@@ -79,6 +79,104 @@ def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
 
 
+def _getch():
+    """Block until a key is pressed, without needing Enter where possible."""
+    try:
+        import msvcrt                     # Windows
+        msvcrt.getch()
+        return
+    except ImportError:
+        pass
+    try:
+        import termios, tty
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            # TCSANOW, not tty.setraw's default TCSAFLUSH: flushing discards a
+            # key pressed a moment too early, and then nothing closes the
+            # window -- which is the exact failure this function exists to fix.
+            tty.setraw(fd, termios.TCSANOW)
+            # os.read, not sys.stdin.read: the latter goes through a buffered
+            # text wrapper that keeps blocking after the keypress.
+            os.read(fd, 1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except Exception:
+        try:
+            input()                       # no raw mode; Enter will have to do
+        except Exception:
+            pass
+
+
+def die(*lines):
+    """Explain the problem, then wait so the message can actually be read.
+
+    A double-clicked console window closes the instant the process exits, so
+    printing an error and returning shows the user nothing at all -- the window
+    just blinks. Waiting is skipped when nobody is watching: under CI, a pipe
+    or a redirect there is no one to press a key and blocking would hang.
+    """
+    sys.stderr.write("\n" + "\n".join(lines) + "\n")
+    if sys.stdin.isatty() and sys.stderr.isatty():
+        sys.stderr.write("\nPress any key to close...")
+        sys.stderr.flush()
+        _getch()
+        sys.stderr.write("\n")
+    sys.exit(1)
+
+
+# What has to sit next to gw.py. images/ and fonts/ are deliberately not here:
+# without them the loading screen falls back to a gradient and a stock
+# typeface, which is a worse-looking game rather than a broken one.
+REQUIRED = [
+    "harness/index.html",
+    "harness/harness.js",
+    "harness/harness.css",
+    "harness/loading.js",
+    "harness/loading.css",
+]
+
+
+def check_install(here):
+    """Refuse to start, legibly, when this copy cannot work."""
+    if sys.version_info < (3, 8):
+        die("Guild Wars needs Python 3.8 or newer.",
+            "",
+            "This is Python %d.%d, at %s."
+            % (sys.version_info[0], sys.version_info[1], sys.executable),
+            "",
+            "Install a current version from https://www.python.org/downloads/",
+            "and, on Windows, tick \"Add python.exe to PATH\" during setup.")
+
+    missing = [f for f in REQUIRED if not (here / f).exists()]
+    if not missing:
+        return
+
+    # Windows opens a zip like a folder and, on double-click, extracts only the
+    # file you clicked into a temp directory whose path still contains the
+    # zip's name. gw.py then starts completely alone, which is much the most
+    # likely way for anyone to end up here.
+    if ".zip" in str(here).lower():
+        die("Guild Wars cannot start: it is still inside the zip.",
+            "",
+            "Double-clicking gw.py inside a zip runs only that one file,",
+            "without the rest of the game beside it.",
+            "",
+            "Extract the whole zip to a real folder first -- right-click it",
+            "and choose \"Extract All\" -- then run gw.py from there.")
+
+    die(*(["Guild Wars cannot start: some of its files are missing.",
+           "",
+           "Looked in: %s" % here,
+           "",
+           "Missing:"]
+          + ["  " + f for f in missing]
+          + ["",
+             "gw.py needs its harness folder beside it. Download the project",
+             "again and keep the folder together rather than moving gw.py out",
+             "on its own."]))
+
+
 def _human(n):
     return "%.2f GB" % (n / 1e9) if n >= 1e9 else "%.0f MB" % (n / 1e6)
 
@@ -1261,14 +1359,12 @@ def main():
     # Anchor on this file, not the working directory: a double-click starts in
     # $HOME on some desktops, which would scatter a 4 GB cache there.
     here = Path(__file__).resolve().parent
+    check_install(here)
     dest = args.dir or here / "dist"
     cache = args.cache or here / "gwpatch-cache"
 
-    harness = here / "harness"
-    if not (harness / "index.html").exists():
-        sys.exit("harness/index.html not found next to %s" % Path(__file__).name)
     dest.mkdir(parents=True, exist_ok=True)
-    publish(harness, dest)
+    publish(here / "harness", dest)
 
     # Local, so the loading screen is dressed before the browser even opens.
     copy_art(here / "images", dest)

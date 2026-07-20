@@ -49,9 +49,11 @@ login. You would need an account to actually play, once that exists.
 
 ## Running it
 
-1. Download this repository — the green **Code** button, then **Download ZIP** —
-   and unzip it somewhere.
-2. Open that folder.
+1. Download the latest **[release zip](https://github.com/gwdevhub/gw_in_browser/releases/latest)**.
+2. **Unzip it properly**, to a real folder — do not run `gw.py` from inside the
+   zip. Windows lets you open a zip like a folder, but double-clicking `gw.py`
+   there runs it on its own without the rest of the game. (If you do, it will
+   tell you so rather than failing silently.)
 3. Start it:
    - **Windows**: double-click `gw.py`.
    - **macOS / Linux**: open a terminal in the folder and run `python3 gw.py`.
@@ -146,6 +148,10 @@ Deleting either is safe; both are rebuilt on the next run. Deleting
 **Double-clicking does nothing, or "python3: command not found"**
 Python is missing or not on your PATH. See *What you need*. On Windows,
 reinstall it with "Add python.exe to PATH" ticked.
+
+**"Guild Wars cannot start: it is still inside the zip"**
+Exactly what it says — extract the zip to a real folder first, then run `gw.py`
+from there.
 
 **"Address already in use"**
 Something else has port 8080. Use `python3 gw.py -p 9000`.

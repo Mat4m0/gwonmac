@@ -555,6 +555,43 @@ def test_watchdog():
     check("a silent tab eventually times out", h.stopped.wait(3.0))
 
 
+def test_install_check(tmp):
+    """gw.py must refuse to start legibly when its files are not beside it."""
+    import subprocess
+    gwpy = Path(__file__).resolve().parent.parent / "gw.py"
+
+    def run(where):
+        where.mkdir(parents=True, exist_ok=True)
+        (where / "gw.py").write_bytes(gwpy.read_bytes())
+        # stdin closed: die() must not block when nobody is watching, or this
+        # hangs here exactly as it would in CI.
+        return subprocess.run([sys.executable, "gw.py", "--no-browser"],
+                              cwd=str(where), stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=60)
+
+    r = run(tmp / "alone")
+    check("refuses to start with no harness", r.returncode == 1, str(r.returncode))
+    check("names what is missing", "harness/index.html" in r.stderr, r.stderr[:120])
+    check("does not block without a tty", "Press any key" not in r.stderr)
+
+    # Windows extracts a double-clicked file to a temp path that still has the
+    # zip's name in it, which is the likeliest way anyone hits this.
+    r = run(tmp / "Temp1_gw.zip" / "gw_in_browser")
+    check("recognises being run from inside a zip",
+          "still inside the zip" in r.stderr, r.stderr[:120])
+
+    # A complete copy must get past the check and start serving.
+    good = tmp / "good"
+    (good / "harness").mkdir(parents=True, exist_ok=True)
+    src = gwpy.parent / "harness"
+    for f in gw.REQUIRED:
+        (good / f).write_bytes((gwpy.parent / f).read_bytes())
+    (good / "gw.py").write_bytes(gwpy.read_bytes())
+    r = subprocess.run([sys.executable, "gw.py", "--help"], cwd=str(good),
+                       capture_output=True, text=True, timeout=60)
+    check("a complete copy passes the check", r.returncode == 0, r.stderr[:120])
+
+
 def main():
     import tempfile
     test_framing()
@@ -567,6 +604,7 @@ def main():
         test_lazy_fetch(Path(td) / "lazy")
         test_boot_recording(Path(td) / "boot")
         test_download_all(Path(td) / "image")
+        test_install_check(Path(td) / "install")
     print()
     if FAILED:
         print("%d FAILED: %s" % (len(FAILED), ", ".join(FAILED)))

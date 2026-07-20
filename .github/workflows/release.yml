@@ -14,6 +14,15 @@ name: Release
 on:
   push:
     branches: [main]
+    # Code only. A README fix, a new screenshot or a tweak to this file does
+    # not change what the game does, and cutting a release for each one buries
+    # the ones that matter. workflow_dispatch publishes on demand regardless;
+    # whatever else has landed since is included either way.
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.css'
+      - '**.html'
   workflow_dispatch:      # so a release can be cut without an empty commit
 
 permissions:
