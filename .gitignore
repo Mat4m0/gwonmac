@@ -1,0 +1,38 @@
+# Credentials -------------------------------------------------------------
+# A key file extracted by gwkey.py. gw.py has a working key built in, so this
+# only appears if you extracted your own; either way it stays out of git.
+access.key
+*.key
+
+# Game artifacts ----------------------------------------------------------
+# ArenaNet's copyrighted binaries. Never commit these. Everything here is
+# reproducible from your own licensed copy of the client via gwkey/gwpatch.
+*.apk
+*.wasm
+*.wasm.debug
+Gw.js
+Gw.jspi.js
+Gw.snapshot
+manifest.json
+version.json
+
+# Chunk cache -- content-addressed pieces of the above.
+gwpatch-cache/
+
+# Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Test tooling -- playwright-core is installed on demand by tests/e2e.js
+node_modules/
+package-lock.json
+
+# Release packaging, assembled by .github/workflows/release.yml.
+dist-release/
+
+# Build output -- everything under here is derived from your own client copy.
+# Directory-shaped, because the file patterns above missed
+# dist/snapshot-chunks.json (16k ArenaNet content hashes) and it got published.
+dist/

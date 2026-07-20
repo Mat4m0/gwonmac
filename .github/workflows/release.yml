@@ -1,0 +1,136 @@
+# Cut a release whenever main moves.
+#
+# The whole suite runs first, and nothing is published unless it passes. That
+# includes tests/test_no_leaks.py, which is the guard against shipping an
+# ArenaNet binary or a credential by accident -- releasing is exactly the moment
+# that guard matters most.
+#
+# The artifact is a ready-to-run folder, not the source tree: someone
+# downloading a release should be able to unzip it and double-click gw.py
+# without wondering which of tests/, tools/ or docs/ they need.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:      # so a release can be cut without an empty commit
+
+permissions:
+  contents: write         # required to create the release
+
+# Serialised rather than cancelled: two runs publishing at once would race for
+# the same tag, and a superseded run has usually already done its testing.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-22.04     # 22.04 still provides a 3.8 toolchain
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor the README promises, and a current release. Anything that
+        # only works on one of them is a bug in the claim or in the code.
+        python: ['3.8', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Import on a bare interpreter
+        # No pip step anywhere in this workflow, deliberately: if gw.py ever
+        # grows a dependency, this is where it should fail.
+        run: python3 -c "import gw; print(gw.__doc__.splitlines()[0])"
+
+      - run: python3 tests/test_gw.py
+      - run: python3 tests/test_no_leaks.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node tests/test_harness.js
+
+  e2e:
+    name: Browser end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install a browser
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      # Drives the real harness against local fixtures. It reaches nothing of
+      # ArenaNet's: gw.py is spawned with --offline --no-update.
+      - run: node tests/e2e.js
+
+  release:
+    name: Publish
+    needs: [test, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: v
+        run: |
+          echo "tag=v$(date -u +%Y.%m.%d).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble the package
+        run: |
+          set -eu
+          name="gw_in_browser-${{ steps.v.outputs.tag }}"
+          mkdir -p "dist-release/$name"
+          # Exactly what running the game needs. Not tests/, tools/, docs/ or
+          # CLAUDE.md -- those are for working on it, and are on GitHub anyway.
+          cp gw.py README.md LICENSE "dist-release/$name/"
+          cp -r harness images fonts "dist-release/$name/"
+          chmod +x "dist-release/$name/gw.py"
+          (cd dist-release && zip -qr "$name.zip" "$name")
+          echo "ZIP=dist-release/$name.zip" >> "$GITHUB_ENV"
+
+      - name: Check the package actually runs
+        # Cheap, but it catches the failure that matters: a release that is
+        # missing a file it needs. Verified from a copy, not the repo, so a
+        # path that only resolves in the checkout is caught here.
+        run: |
+          set -eu
+          work="$(mktemp -d)"
+          unzip -q "$ZIP" -d "$work"
+          cd "$work"/gw_in_browser-*
+          python3 gw.py --help > /dev/null
+          for f in gw.py harness/index.html harness/harness.js harness/loading.js \
+                   harness/favicon.ico images/logo.webp fonts/Fremont.woff LICENSE; do
+            test -f "$f" || { echo "missing from the release: $f"; exit 1; }
+          done
+          echo "package looks runnable"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh release create "${{ steps.v.outputs.tag }}" "$ZIP" \
+            --target "${{ github.sha }}" \
+            --title "${{ steps.v.outputs.tag }}" \
+            --notes "$(printf '%s\n' \
+              'Unzip and run **gw.py** — Python 3.8+, nothing else to install.' \
+              '' \
+              '**This cannot log in yet.** The client boots and reaches' \
+              "ArenaNet's servers, but authentication is not implemented, so" \
+              'there is nothing to enter credentials into. See the README for' \
+              'what does and does not work.' \
+              '' \
+              "Built from \`${{ github.sha }}\`.")"
