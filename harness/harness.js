@@ -669,68 +669,117 @@ function loadGlue(candidates) {
   // Without it the cursor leaves the window mid-swing. While locked
   // clientX/clientY freeze and only movementX/Y move, so we feed the module a
   // virtual cursor: accumulate the movement and re-dispatch mousemove with
-  // those coordinates. Unclamped -- clamping would zero the deltas and stall
-  // the camera, which is the bug being fixed.
+  // those coordinates, canvas-relative.
   //
-  // Promoted on movement rather than on mousedown: capturing the cursor the
-  // moment the button goes down costs the plain right-click.
-  const DRAG_PX = 4;
+  // The module clamps that cursor to the canvas itself, so a virtual cursor
+  // walked off an edge stalls the camera however far the mouse keeps moving.
+  // On reaching one we end the drag there, recentre, and open a new one --
+  // the module sees a fresh grab from the middle and keeps turning.
   let lockEnabled = localStorage.getItem('gw.pointerLock') !== 'off';
-  let virt = null, rmb = null;
+  let virt = null;
+  let resetting = false, pendingX = 0, pendingY = 0, resetFrame = 0;
+
+  // movementX/Y go through the constructor, not assignment afterwards: they
+  // are readonly accessors on the prototype, so a later write silently no-ops.
+  const sendMouse = (type, r, buttons, button, mx, my) => c.dispatchEvent(
+    new MouseEvent(type, {
+      bubbles: true, cancelable: true, composed: true,
+      clientX: r.left + virt.x, clientY: r.top + virt.y,
+      screenX: window.screenX + r.left + virt.x,
+      screenY: window.screenY + r.top + virt.y,
+      movementX: mx, movementY: my, buttons, button,
+    }));
+
+  const sendDelta = (mx, my) => {
+    const r = c.getBoundingClientRect();
+    const nx = virt.x + mx, ny = virt.y + my;
+    if (nx >= 0 && ny >= 0) {
+      virt.x = nx;
+      virt.y = ny;
+      sendMouse('mousemove', r, 2, 0, mx, my);
+      return;
+    }
+    // Walk only as far as the edge, bank the overshoot, recycle the drag.
+    const sx = nx < 0 ? -virt.x : mx, sy = ny < 0 ? -virt.y : my;
+    virt.x += sx;
+    virt.y += sy;
+    sendMouse('mousemove', r, 2, 0, sx, sy);
+    pendingX += mx - sx;
+    pendingY += my - sy;
+    if (resetting) return;
+    resetting = true;
+    sendMouse('mouseup', r, 0, 2, 0, 0);
+    virt = { x: r.width / 2, y: r.height / 2 };
+    sendMouse('mousedown', r, 2, 2, 0, 0);
+    // A frame's grace: the module has to see the regrab before more movement
+    // against it means anything. Whatever arrived meanwhile replays here.
+    resetFrame = requestAnimationFrame(() => {
+      resetting = false;
+      if (document.pointerLockElement !== c || !virt) return;
+      const px = pendingX, py = pendingY;
+      pendingX = pendingY = 0;
+      if (px || py) sendDelta(px, py);
+    });
+  };
 
   window.gwPointerLock = (on) => {
     lockEnabled = !!on;
     localStorage.setItem('gw.pointerLock', on ? 'on' : 'off');
-    if (!on && document.pointerLockElement === c) document.exitPointerLock();
+    if (!on) releaseLock();
     log(`pointer lock: ${on ? 'enabled' : 'disabled'}`);
     return lockEnabled;
   };
 
   c.addEventListener('mousedown', (e) => {
-    if (e.button === 2) rmb = { x: e.clientX, y: e.clientY, locked: false };
+    if (e.button !== 2 || !lockEnabled || !e.isTrusted) return;
+    const r = c.getBoundingClientRect();
+    virt = { x: e.clientX - r.left, y: e.clientY - r.top };
+    resetting = false;
+    pendingX = pendingY = 0;
+    c.classList.add('cursor-hidden');
+    // A plain call, no unadjustedMovement: that option is refused often
+    // enough that its fallback matters, and the fallback ran from a promise
+    // callback, outside the gesture context pointer lock requires.
+    if (document.pointerLockElement !== c) {
+      try { c.requestPointerLock(); } catch (err) { log('[warn] pointer lock refused:', err.message); }
+    }
   }, true);
 
-  c.addEventListener('mousemove', (e) => {
-    if (lockEnabled && rmb && !rmb.locked && e.isTrusted &&
-        Math.hypot(e.clientX - rmb.x, e.clientY - rmb.y) > DRAG_PX) {
-      rmb.locked = true;
-      virt = { x: e.clientX, y: e.clientY };
-      // A plain call, no unadjustedMovement: that option is refused often
-      // enough that its fallback matters, and the fallback ran from a promise
-      // callback, outside the gesture context pointer lock requires.
-      if (document.pointerLockElement !== c) {
-        try { c.requestPointerLock(); } catch (err) { log('[warn] pointer lock refused:', err.message); }
-      }
-    }
-    if (document.pointerLockElement !== c || !virt || !e.isTrusted) return;
+  // On document, not the canvas: once locked the cursor has no position, and
+  // Chrome delivers the moves to the document rather than the locked element.
+  document.addEventListener('mousemove', (e) => {
+    if (!virt || document.pointerLockElement !== c || !e.isTrusted) return;
     e.stopImmediatePropagation();
-    virt.x += e.movementX;
-    virt.y += e.movementY;
-    c.dispatchEvent(new MouseEvent('mousemove', {
-      bubbles: true, cancelable: true, composed: true,
-      clientX: virt.x, clientY: virt.y, screenX: virt.x, screenY: virt.y,
-      movementX: e.movementX, movementY: e.movementY,
-      buttons: e.buttons, button: e.button,
-      ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
-    }));
+    e.preventDefault();
+    if (resetting) { pendingX += e.movementX; pendingY += e.movementY; return; }
+    sendDelta(e.movementX, e.movementY);
   }, true);
 
   // blur too: a button released while unfocused never produces a mouseup here
   // and would strand the cursor locked.
-  const releaseLock = () => {
+  function releaseLock() {
     virt = null;
-    rmb = null;
+    resetting = false;
+    pendingX = pendingY = 0;
+    cancelAnimationFrame(resetFrame);
+    c.classList.remove('cursor-hidden');
     if (document.pointerLockElement === c) document.exitPointerLock();
-  };
-  c.addEventListener('mouseup', (e) => { if (e.button === 2) releaseLock(); }, true);
+  }
+  document.addEventListener('mouseup', (e) => {
+    if (e.button === 2 && e.isTrusted) releaseLock();
+  }, true);
   window.addEventListener('blur', releaseLock);
+  // Esc drops the lock without a mouseup, which would stall a held drag.
+  document.addEventListener('pointerlockchange', () => {
+    if (virt && document.pointerLockElement !== c) releaseLock();
+  });
   document.addEventListener('pointerlockerror', () =>
     log('[warn] pointer lock failed (needs a user gesture, and a focused document)'));
 
-  // Right-drag turns the camera, so the context menu has to go -- but
-  // shift+right-click still reaches it, or there is no right-click route into
-  // devtools. The shipped client suppresses it unconditionally.
-  c.addEventListener('contextmenu', (e) => { if (!e.shiftKey) e.preventDefault(); });
+  // Right-drag turns the camera, so the context menu has to go. The shipped
+  // client suppresses it unconditionally and so do we -- which does cost the
+  // right-click route into devtools.
+  c.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // Text entry runs through these, not through keydown on the canvas. Stray
   // focus must bounce off, or a field silently swallows keys meant for the game.

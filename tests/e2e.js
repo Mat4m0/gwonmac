@@ -374,9 +374,9 @@ function waitFor(pred, timeout = 20000) {
     });
     check('unsolicited focus on an OSK field bounces off', bounced === true);
 
-    // The context menu must be suppressed for right-drag camera control, but
-    // shift+right-click has to still reach it or there is no right-click route
-    // into devtools.
+    // The context menu is suppressed unconditionally for right-drag camera
+    // control, matching the shipped client. There is no shift escape hatch --
+    // devtools has to be reached from the menu or by keyboard.
     const ctx = await page.evaluate(() => {
       const c = document.getElementById('canvas');
       const fire = (shiftKey) => {
@@ -387,8 +387,7 @@ function waitFor(pred, timeout = 20000) {
       return { plain: fire(false), shifted: fire(true) };
     });
     check('right-click is suppressed for the game', ctx.plain === true);
-    check('shift+right-click still opens the browser menu', ctx.shifted === false,
-          'devtools would be unreachable by right-click');
+    check('shift+right-click is suppressed too', ctx.shifted === true);
 
     // Mouse-to-touch translation: the module does its own tap/double-tap
     // timing, so it needs to actually receive touch events.
@@ -521,12 +520,10 @@ function waitFor(pred, timeout = 20000) {
         new MouseEvent(type, { bubbles: true, cancelable: true,
                                clientX: 50, clientY: 50, button }));
 
-      // Held right button alone must NOT lock -- capturing the cursor on
-      // mousedown costs the plain right-click. Only movement past the
-      // threshold promotes it to a drag.
-      //
-      // Dispatched events are untrusted and the promotion path requires
-      // isTrusted, so this covers the button gating only.
+      // Right mousedown is what grabs the lock, but only a trusted one.
+      // Dispatched events are untrusted, so what this actually pins down is
+      // that synthetic input cannot capture the cursor -- the button and
+      // isTrusted gating, not the grab.
       mouse('mousedown', 2);
       const onRightDown = requested;
       mouse('mousedown', 0);
@@ -539,7 +536,7 @@ function waitFor(pred, timeout = 20000) {
       return { onRightDown, onLeft, whenDisabled, lockedBefore,
                hasToggle: typeof window.gwPointerLock === 'function' };
     });
-    check('right mousedown alone does not lock -- that would kill right-click',
+    check('synthetic right mousedown does not lock -- isTrusted gates it',
           lock.onRightDown === 0,
           `${lock.onRightDown} (lock held before test: ${lock.lockedBefore})`);
     check('left button does not lock', lock.onLeft === 0, lock.onLeft);
