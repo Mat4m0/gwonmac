@@ -104,9 +104,9 @@ jobs:
           mkdir -p "dist-release/$name"
           # Exactly what running the game needs. Not tests/, tools/, docs/ or
           # CLAUDE.md -- those are for working on it, and are on GitHub anyway.
-          cp gw.py README.md LICENSE "dist-release/$name/"
+          cp gw.py gw.command README.md LICENSE "dist-release/$name/"
           cp -r harness images fonts "dist-release/$name/"
-          chmod +x "dist-release/$name/gw.py"
+          chmod +x "dist-release/$name/gw.py" "dist-release/$name/gw.command"
           (cd dist-release && zip -qr "$name.zip" "$name")
           echo "ZIP=dist-release/$name.zip" >> "$GITHUB_ENV"
 
@@ -124,6 +124,7 @@ jobs:
                    harness/favicon.ico images/logo.webp fonts/Fremont.woff LICENSE; do
             test -f "$f" || { echo "missing from the release: $f"; exit 1; }
           done
+          test -x gw.command || { echo "gw.command missing or not executable"; exit 1; }
           echo "package looks runnable"
 
       - name: Publish

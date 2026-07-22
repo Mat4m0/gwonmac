@@ -56,7 +56,10 @@ login. You would need an account to actually play, once that exists.
    tell you so rather than failing silently.)
 3. Start it:
    - **Windows**: double-click `gw.py`.
-   - **macOS / Linux**: open a terminal in the folder and run `python3 gw.py`.
+   - **macOS**: double-click `gw.command`. The first time, Finder may refuse
+     with "cannot be opened because it is from an unidentified developer" --
+     right-click it and choose **Open** instead, once.
+   - **Linux**: open a terminal in the folder and run `python3 gw.py`.
 
 Your browser opens by itself, and on Windows the black command window tucks
 itself into the taskbar once it has. **Leave it running** — closing it stops
