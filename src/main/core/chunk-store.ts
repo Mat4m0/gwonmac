@@ -102,6 +102,7 @@ export class ChunkStore {
   private readonly hashResidency = new Map<string, { chunks: number; bytes: number }>();
   private readonly demandQueue: FetchTask[] = [];
   private readonly prefetchQueue: FetchTask[] = [];
+  private readonly demandedHashes = new Set<string>();
   private readonly stoppedPrefetchHashes = new Set<string>();
   private activeDemand = 0;
   private activePrefetch = 0;
@@ -201,6 +202,7 @@ export class ChunkStore {
     expectedLength?: number,
     priority: ChunkPriority = "demand",
   ): Promise<Uint8Array> {
+    if (priority === "demand") this.demandedHashes.add(hash);
     const existing = this.inflight.get(hash);
     if (
       priority === "demand" &&
@@ -216,9 +218,14 @@ export class ChunkStore {
       return existing;
     }
 
-    const work = this.ensureHashInner(hash, expectedLength, priority).finally(() => {
-      if (this.inflight.get(hash) === work) this.inflight.delete(hash);
-    });
+    const work = this.ensureHashInner(hash, expectedLength, priority).finally(
+      () => {
+        if (this.inflight.get(hash) === work) {
+          this.inflight.delete(hash);
+          this.demandedHashes.delete(hash);
+        }
+      },
+    );
     this.inflight.set(hash, work);
     return work;
   }
@@ -272,7 +279,12 @@ export class ChunkStore {
     if (!this.fetchFn) {
       throw new AppError("chunk_offline", `chunk ${hash} not cached, and offline`);
     }
-    const raw = await this.scheduleFetch(hash, expectedLength ?? 0, priority);
+    const scheduledPriority = this.demandedHashes.has(hash) ? "demand" : priority;
+    const raw = await this.scheduleFetch(
+      hash,
+      expectedLength ?? 0,
+      scheduledPriority,
+    );
     this.metrics?.count("cache.networkFetches");
     this.metrics?.count("cache.networkBytes", raw.byteLength);
     const decodeStarted = performance.now();

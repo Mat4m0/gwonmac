@@ -16,7 +16,7 @@ const { url, version } = useLatestRelease();
       Download for macOS
     </a>
     <p v-if="props.size === 'large'" class="text-sm text-parchment-300/60">
-      <template v-if="version">{{ version }} · </template>Free · Open source (GPL-3.0) · Apple Silicon
+      <template v-if="version">{{ version }} · </template>Free · Open-source host (GPL-3.0) · Apple Silicon
     </p>
   </div>
 </template>

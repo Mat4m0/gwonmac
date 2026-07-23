@@ -1,7 +1,7 @@
 {
   "name": "guild-wars",
   "productName": "Guild Wars",
-  "version": "0.1.0",
+  "version": "0.0.1-alpha.1",
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",
@@ -28,13 +28,14 @@
     "test:electron": "pnpm build && playwright test --config=tests/electron/playwright.config.mjs",
     "test:packaged": "node tests/packaged-smoke.mjs",
     "test:release": "pnpm build && node --test tests/release/*.mjs",
+    "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website generate",
     "test": "pnpm test:unit && pnpm test:integration && pnpm test:electron",
     "package": "pnpm build && electron-forge package",
     "make": "pnpm build && electron-forge make",
     "diagnostics:validate": "tsc && node build/tools/diagnostics/validate.js",
     "diagnostics:summarize": "tsc && node build/tools/diagnostics/summarize.js",
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:release && pnpm package && pnpm test:packaged"
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:release && pnpm test:website && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

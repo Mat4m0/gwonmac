@@ -1,43 +1,71 @@
 # Guild Wars for macOS
 
-An Electron host for ArenaNet’s official Guild Wars WebAssembly
-client. The application downloads the JSPI client directly from ArenaNet,
-streams the game snapshot through a native content-addressed cache, exposes the
-small platform surface the client expects, and renders it in a sandboxed
-Chromium process.
+Play ArenaNet's official Guild Wars client natively on your Mac — no Windows
+install, no Wine, no compatibility layer to configure.
 
-This is an independent interoperability project. It is not affiliated with or
-endorsed by ArenaNet or NCSoft, and it contains no game binaries.
+[Download](https://github.com/Mat4m0/gwonmac/releases/latest) ·
+[Install guide](docs/user-guide.md) ·
+[Discord](https://discord.gg/Z9ft52RBD3) ·
+[Report a bug](https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml) ·
+[Support development](https://ko-fi.com/mat4m0)
 
-## Current status
+This is an independent interoperability project. It is **not** affiliated with
+or endorsed by ArenaNet or NCSoft, and it ships **no game binaries** — the app
+downloads ArenaNet's official WebAssembly client and game data directly from
+ArenaNet, verifies it, and hosts it in a sandboxed Chromium process.
 
-The Python/browser runtime has been retired. Electron is the only production
-path.
+## Install
 
-- The JSPI client updater, virtual snapshot, native TCP/DNS bridge, HTTPS proxy,
-  settings, encrypted saved login, input, audio, fullscreen, and
-  OffscreenCanvas presentation paths are implemented.
-- The offline Electron acceptance suite verifies the custom protocol,
-  sandboxed preload, narrow native bridge, and diagnostics capture lifecycle.
-- Guild Wars' own **Remember Password** flow stores one encrypted, owner-only
-  local file. Credentials are never logged, exported, or placed in macOS
-  Keychain.
-- On July 23, 2026, the opt-in live smoke test downloaded the current ArenaNet
-  client, initialized JSPI with hardware acceleration, read the real snapshot,
-  and submitted a frame on Apple Silicon. Account login and broader Mac/GPU
-  coverage remain live release gates.
-- Current builds are ad-hoc signed and distributed as source/local beta builds;
-  no paid Apple developer account is required. macOS may require a manual
-  first-open confirmation, but login never invokes Keychain. Developer ID
-  signing remains an optional future distribution improvement.
+**You need:** an Apple Silicon Mac, and a Guild Wars account. This app does not
+create accounts or bypass the login — if you don't own the game yet, buy it
+from the [official store](https://store.guildwars.com/en-us).
+
+1. **Download** the latest release and unzip it. Safari unzips automatically;
+   otherwise double-click the `.zip`.
+2. **Move** `Guild Wars.app` into your Applications folder.
+3. **Open it once.** macOS blocks it and offers only _Move to Bin_ and _Done_ —
+   click **Done**.
+4. **Allow it:** System Settings → Privacy & Security → scroll down → **Open
+   Anyway** next to the blocked-app notice.
+5. **Confirm.** The warning appears once more, now with an _Open Anyway_ button.
+   The app opens and stays trusted from then on.
+
+Releases are ad-hoc signed but not notarized by Apple, which is why macOS asks.
+Notarization needs a paid Apple Developer membership (~€100/year) that
+[donations](https://ko-fi.com/mat4m0) fund.
+
+## How it works
+
+On first launch the app asks how you want game data downloaded, and waits for your choice.
+The two modes are:
+
+| Mode                            | What happens                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Quick Start** _(recommended)_ | Playable in about a minute. Areas download the first time you visit them.                   |
+| **Full Game**                   | Downloads everything first (~4 GB). The game starts only when you choose _Play Guild Wars_. |
+
+You can switch modes later in Settings → Game Data, pause and resume a full download, or start playing
+mid-download with _Play Now Instead_.
+
+## Privacy and data
+
+- **No telemetry is ever uploaded.** Diagnostics are written locally and only
+  leave your machine if you attach a `.gwdiag` file to a bug report yourself.
+- Passwords, account identifiers, cookies, request bodies, and game packet
+  payloads are never recorded.
+- Guild Wars' own **Remember Password** writes one encrypted, owner-only local
+  file. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
+  encryption, so software running as your macOS user could recover it. Leave
+  Remember Password off if that tradeoff isn't acceptable.
+- The app checks the GitHub releases feed once per launch and shows a link when
+  a newer version exists. It never downloads or installs anything by itself,
+  and development builds skip the check entirely.
+
+Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 
 ## Development
 
-Requirements:
-
-- macOS on Apple Silicon
-- Node.js 20.19 or newer
-- pnpm 11
+**Requirements:** macOS on Apple Silicon · Node.js 20.19+ · pnpm 11
 
 ```bash
 corepack enable
@@ -45,79 +73,64 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The first online run fetches the small JSPI client artifacts. Game data is
-downloaded in 256 KB content-addressed chunks as the client asks for it.
-The one-time launcher choice selects Quick Start or Full Game before the
-official game client runs. Full Game remains in the launcher until the verified
-download completes or the user explicitly chooses Play Now. The same strategy
-can be changed in Settings for the next launch.
-Concurrency remains capped at eight to avoid unnecessary load on ArenaNet’s
-production CDN.
+The first online run fetches the small JSPI client artifacts.
 
-See the [user guide](docs/user-guide.md) for the ad-hoc macOS first-open flow,
-Quick Start, downloading or pausing the full game, settings, updates, local
-data, and bug reports.
+| Command                                                                  | Purpose                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------- |
+| `pnpm dev`                                                               | Build and launch the app via Electron Forge |
+| `pnpm package`                                                           | Build a local `.app` under `out/`           |
+| `pnpm make`                                                              | Build the distributable `.zip`              |
+| `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
+| `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites                                 |
+| `pnpm verify`                                                            | The complete local gate                     |
 
-Build a local `.app`:
-
-```bash
-pnpm package
-```
-
-Forge writes the application under `out/`. Create the distributable ZIP with:
-
-```bash
-pnpm make
-```
-
-## Verification
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test:unit
-pnpm test:integration
-pnpm test:electron
-pnpm test:release
-pnpm package
-```
-
-`pnpm verify` runs the complete local gate. The Electron test launches a real
-macOS application process, so it needs permission to open GUI applications.
-The networked smoke test is intentionally opt-in:
+`pnpm test:electron` launches a real macOS application process, so it needs
+permission to open GUI applications. The networked smoke test is opt-in:
 
 ```bash
 GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
+### Repository layout
+
+This is a pnpm workspace: the Electron app lives at the root, the download site
+under `apps/`.
+
+| Path            | Contents                                                          |
+| --------------- | ----------------------------------------------------------------- |
+| `src/main/`     | Main process: updater, cache, sockets, IPC, windows, diagnostics  |
+| `src/preload/`  | Sandboxed CommonJS preload — the entire native bridge surface     |
+| `src/renderer/` | Launcher chrome, settings, and the game host harness              |
+| `src/shared/`   | Contracts shared by main, preload, renderer, and the website      |
+| `apps/website/` | The download site (Nuxt 4 + Tailwind), deployed separately        |
+| `docs/`         | User guide, internals, performance notes                          |
+| `tests/`        | Unit, integration, Electron acceptance, and release-policy suites |
+| `tools/`        | Developer-only reverse-engineering helpers                        |
+
+`src/shared/contracts.ts` is the single source of truth for IPC channels,
+settings, and every project link — the launcher and website both import it.
+
+Releases are cut from `main` by manual dispatch of the macOS workflow. Signing
+and notarization run automatically when the Apple credentials are configured;
+without them the workflow still ships an ad-hoc signed build and labels the
+release accordingly.
+
 ## Diagnostics
 
-The app records a bounded, local-only Level 0 flight recorder:
+The app keeps a bounded, local-only Level 0 flight recorder: synchronized
+process → renderer → WASM → runtime → first-frame timings and the official
+client build id, rAF and submitted-frame aggregates, presentation cost,
+snapshot/cache/network/disk timing, input-to-next-submit latency, CPU and
+memory, event-loop delay, GPU/JSPI/power/thermal/suspend/crash state, and
+socket lifetimes.
 
-- synchronized process → renderer → WASM → runtime → first-frame timings and
-  the official client build id;
-- renderer rAF and submitted-frame aggregates;
-- swap and ImageBitmap presentation cost;
-- snapshot/cache/network/disk timing;
-- input-to-next-submit timing;
-- main and Chromium process CPU/memory;
-- main event-loop delay;
-- GPU, JSPI, power, thermal, suspend, and crash state;
-- socket counts, byte counts, lifetimes, and close reasons.
+Use **View → Start Performance Capture** for per-frame Level 1 data or **View →
+Start Chromium Trace** for a short Level 2 trace; both stop after 120 seconds
+and offer export. Press **Cmd+Shift+M** when a visible problem occurs — the
+marker records only its timestamp. **Help → Report a Problem…** produces one
+redacted `.gwdiag` file and opens the bug form.
 
-No telemetry is uploaded. Passwords, account identifiers, authorization,
-cookies, request bodies, and game packet payloads are never recorded.
-
-Use **View → Start Performance Capture** for bounded per-frame Level 1 data, or
-**View → Start Chromium Trace** for a short Level 2 trace. Captures stop after
-120 seconds and then offer export. Press **Cmd+Shift+M** when a visible
-performance problem occurs; the marker records only its timestamp. Choose
-**Help → Report a Problem…** for the guided path. It creates one `.gwdiag`
-file containing a machine-readable health report, the complete retained
-current-session log, and—when the previous run ended abnormally—the retained
-tail of that run.
-
-Inspect captures without opening the application:
+Inspect captures without launching the app:
 
 ```bash
 pnpm diagnostics:validate capture.gwdiag
@@ -125,45 +138,65 @@ pnpm diagnostics:summarize capture.gwdiag
 pnpm diagnostics:compare before.gwdiag after.gwdiag
 ```
 
-Published performance claims should use alternating sets of comparable
-packaged-build runs, not a single profiler-contaminated trace.
-
-Report ordinary bugs through the
-[GitHub bug form](https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml)
-and attach the single `.gwdiag` file. Report security-sensitive findings
-privately as described in [SECURITY.md](SECURITY.md).
+Performance claims should compare alternating sets of packaged-build runs, not
+a single profiler-contaminated trace.
 
 ## Local data
 
-Electron stores settings, cached chunks, downloaded client artifacts, and
-rolling diagnostics under its macOS user-data directory
-(normally `~/Library/Application Support/Guild Wars`).
+Everything lives under `~/Library/Application Support/Guild Wars`:
 
-- Cached game chunks and client artifacts are reproducible.
-- Window size, position, and normal/maximized/fullscreen mode are restored from
-  an owner-only `window-state.json`. Missing monitors fall back safely to a
-  centered primary-display window.
-- Saved login is encrypted in an owner-only `credentials.bin` file and crosses
-  only the narrow credential IPC methods required by the game host.
-- Chromium uses its local mock profile key in ad-hoc macOS builds to avoid
-  recurring Safe Storage dialogs. This is intentionally weaker than macOS
-  Keychain protection: software running as the same macOS user may be able to
-  recover the saved login. Browser cookies are cleared at startup and quit.
-- Diagnostics retain at most five 5 MB JSONL files.
-- At most three crash dumps are retained locally and they are never exported.
-- The host application itself does not contact an update feed. Install a newer
-  source or release build manually; the ArenaNet game client still updates
-  automatically from ArenaNet.
+- Cached game chunks and client artifacts — reproducible, safe to delete via
+  Settings → Game Data → _Clear game data_.
+- Window size, position, and display mode in an owner-only
+  `window-state.json`; missing monitors fall back to a centered window.
+- Saved login, encrypted in an owner-only `credentials.bin`, reachable only
+  through the narrow credential IPC methods.
+- At most five 5 MB diagnostics files and three crash dumps. Dumps are never
+  exported.
 
-## Architecture
+Browser cookies are cleared at startup and quit. Clearing game data never
+touches your login or settings; resetting launcher settings never deletes
+downloaded data.
 
-See [docs/internals.md](docs/internals.md) for the process model, security
-boundaries, updater/cache design, renderer host surface, and diagnostics
-format. [port-plan.md](port-plan.md) is the port specification and acceptance
-checklist.
+## Documentation
 
-Developer-only reverse-engineering tools remain under `tools/`; `gwkey.py`
-extracts a rotated public client key from an APK if ArenaNet changes it.
+- [User guide](docs/user-guide.md) — first launch, download modes, settings,
+  local data, bug reports
+- [Internals](docs/internals.md) — process model, security boundaries,
+  updater/cache design, renderer host surface, diagnostics format
+- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) ·
+  [Product brief](PRODUCT.md) · [Port plan](port-plan.md)
+
+## Credits
+
+This project is a fork of
+**[gwdevhub/gw_in_browser](https://github.com/gwdevhub/gw_in_browser)** and
+would not exist without it. That work established the approach this app is
+built on: hosting ArenaNet's official WebAssembly client outside the browser
+and supplying the platform surface it expects. The upstream git history is
+preserved in this repository.
+
+Upstream authors:
+
+- **[Marc (henderkes)](https://github.com/henderkes)** — original author;
+  wrote the foundational _"Guild Wars in the browser"_ work this fork descends
+  from.
+- **[Jon (3vcloud)](https://github.com/3vcloud)** — [gwdevhub](https://github.com/gwdevhub)
+  maintainer and contributor.
+- **[GWToolbox](https://gwtoolbox.com)** — contributed the macOS launch
+  wrapper that this app's native host grew out of.
+
+Upstream is licensed GPL-3.0, and so is this fork. If you find this project
+useful, the credit belongs upstream first.
+
+Also with thanks to:
+
+- **[Snapshot Henchman](https://bloogum.net/guildwars/)** — loading-screen
+  photography.
+- **QualiType** — the QT Friz Quad typeface, released under the SIL Open Font
+  License 1.1.
+- **ArenaNet** — for the game, and for keeping the Guild Wars client alive and
+  publicly downloadable more than twenty years on.
 
 ## Legal
 
@@ -173,15 +206,12 @@ Wars and associated logos and designs are trademarks or registered trademarks
 of NCsoft Corporation.
 
 Loading-screen photography is by
-[Snapshot Henchman](https://bloogum.net/guildwars/).
+[Snapshot Henchman](https://bloogum.net/guildwars/). The loading-screen typeface
+is QT Friz Quad, © 1992 QualiType, distributed under the SIL Open Font License
+1.1; its license ships with the font.
 
-The loading-screen typeface is QT Friz Quad, © 1992 QualiType, distributed
-under the SIL Open Font License 1.1. Its license is included with the font.
-
-The GPL-3.0 license covers the project source code. Unless an asset carries an
-explicit license of its own, Guild Wars imagery, screenshots, loading artwork,
-the application icon, and derived favicons are fan-project visual material and
-are not relicensed under GPL-3.0. All underlying rights remain with their
+Source code is GPL-3.0-only — see [LICENSE](LICENSE). Unless an asset carries
+its own license, Guild Wars imagery, screenshots, loading artwork, the
+application icon, and derived favicons are fan-project visual material, are not
+relicensed under GPL-3.0, and all underlying rights remain with their
 respective owners.
-
-Source code is GPL-3.0-only. See [LICENSE](LICENSE).

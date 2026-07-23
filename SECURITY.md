@@ -4,10 +4,12 @@ Please do not report credential exposure, relay/proxy boundary bypasses,
 arbitrary native access, or other security-sensitive findings in a public
 issue.
 
-GitHub private vulnerability reporting is not currently enabled for this
-repository. Open a public issue titled **Security contact request** with no
-vulnerability details or evidence; a maintainer will arrange a private channel.
-Do not publish the affected behavior while arranging contact.
+Use GitHub's
+[private vulnerability reporting](https://github.com/Mat4m0/gwonmac/security/advisories/new).
+Do not open a public issue or discussion for a suspected vulnerability.
+
+Only the latest published alpha is supported. Findings against the current
+`main` branch are also welcome when they affect an upcoming release.
 
 In the private report, include the affected version, impact, reproduction, and
 the smallest necessary evidence. Do not include real account credentials, game

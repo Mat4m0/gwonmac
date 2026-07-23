@@ -134,7 +134,7 @@ export async function resetWindowState(win = mainWindow): Promise<void> {
   if (win && !win.isDestroyed()) {
     if (win.isFullScreen()) {
       await new Promise<void>((resolve) => {
-        const timeout = setTimeout(resolve, 1_000);
+        const timeout = setTimeout(resolve, 5_000);
         win.once("leave-full-screen", () => {
           clearTimeout(timeout);
           resolve();
@@ -142,7 +142,16 @@ export async function resetWindowState(win = mainWindow): Promise<void> {
         win.setFullScreen(false);
       });
     }
-    if (win.isMaximized()) win.unmaximize();
+    if (win.isMaximized()) {
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 5_000);
+        win.once("unmaximize", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        win.unmaximize();
+      });
+    }
     win.setBounds(reset.bounds);
   }
   const write = windowStateWrite.then(() =>

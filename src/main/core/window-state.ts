@@ -19,6 +19,8 @@ export const DEFAULT_WINDOW_SIZE = {
   height: 800,
 } as const;
 
+const DEFAULT_WINDOW_MARGIN = 64;
+
 const MODES = new Set<WindowState["mode"]>([
   "normal",
   "maximized",
@@ -135,8 +137,20 @@ export function fitWindowStateToDisplays(
 }
 
 export function defaultWindowState(primaryWorkArea: WindowBounds): WindowState {
-  const width = Math.min(DEFAULT_WINDOW_SIZE.width, primaryWorkArea.width);
-  const height = Math.min(DEFAULT_WINDOW_SIZE.height, primaryWorkArea.height);
+  const width = Math.min(
+    DEFAULT_WINDOW_SIZE.width,
+    Math.max(
+      Math.min(800, primaryWorkArea.width),
+      primaryWorkArea.width - DEFAULT_WINDOW_MARGIN,
+    ),
+  );
+  const height = Math.min(
+    DEFAULT_WINDOW_SIZE.height,
+    Math.max(
+      Math.min(600, primaryWorkArea.height),
+      primaryWorkArea.height - DEFAULT_WINDOW_MARGIN,
+    ),
+  );
   return {
     bounds: {
       x: Math.round(primaryWorkArea.x + (primaryWorkArea.width - width) / 2),
