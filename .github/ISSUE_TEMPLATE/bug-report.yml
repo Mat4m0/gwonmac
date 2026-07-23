@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a crash, startup, download, gameplay, or performance problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        In Guild Wars, choose **Help → Report a Problem…** and create one `.gwdiag` file. It is local and redacted: credentials, account identifiers, packet contents, HTTP bodies, headers, cookies, filesystem paths, and crash dumps are excluded.
+
+        Issues are public. Attach the file only if you are comfortable sharing the diagnostics described above.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Problem area
+      options:
+        - Crash or unexpected quit
+        - Startup or update
+        - Download or loading
+        - Performance or stutter
+        - Graphics
+        - Input or audio
+        - Login
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Give the shortest repeatable sequence, if one exists.
+      placeholder: |
+        1. Start the app
+        2. …
+        3. Problem appears
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: If the app can create one, drag the single `.gwdiag` file here. For stutter, record first and press Cmd+Shift+M when it happens.
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and macOS version
+      placeholder: M1 Pro MacBook Pro, macOS 15.5
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I used Help → Report a Problem and reviewed the public-issue privacy note above.
+          required: true

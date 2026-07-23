@@ -1,0 +1,261 @@
+/* Loading screen. Separate from harness.css because this is the part meant to
+   be restyled once the game's own art direction is settled.
+
+   Dock layout: the artwork owns the whole window and slowly breathes; every
+   control lives in a slim dock along the bottom edge with the progress rail on
+   its top border. Only the dock's text and buttons change between states. */
+
+/* QT Friz Quad is the OFL-licensed QualiType face closest to the former
+   Fremont/Friz Quadrata styling. swap keeps startup progress immediately visible. */
+@font-face {
+  font-family: "QT Friz Quad";
+  src: url("fonts/QTFrizQuad.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+#loading { position:fixed; inset:0; z-index:10; overflow:hidden;
+           --dock-h: 104px;
+           background:#0a0806; color:#e8dcc0;
+           font:16px/1.5 "QT Friz Quad","Iowan Old Style",Palatino,Georgia,serif;
+           transition:opacity .6s ease; }
+#loading.gone { opacity:0; pointer-events:none; }
+
+.sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+           overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* The screenshot is a separate layer so it can fade in when it decodes --
+   swapping background-image on #loading itself would flash the whole panel.
+   It also carries the ambient motion: a scale so slow it is felt, not seen.
+   transform only, so the loop stays on the compositor; .idle (window blurred)
+   pauses it so an unfocused launcher costs zero GPU. */
+#loading-bg { position:absolute; inset:0; background-size:cover;
+              background-position:center; opacity:0; transition:opacity 1.2s ease; }
+#loading-bg.shown { opacity:1; }
+@media (prefers-reduced-motion:no-preference) {
+  #loading-bg { animation:loading-drift 38s ease-in-out infinite alternate; }
+  #loading-bg.idle { animation-play-state:paused; }
+}
+@keyframes loading-drift {
+  from { transform:scale(1) translateY(0); }
+  to   { transform:scale(1.07) translateY(-1.2%); }
+}
+
+/* Light at the top, darkest at the bottom where the dock and legal text sit. */
+#loading-scrim { position:absolute; inset:0;
+                 background:linear-gradient(180deg,#0a080659 0%,#0a080626 45%,#0a0806d9 100%); }
+
+/* Quiet project links in the top-right corner. */
+#loading-links { position:absolute; top:14px; right:18px; z-index:2;
+                 display:flex; align-items:center; gap:16px; white-space:nowrap;
+                 font-size:13px; text-shadow:0 1px 5px #000e; }
+#loading-links a { color:#e8dcc0bf; text-decoration:none; padding:3px 6px;
+                   border-radius:2px; transition:color .15s, background-color .15s; }
+#loading-links a:hover, #loading-links a:focus-visible {
+  color:#f3dd9d; background:#f3dd9d1a; outline:none; }
+/* The update notice earns the gold the other links do not. */
+#loading-links a.update { color:#f3dd9d; border:1px solid #a9833880;
+                          border-radius:2px; padding:2px 8px; }
+
+/* Art zone: the logo floats over the artwork, centered above the dock. */
+#loading-inner { position:absolute; inset:0 0 var(--dock-h) 0; display:flex;
+                 align-items:center; justify-content:center; pointer-events:none; }
+#loading-logo { width:min(400px,56vw); filter:drop-shadow(0 3px 14px #000a); }
+/* Until the real logo arrives, the alt text should not flash as broken art. */
+#loading-logo:not([src]) { visibility:hidden; }
+
+/* ---------------------------------------------------------------- the dock */
+#loading-dock { position:absolute; left:0; right:0; bottom:0; z-index:2;
+                min-height:var(--dock-h); box-sizing:border-box;
+                display:flex; align-items:center;
+                padding:10px 26px;
+                background:linear-gradient(180deg,#17120ef5,#0c0907fb);
+                border-top:1px solid #a98338;
+                box-shadow:inset 0 1px 0 #f0d4921f, 0 -6px 18px #0006; }
+
+/* Boot progress rail: a hairline on the dock's top border. */
+#loading-bar { position:absolute; top:-1px; left:0; right:0; height:3px;
+               background:#201a14; overflow:hidden; }
+#loading-fill { height:100%; width:0;
+                background:linear-gradient(90deg,#8a6a2b 0%,#d9b25c 55%,#f3dd9d 100%);
+                box-shadow:0 0 10px #d9b25c99;
+                transition:width .3s ease; }
+
+/* Indeterminate: the server phase knows its total, but the game's own boot
+   reports stages without one, so a sweep is honest where a fake % is not. */
+#loading-bar.busy #loading-fill { width:35%;
+                                  animation:sweep 1.5s ease-in-out infinite; }
+@keyframes sweep { 0% { transform:translateX(-110%); }
+                   100% { transform:translateX(320%); } }
+
+/* Default dock content: boot label + detail. Hidden while a decision panel
+   is visible so the dock never shows two states at once. */
+#loading-boot { flex:1; min-width:0; display:flex; align-items:center;
+                justify-content:space-between; gap:20px; }
+#loading-retry { min-height:38px; padding:8px 22px; border:1px solid #79613c;
+                 border-radius:2px; color:#eee3c9; background:#201a14e8;
+                 font:inherit; cursor:default; }
+#loading-retry:hover { border-color:#d1aa5e; background:#2b2117f2; }
+#loading-retry:focus-visible { outline:2px solid #e0bd73; outline-offset:2px; }
+#loading-retry[hidden] { display:none; }
+#loading-dock:has(#data-choice:not([hidden])) #loading-boot,
+#loading-dock:has(#data-download:not([hidden])) #loading-boot { display:none; }
+#loading-dock:has(#data-download:not([hidden])) #loading-bar { display:none; }
+
+#loading-label { font-size:17px; letter-spacing:.02em; color:#f2e8d2;
+                 text-shadow:0 1px 6px #000c; }
+#loading-detail { min-height:1.3em; font-size:13px; color:#e8dcc099;
+                  text-shadow:0 1px 6px #000c; }
+#loading-label.error { color:#ff8f6b; }
+
+/* --------------------------------------------------- dock decision panels */
+#data-choice,
+#data-download { flex:1; min-width:0; display:flex; align-items:center;
+                 justify-content:space-between; gap:20px; color:#eee3c9; }
+#data-choice[hidden],
+#data-download[hidden] { display:none; }
+
+.dock-info { min-width:0; }
+#data-choice-title { margin:0 0 2px; font-size:17px; font-weight:400;
+                     letter-spacing:.02em; color:#f2e8d2; }
+.dock-info > p { margin:0; font-size:13px; color:#d8caaaad; }
+
+/* First-run options: two compact cards on the dock's action side. */
+.data-choice-actions { display:flex; gap:12px; flex-shrink:0; }
+.data-choice-option {
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:3px 8px;
+  align-items:center;
+  width:230px;
+  box-sizing:border-box;
+  padding:10px 13px;
+  border:1px solid #79613c;
+  border-radius:2px;
+  background:#201a14e8;
+  color:#eee3c9;
+  font:inherit;
+  text-align:left;
+  cursor:default;
+}
+.data-choice-option:hover {
+  border-color:#d1aa5e;
+  background:#2b2117f2;
+}
+.data-choice-option:active { background:#15110d; }
+.data-choice-option:focus-visible {
+  outline:2px solid #e0bd73;
+  outline-offset:2px;
+}
+/* The recommended card is the dock's gold primary. */
+.data-choice-option.recommended {
+  border-color:#a98338;
+  background:#6d5222e8;
+  box-shadow:inset 0 0 0 1px #f1d58a18;
+}
+.data-choice-option.recommended:hover { background:#806329f2; }
+.data-choice-option.recommended .data-choice-name { color:#fff8e7; }
+.data-choice-name { font-size:15px; color:#fff2cf; }
+.data-choice-badge {
+  padding:2px 6px;
+  color:#e6c77f;
+  border:1px solid #9d783a80;
+  border-radius:2px;
+  font-size:10px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+.data-choice-description {
+  grid-column:1 / -1;
+  color:#d8caaaad;
+  font-size:11.5px;
+  line-height:1.35;
+}
+.data-choice-option.recommended .data-choice-description { color:#f0dfb7b3; }
+
+/* Download progress rail replaces the boot rail while this panel is up. */
+#data-download-track { position:absolute; top:-1px; left:0; right:0; height:3px;
+                       overflow:hidden; background:#201a14; }
+#data-download-fill { width:0; height:100%;
+                      background:linear-gradient(90deg,#8a6a2b,#d9b25c 55%,#f3dd9d);
+                      box-shadow:0 0 10px #d9b25c99;
+                      transition:width .25s ease; }
+#data-download-status { font-size:15px; color:#f0dfb7; }
+#data-download-detail { font-size:12.5px; color:#d8caaa8f; }
+
+.data-download-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.data-download-actions button {
+  min-height:38px;
+  padding:8px 16px;
+  border:1px solid #79613c;
+  border-radius:2px;
+  color:#eee3c9;
+  background:#201a14e8;
+  font:inherit;
+  cursor:default;
+}
+.data-download-actions button:hover:not(:disabled) {
+  border-color:#d1aa5e;
+  background:#2b2117f2;
+}
+.data-download-actions button:focus-visible {
+  outline:2px solid #e0bd73;
+  outline-offset:2px;
+}
+.data-download-actions button:disabled { opacity:.5; }
+.data-download-actions .launcher-primary {
+  border-color:#a98338;
+  color:#fff8e7;
+  background:#6d5222;
+}
+.data-download-actions .launcher-primary:hover:not(:disabled) { background:#806329; }
+.data-download-actions .launcher-link {
+  border-color:transparent;
+  color:#d8caaaad;
+  background:transparent;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.data-download-actions .launcher-link:hover:not(:disabled) {
+  color:#f3dd9d;
+  border-color:transparent;
+  background:transparent;
+}
+
+/* -------------------------------------------------------- credit + legal */
+/* Pinned just above the dock where the scrim is darkest and text stays
+   legible: screenshot credit left, legal notice right. */
+#loading-footer { position:absolute; left:0; right:0; bottom:calc(var(--dock-h) + 10px);
+                  display:flex; align-items:flex-end; justify-content:space-between;
+                  gap:18px; padding:0 16px; pointer-events:none; }
+#loading-footer a { pointer-events:auto; }
+
+#loading-credit { font-size:11.5px; color:#e8dcc08c; text-shadow:0 1px 5px #000e; }
+#loading-credit a { color:inherit; }
+
+#loading-legal { max-width:52ch; text-align:right; font-size:10px;
+                 line-height:1.45; color:#e8dcc07a; text-shadow:0 1px 5px #000e; }
+#loading-legal p { margin:0; }
+#loading-legal p.strong { color:#e8dcc0a6; margin-bottom:3px; }
+
+/* Narrow windows: stack the dock's info above its actions, shrink chrome. */
+@media (max-width:860px) {
+  #loading { --dock-h: 168px; }
+  #loading-dock { flex-wrap:wrap; align-content:center; padding:12px 18px; }
+  #data-choice, #data-download { flex-direction:column; align-items:stretch;
+                                 justify-content:center; gap:10px; text-align:center; }
+  .data-choice-actions { justify-content:center; }
+  .data-choice-option { width:auto; flex:1; max-width:260px; }
+  .data-download-actions { justify-content:center; flex-wrap:wrap; }
+  #loading-boot { width:100%; text-align:center; }
+  #loading-footer { flex-direction:column; align-items:center; gap:4px; }
+  #loading-legal { text-align:center; max-width:100%; }
+  #loading-logo { width:min(300px,70vw); }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  #loading, #loading-bg, #loading-fill, #data-download-fill { transition:none; }
+  #loading-bar.busy #loading-fill { animation:none; width:100%; opacity:.5; }
+}

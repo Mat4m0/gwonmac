@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Extract the Guild Wars Reforged client's X-Access-Key from an APK.
+"""Extract the Guild Wars client's X-Access-Key from an APK.
 
-Run once against a base.apk; the key it writes is what gwpatch.py consumes.
+Run against a base.apk when the public client key in the Electron host rotates.
 The key ships in the public client bundle -- it identifies the client, it does
 not authenticate a user -- but it is still a credential belonging to someone
 else's service, so the output file is written 0600 and is worth keeping out of

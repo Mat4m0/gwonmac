@@ -1,0 +1,20 @@
+{
+  "name": "gw-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "nuxt": "^4.0.1",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.9.2",
+    "vue": "^3.5.18",
+    "vue-tsc": "^3.0.4"
+  }
+}

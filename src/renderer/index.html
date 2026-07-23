@@ -1,0 +1,238 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Guild Wars</title>
+<!-- Packaged at the protocol root; the link tag avoids a speculative 404. -->
+<link rel="icon" href="favicon.png" type="image/png" sizes="48x48">
+<link rel="stylesheet" href="harness.css">
+<link rel="stylesheet" href="loading.css">
+
+<!-- tabindex=0 + autofocus match the shipped page; tabindex=-1 is focusable but
+     not keyboard-focusable, and key events never reached the module. -->
+<canvas id="canvas" tabindex="0" autofocus></canvas>
+
+<!-- The launcher owns this surface before the official game glue is loaded,
+     then remains as the ordinary startup overlay until the module is ready.
+     Layout: the artwork owns the window; every control lives in the dock along
+     the bottom edge, with the progress rail on the dock's top border. -->
+<div id="loading">
+  <div id="loading-bg"></div>
+  <div id="loading-scrim"></div>
+
+  <!-- noreferrer as well as noopener: these are external sites and there is
+       no reason to hand them the address of a server on someone's machine. -->
+  <nav id="loading-links">
+    <a href="#" data-settings>Settings</a>
+    <a href="#" data-external="store">Buy Guild Wars</a>
+    <a href="#" data-external="discord">Discord</a>
+    <a href="#" data-external="github">GitHub</a>
+    <a href="#" data-external="donate">Donate</a>
+  </nav>
+
+  <div id="loading-inner">
+    <img id="loading-logo" alt="Guild Wars">
+  </div>
+
+  <!-- Credit left, legal right, both just above the dock where the scrim is
+       darkest. Static, not fetched: a disclaimer that only appears when a
+       request succeeds is not a disclaimer. Mirrors gwtoolbox.com's footer. -->
+  <div id="loading-footer">
+    <div id="loading-credit"></div>
+    <div id="loading-legal">
+      <p class="strong">An independent fan project, in no way affiliated with or
+        endorsed by ArenaNet or NCSoft.</p>
+      <p>Guild Wars and all associated game content are © 2005–2026 ArenaNet, Inc.
+        All rights reserved. NCsoft, the interlocking NC logo, ArenaNet, Arena.net,
+        Guild Wars and all associated logos and designs are trademarks or
+        registered trademarks of NCsoft Corporation. All other trademarks are the
+        property of their respective owners.</p>
+    </div>
+  </div>
+
+  <div id="loading-dock">
+    <div id="loading-bar"><div id="loading-fill"></div></div>
+
+    <!-- Default dock content: boot progress. Hidden while a launcher decision
+         panel is visible (see loading.css :has rules). -->
+    <div id="loading-boot">
+      <div class="dock-info">
+        <div id="loading-label">Checking the game client</div>
+        <div id="loading-detail"></div>
+      </div>
+      <button type="button" id="loading-retry" hidden>Retry</button>
+    </div>
+
+    <section id="data-choice" aria-labelledby="data-choice-title" hidden>
+      <div class="dock-info">
+        <h2 id="data-choice-title">Welcome — choose how to play</h2>
+        <p>Choose what should happen before Guild Wars starts. You can change this later in Settings.</p>
+      </div>
+      <div class="data-choice-actions">
+        <button type="button" id="data-choice-full" class="data-choice-option">
+          <span class="data-choice-name">Download Full Game</span>
+          <span id="data-choice-full-size" class="data-choice-description">Download everything before starting.</span>
+        </button>
+        <button type="button" id="data-choice-quick" class="data-choice-option recommended">
+          <span class="data-choice-name">Quick Start</span>
+          <span class="data-choice-badge">Recommended</span>
+          <span class="data-choice-description">Download each area when you need it.</span>
+        </button>
+      </div>
+    </section>
+
+    <section id="data-download" aria-labelledby="data-download-title" hidden>
+      <div id="data-download-track" aria-hidden="true">
+        <div id="data-download-fill"></div>
+      </div>
+      <div class="dock-info">
+        <h2 id="data-download-title" class="sr-only">Downloading the full game</h2>
+        <p id="data-download-status" role="status" aria-live="polite">
+          Preparing the download…
+        </p>
+        <p id="data-download-detail">You can close the launcher and continue later.</p>
+      </div>
+      <div class="data-download-actions">
+        <button type="button" id="data-download-quick" class="launcher-link">
+          Back to Quick Start
+        </button>
+        <button type="button" id="data-download-toggle" class="launcher-secondary">
+          Pause Download
+        </button>
+        <button type="button" id="data-download-play" class="launcher-primary">
+          Play Now Instead
+        </button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- The module probes for Module.oskInput and concludes it cannot accept text
+     at all without these. It focuses them programmatically, hence tabindex=-1. -->
+<div class="osk-input-container"><input type="text" id="osk-input-text" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
+<div class="osk-input-container"><input type="email" id="osk-input-email" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
+<div class="osk-input-container"><input type="password" id="osk-input-password" class="osk-input" tabindex="-1"></div>
+<div class="osk-input-container"><input type="number" id="osk-input-number" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
+<div class="osk-input-container"><textarea id="osk-input-multiline" class="osk-input" rows="3" tabindex="-1"></textarea></div>
+
+<div id="log"></div>
+<output id="diagnostics" aria-live="off"></output>
+
+<!-- Settings: one compact panel with a section rail. Every pane fits without
+     scrolling. A status is never a button; danger actions are quiet and
+     separated; changes save automatically and say so. -->
+<dialog id="settings-dialog" aria-labelledby="settings-title">
+  <form method="dialog" id="settings-form">
+    <header class="settings-header">
+      <h2 id="settings-title">Settings</h2>
+      <span id="settings-saved" aria-hidden="true">Saved</span>
+      <button value="done" id="settings-done" aria-label="Close settings">&#10005;</button>
+    </header>
+
+    <div class="settings-body">
+      <div class="settings-rail" role="tablist" aria-label="Settings sections">
+        <button type="button" class="settings-rtab" id="settings-tab-data"
+                role="tab" aria-selected="true" data-pane="data">Game Data</button>
+        <button type="button" class="settings-rtab" id="settings-tab-display"
+                role="tab" aria-selected="false" data-pane="display">Display</button>
+        <button type="button" class="settings-rtab" id="settings-tab-controls"
+                role="tab" aria-selected="false" data-pane="controls">Controls</button>
+        <button type="button" class="settings-rtab" id="settings-tab-advanced"
+                role="tab" aria-selected="false" data-pane="advanced">Advanced</button>
+      </div>
+
+      <div class="settings-panes" data-active="data">
+        <section class="settings-pane" id="settings-pane-data" aria-labelledby="settings-data-title">
+          <h3 id="settings-data-title" class="sr-only">Game Data</h3>
+          <p id="settings-cache" class="settings-status" role="status" aria-live="polite">
+            Checking downloaded game data…
+          </p>
+          <div id="settings-progress" aria-hidden="true" hidden>
+            <div id="settings-progress-fill"></div>
+          </div>
+          <fieldset class="settings-data-strategy">
+            <legend>Game data mode</legend>
+            <div class="settings-seg" role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="dataStrategy" value="quick">
+                <span>Quick Start</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="dataStrategy" value="full">
+                <span>Full Game</span>
+              </label>
+            </div>
+          </fieldset>
+          <p id="settings-data-note" class="settings-note"></p>
+          <div class="settings-data-actions">
+            <button type="button" id="settings-download-full" class="primary">Start Downloading Now</button>
+          </div>
+          <div class="settings-divider" aria-hidden="true"></div>
+          <button type="button" id="settings-clear-cache" class="quiet-danger">Clear Game Data…</button>
+          <p class="settings-danger-sub">Frees the downloaded game data. Your login and settings are kept.</p>
+        </section>
+
+        <section class="settings-pane" id="settings-pane-display" aria-labelledby="settings-display-title">
+          <h3 id="settings-display-title" class="sr-only">Display</h3>
+          <fieldset>
+            <legend>Graphics quality</legend>
+            <div class="settings-seg" role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="renderScale" value="1">
+                <span>Performance — 1×</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="renderScale" value="1.5">
+                <span>Sharper — 1.5×</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="renderScale" value="2">
+                <span>Sharpest — 2×</span>
+              </label>
+            </div>
+          </fieldset>
+          <p class="settings-note">Higher values render more pixels — sharper, but heavier on the GPU.</p>
+        </section>
+
+        <section class="settings-pane" id="settings-pane-controls" aria-labelledby="settings-controls-title">
+          <h3 id="settings-controls-title" class="sr-only">Controls</h3>
+          <label class="settings-check">
+            <input type="checkbox" name="pointerLock">
+            <span>Lock pointer while controlling the camera</span>
+          </label>
+          <p class="settings-note">Hides the cursor while the mouse steers the camera, like on Windows.</p>
+        </section>
+
+        <section class="settings-pane" id="settings-pane-advanced" aria-labelledby="settings-advanced-title">
+          <h3 id="settings-advanced-title" class="sr-only">Advanced</h3>
+          <label class="settings-field">Mobile touch compatibility
+            <select name="touchMode">
+              <option value="dbltap">Double-click sends double-tap</option>
+              <option value="translate">Translate mouse to touch</option>
+              <option value="augment">Mouse and touch together</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label class="settings-check">
+            <input type="checkbox" name="showDiagnostics">
+            <span>Show performance overlay</span>
+          </label>
+          <div class="settings-divider" aria-hidden="true"></div>
+          <button type="button" id="settings-reset-launcher" class="quiet-danger">
+            Reset Launcher Settings…
+          </button>
+          <p class="settings-danger-sub">Shows the first-run choice again next launch. Data and login are kept.</p>
+        </section>
+      </div>
+    </div>
+
+    <footer class="settings-footerbar">
+      <p id="settings-feedback" class="settings-feedback" role="status" aria-live="polite"></p>
+      <span class="settings-autosave">Changes are saved automatically</span>
+    </footer>
+  </form>
+</dialog>
+
+<!-- loading.js first: it must paint before harness.js starts waiting. -->
+<script src="diagnostics.js"></script>
+<script src="loading.js"></script>
+<script src="harness.js"></script>
+<script src="settings.js"></script>

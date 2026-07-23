@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/* OFL-licensed QualiType face matching the launcher; license ships at /fonts/COPYING-QUALITYPE. */
+@font-face {
+  font-family: "QT Friz Quad";
+  src: url("/fonts/QTFrizQuad.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-display: "QT Friz Quad", "Iowan Old Style", Palatino, Georgia, serif;
+
+  --color-ink-950: #0a0806;
+  --color-ink-900: #100d0a;
+  --color-ink-800: #17120e;
+  --color-ink-700: #201a14;
+  --color-parchment-300: #e8dcc0;
+  --color-parchment-200: #eee3c9;
+  --color-parchment-100: #f2e8d2;
+  --color-gold-700: #8a6a2b;
+  --color-gold-400: #d9b25c;
+  --color-gold-200: #f3dd9d;
+  --color-bordergold-dim: #67583e;
+  --color-bordergold: #a98338;
+  --color-btn: #6d5222;
+  --color-btn-hover: #806329;
+  --color-btn-text: #fff8e7;
+  --color-focus: #e0bd73;
+
+  /* Launcher chrome is squared-off */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+}
+
+@layer base {
+  body {
+    @apply bg-ink-950 text-parchment-300 font-display antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  /* Mirrors launcher button.primary */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm border border-bordergold bg-btn px-6 py-3 text-btn-text transition-colors hover:bg-btn-hover;
+  }
+  /* Mirrors launcher secondary buttons */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-sm border border-bordergold-dim bg-ink-700 px-6 py-3 text-parchment-200 transition-colors hover:border-bordergold hover:bg-ink-800;
+  }
+  /* Mirrors launcher #data-choice panel: inset gold hairline */
+  .panel {
+    @apply rounded-sm border border-bordergold-dim bg-ink-800;
+    box-shadow:
+      inset 0 0 0 1px #f0d4921f,
+      0 3px 8px #0008;
+  }
+  /* Scrim over artwork, from loading.css */
+  .scrim {
+    background: linear-gradient(180deg, #0a0806cc 0%, #0a0806a6 45%, #0a0806f2 100%);
+  }
+  /* Launcher loading-bar gradient, used as accent rule */
+  .gold-rule {
+    background: linear-gradient(90deg, #8a6a2b, #d9b25c 55%, #f3dd9d);
+  }
+}
+
+/* Same ambient drift as the launcher artwork: felt, not seen. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-drift {
+    animation: hero-drift 38s ease-in-out infinite alternate;
+  }
+  @keyframes hero-drift {
+    from {
+      transform: scale(1) translateY(0);
+    }
+    to {
+      transform: scale(1.07) translateY(-1.2%);
+    }
+  }
+}

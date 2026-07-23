@@ -1,272 +1,251 @@
 # Internals
 
-How the client is put together and how this repo drives it. For running the
-game, see the [README](../README.md).
+Guild Wars is an Emscripten/JSPI WebAssembly client whose platform
+services are read from a JavaScript `Module` object. This repository supplies
+those services in a macOS Electron application.
 
-## How the client is built
+## Process model
 
-Guild Wars Reforged shipped on Android and iOS in June 2026. The mobile client
-turned out not to be a native port: it is a **Capacitor WebView wrapping an
-Emscripten-compiled build of the game**, with an Astro-built launcher around it.
-The wasm core is platform-agnostic — every platform service is injected as a
-plain JavaScript object — which means the same module that runs inside the app's
-WebView runs in an ordinary browser, given a host that supplies those services.
-
-That is what `harness/` is.
-
-## Status
-
-**The client boots and talks to ArenaNet.** The runtime initialises, the
-snapshot opens, reads are served on demand, the twelve `File*.ArenaNetworks.com`
-content servers resolve, and the client completes a short exchange with each —
-21 bytes out, 32 back — which is it sampling them before choosing one.
-
-Blocked on **authentication**: `login`, `secureStorage` and `nativeAccount` are
-logging stubs, so there are no credentials to present.
-
-Rendering is unverified. Headless Chromium aborts at
-`GL ES 3.0 default vertex shader compilation failed`
-(`Engine/Gr/Gles3/GlShaderCache.cpp:959`) under SwiftShader, immediately after
-logging "first frame presented", so the presentation path is wired but what a
-real GPU does is unknown.
-
-## Layout
-
-| | |
-|---|---|
-| `gw.py` | the whole runtime: downloads, serves, relays, opens a browser |
-| `harness/` | the page it serves; supplies the `Module.*` services |
-| `images/`, `fonts/` | loading-screen art and typeface |
-| `gwkey.py` | extracts the client's access key from an APK |
-| `gwpatch.py` | the patch protocol, standalone |
-| `tools/` | wasm patching, scanning and symbol recovery |
-
-## What is committed that arguably should not be
-
-No game binaries are in this repo; they are fetched from ArenaNet's CDN at
-runtime. Three deliberate exceptions:
-
-- **The access key**, hardcoded in `gw.py`. It ships in the public app bundle
-  and identifies the client rather than a user. Hardcoding it is what lets
-  `gw.py` run with nothing to configure. `gwkey.py` extracts a fresh one from
-  an APK if it rotates.
-- **`images/`** — the Guild Wars logo and four screenshots. ArenaNet's artwork,
-  committed so the loading screen works offline and does not hotlink a fan site
-  on every run. Screenshots from
-  [Snapshot Henchman](https://bloogum.net/guildwars/), credited on screen.
-- **`harness/favicon.ico`** — guildwars.com's icon, so the browser tab looks
-  like the game rather than a blank page. ArenaNet's mark, same category as
-  `images/`.
-- **`fonts/Fremont.woff`** — the loading typeface. Note this one is *not*
-  ArenaNet's: Fremont is © SoftMaker Software GmbH and the name is their
-  trademark, so the "interoperating with a game you own" reasoning does not
-  cover it. Of the three this is the one most likely to be a real problem if
-  the repo is ever opened up.
-
-None of these is a precedent for committing anything else.
-
-## Builds and downloads
-
-### Which build
-
-`--build` selects the pair to fetch, defaulting to `jspi`:
-
-```bash
-python3 gw.py --build jspi      # 8.2 MB, what Chrome picks
-python3 gw.py --build asyncify  # 27.8 MB, for Safari/iOS
-python3 gw.py --build both
+```text
+Electron main process
+  ArenaNet client updater + atomic artifact publication
+  native content-addressed chunk store
+  gw://app protocol
+  DNS + raw TCP ownership
+  explicit HTTPS proxy routes
+  encrypted owner-only saved-login handling
+  settings + lifecycle + diagnostics
+          │ narrow validated IPC
+Sandboxed preload
+          │ frozen window.gwNative capability object
+Chromium renderer
+  loading/settings UI
+  Emscripten Module host
+  JSPI WASM + WebGL/ANGLE
 ```
 
-The harness feature-detects at runtime exactly as the shipped launcher does —
-`ios ? Asyncify : 'Suspending' in WebAssembly` — and falls back if the preferred
-glue is absent.
+The renderer has no Node integration. Context isolation, Chromium sandboxing,
+web security, ASAR integrity, and app-only ASAR loading are enabled. Navigation,
+redirects, permissions, external links, DNS names, socket destinations, ports,
+proxy routes, IPC senders, and IPC payloads are validated in the main process.
 
-**If you switch builds, clear `dist/` first.** `gw.py` skips files that are
-already present at the right size, so a stale `Gw.wasm` lingers. Both builds were compiled
-with the same output basename, so `Gw.jspi.js` also asks for `Gw.wasm`; the
-harness redirects that via `locateFile`, but a leftover file is still confusing
-to reason about. The log line names the pair actually in use:
+`gw://app` is registered as a standard secure scheme before Electron becomes
+ready. It serves packaged renderer assets, current JSPI artifacts, virtual
+snapshot ranges, and an explicit set of proxy routes. It does not expose an
+arbitrary filesystem or URL fetch capability.
 
-```
-loading Gw.jspi.js (wasm: Gw.jspi.wasm) ...
-```
+## Source layout
 
-### The pieces individually
+| Path                      | Ownership                                                         |
+| ------------------------- | ----------------------------------------------------------------- |
+| `src/main/main.ts`        | composition root and application state                            |
+| `src/main/core/`          | updater, cache, DNS, sockets, credentials, settings, window state |
+| `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
+| `src/main/ipc.ts`         | validated native capability handlers                              |
+| `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
+| `src/preload/preload.cjs` | self-contained sandbox-compatible bridge                          |
+| `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
+| `src/shared/`             | contracts, validation types, progress, errors                     |
+| `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
+| `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
 
-```bash
-python3 gwkey.py base.apk        # -> access.key (mode 0600)
-python3 gwpatch.py               # list the manifest
-python3 gwpatch.py Gw.wasm -j 8  # fetch and reassemble one file
-```
+The preload is deliberately self-contained CommonJS. Electron’s sandboxed
+preload loader does not execute a local ESM dependency graph. Release tests
+therefore assert that its channel list exactly matches the canonical shared
+contract.
 
-`gwpatch.py` caches chunks by content hash under `gwpatch-cache/`, so a later run
-against a newer manifest only fetches hashes that actually changed. That is what
-makes it an updater rather than a downloader.
+## Game update and snapshot cache
 
-### Why not `python3 -m http.server`
+The main process downloads only:
 
-Two reasons, both fatal:
-
-- It ignores `Range` and answers `200` with the whole file. Snapshot reads are
-  small and random, so every read would drag the entire image.
-- It does not know `application/wasm`, which `instantiateStreaming` requires.
-
-`gw.py` handles both, and additionally serves `Gw.snapshot` **virtually from
-`gwpatch-cache/`** — mapping each range onto the 256 KB chunks covering it. Since
-reads are on demand, you can boot without ever assembling the 4.2 GB file.
-
-## What the manifest contains
-
-| File | Size | Notes |
-|---|---|---|
-| `Gw.js` | 493 KB | Emscripten glue; hosts the `EM_ASM` bodies |
-| `Gw.wasm` | 27.8 MB | Asyncify build |
-| `Gw.jspi.js` | 470 KB | glue for the JSPI build |
-| `Gw.jspi.wasm` | 8.2 MB | JSPI build — same game, ~4× smaller code section |
-| `Gw.snapshot` | 4.20 GB | game data image, read on demand |
-| `version.json` | 127 B | build metadata |
-
-`chunkSize` is 256 KB and `compressionMode` is `none`.
-
-## Notes on the module
-
-Both builds are stripped: no `name` section, 17.6k functions, no symbols. The
-`external_debug_info` custom section names `Gw.wasm.debug`, but that file is not
-in the manifest — the sidecar is built and not shipped.
-
-The JSPI build is the better analysis target. It has essentially the same
-function count as the Asyncify build (17,596 vs 17,648) in 6.5 MB of code rather
-than 26.2 MB; the difference is Asyncify's instrumentation of every suspendable
-call site.
-
-`target_features` lists no `atomics` and no SIMD, so the module is
-single-threaded. There is no `SharedArrayBuffer`, and therefore **no COOP/COEP
-headers are needed** to host it — usually the most painful part of self-hosting
-an Emscripten build.
-
-Imports are 212 `env` plus 7 `wasi_snapshot_preview1`. EGL appears in the import
-list, so GLES is translated to WebGL by Emscripten's shim.
-
-### Host interfaces
-
-The glue reads platform services off `Module`. Implementing these is the whole
-job:
-
-| Object | Purpose |
-|---|---|
-| `image` | random-access reads over `Gw.snapshot` |
-| `socket` | TCP; `connect(destAddr)` returns a socket object |
-| `dns` | `resolve(name)` → address |
-| `shop`, `login`, `nativeAccount`, `adProvider`, `secureStorage`, `browser`, `events` | commerce, accounts, telemetry |
-
-`image` is the interesting one:
-
-```
-open(path)                                   -> handle (0 = failure)
-fileSize(handle)                             -> size, SYNCHRONOUSLY
-readAsync(imageId, offset, null, buf, bytes) -> Promise, writes into HEAPU8 at buf
-isCached(handle, offset, size)               -> truthy
-cacheAsync(handle, offset, size, progressCb) -> Promise
-close(handle)
+```text
+Gw.jspi.js
+Gw.jspi.wasm
+version.json
 ```
 
-Random access with an explicit caching layer means the snapshot is streamed on
-demand. Booting touches ~30 chunks, not all 4.2 GB.
+Existing artifacts are verified chunk-by-chunk against the current manifest;
+equal file length is not treated as proof of equality. New artifacts are built
+in a part file, synced, and renamed only after every content hash passes.
 
-`fileSize` is synchronous, so the size must be known before the module asks —
-the harness reads it from `snapshot-chunks.json` before loading the glue.
+`Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
+range onto 256 KB chunks, coalesces concurrent requests by content hash,
+verifies downloaded bytes, and publishes chunks atomically. Its in-memory
+residency set is initialized with one directory scan and updated on
+publication. Snapshot requests never rescan every hash on disk.
 
-**Nine of these are awaited or `.then()`d by the glue.** Returning `undefined`
-from one throws `Cannot read properties of undefined (reading 'then')` and kills
-the frame mid-connect, so a stub for any of them must be a promise, not merely
-callable:
+The renderer keeps a disposable 256 MB LRU of chunk bytes. The main-process
+content store is canonical. `image.fileSize` stays synchronous because the
+snapshot metadata is obtained before the Emscripten glue is appended.
 
-```
-image.cacheAsync            adProvider.showInterstitial
-dns.resolve                 ageSignals.check
-secureStorage.getCredentials / storeCredentials / clearCredentials
-shop.initialize / inAppPurchase
-```
+Download concurrency is capped at eight. This is a conduct constraint as well
+as a performance setting: every installation uses the public client access key
+against ArenaNet’s production service.
 
-`socket.connect(destAddr)` returns an object on which the glue assigns
-`onopen`, `onclose` and `onmessage` — and it calls `onmessage` with the payload
-directly, not with an event.
+## WASM host
 
-## The relay is deliberately narrow
+`Module` must be declared with `var`; the generated glue redeclares it.
+`Gw.jspi.js` asks for `Gw.wasm`, so `locateFile` explicitly selects
+`Gw.jspi.wasm`. Asyncify is not a production fallback.
 
-Browsers cannot open raw TCP — which is exactly why the shipped Capacitor build
-carries a native socket plugin. `gw.py` stands in for it, on the same port it
-serves the page from, so the bridge is same-origin with the harness.
+Before `Gw.jspi.js` is appended, the renderer resolves the single
+`dataStrategy` setting against native cache residency. `null` owns the
+first-run choice, `quick` releases boot immediately, and incomplete `full`
+owns the foreground downloader. The game, audio context, sockets, and WebGL
+runtime cannot start behind the launcher. Cache residency—not a saved progress
+counter—is the download truth.
 
-A WebSocket-to-TCP bridge on localhost is an open proxy, and every page in your
-browser can reach it, not just this one. Without limits, any site you visit
-could use it to reach hosts on your LAN it could never reach directly. So:
+Awaited host calls always return promises:
 
-- it binds `127.0.0.1` only
-- `/dns` resolves names under `arenanetworks.com` / `guildwars.com` and nothing else
-- it dials **public unicast addresses only** — loopback, RFC1918, CGNAT and
-  link-local (including cloud metadata endpoints) are all refused, so the bridge
-  cannot reach anything a page could not reach directly
-- destination ports are allowlisted (`6112,80,443` by default)
-- the `Origin` header must be this server
-
-The address rule replaced an earlier one that allowed only IPs the relay had
-itself resolved. That was tighter but wrong: the client takes its game server
-address from the authenticated login response, not from DNS, so no lookup ever
-passes through `/dns` and nothing legitimate could connect.
-
-`GW_RELAY_DOMAINS` and `GW_RELAY_PORTS` widen the allowlists; do that only if
-you have thought about the above. `GW_RELAY_ALLOW_PRIVATE=1` disables the
-address rule outright and exists for `e2e.js`, which dials a loopback fixture —
-it announces itself loudly at startup and is not for ordinary use.
-
-## Loading-screen footer links
-
-Discord, GitHub and Donate, in the middle of the footer, mirroring
-gwtoolbox.com. The destinations were taken from that site rather than invented:
-`discord.gg/pGS5pFn` and `opencollective.com/gwdevhub_collective`, both
-confirmed live.
-
-Every link carries `rel="noopener noreferrer"`: these are external sites, and
-there is no reason to hand them a window handle or the address of a server on
-someone's machine. `e2e.js` asserts it.
-
-## CI
-
-`.github/workflows/release.yml` runs the suite on every push to `main` and, if
-it passes, publishes a release: a zip of `gw.py`, `harness/`, `images/`,
-`fonts/`, the README and the licence -- what someone needs to run it, without
-`tests/`, `tools/` or `docs/`.
-
-Three things it is doing deliberately:
-
-- **`test_no_leaks.py` gates the release.** Publishing is exactly the moment
-  that guard matters, since a release turns a mistake into a download.
-- **No `pip install` anywhere**, and a bare `import gw` on a clean interpreter.
-  If the zero-dependency property is ever lost, that step is where it breaks.
-- **Python 3.8 and 3.13**, because the README promises 3.8 and an untested
-  floor is a guess.
-
-The release job re-tests the *unpacked zip* rather than the checkout, so a file
-that only resolves because it happens to sit in the repo is caught before it
-ships.
-
-## Tests
-
-```bash
-python3 tests/test_gw.py         # framing, allowlists, DNS, ranges, snapshot, proxy
-python3 tests/test_no_leaks.py   # nothing publishable-by-accident is tracked
-node    tests/test_harness.js    # Module adoption and the host surface
-node    tests/e2e.js             # the real harness in headless Chromium
+```text
+image.cacheAsync
+dns.resolve
+secureStorage.getCredentials/storeCredentials/clearCredentials
+adProvider.showInterstitial
+ageSignals.check
+shop.initialize/inAppPurchase
 ```
 
-Everything runs offline against local fixtures — a synthetic snapshot, a
-stand-in TCP server, and a mock glue that drives `Module.*` the way the real
-glue does. `e2e.js` is the one that matters: every harness bug so far has lived
-in that wiring rather than in the parts a unit test reaches.
+The generated glue requires all three credential methods. They cross a narrow
+IPC boundary to one native `CredentialsStore`, which writes encrypted
+`credentials.bin` atomically with mode `0600`. Because ad-hoc builds have no
+stable signing identity, the main process enables Chromium's
+`use-mock-keychain` provider before ready. Electron `safeStorage` therefore
+uses a local mock profile key rather than macOS Keychain: it prevents recurring
+OS prompts and casual plaintext disclosure, but does not defend the saved
+login from software running as the same user. An unreadable pre-cutover
+Keychain-backed ciphertext is deleted once and the game prompts again.
+Browser cookies are cleared at startup and quit. Persistent IDBFS client
+preferences and the dedicated saved-login file remain intact.
+No federated provider is advertised, allowing the client’s username/password
+flow to own the UI. The app has no independent update feed;
+application replacements are manual, while the ArenaNet client updater remains
+automatic. Commerce, ads, browser, and event services remain inert capability
+stubs where the desktop client does not need the mobile integration.
 
-It needs a Chromium. It looks in `~/.cache/ms-playwright`, or set `CHROME_PATH`;
-`npx playwright install chromium` if you have neither.
+The native socket manager owns all TCP handles. It permits only public-unicast
+destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes
+per renderer, and closes an owner’s sockets on reload, renderer loss, or quit.
+DNS accepts only approved ArenaNet/Guild Wars suffixes and retains the raw DNS
+fallback needed for the `0.0.1.2` datacenter sentinel.
 
-What it cannot check is whether the real wasm is satisfied — that still needs
-artifacts and network.
+Game socket payloads are views into WebAssembly memory. The renderer copies
+each outbound view into a compact `Uint8Array` before crossing
+`contextBridge`; otherwise Electron can serialize the view’s entire backing
+memory for a packet only a few bytes long. Main still owns validation,
+backpressure, ordering, and the TCP write. Diagnostics reconcile logical,
+source-backing, compact, IPC-backing, and written byte counts without recording
+packet contents.
+
+Closing the single game window is an application quit. The close event is
+converted to `app.quit()` before the renderer is destroyed, cleanup closes
+sockets and background work, diagnostics flush their final lifecycle events,
+and the process exits with status zero. Main-to-renderer events are dropped
+once either the window or its `webContents` is destroyed. Renderer recovery is
+reserved for unexpected loss while the application is not quitting.
+
+## Rendering and input
+
+The client creates a WebGL context on an `OffscreenCanvas`. The EGL import
+patch presents each successful swap through `transferToImageBitmap()` and the
+visible canvas’s `bitmaprenderer`. Backing dimensions are CSS dimensions times
+the selected render scale, deliberately independent of device pixel ratio.
+
+The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
+fullscreen, touch translation, and right-drag pointer lock. Pointer lock uses a
+virtual cursor and recycles a held drag at canvas edges so camera rotation does
+not stall.
+
+## Diagnostics
+
+Every event uses an integer monotonic microsecond timestamp, sequence number,
+process/subsystem name, level, typed scalar fields, and optional
+`traceId`/`spanId`/`parentSpanId`. Seven-sample renderer/main clock
+synchronization chooses the lowest-round-trip sample and repeats after
+visibility changes and every five minutes.
+
+The shared timeline starts at process launch and records Electron ready,
+renderer load, WASM instantiation begin/end, streaming fallback, runtime ready,
+first submitted frame, startup complete, and the official client build id.
+
+Level 0 is always active:
+
+- bounded 2,048-event memory ring;
+- five rolling 5 MB JSONL files;
+- renderer aggregation every two seconds, never per-frame IPC;
+- fixed-bucket frame, swap, snapshot, socket-bridge, and input latency
+  distributions, merged without reducing them to averages;
+- event-loop and process samples;
+- cache/disk/network/protocol spans;
+- GPU, power, thermal, lifecycle, crash, and context-loss signals.
+
+Level 1 adds fixed-width per-frame records. The renderer batches them; the main
+process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
+an argument-filtered Chromium trace with selected supported categories, a 256
+MB buffer, an 80% stop threshold, and a 120-second time limit.
+
+`.gwdiag` is a ZIP with:
+
+```text
+manifest.json
+report.json
+summary.json
+capture-summary.json         optional, selected Level 1/2 window only
+events.jsonl
+previous-events.jsonl        optional, latest abnormally ended session
+frames.bin                   optional
+histograms.json
+environment.json
+settings-redacted.json
+chromium-trace.json        optional
+```
+
+`events.jsonl` is assembled from the complete retained session files rather
+than the smaller live memory ring. Manifest metadata states whether session
+start is still retained and gives exact event and capture sequence bounds.
+`report.json` is the compact triage entry point: startup stage, error/warning
+counts, last structured error, capture state, and key performance percentiles.
+The immediately previous retained session is included as
+`previous-events.jsonl` when it lacks `quit.cleanupCompleted` or contains a
+fatal main exception, cleanup failure, or unexpected renderer loss. Cleanup
+can complete after a fatal error, so outcome and cleanup state are evaluated
+separately. Clean previous sessions are not duplicated.
+
+Renderer console text remains renderer-local and bounded. Only allow-listed
+failure names and non-text eight-hex fingerprints cross IPC. This makes
+repeated failures correlatable without exporting exception text, account data,
+chat, paths, request contents, or packet contents.
+The recorder normalizes every event name to a dot-separated identifier, so all
+producers share one searchable vocabulary.
+Event-loop delay uses reset five-second windows at 5 ms resolution. When
+`frames.bin` exists, the tools calculate exact visible-only frame percentiles,
+FPS, and stalls from its fixed-width records.
+
+Exports fail closed on credential-shaped content. Chromium net bodies, HTTP
+headers, account request bodies, TCP payloads, and crash dumps are never
+included. Crashpad is local-only and retains at most three dumps.
+
+The comparison tool warns about architecture, OS, app version, GPU renderer,
+render scale, canvas size, capture level, visibility, same-session and
+overlapping-window differences. Deep traces are labeled profiler-contaminated
+and should locate a bottleneck, not provide the final before/after number.
+
+## Verification boundaries
+
+Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
+cache coalescing, hash validation, resume behavior, and diagnostics payloads.
+Integration tests exercise artifact publication and rollback against an
+in-memory patch fixture. Playwright launches the real Electron shell and
+asserts the protocol origin, sandboxed preload surface, absence of Node globals,
+clock/metrics availability, and capture lifecycle.
+
+The opt-in live smoke passed on Apple Silicon on July 23, 2026 against the
+current production client: JSPI initialized, hardware acceleration was active,
+snapshot reads completed, and a frame was submitted. It does not prove:
+
+- a real account completes login;
+- ANGLE/Metal renders the real client correctly on every advertised Mac;
+- signing, notarization, and update credentials are valid.
+
+Those are explicit live release gates, not assumptions hidden behind unit
+tests.

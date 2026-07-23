@@ -1,216 +1,187 @@
-# Guild Wars in your browser
+# Guild Wars for macOS
 
-Runs the WebAssembly build of Guild Wars locally, in an ordinary browser.
+An Electron host for ArenaNet’s official Guild Wars WebAssembly
+client. The application downloads the JSPI client directly from ArenaNet,
+streams the game snapshot through a native content-addressed cache, exposes the
+small platform surface the client expects, and renders it in a sandboxed
+Chromium process.
 
-```bash
-python3 gw.py
-```
+This is an independent interoperability project. It is not affiliated with or
+endorsed by ArenaNet or NCSoft, and it contains no game binaries.
 
-That is the whole thing. It downloads what it needs, serves it, and opens your
-browser.
+## Current status
 
-## Read this first — what actually works
+The Python/browser runtime has been retired. Electron is the only production
+path.
 
-This is a work in progress, and it matters to be straight about where it stops.
+- The JSPI client updater, virtual snapshot, native TCP/DNS bridge, HTTPS proxy,
+  settings, encrypted saved login, input, audio, fullscreen, and
+  OffscreenCanvas presentation paths are implemented.
+- The offline Electron acceptance suite verifies the custom protocol,
+  sandboxed preload, narrow native bridge, and diagnostics capture lifecycle.
+- Guild Wars' own **Remember Password** flow stores one encrypted, owner-only
+  local file. Credentials are never logged, exported, or placed in macOS
+  Keychain.
+- On July 23, 2026, the opt-in live smoke test downloaded the current ArenaNet
+  client, initialized JSPI with hardware acceleration, read the real snapshot,
+  and submitted a frame on Apple Silicon. Account login and broader Mac/GPU
+  coverage remain live release gates.
+- Current builds are ad-hoc signed and distributed as source/local beta builds;
+  no paid Apple developer account is required. macOS may require a manual
+  first-open confirmation, but login never invokes Keychain. Developer ID
+  signing remains an optional future distribution improvement.
 
-| | |
-|---|---|
-| ✅ The client downloads, boots and runs | |
-| ✅ It reaches ArenaNet's live game servers | all twelve resolve and answer |
-| ✅ Game data streams on demand, or downloads up front | |
-| ❌ **You cannot log in** | nothing is wired up to take your credentials |
-| ❓ Whether the game *draws anything* | untested on real hardware |
+## Development
 
-**You cannot currently play Guild Wars with this.** The client starts and talks
-to ArenaNet, but the parts that would hand it a username and password
-(`login`, `secureStorage`, `nativeAccount`) are stubs that only write to a log.
-There is nothing to type credentials into. Authentication is the next piece of
-work and it has not been started.
+Requirements:
 
-Rendering has only ever been exercised in a headless browser, where the game
-aborts while compiling its shaders because there is no real GPU. On a normal
-machine it may well draw fine — nobody has checked. If you try it, that is
-genuinely useful information; see *If something goes wrong* below.
-
-So this is worth running to see how far the port has got, or to work on it. It
-is not yet a way to play the game.
-
-## What you need
-
-- **Python 3.8 or newer.** Nothing else — no `pip install`, no Node.js.
-  - macOS and Linux already have it. Run `python3 --version` to check.
-  - Windows: install from [python.org](https://www.python.org/downloads/) and
-    tick **"Add python.exe to PATH"** during setup.
-- **About 1 GB of free disk space**, or **5 GB** if you use `--image`.
-- A recent **Chrome, Edge or Firefox**. Chrome is what this is tested against.
-
-You do not need to own Guild Wars to get this far, because it never reaches a
-login. You would need an account to actually play, once that exists.
-
-## Running it
-
-1. Download the latest **[release zip](https://github.com/gwdevhub/gw_in_browser/releases/latest)**.
-2. **Unzip it properly**, to a real folder — do not run `gw.py` from inside the
-   zip. Windows lets you open a zip like a folder, but double-clicking `gw.py`
-   there runs it on its own without the rest of the game. (If you do, it will
-   tell you so rather than failing silently.)
-3. Start it:
-   - **Windows**: double-click `gw.py`.
-   - **macOS**: double-click `gw.command`. The first time, Finder may refuse
-     with "cannot be opened because it is from an unidentified developer" --
-     right-click it and choose **Open** instead, once.
-   - **Linux**: open a terminal in the folder and run `python3 gw.py`.
-
-Your browser opens by itself, and on Windows the black command window tucks
-itself into the taskbar once it has. **Leave it running** — closing it stops
-the server, and the game with it.
-
-**Closing the browser stops it.** A few seconds after the last tab pointing at
-the game is gone, `gw.py` shuts itself down — there is nothing left running and
-nothing to remember to kill. Reloading the page, or having a second tab open,
-does not trigger it.
-
-You can also bring the window back up and press **Ctrl+C**, or just close it.
-
-The window is deliberately minimised rather than hidden: it is where errors
-appear, and it is the manual way to stop a server that is also holding a
-network connection open.
-
-### The first run takes a while
-
-It downloads the game client first (about 8 MB), then the game starts pulling
-its own data as it needs it — roughly 360 MB over a few minutes. The loading
-screen shows both, with a speed and a time estimate.
-
-Later runs are much quicker, because everything downloaded is kept.
-
-### Downloading everything up front
-
-To wait once instead of every time:
+- macOS on Apple Silicon
+- Node.js 20.19 or newer
+- pnpm 11
 
 ```bash
-python3 gw.py --image
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-This fetches the complete 4.2 GB game image before starting — expect **around
-20 minutes**. Afterwards the game needs no network at all for game data.
+The first online run fetches the small JSPI client artifacts. Game data is
+downloaded in 256 KB content-addressed chunks as the client asks for it.
+The one-time launcher choice selects Quick Start or Full Game before the
+official game client runs. Full Game remains in the launcher until the verified
+download completes or the user explicitly chooses Play Now. The same strategy
+can be changed in Settings for the next launch.
+Concurrency remains capped at eight to avoid unnecessary load on ArenaNet’s
+production CDN.
 
-Stop it whenever you like with Ctrl+C and run it again later: it resumes exactly
-where it left off and never re-downloads anything it already has.
+See the [user guide](docs/user-guide.md) for the ad-hoc macOS first-open flow,
+Quick Start, downloading or pausing the full game, settings, updates, local
+data, and bug reports.
 
-## Options
-
-You only need these to change a default or work around a problem.
-
-| Option | What it does |
-|---|---|
-| `--image` | download all 4.2 GB before starting, instead of streaming |
-| `-p 9000` | serve on a different port, if 8080 is taken |
-| `--no-browser` | do not open a browser automatically |
-| `--offline` | never download; use only what is already on disk |
-| `--no-update` | skip the check for a newer game version |
-| `--build asyncify` | the build for Safari and iOS (27.8 MB rather than 8.2 MB) |
-| `-j 16` | download with more threads — see below |
-| `-v` | log every request, for diagnosing a problem |
-
-Run `python3 gw.py --help` for the full list.
-
-### Downloading faster
-
-Downloads are limited by round-trip time, not bandwidth, so more threads means
-almost proportionally more speed:
-
-| `-j` | speed | 4.2 GB takes |
-|---|---|---|
-| 8 (default) | ~3 MB/s | ~20 min |
-| 16 | ~7 MB/s | ~9 min |
-| 32 | ~12 MB/s | ~6 min |
+Build a local `.app`:
 
 ```bash
-python3 gw.py --image -j 16
+pnpm package
 ```
 
-**Please think before raising this much.** These are ArenaNet's real servers,
-and everyone using this shares one access key — so if that key gets
-rate-limited, patching breaks for actual paying players, not just for us. 8 is
-the default for that reason, and 16 is already a favour being asked.
+Forge writes the application under `out/`. Create the distributable ZIP with:
 
-## Where it puts things
+```bash
+pnpm make
+```
 
-Everything lands next to `gw.py`. Nothing is installed system-wide and nothing
-is written elsewhere:
+## Verification
 
-- `dist/` — the game client and the page it is served from
-- `gwpatch-cache/` — downloaded game data, kept in 256 KB pieces
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test:unit
+pnpm test:integration
+pnpm test:electron
+pnpm test:release
+pnpm package
+```
 
-Deleting either is safe; both are rebuilt on the next run. Deleting
-`gwpatch-cache/` means downloading the game data again.
+`pnpm verify` runs the complete local gate. The Electron test launches a real
+macOS application process, so it needs permission to open GUI applications.
+The networked smoke test is intentionally opt-in:
 
-## If something goes wrong
+```bash
+GW_LIVE_SMOKE=1 pnpm test:electron
+```
 
-**Double-clicking does nothing, or "python3: command not found"**
-Python is missing or not on your PATH. See *What you need*. On Windows,
-reinstall it with "Add python.exe to PATH" ticked.
+## Diagnostics
 
-**"Guild Wars cannot start: it is still inside the zip"**
-Exactly what it says — extract the zip to a real folder first, then run `gw.py`
-from there.
+The app records a bounded, local-only Level 0 flight recorder:
 
-**"Address already in use"**
-Something else has port 8080. Use `python3 gw.py -p 9000`.
+- synchronized process → renderer → WASM → runtime → first-frame timings and
+  the official client build id;
+- renderer rAF and submitted-frame aggregates;
+- swap and ImageBitmap presentation cost;
+- snapshot/cache/network/disk timing;
+- input-to-next-submit timing;
+- main and Chromium process CPU/memory;
+- main event-loop delay;
+- GPU, JSPI, power, thermal, suspend, and crash state;
+- socket counts, byte counts, lifetimes, and close reasons.
 
-**The page says it could not download the game**
-Check your connection, then read the terminal window — the actual error is
-printed there. Run it again; nothing already downloaded is lost.
+No telemetry is uploaded. Passwords, account identifiers, authorization,
+cookies, request bodies, and game packet payloads are never recorded.
 
-**"Not enough disk space"**
-`--image` needs about 5 GB free. Free some up, or run without `--image`.
+Use **View → Start Performance Capture** for bounded per-frame Level 1 data, or
+**View → Start Chromium Trace** for a short Level 2 trace. Captures stop after
+120 seconds and then offer export. Press **Cmd+Shift+M** when a visible
+performance problem occurs; the marker records only its timestamp. Choose
+**Help → Report a Problem…** for the guided path. It creates one `.gwdiag`
+file containing a machine-readable health report, the complete retained
+current-session log, and—when the previous run ended abnormally—the retained
+tail of that run.
 
-**The loading screen finishes and the window is blank**
-That is the open rendering question above. Please
-[open an issue](https://github.com/gwdevhub/gw_in_browser/issues) saying which
-operating system, browser and graphics card you have — that is exactly the
-information this project is missing.
+Inspect captures without opening the application:
 
-**It seems stuck**
-Ctrl+C in the terminal and start it again. Progress is kept.
+```bash
+pnpm diagnostics:validate capture.gwdiag
+pnpm diagnostics:summarize capture.gwdiag
+pnpm diagnostics:compare before.gwdiag after.gwdiag
+```
 
-## For developers
+Published performance claims should use alternating sets of comparable
+packaged-build runs, not a single profiler-contaminated trace.
 
-The technical write-up — how the client is put together, the patch protocol,
-the host interfaces the module expects, the WebSocket relay, snapshot read
-performance and the tests — is in **[docs/internals.md](docs/internals.md)**.
+Report ordinary bugs through the
+[GitHub bug form](https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml)
+and attach the single `.gwdiag` file. Report security-sensitive findings
+privately as described in [SECURITY.md](SECURITY.md).
 
-`CLAUDE.md` records how the project got here and which mistakes not to repeat.
+## Local data
 
-## Credits and legal
+Electron stores settings, cached chunks, downloaded client artifacts, and
+rolling diagnostics under its macOS user-data directory
+(normally `~/Library/Application Support/Guild Wars`).
 
-An independent fan project, **in no way affiliated with or endorsed by ArenaNet
-or NCSoft**.
+- Cached game chunks and client artifacts are reproducible.
+- Window size, position, and normal/maximized/fullscreen mode are restored from
+  an owner-only `window-state.json`. Missing monitors fall back safely to a
+  centered primary-display window.
+- Saved login is encrypted in an owner-only `credentials.bin` file and crosses
+  only the narrow credential IPC methods required by the game host.
+- Chromium uses its local mock profile key in ad-hoc macOS builds to avoid
+  recurring Safe Storage dialogs. This is intentionally weaker than macOS
+  Keychain protection: software running as the same macOS user may be able to
+  recover the saved login. Browser cookies are cleared at startup and quit.
+- Diagnostics retain at most five 5 MB JSONL files.
+- At most three crash dumps are retained locally and they are never exported.
+- The host application itself does not contact an update feed. Install a newer
+  source or release build manually; the ArenaNet game client still updates
+  automatically from ArenaNet.
+
+## Architecture
+
+See [docs/internals.md](docs/internals.md) for the process model, security
+boundaries, updater/cache design, renderer host surface, and diagnostics
+format. [port-plan.md](port-plan.md) is the port specification and acceptance
+checklist.
+
+Developer-only reverse-engineering tools remain under `tools/`; `gwkey.py`
+extracts a rotated public client key from an APK if ArenaNet changes it.
+
+## Legal
 
 Guild Wars and all associated game content are © 2005–2026 ArenaNet, Inc. All
 rights reserved. NCsoft, the interlocking NC logo, ArenaNet, Arena.net, Guild
-Wars and all associated logos and designs are trademarks or registered
-trademarks of NCsoft Corporation. All other trademarks are the property of
-their respective owners.
+Wars and associated logos and designs are trademarks or registered trademarks
+of NCsoft Corporation.
 
-Loading screen photography by
+Loading-screen photography is by
 [Snapshot Henchman](https://bloogum.net/guildwars/).
 
-This repository contains no game binaries. They are downloaded from ArenaNet's
-own servers when you run it.
+The loading-screen typeface is QT Friz Quad, © 1992 QualiType, distributed
+under the SIL Open Font License 1.1. Its license is included with the font.
 
-### Licence
+The GPL-3.0 license covers the project source code. Unless an asset carries an
+explicit license of its own, Guild Wars imagery, screenshots, loading artwork,
+the application icon, and derived favicons are fan-project visual material and
+are not relicensed under GPL-3.0. All underlying rights remain with their
+respective owners.
 
-GPL-3.0, matching `gwlauncher` and `gMod`. See `LICENSE`.
-
-Copyleft is the deliberate choice here: the value of this repo is the recovered
-knowledge of how the client is put together, and forks of it should stay open
-for the same reason the original work was worth doing.
-
-### Please be considerate
-
-This talks to ArenaNet's real servers. Download concurrency is capped on
-purpose, and the same access key is shared by everyone using this — so pushing
-it harder risks getting that key rate-limited, which would break patching for
-actual players. Please leave the limits where they are.
+Source code is GPL-3.0-only. See [LICENSE](LICENSE).

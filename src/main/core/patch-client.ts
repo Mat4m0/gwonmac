@@ -1,0 +1,455 @@
+import { createHash } from "node:crypto";
+import {
+  copyFile,
+  link,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  rm,
+  stat,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { gunzip } from "node:zlib";
+import type { DownloadProgress } from "../../shared/contracts.js";
+import { AppError, HttpStatusError } from "../../shared/errors.js";
+import { bytesPerSecond, secondsRemaining } from "../../shared/progress.js";
+import {
+  ACCESS_KEY,
+  COMMON_ARTIFACTS,
+  FATAL_HTTP,
+  HASH_ALGOS,
+  JSPI_ARTIFACTS,
+  PATCH_ROOT,
+  PREFETCH_JOBS,
+  SNAPSHOT,
+  UA,
+} from "./access-key.js";
+import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
+import { Manifest, type CompressionMode, type ManifestFileEntry } from "./manifest.js";
+import { publishSnapshotIndex } from "./snapshot.js";
+
+const gunzipAsync = promisify(gunzip);
+
+export type FetchLike = (
+  url: string,
+  init?: { headers?: Record<string, string>; method?: string },
+) => Promise<{ status: number; body: Uint8Array }>;
+
+export interface PatchClientOptions {
+  artifactsDir: string;
+  chunksDir: string;
+  patchRoot?: string;
+  fetch?: FetchLike;
+  jobs?: number;
+  onProgress?: (p: DownloadProgress) => void;
+  accessKey?: string;
+  userAgent?: string;
+}
+
+function defaultFetch(): FetchLike {
+  return async (url, init) => {
+    const req: RequestInit = { method: init?.method ?? "GET" };
+    if (init?.headers) req.headers = init.headers;
+    const res = await fetch(url, req);
+    return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) };
+  };
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function mapPool<T>(items: T[], jobs: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(jobs, items.length) || 0 }, async () => {
+      while (true) {
+        const i = next++;
+        if (i >= items.length) return;
+        await fn(items[i]!);
+      }
+    }),
+  );
+}
+
+function verifyHash(hash: string, data: Uint8Array): void {
+  const algo = HASH_ALGOS[hash.length];
+  if (!algo) throw new AppError("hash_format", `unsupported chunk hash: ${hash}`);
+  if (createHash(algo).update(data).digest("hex") !== hash.toLowerCase()) {
+    throw new AppError("hash_mismatch", `hash mismatch on chunk ${hash}`);
+  }
+}
+
+async function decodeChunk(
+  data: Uint8Array,
+  compression: CompressionMode,
+): Promise<Uint8Array> {
+  return compression === "gzip" ? gunzipAsync(data) : data;
+}
+
+export class PatchClient {
+  private readonly artifactsDir: string;
+  private readonly chunksDir: string;
+  private readonly patchRoot: string;
+  private readonly fetchFn: FetchLike;
+  private readonly jobs: number;
+  private readonly onProgress: ((p: DownloadProgress) => void) | undefined;
+  private readonly headers: Record<string, string>;
+
+  constructor(opts: PatchClientOptions) {
+    this.artifactsDir = opts.artifactsDir;
+    this.chunksDir = opts.chunksDir;
+    this.patchRoot = opts.patchRoot ?? PATCH_ROOT;
+    this.fetchFn = opts.fetch ?? defaultFetch();
+    this.jobs = opts.jobs ?? PREFETCH_JOBS;
+    this.onProgress = opts.onProgress;
+    this.headers = {
+      "X-Access-Key": opts.accessKey ?? ACCESS_KEY,
+      "User-Agent": opts.userAgent ?? UA,
+      "Accept-Encoding": "identity",
+      Connection: "keep-alive",
+    };
+  }
+
+  private emit(p: DownloadProgress): void {
+    this.onProgress?.(p);
+  }
+
+  async getBytes(url: string, tries = 4): Promise<Uint8Array> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < tries; attempt++) {
+      try {
+        const { status, body } = await this.fetchFn(url, { headers: this.headers });
+        if (status >= 400) {
+          const err = new HttpStatusError(status, `${url}: HTTP ${status}`);
+          if (FATAL_HTTP.has(status) || attempt === tries - 1) throw err;
+          await sleep(2 ** attempt * 1000);
+          continue;
+        }
+        return body;
+      } catch (e) {
+        lastErr = e;
+        if (e instanceof HttpStatusError && FATAL_HTTP.has(e.status)) throw e;
+        if (attempt === tries - 1) throw e;
+        await sleep(2 ** attempt * 1000);
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new AppError("fetch_failed", String(lastErr));
+  }
+
+  async fetchManifest(): Promise<Manifest> {
+    this.emit({
+      phase: "checking",
+      label: "Checking the game client",
+      received: 0,
+      total: 0,
+      bytesPerSecond: 0,
+      secondsRemaining: null,
+      error: null,
+    });
+    const body = await this.getBytes(`${this.patchRoot}/manifest.json`);
+    return new Manifest(JSON.parse(new TextDecoder().decode(body)));
+  }
+
+  private async chunkCached(hash: string): Promise<boolean> {
+    const file = join(this.chunksDir, hash);
+    try {
+      const data = await readFile(file);
+      verifyHash(hash, data);
+      return true;
+    } catch {
+      await rm(file, { force: true }).catch(() => undefined);
+      return false;
+    }
+  }
+
+  private async storeChunk(hash: string, compression: CompressionMode): Promise<Uint8Array> {
+    const data = await decodeChunk(
+      await this.getBytes(`${this.patchRoot}/${hash}.bin`),
+      compression,
+    );
+    verifyHash(hash, data);
+    await writeAtomicInDir(this.chunksDir, hash, data);
+    return data;
+  }
+
+  private chunkBytes(entry: ManifestFileEntry, chunkSize: number, i: number): number {
+    return Math.min(chunkSize, entry.size - i * chunkSize);
+  }
+
+  private async assembleFile(
+    outPath: string,
+    entry: ManifestFileEntry,
+    compression: CompressionMode,
+    progress: { got: number; total: number; started: number; sizes: Map<string, number> },
+  ): Promise<void> {
+    const hashes = entry.chunkHashes;
+    const missing: string[] = [];
+    for (const h of hashes) {
+      if (!(await this.chunkCached(h))) missing.push(h);
+    }
+    const unique = [...new Set(missing)];
+
+    await mapPool(unique, this.jobs, async (h) => {
+      await this.storeChunk(h, compression);
+      progress.got += progress.sizes.get(h) ?? 0;
+      const rate = bytesPerSecond(progress.got, progress.started);
+      this.emit({
+        phase: "client",
+        label: "Preparing files needed to start",
+        received: progress.got,
+        total: progress.total,
+        bytesPerSecond: rate,
+        secondsRemaining: secondsRemaining(progress.got, progress.total, rate),
+        error: null,
+      });
+    });
+
+    this.emit({
+      phase: "client",
+      label: "Preparing files needed to start",
+      received: progress.got,
+      total: progress.total,
+      bytesPerSecond: 0,
+      secondsRemaining: null,
+      error: null,
+    });
+
+    const part = `${outPath}.part`;
+    const file = await open(part, "w");
+    try {
+      for (const h of hashes) await file.write(await readFile(join(this.chunksDir, h)));
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    await rename(part, outPath);
+  }
+
+  private async artifactMatches(
+    outPath: string,
+    entry: ManifestFileEntry,
+    chunkSize: number,
+  ): Promise<boolean> {
+    let file;
+    try {
+      if ((await stat(outPath)).size !== entry.size) return false;
+      file = await open(outPath, "r");
+      for (let i = 0; i < entry.chunkHashes.length; i++) {
+        const size = this.chunkBytes(entry, chunkSize, i);
+        const data = Buffer.allocUnsafe(size);
+        const { bytesRead } = await file.read(data, 0, size, i * chunkSize);
+        if (bytesRead !== size) return false;
+        const hash = entry.chunkHashes[i]!;
+        const algo = HASH_ALGOS[hash.length];
+        if (!algo) return false;
+        if (createHash(algo).update(data).digest("hex") !== hash.toLowerCase()) {
+          return false;
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await file?.close();
+    }
+  }
+
+  private async snapshotIndexesMatch(
+    entry: ManifestFileEntry,
+    manifest: Manifest,
+  ): Promise<boolean> {
+    try {
+      const metadata = JSON.parse(
+        await readFile(join(this.artifactsDir, "snapshot-metadata.json"), "utf8"),
+      ) as Record<string, unknown>;
+      const current = JSON.parse(
+        await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+      ) as Record<string, unknown>;
+      const hashes = JSON.stringify(entry.chunkHashes);
+      return (
+        metadata.size === entry.size &&
+        metadata.chunkSize === manifest.chunkSize &&
+        JSON.stringify(metadata.chunkHashes) === hashes &&
+        current.compressionMode === manifest.compression &&
+        current.chunkSize === manifest.chunkSize &&
+        current.snapshot === SNAPSHOT &&
+        current.size === entry.size &&
+        JSON.stringify(current.chunkHashes) === hashes
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private async recoverArtifactSwap(stage: string, backup: string): Promise<void> {
+    let currentExists = true;
+    try {
+      await stat(this.artifactsDir);
+    } catch {
+      currentExists = false;
+    }
+    let backupExists = true;
+    try {
+      await stat(backup);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      backupExists = false;
+    }
+    if (backupExists && currentExists) {
+      await rm(backup, { recursive: true, force: true });
+    } else if (backupExists) {
+      await rename(backup, this.artifactsDir);
+    }
+    await rm(stage, { recursive: true, force: true });
+  }
+
+  private async stageExisting(source: string, target: string): Promise<void> {
+    try {
+      await link(source, target);
+    } catch {
+      await copyFile(source, target);
+    }
+  }
+
+  /** Fetch JSPI client artifacts and publish snapshot metadata; never assembles Gw.snapshot. */
+  async update(): Promise<Manifest> {
+    const stage = `${this.artifactsDir}.next`;
+    const backup = `${this.artifactsDir}.previous`;
+    await this.recoverArtifactSwap(stage, backup);
+    await mkdir(this.chunksDir, { recursive: true });
+
+    const mf = await this.fetchManifest();
+    const artifacts: {
+      name: string;
+      entry: ManifestFileEntry;
+      current: string;
+      staged: string;
+      needsBuild: boolean;
+    }[] = [];
+
+    for (const name of [...JSPI_ARTIFACTS, ...COMMON_ARTIFACTS]) {
+      const path = mf.find(name);
+      if (!path) {
+        throw new AppError("manifest_missing", `manifest is missing ${name}`);
+      }
+      const entry = mf.files[path]!;
+      const current = join(this.artifactsDir, name);
+      artifacts.push({
+        name,
+        entry,
+        current,
+        staged: join(stage, name),
+        needsBuild: !(await this.artifactMatches(current, entry, mf.chunkSize)),
+      });
+    }
+    const snapPath = mf.find(SNAPSHOT);
+    if (!snapPath) {
+      throw new AppError("manifest_missing", `manifest is missing ${SNAPSHOT}`);
+    }
+    const snapshotEntry = mf.files[snapPath]!;
+    const wanted = artifacts.filter((artifact) => artifact.needsBuild);
+    if (
+      wanted.length === 0 &&
+      (await this.snapshotIndexesMatch(snapshotEntry, mf))
+    ) {
+      this.emit({
+        phase: "ready",
+        label: "Ready",
+        received: 0,
+        total: 0,
+        bytesPerSecond: 0,
+        secondsRemaining: null,
+        error: null,
+      });
+      return mf;
+    }
+
+    const sizes = new Map<string, number>();
+    const missing = new Set<string>();
+    let total = 0;
+    for (const { entry } of wanted) {
+      for (let i = 0; i < entry.chunkHashes.length; i++) {
+        const h = entry.chunkHashes[i]!;
+        const n = this.chunkBytes(entry, mf.chunkSize, i);
+        sizes.set(h, n);
+        if (!missing.has(h) && !(await this.chunkCached(h))) {
+          missing.add(h);
+          total += n;
+        }
+      }
+    }
+    const progress = { got: 0, total, started: Date.now(), sizes };
+
+    if (total) {
+      this.emit({
+        phase: "client",
+        label: "Preparing files needed to start",
+        received: 0,
+        total,
+        bytesPerSecond: 0,
+        secondsRemaining: null,
+        error: null,
+      });
+    }
+
+    await mkdir(stage, { recursive: true });
+    try {
+      for (const artifact of artifacts) {
+        if (artifact.needsBuild) {
+          await this.assembleFile(
+            artifact.staged,
+            artifact.entry,
+            mf.compression,
+            progress,
+          );
+        } else {
+          await this.stageExisting(artifact.current, artifact.staged);
+        }
+      }
+      await publishSnapshotIndex(join(stage, "snapshot-metadata.json"), {
+        size: snapshotEntry.size,
+        chunkSize: mf.chunkSize,
+        chunkHashes: snapshotEntry.chunkHashes,
+      });
+      await writeAtomicJson(join(stage, "manifest.json"), {
+        compressionMode: mf.compression,
+        chunkSize: mf.chunkSize,
+        snapshot: SNAPSHOT,
+        size: snapshotEntry.size,
+        chunkHashes: snapshotEntry.chunkHashes,
+      });
+      let hadCurrent = false;
+      try {
+        await stat(this.artifactsDir);
+        hadCurrent = true;
+      } catch {
+        hadCurrent = false;
+      }
+      if (hadCurrent) {
+        await rm(backup, { recursive: true, force: true });
+        await rename(this.artifactsDir, backup);
+      }
+      try {
+        await rename(stage, this.artifactsDir);
+      } catch (error) {
+        if (hadCurrent) await rename(backup, this.artifactsDir);
+        throw error;
+      }
+      if (hadCurrent) await rm(backup, { recursive: true, force: true });
+    } finally {
+      await rm(stage, { recursive: true, force: true });
+    }
+
+    this.emit({
+      phase: "ready",
+      label: "Ready",
+      received: total,
+      total,
+      bytesPerSecond: 0,
+      secondsRemaining: null,
+      error: null,
+    });
+    return mf;
+  }
+}

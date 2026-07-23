@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+# Default isolated linker keeps .bin links. publicHoistPattern satisfies Electron Forge.
+publicHoistPattern:
+  - "*"
+confirmModulesPurge: false
+blockExoticSubdeps: false
+overrides:
+  tar: 7.5.19
+  tmp: 0.2.7
+allowBuilds:
+  esbuild: true
+  fs-xattr: true
+  macos-alias: true

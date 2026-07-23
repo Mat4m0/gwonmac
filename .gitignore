@@ -1,12 +1,16 @@
-# Credentials -------------------------------------------------------------
-# A key file extracted by gwkey.py. gw.py has a working key built in, so this
-# only appears if you extracted your own; either way it stays out of git.
+# Credentials and private diagnostics ------------------------------------
+# access.key can be extracted by gwkey.py for offline analysis. The runtime
+# uses the public client key in source; neither private data nor exports belong
+# in git.
 access.key
 *.key
+credentials.bin
+*.gwdiag
+*.dmp
 
 # Game artifacts ----------------------------------------------------------
 # ArenaNet's copyrighted binaries. Never commit these. Everything here is
-# reproducible from your own licensed copy of the client via gwkey/gwpatch.
+# reproducible from ArenaNet's public client distribution.
 *.apk
 *.wasm
 *.wasm.debug
@@ -16,7 +20,7 @@ Gw.snapshot
 manifest.json
 version.json
 
-# Chunk cache -- content-addressed pieces of the above.
+# Legacy/local chunk cache -- content-addressed pieces of the above.
 gwpatch-cache/
 
 # Python ------------------------------------------------------------------
@@ -25,7 +29,7 @@ __pycache__/
 .venv/
 venv/
 
-# Test tooling -- playwright-core is installed on demand by tests/e2e.js
+# Dependencies and local tooling.
 node_modules/
 package-lock.json
 
@@ -36,3 +40,22 @@ dist-release/
 # Directory-shaped, because the file patterns above missed
 # dist/snapshot-chunks.json (16k ArenaNet content hashes) and it got published.
 dist/
+
+# Electron / TypeScript build and Forge packaging.
+# tsc emits to build/; Forge packages to out/ — keep them separate.
+build/
+out/
+.pnpm-store/
+.vite/
+.webpack/
+out-tsc/
+forge-dist/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.eslintcache
+
+# macOS metadata.
+.DS_Store
+.nuxt
+.output
