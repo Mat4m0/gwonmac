@@ -32,7 +32,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      siteUrl: "https://gw-for-mac.vercel.app",
+      siteUrl: "https://gwonmac.vercel.app",
     },
   },
 });
