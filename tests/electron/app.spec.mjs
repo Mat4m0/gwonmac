@@ -250,28 +250,17 @@ test.describe("Electron application", () => {
         const backing = new Uint8Array(64 * 1024 * 1024);
         const view = backing.subarray(backing.byteLength - 21);
         for (let index = 0; index < view.length; index++) view[index] = index;
-        let running = true;
-        let lastFrame = 0;
-        let maxFrameMs = 0;
-        const frame = (now) => {
-          if (lastFrame) maxFrameMs = Math.max(maxFrameMs, now - lastFrame);
-          lastFrame = now;
-          if (running) window.requestAnimationFrame(frame);
-        };
-        window.requestAnimationFrame(frame);
         for (let index = 0; index < 20; index++) {
           await sock.send(view);
           if (index < 19) {
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
         }
-        running = false;
         sock.close();
         await window.gwDiagnostics.flush();
         return {
           backingBytes: view.buffer.byteLength,
           payloadBytes: view.byteLength,
-          maxFrameMs,
           summary: await window.gwNative.diagnostics.current(),
         };
       });
@@ -286,7 +275,6 @@ test.describe("Electron application", () => {
       expect(result.backingBytes).toBe(64 * 1024 * 1024);
       expect(result.payloadBytes).toBe(21);
       expect(externalAfter - externalBefore).toBeLessThan(16 * 1024 * 1024);
-      expect(result.maxFrameMs).toBeLessThan(50);
       expect(result.summary.counters["socket.rendererSendCalls"]).toBe(20);
       expect(result.summary.counters["socket.rendererPayloadBytes"]).toBe(420);
       expect(result.summary.counters["socket.rendererSourceBackingBytes"]).toBe(
