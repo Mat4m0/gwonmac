@@ -167,6 +167,37 @@ downloaded data.
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) ·
   [Product brief](PRODUCT.md) · [Port plan](port-plan.md)
 
+## Credits
+
+This project is a fork of
+**[gwdevhub/gw_in_browser](https://github.com/gwdevhub/gw_in_browser)** and
+would not exist without it. That work established the approach this app is
+built on: hosting ArenaNet's official WebAssembly client outside the browser
+and supplying the platform surface it expects. The upstream git history is
+preserved in this repository.
+
+Upstream authors:
+
+- **[Marc (henderkes)](https://github.com/henderkes)** — original author;
+  wrote the foundational _"Guild Wars in the browser"_ work this fork descends
+  from.
+- **[Jon (3vcloud)](https://github.com/3vcloud)** — [gwdevhub](https://github.com/gwdevhub)
+  maintainer and contributor.
+- **[GWToolbox](https://gwtoolbox.com)** — contributed the macOS launch
+  wrapper that this app's native host grew out of.
+
+Upstream is licensed GPL-3.0, and so is this fork. If you find this project
+useful, the credit belongs upstream first.
+
+Also with thanks to:
+
+- **[Snapshot Henchman](https://bloogum.net/guildwars/)** — loading-screen
+  photography.
+- **QualiType** — the QT Friz Quad typeface, released under the SIL Open Font
+  License 1.1.
+- **ArenaNet** — for the game, and for keeping the Guild Wars client alive and
+  publicly downloadable more than twenty years on.
+
 ## Legal
 
 Guild Wars and all associated game content are © 2005–2026 ArenaNet, Inc. All
