@@ -52,7 +52,7 @@ import { EXTERNAL_URLS } from "../../../../src/shared/contracts";
             />
           </svg>
         </a>
-        <DownloadCta size="compact" />
+        <DownloadCta size="compact" source="navigation" />
       </div>
     </nav>
   </header>
