@@ -39,6 +39,12 @@ const LINKS = {
           QT Friz Quad font © QualiType, used under the
           <a href="/fonts/COPYING-QUALITYPE" class="underline hover:text-gold-200">SIL Open Font License 1.1</a>.
         </p>
+        <p>
+          This website uses cookie-free
+          <a href="https://plausible.io" class="underline hover:text-gold-200">Plausible Analytics</a>
+          for aggregate page views, download clicks, and FAQ opens. The Guild Wars application
+          itself uploads no telemetry.
+        </p>
       </div>
     </div>
   </footer>

@@ -35,7 +35,7 @@ const SCREENSHOTS = [
           Run the official Guild Wars client in a performant macOS app.
         </p>
         <div class="gold-rule h-px w-40" aria-hidden="true" />
-        <DownloadCta size="large" />
+        <DownloadCta size="large" source="hero" />
         <NuxtLink to="/install" class="text-sm text-parchment-300/70 underline hover:text-gold-200">
           How to install
         </NuxtLink>
@@ -108,7 +108,7 @@ const SCREENSHOTS = [
           Download Guild Wars for macOS and follow the short first-open guide.
         </p>
         <div class="flex flex-wrap items-center justify-center gap-4">
-          <DownloadCta size="large" />
+          <DownloadCta size="large" source="final-cta" />
           <NuxtLink to="/install" class="btn-secondary">Installation guide</NuxtLink>
         </div>
       </div>

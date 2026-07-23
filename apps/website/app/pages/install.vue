@@ -46,7 +46,7 @@ const STEPS = [
       are not yet notarized by Apple.
     </p>
     <div class="mt-6 flex justify-center">
-      <DownloadCta size="large" />
+      <DownloadCta size="large" source="install-guide" />
     </div>
 
     <ol class="mt-12 space-y-4">
