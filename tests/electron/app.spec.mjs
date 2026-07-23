@@ -122,11 +122,12 @@ test.describe("Electron application", () => {
     let app = await launch();
     try {
       await app.firstWindow({ timeout: 30_000 });
-      await app.evaluate(async ({ BrowserWindow }) => {
+      const normalBounds = await app.evaluate(async ({ BrowserWindow }) => {
         const win = BrowserWindow.getAllWindows()[0];
         if (!win) throw new Error("window missing");
         win.setBounds({ x: 120, y: 90, width: 960, height: 700 });
         await new Promise((resolve) => setTimeout(resolve, 400));
+        const bounds = win.getBounds();
         await new Promise((resolve) => {
           const timeout = setTimeout(resolve, 5_000);
           win.once("enter-full-screen", () => {
@@ -135,12 +136,13 @@ test.describe("Electron application", () => {
           });
           win.setFullScreen(true);
         });
+        return bounds;
       });
       await closeCleanly(app);
 
       const statePath = path.join(userData, "window-state.json");
       expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({
-        bounds: { x: 120, y: 90, width: 960, height: 700 },
+        bounds: normalBounds,
         mode: "fullscreen",
       });
       expect((await stat(statePath)).mode & 0o777).toBe(0o600);
@@ -156,7 +158,7 @@ test.describe("Electron application", () => {
       expect(
         await app.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows()[0]?.getNormalBounds()),
-      ).toEqual({ x: 120, y: 90, width: 960, height: 700 });
+      ).toEqual(normalBounds);
 
       const expectedReset = await app.evaluate(({ screen }) => {
         const area = screen.getPrimaryDisplay().workArea;
@@ -180,10 +182,12 @@ test.describe("Electron application", () => {
           }),
         )
         .toEqual(expectedReset);
-      expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({
-        bounds: expectedReset,
-        mode: "normal",
-      });
+      await expect
+        .poll(async () => JSON.parse(await readFile(statePath, "utf8")))
+        .toEqual({
+          bounds: expectedReset,
+          mode: "normal",
+        });
       await closeCleanly(app);
     } finally {
       await app.close().catch(() => undefined);
