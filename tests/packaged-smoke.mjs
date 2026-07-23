@@ -26,15 +26,40 @@ const executable = path.join(
   "Contents/MacOS/Guild Wars",
 );
 const execFileAsync = promisify(execFile);
+const resources = path.join(appBundle, "Contents/Resources");
+const packageVersion = JSON.parse(
+  await readFile(path.join(root, "package.json"), "utf8"),
+).version;
+const macOSVersion = packageVersion.split("-", 1)[0];
 const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",
   path.join(appBundle, "Contents/Info.plist"),
 ]);
 assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
 assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
+assert.match(
+  bundleInfo,
+  new RegExp(`"CFBundleShortVersionString" => "${macOSVersion.replaceAll(".", "\\.")}"`),
+);
+assert.match(
+  bundleInfo,
+  new RegExp(`"CFBundleVersion" => "${macOSVersion.replaceAll(".", "\\.")}"`),
+);
 assert.deepEqual(
-  await readFile(path.join(appBundle, "Contents/Resources/electron.icns")),
+  await readFile(path.join(resources, "electron.icns")),
   await readFile(path.join(root, "assets/AppIcon.icns")),
+);
+assert.match(
+  await readFile(path.join(resources, "LICENSE"), "utf8"),
+  /GNU GENERAL PUBLIC LICENSE[\s\S]*Version 3/,
+);
+assert.match(
+  await readFile(path.join(resources, "THIRD-PARTY-NOTICES.md"), "utf8"),
+  /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/,
+);
+assert.match(
+  await readFile(path.join(resources, "COPYING-QUALITYPE"), "utf8"),
+  /SIL OPEN FONT LICENSE[\s\S]*Version 1\.1/,
 );
 await execFileAsync("codesign", ["--verify", "--deep", "--strict", appBundle]);
 const fuses = await getCurrentFuseWire(executable);

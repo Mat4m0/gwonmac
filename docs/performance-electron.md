@@ -10,7 +10,7 @@ profiler-contaminated. Only clean Level 1 captures establish improvements.
 Recorded July 23, 2026:
 
 ```text
-application                 Guild Wars 0.1.0
+application                 Guild Wars 0.0.1-alpha.1
 official client build       38771
 machine                     MacBook Pro, Apple M1 Pro
 memory                      16 GB

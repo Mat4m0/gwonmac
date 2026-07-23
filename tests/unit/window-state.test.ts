@@ -71,4 +71,12 @@ describe("window state", () => {
       mode: "normal",
     });
   });
+
+  it("keeps the default window distinct from a constrained work area", () => {
+    const primary = { x: 0, y: 25, width: 1024, height: 684 };
+    assert.deepEqual(defaultWindowState(primary), {
+      bounds: { x: 32, y: 57, width: 960, height: 620 },
+      mode: "normal",
+    });
+  });
 });
