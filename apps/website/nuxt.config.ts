@@ -2,7 +2,6 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-07-23",
-  modules: ["@nuxt/scripts"],
   css: ["~/assets/css/main.css"],
   vite: {
     plugins: [tailwindcss()],
@@ -28,6 +27,16 @@ export default defineNuxtConfig({
           sizes: "180x180",
         },
         { rel: "manifest", href: "/site.webmanifest" },
+      ],
+      script: [
+        {
+          async: true,
+          src: "https://plausible.io/js/pa--X4qMlLVyMnUW4L8emwE_.js",
+        },
+        {
+          innerHTML:
+            "window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)},window.plausible.init=window.plausible.init||function(i){window.plausible.o=i||{}};window.plausible.init()",
+        },
       ],
     },
   },

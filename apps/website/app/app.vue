@@ -1,6 +1,5 @@
 <script setup lang="ts">
 const { siteUrl } = useRuntimeConfig().public;
-useAnalytics();
 
 useSeoMeta({
   title: "Guild Wars for macOS — Native Launcher",
