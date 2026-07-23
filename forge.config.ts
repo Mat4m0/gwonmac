@@ -1,7 +1,15 @@
 import { MakerZIP } from "@electron-forge/maker-zip";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+
+const packageVersion = (
+  JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
+const macOSVersion = packageVersion.split("-", 1)[0]!;
 
 const signing = process.env.APPLE_IDENTITY
   ? {
@@ -30,12 +38,19 @@ const config: ForgeConfig = {
     asar: true,
     name: "Guild Wars",
     executableName: "Guild Wars",
+    appVersion: macOSVersion,
+    buildVersion: macOSVersion,
     icon: path.resolve("assets/AppIcon.icns"),
     appBundleId: "com.gwdevhub.guildwars",
     appCategoryType: "public.app-category.games",
     darwinDarkModeSupport: true,
-    appCopyright: "© 2005–2026 ArenaNet, Inc. Independent fan project.",
-    extraResource: ["src/renderer/fonts/COPYING-QUALITYPE"],
+    appCopyright:
+      "© 2026 gwonmac contributors. Guild Wars © 2005–2026 ArenaNet, Inc.",
+    extraResource: [
+      "LICENSE",
+      "THIRD-PARTY-NOTICES.md",
+      "src/renderer/fonts/COPYING-QUALITYPE",
+    ],
     extendInfo: {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
     },

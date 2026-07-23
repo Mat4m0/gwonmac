@@ -179,6 +179,7 @@ test("the host has one manual application replacement path", () => {
 
 test("package metadata identifies the GPL project and canonical repository", () => {
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.equal(pkg.version, "0.0.1-alpha.1");
   assert.equal(pkg.license, "GPL-3.0-only");
   assert.equal(
     pkg.repository?.url,
@@ -188,6 +189,27 @@ test("package metadata identifies the GPL project and canonical repository", () 
     pkg.bugs?.url,
     "https://github.com/Mat4m0/gwonmac/issues",
   );
+});
+
+test("packaged releases carry the project and third-party license notices", () => {
+  const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
+  assert.match(forge, /extraResource:[\s\S]*"LICENSE"/);
+  assert.match(forge, /extraResource:[\s\S]*"THIRD-PARTY-NOTICES\.md"/);
+  assert.match(forge, /extraResource:[\s\S]*"src\/renderer\/fonts\/COPYING-QUALITYPE"/);
+  const notices = readFileSync(
+    path.join(root, "THIRD-PARTY-NOTICES.md"),
+    "utf8",
+  );
+  assert.match(notices, /not relicensed under GPL-3\.0-only/);
+  assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
+});
+
+test("macOS derives numeric bundle versions from the package prerelease", () => {
+  const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
+  assert.match(forge, /const packageVersion =/);
+  assert.match(forge, /const macOSVersion = packageVersion\.split\("-", 1\)\[0\]/);
+  assert.match(forge, /appVersion: macOSVersion/);
+  assert.match(forge, /buildVersion: macOSVersion/);
 });
 
 test("release fuses keep Node and inspection disabled", () => {
@@ -244,4 +266,22 @@ test("official releases import, verify, and remove a stable signing identity", (
   assert.match(workflow, /Signature=adhoc/);
   assert.match(workflow, /ad-hoc signed, not notarized/);
   assert.match(workflow, /if: always\(\)[\s\S]*security delete-keychain/);
+});
+
+test("release workflow publishes one tested, attested package version", () => {
+  const workflow = readFileSync(
+    path.join(root, ".github/workflows/release.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /runs-on: macos-15/);
+  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
+  assert.match(workflow, /persist-credentials: false/);
+  assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
+  assert.match(workflow, /git\/ref\/tags\/\$tag/);
+  assert.doesNotMatch(workflow, /pnpm version|date -u/);
+  assert.match(workflow, /name: Smoke-test release candidate[\s\S]*pnpm test:packaged/);
+  assert.match(workflow, /shasum -a 256/);
+  assert.match(workflow, /actions\/attest-build-provenance@[0-9a-f]{40}/);
+  assert.match(workflow, /--prerelease --latest=false/);
+  assert.match(workflow, /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM"/);
 });

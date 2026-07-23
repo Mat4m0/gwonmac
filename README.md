@@ -25,11 +25,15 @@ path.
 - On July 23, 2026, the opt-in live smoke test downloaded the current ArenaNet
   client, initialized JSPI with hardware acceleration, read the real snapshot,
   and submitted a frame on Apple Silicon. Account login and broader Mac/GPU
-  coverage remain live release gates.
-- Current builds are ad-hoc signed and distributed as source/local beta builds;
-  no paid Apple developer account is required. macOS may require a manual
-  first-open confirmation, but login never invokes Keychain. Developer ID
-  signing remains an optional future distribution improvement.
+  coverage remain alpha validation targets.
+- The first public prerelease is versioned `0.0.1-alpha.1`. Alpha builds are
+  ad-hoc signed until Apple signing credentials are configured. macOS may
+  require a manual first-open confirmation, but login never invokes Keychain.
+  Developer ID signing remains an optional future distribution improvement.
+
+Each GitHub release contains one Apple Silicon ZIP, its SHA-256 checksum, and
+GitHub provenance attestations. Alpha versions are explicitly marked as
+prereleases and are never selected as a stable “latest” release.
 
 ## Development
 
@@ -79,6 +83,7 @@ pnpm test:unit
 pnpm test:integration
 pnpm test:electron
 pnpm test:release
+pnpm test:website
 pnpm package
 ```
 

@@ -11,17 +11,20 @@ permissions:
 
 concurrency:
   group: macos-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
-    runs-on: macos-14
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 11.13.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: pnpm
@@ -32,33 +35,61 @@ jobs:
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: verify
-    runs-on: macos-14
+    runs-on: macos-15
+    timeout-minutes: 45
     permissions:
+      attestations: write
       contents: write
-    env:
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
-      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 11.13.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # Developer ID signing + notarization run when the Apple secrets exist;
-      # otherwise the build ships ad-hoc signed (forge's postPackage hook) and
-      # the release notes say so. Adding the secrets later upgrades releases
-      # with no workflow change.
+      - name: Resolve release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "package.json contains an invalid release version: $version" >&2
+            exit 1
+          fi
+          tag="v$version"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1 ||
+             gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Tag or release $tag already exists." >&2
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      # Developer ID signing + notarization run only when the complete Apple
+      # credential set exists. Secrets are scoped to the steps that need them;
+      # dependency installation never receives signing credentials.
       - name: Check signing credentials
         id: signing
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] &&
              [ -n "$APPLE_TEAM_ID" ] && [ -n "$APPLE_IDENTITY" ] &&
@@ -72,6 +103,8 @@ jobs:
       - name: Import Developer ID certificate
         if: steps.signing.outputs.signed == 'true'
         env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           SIGNING_KEYCHAIN: ${{ runner.temp }}/guild-wars-signing.keychain-db
           SIGNING_CERTIFICATE: ${{ runner.temp }}/guild-wars-signing.p12
         run: |
@@ -95,23 +128,28 @@ jobs:
             $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$SIGNING_KEYCHAIN"
 
-      - name: Set release version
-        id: version
-        run: |
-          version="$(date -u +%Y).$(date -u +%-m).${{ github.run_number }}"
-          pnpm version "$version" --no-git-tag-version
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build release candidate
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+        run: pnpm make
 
-      - run: pnpm make
+      - name: Smoke-test release candidate
+        run: pnpm test:packaged
 
       - name: Verify code signature
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
           app="$(find out -name 'Guild Wars.app' -type d -print -quit)"
           test -n "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
-          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+          if [ "$SIGNED" = "true" ]; then
             echo "$signature" | grep -F "Authority=Developer ID Application"
             echo "$signature" | grep -F "TeamIdentifier=$APPLE_TEAM_ID"
             echo "$signature" | grep -E "flags=.*runtime"
@@ -121,26 +159,57 @@ jobs:
             echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
           fi
 
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SIGNED: ${{ steps.signing.outputs.signed }}
+      - name: Prepare release assets
+        id: assets
         run: |
-          tag="v${{ steps.version.outputs.version }}"
-          if [ "$SIGNED" = "true" ]; then
-            notes_args=(--generate-notes)
-          else
-            notes_args=(--generate-notes --notes "> [!NOTE]
-          > This build is ad-hoc signed, not notarized by Apple. macOS blocks the
-          > first launch — see the install guide for the one-time System Settings
-          > approval. Donations fund the Apple Developer account that will remove
-          > this step.")
+          asset_count="$(find out/make -type f -name '*.zip' | wc -l | tr -d ' ')"
+          if [ "$asset_count" != "1" ]; then
+            echo "Expected exactly one ZIP, found $asset_count." >&2
+            exit 1
           fi
-          find out/make -type f -name '*.zip' -print0 |
-            xargs -0 gh release create "$tag" \
-              --target "${{ github.sha }}" \
-              --title "$tag" \
-              "${notes_args[@]}"
+          asset="$(find out/make -type f -name '*.zip' -print -quit)"
+          asset_dir="$(dirname "$asset")"
+          asset_name="$(basename "$asset")"
+          checksum="$asset.sha256"
+          (
+            cd "$asset_dir"
+            shasum -a 256 "$asset_name" > "$asset_name.sha256"
+          )
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+
+      - name: Attest release provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.assets.outputs.asset }}
+
+      - name: Publish GitHub prerelease
+        env:
+          ASSET: ${{ steps.assets.outputs.asset }}
+          CHECKSUM: ${{ steps.assets.outputs.checksum }}
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          notes="> [!WARNING]
+          > This is an alpha build. Back up important data and expect bugs."
+          release_args=(--target "$GITHUB_SHA" --title "$TAG")
+          if [ "$PRERELEASE" = "true" ]; then
+            release_args+=(--prerelease --latest=false)
+          fi
+          if [ "$SIGNED" != "true" ]; then
+            notes="$notes
+
+          > [!NOTE]
+          > This build is ad-hoc signed, not notarized by Apple. macOS blocks the
+          > first launch; follow the install guide for the one-time per-app
+          > approval. Do not disable Gatekeeper."
+          fi
+          gh release create "$TAG" "$ASSET" "$CHECKSUM" \
+            "${release_args[@]}" \
+            --generate-notes \
+            --notes "$notes"
 
       - name: Remove signing keychain
         if: always()

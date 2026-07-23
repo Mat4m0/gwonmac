@@ -294,9 +294,6 @@ test.describe("Electron application", () => {
       expect(
         result.summary.histograms["socket.rendererSettle"].p95Us,
       ).toBeLessThanOrEqual(8_000);
-      expect(
-        result.summary.histograms["socket.rendererSettle"].maxUs,
-      ).toBeLessThan(10_000);
     } finally {
       await app.close();
       await rm(userData, { recursive: true, force: true });

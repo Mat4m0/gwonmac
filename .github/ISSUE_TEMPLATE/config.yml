@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Mat4m0/gwonmac/security/advisories/new
+    about: Report security-sensitive findings privately.
+  - name: Questions and ideas
+    url: https://github.com/Mat4m0/gwonmac/discussions
+    about: Ask for help or discuss an idea before filing a bug.
