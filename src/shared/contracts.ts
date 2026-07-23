@@ -126,7 +126,7 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   github: `https://github.com/${RELEASE_REPO}`,
   discord: "https://discord.gg/Z9ft52RBD3",
   donate: "https://ko-fi.com/mat4m0",
-  releases: `https://github.com/${RELEASE_REPO}/releases/latest`,
+  releases: `https://github.com/${RELEASE_REPO}/releases`,
   // Official ArenaNet store, for players who do not own the game yet.
   store: "https://store.guildwars.com/en-us",
 };

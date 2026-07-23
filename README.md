@@ -3,7 +3,7 @@
 Play ArenaNet's official Guild Wars client natively on your Mac — no Windows
 install, no Wine, no compatibility layer to configure.
 
-[Download](https://github.com/Mat4m0/gwonmac/releases/latest) ·
+[Download](https://github.com/Mat4m0/gwonmac/releases) ·
 [Install guide](docs/user-guide.md) ·
 [Discord](https://discord.gg/Z9ft52RBD3) ·
 [Report a bug](https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml) ·
