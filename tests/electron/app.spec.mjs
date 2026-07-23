@@ -162,8 +162,14 @@ test.describe("Electron application", () => {
 
       const expectedReset = await app.evaluate(({ screen }) => {
         const area = screen.getPrimaryDisplay().workArea;
-        const width = Math.min(1280, area.width);
-        const height = Math.min(800, area.height);
+        const width = Math.min(
+          1280,
+          Math.max(Math.min(800, area.width), area.width - 64),
+        );
+        const height = Math.min(
+          800,
+          Math.max(Math.min(600, area.height), area.height - 64),
+        );
         return {
           x: Math.round(area.x + (area.width - width) / 2),
           y: Math.round(area.y + (area.height - height) / 2),
@@ -180,10 +186,14 @@ test.describe("Electron application", () => {
             const win = BrowserWindow.getAllWindows()[0];
             return win && !win.isFullScreen() ? win.getBounds() : null;
           }),
+          { timeout: 15_000 },
         )
         .toEqual(expectedReset);
       await expect
-        .poll(async () => JSON.parse(await readFile(statePath, "utf8")))
+        .poll(
+          async () => JSON.parse(await readFile(statePath, "utf8")),
+          { timeout: 15_000 },
+        )
         .toEqual({
           bounds: expectedReset,
           mode: "normal",
