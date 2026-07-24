@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import {
-  readToolboxSnapshot,
   renderToolboxState,
 } from "../../src/renderer/toolbox.js";
+import {
+  readToolboxSnapshot,
+} from "../../src/renderer/toolbox-snapshot.js";
 
 const MAGIC = 0x42545747;
 

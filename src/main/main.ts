@@ -39,9 +39,9 @@ import { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
 import {
   prepareToolboxClient,
-  TOOLBOX_TRANSFORM_ABI,
   type PreparedToolboxClient,
-} from "./core/toolbox-transform.js";
+} from "./core/toolbox-client.js";
+import { TOOLBOX_TRANSFORM_ABI } from "./core/toolbox-transform.js";
 import {
   count,
   exportDiagnosticsForWindow,

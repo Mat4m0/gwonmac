@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
-import type { KnownToolboxBuild } from "../../src/main/core/toolbox-builds.js";
+import {
+  toolboxLayoutWords,
+  type KnownToolboxBuild,
+} from "../../src/main/core/toolbox-builds.js";
 import {
   inspectToolboxCandidate,
   TOOLBOX_HOOK_EXPORT,
+  TOOLBOX_MANIFEST_SECTION,
   TOOLBOX_ORIGINAL_EXPORT,
+  TOOLBOX_TRANSFORM_ABI,
   transformToolboxWasm,
 } from "../../src/main/core/toolbox-transform.js";
 
@@ -80,6 +85,24 @@ describe("targeted Toolbox WebAssembly transform", () => {
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(TOOLBOX_HOOK_EXPORT));
     assert.ok(names.includes(TOOLBOX_ORIGINAL_EXPORT));
+    const sections = WebAssembly.Module.customSections(
+      module,
+      TOOLBOX_MANIFEST_SECTION,
+    );
+    assert.equal(sections.length, 1);
+    assert.deepEqual(
+      JSON.parse(new TextDecoder().decode(sections[0])),
+      {
+        transformAbi: TOOLBOX_TRANSFORM_ABI,
+        snapshotAbi: 1,
+        snapshotBytes: 64,
+        configBytes: 64,
+        programId: build.programId,
+        buildId: build.buildId,
+        tableSlot: build.tableSlot,
+        layoutWords: toolboxLayoutWords(build.layout),
+      },
+    );
   });
 
   it("reports the semantic loop signature and reusable empty slots", () => {

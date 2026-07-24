@@ -17,6 +17,29 @@ export interface ToolboxLayout {
   agentModelType: number;
 }
 
+export const TOOLBOX_LAYOUT_FIELDS = [
+  "contextRoot",
+  "agentArray",
+  "targetAgentId",
+  "gameContextSlot",
+  "characterContext",
+  "mapId",
+  "isExplorable",
+  "currentMapId",
+  "currentInstanceType",
+  "playerNumber",
+  "agentId",
+  "agentX",
+  "agentY",
+  "agentType",
+  "agentPlayerNumber",
+  "agentModelType",
+] as const satisfies readonly (keyof ToolboxLayout)[];
+
+export function toolboxLayoutWords(layout: ToolboxLayout): number[] {
+  return TOOLBOX_LAYOUT_FIELDS.map((field) => layout[field]);
+}
+
 export interface KnownToolboxBuild {
   sha256: string;
   programId: number;

@@ -8,7 +8,7 @@ import {
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
 import { findToolboxBuild } from "../main/core/toolbox-builds.js";
-import { inspectToolboxCache } from "../main/core/toolbox-transform.js";
+import { inspectToolboxCache } from "../main/core/toolbox-client.js";
 
 export interface ToolboxDoctorReport {
   profile: "ready" | "missing";

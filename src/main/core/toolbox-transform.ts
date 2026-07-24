@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { mkdir, readFile, stat } from "node:fs/promises";
-import path from "node:path";
-import { writeAtomic, writeAtomicJson } from "./atomic-file.js";
 import {
   findToolboxBuild,
+  toolboxLayoutWords,
   type KnownToolboxBuild,
 } from "./toolbox-builds.js";
 
@@ -12,7 +9,7 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const TOOLBOX_TRANSFORM_ABI = 1;
+export const TOOLBOX_TRANSFORM_ABI = 2;
 export const TOOLBOX_HOOK_EXPORT = "toolbox_hook_slot";
 export const TOOLBOX_ORIGINAL_EXPORT = "toolbox_tick_original";
 export const TOOLBOX_MANIFEST_SECTION = "toolbox_manifest";
@@ -43,12 +40,6 @@ interface WasmExport {
 
 interface Cursor {
   offset: number;
-}
-
-export interface PreparedToolboxClient {
-  wasmPath: string;
-  build: KnownToolboxBuild | null;
-  transformed: boolean;
 }
 
 function fail(message: string): never {
@@ -335,16 +326,17 @@ function encodeSection(section: Section): Uint8Array {
 }
 
 function buildManifestSection(build: KnownToolboxBuild): Section {
+  const layoutWords = toolboxLayoutWords(build.layout);
   const json = new TextEncoder().encode(
     JSON.stringify({
       transformAbi: TOOLBOX_TRANSFORM_ABI,
       snapshotAbi: 1,
       snapshotBytes: 64,
-      configBytes: 64,
+      configBytes: layoutWords.length * 4,
       programId: build.programId,
       buildId: build.buildId,
       tableSlot: build.tableSlot,
-      layout: build.layout,
+      layoutWords,
     }),
   );
   return {
@@ -518,107 +510,4 @@ export function transformToolboxWasm(
   );
   if (!WebAssembly.validate(output)) fail("rewritten module failed validation");
   return output;
-}
-
-async function isUsableCache(
-  wasmPath: string,
-  metadataPath: string,
-  inputHash: string,
-  buildFingerprint: string,
-): Promise<boolean> {
-  try {
-    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
-      inputSha256?: unknown;
-      transformAbi?: unknown;
-      outputSha256?: unknown;
-      buildFingerprint?: unknown;
-    };
-    if (
-      metadata.inputSha256 !== inputHash ||
-      metadata.transformAbi !== TOOLBOX_TRANSFORM_ABI ||
-      metadata.buildFingerprint !== buildFingerprint ||
-      typeof metadata.outputSha256 !== "string"
-    ) {
-      return false;
-    }
-    const file = await stat(wasmPath);
-    return file.isFile()
-      && file.size > 0
-      && await sha256File(wasmPath) === metadata.outputSha256;
-  } catch {
-    return false;
-  }
-}
-
-async function sha256File(filePath: string): Promise<string> {
-  const hash = createHash("sha256");
-  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
-  return hash.digest("hex");
-}
-
-export async function inspectToolboxCache(
-  officialSha256: string,
-  build: KnownToolboxBuild,
-  cacheRoot: string,
-): Promise<"valid" | "missing-or-invalid"> {
-  const cacheDir = path.join(
-    cacheRoot,
-    officialSha256,
-    String(TOOLBOX_TRANSFORM_ABI),
-  );
-  const buildFingerprint = createHash("sha256")
-    .update(JSON.stringify(build))
-    .digest("hex");
-  return (await isUsableCache(
-    path.join(cacheDir, "Gw.jspi.wasm"),
-    path.join(cacheDir, "metadata.json"),
-    officialSha256,
-    buildFingerprint,
-  ))
-    ? "valid"
-    : "missing-or-invalid";
-}
-
-export async function prepareToolboxClient(
-  officialWasmPath: string,
-  cacheRoot: string,
-): Promise<PreparedToolboxClient> {
-  const inputHash = await sha256File(officialWasmPath);
-  const build = findToolboxBuild(inputHash);
-  if (!build) {
-    return { wasmPath: officialWasmPath, build: null, transformed: false };
-  }
-  const cacheDir = path.join(cacheRoot, inputHash, String(TOOLBOX_TRANSFORM_ABI));
-  const wasmPath = path.join(cacheDir, "Gw.jspi.wasm");
-  const metadataPath = path.join(cacheDir, "metadata.json");
-  const buildFingerprint = createHash("sha256")
-    .update(JSON.stringify(build))
-    .digest("hex");
-  if (
-    await isUsableCache(
-      wasmPath,
-      metadataPath,
-      inputHash,
-      buildFingerprint,
-    )
-  ) {
-    return { wasmPath, build, transformed: true };
-  }
-
-  await mkdir(cacheDir, { recursive: true });
-  const official = await readFile(officialWasmPath);
-  const transformed = transformToolboxWasm(official, build);
-  const outputHash = createHash("sha256").update(transformed).digest("hex");
-  await writeAtomic(wasmPath, transformed);
-  await writeAtomicJson(metadataPath, {
-    inputSha256: inputHash,
-    transformAbi: TOOLBOX_TRANSFORM_ABI,
-    buildFingerprint,
-    outputSha256: outputHash,
-  });
-  const file = await stat(wasmPath);
-  if (!file.isFile() || file.size !== transformed.byteLength) {
-    fail("published derived module is incomplete");
-  }
-  return { wasmPath, build, transformed: true };
 }
