@@ -64,3 +64,12 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
       main.indexOf("createMainWindow(buildWindowHost())"),
   );
 });
+
+test("a clean WASM process exit closes the host application", async () => {
+  const harness = await readFile(
+    path.join(root, "src/renderer/harness.js"),
+    "utf8",
+  );
+  assert.match(harness, /onExit\(code\)/);
+  assert.match(harness, /code === 0[\s\S]*native\(\)\.app\.requestQuit\(\)/);
+});

@@ -687,6 +687,20 @@ Module = {
     log('[err] WASM aborted:', reason);
     window.gwLoading?.fail('The game client stopped unexpectedly.');
   },
+  /** @param {unknown} code */
+  onExit(code) {
+    log('WASM exited:', code);
+    if (code === 0) {
+      void native().app.requestQuit().catch((error) => {
+        log(
+          '[err] clean client exit could not close the app:',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    } else {
+      window.gwLoading?.fail('The game client stopped unexpectedly.');
+    }
+  },
 };
 
 window.gwInstallGameFilesystem({
