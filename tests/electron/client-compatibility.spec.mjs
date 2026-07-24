@@ -53,6 +53,9 @@ test.describe("client compatibility", () => {
       },
     );
     try {
+      await fixture.page.waitForFunction(
+        () => typeof window.Module?.socket?.connect === "function",
+      );
       expect(await pathExists(previous)).toBe(true);
       expect(
         await fixture.page.evaluate(() => {
