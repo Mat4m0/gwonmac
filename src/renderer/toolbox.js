@@ -279,7 +279,9 @@ async function install(instance, module) {
       tableSlot: manifest.tableSlot,
       hertz: 0,
       lastRenderUs: 0,
+      installation: (window.gwToolboxInstallations ?? 0) + 1,
     };
+    window.gwToolboxInstallations = runtime.installation;
     window.gwToolboxRuntime = runtime;
     stopRenderer = mountRenderer(runtime);
 

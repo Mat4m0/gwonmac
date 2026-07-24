@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import {
+  defaultGuildWarsProfile,
+  inspectToolboxWorkspace,
+} from "../build/tools/toolbox-doctor.js";
 
 if (process.env.GW_LIVE_SMOKE !== "1") {
   console.error("toolbox:live requires GW_LIVE_SMOKE=1");
@@ -15,15 +18,31 @@ const electronBin = path.join(
   root,
   "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
 );
-const userData =
-  process.platform === "darwin"
-    ? path.join(homedir(), "Library", "Application Support", "Guild Wars")
-    : path.join(homedir(), ".guild-wars");
+const userData = defaultGuildWarsProfile();
 const leaveOpen = process.argv.includes("--leave-open");
+const allowUpdate = process.argv.includes("--allow-update");
+const scenarioArgument = process.argv.indexOf("--scenario");
+const scenario = scenarioArgument >= 0
+  ? process.argv[scenarioArgument + 1]
+  : "target";
+if (!["boot", "target", "movement"].includes(scenario)) {
+  console.error(`unknown Toolbox live scenario: ${scenario}`);
+  process.exit(2);
+}
+const preflight = await inspectToolboxWorkspace(userData);
+if (!allowUpdate && !preflight.readyForCachedLive) {
+  console.error(JSON.stringify({ preflight, blocked: "cached-client-incomplete" }));
+  process.exit(2);
+}
+if (preflight.credentials !== "saved") {
+  console.error(JSON.stringify({ preflight, blocked: "saved-login-missing" }));
+  process.exit(2);
+}
 const failureDir = path.join(root, "test-results", "toolbox-live");
 const env = {
   ...process.env,
   GW_EXPECT_USER_DATA: userData,
+  ...(allowUpdate ? {} : { GW_REQUIRE_CACHED_CLIENT: "1" }),
 };
 delete env.ELECTRON_RUN_AS_NODE;
 
@@ -81,22 +100,26 @@ try {
     null,
     { timeout: 30 * 60_000, polling: 500 },
   );
-  await page.waitForTimeout(3_000);
-  await page.keyboard.press("Enter");
-  await page.waitForTimeout(5_000);
-  await page.keyboard.press("Enter");
-
-  try {
-    await page.waitForFunction(
-      () => window.gwToolboxState?.status === "ready",
-      null,
-      { timeout: 20_000, polling: 250 },
-    );
-  } catch {
-    // Saved-login timing varies depending on whether the client showed the
-    // account, character, or download transition. One final confirmation is
-    // safe only after the runtime has remained in loading for this full bound.
+  await page.waitForFunction(
+    () => {
+      const stage = window.gwAutomation?.read().stage;
+      return stage === "client.frontend" || stage?.startsWith("game.");
+    },
+    null,
+    { timeout: 60_000, polling: 100 },
+  );
+  let loginInputs = 0;
+  for (const delay of [3_000, 5_000, 20_000]) {
+    if (await page.evaluate(() => window.gwToolboxState?.status === "ready")) {
+      break;
+    }
+    await page.waitForTimeout(delay);
+    if (await page.evaluate(() => window.gwToolboxState?.status === "ready")) {
+      break;
+    }
+    await page.locator("#canvas").focus();
     await page.keyboard.press("Enter");
+    loginInputs += 1;
   }
 
   // A real game download can legitimately take longer than an automated test.
@@ -124,32 +147,53 @@ try {
     elapsedMs: performance.now() - start.at,
   }), before);
 
-  await page.locator("#canvas").focus();
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("v");
-  try {
-    await page.waitForFunction(
-      () => window.gwToolboxState?.targetValid === true,
-      null,
-      { timeout: 3_000, polling: 100 },
-    );
-  } catch {
-    const viewport = await page.evaluate(() => ({
-      width: window.innerWidth,
-      height: window.innerHeight,
+  if (scenario === "target") {
+    await page.locator("#canvas").focus();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("v");
+    try {
+      await page.waitForFunction(
+        () => window.gwToolboxState?.targetValid === true,
+        null,
+        { timeout: 3_000, polling: 100 },
+      );
+    } catch {
+      const viewport = await page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }));
+      await page.mouse.click(viewport.width - 250, 425);
+      await page.waitForFunction(
+        () => window.gwToolboxState?.targetValid === true,
+        null,
+        { timeout: 10_000, polling: 100 },
+      );
+    }
+  } else if (scenario === "movement") {
+    const position = await page.evaluate(() => ({
+      x: window.gwToolboxState.playerX,
+      y: window.gwToolboxState.playerY,
     }));
-    await page.mouse.click(viewport.width - 250, 425);
+    await page.locator("#canvas").focus();
+    await page.keyboard.down("w");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("w");
     await page.waitForFunction(
-      () => window.gwToolboxState?.targetValid === true,
-      null,
-      { timeout: 10_000, polling: 100 },
+      (start) => {
+        const state = window.gwToolboxState;
+        return state?.status === "ready"
+          && Math.hypot(state.playerX - start.x, state.playerY - start.y) > 5;
+      },
+      position,
+      { timeout: 5_000, polling: 100 },
     );
   }
 
-  const result = await page.evaluate(({ ticks, elapsedMs }) => {
+  const result = await page.evaluate(({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwToolboxState;
     const runtime = window.gwToolboxRuntime;
     return {
+      scenario: name,
       supported: runtime?.status === "installed",
       buildId: runtime?.buildId ?? null,
       hookCount: state?.tickCount ?? 0,
@@ -177,8 +221,16 @@ try {
           }
         : null,
       renderUs: Number((runtime?.lastRenderUs ?? 0).toFixed(2)),
+      lifecycle: window.gwAutomation?.read() ?? null,
+      installation: runtime?.installation ?? 0,
     };
-  }, cadence);
+  }, { ...cadence, scenario });
+  result.loginInputs = loginInputs;
+  result.preflight = {
+    cached: !allowUpdate,
+    snapshotComplete: preflight.snapshot?.complete === true,
+    transformedCache: preflight.client.transformedCache,
+  };
   result.rendererErrors = [...rendererErrors];
   if (
     !result.supported
@@ -186,7 +238,8 @@ try {
     || result.hookHertz < 1
     || result.hookHertz > 240
     || !result.map
-    || !result.target
+    || (scenario === "target" && !result.target)
+    || result.installation !== 1
     || result.renderUs >= 250
     || rendererErrors.some((line) =>
       /unknown socket|unhandled|wasm.*trap/i.test(line),

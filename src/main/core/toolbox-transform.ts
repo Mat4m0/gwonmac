@@ -453,6 +453,29 @@ async function isUsableCache(
   }
 }
 
+export async function inspectToolboxCache(
+  officialSha256: string,
+  build: KnownToolboxBuild,
+  cacheRoot: string,
+): Promise<"valid" | "missing-or-invalid"> {
+  const cacheDir = path.join(
+    cacheRoot,
+    officialSha256,
+    String(TOOLBOX_TRANSFORM_ABI),
+  );
+  const buildFingerprint = createHash("sha256")
+    .update(JSON.stringify(build))
+    .digest("hex");
+  return (await isUsableCache(
+    path.join(cacheDir, "Gw.jspi.wasm"),
+    path.join(cacheDir, "metadata.json"),
+    officialSha256,
+    buildFingerprint,
+  ))
+    ? "valid"
+    : "missing-or-invalid";
+}
+
 export async function prepareToolboxClient(
   officialWasmPath: string,
   cacheRoot: string,

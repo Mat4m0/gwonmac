@@ -426,6 +426,7 @@ Module = {
     const url = useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm';
     performance.mark('gw.wasm.instantiate.begin');
     milestone('wasm.instantiate.begin');
+    window.gwAutomation?.set('runtime.instantiating');
     (async () => {
       let result;
       try {
@@ -762,6 +763,7 @@ Module = {
   onRuntimeInitialized() {
     performance.mark('gw.runtime.initialized');
     milestone('runtime.initialized');
+    window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
     const startToolbox = () => {
       if (!window.gwToolbox || !gameWasmInstance || !gameWasmModule) return;

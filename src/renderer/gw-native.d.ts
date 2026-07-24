@@ -69,6 +69,29 @@ declare global {
     flush(): Promise<void>;
   }
 
+  interface ToolboxState {
+    status?: string;
+    reason?: string;
+    instanceType?: number;
+    tickCount?: number;
+    [key: string]: unknown;
+  }
+
+  interface ToolboxAutomation {
+    set(stage: string): void;
+    read(): Readonly<{
+      stage: string;
+      sequence: number;
+      transitions: ReadonlyArray<{
+        sequence: number;
+        stage: string;
+        atMs: number;
+      }>;
+      toolboxStatus: string;
+      tickCount: number;
+    }>;
+  }
+
   interface Window {
     readonly gwNative: GwNativeApi;
     Module?: {
@@ -94,8 +117,9 @@ declare global {
         module: WebAssembly.Module,
       ): Promise<unknown>;
     }>;
-    gwToolboxRuntime?: unknown;
-    gwToolboxState?: unknown;
+    gwToolboxRuntime?: Record<string, unknown> | null;
+    gwToolboxState?: ToolboxState;
+    gwAutomation: ToolboxAutomation;
     gwInstallGraphics(options: {
       env: ArenaNetEglImports;
       module: ArenaNetGraphicsModule;

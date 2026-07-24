@@ -1,6 +1,43 @@
 // Loading screen: owns everything the user sees before the canvas appears.
 // Progress comes from the main-process updater via gwNative, not HTTP polling.
 
+window.gwAutomation = (function () {
+  let stage = 'renderer.loading';
+  let sequence = 0;
+  /** @type {{ sequence: number, stage: string, atMs: number }[]} */
+  const history = [];
+  return Object.freeze({
+    /** @param {string} next */
+    set(next) {
+      if (typeof next !== 'string' || next === stage) return;
+      stage = next;
+      sequence += 1;
+      history.push({ sequence, stage, atMs: performance.now() });
+      if (history.length > 32) history.shift();
+    },
+    read() {
+      const toolbox = window.gwToolboxState;
+      let derived = stage;
+      if (toolbox?.status === 'ready') {
+        derived = toolbox.instanceType === 1
+          ? 'game.explorable'
+          : 'game.outpost';
+      } else if (toolbox?.reason === 'loading') {
+        derived = 'game.loading';
+      } else if (toolbox?.status === 'unsupported') {
+        derived = 'toolbox.unsupported';
+      }
+      return Object.freeze({
+        stage: derived,
+        sequence,
+        transitions: history.slice(),
+        toolboxStatus: toolbox?.status ?? 'not-installed',
+        tickCount: toolbox?.tickCount ?? 0,
+      });
+    },
+  });
+})();
+
 window.gwLoading = (function () {
   /** @param {string} id */
   const el = (id) => {
@@ -198,6 +235,7 @@ window.gwLoading = (function () {
       /** @param {import('../shared/contracts.js').DownloadProgress} p */
       const apply = (p) => {
         if (p.error) { api.fail(p.error); finish(false); return; }
+        window.gwAutomation.set(`launcher.${p.phase}`);
         if (p.phase === 'ready') {
           api.set('Starting Guild Wars', null, p.notice || '');
           finish(true);

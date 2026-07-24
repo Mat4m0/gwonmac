@@ -29,6 +29,7 @@
     "test:packaged": "node tests/packaged-smoke.mjs",
     "test:release": "pnpm build && node --test tests/release/*.mjs",
     "toolbox:live": "pnpm build && node scripts/toolbox-live.mjs",
+    "toolbox:doctor": "pnpm build && node build/tools/toolbox-doctor.js",
     "toolbox:transform": "pnpm build && node build/tools/toolbox-transform.js",
     "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website generate && pnpm --filter gw-website build && node tests/website-smoke.mjs",
     "test": "pnpm test:unit && pnpm test:integration && pnpm test:electron",

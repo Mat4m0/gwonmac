@@ -362,7 +362,12 @@ async function installChunkStore(
     chunkHashes,
     compression,
     bootListPath: bootChunks,
-    fetch: cdnChunkFetcher(),
+    fetch:
+      process.env.GW_REQUIRE_CACHED_CLIENT === "1"
+        ? async () => {
+            throw new Error("cached live probe cannot download missing chunks");
+          }
+        : cdnChunkFetcher(),
     metrics: { count, observe, gauge, peak: peakGauge },
   });
   initialResidencyRecorded = false;
@@ -496,6 +501,23 @@ async function startGameUpdate(): Promise<void> {
       phase: "ready",
       label: "Ready (offline shell)",
     });
+    return;
+  }
+  if (process.env.GW_REQUIRE_CACHED_CLIENT === "1") {
+    try {
+      await attachLastPublishedClient();
+      await prepareToolbox();
+      gauge("update.usingCachedClient", true);
+      await afterClientReady("Live probe is using the existing cached client.");
+    } catch {
+      setProgress({
+        ...INITIAL_PROGRESS,
+        phase: "error",
+        label: "Cached live probe blocked",
+        error:
+          "The cached client is incomplete. No ArenaNet update was started.",
+      });
+    }
     return;
   }
   const paths = gamePaths();
