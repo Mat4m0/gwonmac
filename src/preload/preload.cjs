@@ -52,25 +52,14 @@ function listen(eventChannel, callback) {
   };
 }
 
-const api = Object.freeze({
+const api = {
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
     onChange: (callback) => listen(IPC.progressEvent, callback),
     onPrefetch: (callback) => listen(IPC.prefetchEvent, callback),
   },
   snapshot: {
-    metadata: async () => {
-      const wire = await ipcRenderer.invoke(IPC.snapshotMetadata);
-      const bin = atob(wire.residentBits);
-      const residentBits = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) residentBits[i] = bin.charCodeAt(i);
-      return {
-        size: wire.size,
-        chunkSize: wire.chunkSize,
-        chunkHashes: wire.chunkHashes,
-        residentBits,
-      };
-    },
+    metadata: () => ipcRenderer.invoke(IPC.snapshotMetadata),
   },
   dns: {
     resolve: (name) => ipcRenderer.invoke(IPC.dnsResolve, name),
@@ -143,6 +132,8 @@ const api = Object.freeze({
   update: {
     status: () => ipcRenderer.invoke(IPC.updateStatus),
   },
-});
+};
+for (const namespace of Object.values(api)) Object.freeze(namespace);
+Object.freeze(api);
 
 contextBridge.exposeInMainWorld("gwNative", api);

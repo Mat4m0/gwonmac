@@ -15,7 +15,6 @@ import type {
   ExternalLinkKind,
   GraphicsDiagnostics,
   SocketEvent,
-  StoredCredentials,
 } from "../shared/contracts.js";
 import {
   isRendererFrameBatch,
@@ -23,13 +22,13 @@ import {
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
-import { AllowlistError, AppError, ValidationError } from "../shared/errors.js";
+import { AllowlistError, ValidationError } from "../shared/errors.js";
 import { CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
 import { checkForUpdate } from "./update-check.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
-import { buildSnapshotMetadata, snapshotMetadataWire } from "./core/snapshot.js";
+import { buildSnapshotMetadata } from "./core/snapshot.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
   count,
@@ -135,23 +134,21 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         process.env.GW_OFFLINE_SHELL === "1"
           ? Number(process.env.GW_OFFLINE_SNAPSHOT_SIZE ?? 0)
           : 0;
-      return snapshotMetadataWire(
-        buildSnapshotMetadata({
-          size: Number.isSafeInteger(offlineSize) && offlineSize > 0
-            ? offlineSize
-            : 0,
-          chunkSize: 262144,
-          chunkHashes: [],
-          residentIndices: [],
-        }),
-      );
+      return buildSnapshotMetadata({
+        size: Number.isSafeInteger(offlineSize) && offlineSize > 0
+          ? offlineSize
+          : 0,
+        chunkSize: 262144,
+        chunkHashes: [],
+        residentIndices: [],
+      });
     }
     const bits = await store.residentBits();
     return {
       size: store.size,
       chunkSize: store.chunkSize,
       chunkHashes: store.hashes,
-      residentBits: Buffer.from(bits).toString("base64"),
+      residentBits: bits,
     };
   });
 
@@ -267,14 +264,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     try {
       return await credentials.load();
     } catch (error) {
-      if (error instanceof AppError && error.code === "credentials_corrupt") {
-        // A previous Keychain-backed ciphertext cannot be opened after the
-        // deliberate mock-provider cutover. Remove it once and let the game ask
-        // again; never expose ciphertext details to the renderer or recorder.
-        await credentials.clear();
-        log("credentials", "warn", "credentials.unreadableCleared");
-        return null;
-      }
       log("credentials", "error", "credentials.loadFailed");
       throw error;
     }
@@ -283,7 +272,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.credentialsSave, async (event, value: unknown) => {
     assertSender(event);
     try {
-      await credentials.save(value as StoredCredentials);
+      await credentials.save(value);
     } catch (error) {
       log("credentials", "error", "credentials.saveFailed");
       throw error;

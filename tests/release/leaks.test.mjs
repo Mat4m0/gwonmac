@@ -99,12 +99,22 @@ test("only the public client access key is UUID-shaped", () => {
   assert.deepEqual(hits, []);
 });
 
-test("sandboxed preload and main process declare the same IPC channels", () => {
-  const contracts = readFileSync(path.join(root, "src/shared/contracts.ts"), "utf8");
+test("every canonical IPC channel is wired through preload and main", async () => {
+  const { IPC } = await import(
+    new URL("../../build/shared/contracts.js", import.meta.url)
+  );
   const preload = readFileSync(path.join(root, "src/preload/preload.cjs"), "utf8");
-  const channels = (text) =>
-    [...text.matchAll(/"gw:[^"]+"/g)].map((match) => match[0]).sort();
-  assert.deepEqual(channels(preload), channels(contracts));
+  const main = tracked
+    .filter((file) => file.startsWith("src/main/"))
+    .map((file) => readFileSync(path.join(root, file), "utf8"))
+    .join("\n");
+  for (const [key, channel] of Object.entries(IPC)) {
+    assert.ok(
+      preload.includes(JSON.stringify(channel)),
+      `${key} is missing from the preload`,
+    );
+    assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
+  }
 });
 
 test("saved login has one encrypted owner-only persistence surface", () => {

@@ -63,5 +63,22 @@ describe("credentials", () => {
       (error: unknown) =>
         error instanceof AppError && error.code === "credentials_corrupt",
     );
+    assert.ok((await readFile(path)).byteLength > 0, "a failed read must not delete credentials");
+  });
+
+  it("rejects invalid save payloads before replacing stored credentials", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-credentials-"));
+    const path = join(dir, "credentials.bin");
+    const store = new CredentialsStore(path, fakeStorage());
+    const credentials = { username: "player@example.test", password: "secret" };
+    await store.save(credentials);
+    const before = await readFile(path);
+    await assert.rejects(
+      store.save({ username: "player@example.test", password: 42 }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "credentials_corrupt",
+    );
+    assert.deepEqual(await readFile(path), before);
+    assert.deepEqual(await store.load(), credentials);
   });
 });
