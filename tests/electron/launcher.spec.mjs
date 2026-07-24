@@ -129,7 +129,7 @@ test.describe("launcher recovery", () => {
       );
       await fixture.page.locator("#loading-retry").click();
       await expect(fixture.page.locator("#loading-label")).toHaveText(
-        "No game build could be loaded.",
+        "The game client could not be loaded.",
       );
       await expect(fixture.page.locator("#loading-retry")).toBeVisible();
     } finally {
