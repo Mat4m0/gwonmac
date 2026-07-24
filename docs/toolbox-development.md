@@ -65,6 +65,9 @@ The harness launches Electron directly with the normal Guild Wars profile,
 verifies the effective user-data directory in main before startup, connects to
 the random loopback DevTools endpoint, and observes structured renderer state.
 It never launches through Playwright's temporary Electron profile.
+Its parent-process IPC channel can only start and stop Level 1 diagnostics when
+the explicit Toolbox automation environment is active; capture mutation is not
+exposed to the sandboxed renderer.
 `scripts/toolbox-live.mjs` is only the process, connection, result, and shutdown
 coordinator. Fixed gameplay scenarios live in
 `scripts/toolbox-live/scenarios.mjs`; the paired Level 1 benchmark lives in

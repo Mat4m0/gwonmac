@@ -68,9 +68,18 @@ const child = spawn(
   {
     cwd: root,
     env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   },
 );
+
+function sendAutomationCommand(command) {
+  return new Promise((resolve, reject) => {
+    child.send(command, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
 
 async function sampleObservations(targetPage) {
   if (observations.length === 0) return [];
@@ -158,7 +167,7 @@ try {
   }), before);
   const observationsBefore = await sampleObservations(page);
   const scenarioEvidence = scenario === "performance"
-    ? await runPerformanceScenario(page, cdp)
+    ? await runPerformanceScenario(page, cdp, sendAutomationCommand)
     : await runScenario(scenario, page);
 
   const result = await page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {

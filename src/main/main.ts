@@ -827,7 +827,19 @@ app.whenReady().then(async () => {
   });
 
   createMainWindow(buildWindowHost());
-  if (process.env.GW_TOOLBOX_AUTOMATION !== "1") {
+  if (process.env.GW_TOOLBOX_AUTOMATION === "1") {
+    process.on("message", (message) => {
+      if (message === "diagnostics:start-level-1") {
+        void startDiagnosticCapture(1).catch((error) => {
+          log("app", "error", "capture.automationStartFailed", {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+      } else if (message === "diagnostics:stop") {
+        void stopDiagnosticCapture();
+      }
+    });
+  } else {
     setDiagnosticCaptureStoppedHandler(async () => {
       const win = getMainWindow();
       if (!win || win.isDestroyed()) return;

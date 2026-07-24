@@ -37,7 +37,19 @@ function summarizeMetrics(before, after) {
   };
 }
 
-async function captureFrames(page, cdp, hookEnabled) {
+async function setCapture(page, sendAutomationCommand, enabled) {
+  await sendAutomationCommand(
+    enabled ? "diagnostics:start-level-1" : "diagnostics:stop",
+  );
+  await page.waitForFunction(
+    async (expected) =>
+      (await window.gwNative.diagnostics.current()).captureLevel === expected,
+    enabled ? 1 : 0,
+    { timeout: 5_000, polling: 50 },
+  );
+}
+
+async function captureFrames(page, cdp, hookEnabled, sendAutomationCommand) {
   await page.evaluate((enabled) => {
     window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
   }, hookEnabled);
@@ -55,7 +67,7 @@ async function captureFrames(page, cdp, hookEnabled) {
     () => window.gwToolboxState.tickCount,
   );
   const metricsBefore = await readMetrics(cdp);
-  await page.evaluate(() => window.gwNative.diagnostics.startCapture(1));
+  await setCapture(page, sendAutomationCommand, true);
   let samples;
   try {
     samples = await page.evaluate(
@@ -74,7 +86,7 @@ async function captureFrames(page, cdp, hookEnabled) {
       60_000,
     );
   } finally {
-    await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
+    await setCapture(page, sendAutomationCommand, false);
   }
   const tickAfter = await page.evaluate(
     () => window.gwToolboxState.tickCount,
@@ -89,10 +101,20 @@ async function captureFrames(page, cdp, hookEnabled) {
   };
 }
 
-export async function runPerformanceScenario(page, cdp) {
+export async function runPerformanceScenario(page, cdp, sendAutomationCommand) {
   try {
-    const baseline = await captureFrames(page, cdp, false);
-    const hooked = await captureFrames(page, cdp, true);
+    const baseline = await captureFrames(
+      page,
+      cdp,
+      false,
+      sendAutomationCommand,
+    );
+    const hooked = await captureFrames(
+      page,
+      cdp,
+      true,
+      sendAutomationCommand,
+    );
     const regressionPercent = baseline.p95Ms > 0
       ? ((hooked.p95Ms / baseline.p95Ms) - 1) * 100
       : Number.POSITIVE_INFINITY;
