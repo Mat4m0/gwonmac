@@ -184,3 +184,53 @@ required repeated captures reproduce and attribute one of these costs.
 Five clean Level 1 candidate runs are still required for final release
 acceptance. Record every run here, including failures and profiler
 contamination; never replace the baseline with a single favorable run.
+
+## Host-pipeline audit and render-scale correction
+
+Recorded July 24, 2026 on the baseline environment above.
+
+A live context inspection found that the saved 1× render scale was initially
+applied by the host, then overwritten by the official client's Emscripten
+device-pixel-ratio path. On the Retina display, the CSS viewport was
+2242×1234 while the visible canvas, OffscreenCanvas, and WebGL drawing buffer
+were all 4484×2468. The host now supplies the selected render scale through
+`emscripten_get_device_pixel_ratio`; redundant backing-buffer assignments are
+also suppressed and window resize work is coalesced to one animation frame.
+The same live inspection now reports 2242×1234 for all three backing sizes at
+1×. That reduces the rasterized pixel count from 11.07 million to 2.77
+million, while 1.5× and 2× remain explicit quality choices.
+
+The actual context is hardware WebGL2 through ANGLE Metal on Apple M1 Pro.
+Antialiasing and `preserveDrawingBuffer` are disabled; alpha is disabled;
+depth and stencil remain enabled for client compatibility. Over 4,292 swaps,
+EGL swap, bitmap extraction, and bitmap presentation were each at or below
+0.1 ms p95; extraction and presentation were at or below 0.25 ms p99. The
+OffscreenCanvas/ImageBitmap handoff is therefore not an evidenced bottleneck.
+Apple Silicon uses unified memory, so Chromium exposes no independent VRAM
+counter; GPU-process RSS was approximately 122–140 MiB during these runs.
+
+The corrected 1× build passed the paired live performance gate:
+
+```text
+phase duration               60 s baseline + 60 s Toolbox
+frame samples                3598 / 3600
+baseline p50/p95/p99         16.7 / 18.4 / 18.6 ms
+Toolbox p50/p95/p99          16.7 / 18.3 / 18.6 ms
+Toolbox p95 regression       -0.54%
+frames >20/33/50 ms          0 / 0 / 0 with Toolbox
+hook callbacks               3602
+rejected snapshots           0
+snapshot render p95          <=0.1 ms
+```
+
+The socket audit also found no remaining payload amplification. During the
+live run, 59 sends carried 2.1 KiB total; compact payload size, IPC backing
+size, and native bytes written were equal. Synchronous bridge work was at or
+below 0.25 ms p95 and native writes were at or below 0.25 ms p95. Startup
+settlement percentiles include connection and persistent-data restoration and
+must not be interpreted as steady packet-processing cost.
+
+No direct-canvas rewrite, packet batching, transferable transport, WebGPU
+port, forced GPU preference, higher download concurrency, or merged animation
+loop is justified by these measurements. Revisit those choices only if a
+clean Level 1 capture identifies a repeatable budget violation.
