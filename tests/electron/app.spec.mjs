@@ -142,7 +142,7 @@ test.describe("Electron application", () => {
       expect((await stat(statePath)).mode & 0o777).toBe(0o600);
 
       app = await launch();
-      await app.firstWindow({ timeout: 30_000 });
+      const resetPage = await app.firstWindow({ timeout: 30_000 });
       await expect
         .poll(() =>
           app.evaluate(({ BrowserWindow }) =>
@@ -171,9 +171,20 @@ test.describe("Electron application", () => {
           height,
         };
       });
+      await resetPage.evaluate(() => {
+        window.__windowResetReleasedInput = false;
+        window.addEventListener("gw:input-reset", () => {
+          window.__windowResetReleasedInput = true;
+        });
+      });
       await app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()?.getMenuItemById("reset-window-state")?.click();
       });
+      await expect
+        .poll(() =>
+          resetPage.evaluate(() => window.__windowResetReleasedInput),
+        )
+        .toBe(true);
       await expect
         .poll(() =>
           app.evaluate(({ BrowserWindow }) => {

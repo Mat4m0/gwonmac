@@ -494,6 +494,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.diagnosticsExport, async (event) => {
     const win = assertSender(event);
+    await resetGameInput(win);
     return exportDiagnosticsForWindow(win);
   });
 

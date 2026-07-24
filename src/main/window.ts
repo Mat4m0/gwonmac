@@ -465,7 +465,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         {
           id: "reset-window-state",
           label: "Reset Window Size and Position",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void resetWindowState(win).catch(() => {
               log("app", "error", "window.stateResetFailed");
             });

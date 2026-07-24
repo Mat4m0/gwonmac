@@ -30,7 +30,9 @@ test.describe("renderer input", () => {
         window.__inputReleases = [];
         window.addEventListener("keyup", (event) => {
           if (!event.isTrusted) {
-            window.__inputReleases.push(`key:${event.code}`);
+            window.__inputReleases.push(
+              `key:${event.code}:${event.keyCode}:${event.which}`,
+            );
           }
         });
         window.addEventListener("mouseup", (event) => {
@@ -49,7 +51,7 @@ test.describe("renderer input", () => {
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")),
       );
       expect(await page.evaluate(() => window.__inputReleases)).toEqual([
-        "key:KeyW",
+        "key:KeyW:87:87",
         "mouse:0",
       ]);
       await page.keyboard.up("w");
@@ -158,7 +160,7 @@ test.describe("renderer input", () => {
     try {
       const { page } = fixture;
       await startGameInput(page);
-      const touchEvents = await page.evaluate(async () => {
+      const result = await page.evaluate(async () => {
         const canvas = globalThis.document.getElementById("canvas");
         const observed = [];
         for (const type of ["touchstart", "touchend", "touchcancel"]) {
@@ -181,10 +183,27 @@ test.describe("renderer input", () => {
         mouse("mousedown", 3);
         mouse("mouseup", 3);
         await new Promise((resolve) => setTimeout(resolve, 150));
-        return observed;
+        const interrupted = [...observed];
+
+        observed.length = 0;
+        mouse("mousedown", 2);
+        canvas.dispatchEvent(
+          new globalThis.MouseEvent("mouseleave", {
+            bubbles: true,
+            button: 0,
+            clientX: 400,
+            clientY: 400,
+          }),
+        );
+        mouse("mouseup", 2);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return { interrupted, afterLeave: observed };
       });
 
-      expect(touchEvents).toEqual(["touchstart", "touchcancel"]);
+      expect(result).toEqual({
+        interrupted: ["touchstart", "touchcancel"],
+        afterLeave: [],
+      });
     } finally {
       await closeOffline(fixture);
     }
@@ -194,7 +213,7 @@ test.describe("renderer input", () => {
     const fixture = await launchOffline("gw-wheel-e2e-");
     try {
       await startGameInput(fixture.page);
-      const steps = await fixture.page.evaluate(() => {
+      const result = await fixture.page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const observed = [];
         window.addEventListener(
@@ -209,7 +228,7 @@ test.describe("renderer input", () => {
           },
           true,
         );
-        for (const deltaY of [60, 60]) {
+        const pixel = (deltaY) =>
           canvas.dispatchEvent(
             new globalThis.WheelEvent("wheel", {
               bubbles: true,
@@ -218,18 +237,33 @@ test.describe("renderer input", () => {
               deltaMode: globalThis.WheelEvent.DOM_DELTA_PIXEL,
             }),
           );
-        }
-        canvas.dispatchEvent(
-          new globalThis.WheelEvent("wheel", {
-            bubbles: true,
-            cancelable: true,
-            deltaY: -1,
-            deltaMode: globalThis.WheelEvent.DOM_DELTA_LINE,
-          }),
-        );
-        return observed;
+        const line = (deltaY) =>
+          canvas.dispatchEvent(
+            new globalThis.WheelEvent("wheel", {
+              bubbles: true,
+              cancelable: true,
+              deltaY,
+              deltaMode: globalThis.WheelEvent.DOM_DELTA_LINE,
+            }),
+          );
+
+        pixel(60);
+        window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
+        pixel(60);
+        const afterReset = [...observed];
+
+        line(-1);
+        pixel(60);
+        const afterDiscrete = [...observed];
+        pixel(60);
+        const complete = [...observed];
+        return { afterReset, afterDiscrete, complete };
       });
-      expect(steps).toEqual([1, -1]);
+      expect(result).toEqual({
+        afterReset: [],
+        afterDiscrete: [-1],
+        complete: [-1, 1],
+      });
     } finally {
       await closeOffline(fixture);
     }
@@ -246,7 +280,9 @@ test.describe("renderer input", () => {
         window.__inputReleases = [];
         window.addEventListener("keyup", (event) => {
           if (!event.isTrusted) {
-            window.__inputReleases.push(`key:${event.code}`);
+            window.__inputReleases.push(
+              `key:${event.code}:${event.keyCode}:${event.which}`,
+            );
           }
         });
         window.addEventListener("mouseup", (event) => {
@@ -275,7 +311,7 @@ test.describe("renderer input", () => {
         );
       });
       expect(await page.evaluate(() => window.__inputReleases)).toEqual([
-        "key:KeyW",
+        "key:KeyW:87:87",
         "mouse:2",
       ]);
       await page.keyboard.up("w");

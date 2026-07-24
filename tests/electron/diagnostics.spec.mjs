@@ -88,6 +88,34 @@ test.describe("diagnostics", () => {
     }
   });
 
+  test("releases game input before opening the diagnostics save panel", async () => {
+    const fixture = await launchOffline("gw-diagnostic-dialog-input-e2e-");
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ dialog }) => {
+        dialog.showSaveDialog = async () => ({
+          canceled: true,
+          filePath: "",
+        });
+      });
+      await page.evaluate(() => {
+        window.__diagnosticExportReleasedInput = false;
+        window.addEventListener("gw:input-reset", () => {
+          window.__diagnosticExportReleasedInput = true;
+        });
+      });
+
+      expect(
+        await page.evaluate(() => window.gwNative.diagnostics.export()),
+      ).toBe("");
+      expect(
+        await page.evaluate(() => window.__diagnosticExportReleasedInput),
+      ).toBe(true);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("exports a bounded, redacted report with prior crash context", async () => {
     const previousSessionId = randomUUID();
     const fixture = await launchOffline(

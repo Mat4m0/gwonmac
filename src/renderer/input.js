@@ -13,7 +13,14 @@
      *   target: EventTarget | null,
      *   key: string,
      *   code: string,
-     *   location: number
+     *   location: number,
+     *   charCode: number,
+     *   keyCode: number,
+     *   which: number,
+     *   ctrlKey: boolean,
+     *   shiftKey: boolean,
+     *   altKey: boolean,
+     *   metaKey: boolean
      * }>} */
     const heldKeys = new Map();
     /** @type {Map<number, {
@@ -22,7 +29,11 @@
      *   clientX: number,
      *   clientY: number,
      *   screenX: number,
-     *   screenY: number
+     *   screenY: number,
+     *   ctrlKey: boolean,
+     *   shiftKey: boolean,
+     *   altKey: boolean,
+     *   metaKey: boolean
      * }>} */
     const heldButtons = new Map();
     /** @type {Map<number, Touch>} */
@@ -42,6 +53,15 @@
     let pendingX = 0;
     let pendingY = 0;
     let resetFrame = 0;
+    let wheelRemainder = 0;
+    let wheelDirection = 0;
+    let wheelAt = 0;
+
+    const resetWheel = () => {
+      wheelRemainder = 0;
+      wheelDirection = 0;
+      wheelAt = 0;
+    };
 
     /** @param {() => void} callback @param {number} delay */
     const schedule = (callback, delay) => {
@@ -129,6 +149,8 @@
      */
     const sendMouse = (type, rect, buttons, button, movementX, movementY) => {
       if (!virtualCursor) return false;
+      const modifiers = heldButtons.get(button) ??
+        (buttons & 2 ? heldButtons.get(2) : undefined);
       return canvas.dispatchEvent(new MouseEvent(type, {
         bubbles: true,
         cancelable: true,
@@ -141,6 +163,10 @@
         movementY,
         buttons,
         button,
+        ctrlKey: !!modifiers?.ctrlKey,
+        shiftKey: !!modifiers?.shiftKey,
+        altKey: !!modifiers?.altKey,
+        metaKey: !!modifiers?.metaKey,
       }));
     };
 
@@ -157,14 +183,28 @@
     function releaseAll() {
       // Translate/augment gestures must see interruption, not a normal mouseup.
       cancelSyntheticTouches();
+      resetWheel();
       for (const input of heldKeys.values()) {
-        input.target?.dispatchEvent(new globalThis.KeyboardEvent('keyup', {
+        const release = new globalThis.KeyboardEvent('keyup', {
           bubbles: true,
           cancelable: true,
           key: input.key,
           code: input.code,
           location: input.location,
-        }));
+          ctrlKey: input.ctrlKey,
+          shiftKey: input.shiftKey,
+          altKey: input.altKey,
+          metaKey: input.metaKey,
+        });
+        // KeyboardEvent's legacy numeric fields are read-only constructor
+        // outputs. ArenaNet's Emscripten bridge still marshals them, so shadow
+        // the prototype getters with the exact values from the trusted press.
+        Object.defineProperties(release, {
+          charCode: { value: input.charCode },
+          keyCode: { value: input.keyCode },
+          which: { value: input.which },
+        });
+        input.target?.dispatchEvent(release);
       }
       heldKeys.clear();
       for (const input of heldButtons.values()) {
@@ -177,6 +217,10 @@
           clientY: input.clientY,
           screenX: input.screenX,
           screenY: input.screenY,
+          ctrlKey: input.ctrlKey,
+          shiftKey: input.shiftKey,
+          altKey: input.altKey,
+          metaKey: input.metaKey,
         }));
       }
       heldButtons.clear();
@@ -190,6 +234,13 @@
         key: event.key,
         code: event.code,
         location: event.location,
+        charCode: event.charCode,
+        keyCode: event.keyCode,
+        which: event.which,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
       });
     }, true);
     window.addEventListener('keyup', (event) => {
@@ -204,6 +255,10 @@
         clientY: event.clientY,
         screenX: event.screenX,
         screenY: event.screenY,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
       });
     }, true);
     window.addEventListener('mouseup', (event) => {
@@ -219,16 +274,14 @@
 
     // Pixel deltas from trackpads become bounded line steps; discrete mouse
     // wheel events pass through unchanged.
-    let wheelRemainder = 0;
-    let wheelDirection = 0;
-    let wheelAt = 0;
     /** @type {WeakSet<WheelEvent>} */
     const normalizedWheels = new WeakSet();
     canvas.addEventListener('wheel', (event) => {
-      if (
-        normalizedWheels.has(event) ||
-        event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL
-      ) return;
+      if (normalizedWheels.has(event)) return;
+      if (event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL) {
+        resetWheel();
+        return;
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
       const now = performance.now();
@@ -315,6 +368,10 @@
     }, true);
 
     canvas.addEventListener('mouseleave', () => {
+      if (touchMode === 'dbltap') {
+        pendingTap = null;
+        return;
+      }
       if (!activeTouch) return;
       const touch = activeTouch;
       activeTouch = null;
