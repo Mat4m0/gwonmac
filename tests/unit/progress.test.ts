@@ -33,6 +33,7 @@ describe("download progress", () => {
     assert.equal(initial, 1_000);
     assert.equal(average.update(1_000, 1_100), initial);
     assert.equal(average.update(500, 1_200), initial);
+    assert.equal(average.update(2_000, 2_000), initial);
   });
 
   it("drives Dock progress and sleep blocking only for a full download", () => {

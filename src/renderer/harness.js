@@ -423,6 +423,7 @@ function scheduleGraphicsDiagnostics(visible, offscreen) {
         antialias: !!attributes?.antialias,
         samples: gl ? Number(gl.getParameter(gl.SAMPLES) || 0) : 0,
       });
+      window.dispatchEvent(new globalThis.Event('gw:graphics-resized'));
     } catch (e) {
       log('[warn] graphics diagnostics failed:', e.message);
     }

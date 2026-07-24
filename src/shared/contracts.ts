@@ -87,7 +87,7 @@ export interface GraphicsDiagnostics {
   drawingBufferWidth: number;
   drawingBufferHeight: number;
   devicePixelRatio: number;
-  renderScale: number;
+  renderScale: AppSettings["renderScale"];
   antialias: boolean;
   samples: number;
 }

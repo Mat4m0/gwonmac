@@ -874,14 +874,14 @@ test.describe("Electron application", () => {
       };
     });
     expect(renderDimensions.one).toBe(
-      `${renderDimensions.width} × ${renderDimensions.height}`,
+      `≈ ${renderDimensions.width} × ${renderDimensions.height}`,
     );
     expect(renderDimensions.oneAndHalf).toBe(
-      `${Math.round(renderDimensions.width * 1.5)} × ` +
+      `≈ ${Math.round(renderDimensions.width * 1.5)} × ` +
         `${Math.round(renderDimensions.height * 1.5)}`,
     );
     expect(renderDimensions.two).toBe(
-      `${renderDimensions.width * 2} × ${renderDimensions.height * 2}`,
+      `≈ ${renderDimensions.width * 2} × ${renderDimensions.height * 2}`,
     );
     await expect(page.locator("#settings-pane-display")).toContainText(
       "2× renders four times the pixels",

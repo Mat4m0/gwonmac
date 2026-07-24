@@ -53,14 +53,15 @@
   let settingsWrite = Promise.resolve();
   let currentCache = null;
   let fullDownloadPromise = null;
-  let fullDownloadActive = false;
-  let fullDownloadStopping = false;
+  let downloadPhase = 'idle';
   let currentDownloadProgress = null;
   let downloadError = '';
   let launcherResolve = null;
   let launcherTotalBytes = 0;
   let savedTimer = null;
   let activeSettingsPane = 'data';
+  const downloadActive = () =>
+    downloadPhase === 'running' || downloadPhase === 'stopping';
 
   // Auto-save proof: a brief "Saved" note in the header when a change lands.
   function flashSaved() {
@@ -142,10 +143,23 @@
     if (!canvas) return;
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
+    const activeScale = Number(form.renderScale.value);
+    const offscreen = window.Module?.canvas?.offscreen;
     for (const output of form.querySelectorAll('[data-render-scale]')) {
       const scale = Number(output.dataset.renderScale);
+      const measured =
+        scale === activeScale &&
+        Number.isFinite(offscreen?.width) &&
+        Number.isFinite(offscreen?.height) &&
+        offscreen.width > 0 &&
+        offscreen.height > 0;
+      const backingWidth = measured ? offscreen.width : Math.round(width * scale);
+      const backingHeight = measured ? offscreen.height : Math.round(height * scale);
       output.textContent =
-        `${Math.round(width * scale)} × ${Math.round(height * scale)}`;
+        `${measured ? '' : '≈ '}${backingWidth} × ${backingHeight}`;
+      output.title = measured
+        ? 'Current measured backing buffer'
+        : 'Estimated backing resolution';
     }
   }
 
@@ -238,10 +252,10 @@
     // line already says "Full game ready" and the action disappears.
     if (cacheComplete(cache)) {
       settingsDownload.hidden = true;
-    } else if (fullDownloadStopping) {
+    } else if (downloadPhase === 'stopping') {
       settingsDownload.textContent = 'Stopping Download…';
       settingsDownload.disabled = true;
-    } else if (fullDownloadActive) {
+    } else if (downloadPhase === 'running') {
       settingsDownload.textContent = 'Pause Download';
       settingsDownload.disabled = false;
     } else if (!cache?.totalBytes) {
@@ -269,10 +283,10 @@
       dataDownloadStatus.textContent = `Full game ready · ${size(received)} downloaded`;
       dataDownloadDetail.textContent =
         'Guild Wars will not start until you choose Play Guild Wars.';
-    } else if (fullDownloadStopping) {
+    } else if (downloadPhase === 'stopping') {
       dataDownloadStatus.textContent = `Pausing · ${cacheStatus(cache)}`;
       dataDownloadDetail.textContent = 'Verified data is being preserved.';
-    } else if (fullDownloadActive) {
+    } else if (downloadPhase === 'running') {
       const progress = currentDownloadProgress;
       const rate = progress?.bytesPerSecond > 0
         ? ` · ${size(progress.bytesPerSecond)}/s avg`
@@ -285,17 +299,17 @@
         : `Starting download · ${cacheStatus(cache)}`;
       dataDownloadDetail.textContent =
         'Guild Wars has not started. You can pause or close the launcher and continue later.';
-    } else if (!fullDownloadActive) {
+    } else if (!downloadActive()) {
       dataDownloadStatus.textContent = `Download paused · ${cacheStatus(cache)}`;
       dataDownloadDetail.textContent =
         'You can resume now or close the launcher and continue later.';
     }
 
     dataDownloadToggle.hidden = complete;
-    dataDownloadToggle.disabled = fullDownloadStopping;
-    dataDownloadToggle.textContent = fullDownloadStopping
+    dataDownloadToggle.disabled = downloadPhase === 'stopping';
+    dataDownloadToggle.textContent = downloadPhase === 'stopping'
       ? 'Pausing…'
-      : fullDownloadActive
+      : downloadPhase === 'running'
         ? 'Pause Download'
         : 'Resume Download';
     dataDownloadPlay.textContent = complete ? 'Play Guild Wars' : 'Play Now Instead';
@@ -313,8 +327,7 @@
   function startFullDownload() {
     if (fullDownloadPromise) return fullDownloadPromise;
     downloadError = '';
-    fullDownloadActive = true;
-    fullDownloadStopping = false;
+    downloadPhase = 'running';
     currentDownloadProgress = null;
     renderSettingsData();
     if (!dataDownload.hidden) renderLauncherDownload();
@@ -340,8 +353,7 @@
         return false;
       })
       .finally(async () => {
-        fullDownloadActive = false;
-        fullDownloadStopping = false;
+        downloadPhase = 'idle';
         currentDownloadProgress = null;
         fullDownloadPromise = null;
         await refreshCache().catch(() => {
@@ -355,14 +367,14 @@
   }
 
   async function stopFullDownload() {
-    if (!fullDownloadActive || fullDownloadStopping) return;
-    fullDownloadStopping = true;
+    if (downloadPhase !== 'running') return;
+    downloadPhase = 'stopping';
     renderSettingsData();
     if (!dataDownload.hidden) renderLauncherDownload();
     try {
       await window.gwNative.cache.stopDownload();
     } catch {
-      fullDownloadStopping = false;
+      downloadPhase = 'running';
       feedback.textContent = 'The download could not be paused.';
       renderSettingsData();
       if (!dataDownload.hidden) {
@@ -469,7 +481,7 @@
   });
 
   dataDownloadToggle.addEventListener('click', () => {
-    if (fullDownloadActive) void stopFullDownload();
+    if (downloadActive()) void stopFullDownload();
     else void startFullDownload();
   });
 
@@ -481,7 +493,7 @@
   dataDownloadQuick.addEventListener('click', async () => {
     dataDownloadQuick.disabled = true;
     try {
-      if (fullDownloadActive) await stopFullDownload();
+      if (downloadActive()) await stopFullDownload();
       await persistSettings({ dataStrategy: 'quick' });
       releaseGameBoot('launcher.quickSelected');
     } catch {
@@ -524,7 +536,7 @@
       .then(async () => {
         flashSaved();
         if (!strategyChanged) return;
-        if (nextStrategy === 'quick' && fullDownloadActive) {
+        if (nextStrategy === 'quick' && downloadActive()) {
           await stopFullDownload();
         }
         renderSettingsData();
@@ -539,7 +551,7 @@
 
   settingsDownload.addEventListener('click', () => {
     feedback.textContent = '';
-    if (fullDownloadActive) void stopFullDownload();
+    if (downloadActive()) void stopFullDownload();
     else void startFullDownload();
   });
 
@@ -569,12 +581,12 @@
   });
 
   window.gwNative.progress.onChange((progress) => {
-    if (progress.phase === 'ready' && !fullDownloadActive) {
+    if (progress.phase === 'ready' && !downloadActive()) {
       void refreshCache().catch(() => {});
       return;
     }
     if (progress.phase !== 'image') return;
-    fullDownloadActive = true;
+    downloadPhase = 'running';
     currentDownloadProgress = progress;
     const next = {
       ...(currentCache || {}),
@@ -598,7 +610,7 @@
   window.gwNative.progress.onPrefetch((progress) => {
     if (
       !dialog.open ||
-      fullDownloadActive ||
+      downloadActive() ||
       !progress?.totalChunks ||
       progress.completedChunks >= progress.totalChunks
     ) return;
@@ -606,4 +618,5 @@
   });
 
   window.addEventListener('resize', updateRenderScaleDimensions);
+  window.addEventListener('gw:graphics-resized', updateRenderScaleDimensions);
 })();

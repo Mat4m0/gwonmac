@@ -31,27 +31,6 @@ export function longRunningTaskFeedback(value: DownloadProgress): {
   };
 }
 
-export function rateBytesPerSecond(
-  received: number,
-  startedAtMs: number,
-  nowMs = Date.now(),
-  minElapsedMs = 500,
-): number {
-  const elapsedMs = nowMs - startedAtMs;
-  if (elapsedMs < minElapsedMs || received <= 0) return 0;
-  return received / (elapsedMs / 1000);
-}
-
-/** Alias used by core patch/chunk services. */
-export function bytesPerSecond(
-  received: number,
-  startedAtMs: number,
-  nowMs = Date.now(),
-  minElapsedMs = 500,
-): number {
-  return rateBytesPerSecond(received, startedAtMs, nowMs, minElapsedMs);
-}
-
 export function secondsRemaining(
   received: number,
   total: number,
@@ -103,6 +82,7 @@ export class DownloadRateAverage {
     const elapsedMs = nowMs - this.startedAtMs;
     const intervalMs = nowMs - this.lastAtMs;
     const intervalBytes = received - this.lastBytes;
+    if (intervalMs <= 0 || intervalBytes <= 0) return this.average;
     this.lastAtMs = nowMs;
     this.lastBytes = received;
 
@@ -112,30 +92,9 @@ export class DownloadRateAverage {
         ((received - this.startedBytes) * 1_000) / Math.max(1, elapsedMs);
       return this.average;
     }
-    if (intervalMs <= 0 || intervalBytes <= 0) return this.average;
-
     const instantaneous = (intervalBytes * 1_000) / intervalMs;
     const weight = 1 - Math.exp(-intervalMs / this.smoothingMs);
     this.average += weight * (instantaneous - this.average);
     return this.average;
   }
-}
-
-export function withProgressRates(
-  value: Omit<DownloadProgress, "bytesPerSecond" | "secondsRemaining"> & {
-    bytesPerSecond?: number;
-    secondsRemaining?: number | null;
-  },
-  startedAtMs: number,
-  nowMs = Date.now(),
-): DownloadProgress {
-  const bytesPerSecond =
-    value.bytesPerSecond ?? rateBytesPerSecond(value.received, startedAtMs, nowMs);
-  return {
-    ...value,
-    bytesPerSecond,
-    secondsRemaining:
-      value.secondsRemaining ??
-      secondsRemaining(value.received, value.total, bytesPerSecond),
-  };
 }
