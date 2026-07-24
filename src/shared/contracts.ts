@@ -109,7 +109,7 @@ export interface AppSettings {
 export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  renderScale: 1,
+  renderScale: 2,
   pointerLock: true,
   cursorTheme: "guild-wars",
   touchMode: "dbltap",

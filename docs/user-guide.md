@@ -80,8 +80,9 @@ The app confirms the action and restarts. Small client files stay installed.
 
 Settings save immediately. **Game Data** owns the canonical Quick Start/Full
 Game strategy, optional current-session download, and cache controls.
-**Graphics quality** changes rendering resolution; keep **1×** unless a sharper
-image is worth the extra GPU work.
+**Graphics quality** changes rendering resolution. **Retina — 2×** is the
+visual-quality default; choose 1.5× or 1× when higher frame rate or lower GPU
+memory use matters more than sharpness.
 Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.

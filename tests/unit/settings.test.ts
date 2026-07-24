@@ -15,7 +15,7 @@ import {
 describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
-      renderScale: 1,
+      renderScale: 2,
       pointerLock: true,
       cursorTheme: "guild-wars",
       touchMode: "dbltap",

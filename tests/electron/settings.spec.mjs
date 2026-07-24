@@ -14,6 +14,9 @@ test.describe("settings experience", () => {
       );
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
       await page.locator("#settings-tab-display").click();
+      await expect(
+        page.locator('input[name="renderScale"][value="2"]'),
+      ).toBeChecked();
 
       const dimensions = await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
