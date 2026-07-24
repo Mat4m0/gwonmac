@@ -139,7 +139,11 @@ function setPrefetch(next: PrefetchProgress): void {
 function sendToRenderer(channel: string, value: unknown): void {
   const win = getMainWindow();
   if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
-  win.webContents.send(channel, value);
+  try {
+    win.webContents.send(channel, value);
+  } catch {
+    // Renderer teardown can race a native progress callback.
+  }
 }
 
 async function ensureDirs(): Promise<void> {
