@@ -1,5 +1,5 @@
 import { app, dialog, net, session } from "electron";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -20,6 +20,7 @@ import {
   SNAPSHOT,
   UA,
 } from "./core/access-key.js";
+import { readPublishedClientManifest } from "./core/published-client.js";
 import { ChunkStore } from "./core/chunk-store.js";
 import type { Manifest } from "./core/manifest.js";
 import { PatchClient } from "./core/patch-client.js";
@@ -279,24 +280,13 @@ async function attachLastPublishedClient(): Promise<void> {
       throw new Error(`last published client is missing ${name}`);
     }
   }
-  const value = JSON.parse(
-    await readFile(path.join(paths.artifacts, "manifest.json"), "utf8"),
-  ) as Record<string, unknown>;
-  if (
-    (value.compressionMode !== "none" && value.compressionMode !== "gzip") ||
-    !Number.isSafeInteger(value.chunkSize) ||
-    (value.chunkSize as number) <= 0 ||
-    !Number.isSafeInteger(value.size) ||
-    (value.size as number) <= 0 ||
-    !Array.isArray(value.chunkHashes) ||
-    !value.chunkHashes.every((hash) => typeof hash === "string")
-  ) {
-    throw new Error("last published client manifest is invalid");
-  }
+  const value = await readPublishedClientManifest(
+    path.join(paths.artifacts, "manifest.json"),
+  );
   await installChunkStore(
-    value.size as number,
-    value.chunkSize as number,
-    value.chunkHashes as string[],
+    value.size,
+    value.chunkSize,
+    value.chunkHashes,
     value.compressionMode,
     paths.chunks,
     paths.bootChunks,

@@ -33,6 +33,7 @@ import {
   fetchPatchBytes,
   type PatchFetch,
 } from "./patch-transport.js";
+import { parsePublishedClientManifest } from "./published-client.js";
 import { publishSnapshotIndex } from "./snapshot.js";
 
 export type FetchLike = PatchFetch;
@@ -226,9 +227,11 @@ export class PatchClient {
       const metadata = JSON.parse(
         await readFile(join(this.artifactsDir, "snapshot-metadata.json"), "utf8"),
       ) as Record<string, unknown>;
-      const current = JSON.parse(
-        await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
-      ) as Record<string, unknown>;
+      const current = parsePublishedClientManifest(
+        JSON.parse(
+          await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+        ),
+      );
       const hashes = JSON.stringify(entry.chunkHashes);
       return (
         metadata.size === entry.size &&
@@ -380,13 +383,16 @@ export class PatchClient {
         chunkSize: mf.chunkSize,
         chunkHashes: snapshotEntry.chunkHashes,
       });
-      await writeAtomicJson(join(stage, "manifest.json"), {
+      await writeAtomicJson(
+        join(stage, "manifest.json"),
+        parsePublishedClientManifest({
         compressionMode: mf.compression,
         chunkSize: mf.chunkSize,
         snapshot: SNAPSHOT,
         size: snapshotEntry.size,
         chunkHashes: snapshotEntry.chunkHashes,
-      });
+        }),
+      );
       let hadCurrent = false;
       try {
         await stat(this.artifactsDir);
