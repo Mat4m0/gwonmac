@@ -51,6 +51,8 @@ GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario boot
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario movement
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario reload
+GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario map-transition
+GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario performance
 ```
 
 The default is cached-only. Main skips the client updater, and the chunk store
@@ -63,6 +65,27 @@ The harness launches Electron directly with the normal Guild Wars profile,
 verifies the effective user-data directory in main before startup, connects to
 the random loopback DevTools endpoint, and observes structured renderer state.
 It never launches through Playwright's temporary Electron profile.
+
+Gameplay automation uses trusted mouse input. The WASM client consumes the
+saved-login Enter presses through its text-input path, but did not consume
+synthetic gameplay key presses in live verification. The target scenario
+therefore selects a different party entry, and the movement scenario uses the
+standard bounded two-button forward gesture. Do not add guessed key bindings or
+change account controls to make a scenario pass.
+
+`map-transition` is the one intentional human checkpoint: the harness prints a
+compact instruction and waits for one portal/map crossing. It proves that the
+snapshot publishes loading with no map, player, or target fields, then resumes
+on a different map. This is also the live target-clear proof; Clear Target is an
+optional account binding and cannot be assumed by automation.
+
+`performance` takes two Level 1 captures and exact animation-frame samples:
+60 seconds with the hook slot disabled, then 60 seconds with the hook enabled.
+It requires at least 3,000 frames per phase and no more than 2% p95 regression.
+The baseline isolates the incremental companion/snapshot/overlay cost; it still
+uses the already transformed game module and its disabled dispatcher branch.
+The result also requires zero hook ticks in baseline and at least 3,000 hooked
+ticks, so a disconnected benchmark cannot pass.
 
 The renderer lifecycle surface derives from existing state:
 
@@ -124,9 +147,9 @@ connection. Candidate observations are research evidence, never runtime truth.
 Use controlled differentials:
 
 ```text
-no target -> target -> clear target
+party target A -> party target B
 stationary -> bounded movement -> stationary
-outpost -> loading -> explorable
+target visible -> loading with no target fields -> new map
 skill ready -> activated -> recharged
 effect absent -> present -> removed
 ```
@@ -178,9 +201,9 @@ failure results. Never expose `writeMemory`, `callFunction`, or `sendPacket`.
 
 | Domain | Foundation | Live evidence | Next proof |
 | --- | --- | --- | --- |
-| Hook lifecycle | Ready | continuous tick, reload, clean shutdown | map transition |
-| Map/player | Ready | live identity, coordinates, movement | live map transition |
-| Target identity/distance | Ready | Living target | hostile/item/gadget/clear |
+| Hook lifecycle | Ready | continuous tick, reload, clean shutdown | one live map transition |
+| Map/player | Ready | live identity, 201-unit movement delta | one live map transition |
+| Target identity/distance | Ready | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
 | Overlay presentation | Ready | real canvas integration | deterministic visual QA |
 | Party | Not modeled | none | locate bounded roster |
 | Skills/recharge | Not modeled | none | locate skill context |

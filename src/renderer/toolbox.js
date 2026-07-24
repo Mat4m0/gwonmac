@@ -155,6 +155,18 @@ function hidden(element, value) {
   return 1;
 }
 
+function recordLifecycle(state) {
+  if (state.status === "ready") {
+    window.gwAutomation?.set(
+      state.instanceType === 1 ? "game.explorable" : "game.outpost",
+    );
+  } else if (state.reason === "loading") {
+    window.gwAutomation?.set("game.loading");
+  } else if (state.status === "unsupported") {
+    window.gwAutomation?.set("toolbox.unsupported");
+  }
+}
+
 export function renderToolboxState(state) {
   const root = document.getElementById("toolbox");
   const target = document.getElementById("toolbox-target");
@@ -220,6 +232,7 @@ function mountRenderer(runtime) {
       runtime.memory.buffer,
       runtime.snapshotPointer,
     );
+    recordLifecycle(state);
     runtime.snapshotReads += 1;
     if (state.reason === "writing" || state.reason === "snapshot") {
       runtime.rejectedSnapshots += 1;
@@ -320,6 +333,11 @@ async function install(instance, module) {
       rejectedSnapshots: 0,
       domUpdates: 0,
       installation: (window.gwToolboxInstallations ?? 0) + 1,
+      setHookEnabledForBenchmark(enabled) {
+        exports.toolbox_hook_slot.value = enabled
+          ? manifest.tableSlot + 1
+          : 0;
+      },
     };
     window.gwToolboxInstallations = runtime.installation;
     window.gwToolboxRuntime = runtime;
@@ -378,6 +396,7 @@ if (typeof window !== "undefined") {
       rangeName: fixture === "target" ? "Compass" : "None",
     });
     window.gwToolboxState = state;
+    recordLifecycle(state);
     renderToolboxState(state);
   }
 }

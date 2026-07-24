@@ -17,18 +17,8 @@ window.gwAutomation = (function () {
     },
     read() {
       const toolbox = window.gwToolboxState;
-      let derived = stage;
-      if (toolbox?.status === 'ready') {
-        derived = toolbox.instanceType === 1
-          ? 'game.explorable'
-          : 'game.outpost';
-      } else if (toolbox?.reason === 'loading') {
-        derived = 'game.loading';
-      } else if (toolbox?.status === 'unsupported') {
-        derived = 'toolbox.unsupported';
-      }
       return Object.freeze({
-        stage: derived,
+        stage,
         sequence,
         transitions: history.slice(),
         toolboxStatus: toolbox?.status ?? 'not-installed',

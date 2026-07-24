@@ -769,22 +769,24 @@ app.whenReady().then(async () => {
   });
 
   createMainWindow(buildWindowHost());
-  setDiagnosticCaptureStoppedHandler(async () => {
-    const win = getMainWindow();
-    if (!win || win.isDestroyed()) return;
-    await resetGameInput(win);
-    const { response } = await dialog.showMessageBox(win, {
-      type: "info",
-      buttons: ["Export Now…", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      message: "Performance capture finished",
-      detail: "Export it now while the capture context is fresh.",
+  if (process.env.GW_TOOLBOX_AUTOMATION !== "1") {
+    setDiagnosticCaptureStoppedHandler(async () => {
+      const win = getMainWindow();
+      if (!win || win.isDestroyed()) return;
+      await resetGameInput(win);
+      const { response } = await dialog.showMessageBox(win, {
+        type: "info",
+        buttons: ["Export Now…", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+        message: "Performance capture finished",
+        detail: "Export it now while the capture context is fresh.",
+      });
+      if (response === 0) {
+        await exportProblemReport(win, () => exportDiagnosticsForWindow(win));
+      }
     });
-    if (response === 0) {
-      await exportProblemReport(win, () => exportDiagnosticsForWindow(win));
-    }
-  });
+  }
   log("app", "info", "window.created");
   void requestGameUpdate();
 

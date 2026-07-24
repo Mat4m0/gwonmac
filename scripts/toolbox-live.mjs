@@ -28,7 +28,16 @@ const scenarioArgument = process.argv.indexOf("--scenario");
 const scenario = scenarioArgument >= 0
   ? process.argv[scenarioArgument + 1]
   : "target";
-if (!["boot", "target", "movement", "reload"].includes(scenario)) {
+if (
+  ![
+    "boot",
+    "target",
+    "movement",
+    "reload",
+    "map-transition",
+    "performance",
+  ].includes(scenario)
+) {
   console.error(`unknown Toolbox live scenario: ${scenario}`);
   process.exit(2);
 }
@@ -49,6 +58,7 @@ const failureDir = path.join(root, "test-results", "toolbox-live");
 const env = {
   ...process.env,
   GW_EXPECT_USER_DATA: userData,
+  GW_TOOLBOX_AUTOMATION: "1",
   ...(allowUpdate ? {} : { GW_REQUIRE_CACHED_CLIENT: "1" }),
 };
 delete env.ELECTRON_RUN_AS_NODE;
@@ -140,6 +150,200 @@ async function waitForPlayable(targetPage) {
   );
   return inputs;
 }
+
+async function readTarget(targetPage) {
+  return targetPage.evaluate(() => {
+    const state = window.gwToolboxState;
+    return state?.targetValid
+      ? {
+          valid: true,
+          id: state.targetId,
+          type: state.targetKind,
+          x: state.targetX,
+          y: state.targetY,
+          distance: state.distance,
+          range: state.rangeName,
+        }
+      : { valid: false };
+  });
+}
+
+async function runTargetScenario(targetPage) {
+  const initial = await readTarget(targetPage);
+  const viewport = await targetPage.evaluate(() => ({
+    width: window.innerWidth,
+  }));
+  const excludedId = initial.valid ? initial.id : 0;
+  let acquired = initial;
+  for (const y of [395, 425, 455]) {
+    await targetPage.mouse.click(viewport.width - 250, y);
+    await targetPage.waitForTimeout(500);
+    acquired = await readTarget(targetPage);
+    if (acquired.valid && acquired.id !== excludedId) break;
+  }
+  if (!acquired.valid || acquired.id === excludedId) {
+    throw new Error("bounded party-panel clicks did not change the target");
+  }
+  return { initial, acquired };
+}
+
+async function runMovementScenario(targetPage) {
+  const before = await targetPage.evaluate(() => ({
+    x: window.gwToolboxState.playerX,
+    y: window.gwToolboxState.playerY,
+  }));
+  const viewport = await targetPage.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  await targetPage.mouse.move(viewport.width / 2, viewport.height / 2);
+  await targetPage.mouse.down({ button: "right" });
+  await targetPage.mouse.down({ button: "left" });
+  try {
+    await targetPage.waitForTimeout(700);
+  } finally {
+    await targetPage.mouse.up({ button: "left" });
+    await targetPage.mouse.up({ button: "right" });
+  }
+  await targetPage.waitForTimeout(500);
+  const after = await targetPage.evaluate(() => ({
+    x: window.gwToolboxState.playerX,
+    y: window.gwToolboxState.playerY,
+  }));
+  const distance = Math.hypot(after.x - before.x, after.y - before.y);
+  if (distance <= 5) {
+    throw new Error("bounded two-button movement did not change player coordinates");
+  }
+  return { gesture: "two-button-forward", before, after, distance };
+}
+
+async function runMapTransitionScenario(targetPage) {
+  const before = await targetPage.evaluate(() => ({
+    mapId: window.gwToolboxState.mapId,
+    instance: window.gwToolboxState.instanceName,
+    playerId: window.gwToolboxState.playerId,
+    targetValid: window.gwToolboxState.targetValid,
+  }));
+  console.log(JSON.stringify({
+    checkpoint: "travel-to-a-different-map",
+    fromMapId: before.mapId,
+    timeoutSeconds: 600,
+  }));
+  const startedAt = Date.now();
+  await targetPage.waitForFunction(
+    () => window.gwToolboxState?.reason === "loading",
+    null,
+    { timeout: 10 * 60_000, polling: 50 },
+  );
+  const loading = await targetPage.evaluate(() => ({
+    status: window.gwToolboxState.status,
+    reason: window.gwToolboxState.reason,
+    exposesMap: "mapId" in window.gwToolboxState,
+    exposesPlayer: "playerId" in window.gwToolboxState,
+    exposesTarget: "targetId" in window.gwToolboxState,
+  }));
+  await targetPage.waitForFunction(
+    (mapId) => {
+      const state = window.gwToolboxState;
+      return state?.status === "ready" && state.mapId !== mapId;
+    },
+    before.mapId,
+    { timeout: 5 * 60_000, polling: 100 },
+  );
+  const after = await targetPage.evaluate(() => ({
+    mapId: window.gwToolboxState.mapId,
+    instance: window.gwToolboxState.instanceName,
+    playerId: window.gwToolboxState.playerId,
+    targetValid: window.gwToolboxState.targetValid,
+  }));
+  return { before, loading, after, elapsedMs: Date.now() - startedAt };
+}
+
+function summarizeFrames(samples) {
+  const sorted = [...samples].sort((left, right) => left - right);
+  const at = (percentile) =>
+    sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] ?? 0;
+  return {
+    count: sorted.length,
+    p50Ms: Number(at(0.5).toFixed(3)),
+    p95Ms: Number(at(0.95).toFixed(3)),
+    p99Ms: Number(at(0.99).toFixed(3)),
+    maxMs: Number((sorted.at(-1) ?? 0).toFixed(3)),
+  };
+}
+
+async function captureFrames(targetPage, hookEnabled) {
+  await targetPage.evaluate((enabled) => {
+    window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
+  }, hookEnabled);
+  if (hookEnabled) {
+    const tick = await targetPage.evaluate(
+      () => window.gwToolboxState.tickCount,
+    );
+    await targetPage.waitForFunction(
+      (previous) => window.gwToolboxState?.tickCount > previous,
+      tick,
+      { timeout: 2_000, polling: 25 },
+    );
+  } else {
+    await targetPage.waitForTimeout(1_000);
+  }
+  const tickBefore = await targetPage.evaluate(
+    () => window.gwToolboxState.tickCount,
+  );
+  await targetPage.evaluate(() =>
+    window.gwNative.diagnostics.startCapture(1));
+  let samples;
+  try {
+    samples = await targetPage.evaluate(
+      (durationMs) => new Promise((resolve) => {
+        const values = [];
+        const started = performance.now();
+        let previous = 0;
+        const frame = (now) => {
+          if (previous) values.push(now - previous);
+          previous = now;
+          if (now - started >= durationMs) resolve(values);
+          else window.requestAnimationFrame(frame);
+        };
+        window.requestAnimationFrame(frame);
+      }),
+      60_000,
+    );
+  } finally {
+    await targetPage.evaluate(() =>
+      window.gwNative.diagnostics.stopCapture());
+  }
+  const tickAfter = await targetPage.evaluate(
+    () => window.gwToolboxState.tickCount,
+  );
+  return {
+    ...summarizeFrames(samples),
+    ticks: tickAfter >= tickBefore
+      ? tickAfter - tickBefore
+      : tickAfter + (2 ** 32 - tickBefore),
+  };
+}
+
+async function runPerformanceScenario(targetPage) {
+  try {
+    const baseline = await captureFrames(targetPage, false);
+    const hooked = await captureFrames(targetPage, true);
+    const regressionPercent = baseline.p95Ms > 0
+      ? ((hooked.p95Ms / baseline.p95Ms) - 1) * 100
+      : Number.POSITIVE_INFINITY;
+    return {
+      durationSecondsPerPhase: 60,
+      baseline,
+      hooked,
+      p95RegressionPercent: Number(regressionPercent.toFixed(2)),
+    };
+  } finally {
+    await targetPage.evaluate(() => {
+      window.gwToolboxRuntime.setHookEnabledForBenchmark(true);
+    });
+  }
+}
 const output = [];
 child.stdout.on("data", (chunk) => output.push(chunk.toString()));
 child.stderr.on("data", (chunk) => output.push(chunk.toString()));
@@ -194,47 +398,15 @@ try {
     elapsedMs: performance.now() - start.at,
   }), before);
   const observationsBefore = await sampleObservations(page);
-
+  let scenarioEvidence = null;
   if (scenario === "target") {
-    await page.locator("#canvas").focus();
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("v");
-    try {
-      await page.waitForFunction(
-        () => window.gwToolboxState?.targetValid === true,
-        null,
-        { timeout: 3_000, polling: 100 },
-      );
-    } catch {
-      const viewport = await page.evaluate(() => ({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      }));
-      await page.mouse.click(viewport.width - 250, 425);
-      await page.waitForFunction(
-        () => window.gwToolboxState?.targetValid === true,
-        null,
-        { timeout: 10_000, polling: 100 },
-      );
-    }
+    scenarioEvidence = await runTargetScenario(page);
   } else if (scenario === "movement") {
-    const position = await page.evaluate(() => ({
-      x: window.gwToolboxState.playerX,
-      y: window.gwToolboxState.playerY,
-    }));
-    await page.locator("#canvas").focus();
-    await page.keyboard.down("w");
-    await page.waitForTimeout(600);
-    await page.keyboard.up("w");
-    await page.waitForFunction(
-      (start) => {
-        const state = window.gwToolboxState;
-        return state?.status === "ready"
-          && Math.hypot(state.playerX - start.x, state.playerY - start.y) > 5;
-      },
-      position,
-      { timeout: 5_000, polling: 100 },
-    );
+    scenarioEvidence = await runMovementScenario(page);
+  } else if (scenario === "map-transition") {
+    scenarioEvidence = await runMapTransitionScenario(page);
+  } else if (scenario === "performance") {
+    scenarioEvidence = await runPerformanceScenario(page);
   }
 
   const result = await page.evaluate(({ ticks, elapsedMs, scenario: name }) => {
@@ -281,6 +453,7 @@ try {
     };
   }, { ...cadence, scenario });
   result.loginInputs = loginInputs;
+  if (scenarioEvidence) result.evidence = scenarioEvidence;
   if (observations.length > 0) {
     result.observations = {
       before: observationsBefore,
@@ -299,7 +472,37 @@ try {
     || result.hookHertz < 1
     || result.hookHertz > 240
     || !result.map
-    || (scenario === "target" && !result.target)
+    || (
+      scenario === "target"
+      && (
+        !result.evidence.acquired.valid
+        || (
+          result.evidence.initial.valid
+          && result.evidence.initial.id === result.evidence.acquired.id
+        )
+      )
+    )
+    || (
+      scenario === "map-transition"
+      && (
+        result.evidence.loading.status !== "waiting"
+        || result.evidence.loading.reason !== "loading"
+        || result.evidence.loading.exposesMap
+        || result.evidence.loading.exposesPlayer
+        || result.evidence.loading.exposesTarget
+        || result.evidence.before.mapId === result.evidence.after.mapId
+      )
+    )
+    || (
+      scenario === "performance"
+      && (
+        result.evidence.baseline.count < 3_000
+        || result.evidence.baseline.ticks !== 0
+        || result.evidence.hooked.count < 3_000
+        || result.evidence.hooked.ticks < 3_000
+        || result.evidence.p95RegressionPercent > 2
+      )
+    )
     || result.installation !== 1
     || result.renderP95Us >= 250
     || rendererErrors.some((line) =>
