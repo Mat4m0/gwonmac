@@ -25,6 +25,16 @@ function fixture(options: {
       calls.push(`lookup:${value}`);
       return {};
     },
+    open(value: unknown) {
+      calls.push(`open:${String(value)}`);
+      return {};
+    },
+    rename(oldPath: string, newPath: string) {
+      calls.push(`rename:${oldPath}:${newPath}`);
+    },
+    unlink(value: string) {
+      calls.push(`unlink:${value}`);
+    },
     analyzePath() {
       return { error: options.mounted ? 0 : 44 };
     },
@@ -111,10 +121,17 @@ test("normalizes Guild Wars desktop template paths at the filesystem boundary", 
   const result = fixture();
   result.calls.length = 0;
   result.fileSystem.lookupPath("\\Templates\\Skills\\Test.st");
-  result.fileSystem.lookupPath("Templates\\Equipment\\Test.eq");
+  result.fileSystem.open("Templates\\Equipment\\Test.eq");
+  result.fileSystem.rename(
+    "Templates\\Skills\\Old.st",
+    "Templates\\Skills\\New.st",
+  );
+  result.fileSystem.unlink("Templates\\Skills\\New.st");
   assert.deepEqual(result.calls, [
     "lookup:Templates/Skills/Test.st",
-    "lookup:Templates/Equipment/Test.eq",
+    "open:Templates/Equipment/Test.eq",
+    "rename:Templates/Skills/Old.st:Templates/Skills/New.st",
+    "unlink:Templates/Skills/New.st",
   ]);
 });
 

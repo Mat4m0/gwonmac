@@ -18,6 +18,9 @@
    *   analyzePath(path: string): { error: number },
    *   chdir(path: string): void,
    *   lookupPath(path: string, options?: unknown): unknown,
+   *   open(path: unknown, ...args: unknown[]): unknown,
+   *   rename(oldPath: string, newPath: string): void,
+   *   unlink(path: string): void,
    *   mkdir(path: string): void,
    *   mkdirTree(path: string): void,
    *   mount(type: unknown, options: { autoPersist: boolean }, path: string): void,
@@ -49,19 +52,6 @@
       const fs = /** @type {EmscriptenFileSystem} */ (runtime.FS);
       const idbfs = runtime.IDBFS;
       let finished = false;
-
-      // The desktop game code still builds template names with Windows
-      // backslashes (for example "\Name.st"). Emscripten's POSIX filesystem
-      // treats those as literal filename characters, so normalize once at its
-      // canonical lookup boundary. A leading Windows root means the mounted
-      // game directory here, not MEMFS "/".
-      const lookupPath = fs.lookupPath.bind(fs);
-      fs.lookupPath = (file, options) => {
-        const normalized = file.includes('\\')
-          ? file.replace(/^\\+/, '').replaceAll('\\', '/')
-          : file;
-        return lookupPath(normalized, options);
-      };
 
       /** @param {unknown} error */
       const stop = (error) => {
@@ -95,7 +85,32 @@
             // template, screenshot, chat log, or diagnostic file beneath it.
             fs.syncfs(false, (persistError) => {
               if (persistError) stop(persistError);
-              else ready();
+              else {
+                // Normalize at the public operations, not only lookupPath:
+                // rename/unlink derive a basename from their original argument
+                // after lookup, which otherwise reintroduces the backslashes.
+                const lookupPath = fs.lookupPath.bind(fs);
+                const open = fs.open.bind(fs);
+                const rename = fs.rename.bind(fs);
+                const unlink = fs.unlink.bind(fs);
+                /** @param {string} file */
+                const normalize = (file) =>
+                  file.includes('\\')
+                    ? file.replace(/^\\+/, '').replaceAll('\\', '/')
+                    : file;
+                fs.lookupPath = (file, options) => {
+                  return lookupPath(normalize(file), options);
+                };
+                fs.open = (file, ...args) =>
+                  open(
+                    typeof file === 'string' ? normalize(file) : file,
+                    ...args,
+                  );
+                fs.rename = (oldPath, newPath) =>
+                  rename(normalize(oldPath), normalize(newPath));
+                fs.unlink = (file) => unlink(normalize(file));
+                ready();
+              }
             });
           } catch (error) {
             stop(error);

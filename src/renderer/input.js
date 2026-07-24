@@ -301,11 +301,11 @@
         cancelable: true,
         clientX: event.clientX,
         clientY: event.clientY,
-        // ArenaNet's generated Emscripten glue defines one wheel step as
-        // three DOM lines. Sending a single line was divided by three again
-        // inside the client and never crossed its zoom threshold.
-        deltaY: steps * 3,
-        deltaMode: globalThis.WheelEvent.DOM_DELTA_LINE,
+        // ArenaNet registers the raw Emscripten wheel callback and consumes
+        // its pixel delta directly. Bundle trackpad motion into full 100 px
+        // steps instead of converting through the unused browser helper.
+        deltaY: steps * 100,
+        deltaMode: globalThis.WheelEvent.DOM_DELTA_PIXEL,
         ctrlKey: event.ctrlKey,
         shiftKey: event.shiftKey,
         altKey: event.altKey,
@@ -460,6 +460,13 @@
         document.pointerLockElement !== canvas ||
         !event.isTrusted
       ) return;
+      if ((event.buttons & 2) === 0) {
+        const rect = canvas.getBoundingClientRect();
+        sendMouse('mouseup', rect, 0, 2, 0, 0);
+        heldButtons.delete(2);
+        releasePointer();
+        return;
+      }
       event.stopImmediatePropagation();
       event.preventDefault();
       if (resettingPointer) {
@@ -483,6 +490,7 @@
       log('[warn] pointer lock failed (needs a user gesture and focused document)');
       releaseAll();
     });
+    document.documentElement.addEventListener('mouseleave', releaseAll);
 
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     log(`touch mode: ${touchMode}`);

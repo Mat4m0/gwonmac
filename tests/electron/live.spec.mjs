@@ -73,6 +73,34 @@ test.describe("live client", () => {
 
       const state = await page.evaluate(async () => {
         const diagnostics = await window.gwNative.diagnostics.current();
+        const filesystemProbes = {};
+        for (const file of [
+          "Templates/Skills/CodexProbe.st",
+          "Templates\\Skills\\CodexProbe.st",
+          "\\CodexProbe.st",
+        ]) {
+          let step = "write";
+          try {
+            const temporary = `${file}.tmp`;
+            globalThis.FS.writeFile(temporary, new Uint8Array([1, 2, 3]));
+            step = "rename";
+            globalThis.FS.rename(temporary, file);
+            step = "read";
+            const bytes = globalThis.FS.readFile(file).byteLength;
+            step = "unlink";
+            globalThis.FS.unlink(file);
+            filesystemProbes[file] = { bytes, error: null };
+          } catch (error) {
+            filesystemProbes[file] = {
+              bytes: 0,
+              error: {
+                step,
+                name: error?.name ?? "UnknownError",
+                errno: error?.errno ?? null,
+              },
+            };
+          }
+        }
         return {
           jspi: "Suspending" in WebAssembly,
           renderer: diagnostics.latest["graphics.renderer"],
@@ -82,7 +110,19 @@ test.describe("live client", () => {
             cwd: globalThis.FS.cwd(),
             skills: !globalThis.FS.analyzePath("Templates/Skills").error,
             equipment: !globalThis.FS.analyzePath("Templates/Equipment").error,
+            probes: filesystemProbes,
           },
+          wheelHandlers: (globalThis.JSEvents?.eventHandlers ?? [])
+            .filter((handler) => handler.eventTypeString === "wheel")
+            .map((handler) => ({
+              target:
+                handler.target === globalThis.window
+                  ? "window"
+                  : handler.target === globalThis.document
+                    ? "document"
+                    : handler.target?.id || handler.target?.constructor?.name,
+              capture: handler.useCapture,
+            })),
           stats: window.gwStats(),
         };
       });
@@ -93,7 +133,15 @@ test.describe("live client", () => {
         cwd: "/app:",
         skills: true,
         equipment: true,
+        probes: {
+          "Templates/Skills/CodexProbe.st": { bytes: 3, error: null },
+          "Templates\\Skills\\CodexProbe.st": { bytes: 3, error: null },
+          "\\CodexProbe.st": { bytes: 3, error: null },
+        },
       });
+      expect(state.wheelHandlers).toEqual([
+        { target: "canvas", capture: 0 },
+      ]);
       expect(state.stats.gamepadImports).toBe(true);
       expect(String(state.renderer)).not.toMatch(/swiftshader|llvmpipe|software/i);
       expect(state.stats.reads).toBeGreaterThan(0);

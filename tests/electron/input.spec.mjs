@@ -155,6 +155,45 @@ test.describe("renderer input", () => {
     }
   });
 
+  test("releases held input when the pointer leaves the app window", async () => {
+    const fixture = await launchOffline("gw-input-window-leave-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        globalThis.document.getElementById("loading").classList.add("gone");
+        window.__inputReleases = [];
+        window.addEventListener("keyup", (event) => {
+          if (!event.isTrusted) window.__inputReleases.push(`key:${event.code}`);
+        });
+        window.addEventListener("mouseup", (event) => {
+          if (!event.isTrusted) {
+            window.__inputReleases.push(`mouse:${event.button}`);
+          }
+        });
+        canvas.focus();
+      });
+      const box = await page.locator("#canvas").boundingBox();
+      await page.keyboard.down("w");
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "left" });
+      await page.evaluate(() => {
+        globalThis.document.documentElement.dispatchEvent(
+          new globalThis.MouseEvent("mouseleave"),
+        );
+      });
+      expect(await page.evaluate(() => window.__inputReleases)).toEqual([
+        "key:KeyW",
+        "mouse:0",
+      ]);
+      await page.keyboard.up("w");
+      await page.mouse.up({ button: "left" });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("cancels an active synthetic tap before a rapid follow-up click", async () => {
     const fixture = await launchOffline("gw-double-click-cancel-e2e-");
     try {
@@ -216,17 +255,13 @@ test.describe("renderer input", () => {
       const result = await fixture.page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const observed = [];
-        window.addEventListener(
+        canvas.addEventListener(
           "wheel",
           (event) => {
-            if (
-              !event.isTrusted &&
-              event.deltaMode === globalThis.WheelEvent.DOM_DELTA_LINE
-            ) {
-              observed.push(event.deltaY);
+            if (!event.isTrusted) {
+              observed.push([event.deltaMode, event.deltaY]);
             }
           },
-          true,
         );
         const pixel = (deltaY) =>
           canvas.dispatchEvent(
@@ -261,8 +296,11 @@ test.describe("renderer input", () => {
       });
       expect(result).toEqual({
         afterReset: [],
-        afterDiscrete: [-1],
-        complete: [-1, 3],
+        afterDiscrete: [[1, -1]],
+        complete: [
+          [1, -1],
+          [0, 100],
+        ],
       });
     } finally {
       await closeOffline(fixture);
@@ -282,6 +320,14 @@ test.describe("renderer input", () => {
       const box = await canvas.boundingBox();
       await page.mouse.move(box.x + 100, box.y + 100);
       await page.mouse.down({ button: "right" });
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => globalThis.document.pointerLockElement?.id ?? null,
+          ),
+        )
+        .toBe("canvas");
+      await page.mouse.move(box.x + 130, box.y + 120);
       await expect
         .poll(() =>
           page.evaluate(

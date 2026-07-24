@@ -146,8 +146,9 @@ working directory to that mount, and persists the directory invariant before
 releasing the run dependency. This keeps the client's relative build-template,
 screenshot, chat-log, and preference writes in one durable origin. A restore
 or initial persist failure stops startup instead of silently running against
-ephemeral memory. At the Emscripten lookup boundary, Windows-style backslashes
-used by the official template code are normalized to POSIX separators.
+ephemeral memory. At Emscripten's public file-operation boundary, Windows-style
+backslashes used by the official template code are normalized to POSIX
+separators before lookup, create, rename, or delete logic sees them.
 
 After native confirmation, the recovery action records a restart request.
 Startup clears only IndexedDB for the owned `gw://app` session before a
