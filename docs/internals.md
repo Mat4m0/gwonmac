@@ -212,7 +212,7 @@ loads the Toolbox runtime, allocates a config and
 callback, and enables the dispatcher last. The callback calls the relocated
 original exactly once before collecting checked map/player/target state.
 
-Snapshot ABI v1 uses named 64-byte `repr(C)` Layout and Snapshot structures,
+Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
 sequence lock. It contains no pointers. The automation observer reads at most
 once per animation frame and rejects unknown flags, invalid IDs/types/bands,

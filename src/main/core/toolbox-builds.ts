@@ -1,7 +1,8 @@
 export interface ToolboxLayout {
   contextRoot: number;
   agentArray: number;
-  targetAgentId: number;
+  manualTargetAgentId: number;
+  automaticTargetAgentId: number;
   gameContextSlot: number;
   characterContext: number;
   mapId: number;
@@ -20,7 +21,8 @@ export interface ToolboxLayout {
 export const TOOLBOX_LAYOUT_FIELDS = [
   "contextRoot",
   "agentArray",
-  "targetAgentId",
+  "manualTargetAgentId",
+  "automaticTargetAgentId",
   "gameContextSlot",
   "characterContext",
   "mapId",
@@ -67,7 +69,10 @@ export const TOOLBOX_BUILDS: readonly KnownToolboxBuild[] = Object.freeze([
     layout: Object.freeze({
       contextRoot: 0x5a0e20,
       agentArray: 0x5a4d98,
-      targetAgentId: 0x5a1664,
+      // AvSelectGetTarget (#7335) returns manual when non-zero, otherwise
+      // automatic. Keep that exact selection rule in the companion.
+      manualTargetAgentId: 0x5a388c,
+      automaticTargetAgentId: 0x5a3888,
       gameContextSlot: 6,
       characterContext: 0x44,
       mapId: 0x198,

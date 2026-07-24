@@ -98,7 +98,7 @@ describe("Toolbox companion kernel", () => {
 
     const snapshotPointer = 0x1000;
     const configPointer = 0x1100;
-    const config = new Uint32Array(memory.buffer, configPointer, 16);
+    const config = new Uint32Array(memory.buffer, configPointer, 17);
     const contextRoot = 0x2000;
     const contexts = 0x2100;
     const game = 0x2200;
@@ -107,9 +107,11 @@ describe("Toolbox companion kernel", () => {
     const agentBuffer = 0x2500;
     const player = 0x2600;
     const target = 0x2800;
-    const targetIdAddress = 0x2a00;
+    const manualTargetIdAddress = 0x2a00;
+    const automaticTargetIdAddress = 0x2a04;
     config.set([
-      contextRoot, agentArray, targetIdAddress, 6, 0x44, 0x198, 0x19c,
+      contextRoot, agentArray, manualTargetIdAddress, automaticTargetIdAddress,
+      6, 0x44, 0x198, 0x19c,
       0x234, 0x23c, 0x2ac, 0x2c, 0x74, 0x78, 0x9c, 0xf4, 0xf6,
     ]);
     const view = new DataView(memory.buffer);
@@ -136,18 +138,18 @@ describe("Toolbox companion kernel", () => {
     view.setFloat32(target + 0x74, 110, true);
     view.setFloat32(target + 0x78, 20, true);
     view.setUint32(target + 0x9c, 0xdb, true);
-    view.setUint32(targetIdAddress, 9, true);
+    view.setUint32(manualTargetIdAddress, 9, true);
 
     assert.equal(
-      instance.exports.toolbox_init(0xffff_fffc, 64, configPointer, 64),
+      instance.exports.toolbox_init(0xffff_fffc, 64, configPointer, 68),
       0,
     );
     assert.equal(
-      instance.exports.toolbox_init(snapshotPointer, 63, configPointer, 64),
+      instance.exports.toolbox_init(snapshotPointer, 63, configPointer, 68),
       0,
     );
     assert.equal(
-      instance.exports.toolbox_init(snapshotPointer, 64, configPointer, 64),
+      instance.exports.toolbox_init(snapshotPointer, 64, configPointer, 68),
       1,
     );
     instance.exports.toolbox_tick(123);
@@ -179,11 +181,18 @@ describe("Toolbox companion kernel", () => {
       );
     }
 
-    view.setUint32(targetIdAddress, 0, true);
+    view.setUint32(manualTargetIdAddress, 0, true);
     instance.exports.toolbox_tick(123);
     assert.equal(
       readToolboxSnapshot(memory.buffer, snapshotPointer).targetValid,
       false,
+    );
+
+    view.setUint32(automaticTargetIdAddress, 9, true);
+    instance.exports.toolbox_tick(123);
+    assert.equal(
+      readToolboxSnapshot(memory.buffer, snapshotPointer).targetId,
+      9,
     );
 
     view.setUint32(character + 0x23c, 2, true);
@@ -203,7 +212,7 @@ describe("Toolbox companion kernel", () => {
 
     config[0] = 0xffff_fffc;
     assert.equal(
-      instance.exports.toolbox_init(snapshotPointer, 64, configPointer, 64),
+      instance.exports.toolbox_init(snapshotPointer, 64, configPointer, 68),
       1,
     );
     instance.exports.toolbox_tick(123);
@@ -211,6 +220,6 @@ describe("Toolbox companion kernel", () => {
       readToolboxSnapshot(memory.buffer, snapshotPointer).reason,
       "game",
     );
-    assert.equal(originalCalls, boundaries.length + 5);
+    assert.equal(originalCalls, boundaries.length + 6);
   });
 });

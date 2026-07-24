@@ -65,10 +65,11 @@ function manifest(bytes: Uint8Array): KnownToolboxBuild {
     hookResults: [],
     tableSlot: 0,
     layout: {
-      contextRoot: 1, agentArray: 2, targetAgentId: 3, gameContextSlot: 6,
-      characterContext: 4, mapId: 5, isExplorable: 6, currentMapId: 7,
-      currentInstanceType: 8, playerNumber: 9, agentId: 10, agentX: 11,
-      agentY: 12, agentType: 13, agentPlayerNumber: 14, agentModelType: 15,
+      contextRoot: 1, agentArray: 2, manualTargetAgentId: 3,
+      automaticTargetAgentId: 4, gameContextSlot: 6, characterContext: 4,
+      mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
+      playerNumber: 9, agentId: 10, agentX: 11, agentY: 12, agentType: 13,
+      agentPlayerNumber: 14, agentModelType: 15,
     },
   };
 }
@@ -96,7 +97,7 @@ describe("targeted Toolbox WebAssembly transform", () => {
         transformAbi: TOOLBOX_TRANSFORM_ABI,
         snapshotAbi: 1,
         snapshotBytes: 64,
-        configBytes: 64,
+        configBytes: 68,
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,

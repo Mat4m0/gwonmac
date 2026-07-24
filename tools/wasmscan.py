@@ -209,7 +209,7 @@ class WasmModule:
                 val, q = uleb(d, q)
             elif spec == MEMARG:
                 align, q = uleb(d, q)
-                _, q = uleb(d, q)                    # offset
+                val, q = uleb(d, q)                  # offset
                 if align & 0x40:                     # multi-memory form
                     _, q = uleb(d, q)
             elif spec == I32:

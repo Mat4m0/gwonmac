@@ -10,18 +10,20 @@ DLL coupled to Win32, Direct3D 9, MinHook, native GWCA, and native plugin DLLs.
 The Electron client instead ports feature behavior onto a small renderer-local
 WASM kernel. Main continues to own only native platform capabilities.
 
-The first production foundation is now live:
+The first developer-only foundation is operational:
 
 ```text
 official exact-hash WASM
   -> one-function deterministic transform
   -> freestanding no_std companion WASM
   -> versioned seqlock snapshot
-  -> Map/Player and Target Info overlay
+  -> structured Map/Player and Target Info state
 ```
 
 Unknown hashes serve the official client unchanged and do not activate
 Toolbox. Official and transformed client binaries are never committed.
+In 0.0.2 this path is dormant in normal and packaged sessions and presents no
+Toolbox UI.
 
 ## Certified build 38,771
 
@@ -32,7 +34,8 @@ Toolbox. Official and transformed client binaries are never committed.
 | Hook table slot | existing null slot 0, encoded as global value 1 |
 | Context root | `0x5a0e20` |
 | Agent array | `0x5a4d98` |
-| Target agent ID | `0x5a1664` |
+| Manual target agent ID | `0x5a388c` |
+| Automatic target agent ID | `0x5a3888` |
 | Live map proof | map 133 / Outpost |
 | Live target proof | Living agent, stable ID/position/distance/range |
 

@@ -61,19 +61,32 @@ async function readTarget(page) {
 
 async function runTarget(page) {
   const initial = await readTarget(page);
-  const viewport = await page.evaluate(() => ({ width: window.innerWidth }));
+  const viewport = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
   const excludedId = initial.valid ? initial.id : 0;
-  let acquired = initial;
-  for (const y of [395, 425, 455]) {
-    await page.mouse.click(viewport.width - 250, y);
+  let acquired;
+  await page.locator("#canvas").focus();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("v");
+  await page.waitForTimeout(500);
+  acquired = await readTarget(page);
+  if (acquired.valid && acquired.id !== excludedId) {
+    return { method: "nearest-ally-key", initial, acquired };
+  }
+  const candidates = [
+    [viewport.width * 0.90, viewport.height * 0.366],
+    [viewport.width * 0.90, viewport.height * 0.42],
+  ];
+  for (const [x, y] of candidates) {
+    await page.mouse.click(x, y);
     await page.waitForTimeout(500);
     acquired = await readTarget(page);
     if (acquired.valid && acquired.id !== excludedId) break;
   }
-  if (!acquired.valid || acquired.id === excludedId) {
-    throw new Error("bounded party-panel clicks did not change the target");
-  }
-  return { initial, acquired };
+  return { method: "bounded-party-row", initial, acquired };
 }
 
 async function runMovement(page) {

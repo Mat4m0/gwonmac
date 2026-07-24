@@ -160,7 +160,7 @@ addresses before and after its action:
 ```bash
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- \
   --scenario target \
-  --observe u32:0x5a1664,f32:0x123456
+  --observe u32:0x5a388c,u32:0x5a3888
 ```
 
 Allowed types are `u8`, `u16`, `u32`, `i32`, and `f32`. There is no string,

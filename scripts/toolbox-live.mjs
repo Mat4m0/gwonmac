@@ -143,6 +143,7 @@ let page;
 let cdp;
 const rendererErrors = [];
 let keepAlive = leaveOpen;
+let result = null;
 try {
   browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
@@ -179,7 +180,7 @@ try {
     sendAutomationCommand,
   });
 
-  const result = await projectLiveResult(page, cadence, scenario);
+  result = await projectLiveResult(page, cadence, scenario);
   result.loginInputs = loginInputs;
   if (scenarioEvidence) result.evidence = scenarioEvidence;
   if (observations.length > 0) {
@@ -223,6 +224,7 @@ try {
     path.join(failureDir, "failure.json"),
     JSON.stringify({
       message: error instanceof Error ? error.message : String(error),
+      result,
       rendererErrors,
       processOutput,
     }),

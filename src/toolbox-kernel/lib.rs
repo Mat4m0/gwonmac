@@ -19,7 +19,8 @@ const FLAG_LOADING: u32 = 1 << 3;
 struct Layout {
     context_root: u32,
     agent_array: u32,
-    target_agent_id: u32,
+    manual_target_agent_id: u32,
+    automatic_target_agent_id: u32,
     game_context_slot: u32,
     character_context: u32,
     map_id: u32,
@@ -39,7 +40,8 @@ impl Layout {
     const EMPTY: Self = Self {
         context_root: 0,
         agent_array: 0,
-        target_agent_id: 0,
+        manual_target_agent_id: 0,
+        automatic_target_agent_id: 0,
         game_context_slot: 0,
         character_context: 0,
         map_id: 0,
@@ -77,7 +79,7 @@ struct Snapshot {
     range_band: u32,
 }
 
-const _: [(); 64] = [(); size_of::<Layout>()];
+const _: [(); 68] = [(); size_of::<Layout>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 
 static mut SNAPSHOT_PTR: u32 = 0;
@@ -360,8 +362,13 @@ unsafe fn collect(layout: Layout) -> State {
         return State::empty();
     }
 
-    if layout.target_agent_id != 0 {
-        if let Some(target_id) = unsafe { read_u32(layout.target_agent_id) } {
+    if layout.manual_target_agent_id != 0
+        && layout.automatic_target_agent_id != 0
+    {
+        let target_id = unsafe { read_u32(layout.manual_target_agent_id) }
+            .filter(|id| *id != 0)
+            .or_else(|| unsafe { read_u32(layout.automatic_target_agent_id) });
+        if let Some(target_id) = target_id {
             if let Some(target) =
                 unsafe { read_agent(layout, agent_buffer, size, target_id) }
             {
