@@ -21,6 +21,12 @@ import {
 } from "./fixtures.mjs";
 
 const execFileAsync = promisify(execFile);
+const clickMenu = (app, id) =>
+  app.evaluate(({ Menu }, menuId) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(menuId);
+    if (!item) throw new Error(`menu item ${menuId} is missing`);
+    item.click();
+  }, id);
 
 test.describe("diagnostics", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
@@ -35,7 +41,7 @@ test.describe("diagnostics", () => {
           checkboxChecked: false,
         });
       });
-      await page.evaluate(() => window.gwNative.diagnostics.startCapture(1));
+      await clickMenu(app, "start-performance-capture");
       await expect(page.locator("#capture-status")).toBeVisible();
       await expect(page.locator("#capture-label")).toContainText(
         "Performance capture",
@@ -45,21 +51,20 @@ test.describe("diagnostics", () => {
         window.gwDiagnostics.swap(200, 50, 25);
         await window.gwDiagnostics.flush();
       });
-      await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
+      await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
 
-      await page.evaluate(async () => {
-        const starting = window.gwNative.diagnostics.startCapture(1);
-        const stopping = window.gwNative.diagnostics.stopCapture();
-        await Promise.all([starting, stopping]);
-      });
+      await clickMenu(app, "start-performance-capture");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
       expect(
         await page.evaluate(async () =>
           (await window.gwNative.diagnostics.current()).captureLevel,
         ),
       ).toBe(0);
 
-      await page.evaluate(() => window.gwNative.diagnostics.startCapture(2));
+      await clickMenu(app, "start-chromium-trace");
       await expect(page.locator("#capture-label")).toContainText(
         "Chromium trace",
       );
@@ -81,7 +86,7 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-marker")).toHaveText(
         "Problem marked ✓",
       );
-      await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
+      await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
     } finally {
       await closeOffline(fixture);
@@ -93,6 +98,10 @@ test.describe("diagnostics", () => {
     try {
       const { app, page } = fixture;
       await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 0,
+          checkboxChecked: false,
+        });
         dialog.showSaveDialog = async () => ({
           canceled: true,
           filePath: "",
@@ -105,12 +114,12 @@ test.describe("diagnostics", () => {
         });
       });
 
-      expect(
-        await page.evaluate(() => window.gwNative.diagnostics.export()),
-      ).toBe("");
-      expect(
-        await page.evaluate(() => window.__diagnosticExportReleasedInput),
-      ).toBe(true);
+      await clickMenu(app, "report-problem");
+      await expect
+        .poll(() =>
+          page.evaluate(() => window.__diagnosticExportReleasedInput),
+        )
+        .toBe(true);
     } finally {
       await closeOffline(fixture);
     }
@@ -167,7 +176,8 @@ test.describe("diagnostics", () => {
           checkboxChecked: false,
         });
       });
-      await page.evaluate(() => window.gwNative.diagnostics.startCapture(1));
+      await clickMenu(app, "start-performance-capture");
+      await expect(page.locator("#capture-status")).toBeVisible();
       await page.evaluate(async () => {
         window.gwDiagnostics.swap(200, 50, 25);
         await window.gwDiagnostics.flush();
@@ -177,7 +187,8 @@ test.describe("diagnostics", () => {
           ?.getMenuItemById("mark-performance-problem")
           ?.click();
       });
-      await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
 
       const target = path.join(diagnosticRoot, "capture.gwdiag");
       const modulePath = path.join(root, "build/main/diagnostics.js");

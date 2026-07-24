@@ -56,7 +56,11 @@ test.describe("Electron application", () => {
             reject(new Error("socket closed before opening"));
           };
         });
-        await window.gwNative.diagnostics.startCapture(1);
+      });
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.getMenuItemById("start-performance-capture")
+          ?.click();
       });
       const electronProcess = app.process();
       const exited = new Promise((resolve) => {

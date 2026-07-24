@@ -504,6 +504,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           },
         },
         {
+          id: "start-performance-capture",
           label: "Start Performance Capture",
           click: async () => {
             await resetGameInput(win);
@@ -525,6 +526,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           },
         },
         {
+          id: "start-chromium-trace",
           label: "Start Chromium Trace",
           click: async () => {
             await resetGameInput(win);
@@ -537,6 +539,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           },
         },
         {
+          id: "stop-capture",
           label: "Stop Capture",
           click: async () => {
             await resetGameInput(win);

@@ -176,9 +176,6 @@ export const IPC = {
   diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
   diagnosticsCurrent: "gw:diagnostics:current",
-  diagnosticsStartCapture: "gw:diagnostics:startCapture",
-  diagnosticsStopCapture: "gw:diagnostics:stopCapture",
-  diagnosticsExport: "gw:diagnostics:export",
   appOpenExternal: "gw:app:openExternal",
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
@@ -237,9 +234,6 @@ export interface GwNativeApi {
       fields?: RendererMilestoneFields,
     ): Promise<void>;
     current(): Promise<DiagnosticSummary>;
-    startCapture(level: 1 | 2): Promise<void>;
-    stopCapture(): Promise<void>;
-    export(): Promise<string>;
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;

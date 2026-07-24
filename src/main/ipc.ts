@@ -34,7 +34,6 @@ import {
   count,
   diagnosticSummary,
   diagnosticTimestampUs,
-  exportDiagnosticsForWindow,
   log,
   recordGraphics,
   recordRendererMetrics,
@@ -42,8 +41,6 @@ import {
   recordRendererMilestone,
   recordClockOffset,
   span,
-  startDiagnosticCapture,
-  stopDiagnosticCapture,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
@@ -465,25 +462,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.diagnosticsCurrent, (event) => {
     assertSender(event);
     return diagnosticSummary();
-  });
-
-  ipcMain.handle(IPC.diagnosticsStartCapture, async (event, level: unknown) => {
-    assertSender(event);
-    if (level !== 1 && level !== 2) {
-      throw new ValidationError("diagnostics level must be 1 or 2");
-    }
-    await startDiagnosticCapture(level);
-  });
-
-  ipcMain.handle(IPC.diagnosticsStopCapture, async (event) => {
-    assertSender(event);
-    await stopDiagnosticCapture();
-  });
-
-  ipcMain.handle(IPC.diagnosticsExport, async (event) => {
-    const win = assertSender(event);
-    await resetGameInput(win);
-    return exportDiagnosticsForWindow(win);
   });
 
   ipcMain.handle(IPC.appOpenExternal, async (event, kind: unknown) => {
