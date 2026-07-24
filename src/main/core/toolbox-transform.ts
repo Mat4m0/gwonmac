@@ -34,6 +34,12 @@ interface FunctionType {
   results: number[];
 }
 
+interface WasmExport {
+  name: string;
+  kind: number;
+  index: number;
+}
+
 interface Cursor {
   offset: number;
 }
@@ -208,6 +214,23 @@ function parseCode(bytes: Uint8Array): Uint8Array[] {
   return bodies;
 }
 
+function parseExports(bytes: Uint8Array): WasmExport[] {
+  const cursor = { offset: 0 };
+  const count = readUleb(bytes, cursor);
+  const exports: WasmExport[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const nameLength = readUleb(bytes, cursor);
+    const end = cursor.offset + nameLength;
+    if (end > bytes.byteLength) fail("truncated export name");
+    const name = new TextDecoder().decode(bytes.slice(cursor.offset, end));
+    cursor.offset = end;
+    const kind = bytes[cursor.offset++]!;
+    exports.push({ name, kind, index: readUleb(bytes, cursor) });
+  }
+  if (cursor.offset !== bytes.byteLength) fail("malformed export section");
+  return exports;
+}
+
 function vectorPayload(bytes: Uint8Array): {
   count: number;
   entries: Uint8Array;
@@ -341,6 +364,80 @@ function assertSignature(type: FunctionType, build: KnownToolboxBuild): void {
         `(${build.hookParams.join(",")}) -> (${build.hookResults.join(",")})`,
     );
   }
+}
+
+export interface ToolboxCandidateReport {
+  sha256: string;
+  validWasm: boolean;
+  certifiedBuildId: number | null;
+  mainLoop: {
+    functionIndex: number;
+    params: string[];
+    results: string[];
+  } | null;
+  table: {
+    min: number;
+    max: number | null;
+    firstEmptySlots: number[];
+  } | null;
+}
+
+export function inspectToolboxCandidate(
+  input: Uint8Array,
+): ToolboxCandidateReport {
+  const sha256 = createHash("sha256").update(input).digest("hex");
+  if (!WebAssembly.validate(input)) {
+    return {
+      sha256,
+      validWasm: false,
+      certifiedBuildId: null,
+      mainLoop: null,
+      table: null,
+    };
+  }
+  const sections = splitSections(input);
+  const types = parseTypes(sectionById(sections, 1));
+  const importCount = countFunctionImports(sectionById(sections, 2));
+  const functionTypes = parseVectorOfUleb(sectionById(sections, 3));
+  const mainLoopExport = parseExports(sectionById(sections, 7)).find(
+    (entry) => entry.kind === 0 && entry.name === "EmscriptenExeThreadMainLoop",
+  );
+  let mainLoop: ToolboxCandidateReport["mainLoop"] = null;
+  if (mainLoopExport && mainLoopExport.index >= importCount) {
+    const localIndex = mainLoopExport.index - importCount;
+    const typeIndex = functionTypes[localIndex];
+    const type = typeIndex === undefined ? undefined : types[typeIndex];
+    if (type) {
+      mainLoop = {
+        functionIndex: mainLoopExport.index,
+        params: type.params.map(valueTypeName),
+        results: type.results.map(valueTypeName),
+      };
+    }
+  }
+  let table: ToolboxCandidateReport["table"];
+  try {
+    const shape = parseTable(sectionById(sections, 4));
+    const occupied = occupiedTableSlots(sectionById(sections, 9));
+    const firstEmptySlots: number[] = [];
+    for (
+      let slot = 0;
+      slot < shape.min && firstEmptySlots.length < 8;
+      slot += 1
+    ) {
+      if (!occupied.has(slot)) firstEmptySlots.push(slot);
+    }
+    table = { ...shape, firstEmptySlots };
+  } catch {
+    table = null;
+  }
+  return {
+    sha256,
+    validWasm: true,
+    certifiedBuildId: findToolboxBuild(sha256)?.buildId ?? null,
+    mainLoop,
+    table,
+  };
 }
 
 export function transformToolboxWasm(

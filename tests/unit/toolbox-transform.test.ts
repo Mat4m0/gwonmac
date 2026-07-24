@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import type { KnownToolboxBuild } from "../../src/main/core/toolbox-builds.js";
 import {
+  inspectToolboxCandidate,
   TOOLBOX_HOOK_EXPORT,
   TOOLBOX_ORIGINAL_EXPORT,
   transformToolboxWasm,
@@ -30,7 +31,12 @@ function fixture(occupied = false): Uint8Array {
   const table = section(4, [1, 0x70, 1, 1, 1]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
-  const exports = section(7, [1, ...tableName, 1, 0]);
+  const loopName = [...new TextEncoder().encode("EmscriptenExeThreadMainLoop")];
+  const exports = section(7, [
+    2,
+    ...tableName, 1, 0,
+    ...uleb(loopName.length), ...loopName, 0, 0,
+  ]);
   const elements = section(
     9,
     occupied ? [1, 0, 0x41, 0, 0x0b, 1, 0] : [0],
@@ -74,6 +80,21 @@ describe("targeted Toolbox WebAssembly transform", () => {
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(TOOLBOX_HOOK_EXPORT));
     assert.ok(names.includes(TOOLBOX_ORIGINAL_EXPORT));
+  });
+
+  it("reports the semantic loop signature and reusable empty slots", () => {
+    const report = inspectToolboxCandidate(fixture());
+    assert.equal(report.validWasm, true);
+    assert.deepEqual(report.mainLoop, {
+      functionIndex: 0,
+      params: ["i32"],
+      results: [],
+    });
+    assert.deepEqual(report.table, {
+      min: 1,
+      max: 1,
+      firstEmptySlots: [0],
+    });
   });
 
   it("rejects an occupied slot, hash mismatch, and signature mismatch", () => {

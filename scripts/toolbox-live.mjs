@@ -7,6 +7,9 @@ import {
   defaultGuildWarsProfile,
   inspectToolboxWorkspace,
 } from "../build/tools/toolbox-doctor.js";
+import {
+  parseToolboxObservations,
+} from "../build/tools/toolbox-observations.js";
 
 if (process.env.GW_LIVE_SMOKE !== "1") {
   console.error("toolbox:live requires GW_LIVE_SMOKE=1");
@@ -29,6 +32,10 @@ if (!["boot", "target", "movement"].includes(scenario)) {
   console.error(`unknown Toolbox live scenario: ${scenario}`);
   process.exit(2);
 }
+const observeArgument = process.argv.indexOf("--observe");
+const observations = parseToolboxObservations(
+  observeArgument >= 0 ? process.argv[observeArgument + 1] ?? null : null,
+);
 const preflight = await inspectToolboxWorkspace(userData);
 if (!allowUpdate && !preflight.readyForCachedLive) {
   console.error(JSON.stringify({ preflight, blocked: "cached-client-incomplete" }));
@@ -55,6 +62,34 @@ const child = spawn(
     stdio: ["ignore", "pipe", "pipe"],
   },
 );
+
+async function sampleObservations(targetPage) {
+  if (observations.length === 0) return [];
+  return targetPage.evaluate((requested) => {
+    const buffer = window.gwToolboxRuntime?.memory?.buffer;
+    if (!(buffer instanceof ArrayBuffer)) return [];
+    const view = new DataView(buffer);
+    const widths = { u8: 1, u16: 2, u32: 4, i32: 4, f32: 4 };
+    return requested.map(({ type, address }) => {
+      const width = widths[type];
+      if (address + width > view.byteLength) {
+        return { type, address, value: null, valid: false };
+      }
+      let value;
+      if (type === "u8") value = view.getUint8(address);
+      else if (type === "u16") value = view.getUint16(address, true);
+      else if (type === "u32") value = view.getUint32(address, true);
+      else if (type === "i32") value = view.getInt32(address, true);
+      else value = view.getFloat32(address, true);
+      return {
+        type,
+        address,
+        value: Number.isFinite(value) ? value : null,
+        valid: Number.isFinite(value),
+      };
+    });
+  }, observations);
+}
 const output = [];
 child.stdout.on("data", (chunk) => output.push(chunk.toString()));
 child.stderr.on("data", (chunk) => output.push(chunk.toString()));
@@ -146,6 +181,7 @@ try {
         : window.gwToolboxState.tickCount + (2 ** 32 - start.tickCount),
     elapsedMs: performance.now() - start.at,
   }), before);
+  const observationsBefore = await sampleObservations(page);
 
   if (scenario === "target") {
     await page.locator("#canvas").focus();
@@ -233,6 +269,12 @@ try {
     };
   }, { ...cadence, scenario });
   result.loginInputs = loginInputs;
+  if (observations.length > 0) {
+    result.observations = {
+      before: observationsBefore,
+      after: await sampleObservations(page),
+    };
+  }
   result.preflight = {
     cached: !allowUpdate,
     snapshotComplete: preflight.snapshot?.complete === true,
