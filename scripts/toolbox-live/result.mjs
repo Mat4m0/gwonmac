@@ -3,6 +3,7 @@ export function projectLiveResult(page, cadence, scenario) {
     const state = window.gwToolboxState;
     const runtime = window.gwToolboxRuntime;
     const diagnostics = await window.gwNative.diagnostics.current();
+    const settings = await window.gwNative.settings.get();
     const storage = await window.navigator.storage.estimate();
     const p95 = (metric) => diagnostics.histograms[metric]?.p95Us ?? 0;
     const renderSamples = [...(runtime?.renderSamples ?? [])]
@@ -44,6 +45,7 @@ export function projectLiveResult(page, cadence, scenario) {
       lifecycle: window.gwAutomation?.read() ?? null,
       installation: runtime?.installation ?? 0,
       host: {
+        renderScale: settings.renderScale,
         wasmMemoryMiB: mib(runtime?.memory?.buffer?.byteLength ?? 0),
         browserStorageMiB: mib(storage.usage ?? 0),
         rendererCacheMiB: latestMib("renderer.memoryCacheBytes"),

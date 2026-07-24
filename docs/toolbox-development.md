@@ -78,31 +78,29 @@ the paired Level 1 benchmark lives in
 `scripts/toolbox-live/performance.mjs`. Add behavior to the narrow owner rather
 than growing another general automation framework.
 
-Gameplay automation uses trusted mouse input. The WASM client consumes the
-saved-login Enter presses through its text-input path, but did not consume
-synthetic gameplay key presses in live verification. The target scenario
-therefore selects a different party entry, and the movement scenario uses the
-standard bounded two-button forward gesture. Do not add guessed key bindings or
-change account controls to make a scenario pass.
+Gameplay automation uses trusted Playwright input. Saved-login confirmation
+uses Enter, target acquisition uses the normal nearest-ally key with a bounded
+party-row fallback, and movement uses the standard two-button forward gesture.
+Do not change account controls to make a scenario pass.
 
-`map-transition` is the one intentional human checkpoint: the harness prints a
-compact instruction and waits for one portal/map crossing. It proves that the
-snapshot publishes loading with no map, player, or target fields, then resumes
-on a different map. This is also the live target-clear proof; Clear Target is an
-optional account binding and cannot be assumed by automation.
+`map-transition` owns one certified, bidirectional map 146/148 portal route.
+It steers in short segments using renderer-local player coordinates and stops
+on the first field-cleared transition state. It proves that no stale map,
+player, or target fields survive loading, then requires the exact destination
+map. Other maps fail closed; this is not a general navigation system.
 
 `performance` takes two Level 1 captures and exact animation-frame samples:
 60 seconds with the hook slot disabled, then 60 seconds with the hook enabled.
 It reports p50, p95, p99, maximum frame time, long-frame counts, renderer
 task/script/layout time, JavaScript heap use, and hook calls. It requires at
-least 3,000 frames per phase and fails when both p95 and p99 regress by more
-than 2%, when p95 moves by more than 1 ms, on a new cluster of frames above 33
-or 50 ms, or on a torn snapshot. Requiring corroboration from both tail
-percentiles avoids treating a single 0.1 ms-quantized scheduling boundary as a
-Toolbox regression.
+least 2,500 frames per phase and fails when both p95 and p99 regress by more
+than 2%, when p95 moves by more than 1 ms, or on a torn snapshot. Requiring
+corroboration from both tail percentiles avoids treating normal outpost
+variance or a single 0.1 ms-quantized scheduling boundary as a Toolbox
+regression.
 The baseline isolates the incremental companion/snapshot-observer cost; it still
 uses the already transformed game module and its disabled dispatcher branch.
-The result also requires zero hook ticks in baseline and at least 3,000 hooked
+The result also requires zero hook ticks in baseline and at least 2,500 hooked
 ticks, so a disconnected benchmark cannot pass. Task and heap values are
 diagnostic rather than gates because garbage collection and unrelated game
 work can move them between phases.

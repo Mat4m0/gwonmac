@@ -203,10 +203,18 @@ try {
     console.log("Toolbox live acceptance passed; leaving Electron open.");
     keepAlive = true;
   } else {
-    await page.evaluate(() => window.gwNative.app.requestQuit());
-    const shutdown = await new Promise((resolve) => {
-      child.once("exit", (code, signal) => resolve({ code, signal }));
-    });
+    if (!page.isClosed()) {
+      await page
+        .evaluate(() => window.gwNative.app.requestQuit())
+        .catch((error) => {
+          if (!page.isClosed()) throw error;
+        });
+    }
+    const shutdown = child.exitCode !== null || child.signalCode !== null
+      ? { code: child.exitCode, signal: child.signalCode }
+      : await new Promise((resolve) => {
+          child.once("exit", (code, signal) => resolve({ code, signal }));
+        });
     if (shutdown.code !== 0 || shutdown.signal !== null) {
       throw new Error(`unclean shutdown: ${JSON.stringify(shutdown)}`);
     }

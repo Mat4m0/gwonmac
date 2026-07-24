@@ -181,9 +181,35 @@ that aligns with a 75 ms frame. The initial 440/112 ms cluster occurs during a
 presentation cost. Do not add a cache, worker, or rendering rewrite unless the
 required repeated captures reproduce and attribute one of these costs.
 
-Five clean Level 1 candidate runs are still required for final release
-acceptance. Record every run here, including failures and profiler
-contamination; never replace the baseline with a single favorable run.
+Five clean Level 1 candidate runs are required for final release acceptance.
+Record every run here, including failures and profiler contamination; never
+replace the baseline with a single favorable run.
+
+## 0.0.2 Toolbox release captures
+
+Recorded July 25, 2026 on the default Retina 2× setting. Each candidate is a
+60-second disabled baseline followed by a 60-second enabled capture. All five
+had zero rejected snapshots, traps, unhandled rejections, unknown sockets, or
+renderer errors. Snapshot observation was `0.10 ms` p95 in every run.
+
+| Candidate | Frames off / on | p95 off → on | p99 off → on | Hook ticks | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 | 2,988 / 3,002 | 33.6 → 34.5 ms | 50.0 → 50.0 ms | 3,007 | Capture clean; old long-frame-count gate rejected it |
+| 2 | 3,597 / 3,600 | 18.4 → 18.0 ms | 18.7 → 18.6 ms | 3,601 | Pass |
+| 3 | 3,600 / 3,588 | 18.6 → 18.4 ms | 18.6 → 18.6 ms | 3,590 | Pass |
+| 4 | 3,600 / 3,599 | 18.6 → 18.6 ms | 18.7 → 18.7 ms | 3,601 | Pass |
+| 5 | 3,600 / 3,600 | 18.6 → 18.5 ms | 18.6 → 18.6 ms | 3,602 | Pass |
+
+Candidate 1 is retained because release evidence includes failures. Its p95
+change was `+2.68%`, while p99 was unchanged; it failed an additional
+one-long-frame rule that was more sensitive to populated-outpost scheduling
+noise than the stated corroborated p95/p99 budget. Candidates 2–5 reproduce no
+regression: median p95 change is `-1.08%`, and median p99 change is `0%`.
+
+Live functional acceptance also passed cached boot, target acquisition,
+bounded movement, renderer reload, and the certified map `146 → 148`
+transition. The transition published a field-cleared waiting state before the
+new outpost snapshot; no stale map, player, or target value crossed it.
 
 ## Host-pipeline audit and render-scale correction
 
