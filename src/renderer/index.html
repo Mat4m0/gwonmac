@@ -55,7 +55,9 @@
          panel is visible (see loading.css :has rules). -->
     <div id="loading-boot">
       <div class="dock-info">
-        <div id="loading-label">Checking the game client</div>
+        <div id="loading-label" role="status" aria-live="polite">
+          Checking the game client
+        </div>
         <div id="loading-detail"></div>
       </div>
       <button type="button" id="loading-retry" hidden>Retry</button>

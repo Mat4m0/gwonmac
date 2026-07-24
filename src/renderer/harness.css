@@ -387,3 +387,10 @@ html,body { margin:0; background:#000; color:#fe0000; font:14px Tahoma,sans-seri
   #settings-form .settings-rtab { border-left: 0; border-bottom: 2px solid transparent; }
   #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: #d9b25c; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  #settings-saved,
+  #settings-progress-fill {
+    transition: none;
+  }
+}

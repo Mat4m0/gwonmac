@@ -3,7 +3,6 @@ import { AllowlistError, ValidationError } from "../../shared/errors.js";
 export const ALLOWED_PORTS = new Set([6112, 80, 443]);
 
 export const ALLOWED_DOMAINS = ["arenanetworks.com", "guildwars.com"] as const;
-export const DNS_SUFFIXES = ALLOWED_DOMAINS;
 
 export function isAllowedPort(port: number): boolean {
   return ALLOWED_PORTS.has(port);
@@ -17,8 +16,6 @@ export function allowedName(
   if (!h) return false;
   return domains.some((d) => h === d || h.endsWith("." + d));
 }
-
-export const dnsSuffixAllowed = (name: string): boolean => allowedName(name);
 
 export function isPublicIpv4(ip: string): boolean {
   const p = ip.split(".");
@@ -38,8 +35,6 @@ export function isPublicIpv4(ip: string): boolean {
   return true;
 }
 
-export const isPublicUnicastIPv4 = isPublicIpv4;
-
 export function isPublicIp(ip: string): boolean {
   if (!ip.includes(":")) return isPublicIpv4(ip);
   const h = ip.toLowerCase();
@@ -48,10 +43,6 @@ export function isPublicIp(ip: string): boolean {
   if (/^fe[89ab]/.test(h)) return false;
   const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(h);
   return m ? isPublicIpv4(m[1]!) : true;
-}
-
-export function isPublicUnicastIPv6(host: string): boolean {
-  return isPublicIp(host);
 }
 
 let privateAllowWarned = false;

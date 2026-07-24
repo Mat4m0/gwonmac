@@ -120,4 +120,37 @@ test.describe("settings experience", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("keeps settings keyboard navigation and reduced motion accessible", async () => {
+    const fixture = await launchOffline("gw-settings-accessibility-e2e-");
+    try {
+      const { page } = fixture;
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+
+      const dataTab = page.locator("#settings-tab-data");
+      const displayTab = page.locator("#settings-tab-display");
+      await dataTab.focus();
+      await dataTab.press("ArrowRight");
+      await expect(displayTab).toBeFocused();
+      await expect(displayTab).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator("#settings-pane-display")).toBeVisible();
+      await expect(page.locator("#settings-pane-data")).toBeHidden();
+
+      expect(
+        await page.locator("#settings-saved").evaluate(
+          (element) => globalThis.getComputedStyle(element).transitionDuration,
+        ),
+      ).toBe("0s");
+      await page.locator("#settings-done").click();
+      await expect(page.locator("#settings-dialog")).not.toHaveAttribute(
+        "open",
+        "",
+      );
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

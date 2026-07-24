@@ -53,7 +53,11 @@
 #loading-links a { color:#e8dcc0bf; text-decoration:none; padding:3px 6px;
                    border-radius:2px; transition:color .15s, background-color .15s; }
 #loading-links a:hover, #loading-links a:focus-visible {
-  color:#f3dd9d; background:#f3dd9d1a; outline:none; }
+  color:#f3dd9d; background:#f3dd9d1a; }
+#loading-links a:focus-visible {
+  outline:2px solid #e0bd73;
+  outline-offset:2px;
+}
 /* The update notice earns the gold the other links do not. */
 #loading-links a.update { color:#f3dd9d; border:1px solid #a9833880;
                           border-radius:2px; padding:2px 8px; }
