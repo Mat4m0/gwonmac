@@ -543,9 +543,20 @@ function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
     typeof record.renderer === "string" &&
     typeof record.vendor === "string" &&
     typeof record.hardwareAcceleration === "boolean" &&
-    ["canvasWidth", "canvasHeight", "devicePixelRatio", "renderScale"].every(
+    [
+      "canvasWidth",
+      "canvasHeight",
+      "offscreenWidth",
+      "offscreenHeight",
+      "drawingBufferWidth",
+      "drawingBufferHeight",
+      "devicePixelRatio",
+      "renderScale",
+      "samples",
+    ].every(
       (key) => typeof record[key] === "number" && Number.isFinite(record[key]),
     ) &&
+    typeof record.antialias === "boolean" &&
     record.userAgent.length <= 2_048 &&
     record.webglVersion.length <= 1_024 &&
     record.renderer.length <= 1_024 &&
@@ -554,6 +565,17 @@ function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
     (record.canvasWidth as number) <= 32_768 &&
     (record.canvasHeight as number) >= 0 &&
     (record.canvasHeight as number) <= 32_768 &&
+    (record.offscreenWidth as number) >= 0 &&
+    (record.offscreenWidth as number) <= 32_768 &&
+    (record.offscreenHeight as number) >= 0 &&
+    (record.offscreenHeight as number) <= 32_768 &&
+    (record.drawingBufferWidth as number) >= 0 &&
+    (record.drawingBufferWidth as number) <= 32_768 &&
+    (record.drawingBufferHeight as number) >= 0 &&
+    (record.drawingBufferHeight as number) <= 32_768 &&
+    Number.isInteger(record.samples) &&
+    (record.samples as number) >= 0 &&
+    (record.samples as number) <= 64 &&
     (record.devicePixelRatio as number) > 0 &&
     (record.devicePixelRatio as number) <= 16 &&
     (record.renderScale === 1 ||

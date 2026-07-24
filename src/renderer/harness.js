@@ -47,6 +47,7 @@ let useJspi = true;
 let appSettings = {
   renderScale: 1,
   pointerLock: true,
+  cursorTheme: 'guild-wars',
   touchMode: 'dbltap',
   showDiagnostics: false,
   dataStrategy: null,
@@ -83,6 +84,7 @@ const stats = {
 };
 let burstBytes = 0, burstTimer = null;
 let lastSnapshotError = '';
+let gamepadImportsAvailable = false;
 
 window.gwEvictMemory = () => {
   const n = chunkCache.size;
@@ -101,6 +103,7 @@ window.gwStats = () => {
     memoryCacheMB: +(chunkCacheBytes / 1048576).toFixed(1),
     memoryCacheChunks: chunkCache.size,
     residentHashes: residentHashes.size,
+    gamepadImports: gamepadImportsAvailable,
   };
   if (console.table) console.table(s);
   else console.log(s);
@@ -319,13 +322,26 @@ function patchEgl(env) {
   env.eglCreateContext = (...args) => {
     const visible = Module.canvas;
     visible.offscreen = new OffscreenCanvas(visible.width, visible.height);
+    const offscreen = visible.offscreen;
     Module.canvas = visible.offscreen;          // context is created on this
-    const ctx = createContext(...args);
-    Module.canvas = visible;
+    let ctx;
+    try {
+      ctx = createContext(...args);
+    } finally {
+      Module.canvas = visible;
+    }
     Module.canvas.context = visible.getContext('bitmaprenderer');
     log(`egl context on offscreen ${visible.width}x${visible.height}`);
+    scheduleGraphicsDiagnostics(visible, offscreen);
     return ctx;
   };
+
+  // The client owns canvas sizing. Render scale is the density it sees, not a
+  // second host-side resize competing with emscripten_set_canvas_element_size.
+  if (typeof env.emscripten_get_device_pixel_ratio === 'function') {
+    env.emscripten_get_device_pixel_ratio =
+      () => appSettings.renderScale || 1;
+  }
 
   const swap = env.eglSwapBuffers;
   let firstFrame = true;
@@ -366,10 +382,51 @@ function patchEgl(env) {
       if (rc === 0 && Module.canvas.offscreen) {
         Module.canvas.offscreen.width = w;
         Module.canvas.offscreen.height = h;
+        scheduleGraphicsDiagnostics(Module.canvas, Module.canvas.offscreen);
       }
       return rc;
     };
   }
+}
+
+let graphicsDiagnosticsFrame = 0;
+function scheduleGraphicsDiagnostics(visible, offscreen) {
+  cancelAnimationFrame(graphicsDiagnosticsFrame);
+  graphicsDiagnosticsFrame = requestAnimationFrame(async () => {
+    try {
+      const gl = offscreen.getContext('webgl2') || offscreen.getContext('webgl');
+      const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      const renderer = dbg
+        ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+        : (gl ? 'unknown' : 'none');
+      const vendor = dbg
+        ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)
+        : (gl ? 'unknown' : 'none');
+      const attributes = gl?.getContextAttributes();
+      await native().diagnostics.recordGraphics({
+        userAgent: navigator.userAgent,
+        jspi: true,
+        webglVersion: gl
+          ? (gl.constructor?.name === 'WebGL2RenderingContext' ? 'WebGL2' : 'WebGL')
+          : 'none',
+        renderer: String(renderer),
+        vendor: String(vendor),
+        hardwareAcceleration: !/swiftshader|llvmpipe|software/i.test(String(renderer)),
+        canvasWidth: visible.width,
+        canvasHeight: visible.height,
+        offscreenWidth: offscreen.width,
+        offscreenHeight: offscreen.height,
+        drawingBufferWidth: gl?.drawingBufferWidth || 0,
+        drawingBufferHeight: gl?.drawingBufferHeight || 0,
+        devicePixelRatio: window.devicePixelRatio || 1,
+        renderScale: appSettings.renderScale || 1,
+        antialias: !!attributes?.antialias,
+        samples: gl ? Number(gl.getParameter(gl.SAMPLES) || 0) : 0,
+      });
+    } catch (e) {
+      log('[warn] graphics diagnostics failed:', e.message);
+    }
+  });
 }
 
 Module = {
@@ -380,6 +437,17 @@ Module = {
   // Take over instantiation so the EGL imports can be patched first.
   instantiateWasm(imports, success) {
     patchEgl(imports.env);
+    const gamepadImports = [
+      'emscripten_sample_gamepad_data',
+      'emscripten_set_gamepadconnected_callback_on_thread',
+      'emscripten_set_gamepaddisconnected_callback_on_thread',
+      'emscripten_get_num_gamepads',
+      'emscripten_get_gamepad_status',
+    ];
+    gamepadImportsAvailable =
+      typeof navigator.getGamepads === 'function' &&
+      gamepadImports.every((name) => typeof imports.env?.[name] === 'function');
+    log(`gamepad host: ${gamepadImportsAvailable ? 'available' : 'unavailable'}`);
     const url = useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm';
     performance.mark('gw.wasm.instantiate.begin');
     milestone('wasm.instantiate.begin');
@@ -677,20 +745,12 @@ function loadGlue(candidates) {
   wired = true;
   useJspi = src === 'Gw.jspi.js';
 
-  // Backing size is CSS size × renderScale, deliberately independent of DPR.
-  const c = Module.canvas;
-  const syncCanvas = () => {
-    const scale = appSettings.renderScale || 1;
-    c.width = Math.round(window.innerWidth * scale);
-    c.height = Math.round(window.innerHeight * scale);
-    if (c.offscreen) {
-      c.offscreen.width = c.width;
-      c.offscreen.height = c.height;
-    }
-    log(`canvas ${c.width}x${c.height} (scale ${scale})`);
+  const c = document.getElementById('canvas');
+  const applyCursorTheme = () => {
+    const visible = document.getElementById('canvas');
+    if (visible) visible.dataset.cursorTheme = appSettings.cursorTheme || 'guild-wars';
   };
-  syncCanvas();
-  window.addEventListener('resize', syncCanvas);
+  applyCursorTheme();
 
   c.focus();
   c.addEventListener('pointerdown', () => {
@@ -727,6 +787,112 @@ function loadGlue(candidates) {
   for (const ev of ['pointerdown', 'keydown']) {
     window.addEventListener(ev, resumeAudio, true);
   }
+
+  // Track the trusted inputs delivered to the game. Native menus, dialogs,
+  // Cmd-Tab, and pointer-lock failures can consume the matching release.
+  const heldKeys = new Map();
+  const heldButtons = new Map();
+  let cancelSyntheticTouches = () => {};
+  let releasePointer = () => {};
+
+  window.addEventListener('keydown', (event) => {
+    if (!event.isTrusted || event.repeat) return;
+    heldKeys.set(event.code, {
+      target: event.target,
+      key: event.key,
+      code: event.code,
+      location: event.location,
+    });
+  }, true);
+  window.addEventListener('keyup', (event) => {
+    if (event.isTrusted) heldKeys.delete(event.code);
+  }, true);
+  window.addEventListener('mousedown', (event) => {
+    if (!event.isTrusted) return;
+    heldButtons.set(event.button, {
+      target: event.target,
+      button: event.button,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      screenX: event.screenX,
+      screenY: event.screenY,
+    });
+  }, true);
+  window.addEventListener('mouseup', (event) => {
+    if (event.isTrusted) heldButtons.delete(event.button);
+  }, true);
+
+  function releaseAllInputs() {
+    for (const input of heldKeys.values()) {
+      input.target?.dispatchEvent(new globalThis.KeyboardEvent('keyup', {
+        bubbles: true,
+        cancelable: true,
+        key: input.key,
+        code: input.code,
+        location: input.location,
+      }));
+    }
+    heldKeys.clear();
+    for (const input of heldButtons.values()) {
+      input.target?.dispatchEvent(new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+        button: input.button,
+        buttons: 0,
+        clientX: input.clientX,
+        clientY: input.clientY,
+        screenX: input.screenX,
+        screenY: input.screenY,
+      }));
+    }
+    heldButtons.clear();
+    cancelSyntheticTouches();
+    releasePointer();
+  }
+
+  window.addEventListener('blur', releaseAllInputs);
+  window.addEventListener('pagehide', releaseAllInputs);
+  window.addEventListener('gw:input-reset', releaseAllInputs);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') releaseAllInputs();
+  });
+
+  // Emscripten forwards raw pixel deltas, while the game consumes wheel
+  // notches. Accumulate smooth trackpad motion into bounded line steps.
+  let wheelRemainder = 0, wheelDirection = 0, wheelAt = 0;
+  const normalizedWheels = new WeakSet();
+  c.addEventListener('wheel', (event) => {
+    if (normalizedWheels.has(event)) return;
+    if (
+      event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL
+    ) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const now = performance.now();
+    const direction = Math.sign(event.deltaY);
+    if (!direction) return;
+    if (direction !== wheelDirection || now - wheelAt > 150) wheelRemainder = 0;
+    wheelDirection = direction;
+    wheelAt = now;
+    wheelRemainder += event.deltaY;
+    const steps = Math.max(-3, Math.min(3, Math.trunc(wheelRemainder / 100)));
+    if (!steps) return;
+    wheelRemainder -= steps * 100;
+    const normalized = new globalThis.WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      deltaY: steps,
+      deltaMode: globalThis.WheelEvent.DOM_DELTA_LINE,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      metaKey: event.metaKey,
+    });
+    normalizedWheels.add(normalized);
+    c.dispatchEvent(normalized);
+  }, { capture: true, passive: false });
 
   // ---- mouse -> touch --------------------------------------------------
   let touchMode = appSettings.touchMode || 'dbltap';
@@ -818,6 +984,14 @@ function loadGlue(candidates) {
       sendTouch('touchcancel', t);
     }, true);
   }
+  cancelSyntheticTouches = () => {
+    cancelTaps();
+    pendingTap = null;
+    if (!active) return;
+    const touch = active;
+    active = null;
+    sendTouch('touchcancel', touch);
+  };
 
   window.gwTap = (x, y) => {
     const t = mkTouch(x, y, ++touchId);
@@ -855,14 +1029,15 @@ function loadGlue(candidates) {
   const sendDelta = (mx, my) => {
     const r = c.getBoundingClientRect();
     const nx = virt.x + mx, ny = virt.y + my;
-    if (nx >= 0 && ny >= 0) {
+    if (nx >= 0 && nx <= r.width && ny >= 0 && ny <= r.height) {
       virt.x = nx;
       virt.y = ny;
       sendMouse('mousemove', r, 2, 0, mx, my);
       return;
     }
     // Walk only as far as the edge, bank the overshoot, recycle the drag.
-    const sx = nx < 0 ? -virt.x : mx, sy = ny < 0 ? -virt.y : my;
+    const sx = Math.max(0, Math.min(r.width, nx)) - virt.x;
+    const sy = Math.max(0, Math.min(r.height, ny)) - virt.y;
     virt.x += sx;
     virt.y += sy;
     sendMouse('mousemove', r, 2, 0, sx, sy);
@@ -897,7 +1072,10 @@ function loadGlue(candidates) {
     touchMode = appSettings.touchMode || 'dbltap';
     lockEnabled = appSettings.pointerLock !== false;
     if (!lockEnabled) releaseLock();
-    if (appSettings.renderScale !== previousScale) syncCanvas();
+    applyCursorTheme();
+    if (appSettings.renderScale !== previousScale) {
+      window.dispatchEvent(new globalThis.Event('resize'));
+    }
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
     log('settings applied');
   };
@@ -908,16 +1086,21 @@ function loadGlue(candidates) {
     virt = { x: e.clientX - r.left, y: e.clientY - r.top };
     resetting = false;
     pendingX = pendingY = 0;
-    c.classList.add('cursor-hidden');
     // A plain call, no unadjustedMovement: that option is refused often
     // enough that its fallback matters, and the fallback ran from a promise
     // callback, outside the gesture context pointer lock requires.
     if (document.pointerLockElement !== c) {
       try {
-        c.requestPointerLock();
+        const request = c.requestPointerLock();
+        request?.catch((err) => {
+          window.gwDiagnostics?.event('pointerLock.failed', err);
+          log('[warn] pointer lock refused:', err.message);
+          releaseAllInputs();
+        });
       } catch (err) {
         window.gwDiagnostics?.event('pointerLock.failed', err);
         log('[warn] pointer lock refused:', err.message);
+        releaseAllInputs();
       }
     }
   }, true);
@@ -942,17 +1125,20 @@ function loadGlue(candidates) {
     c.classList.remove('cursor-hidden');
     if (document.pointerLockElement === c) document.exitPointerLock();
   }
+  releasePointer = releaseLock;
   document.addEventListener('mouseup', (e) => {
     if (e.button === 2 && e.isTrusted) releaseLock();
   }, true);
-  window.addEventListener('blur', releaseLock);
   // Esc drops the lock without a mouseup, which would stall a held drag.
   document.addEventListener('pointerlockchange', () => {
-    if (virt && document.pointerLockElement !== c) releaseLock();
+    const locked = document.pointerLockElement === c;
+    c.classList.toggle('cursor-hidden', locked);
+    if (virt && !locked) releaseLock();
   });
   document.addEventListener('pointerlockerror', () => {
     window.gwDiagnostics?.event('pointerLock.failed');
     log('[warn] pointer lock failed (needs a user gesture, and a focused document)');
+    releaseAllInputs();
   });
 
   // Right-drag turns the camera, so the context menu has to go. The shipped
@@ -1020,29 +1206,6 @@ function loadGlue(candidates) {
   if (!('Suspending' in WebAssembly)) {
     window.gwLoading?.fail('This Electron build lacks WebAssembly JSPI (WebAssembly.Suspending).');
     return log('[err] JSPI unavailable');
-  }
-
-  // Record graphics diagnostics once a WebGL context is obtainable.
-  try {
-    const probe = document.createElement('canvas');
-    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
-    const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
-    const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : (gl ? 'unknown' : 'none');
-    const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : (gl ? 'unknown' : 'none');
-    await native().diagnostics.recordGraphics({
-      userAgent: navigator.userAgent,
-      jspi: true,
-      webglVersion: gl ? (gl instanceof WebGL2RenderingContext ? 'WebGL2' : 'WebGL') : 'none',
-      renderer: String(renderer),
-      vendor: String(vendor),
-      hardwareAcceleration: !/swiftshader|llvmpipe|software/i.test(String(renderer)),
-      canvasWidth: Math.round(window.innerWidth * (appSettings.renderScale || 1)),
-      canvasHeight: Math.round(window.innerHeight * (appSettings.renderScale || 1)),
-      devicePixelRatio: window.devicePixelRatio || 1,
-      renderScale: appSettings.renderScale || 1,
-    });
-  } catch (e) {
-    log('[warn] graphics diagnostics failed:', e.message);
   }
 
   window.gwLoading.set('Starting the game…', null);

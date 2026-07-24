@@ -125,7 +125,26 @@
   let clockSyncRunning = false;
   let clockOffsetUs = 0;
   let captureLevel = 0;
+  let captureStartedAt = 0;
+  let captureStatusTimer = null;
   let frameData = [];
+
+  function updateCaptureStatus() {
+    const status = document.getElementById('capture-status');
+    const label = document.getElementById('capture-label');
+    if (!status || !label || captureLevel === 0) return;
+    const elapsed = Math.max(0, Math.floor((performance.now() - captureStartedAt) / 1000));
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const seconds = String(elapsed % 60).padStart(2, '0');
+    label.textContent =
+      `${captureLevel === 2 ? 'Chromium trace' : 'Performance capture'} · ` +
+      `${minutes}:${seconds}`;
+  }
+
+  function announceCapture(message) {
+    const output = document.getElementById('capture-announcement');
+    if (output) output.textContent = message;
+  }
 
   function fingerprint(value) {
     const input = value instanceof Error
@@ -235,10 +254,34 @@
     },
     captureStarted(level) {
       captureLevel = level === 2 ? 2 : 1;
+      captureStartedAt = performance.now();
+      const status = document.getElementById('capture-status');
+      const marker = document.getElementById('capture-marker');
+      if (status) status.hidden = false;
+      if (marker) marker.hidden = true;
+      updateCaptureStatus();
+      window.clearInterval(captureStatusTimer);
+      captureStatusTimer = setInterval(updateCaptureStatus, 1_000);
+      announceCapture(
+        captureLevel === 2
+          ? 'Chromium trace started.'
+          : 'Performance capture started.',
+      );
     },
     captureStopped() {
       captureLevel = 0;
       frameData = [];
+      window.clearInterval(captureStatusTimer);
+      captureStatusTimer = null;
+      const status = document.getElementById('capture-status');
+      if (status) status.hidden = true;
+      announceCapture('Capture stopped.');
+    },
+    problemMarked() {
+      if (captureLevel === 0) return;
+      const marker = document.getElementById('capture-marker');
+      if (marker) marker.hidden = false;
+      announceCapture('Performance problem marked.');
     },
     mark(name, fields) {
       try {

@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import http from "node:http";
 import { after, describe, it } from "node:test";
 import { PatchClient } from "../../build/main/core/patch-client.js";
 import { isProxyRoute, resolveProxyHost } from "../../build/main/core/proxy-routes.js";
@@ -203,6 +204,37 @@ describe("integration: patch updater", () => {
     });
     await assert.rejects(() => client.update());
     assert.equal(await readFile(join(artifacts, "Gw.jspi.js"), "utf8"), "OLD");
+  });
+
+  it("bounds an unresponsive ArenaNet request", async () => {
+    const server = http.createServer(() => {
+      // Deliberately never respond; AbortSignal must end the request.
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    assert(address && typeof address === "object");
+    const root = await mkdtemp(join(tmpdir(), "gw-timeout-"));
+    cleanup.push(root);
+    const client = new PatchClient({
+      artifactsDir: join(root, "artifacts"),
+      chunksDir: join(root, "chunks"),
+      patchRoot: `http://127.0.0.1:${address.port}`,
+      requestTimeoutMs: 25,
+    });
+
+    const started = Date.now();
+    try {
+      await assert.rejects(() =>
+        client.getBytes(`http://127.0.0.1:${address.port}/manifest.json`, 1),
+      );
+      assert(Date.now() - started < 1_000);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });
 

@@ -211,7 +211,7 @@ is QT Friz Quad, © 1992 QualiType, distributed under the SIL Open Font License
 1.1; its license ships with the font.
 
 Source code is GPL-3.0-only — see [LICENSE](LICENSE). Unless an asset carries
-its own license, Guild Wars imagery, screenshots, loading artwork, the
-application icon, and derived favicons are fan-project visual material, are not
-relicensed under GPL-3.0, and all underlying rights remain with their
-respective owners.
+its own license, Guild Wars imagery, screenshots, loading artwork, cursor
+artwork, the application icon, and derived favicons are fan-project visual
+material, are not relicensed under GPL-3.0, and all underlying rights remain
+with their respective owners.

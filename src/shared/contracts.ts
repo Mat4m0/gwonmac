@@ -82,8 +82,14 @@ export interface GraphicsDiagnostics {
   hardwareAcceleration: boolean;
   canvasWidth: number;
   canvasHeight: number;
+  offscreenWidth: number;
+  offscreenHeight: number;
+  drawingBufferWidth: number;
+  drawingBufferHeight: number;
   devicePixelRatio: number;
   renderScale: number;
+  antialias: boolean;
+  samples: number;
 }
 
 export interface ClockSyncResponse {
@@ -94,6 +100,7 @@ export interface ClockSyncResponse {
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
   pointerLock: boolean;
+  cursorTheme: "system" | "guild-wars" | "guild-wars-2";
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
@@ -102,6 +109,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 1,
   pointerLock: true,
+  cursorTheme: "guild-wars",
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,

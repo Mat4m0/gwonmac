@@ -3,12 +3,14 @@ import {
   BrowserWindow,
   dialog,
   Menu,
+  powerSaveBlocker,
   screen,
   shell,
   type MenuItemConstructorOptions,
 } from "electron";
-import type { AppSettings } from "../shared/contracts.js";
+import type { AppSettings, DownloadProgress } from "../shared/contracts.js";
 import { EXTERNAL_URLS } from "../shared/contracts.js";
+import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
 import {
   defaultWindowState,
@@ -29,6 +31,7 @@ const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface WindowHost {
   sockets: SocketManager;
+  getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   setSettings: (value: AppSettings) => Promise<AppSettings>;
   exportDiagnostics: () => Promise<string>;
@@ -44,6 +47,29 @@ let restoredWindowState: WindowState | null = null;
 let lastNormalBounds: WindowBounds | null = null;
 let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
 let windowStateWrite: Promise<void> = Promise.resolve();
+let downloadPowerBlockerId: number | null = null;
+
+export function updateLongRunningTaskFeedback(
+  value: DownloadProgress,
+  win = mainWindow,
+): boolean {
+  const feedback = longRunningTaskFeedback(value);
+  if (feedback.preventAppSuspension && downloadPowerBlockerId === null) {
+    downloadPowerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+    log("app", "info", "download.appSuspensionPrevented");
+  } else if (!feedback.preventAppSuspension && downloadPowerBlockerId !== null) {
+    powerSaveBlocker.stop(downloadPowerBlockerId);
+    downloadPowerBlockerId = null;
+    log("app", "info", "download.appSuspensionRestored");
+  }
+
+  const preventingAppSuspension =
+    downloadPowerBlockerId !== null &&
+    powerSaveBlocker.isStarted(downloadPowerBlockerId);
+  if (!win || win.isDestroyed()) return preventingAppSuspension;
+  win.setProgressBar(feedback.dockProgress);
+  return preventingAppSuspension;
+}
 
 function workAreas(): WindowBounds[] {
   return screen.getAllDisplays().map((display) => ({ ...display.workArea }));
@@ -197,6 +223,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   mainWindow = win;
+  updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
   win.once("ready-to-show", () => {
@@ -308,6 +335,17 @@ function isAppUrl(raw: string): boolean {
   }
 }
 
+export async function resetGameInput(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+  try {
+    await win.webContents.executeJavaScript(
+      "window.dispatchEvent(new CustomEvent('gw:input-reset'))",
+    );
+  } catch {
+    // Reload/quit can destroy the renderer between the liveness check and send.
+  }
+}
+
 export async function exportProblemReport(
   win: BrowserWindow,
   exportDiagnostics: () => Promise<string>,
@@ -338,6 +376,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
   const reportProblem = async (): Promise<void> => {
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
       buttons: [
@@ -377,9 +416,10 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
               {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
-                click: () => {
+                click: async () => {
                   if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-                  void win.webContents.executeJavaScript(
+                  await resetGameInput(win);
+                  await win.webContents.executeJavaScript(
                     "window.dispatchEvent(new CustomEvent('gw:settings'))",
                   );
                 },
@@ -420,6 +460,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         {
           label: "Toggle Diagnostics",
           click: async () => {
+            await resetGameInput(win);
             const cur = await host.getSettings();
             await host.setSettings({
               ...cur,
@@ -433,7 +474,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         },
         {
           label: "Start Performance Capture",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void host.startCapture(1).catch((error) => {
               dialog.showErrorBox(
                 "Capture could not start",
@@ -446,11 +488,15 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "mark-performance-problem",
           label: "Mark Performance Problem",
           accelerator: "CmdOrCtrl+Shift+M",
-          click: () => host.markPerformanceProblem(),
+          click: async () => {
+            await resetGameInput(win);
+            host.markPerformanceProblem();
+          },
         },
         {
           label: "Start Chromium Trace",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void host.startCapture(2).catch((error) => {
               dialog.showErrorBox(
                 "Trace could not start",
@@ -461,7 +507,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         },
         {
           label: "Stop Capture",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void host.stopCapture();
           },
         },
@@ -469,6 +516,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           label: "Reload Game",
           accelerator: "CmdOrCtrl+R",
           click: async () => {
+            await resetGameInput(win);
             if (host.sockets.size(win.webContents.id) > 0) {
               const { response } = await dialog.showMessageBox(win, {
                 type: "warning",

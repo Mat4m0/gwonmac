@@ -14,13 +14,17 @@ import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
 import type { DownloadProgress } from "../../shared/contracts.js";
 import { AppError, HttpStatusError } from "../../shared/errors.js";
-import { bytesPerSecond, secondsRemaining } from "../../shared/progress.js";
+import {
+  DownloadRateAverage,
+  secondsRemaining,
+} from "../../shared/progress.js";
 import {
   ACCESS_KEY,
   COMMON_ARTIFACTS,
   FATAL_HTTP,
   HASH_ALGOS,
   JSPI_ARTIFACTS,
+  PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   PREFETCH_JOBS,
   SNAPSHOT,
@@ -46,11 +50,15 @@ export interface PatchClientOptions {
   onProgress?: (p: DownloadProgress) => void;
   accessKey?: string;
   userAgent?: string;
+  requestTimeoutMs?: number;
 }
 
-function defaultFetch(): FetchLike {
+function defaultFetch(requestTimeoutMs: number): FetchLike {
   return async (url, init) => {
-    const req: RequestInit = { method: init?.method ?? "GET" };
+    const req: RequestInit = {
+      method: init?.method ?? "GET",
+      signal: AbortSignal.timeout(requestTimeoutMs),
+    };
     if (init?.headers) req.headers = init.headers;
     const res = await fetch(url, req);
     return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) };
@@ -100,7 +108,8 @@ export class PatchClient {
     this.artifactsDir = opts.artifactsDir;
     this.chunksDir = opts.chunksDir;
     this.patchRoot = opts.patchRoot ?? PATCH_ROOT;
-    this.fetchFn = opts.fetch ?? defaultFetch();
+    this.fetchFn =
+      opts.fetch ?? defaultFetch(opts.requestTimeoutMs ?? PATCH_REQUEST_TIMEOUT_MS);
     this.jobs = opts.jobs ?? PREFETCH_JOBS;
     this.onProgress = opts.onProgress;
     this.headers = {
@@ -181,7 +190,12 @@ export class PatchClient {
     outPath: string,
     entry: ManifestFileEntry,
     compression: CompressionMode,
-    progress: { got: number; total: number; started: number; sizes: Map<string, number> },
+    progress: {
+      got: number;
+      total: number;
+      rate: DownloadRateAverage;
+      sizes: Map<string, number>;
+    },
   ): Promise<void> {
     const hashes = entry.chunkHashes;
     const missing: string[] = [];
@@ -193,7 +207,7 @@ export class PatchClient {
     await mapPool(unique, this.jobs, async (h) => {
       await this.storeChunk(h, compression);
       progress.got += progress.sizes.get(h) ?? 0;
-      const rate = bytesPerSecond(progress.got, progress.started);
+      const rate = progress.rate.update(progress.got);
       this.emit({
         phase: "client",
         label: "Preparing files needed to start",
@@ -379,7 +393,12 @@ export class PatchClient {
         }
       }
     }
-    const progress = { got: 0, total, started: Date.now(), sizes };
+    const progress = {
+      got: 0,
+      total,
+      rate: new DownloadRateAverage(),
+      sizes,
+    };
 
     if (total) {
       this.emit({

@@ -80,7 +80,15 @@ snapshot metadata is obtained before the Emscripten glue is appended.
 
 Download concurrency is capped at eight. This is a conduct constraint as well
 as a performance setting: every installation uses the public client access key
-against ArenaNet’s production service.
+against ArenaNet’s production service. Individual patch requests have a
+30-second ceiling and retain the existing bounded exponential retry policy.
+
+Full-image progress uses one time-weighted rate average after a short warm-up;
+the same value drives the displayed transfer rate and ETA. The main process
+derives native task feedback from the canonical `image` progress phase: the
+Dock shows determinate or indeterminate progress and
+`prevent-app-suspension` remains active until the download completes, pauses,
+or fails. There is no renderer-owned download or power state.
 
 ## WASM host
 
@@ -148,13 +156,16 @@ reserved for unexpected loss while the application is not quitting.
 
 The client creates a WebGL context on an `OffscreenCanvas`. The EGL import
 patch presents each successful swap through `transferToImageBitmap()` and the
-visible canvas’s `bitmaprenderer`. Backing dimensions are CSS dimensions times
-the selected render scale, deliberately independent of device pixel ratio.
+visible canvas’s `bitmaprenderer`. The client remains the only canvas-size
+owner; the host supplies the selected render scale through Emscripten’s device
+pixel ratio import and mirrors client-requested sizes to the offscreen buffer.
 
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
-fullscreen, touch translation, and right-drag pointer lock. Pointer lock uses a
-virtual cursor and recycles a held drag at canvas edges so camera rotation does
-not stall.
+fullscreen, touch translation, trackpad-wheel normalization, and right-drag
+pointer lock. One held-input registry releases keys, buttons, and touches when
+focus or native UI consumes an input release. Pointer lock uses a virtual
+cursor and recycles a held drag at canvas edges so camera rotation does not
+stall.
 
 ## Diagnostics
 
@@ -183,6 +194,9 @@ Level 1 adds fixed-width per-frame records. The renderer batches them; the main
 process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
 an argument-filtered Chromium trace with selected supported categories, a 256
 MB buffer, an 80% stop threshold, and a 120-second time limit.
+The existing main-to-renderer capture command path also owns a noninteractive
+recording indicator, elapsed timer, and problem-marker acknowledgement; it
+does not add a preload capability.
 
 `.gwdiag` is a ZIP with:
 
@@ -233,10 +247,13 @@ and should locate a bottleneck, not provide the final before/after number.
 ## Verification boundaries
 
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
-cache coalescing, hash validation, resume behavior, and diagnostics payloads.
-Integration tests exercise artifact publication and rollback against an
-in-memory patch fixture. Playwright launches the real Electron shell and
-asserts the protocol origin, sandboxed preload surface, absence of Node globals,
+cache coalescing, hash validation, insufficient-disk rejection, interrupted
+full-download resume, smoothed rates, native task-state derivation, and
+diagnostics payloads. Integration tests exercise artifact publication,
+corruption repair, rollback, and bounded unresponsive requests against local
+fixtures. Playwright launches the real Electron shell and asserts the protocol
+origin, sandboxed preload surface, absence of Node globals, actionable startup
+and download failures, renderer crash recovery, settings presentation,
 clock/metrics availability, and capture lifecycle.
 
 The opt-in live smoke passed on Apple Silicon on July 23, 2026 against the

@@ -495,8 +495,8 @@ test.describe("Electron application", () => {
       ipcMain.handle("gw:cache:downloadAll", () => {
         if (!firstRequest) return false;
         firstRequest = false;
-        return new Promise((resolve) => {
-          globalThis.__resolveLauncherDownloadTest = resolve;
+        return new Promise((_resolve, reject) => {
+          globalThis.__rejectLauncherDownloadTest = reject;
         });
       });
     });
@@ -513,9 +513,24 @@ test.describe("Electron application", () => {
       "Pause Download",
     );
     await app.evaluate(() => {
-      globalThis.__resolveLauncherDownloadTest?.(false);
-      delete globalThis.__resolveLauncherDownloadTest;
+      globalThis.__rejectLauncherDownloadTest?.(
+        new Error("ArenaNet is unavailable. The download can resume later."),
+      );
+      delete globalThis.__rejectLauncherDownloadTest;
     });
+    await expect(page.locator("#data-download-status")).toContainText(
+      "ArenaNet is unavailable",
+    );
+    await expect(page.locator("#data-download-detail")).toHaveText(
+      "Verified data is safe. Choose Resume Download to try again.",
+    );
+    await expect(page.locator("#data-download-toggle")).toHaveText(
+      "Resume Download",
+    );
+    await page.locator("#data-download-toggle").click();
+    await expect(page.locator("#data-download-status")).toContainText(
+      "Download paused",
+    );
     expect(
       await page.evaluate(async () =>
         (await window.gwNative.settings.get()).dataStrategy),
@@ -534,6 +549,60 @@ test.describe("Electron application", () => {
             script.src.endsWith("/Gw.jspi.js"))),
       )
       .toBe(true);
+
+    await page.evaluate(() => {
+      window.gwLoading.fail(
+        "ArenaNet is unavailable and no previous game client could be restored.",
+      );
+    });
+    await expect(page.locator("#loading-retry")).toBeVisible();
+    await expect(page.locator("#loading-detail")).toHaveText(
+      "You can retry, or choose Help → Report a Problem.",
+    );
+    await page.evaluate(() => window.gwLoading.done());
+
+    await page.evaluate(() => {
+      const canvas = globalThis.document.getElementById("canvas");
+      globalThis.document.getElementById("loading").classList.add("gone");
+      window.__inputReleases = [];
+      window.__wheelSteps = [];
+      window.addEventListener("keyup", (event) => {
+        if (!event.isTrusted) window.__inputReleases.push(`key:${event.code}`);
+      });
+      window.addEventListener("mouseup", (event) => {
+        if (!event.isTrusted) window.__inputReleases.push(`mouse:${event.button}`);
+      });
+      window.addEventListener("wheel", (event) => {
+        if (!event.isTrusted && event.deltaMode === 1) {
+          window.__wheelSteps.push([event.deltaMode, event.deltaY]);
+        }
+      }, true);
+      canvas.focus();
+    });
+    await page.keyboard.down("w");
+    const canvasBox = await page.locator("#canvas").boundingBox();
+    await page.mouse.move(canvasBox.x + 100, canvasBox.y + 100);
+    await page.mouse.down({ button: "left" });
+    await page.evaluate(() =>
+      window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")));
+    expect(await page.evaluate(() => window.__inputReleases)).toEqual([
+      "key:KeyW",
+      "mouse:0",
+    ]);
+    await page.keyboard.up("w");
+    await page.mouse.up({ button: "left" });
+    await page.evaluate(() => {
+      const canvas = globalThis.document.getElementById("canvas");
+      for (const deltaY of [60, 60]) {
+        canvas.dispatchEvent(new globalThis.WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          deltaY,
+          deltaMode: globalThis.WheelEvent.DOM_DELTA_PIXEL,
+        }));
+      }
+    });
+    expect(await page.evaluate(() => window.__wheelSteps)).toEqual([[1, 1]]);
 
     const bridge = await page.evaluate(() => ({
       hasNative: typeof window.gwNative === "object" && window.gwNative !== null,
@@ -592,6 +661,33 @@ test.describe("Electron application", () => {
       p95Us: 1_000,
     });
     expect(aggregate.latest["milestone.runtime.initializedUs"]).toBeGreaterThan(0);
+    const graphics = await page.evaluate(async () => {
+      await window.gwNative.diagnostics.recordGraphics({
+        userAgent: globalThis.navigator.userAgent,
+        jspi: true,
+        webglVersion: "WebGL2",
+        renderer: "fixture",
+        vendor: "fixture",
+        hardwareAcceleration: true,
+        canvasWidth: 1280,
+        canvasHeight: 800,
+        offscreenWidth: 2560,
+        offscreenHeight: 1600,
+        drawingBufferWidth: 2560,
+        drawingBufferHeight: 1600,
+        devicePixelRatio: 2,
+        renderScale: 2,
+        antialias: false,
+        samples: 0,
+      });
+      return (await window.gwNative.diagnostics.current()).latest;
+    });
+    expect(graphics).toMatchObject({
+      "graphics.drawingBufferWidth": 2560,
+      "graphics.drawingBufferHeight": 1600,
+      "graphics.antialias": false,
+      "graphics.samples": 0,
+    });
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
         response: 1,
@@ -599,6 +695,10 @@ test.describe("Electron application", () => {
       });
     });
     await page.evaluate(() => window.gwNative.diagnostics.startCapture(1));
+    await expect(page.locator("#capture-status")).toBeVisible();
+    await expect(page.locator("#capture-label")).toContainText(
+      "Performance capture",
+    );
     expect(
       await page.evaluate(async () => (await window.gwNative.diagnostics.current()).captureLevel),
     ).toBe(1);
@@ -608,7 +708,9 @@ test.describe("Electron application", () => {
       await window.gwDiagnostics.flush();
     });
     await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
+    await expect(page.locator("#capture-status")).toBeHidden();
     await page.evaluate(() => window.gwNative.diagnostics.startCapture(2));
+    await expect(page.locator("#capture-label")).toContainText("Chromium trace");
     await page.waitForTimeout(100);
     await page.evaluate(async () => {
       window.gwDiagnostics.swap(200, 50, 25);
@@ -629,6 +731,8 @@ test.describe("Electron application", () => {
       label: "Mark Performance Problem",
       accelerator: "CmdOrCtrl+Shift+M",
     });
+    await expect(page.locator("#capture-marker")).toBeVisible();
+    await expect(page.locator("#capture-marker")).toHaveText("Problem marked ✓");
     expect(
       await app.evaluate(
         ({ Menu }) =>
@@ -636,6 +740,7 @@ test.describe("Electron application", () => {
       ),
     ).toBe("Report a Problem…");
     await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
+    await expect(page.locator("#capture-status")).toBeHidden();
 
     expect(await page.evaluate(() => window.gwNative.cache.info())).toEqual({
       bytes: 0,
@@ -722,6 +827,33 @@ test.describe("Electron application", () => {
     await expect(page.locator("#settings-save")).toHaveCount(0);
     await page.locator("#settings-tab-display").click();
     await expect(page.locator("#settings-dialog")).toContainText("Graphics quality");
+    const renderDimensions = await page.evaluate(() => {
+      const canvas = globalThis.document.getElementById("canvas");
+      const label = (scale) =>
+        globalThis.document.querySelector(
+          `[data-render-scale="${scale}"]`,
+        ).textContent;
+      return {
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+        one: label("1"),
+        oneAndHalf: label("1.5"),
+        two: label("2"),
+      };
+    });
+    expect(renderDimensions.one).toBe(
+      `${renderDimensions.width} × ${renderDimensions.height}`,
+    );
+    expect(renderDimensions.oneAndHalf).toBe(
+      `${Math.round(renderDimensions.width * 1.5)} × ` +
+        `${Math.round(renderDimensions.height * 1.5)}`,
+    );
+    expect(renderDimensions.two).toBe(
+      `${renderDimensions.width * 2} × ${renderDimensions.height * 2}`,
+    );
+    await expect(page.locator("#settings-pane-display")).toContainText(
+      "2× renders four times the pixels",
+    );
     await expect(
       page.locator('input[name="renderScale"][value="1"]'),
     ).toBeChecked();
@@ -753,6 +885,45 @@ test.describe("Electron application", () => {
         showDiagnostics: true,
         dataStrategy: "quick",
       });
+    await page.locator("#settings-tab-controls").click();
+    await page.locator('select[name="cursorTheme"]').selectOption("guild-wars-2");
+    await expect
+      .poll(() =>
+        page.evaluate(async () =>
+          (await window.gwNative.settings.get()).cursorTheme),
+      )
+      .toBe("guild-wars-2");
+    expect(
+      await page.locator("#canvas").getAttribute("data-cursor-theme"),
+    ).toBe("guild-wars-2");
+    expect(
+      await page.locator("#canvas").evaluate((canvas) =>
+        globalThis.getComputedStyle(canvas).cursor),
+    ).toContain("guild-wars-2.png");
+    expect(
+      await page.locator("#settings-cursor-preview").evaluate((preview) =>
+        globalThis.getComputedStyle(preview).cursor),
+    ).toContain("guild-wars-2.png");
+    expect(
+      await page.evaluate(async () => {
+        const response = await globalThis.fetch("assets/cursors/guild-wars-2.png");
+        const bitmap = await globalThis.createImageBitmap(await response.blob());
+        return {
+          contentType: response.headers.get("content-type"),
+          width: bitmap.width,
+          height: bitmap.height,
+        };
+      }),
+    ).toEqual({ contentType: "image/png", width: 32, height: 32 });
+    await page.locator("#settings-done").click();
+    await page.evaluate(() =>
+      globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+    );
+    await expect(page.locator(".settings-panes")).toHaveAttribute(
+      "data-active",
+      "controls",
+    );
+    await page.locator("#settings-tab-advanced").click();
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
         response: 0,
@@ -768,10 +939,18 @@ test.describe("Electron application", () => {
       .toEqual({
         renderScale: 1,
         pointerLock: true,
+        cursorTheme: "guild-wars",
         touchMode: "dbltap",
         showDiagnostics: false,
         dataStrategy: null,
       });
+    expect(
+      await page.locator("#canvas").getAttribute("data-cursor-theme"),
+    ).toBe("guild-wars");
+    expect(
+      await page.locator("#canvas").evaluate((canvas) =>
+        globalThis.getComputedStyle(canvas).cursor),
+    ).toContain("guild-wars.png");
     expect(
       await page.evaluate(() => window.gwNative.credentials.load()),
     ).toEqual({
@@ -793,10 +972,8 @@ test.describe("Electron application", () => {
       .toBe("quick");
     await expect
       .poll(() =>
-        page.evaluate(() => ({
-          scale:
-            globalThis.document.getElementById("canvas").width /
-            globalThis.innerWidth,
+        page.evaluate(async () => ({
+          scale: (await window.gwNative.settings.get()).renderScale,
           diagnostics: globalThis.getComputedStyle(
             globalThis.document.getElementById("diagnostics"),
           ).display,
@@ -829,6 +1006,7 @@ test.describe("Electron application", () => {
             settings: {
               renderScale: 1,
               pointerLock: true,
+              cursorTheme: "system",
               touchMode: "dbltap",
               showDiagnostics: false,
               dataStrategy: "quick",

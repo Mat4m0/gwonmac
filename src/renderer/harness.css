@@ -2,8 +2,17 @@
 html,body { margin:0; background:#000; color:#fe0000; font:14px Tahoma,sans-serif; }
 #canvas { display:block; width:100vw; height:100vh; }
 #canvas:focus { outline:none; }
+[data-cursor-theme="system"] {
+  cursor: default;
+}
+[data-cursor-theme="guild-wars"] {
+  cursor: url("assets/cursors/guild-wars.png") 0 0, default;
+}
+[data-cursor-theme="guild-wars-2"] {
+  cursor: url("assets/cursors/guild-wars-2.png") 0 0, default;
+}
 /* Pointer lock hides the cursor on its own, but not when the grab is refused. */
-#canvas.cursor-hidden { cursor:none; }
+#canvas.cursor-hidden { cursor:none !important; }
 
 /* Hidden by default; every line also goes to console.log. pointer-events:none
    matters -- the overlay sits over the canvas and would eat clicks. */
@@ -26,6 +35,41 @@ html,body { margin:0; background:#000; color:#fe0000; font:14px Tahoma,sans-seri
   white-space: pre;
   pointer-events: none;
 }
+
+#capture-status {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 5px 10px;
+  border: 1px solid #945b4f;
+  border-radius: 2px;
+  color: #fff1e9;
+  background: #1b0c0be8;
+  font: 12px/1.4 Tahoma, sans-serif;
+  box-shadow: 0 2px 10px #0008;
+  pointer-events: none;
+}
+#capture-status[hidden] { display: none; }
+.capture-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff725c;
+  box-shadow: 0 0 7px #ff725ccc;
+}
+#capture-marker {
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid #945b4f99;
+  color: #f3dd9d;
+}
+#capture-marker[hidden] { display: none; }
 
 /* OSK fields are parked behind the canvas, not hidden: the glue bails out if
    focus() does not take, and display:none cannot be focused. */
@@ -197,6 +241,21 @@ html,body { margin:0; background:#000; color:#fe0000; font:14px Tahoma,sans-seri
   outline: 2px solid #e0bd73;
   outline-offset: 2px;
 }
+.render-scale-option {
+  display: flex;
+  min-width: 76px;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.render-scale-option small {
+  color: #cbbd9dcc;
+  font: 10.5px/1.3 Tahoma, sans-serif;
+  white-space: nowrap;
+}
+#settings-form label.settings-radio:has(input:checked) .render-scale-option small {
+  color: #fff0c9cc;
+}
 
 #settings-form input[type=checkbox] {
   width: 16px;
@@ -285,6 +344,20 @@ html,body { margin:0; background:#000; color:#fe0000; font:14px Tahoma,sans-seri
   color: #cbbd9d99;
   font-size: 12px;
   text-wrap: pretty;
+}
+
+#settings-cursor-preview {
+  display: flex;
+  min-height: 54px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  border: 1px dashed #67583e;
+  border-radius: 2px;
+  color: #cbbd9db3;
+  background: #201a145e;
+  font: 12px/1.4 Tahoma, sans-serif;
 }
 
 .settings-footerbar {

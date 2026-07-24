@@ -170,6 +170,67 @@ describe("chunk-store", () => {
     assert.equal(fetched.has(hashes[2]!), true);
   });
 
+  it("fails before downloading when the full image does not fit", async () => {
+    const root = await freshDir();
+    const payload = Buffer.alloc(CHUNK, 11);
+    const hash = hashOf(payload);
+    let fetches = 0;
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK,
+      chunkSize: CHUNK,
+      chunkHashes: [hash],
+      fetch: async () => {
+        fetches += 1;
+        return new Uint8Array(payload);
+      },
+    });
+
+    await assert.rejects(
+      () => store.downloadAll({ freeBytes: async () => 0 }),
+      (error) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "disk_full",
+    );
+    assert.equal(fetches, 0);
+  });
+
+  it("preserves completed chunks when a full download is stopped and resumed", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 3 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 60),
+    );
+    const hashes = payloads.map(hashOf);
+    const fetches: string[] = [];
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async (hash) => {
+        fetches.push(hash);
+        return new Uint8Array(payloads[hashes.indexOf(hash)]!);
+      },
+    });
+
+    const stopped = await store.downloadAll({
+      jobs: 1,
+      freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      onProgress: () => store.stop(),
+    });
+    assert.equal(stopped, false);
+    assert.deepEqual(fetches, [hashes[0]]);
+
+    store.resume();
+    const completed = await store.downloadAll({
+      jobs: 1,
+      freeBytes: async () => 10 * 1024 * 1024 * 1024,
+    });
+    assert.equal(completed, true);
+    assert.deepEqual(fetches, hashes);
+  });
+
   it("caps native fetches at eight and promotes queued demand", async () => {
     const root = await freshDir();
     const payloads = Array.from({ length: 10 }, (_, index) =>

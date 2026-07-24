@@ -13,6 +13,7 @@ import {
   COMMON_ARTIFACTS,
   FATAL_HTTP,
   JSPI_ARTIFACTS,
+  PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
   UA,
@@ -53,7 +54,9 @@ import {
   flushWindowState,
   getMainWindow,
   prepareWindowState,
+  resetGameInput,
   type WindowHost,
+  updateLongRunningTaskFeedback,
 } from "./window.js";
 
 // Ad-hoc builds have no stable code identity, so Chromium's profile encryption
@@ -95,6 +98,7 @@ const sockets = new SocketManager(
 
 function setProgress(next: DownloadProgress): void {
   progress = next;
+  updateLongRunningTaskFeedback(next);
   for (const listener of progressListeners) listener(next);
 }
 
@@ -147,7 +151,10 @@ function cdnChunkFetcher(compressionHint: "none" | "gzip"): (hash: string) => Pr
     for (let attempt = 0; attempt < 4; attempt++) {
       const wireStarted = performance.now();
       try {
-        const res = await net.fetch(url, { headers });
+        const res = await net.fetch(url, {
+          headers,
+          signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
+        });
         if (res.ok) {
           // Compression is applied inside ChunkStore from the manifest mode.
           void compressionHint;
@@ -439,6 +446,7 @@ async function startGameUpdate(): Promise<void> {
 function buildWindowHost(): WindowHost {
   return {
     sockets,
+    getProgress: () => progress,
     getSettings: () => loadSettings(gamePaths().settings),
     setSettings: (value) => saveSettings(gamePaths().settings, value),
     exportDiagnostics: async () => {
@@ -516,6 +524,11 @@ app.whenReady().then(async () => {
     await flushWindowState();
     sockets.closeAll();
     chunkStore?.stop();
+    updateLongRunningTaskFeedback({
+      ...INITIAL_PROGRESS,
+      phase: "ready",
+      label: "Quitting",
+    });
     if (saveTouchedTimer) clearInterval(saveTouchedTimer);
     await chunkStore?.saveTouched().catch(() => undefined);
     await clearBrowserCookies("quit");
@@ -526,6 +539,7 @@ app.whenReady().then(async () => {
   setDiagnosticCaptureStoppedHandler(async () => {
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return;
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
       buttons: ["Export Now…", "Later"],

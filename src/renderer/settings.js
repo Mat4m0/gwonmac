@@ -56,9 +56,11 @@
   let fullDownloadActive = false;
   let fullDownloadStopping = false;
   let currentDownloadProgress = null;
+  let downloadError = '';
   let launcherResolve = null;
   let launcherTotalBytes = 0;
   let savedTimer = null;
+  let activeSettingsPane = 'data';
 
   // Auto-save proof: a brief "Saved" note in the header when a change lands.
   function flashSaved() {
@@ -70,6 +72,7 @@
 
   function selectPane(name) {
     if (!settingsPanes) return;
+    activeSettingsPane = name;
     settingsPanes.dataset.active = name;
     for (const tab of form.querySelectorAll('.settings-rtab')) {
       const selected = tab.dataset.pane === name;
@@ -126,13 +129,33 @@
     return settingsLoad;
   }
 
+  function applyRuntimeSettings(settings) {
+    const canvas = document.getElementById('canvas');
+    if (canvas) canvas.dataset.cursorTheme = settings.cursorTheme || 'guild-wars';
+    const preview = byId('settings-cursor-preview');
+    if (preview) preview.dataset.cursorTheme = settings.cursorTheme || 'guild-wars';
+    window.gwApplySettings?.(settings);
+  }
+
+  function updateRenderScaleDimensions() {
+    const canvas = document.getElementById('canvas');
+    if (!canvas) return;
+    const width = canvas.clientWidth || window.innerWidth;
+    const height = canvas.clientHeight || window.innerHeight;
+    for (const output of form.querySelectorAll('[data-render-scale]')) {
+      const scale = Number(output.dataset.renderScale);
+      output.textContent =
+        `${Math.round(width * scale)} × ${Math.round(height * scale)}`;
+    }
+  }
+
   // Serialize writes so a slower earlier write cannot replace newer intent.
   function persistSettings(patch) {
     const operation = settingsWrite.then(async () => {
       const current = await loadSettings();
       const saved = await window.gwNative.settings.set({ ...current, ...patch });
       currentSettings = saved;
-      window.gwApplySettings?.(saved);
+      applyRuntimeSettings(saved);
       return saved;
     });
     settingsWrite = operation.catch(() => undefined);
@@ -159,6 +182,7 @@
     return {
       renderScale: Number(form.renderScale.value),
       pointerLock: form.pointerLock.checked,
+      cursorTheme: form.cursorTheme.value,
       touchMode: form.touchMode.value,
       showDiagnostics: form.showDiagnostics.checked,
       dataStrategy: selectedStrategy(),
@@ -168,11 +192,15 @@
   function fillForm(settings) {
     form.renderScale.value = String(settings.renderScale);
     form.pointerLock.checked = !!settings.pointerLock;
+    form.cursorTheme.value = settings.cursorTheme || 'guild-wars';
     form.touchMode.value = settings.touchMode;
     form.showDiagnostics.checked = !!settings.showDiagnostics;
     for (const radio of form.querySelectorAll('input[name="dataStrategy"]')) {
       radio.checked = radio.value === settings.dataStrategy;
     }
+    const preview = byId('settings-cursor-preview');
+    if (preview) preview.dataset.cursorTheme = settings.cursorTheme || 'guild-wars';
+    updateRenderScaleDimensions();
   }
 
   function renderSettingsData(cache = currentCache) {
@@ -226,7 +254,7 @@
     }
   }
 
-  function renderLauncherDownload(cache = currentCache, error = '') {
+  function renderLauncherDownload(cache = currentCache, error = downloadError) {
     currentCache = cache;
     const total = cache?.totalBytes || launcherTotalBytes;
     const received = cache?.bytes || 0;
@@ -237,7 +265,7 @@
     if (error) {
       dataDownloadStatus.textContent = error;
       dataDownloadDetail.textContent =
-        'Verified data is preserved. Retry, use Quick Start, or close the launcher.';
+        'Verified data is safe. Choose Resume Download to try again.';
     } else if (complete) {
       dataDownloadStatus.textContent = `Full game ready · ${size(received)} downloaded`;
       dataDownloadDetail.textContent =
@@ -248,7 +276,7 @@
     } else if (fullDownloadActive) {
       const progress = currentDownloadProgress;
       const rate = progress?.bytesPerSecond > 0
-        ? ` · ${size(progress.bytesPerSecond)}/s`
+        ? ` · ${size(progress.bytesPerSecond)}/s avg`
         : '';
       const eta = Number.isFinite(progress?.secondsRemaining)
         ? ` · about ${Math.max(1, Math.ceil(progress.secondsRemaining / 60))} min left`
@@ -285,6 +313,7 @@
 
   function startFullDownload() {
     if (fullDownloadPromise) return fullDownloadPromise;
+    downloadError = '';
     fullDownloadActive = true;
     fullDownloadStopping = false;
     currentDownloadProgress = null;
@@ -293,6 +322,7 @@
 
     fullDownloadPromise = window.gwNative.cache.downloadAll()
       .then(async (complete) => {
+        downloadError = '';
         const cache = await window.gwNative.cache.info();
         currentCache = cache;
         renderSettingsData(cache);
@@ -305,6 +335,7 @@
       .catch((error) => {
         const message =
           error?.message || 'The full game download could not continue.';
+        downloadError = message;
         if (dialog.open) feedback.textContent = message;
         if (!dataDownload.hidden) renderLauncherDownload(currentCache, message);
         return false;
@@ -467,7 +498,7 @@
       else dialog.setAttribute('open', '');
     }
     feedback.textContent = '';
-    selectPane('data');
+    selectPane(activeSettingsPane);
     settingsCache.textContent = 'Checking downloaded game data…';
     try {
       await settingsWrite;
@@ -486,6 +517,10 @@
     feedback.textContent = '';
     const strategyChanged = event.target.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
+    if (event.target.name === 'cursorTheme') {
+      const preview = byId('settings-cursor-preview');
+      if (preview) preview.dataset.cursorTheme = event.target.value;
+    }
     void persistSettings(readFormSettings())
       .then(async () => {
         flashSaved();
@@ -526,7 +561,7 @@
       currentSettings = reset;
       fillForm(reset);
       renderSettingsData();
-      window.gwApplySettings?.(reset);
+      applyRuntimeSettings(reset);
       feedback.textContent =
         'Launcher settings reset. The download choice will appear next launch.';
     } catch {
@@ -570,4 +605,6 @@
     ) return;
     settingsCache.textContent = 'Caching recently used areas in the background…';
   });
+
+  window.addEventListener('resize', updateRenderScaleDimensions);
 })();

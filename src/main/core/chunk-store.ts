@@ -5,7 +5,10 @@ import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
 import type { PrefetchProgress } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
-import { bytesPerSecond, secondsRemaining } from "../../shared/progress.js";
+import {
+  DownloadRateAverage,
+  secondsRemaining,
+} from "../../shared/progress.js";
 import { HASH_ALGOS, PREFETCH_JOBS } from "./access-key.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
 import type { CompressionMode } from "./manifest.js";
@@ -574,6 +577,7 @@ export class ChunkStore {
 
     const started = Date.now();
     const baseline = got;
+    const rateAverage = new DownloadRateAverage(baseline, started);
     let failed = 0;
 
     await mapPool(
@@ -589,7 +593,7 @@ export class ChunkStore {
         }
         got += size;
         const received = Math.min(got, total);
-        const rate = bytesPerSecond(received - baseline, started);
+        const rate = rateAverage.update(received);
         opts.onProgress?.({
           received,
           total,

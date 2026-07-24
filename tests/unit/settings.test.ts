@@ -12,6 +12,7 @@ describe("settings", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 1,
       pointerLock: true,
+      cursorTheme: "guild-wars",
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
@@ -33,6 +34,7 @@ describe("settings", () => {
   it("rejects unknown types", () => {
     assert.throws(() => parseSettings({ pointerLock: "yes" }), AppError);
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
+    assert.throws(() => parseSettings({ cursorTheme: "custom" }), AppError);
     assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
@@ -66,6 +68,7 @@ describe("settings", () => {
     assert.equal(saved.showDiagnostics, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
+      "cursorTheme",
       "dataStrategy",
       "pointerLock",
       "renderScale",

@@ -134,7 +134,7 @@ window.gwLoading = (function () {
         const eta = p.secondsRemaining != null
           ? `${Math.ceil(p.secondsRemaining / 60)} min remaining` : '';
         const rate = p.bytesPerSecond > 0
-          ? `${(p.bytesPerSecond / 1e6).toFixed(1)} MB/s` : '';
+          ? `${(p.bytesPerSecond / 1e6).toFixed(1)} MB/s avg` : '';
         const text = p.phase === 'starting' || p.phase === 'checking'
           ? 'Checking the game client'
           : p.phase === 'client'

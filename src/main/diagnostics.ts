@@ -785,6 +785,7 @@ export function peakGauge(name: string, value: number): void {
 
 export function markPerformanceProblem(): void {
   recorder.event("renderer", "info", "performance.problemMarked");
+  void rendererCaptureCommand("problemMarked()");
 }
 
 export function setDiagnosticCaptureStoppedHandler(
@@ -814,6 +815,14 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
   graphics = value;
   recorder.setLatest("graphics.renderer", value.renderer);
   recorder.setLatest("graphics.hardwareAcceleration", value.hardwareAcceleration);
+  recorder.setLatest("graphics.canvasWidth", value.canvasWidth);
+  recorder.setLatest("graphics.canvasHeight", value.canvasHeight);
+  recorder.setLatest("graphics.offscreenWidth", value.offscreenWidth);
+  recorder.setLatest("graphics.offscreenHeight", value.offscreenHeight);
+  recorder.setLatest("graphics.drawingBufferWidth", value.drawingBufferWidth);
+  recorder.setLatest("graphics.drawingBufferHeight", value.drawingBufferHeight);
+  recorder.setLatest("graphics.antialias", value.antialias);
+  recorder.setLatest("graphics.samples", value.samples);
   recorder.event("graphics", "info", "graphics.detected", {
     webglVersion: value.webglVersion,
     renderer: value.renderer,
@@ -822,8 +831,14 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
     hardwareAcceleration: value.hardwareAcceleration,
     canvasWidth: value.canvasWidth,
     canvasHeight: value.canvasHeight,
+    offscreenWidth: value.offscreenWidth,
+    offscreenHeight: value.offscreenHeight,
+    drawingBufferWidth: value.drawingBufferWidth,
+    drawingBufferHeight: value.drawingBufferHeight,
     devicePixelRatio: value.devicePixelRatio,
     renderScale: value.renderScale,
+    antialias: value.antialias,
+    samples: value.samples,
   });
 }
 

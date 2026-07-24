@@ -115,6 +115,12 @@
 
 <div id="log"></div>
 <output id="diagnostics" aria-live="off"></output>
+<output id="capture-status" hidden aria-live="off">
+  <span class="capture-dot" aria-hidden="true"></span>
+  <span id="capture-label">Performance capture · 00:00</span>
+  <span id="capture-marker" hidden>Problem marked ✓</span>
+</output>
+<span id="capture-announcement" class="sr-only" role="status" aria-live="polite"></span>
 
 <!-- Settings: one compact panel with a section rail. Every pane fits without
      scrolling. A status is never a button; danger actions are quiet and
@@ -130,17 +136,22 @@
     <div class="settings-body">
       <div class="settings-rail" role="tablist" aria-label="Settings sections">
         <button type="button" class="settings-rtab" id="settings-tab-data"
-                role="tab" aria-selected="true" data-pane="data">Game Data</button>
+                role="tab" aria-selected="true" aria-controls="settings-pane-data"
+                data-pane="data">Game Data</button>
         <button type="button" class="settings-rtab" id="settings-tab-display"
-                role="tab" aria-selected="false" data-pane="display">Display</button>
+                role="tab" aria-selected="false" aria-controls="settings-pane-display"
+                data-pane="display">Display</button>
         <button type="button" class="settings-rtab" id="settings-tab-controls"
-                role="tab" aria-selected="false" data-pane="controls">Controls</button>
+                role="tab" aria-selected="false" aria-controls="settings-pane-controls"
+                data-pane="controls">Controls</button>
         <button type="button" class="settings-rtab" id="settings-tab-advanced"
-                role="tab" aria-selected="false" data-pane="advanced">Advanced</button>
+                role="tab" aria-selected="false" aria-controls="settings-pane-advanced"
+                data-pane="advanced">Advanced</button>
       </div>
 
       <div class="settings-panes" data-active="data">
-        <section class="settings-pane" id="settings-pane-data" aria-labelledby="settings-data-title">
+        <section class="settings-pane" id="settings-pane-data" role="tabpanel"
+                 aria-labelledby="settings-tab-data">
           <h3 id="settings-data-title" class="sr-only">Game Data</h3>
           <p id="settings-cache" class="settings-status" role="status" aria-live="polite">
             Checking downloaded game data…
@@ -170,38 +181,61 @@
           <p class="settings-danger-sub">Frees the downloaded game data. Your login and settings are kept.</p>
         </section>
 
-        <section class="settings-pane" id="settings-pane-display" aria-labelledby="settings-display-title">
+        <section class="settings-pane" id="settings-pane-display" role="tabpanel"
+                 aria-labelledby="settings-tab-display">
           <h3 id="settings-display-title" class="sr-only">Display</h3>
           <fieldset>
             <legend>Graphics quality</legend>
             <div class="settings-seg" role="presentation">
               <label class="settings-radio">
                 <input type="radio" name="renderScale" value="1">
-                <span>Performance — 1×</span>
+                <span class="render-scale-option">
+                  <span>1×</span>
+                  <small data-render-scale="1">—</small>
+                </span>
               </label>
               <label class="settings-radio">
                 <input type="radio" name="renderScale" value="1.5">
-                <span>Sharper — 1.5×</span>
+                <span class="render-scale-option">
+                  <span>1.5×</span>
+                  <small data-render-scale="1.5">—</small>
+                </span>
               </label>
               <label class="settings-radio">
                 <input type="radio" name="renderScale" value="2">
-                <span>Sharpest — 2×</span>
+                <span class="render-scale-option">
+                  <span>2×</span>
+                  <small data-render-scale="2">—</small>
+                </span>
               </label>
             </div>
           </fieldset>
-          <p class="settings-note">Higher values render more pixels — sharper, but heavier on the GPU.</p>
+          <p class="settings-note">1× prioritizes performance. 1.5× renders 2.25 times the pixels; 2× renders four times the pixels.</p>
         </section>
 
-        <section class="settings-pane" id="settings-pane-controls" aria-labelledby="settings-controls-title">
+        <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
+                 aria-labelledby="settings-tab-controls">
           <h3 id="settings-controls-title" class="sr-only">Controls</h3>
           <label class="settings-check">
             <input type="checkbox" name="pointerLock">
             <span>Lock pointer while controlling the camera</span>
           </label>
           <p class="settings-note">Hides the cursor while the mouse steers the camera, like on Windows.</p>
+          <label class="settings-field">Cursor style
+            <select name="cursorTheme">
+              <option value="system">macOS Default</option>
+              <option value="guild-wars">Guild Wars</option>
+              <option value="guild-wars-2">Guild Wars 2</option>
+            </select>
+          </label>
+          <div id="settings-cursor-preview" data-cursor-theme="guild-wars">
+            Move the pointer here to preview
+          </div>
+          <p class="settings-note">Game cursor artwork is used for interoperability and remains owned by its respective rights holders.</p>
         </section>
 
-        <section class="settings-pane" id="settings-pane-advanced" aria-labelledby="settings-advanced-title">
+        <section class="settings-pane" id="settings-pane-advanced" role="tabpanel"
+                 aria-labelledby="settings-tab-advanced">
           <h3 id="settings-advanced-title" class="sr-only">Advanced</h3>
           <label class="settings-field">Mobile touch compatibility
             <select name="touchMode">
