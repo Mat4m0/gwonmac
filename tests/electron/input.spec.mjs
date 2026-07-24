@@ -61,13 +61,14 @@ test.describe("renderer input", () => {
         for (const type of ["touchstart", "touchend", "touchcancel"]) {
           canvas.addEventListener(type, () => events.push(type));
         }
-        const mouse = (type) =>
+        const mouse = (type, detail = 0) =>
           canvas.dispatchEvent(
             new globalThis.MouseEvent(type, {
               bubbles: true,
               button: 0,
               clientX: 100,
               clientY: 100,
+              detail,
             }),
           );
         const applyTouchMode = async (touchMode) => {
@@ -79,10 +80,10 @@ test.describe("renderer input", () => {
         mouse("mousedown");
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
         await applyTouchMode("dbltap");
-        mouse("mousedown");
-        mouse("mouseup");
-        mouse("mousedown");
-        mouse("mouseup");
+        mouse("mousedown", 1);
+        mouse("mouseup", 1);
+        mouse("mousedown", 2);
+        mouse("mouseup", 2);
         await new Promise((resolve) => setTimeout(resolve, 30));
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
         await new Promise((resolve) => setTimeout(resolve, 60));
@@ -94,6 +95,96 @@ test.describe("renderer input", () => {
         "touchstart",
         "touchcancel",
       ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("uses the native click count for double-tap compatibility", async () => {
+    const fixture = await launchOffline("gw-double-click-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const touchEvents = await page.evaluate(async () => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const observed = [];
+        for (const type of ["touchstart", "touchend", "touchcancel"]) {
+          canvas.addEventListener(type, (event) => {
+            observed.push({
+              type,
+              identifier: event.changedTouches[0].identifier,
+            });
+          });
+        }
+        const mouse = (type, detail) =>
+          canvas.dispatchEvent(
+            new globalThis.MouseEvent(type, {
+              bubbles: true,
+              button: 0,
+              clientX: 120,
+              clientY: 140,
+              detail,
+            }),
+          );
+
+        // The OS may recognize a deliberately slow pair according to the
+        // user's accessibility preference. The host must trust that native
+        // count instead of applying its former 400 ms cutoff.
+        mouse("mousedown", 1);
+        mouse("mouseup", 1);
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        mouse("mousedown", 2);
+        mouse("mouseup", 2);
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        return observed;
+      });
+
+      expect(touchEvents.map(({ type }) => type)).toEqual([
+        "touchstart",
+        "touchend",
+        "touchstart",
+        "touchend",
+      ]);
+      expect(new Set(touchEvents.map(({ identifier }) => identifier)).size).toBe(
+        2,
+      );
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("cancels an active synthetic tap before a rapid follow-up click", async () => {
+    const fixture = await launchOffline("gw-double-click-cancel-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const touchEvents = await page.evaluate(async () => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const observed = [];
+        for (const type of ["touchstart", "touchend", "touchcancel"]) {
+          canvas.addEventListener(type, () => observed.push(type));
+        }
+        const mouse = (type, detail) =>
+          canvas.dispatchEvent(
+            new globalThis.MouseEvent(type, {
+              bubbles: true,
+              button: 0,
+              clientX: 120,
+              clientY: 140,
+              detail,
+            }),
+          );
+
+        mouse("mousedown", 2);
+        mouse("mouseup", 2);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        mouse("mousedown", 3);
+        mouse("mouseup", 3);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return observed;
+      });
+
+      expect(touchEvents).toEqual(["touchstart", "touchcancel"]);
     } finally {
       await closeOffline(fixture);
     }

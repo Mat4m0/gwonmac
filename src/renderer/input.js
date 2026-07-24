@@ -31,8 +31,6 @@
     const tapTimers = new Set();
     let touchMode = initialSettings.touchMode;
     let lockEnabled = initialSettings.pointerLock;
-    /** @type {{ time: number, x: number, y: number } | null} */
-    let lastClick = null;
     /** @type {{ x: number, y: number } | null} */
     let pendingTap = null;
     let touchId = 0;
@@ -271,20 +269,12 @@
     canvas.addEventListener('mousedown', (event) => {
       if (touchMode === 'off' || event.button !== 0) return;
       if (touchMode === 'dbltap') {
-        cancelTapTimers();
-        const now = performance.now();
-        const near =
-          lastClick &&
-          now - lastClick.time < 400 &&
-          Math.hypot(
-            event.clientX - lastClick.x,
-            event.clientY - lastClick.y,
-          ) < 10;
-        if (near) {
-          lastClick = null;
+        // Chromium already applies the user's macOS double-click speed and
+        // distance preferences to detail. Do not impose a second, conflicting
+        // detector here. Even counts preserve consecutive double-click pairs.
+        cancelSyntheticTouches();
+        if (event.detail > 0 && event.detail % 2 === 0) {
           pendingTap = { x: event.clientX, y: event.clientY };
-        } else {
-          lastClick = { time: now, x: event.clientX, y: event.clientY };
         }
         return;
       }
@@ -444,7 +434,6 @@
       applySettings(next) {
         if (next.touchMode !== touchMode) {
           cancelSyntheticTouches();
-          lastClick = null;
         }
         touchMode = next.touchMode;
         lockEnabled = next.pointerLock;
