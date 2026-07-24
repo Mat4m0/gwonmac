@@ -32,7 +32,12 @@ import {
 } from "./core/client-compatibility.js";
 import type { Manifest } from "./core/manifest.js";
 import { PatchClient } from "./core/patch-client.js";
-import { fetchPatchBytes, type PatchFetch } from "./core/patch-transport.js";
+import { encodedChunkLimit } from "./core/chunk-format.js";
+import {
+  fetchPatchBytes,
+  readBoundedResponse,
+  type PatchFetch,
+} from "./core/patch-transport.js";
 import { fullDownloadFailureMessage } from "./core/recovery.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
@@ -292,7 +297,10 @@ async function applyPendingGameStorageClear(): Promise<void> {
   log("filesystem", "warn", "filesystem.resetCompleted");
 }
 
-function cdnChunkFetcher(): (hash: string) => Promise<Uint8Array> {
+function cdnChunkFetcher(compression: "none" | "gzip"): (
+  hash: string,
+  expectedLength: number,
+) => Promise<Uint8Array> {
   const headers = {
     "X-Access-Key": ACCESS_KEY,
     "User-Agent": UA,
@@ -300,21 +308,23 @@ function cdnChunkFetcher(): (hash: string) => Promise<Uint8Array> {
   };
   const patchFetch: PatchFetch = async (url, init) => {
     const request: RequestInit = {
+      redirect: "manual",
       signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
     };
     if (init?.headers) request.headers = init.headers;
     const response = await net.fetch(url, request);
     return {
       status: response.status,
-      body: new Uint8Array(await response.arrayBuffer()),
+      body: await readBoundedResponse(response, init?.maxBytes ?? 1),
     };
   };
-  return async (hash) => {
+  return async (hash, expectedLength) => {
     const url = `${PATCH_ROOT}/${hash}.bin`;
     return fetchPatchBytes({
       fetch: patchFetch,
       url,
       headers,
+      maxBytes: encodedChunkLimit(expectedLength, compression),
       onAttempt: (durationMs) => observe("cache.networkWire", durationMs * 1_000),
     });
   };
@@ -389,7 +399,7 @@ async function installChunkStore(
         ? async () => {
             throw new Error("cached live probe cannot download missing chunks");
           }
-        : cdnChunkFetcher(),
+        : cdnChunkFetcher(compression),
     metrics: { count, observe, gauge, peak: peakGauge },
   });
   initialResidencyRecorded = false;

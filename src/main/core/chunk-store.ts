@@ -14,7 +14,10 @@ import type { CompressionMode } from "./manifest.js";
 import { packResidentBits } from "./snapshot.js";
 
 const FREE_MARGIN = 512 * 1024 * 1024;
-export type ChunkBytesFetcher = (hash: string) => Promise<Uint8Array>;
+export type ChunkBytesFetcher = (
+  hash: string,
+  expectedLength: number,
+) => Promise<Uint8Array>;
 
 export interface ChunkStoreOptions {
   chunksDir: string;
@@ -285,17 +288,14 @@ export class ChunkStore {
     this.metrics?.count("cache.networkFetches");
     this.metrics?.count("cache.networkBytes", raw.byteLength);
     const decodeStarted = performance.now();
-    const data = await decodeChunk(raw, this.compression);
+    if (expectedLength === undefined) {
+      throw new AppError("chunk_length", `missing expected length for ${hash}`);
+    }
+    const data = await decodeChunk(raw, this.compression, expectedLength);
     this.metrics?.observe("cache.decode", (performance.now() - decodeStarted) * 1_000);
     const hashStarted = performance.now();
     verifyChunkHash(hash, data);
     this.metrics?.observe("cache.hash", (performance.now() - hashStarted) * 1_000);
-    if (expectedLength !== undefined && data.byteLength !== expectedLength) {
-      throw new AppError(
-        "chunk_length",
-        `chunk ${hash} length ${data.byteLength}, expected ${expectedLength}`,
-      );
-    }
     const writeStarted = performance.now();
     await writeAtomicInDir(this.chunksDir, hash, data);
     this.metrics?.observe("cache.write", (performance.now() - writeStarted) * 1_000);
@@ -433,7 +433,7 @@ export class ChunkStore {
         (performance.now() - task.queuedAt) * 1_000,
       );
       this.updateQueueMetrics();
-      void this.fetchFn!(task.hash)
+      void this.fetchFn!(task.hash, task.expectedLength)
         .then(task.resolve, task.reject)
         .finally(() => {
           if (task.priority === "demand") this.activeDemand -= 1;

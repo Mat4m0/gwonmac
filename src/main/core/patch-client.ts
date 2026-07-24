@@ -18,9 +18,11 @@ import {
 import {
   ACCESS_KEY,
   CLIENT_ARTIFACTS,
+  MAX_PATCH_MANIFEST_BYTES,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   PREFETCH_JOBS,
+  REQUIRED_PATCH_FILES,
   SNAPSHOT,
   UA,
 } from "./access-key.js";
@@ -31,10 +33,15 @@ import {
   clientGenerationPaths,
   markClientCandidate,
 } from "./client-compatibility.js";
-import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
+import {
+  decodeChunk,
+  encodedChunkLimit,
+  verifyChunkHash,
+} from "./chunk-format.js";
 import { Manifest, type CompressionMode, type ManifestFileEntry } from "./manifest.js";
 import {
   fetchPatchBytes,
+  readBoundedResponse,
   type PatchFetch,
 } from "./patch-transport.js";
 import {
@@ -69,11 +76,15 @@ function defaultFetch(requestTimeoutMs: number): FetchLike {
   return async (url, init) => {
     const req: RequestInit = {
       method: init?.method ?? "GET",
+      redirect: "manual",
       signal: AbortSignal.timeout(requestTimeoutMs),
     };
     if (init?.headers) req.headers = init.headers;
     const res = await fetch(url, req);
-    return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) };
+    return {
+      status: res.status,
+      body: await readBoundedResponse(res, init?.maxBytes ?? MAX_PATCH_MANIFEST_BYTES),
+    };
   };
 }
 
@@ -106,13 +117,19 @@ export class PatchClient {
     this.onProgress?.(p);
   }
 
-  async getBytes(url: string, tries = 4): Promise<Uint8Array> {
-    return fetchPatchBytes({
+  async getBytes(
+    url: string,
+    options: { maxBytes: number; tries?: number },
+  ): Promise<Uint8Array> {
+    const request = {
       fetch: this.fetchFn,
       url,
       headers: this.headers,
-      tries,
-    });
+      maxBytes: options.maxBytes,
+    };
+    return fetchPatchBytes(
+      options.tries === undefined ? request : { ...request, tries: options.tries },
+    );
   }
 
   async fetchManifest(): Promise<Manifest> {
@@ -125,14 +142,27 @@ export class PatchClient {
       secondsRemaining: null,
       error: null,
     });
-    const body = await this.getBytes(`${this.patchRoot}/manifest.json`);
-    return new Manifest(JSON.parse(new TextDecoder().decode(body)));
+    const body = await this.getBytes(`${this.patchRoot}/manifest.json`, {
+      maxBytes: MAX_PATCH_MANIFEST_BYTES,
+    });
+    let raw: unknown;
+    try {
+      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+    } catch (error) {
+      throw new AppError("manifest_format", "invalid manifest JSON", { cause: error });
+    }
+    const manifest = new Manifest(raw);
+    manifest.requireUniqueBasenames(REQUIRED_PATCH_FILES);
+    return manifest;
   }
 
-  private async chunkCached(hash: string): Promise<boolean> {
+  private async chunkCached(hash: string, expectedLength: number): Promise<boolean> {
     const file = join(this.chunksDir, hash);
     try {
       const data = await readFile(file);
+      if (data.byteLength !== expectedLength) {
+        throw new AppError("chunk_length", `cached chunk ${hash} has invalid length`);
+      }
       verifyChunkHash(hash, data);
       return true;
     } catch {
@@ -141,10 +171,17 @@ export class PatchClient {
     }
   }
 
-  private async storeChunk(hash: string, compression: CompressionMode): Promise<Uint8Array> {
+  private async storeChunk(
+    hash: string,
+    compression: CompressionMode,
+    expectedLength: number,
+  ): Promise<Uint8Array> {
     const data = await decodeChunk(
-      await this.getBytes(`${this.patchRoot}/${hash}.bin`),
+      await this.getBytes(`${this.patchRoot}/${hash}.bin`, {
+        maxBytes: encodedChunkLimit(expectedLength, compression),
+      }),
       compression,
+      expectedLength,
     );
     verifyChunkHash(hash, data);
     await writeAtomicInDir(this.chunksDir, hash, data);
@@ -168,14 +205,25 @@ export class PatchClient {
   ): Promise<void> {
     const hashes = entry.chunkHashes;
     const missing: string[] = [];
-    for (const h of hashes) {
-      if (!(await this.chunkCached(h))) missing.push(h);
+    for (let i = 0; i < hashes.length; i++) {
+      const h = hashes[i]!;
+      const expectedLength = progress.sizes.get(h);
+      if (expectedLength === undefined) {
+        throw new AppError("chunk_length", `missing expected length for ${h}`);
+      }
+      if (!(await this.chunkCached(h, expectedLength))) {
+        missing.push(h);
+      }
     }
     const unique = [...new Set(missing)];
 
     await mapPool(unique, this.jobs, async (h) => {
-      await this.storeChunk(h, compression);
-      progress.got += progress.sizes.get(h) ?? 0;
+      const expectedLength = progress.sizes.get(h);
+      if (expectedLength === undefined) {
+        throw new AppError("chunk_length", `missing expected length for ${h}`);
+      }
+      await this.storeChunk(h, compression, expectedLength);
+      progress.got += expectedLength;
       const rate = progress.rate.update(progress.got);
       this.emit({
         phase: "client",
@@ -420,7 +468,7 @@ export class PatchClient {
         const h = entry.chunkHashes[i]!;
         const n = this.chunkBytes(entry, mf.chunkSize, i);
         sizes.set(h, n);
-        if (!missing.has(h) && !(await this.chunkCached(h))) {
+        if (!missing.has(h) && !(await this.chunkCached(h, n))) {
           missing.add(h);
           total += n;
         }

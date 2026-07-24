@@ -307,7 +307,10 @@ describe("integration: patch updater", () => {
     const started = Date.now();
     try {
       await assert.rejects(() =>
-        client.getBytes(`http://127.0.0.1:${address.port}/manifest.json`, 1),
+        client.getBytes(`http://127.0.0.1:${address.port}/manifest.json`, {
+          maxBytes: 1024,
+          tries: 1,
+        }),
       );
       assert(Date.now() - started < 1_000);
     } finally {
