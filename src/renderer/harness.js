@@ -670,16 +670,21 @@ Module = {
     milestone('runtime.initialized');
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
-    const startToolbox = () => {
-      if (!window.gwToolbox || !gameWasmInstance || !gameWasmModule) return;
-      void window.gwToolbox.install(gameWasmInstance, gameWasmModule)
+    if (
+      new URL(window.location.href).searchParams.get('toolbox-automation') === '1'
+      && gameWasmInstance
+      && gameWasmModule
+    ) {
+      const toolboxInstance = gameWasmInstance;
+      const toolboxModule = gameWasmModule;
+      void import('./toolbox.js')
+        .then(({ installToolbox }) =>
+          installToolbox(toolboxInstance, toolboxModule))
         .catch((error) => log(
           '[toolbox]',
           error instanceof Error ? error.message : String(error),
         ));
-    };
-    if (window.gwToolbox) startToolbox();
-    else window.addEventListener('gw-toolbox-ready', startToolbox, { once: true });
+    }
   },
   /** @param {unknown} reason */
   onAbort(reason) {
@@ -834,12 +839,6 @@ function loadGlue() {
     return;
   }
   milestone('renderer.loaded');
-  if (new URL(window.location.href).searchParams.has('toolbox-fixture')) {
-    window.gwLoading?.done();
-    window.gwAutomation?.set('toolbox.fixture');
-    return;
-  }
-
   try {
     const [{ unavailablePlatformCapabilities }, { createSocketHost }] =
       await Promise.all([

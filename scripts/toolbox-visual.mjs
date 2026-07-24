@@ -1,41 +1,32 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { _electron as electron } from "playwright";
+import { pathToFileURL } from "node:url";
+import { chromium } from "playwright";
 
 const fixture = process.argv.slice(2).find((value) => value !== "--") ?? "target";
 if (!["map", "target"].includes(fixture)) {
   console.error(`unknown Toolbox visual fixture: ${fixture}`);
   process.exit(2);
 }
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = path.resolve(import.meta.dirname, "..");
 const outputDir = path.join(root, "test-results", "toolbox-visual");
 const output = path.join(outputDir, `${fixture}.png`);
-const profile = await mkdtemp(path.join(tmpdir(), "gw-toolbox-visual-"));
-const env = {
-  ...process.env,
-  GW_OFFLINE_SHELL: "1",
-  GW_TOOLBOX_FIXTURE: fixture,
-};
-delete env.ELECTRON_RUN_AS_NODE;
+const fixtureUrl = new URL(
+  `?fixture=${fixture}`,
+  pathToFileURL(path.join(root, "scripts", "toolbox-visual", "index.html")),
+);
 
-let app;
+await mkdir(outputDir, { recursive: true });
+const browser = await chromium.launch();
 try {
-  app = await electron.launch({
-    cwd: root,
-    args: [".", `--user-data-dir=${profile}`],
-    env,
+  const page = await browser.newPage({
+    viewport: { width: 720, height: 480 },
+    deviceScaleFactor: 2,
   });
-  const page = await app.firstWindow();
-  await page.waitForFunction(
-    () => window.gwToolboxState?.status === "ready",
-  );
-  await page.waitForTimeout(800);
-  await mkdir(outputDir, { recursive: true });
-  await page.screenshot({ path: output });
+  await page.goto(fixtureUrl.href);
+  await page.locator("body[data-ready='true']").waitFor();
+  await page.locator("#toolbox").screenshot({ path: output });
   console.log(JSON.stringify({ fixture, screenshot: output }));
 } finally {
-  await app?.close().catch(() => undefined);
-  await rm(profile, { recursive: true, force: true });
+  await browser.close();
 }

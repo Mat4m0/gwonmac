@@ -11,7 +11,7 @@ test.describe("sandbox boundary", () => {
       const boundary = await fixture.page.evaluate(() => ({
         protocol: globalThis.location.protocol,
         search: globalThis.location.search,
-        toolboxHidden: globalThis.document.getElementById("toolbox")?.hidden,
+        toolboxPresent: globalThis.document.getElementById("toolbox") !== null,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
         namespacesFrozen: Object.values(window.gwNative).every(Object.isFrozen),
@@ -22,7 +22,7 @@ test.describe("sandbox boundary", () => {
       expect(boundary).toEqual({
         protocol: "gw:",
         search: "",
-        toolboxHidden: true,
+        toolboxPresent: false,
         keys: [
           "app",
           "cache",
@@ -93,13 +93,13 @@ test.describe("sandbox boundary", () => {
     }
   });
 
-  test("enables Toolbox presentation only for explicit developer sessions", async () => {
+  test("accepts explicit automation without adding production Toolbox UI", async () => {
     const fixture = await launchOffline("gw-toolbox-developer-e2e-", {
       GW_TOOLBOX_AUTOMATION: "1",
     });
     try {
       expect(new URL(fixture.page.url()).search).toBe("?toolbox-automation=1");
-      await expect(fixture.page.locator("#toolbox")).toBeHidden();
+      await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);
     }

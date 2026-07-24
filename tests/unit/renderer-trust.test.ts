@@ -8,8 +8,6 @@ describe("canonical renderer URL", () => {
       "gw://app/",
       "gw://app/index.html",
       "gw://app/?toolbox-automation=1",
-      "gw://app/?toolbox-fixture=map",
-      "gw://app/?toolbox-fixture=target",
     ]) {
       assert.equal(isCanonicalRendererUrl(url), true, url);
     }
@@ -21,6 +19,7 @@ describe("canonical renderer URL", () => {
       "gw://app/Gw.jspi.js",
       "gw://app/?unknown=1",
       "gw://app/?toolbox-automation=0",
+      "gw://app/?toolbox-fixture=map",
       "gw://app/?toolbox-automation=1&toolbox-fixture=map",
       "gw://app/?toolbox-automation=1#fragment",
       "gw://user@app/",

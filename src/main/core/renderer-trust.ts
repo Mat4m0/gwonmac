@@ -19,13 +19,7 @@ export function isCanonicalRendererUrl(raw: string): boolean {
     if (entries.length === 0) return true;
     if (entries.length !== 1) return false;
     const [name, value] = entries[0]!;
-    return (
-      (name === "toolbox-automation" && value === "1")
-      || (
-        name === "toolbox-fixture"
-        && (value === "map" || value === "target")
-      )
-    );
+    return name === "toolbox-automation" && value === "1";
   } catch {
     return false;
   }

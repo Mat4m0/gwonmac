@@ -124,38 +124,6 @@
 </output>
 <span id="capture-announcement" class="sr-only" role="status" aria-live="polite"></span>
 
-<aside id="toolbox" aria-label="Toolbox game state" hidden>
-  <header class="toolbox-header">
-    <span class="toolbox-mark" aria-hidden="true"></span>
-    <span>Toolbox</span>
-  </header>
-  <section class="toolbox-section toolbox-map">
-    <div>
-      <span id="toolbox-map-id">—</span>
-      <span id="toolbox-instance">Waiting</span>
-    </div>
-    <span id="toolbox-player-id" class="toolbox-muted">—</span>
-    <dl class="toolbox-coordinates">
-      <div><dt>X</dt><dd id="toolbox-player-x">—</dd></div>
-      <div><dt>Y</dt><dd id="toolbox-player-y">—</dd></div>
-    </dl>
-  </section>
-  <section id="toolbox-target" class="toolbox-section toolbox-target" hidden>
-    <div class="toolbox-target-heading">
-      <span id="toolbox-target-id">—</span>
-      <span id="toolbox-target-type" class="toolbox-muted">—</span>
-    </div>
-    <div class="toolbox-distance">
-      <strong id="toolbox-target-distance">—</strong>
-      <span id="toolbox-target-range">—</span>
-    </div>
-    <dl class="toolbox-coordinates">
-      <div><dt>X</dt><dd id="toolbox-target-x">—</dd></div>
-      <div><dt>Y</dt><dd id="toolbox-target-y">—</dd></div>
-    </dl>
-  </section>
-</aside>
-
 <!-- Settings: one compact panel with a section rail. Every pane fits without
      scrolling. A status is never a button; danger actions are quiet and
      separated; changes save automatically and say so. -->
@@ -305,6 +273,5 @@
 <script src="input.js"></script>
 <script src="graphics.js"></script>
 <script src="filesystem.js"></script>
-<script type="module" src="toolbox.js"></script>
 <script src="harness.js"></script>
 <script src="settings.js"></script>

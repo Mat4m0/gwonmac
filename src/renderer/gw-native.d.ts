@@ -111,12 +111,7 @@ declare global {
       programId: number;
       buildId: number;
     }>;
-    gwToolbox?: Readonly<{
-      install(
-        instance: WebAssembly.Instance,
-        module: WebAssembly.Module,
-      ): Promise<unknown>;
-    }>;
+    gwToolboxInstallations?: number;
     gwToolboxRuntime?: Record<string, unknown> | null;
     gwToolboxState?: ToolboxState;
     gwAutomation: ToolboxAutomation;
