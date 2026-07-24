@@ -6,7 +6,6 @@ import {
   copyFile,
   mkdir,
   open,
-  readFile,
   readdir,
   rename,
   rm,
@@ -30,7 +29,6 @@ import type { AppSettings, GraphicsDiagnostics } from "../shared/contracts.js";
 import type {
   DiagnosticFields,
   DiagnosticLevel,
-  DiagnosticReport,
   DiagnosticSubsystem,
   DiagnosticSummary,
   RendererFrameBatch,
@@ -45,24 +43,16 @@ import {
   redactDiagnosticText as redactText,
   runtimeVersions as versions,
   type CaptureMetadata,
-  type LogRecord,
   type Span,
 } from "./diagnostic-recorder.js";
+import {
+  buildDiagnosticReport,
+  previousAbnormalSession,
+} from "./diagnostic-report.js";
 
 const execFileAsync = promisify(execFile);
 const SAMPLE_INTERVAL_MS = 1_000;
 const PROCESS_SAMPLE_INTERVAL = 5;
-
-interface PreviousSessionExport {
-  sessionId: string;
-  text: string;
-  firstSequenceNumber: number;
-  lastSequenceNumber: number;
-  finalEventName: string;
-  abnormalReason: string;
-  errorCount: number;
-  warningCount: number;
-}
 
 const recorder = new FlightRecorder();
 let graphics: GraphicsDiagnostics | null = null;
@@ -74,142 +64,6 @@ let sampleNumber = 0;
 let tracePath = "";
 let lastTracePath = "";
 
-function parseLogRecords(text: string): LogRecord[] {
-  const records: LogRecord[] = [];
-  for (const line of text.split("\n")) {
-    if (!line) continue;
-    try {
-      const record = JSON.parse(line) as LogRecord;
-      if (
-        Number.isSafeInteger(record.seq) &&
-        typeof record.name === "string" &&
-        typeof record.level === "string" &&
-        typeof record.subsystem === "string"
-      ) {
-        records.push(record);
-      }
-    } catch {
-      // A killed process can leave one incomplete final JSONL record.
-    }
-  }
-  return records.sort((a, b) => a.seq - b.seq);
-}
-
-async function previousAbnormalSession(
-  dir: string,
-): Promise<PreviousSessionExport | null> {
-  const groups = new Map<string, { files: string[]; newestMtime: number }>();
-  for (const name of await readdir(dir).catch(() => [] as string[])) {
-    const match = /^session-([0-9a-f-]{36})(?:-\d+)?\.jsonl$/i.exec(name);
-    const sessionId = match?.[1];
-    if (!sessionId || sessionId === recorder.sessionId) continue;
-    const file = path.join(dir, name);
-    const mtime = (await stat(file).catch(() => null))?.mtimeMs;
-    if (mtime === undefined) continue;
-    const group = groups.get(sessionId) ?? { files: [], newestMtime: 0 };
-    group.files.push(file);
-    group.newestMtime = Math.max(group.newestMtime, mtime);
-    groups.set(sessionId, group);
-  }
-  const latest = [...groups.entries()].sort(
-    (left, right) => right[1].newestMtime - left[1].newestMtime,
-  )[0];
-  if (!latest) return null;
-  const records = parseLogRecords(
-    (
-      await Promise.all(
-        latest[1].files.map((file) => readFile(file, "utf8").catch(() => "")),
-      )
-    ).join("\n"),
-  );
-  const final = records.at(-1);
-  if (!final) return null;
-  const abnormal = [...records].reverse().find(
-    (record) =>
-      record.name === "app.uncaughtException" ||
-      record.name === "uncaught exception" ||
-      record.name === "quit.cleanupFailed" ||
-      (record.name === "renderer.processGone" && record.level === "error"),
-  );
-  if (final.name === "quit.cleanupCompleted" && !abnormal) return null;
-  return {
-    sessionId: latest[0],
-    text: records.map((record) => JSON.stringify(record)).join("\n"),
-    firstSequenceNumber: records[0]?.seq ?? 0,
-    lastSequenceNumber: final.seq,
-    finalEventName: final.name,
-    abnormalReason: abnormal?.name ?? final.name,
-    errorCount: records.filter((record) => record.level === "error").length,
-    warningCount: records.filter((record) => record.level === "warn").length,
-  };
-}
-
-function buildDiagnosticReport(
-  summary: DiagnosticSummary,
-  eventsText: string,
-  previous: PreviousSessionExport | null,
-  capture: ReturnType<FlightRecorder["captureResult"]>,
-  profilerContaminated: boolean,
-): DiagnosticReport {
-  const records = parseLogRecords(eventsText);
-  const errors = records.filter((record) => record.level === "error");
-  const startupStages = [
-    "startup.complete",
-    "frame.firstSubmit",
-    "runtime.initialized",
-    "wasm.instantiate.end",
-    "renderer.loaded",
-    "electronReady",
-  ];
-  const startupStage =
-    startupStages.find(
-      (name) => Number(summary.latest[`milestone.${name}Us`]) > 0,
-    ) ?? "diagnostics.started";
-  return {
-    formatVersion: 1,
-    generatedAt: new Date().toISOString(),
-    currentSession: {
-      sessionId: recorder.sessionId,
-      startupStage,
-      errorCount: errors.length,
-      warningCount: records.filter((record) => record.level === "warn").length,
-      lastError: errors.length
-        ? {
-            subsystem: errors.at(-1)!.subsystem,
-            name: errors.at(-1)!.name,
-          }
-        : null,
-      droppedEvents: summary.droppedEvents,
-    },
-    previousSession: previous
-      ? {
-          sessionId: previous.sessionId,
-          cleanShutdown: false,
-          finalEventName: previous.finalEventName,
-          abnormalReason: previous.abnormalReason,
-          errorCount: previous.errorCount,
-          warningCount: previous.warningCount,
-        }
-      : null,
-    capture: {
-      level: recordedCaptureLevel,
-      profilerContaminated,
-      stopReason: capture?.metadata.stopReason ?? null,
-      visibility:
-        summary.latest["renderer.visible"] === true
-          ? "visible"
-          : summary.latest["renderer.visible"] === false
-            ? "hidden"
-            : "unknown",
-    },
-    performance: {
-      frameP95Us:
-        summary.histograms["renderer.visibleSubmitInterval"]?.p95Us ?? 0,
-      snapshotP95Us: summary.histograms["snapshot.rendererRead"]?.p95Us ?? 0,
-      socketSyncP95Us: summary.histograms["socket.rendererSync"]?.p95Us ?? 0,
-    },
-  };
-}
 let traceGuard: ReturnType<typeof setInterval> | null = null;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let captureStopPromise: Promise<void> | null = null;
@@ -971,7 +825,7 @@ export async function exportDiagnosticsZip(
     const summary = recorder.summary(recordedCaptureLevel);
     const exportedEvents = await recorder.exportedEvents();
     const capture = recorder.captureResult();
-    const previous = await previousAbnormalSession(dir);
+    const previous = await previousAbnormalSession(dir, recorder.sessionId);
     const files: string[] = [
       "manifest.json",
       "report.json",
@@ -1054,13 +908,15 @@ export async function exportDiagnosticsZip(
           }
         : {}),
     };
-    const report = buildDiagnosticReport(
+    const report = buildDiagnosticReport({
       summary,
-      exportedEvents.text,
+      eventsText: exportedEvents.text,
       previous,
       capture,
-      files.includes("chromium-trace.json"),
-    );
+      profilerContaminated: files.includes("chromium-trace.json"),
+      sessionId: recorder.sessionId,
+      captureLevel: recordedCaptureLevel,
+    });
     const documents: Record<string, string> = {
       "manifest.json": JSON.stringify(manifest, null, 2),
       "report.json": JSON.stringify(report, null, 2),
