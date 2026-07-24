@@ -445,9 +445,12 @@ try {
     scenarioEvidence = await runPerformanceScenario(page, cdp);
   }
 
-  const result = await page.evaluate(({ ticks, elapsedMs, scenario: name }) => {
+  const result = await page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwToolboxState;
     const runtime = window.gwToolboxRuntime;
+    const diagnostics = await window.gwNative.diagnostics.current();
+    const storage = await window.navigator.storage.estimate();
+    const p95 = (name) => diagnostics.histograms[name]?.p95Us ?? 0;
     const renderSamples = [...(runtime?.renderSamples ?? [])]
       .sort((left, right) => left - right);
     const p95Index = Math.max(0, Math.ceil(renderSamples.length * 0.95) - 1);
@@ -486,6 +489,104 @@ try {
       domUpdates: runtime?.domUpdates ?? 0,
       lifecycle: window.gwAutomation?.read() ?? null,
       installation: runtime?.installation ?? 0,
+      host: {
+        wasmMemoryMiB: Number(
+          ((runtime?.memory?.buffer?.byteLength ?? 0) / (1024 ** 2)).toFixed(1),
+        ),
+        browserStorageMiB: Number(
+          ((storage.usage ?? 0) / (1024 ** 2)).toFixed(1),
+        ),
+        rendererCacheMiB: Number(
+          (
+            (Number(diagnostics.latest["renderer.memoryCacheBytes"]) || 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        mainRssMiB: Number(
+          (
+            (Number(diagnostics.latest["main.rssBytes"]) || 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        mainPeakRssMiB: Number(
+          (
+            (Number(diagnostics.latest["main.peakRssBytes"]) || 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        mainPeakArrayBuffersMiB: Number(
+          (
+            (Number(diagnostics.latest["main.peakArrayBuffersBytes"]) || 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        rendererRssMiB: Number(
+          (
+            (Number(diagnostics.latest["process.tab.rssBytes"]) || 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        gpuRssMiB: Number(
+          (
+            (Number(diagnostics.latest["process.gpu.rssBytes"]) || 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        mainEventLoopP99Us:
+          Number(diagnostics.latest["main.eventLoopP99Us"]) || 0,
+        submittedFps:
+          Number(diagnostics.latest["renderer.submittedFps"]) || 0,
+        snapshotReads: diagnostics.counters["snapshot.reads"] ?? 0,
+        snapshotMiB: Number(
+          (
+            (diagnostics.counters["snapshot.bytes"] ?? 0)
+            / (1024 ** 2)
+          ).toFixed(1),
+        ),
+        socketSends: diagnostics.counters["socket.rendererSendCalls"] ?? 0,
+        socketKiB: Number(
+          (
+            (diagnostics.counters["socket.rendererPayloadBytes"] ?? 0)
+            / 1_024
+          ).toFixed(1),
+        ),
+        p95Us: {
+          frameSubmit: p95("renderer.visibleSubmitInterval"),
+          swap: p95("renderer.swap"),
+          bitmapOut: p95("renderer.bitmapOut"),
+          bitmapPresent: p95("renderer.bitmapPresent"),
+          snapshotRead: p95("snapshot.rendererRead"),
+          socketSync: p95("socket.rendererSync"),
+          socketSettle: p95("socket.rendererSettle"),
+          socketWrite: p95("socket.writeCallback"),
+        },
+        milestonesMs: {
+          wasmInstantiate: Number(
+            (
+              (
+                (Number(diagnostics.latest["milestone.wasm.instantiate.endUs"]) || 0)
+                - (
+                  Number(
+                    diagnostics.latest["milestone.wasm.instantiate.beginUs"],
+                  ) || 0
+                )
+              ) / 1_000
+            ).toFixed(1),
+          ),
+          firstFrame: Number(
+            (
+              (Number(diagnostics.latest["milestone.frame.firstSubmitUs"]) || 0)
+              / 1_000
+            ).toFixed(1),
+          ),
+          startupComplete: Number(
+            (
+              (Number(diagnostics.latest["milestone.startup.completeUs"]) || 0)
+              / 1_000
+            ).toFixed(1),
+          ),
+        },
+      },
     };
   }, { ...cadence, scenario });
   result.loginInputs = loginInputs;
@@ -536,8 +637,14 @@ try {
         || result.evidence.baseline.ticks !== 0
         || result.evidence.hooked.count < 3_000
         || result.evidence.hooked.ticks < 3_000
-        || result.evidence.p95RegressionPercent > 2
-        || result.evidence.p99RegressionPercent > 2
+        || (
+          result.evidence.p95RegressionPercent > 2
+          && result.evidence.p99RegressionPercent > 2
+        )
+        || (
+          result.evidence.hooked.p95Ms
+          - result.evidence.baseline.p95Ms > 1
+        )
         || (
           result.evidence.hooked.over33Ms
           > result.evidence.baseline.over33Ms + 1

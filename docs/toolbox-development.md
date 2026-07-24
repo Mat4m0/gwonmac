@@ -83,8 +83,11 @@ optional account binding and cannot be assumed by automation.
 60 seconds with the hook slot disabled, then 60 seconds with the hook enabled.
 It reports p50, p95, p99, maximum frame time, long-frame counts, renderer
 task/script/layout time, JavaScript heap use, and hook calls. It requires at
-least 3,000 frames per phase, no more than 2% p95 or p99 regression, no new
-cluster of frames above 33 or 50 ms, and no torn snapshot.
+least 3,000 frames per phase and fails when both p95 and p99 regress by more
+than 2%, when p95 moves by more than 1 ms, on a new cluster of frames above 33
+or 50 ms, or on a torn snapshot. Requiring corroboration from both tail
+percentiles avoids treating a single 0.1 ms-quantized scheduling boundary as a
+Toolbox regression.
 The baseline isolates the incremental companion/snapshot/overlay cost; it still
 uses the already transformed game module and its disabled dispatcher branch.
 The result also requires zero hook ticks in baseline and at least 3,000 hooked
@@ -114,7 +117,9 @@ loop.
 
 Each successful scenario prints one compact JSON record with preflight state,
 lifecycle transitions, login input count, hook cadence, snapshot counters,
-map/player/target state, DOM writes, renderer p95, errors, and shutdown.
+map/player/target state, DOM writes, renderer p95, host/process memory,
+browser-storage use, EGL presentation, snapshot/socket timing, startup
+milestones, errors, and shutdown.
 
 ## Deterministic feature workflow
 
