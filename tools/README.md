@@ -71,3 +71,14 @@ matches. It is a triage tool for choosing re-derivation targets.
     python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
     python3 tools/gensyms.py dist/Gw.jspi.wasm build/
     pnpm toolbox:transform -- dist/Gw.jspi.wasm build/Gw.toolbox.wasm
+
+## Toolbox workspace
+
+    pnpm toolbox:doctor
+    pnpm toolbox:recertify -- path/to/Gw.jspi.wasm
+    GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target
+
+`toolbox:doctor` is local-only. `toolbox:recertify` reports semantic hook and
+table candidates without publishing a transformed client. The live runner is
+cached-only unless `--allow-update` is explicitly supplied and supports at
+most 16 typed scalar observations through `--observe`.

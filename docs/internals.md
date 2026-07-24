@@ -322,3 +322,8 @@ compatibility change for investigation. The canary does not prove:
 
 Those are explicit live release gates, not assumptions hidden behind unit
 tests.
+
+Toolbox development uses the layered, cached-safe workflow in
+`docs/toolbox-development.md`. Unknown client hashes always use the official
+WASM unchanged, and a live Toolbox run cannot update the client unless update
+permission is explicit.

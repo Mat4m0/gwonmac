@@ -139,6 +139,11 @@ production-network smoke is explicitly opt-in:
 GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
+For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in
+`docs/toolbox-development.md`, and finish with one scoped `toolbox:live`
+scenario. Live Toolbox runs are cached-only unless `--allow-update` is
+explicit; do not bypass that guard or use a temporary Electron profile.
+
 Before finishing, check for a second source of truth, retained old paths,
 unnecessary structure, harder debugging, broken architecture decisions, and
 missing failure-path coverage.

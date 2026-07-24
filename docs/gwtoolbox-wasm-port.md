@@ -117,3 +117,7 @@ python3 tools/gensyms.py Gw.jspi.wasm build/
 python3 tools/gwca_anchor_probe.py path/to/GWCA/Source Gw.jspi.wasm
 pnpm toolbox:transform -- Gw.jspi.wasm build/Gw.toolbox.wasm
 ```
+
+The repeatable development loop, live safety gates, scoped observations,
+recertification procedure, and feature readiness register are defined in
+[`toolbox-development.md`](toolbox-development.md).

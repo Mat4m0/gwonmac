@@ -28,7 +28,7 @@ const scenarioArgument = process.argv.indexOf("--scenario");
 const scenario = scenarioArgument >= 0
   ? process.argv[scenarioArgument + 1]
   : "target";
-if (!["boot", "target", "movement"].includes(scenario)) {
+if (!["boot", "target", "movement", "reload"].includes(scenario)) {
   console.error(`unknown Toolbox live scenario: ${scenario}`);
   process.exit(2);
 }
@@ -90,6 +90,56 @@ async function sampleObservations(targetPage) {
     });
   }, observations);
 }
+
+async function waitForPlayable(targetPage) {
+  await targetPage.waitForFunction(
+    async () => {
+      const progress = await window.gwNative.progress.current();
+      if (progress.error) throw new Error(progress.error);
+      return progress.phase === "ready";
+    },
+    null,
+    { timeout: 30 * 60_000, polling: 500 },
+  );
+  await targetPage.waitForFunction(
+    () => {
+      const stage = window.gwAutomation?.read().stage;
+      return stage === "client.frontend" || stage?.startsWith("game.");
+    },
+    null,
+    { timeout: 60_000, polling: 100 },
+  );
+  let inputs = 0;
+  for (const delay of [3_000, 5_000, 20_000]) {
+    if (
+      await targetPage.evaluate(
+        () => window.gwToolboxState?.status === "ready",
+      )
+    ) {
+      break;
+    }
+    await targetPage.waitForTimeout(delay);
+    if (
+      await targetPage.evaluate(
+        () => window.gwToolboxState?.status === "ready",
+      )
+    ) {
+      break;
+    }
+    await targetPage.locator("#canvas").focus();
+    await targetPage.keyboard.press("Enter");
+    inputs += 1;
+  }
+  await targetPage.waitForFunction(
+    () => {
+      const state = window.gwToolboxState;
+      return state?.status === "ready" && state.tickCount > 5;
+    },
+    null,
+    { timeout: 30 * 60_000, polling: 250 },
+  );
+  return inputs;
+}
 const output = [];
 child.stdout.on("data", (chunk) => output.push(chunk.toString()));
 child.stderr.on("data", (chunk) => output.push(chunk.toString()));
@@ -125,49 +175,11 @@ try {
   });
   page.on("pageerror", (error) => rendererErrors.push(error.message));
   await page.waitForLoadState("domcontentloaded");
-
-  await page.waitForFunction(
-    async () => {
-      const progress = await window.gwNative.progress.current();
-      if (progress.error) throw new Error(progress.error);
-      return progress.phase === "ready";
-    },
-    null,
-    { timeout: 30 * 60_000, polling: 500 },
-  );
-  await page.waitForFunction(
-    () => {
-      const stage = window.gwAutomation?.read().stage;
-      return stage === "client.frontend" || stage?.startsWith("game.");
-    },
-    null,
-    { timeout: 60_000, polling: 100 },
-  );
-  let loginInputs = 0;
-  for (const delay of [3_000, 5_000, 20_000]) {
-    if (await page.evaluate(() => window.gwToolboxState?.status === "ready")) {
-      break;
-    }
-    await page.waitForTimeout(delay);
-    if (await page.evaluate(() => window.gwToolboxState?.status === "ready")) {
-      break;
-    }
-    await page.locator("#canvas").focus();
-    await page.keyboard.press("Enter");
-    loginInputs += 1;
+  let loginInputs = await waitForPlayable(page);
+  if (scenario === "reload") {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    loginInputs += await waitForPlayable(page);
   }
-
-  // A real game download can legitimately take longer than an automated test.
-  // Do not close the app if this bound is reached; the failure path leaves it
-  // open for the download/user to continue.
-  await page.waitForFunction(
-    () => {
-      const state = window.gwToolboxState;
-      return state?.status === "ready" && state.tickCount > 5;
-    },
-    null,
-    { timeout: 30 * 60_000, polling: 250 },
-  );
 
   const before = await page.evaluate(() => ({
     tickCount: window.gwToolboxState.tickCount,
