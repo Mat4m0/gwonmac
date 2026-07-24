@@ -741,6 +741,16 @@ test.describe("Electron application", () => {
     });
     await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
     await expect(page.locator("#capture-status")).toBeHidden();
+    await page.evaluate(async () => {
+      const starting = window.gwNative.diagnostics.startCapture(1);
+      const stopping = window.gwNative.diagnostics.stopCapture();
+      await Promise.all([starting, stopping]);
+    });
+    expect(
+      await page.evaluate(async () =>
+        (await window.gwNative.diagnostics.current()).captureLevel),
+    ).toBe(0);
+    await expect(page.locator("#capture-status")).toBeHidden();
     await page.evaluate(() => window.gwNative.diagnostics.startCapture(2));
     await expect(page.locator("#capture-label")).toContainText("Chromium trace");
     await page.waitForTimeout(100);

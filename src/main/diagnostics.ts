@@ -732,7 +732,7 @@ function buildDiagnosticReport(
 let traceGuard: ReturnType<typeof setInterval> | null = null;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let captureStopPromise: Promise<void> | null = null;
-let captureStarting = false;
+let captureStartPromise: Promise<void> | null = null;
 let rendererClockOffsetUs = 0;
 let rendererClockSynchronized = false;
 let previousMainCpu = process.cpuUsage();
@@ -742,7 +742,14 @@ let previousEventLoopUtilization = performance.eventLoopUtilization();
 let eventLoopWindowStartedUs = 0;
 let captureStoppedHandler: (() => void | Promise<void>) | null = null;
 
-async function rendererCaptureCommand(command: string): Promise<void> {
+type RendererCaptureCommand =
+  | { type: "reset" }
+  | { type: "started"; level: 1 | 2 }
+  | { type: "stopped" }
+  | { type: "flush" }
+  | { type: "problem-marked" };
+
+async function rendererCaptureCommand(command: RendererCaptureCommand): Promise<void> {
   const win = BrowserWindow.getAllWindows().find(
     (candidate) =>
       !candidate.isDestroyed() &&
@@ -750,8 +757,16 @@ async function rendererCaptureCommand(command: string): Promise<void> {
       candidate.webContents.getURL().startsWith("gw://app"),
   );
   if (!win) return;
+  const source = command.type === "started"
+    ? `window.gwDiagnostics?.captureStarted(${command.level})`
+    : {
+        reset: "window.gwDiagnostics?.resetForCapture()",
+        stopped: "window.gwDiagnostics?.captureStopped()",
+        flush: "window.gwDiagnostics?.flush()",
+        "problem-marked": "window.gwDiagnostics?.problemMarked()",
+      }[command.type];
   await win.webContents
-    .executeJavaScript(`window.gwDiagnostics?.${command}`)
+    .executeJavaScript(source)
     .catch(() => undefined);
 }
 
@@ -785,7 +800,7 @@ export function peakGauge(name: string, value: number): void {
 
 export function markPerformanceProblem(): void {
   recorder.event("renderer", "info", "performance.problemMarked");
-  void rendererCaptureCommand("problemMarked()");
+  void rendererCaptureCommand({ type: "problem-marked" });
 }
 
 export function setDiagnosticCaptureStoppedHandler(
@@ -1097,20 +1112,19 @@ async function stopTrace(): Promise<void> {
   }
 }
 
-export async function startDiagnosticCapture(level: 1 | 2): Promise<void> {
-  if (captureLevel !== 0 || captureStopPromise || captureStarting) {
-    throw new Error("a diagnostics capture is already active");
+export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
+  if (captureLevel !== 0 || captureStopPromise || captureStartPromise) {
+    return Promise.reject(new Error("a diagnostics capture is already active"));
   }
-  captureStarting = true;
-  try {
-    await rendererCaptureCommand("resetForCapture()");
+  const operation = (async () => {
+    await rendererCaptureCommand({ type: "reset" });
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
     eventLoopWindowStartedUs = recorder.timestampUs();
     lastTracePath = "";
     captureLevel = level;
-    await rendererCaptureCommand(`captureStarted(${level})`);
+    await rendererCaptureCommand({ type: "started", level });
     captureTimer = setTimeout(() => {
       void stopDiagnosticCapture("automatic");
     }, 120_000);
@@ -1152,7 +1166,7 @@ export async function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       if (captureTimer) clearTimeout(captureTimer);
       captureTimer = null;
       captureLevel = 0;
-      await rendererCaptureCommand("captureStopped()");
+      await rendererCaptureCommand({ type: "stopped" });
       tracePath = "";
       recordedCaptureLevel = 0;
       recorder.cancelCapture();
@@ -1161,21 +1175,29 @@ export async function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       });
       throw error;
     }
-  } finally {
-    captureStarting = false;
-  }
+  })();
+  captureStartPromise = operation.finally(() => {
+    captureStartPromise = null;
+  });
+  return captureStartPromise;
 }
 
 export function stopDiagnosticCapture(
   reason: CaptureMetadata["stopReason"] = "manual",
 ): Promise<void> {
   if (captureStopPromise) return captureStopPromise;
+  if (captureStartPromise) {
+    return captureStartPromise.then(
+      () => stopDiagnosticCapture(reason),
+      () => undefined,
+    );
+  }
   if (captureLevel === 0) return Promise.resolve();
   const stoppedLevel = captureLevel;
   captureStopPromise = (async () => {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
-    await rendererCaptureCommand("flush()");
+    await rendererCaptureCommand({ type: "flush" });
     await stopTrace();
     recorder.event("app", "info", "capture.stopped", {
       level: stoppedLevel,
@@ -1183,7 +1205,7 @@ export function stopDiagnosticCapture(
     });
     recorder.endCapture(stoppedLevel, reason);
     captureLevel = 0;
-    await rendererCaptureCommand("captureStopped()");
+    await rendererCaptureCommand({ type: "stopped" });
     if (
       captureStoppedHandler &&
       (reason === "manual" ||
