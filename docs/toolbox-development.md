@@ -65,6 +65,11 @@ The harness launches Electron directly with the normal Guild Wars profile,
 verifies the effective user-data directory in main before startup, connects to
 the random loopback DevTools endpoint, and observes structured renderer state.
 It never launches through Playwright's temporary Electron profile.
+`scripts/toolbox-live.mjs` is only the process, connection, result, and shutdown
+coordinator. Fixed gameplay scenarios live in
+`scripts/toolbox-live/scenarios.mjs`; the paired Level 1 benchmark lives in
+`scripts/toolbox-live/performance.mjs`. Add behavior to the narrow owner rather
+than growing another general automation framework.
 
 Gameplay automation uses trusted mouse input. The WASM client consumes the
 saved-login Enter presses through its text-input path, but did not consume
@@ -137,6 +142,8 @@ For every new field or widget:
 
 Do not add direct renderer pointer chains, a parallel JavaScript probe, generic
 memory writes, arbitrary function calls, or raw packet export.
+The ordered layout field list in `toolbox-builds.ts` generates the transform
+payload, so a new field must not introduce a renderer-side order table.
 
 ## Scoped observations
 

@@ -43,6 +43,9 @@ verified null table slot without growing the table:
 
 The former table-growth and all-functions detour experiments were removed.
 They rewrote far more of the client than the production hook requires.
+`src/main/core/toolbox-client.ts` separately owns official-file hashing,
+derived-cache validation, and atomic publication; neither the CLI nor main
+duplicates those policies.
 
 ### `gensyms.py` — symbol recovery
 The module is stripped, but naming information survives: 219 imports and 44
@@ -82,3 +85,5 @@ matches. It is a triage tool for choosing re-derivation targets.
 table candidates without publishing a transformed client. The live runner is
 cached-only unless `--allow-update` is explicitly supplied and supports at
 most 16 typed scalar observations through `--observe`.
+Its coordinator, fixed gameplay scenarios, and paired performance capture are
+kept in separate modules under `scripts/toolbox-live/`.

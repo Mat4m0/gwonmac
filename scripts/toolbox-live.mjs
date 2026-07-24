@@ -10,6 +10,14 @@ import {
 import {
   parseToolboxObservations,
 } from "../build/tools/toolbox-observations.js";
+import {
+  runScenario,
+  SCENARIOS,
+  waitForPlayable,
+} from "./toolbox-live/scenarios.mjs";
+import {
+  runPerformanceScenario,
+} from "./toolbox-live/performance.mjs";
 
 if (process.env.GW_LIVE_SMOKE !== "1") {
   console.error("toolbox:live requires GW_LIVE_SMOKE=1");
@@ -28,16 +36,7 @@ const scenarioArgument = process.argv.indexOf("--scenario");
 const scenario = scenarioArgument >= 0
   ? process.argv[scenarioArgument + 1]
   : "target";
-if (
-  ![
-    "boot",
-    "target",
-    "movement",
-    "reload",
-    "map-transition",
-    "performance",
-  ].includes(scenario)
-) {
+if (!SCENARIOS.includes(scenario)) {
   console.error(`unknown Toolbox live scenario: ${scenario}`);
   process.exit(2);
 }
@@ -101,282 +100,6 @@ async function sampleObservations(targetPage) {
   }, observations);
 }
 
-async function waitForPlayable(targetPage) {
-  await targetPage.waitForFunction(
-    async () => {
-      const progress = await window.gwNative.progress.current();
-      if (progress.error) throw new Error(progress.error);
-      return progress.phase === "ready";
-    },
-    null,
-    { timeout: 30 * 60_000, polling: 500 },
-  );
-  await targetPage.waitForFunction(
-    () => {
-      const stage = window.gwAutomation?.read().stage;
-      return stage === "client.frontend" || stage?.startsWith("game.");
-    },
-    null,
-    { timeout: 60_000, polling: 100 },
-  );
-  let inputs = 0;
-  for (const delay of [3_000, 5_000, 20_000]) {
-    if (
-      await targetPage.evaluate(
-        () => window.gwToolboxState?.status === "ready",
-      )
-    ) {
-      break;
-    }
-    await targetPage.waitForTimeout(delay);
-    if (
-      await targetPage.evaluate(
-        () => window.gwToolboxState?.status === "ready",
-      )
-    ) {
-      break;
-    }
-    await targetPage.locator("#canvas").focus();
-    await targetPage.keyboard.press("Enter");
-    inputs += 1;
-  }
-  await targetPage.waitForFunction(
-    () => {
-      const state = window.gwToolboxState;
-      return state?.status === "ready" && state.tickCount > 5;
-    },
-    null,
-    { timeout: 30 * 60_000, polling: 250 },
-  );
-  return inputs;
-}
-
-async function readTarget(targetPage) {
-  return targetPage.evaluate(() => {
-    const state = window.gwToolboxState;
-    return state?.targetValid
-      ? {
-          valid: true,
-          id: state.targetId,
-          type: state.targetKind,
-          x: state.targetX,
-          y: state.targetY,
-          distance: state.distance,
-          range: state.rangeName,
-        }
-      : { valid: false };
-  });
-}
-
-async function runTargetScenario(targetPage) {
-  const initial = await readTarget(targetPage);
-  const viewport = await targetPage.evaluate(() => ({
-    width: window.innerWidth,
-  }));
-  const excludedId = initial.valid ? initial.id : 0;
-  let acquired = initial;
-  for (const y of [395, 425, 455]) {
-    await targetPage.mouse.click(viewport.width - 250, y);
-    await targetPage.waitForTimeout(500);
-    acquired = await readTarget(targetPage);
-    if (acquired.valid && acquired.id !== excludedId) break;
-  }
-  if (!acquired.valid || acquired.id === excludedId) {
-    throw new Error("bounded party-panel clicks did not change the target");
-  }
-  return { initial, acquired };
-}
-
-async function runMovementScenario(targetPage) {
-  const before = await targetPage.evaluate(() => ({
-    x: window.gwToolboxState.playerX,
-    y: window.gwToolboxState.playerY,
-  }));
-  const viewport = await targetPage.evaluate(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
-  await targetPage.mouse.move(viewport.width / 2, viewport.height / 2);
-  await targetPage.mouse.down({ button: "right" });
-  await targetPage.mouse.down({ button: "left" });
-  try {
-    await targetPage.waitForTimeout(700);
-  } finally {
-    await targetPage.mouse.up({ button: "left" });
-    await targetPage.mouse.up({ button: "right" });
-  }
-  await targetPage.waitForTimeout(500);
-  const after = await targetPage.evaluate(() => ({
-    x: window.gwToolboxState.playerX,
-    y: window.gwToolboxState.playerY,
-  }));
-  const distance = Math.hypot(after.x - before.x, after.y - before.y);
-  if (distance <= 5) {
-    throw new Error("bounded two-button movement did not change player coordinates");
-  }
-  return { gesture: "two-button-forward", before, after, distance };
-}
-
-async function runMapTransitionScenario(targetPage) {
-  const before = await targetPage.evaluate(() => ({
-    mapId: window.gwToolboxState.mapId,
-    instance: window.gwToolboxState.instanceName,
-    playerId: window.gwToolboxState.playerId,
-    targetValid: window.gwToolboxState.targetValid,
-  }));
-  console.log(JSON.stringify({
-    checkpoint: "travel-to-a-different-map",
-    fromMapId: before.mapId,
-    timeoutSeconds: 600,
-  }));
-  const startedAt = Date.now();
-  await targetPage.waitForFunction(
-    () => window.gwToolboxState?.reason === "loading",
-    null,
-    { timeout: 10 * 60_000, polling: 50 },
-  );
-  const loading = await targetPage.evaluate(() => ({
-    status: window.gwToolboxState.status,
-    reason: window.gwToolboxState.reason,
-    exposesMap: "mapId" in window.gwToolboxState,
-    exposesPlayer: "playerId" in window.gwToolboxState,
-    exposesTarget: "targetId" in window.gwToolboxState,
-  }));
-  await targetPage.waitForFunction(
-    (mapId) => {
-      const state = window.gwToolboxState;
-      return state?.status === "ready" && state.mapId !== mapId;
-    },
-    before.mapId,
-    { timeout: 5 * 60_000, polling: 100 },
-  );
-  const after = await targetPage.evaluate(() => ({
-    mapId: window.gwToolboxState.mapId,
-    instance: window.gwToolboxState.instanceName,
-    playerId: window.gwToolboxState.playerId,
-    targetValid: window.gwToolboxState.targetValid,
-  }));
-  return { before, loading, after, elapsedMs: Date.now() - startedAt };
-}
-
-function summarizeFrames(samples) {
-  const sorted = [...samples].sort((left, right) => left - right);
-  const at = (percentile) =>
-    sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] ?? 0;
-  const over = (milliseconds) =>
-    samples.filter((sample) => sample > milliseconds).length;
-  return {
-    count: sorted.length,
-    p50Ms: Number(at(0.5).toFixed(3)),
-    p95Ms: Number(at(0.95).toFixed(3)),
-    p99Ms: Number(at(0.99).toFixed(3)),
-    maxMs: Number((sorted.at(-1) ?? 0).toFixed(3)),
-    over20Ms: over(20),
-    over33Ms: over(100 / 3),
-    over50Ms: over(50),
-  };
-}
-
-async function readPerformanceMetrics(cdp) {
-  const { metrics } = await cdp.send("Performance.getMetrics");
-  return Object.fromEntries(metrics.map(({ name, value }) => [name, value]));
-}
-
-function summarizePerformanceMetrics(before, after) {
-  const durationMs = (name) =>
-    Number((((after[name] ?? 0) - (before[name] ?? 0)) * 1_000).toFixed(3));
-  return {
-    taskMs: durationMs("TaskDuration"),
-    scriptMs: durationMs("ScriptDuration"),
-    layoutMs: durationMs("LayoutDuration"),
-    styleMs: durationMs("RecalcStyleDuration"),
-    jsHeapUsedMiB: Number(((after.JSHeapUsedSize ?? 0) / (1024 ** 2)).toFixed(3)),
-    jsHeapDeltaKiB: Number(
-      (((after.JSHeapUsedSize ?? 0) - (before.JSHeapUsedSize ?? 0)) / 1_024)
-        .toFixed(3),
-    ),
-  };
-}
-
-async function captureFrames(targetPage, cdp, hookEnabled) {
-  await targetPage.evaluate((enabled) => {
-    window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
-  }, hookEnabled);
-  if (hookEnabled) {
-    const tick = await targetPage.evaluate(
-      () => window.gwToolboxState.tickCount,
-    );
-    await targetPage.waitForFunction(
-      (previous) => window.gwToolboxState?.tickCount > previous,
-      tick,
-      { timeout: 2_000, polling: 25 },
-    );
-  } else {
-    await targetPage.waitForTimeout(1_000);
-  }
-  const tickBefore = await targetPage.evaluate(
-    () => window.gwToolboxState.tickCount,
-  );
-  const metricsBefore = await readPerformanceMetrics(cdp);
-  await targetPage.evaluate(() =>
-    window.gwNative.diagnostics.startCapture(1));
-  let samples;
-  try {
-    samples = await targetPage.evaluate(
-      (durationMs) => new Promise((resolve) => {
-        const values = [];
-        const started = performance.now();
-        let previous = 0;
-        const frame = (now) => {
-          if (previous) values.push(now - previous);
-          previous = now;
-          if (now - started >= durationMs) resolve(values);
-          else window.requestAnimationFrame(frame);
-        };
-        window.requestAnimationFrame(frame);
-      }),
-      60_000,
-    );
-  } finally {
-    await targetPage.evaluate(() =>
-      window.gwNative.diagnostics.stopCapture());
-  }
-  const tickAfter = await targetPage.evaluate(
-    () => window.gwToolboxState.tickCount,
-  );
-  const metricsAfter = await readPerformanceMetrics(cdp);
-  return {
-    ...summarizeFrames(samples),
-    ...summarizePerformanceMetrics(metricsBefore, metricsAfter),
-    ticks: tickAfter >= tickBefore
-      ? tickAfter - tickBefore
-      : tickAfter + (2 ** 32 - tickBefore),
-  };
-}
-
-async function runPerformanceScenario(targetPage, cdp) {
-  try {
-    const baseline = await captureFrames(targetPage, cdp, false);
-    const hooked = await captureFrames(targetPage, cdp, true);
-    const regressionPercent = baseline.p95Ms > 0
-      ? ((hooked.p95Ms / baseline.p95Ms) - 1) * 100
-      : Number.POSITIVE_INFINITY;
-    const p99RegressionPercent = baseline.p99Ms > 0
-      ? ((hooked.p99Ms / baseline.p99Ms) - 1) * 100
-      : Number.POSITIVE_INFINITY;
-    return {
-      durationSecondsPerPhase: 60,
-      baseline,
-      hooked,
-      p95RegressionPercent: Number(regressionPercent.toFixed(2)),
-      p99RegressionPercent: Number(p99RegressionPercent.toFixed(2)),
-    };
-  } finally {
-    await targetPage.evaluate(() => {
-      window.gwToolboxRuntime.setHookEnabledForBenchmark(true);
-    });
-  }
-}
 const output = [];
 child.stdout.on("data", (chunk) => output.push(chunk.toString()));
 child.stderr.on("data", (chunk) => output.push(chunk.toString()));
@@ -434,16 +157,9 @@ try {
     elapsedMs: performance.now() - start.at,
   }), before);
   const observationsBefore = await sampleObservations(page);
-  let scenarioEvidence = null;
-  if (scenario === "target") {
-    scenarioEvidence = await runTargetScenario(page);
-  } else if (scenario === "movement") {
-    scenarioEvidence = await runMovementScenario(page);
-  } else if (scenario === "map-transition") {
-    scenarioEvidence = await runMapTransitionScenario(page);
-  } else if (scenario === "performance") {
-    scenarioEvidence = await runPerformanceScenario(page, cdp);
-  }
+  const scenarioEvidence = scenario === "performance"
+    ? await runPerformanceScenario(page, cdp)
+    : await runScenario(scenario, page);
 
   const result = await page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwToolboxState;

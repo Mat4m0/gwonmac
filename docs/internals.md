@@ -115,11 +115,14 @@ is not a production fallback.
 Before `Gw.jspi.js` is appended, the renderer resolves the single
 `dataStrategy` setting against native cache residency. `null` owns the
 first-run choice, `quick` releases boot immediately, and incomplete `full`
-owns the foreground downloader. The game, audio context, sockets, and WebGL
-runtime cannot start behind the launcher. Cache residency—not a saved progress
-counter—is the download truth. Full Game additionally runs the bounded
-content-hash verification pass at startup even when every expected filename is
-resident; corruption cannot bypass the repair path.
+owns the foreground downloader. Main owns native download execution, canonical
+progress, and power state; the renderer keeps one coalesced UI operation phase
+and derives presentation from progress plus cache residency. The game, audio
+context, sockets, and WebGL runtime cannot start behind the launcher. Cache
+residency—not a saved progress counter—is the download truth. Full Game
+additionally runs the bounded content-hash verification pass at startup even
+when every expected filename is resident; corruption cannot bypass the repair
+path.
 
 Awaited host calls always return promises:
 
@@ -175,6 +178,11 @@ official hash, transform ABI, and manifest fingerprint. The transform clones
 one typed function, installs one dispatcher, and embeds the verified layout as
 a custom section. Unknown hashes and transform failures serve the official
 module unchanged.
+
+`toolbox-transform.ts` is the pure byte transform. `toolbox-client.ts` owns
+streaming hash validation, cache reuse, and atomic derived publication. The
+manifest's ordered layout fields generate the embedded `layoutWords`; the
+renderer does not maintain a second field-order list.
 
 Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
 446. It uses the stock table's null slot 0; the mutable global stores
@@ -241,10 +249,11 @@ pixel ratio import and mirrors client-requested sizes to the offscreen buffer.
 
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
 fullscreen, touch translation, trackpad-wheel normalization, and right-drag
-pointer lock. One held-input registry releases keys, buttons, and touches when
-focus or native UI consumes an input release. Pointer lock uses a virtual
-cursor and recycles a held drag at canvas edges so camera rotation does not
-stall.
+pointer lock. `input.js` owns the canvas input listeners and accepts validated
+settings from the settings owner; it does not persist settings itself. One
+held-input registry releases keys, buttons, and touches when focus or native UI
+consumes an input release. Pointer lock uses a virtual cursor and recycles a
+held drag at canvas edges so camera rotation does not stall.
 
 ## Diagnostics
 

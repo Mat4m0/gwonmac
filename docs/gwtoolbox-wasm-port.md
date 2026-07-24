@@ -54,6 +54,10 @@ empty slot before cloning only the selected function. It adds:
 The official file remains untouched. Main atomically caches the derived module
 by official hash, transform ABI, and build-manifest fingerprint. A corrupt or
 stale derived cache is rebuilt. Failure falls back to the official file.
+Cache/hash/publication policy lives separately in `toolbox-client.ts`; the
+transformer remains a deterministic byte-to-byte operation. The manifest's
+canonical ordered layout fields generate the embedded layout words consumed by
+the renderer, avoiding a second ABI ordering table.
 
 The earlier all-functions dispatcher and table-growth experiments were removed.
 Build 38,771 already has one unused table slot, so no table rewrite is needed.
