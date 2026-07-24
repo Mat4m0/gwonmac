@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
+import net from "node:net";
 import path from "node:path";
 import {
   closeOffline,
@@ -18,8 +19,13 @@ async function pathExists(target) {
 test.describe("client compatibility", () => {
   test.skip(!existsSync(main), "run the build before Electron tests");
 
-  test("promotes a candidate only after the renderer health signal", async () => {
+  test("promotes a candidate only after a frame and game socket open", async () => {
     const fingerprint = "a".repeat(64);
+    const server = net.createServer();
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(6112, "127.0.0.1", resolve);
+    });
     let artifacts;
     let previous;
     let rejected;
@@ -91,6 +97,25 @@ test.describe("client compatibility", () => {
         visibleRestored: true,
         offscreen: [64, 64],
       });
+      expect(await pathExists(path.join(artifacts, ".candidate.json"))).toBe(true);
+      await fixture.page.evaluate(async () => {
+        const socket = window.Module.socket.connect("127.0.0.1:6112");
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("candidate socket did not open")),
+            5_000,
+          );
+          socket.onopen = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          socket.onclose = () => {
+            clearTimeout(timeout);
+            reject(new Error("candidate socket closed before opening"));
+          };
+        });
+        socket.close();
+      });
       await expect
         .poll(() => pathExists(path.join(artifacts, ".candidate.json")))
         .toBe(false);
@@ -98,6 +123,7 @@ test.describe("client compatibility", () => {
       expect(await pathExists(rejected)).toBe(false);
     } finally {
       await closeOffline(fixture);
+      await new Promise((resolve) => server.close(resolve));
     }
   });
 

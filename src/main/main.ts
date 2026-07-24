@@ -105,6 +105,30 @@ let fullDownload: Promise<boolean> | null = null;
 let gameUpdate: Promise<void> | null = null;
 let settingsWrite: Promise<void> = Promise.resolve();
 let toolboxClient: PreparedToolboxClient | null = null;
+let candidateFrameReady = false;
+let candidateSocketReady = false;
+let candidateConfirmation: Promise<void> | null = null;
+
+function confirmCandidateIfReady(): Promise<void> {
+  if (!candidateFrameReady || !candidateSocketReady) return Promise.resolve();
+  if (candidateConfirmation) return candidateConfirmation;
+  candidateConfirmation = (async () => {
+    const paths = gamePaths();
+    const fingerprint = await confirmClientCandidate({
+      artifacts: paths.artifacts,
+      rejectedPath: paths.rejectedClient,
+    });
+    candidateFrameReady = false;
+    candidateSocketReady = false;
+    if (fingerprint) {
+      await pruneCurrentChunkCache();
+      log("update", "info", "client.candidatePromoted", { fingerprint });
+    }
+  })().finally(() => {
+    candidateConfirmation = null;
+  });
+  return candidateConfirmation;
+}
 
 async function pruneCurrentChunkCache(): Promise<void> {
   const paths = gamePaths();
@@ -193,6 +217,14 @@ async function prepareToolbox(): Promise<void> {
 
 const sockets = new SocketManager(
   (ownerId, event) => {
+    if (event.type === "open") {
+      candidateSocketReady = true;
+      void confirmCandidateIfReady().catch((error) => {
+        log("update", "error", "client.candidatePromotionFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
     if (event.type !== "data") {
       log("socket", "info", `socket.${event.type}`, {
         socketId: event.socketId,
@@ -773,15 +805,8 @@ app.whenReady().then(async () => {
       chunkStore?.stop();
     },
     confirmClientHealthy: async () => {
-      const paths = gamePaths();
-      const fingerprint = await confirmClientCandidate({
-        artifacts: paths.artifacts,
-        rejectedPath: paths.rejectedClient,
-      });
-      if (fingerprint) {
-        await pruneCurrentChunkCache();
-        log("update", "info", "client.candidatePromoted", { fingerprint });
-      }
+      candidateFrameReady = true;
+      await confirmCandidateIfReady();
     },
     retryClient: retryGameUpdate,
   });
