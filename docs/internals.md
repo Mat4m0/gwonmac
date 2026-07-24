@@ -53,8 +53,8 @@ arbitrary filesystem or URL fetch capability.
 
 The preload is deliberately self-contained CommonJS. Electron’s sandboxed
 preload loader does not execute a local ESM dependency graph. Release tests
-therefore assert that its channel list exactly matches the canonical shared
-contract.
+therefore assert that every canonical channel is present in both the preload
+and the main-process wiring. The bridge and each nested namespace are frozen.
 
 ## Game update and snapshot cache
 
@@ -66,14 +66,20 @@ Gw.jspi.wasm
 version.json
 ```
 
+The remote manifest has bounded size, file and directory counts, names,
+parent topology, and chunk references. Required product basenames must be
+unique. Network bodies are streamed beneath call-site byte ceilings and gzip
+decoding cannot exceed the manifest's exact expected chunk length.
 Existing artifacts are verified chunk-by-chunk against the current manifest;
 equal file length is not treated as proof of equality. New artifacts are built
 in a part file, synced, and renamed only after every content hash passes.
 The published local manifest retains the executable artifacts' sizes and chunk
 hashes, so offline fallback is independently verifiable. A changed client is
-kept as a candidate beside one verified previous generation until its first
-presented frame. Failure before that signal durably rejects that exact client
-fingerprint for the current host version and restores the previous generation.
+kept as a candidate beside one verified previous generation until it has both
+presented a frame and opened a game TCP connection. A login-screen frame alone
+cannot discard the rollback generation. Failure before both signals durably
+rejects that exact client fingerprint for the current host version and restores
+the previous generation.
 Invalid or legacy-unverifiable state is never promoted into the rollback slot.
 
 `Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
@@ -131,7 +137,6 @@ image.cacheAsync
 dns.resolve
 secureStorage.getCredentials/storeCredentials/clearCredentials
 adProvider.showInterstitial
-ageSignals.check
 shop.initialize/inAppPurchase
 ```
 
@@ -142,15 +147,18 @@ stable signing identity, the main process enables Chromium's
 `use-mock-keychain` provider before ready. Electron `safeStorage` therefore
 uses a local mock profile key rather than macOS Keychain: it prevents recurring
 OS prompts and casual plaintext disclosure, but does not defend the saved
-login from software running as the same user. An unreadable pre-cutover
-Keychain-backed ciphertext is deleted once and the game prompts again.
+login from software running as the same user. An unreadable ciphertext is never
+deleted by a read; the failure is recorded without credential content and the
+game prompts again. A later explicit save atomically replaces it.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 No federated provider is advertised, allowing the client’s username/password
 flow to own the UI. The app has no independent update feed;
 application replacements are manual, while the ArenaNet client updater remains
-automatic. Commerce, ads, browser, and event services remain inert capability
-stubs where the desktop client does not need the mobile integration.
+automatic. Properly guarded browser, analytics, age-signal, and federated-auth
+namespaces are absent. The two namespaces with defective absence guards
+(`adProvider` and `shop`) are narrow plain objects whose unavailable operations
+reject with the promise shapes expected by the client.
 
 The renderer owns one persistent game filesystem initialization before the
 official client enters `main()`. It mounts and restores Emscripten IDBFS at

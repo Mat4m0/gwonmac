@@ -14,6 +14,8 @@ test.describe("sandbox boundary", () => {
         toolboxHidden: globalThis.document.getElementById("toolbox")?.hidden,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
+        namespacesFrozen: Object.values(window.gwNative).every(Object.isFrozen),
+        diagnosticsKeys: Object.keys(window.gwNative.diagnostics).sort(),
         requireType: typeof window.require,
         processType: typeof window.process,
       }));
@@ -36,6 +38,16 @@ test.describe("sandbox boundary", () => {
           "update",
         ],
         nativeFrozen: true,
+        namespacesFrozen: true,
+        diagnosticsKeys: [
+          "clockSync",
+          "current",
+          "recordClockOffset",
+          "recordGraphics",
+          "recordRendererFrames",
+          "recordRendererMetrics",
+          "recordRendererMilestone",
+        ],
         requireType: "undefined",
         processType: "undefined",
       });
