@@ -132,9 +132,9 @@
 
   function applyRuntimeSettings(settings) {
     const canvas = document.getElementById('canvas');
-    if (canvas) canvas.dataset.cursorTheme = settings.cursorTheme || 'guild-wars';
+    if (canvas) canvas.dataset.cursorTheme = settings.cursorTheme;
     const preview = byId('settings-cursor-preview');
-    if (preview) preview.dataset.cursorTheme = settings.cursorTheme || 'guild-wars';
+    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
     window.gwApplySettings?.(settings);
   }
 
@@ -213,14 +213,14 @@
   function fillForm(settings) {
     form.renderScale.value = String(settings.renderScale);
     form.pointerLock.checked = !!settings.pointerLock;
-    form.cursorTheme.value = settings.cursorTheme || 'guild-wars';
+    form.cursorTheme.value = settings.cursorTheme;
     form.touchMode.value = settings.touchMode;
     form.showDiagnostics.checked = !!settings.showDiagnostics;
     for (const radio of form.querySelectorAll('input[name="dataStrategy"]')) {
       radio.checked = radio.value === settings.dataStrategy;
     }
     const preview = byId('settings-cursor-preview');
-    if (preview) preview.dataset.cursorTheme = settings.cursorTheme || 'guild-wars';
+    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
     updateRenderScaleDimensions();
   }
 

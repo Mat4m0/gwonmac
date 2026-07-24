@@ -46,22 +46,29 @@ test.describe("renderer input", () => {
         for (const type of ["touchstart", "touchend", "touchcancel"]) {
           canvas.addEventListener(type, () => events.push(type));
         }
-        const mouseDown = () =>
+        const mouse = (type) =>
           canvas.dispatchEvent(
-            new globalThis.MouseEvent("mousedown", {
+            new globalThis.MouseEvent(type, {
               bubbles: true,
               button: 0,
               clientX: 100,
               clientY: 100,
             }),
           );
+        const applyTouchMode = async (touchMode) => {
+          const settings = await window.gwNative.settings.set({ touchMode });
+          window.gwApplySettings(settings);
+        };
 
-        await window.gwTouchMode("translate");
-        mouseDown();
+        await applyTouchMode("translate");
+        mouse("mousedown");
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
-        await window.gwTouchMode("dbltap");
-        window.gwTap(100, 100);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await applyTouchMode("dbltap");
+        mouse("mousedown");
+        mouse("mouseup");
+        mouse("mousedown");
+        mouse("mouseup");
+        await new Promise((resolve) => setTimeout(resolve, 30));
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
         await new Promise((resolve) => setTimeout(resolve, 60));
         return events;

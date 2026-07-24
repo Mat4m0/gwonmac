@@ -6,7 +6,6 @@
   window.gwInstallGameInput = ({
     canvas,
     initialSettings,
-    saveSettings,
     diagnostics,
     log,
   }) => {
@@ -290,26 +289,6 @@
       finishTouch('touchcancel', touch);
     }, true);
 
-    window.gwTap = (x, y) => {
-      const touch = makeTouch(x, y, ++touchId);
-      startTouch(touch);
-      schedule(() => finishTouch('touchend', touch), 40);
-    };
-    window.gwDoubleTap = (x, y) => {
-      window.gwTap(x, y);
-      schedule(() => window.gwTap(x, y), 120);
-    };
-    window.gwTouchMode = async (mode) => {
-      if (!['dbltap', 'translate', 'augment', 'off'].includes(mode)) {
-        log(`[warn] unknown mode ${mode}`);
-        return undefined;
-      }
-      touchMode = mode;
-      await saveSettings({ touchMode: mode });
-      log(`touch mode: ${mode}`);
-      return mode;
-    };
-
     const sendDelta = (movementX, movementY) => {
       if (!virtualCursor) return;
       const rect = canvas.getBoundingClientRect();
@@ -349,14 +328,6 @@
         pendingY = 0;
         if (replayX || replayY) sendDelta(replayX, replayY);
       });
-    };
-
-    window.gwPointerLock = async (enabled) => {
-      lockEnabled = !!enabled;
-      await saveSettings({ pointerLock: lockEnabled });
-      if (!lockEnabled) releasePointer();
-      log(`pointer lock: ${lockEnabled ? 'enabled' : 'disabled'}`);
-      return lockEnabled;
     };
 
     canvas.addEventListener('mousedown', (event) => {
@@ -415,7 +386,7 @@
     });
 
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-    log(`touch mode: ${touchMode} (gwTouchMode('off') to disable)`);
+    log(`touch mode: ${touchMode}`);
 
     return Object.freeze({
       releaseAll,

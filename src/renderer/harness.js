@@ -44,14 +44,7 @@ const STARTUP_LABELS = {
 
 const SNAPSHOT_URL = 'Gw.snapshot';
 let useJspi = true;
-let appSettings = {
-  renderScale: 1,
-  pointerLock: true,
-  cursorTheme: 'guild-wars',
-  touchMode: 'dbltap',
-  showDiagnostics: false,
-  dataStrategy: null,
-};
+let appSettings = null;
 // Settings UI can update the canonical object before the game glue has loaded.
 // loadGlue replaces this with the richer runtime application hook.
 window.gwApplySettings = (next) => {
@@ -340,7 +333,7 @@ function patchEgl(env) {
   // second host-side resize competing with emscripten_set_canvas_element_size.
   if (typeof env.emscripten_get_device_pixel_ratio === 'function') {
     env.emscripten_get_device_pixel_ratio =
-      () => appSettings.renderScale || 1;
+      () => appSettings.renderScale;
   }
 
   const swap = env.eglSwapBuffers;
@@ -419,7 +412,7 @@ function scheduleGraphicsDiagnostics(visible, offscreen) {
         drawingBufferWidth: gl?.drawingBufferWidth || 0,
         drawingBufferHeight: gl?.drawingBufferHeight || 0,
         devicePixelRatio: window.devicePixelRatio || 1,
-        renderScale: appSettings.renderScale || 1,
+        renderScale: appSettings.renderScale,
         antialias: !!attributes?.antialias,
         samples: gl ? Number(gl.getParameter(gl.SAMPLES) || 0) : 0,
       });
@@ -749,7 +742,7 @@ function loadGlue(candidates) {
   const c = document.getElementById('canvas');
   const applyCursorTheme = () => {
     const visible = document.getElementById('canvas');
-    if (visible) visible.dataset.cursorTheme = appSettings.cursorTheme || 'guild-wars';
+    if (visible) visible.dataset.cursorTheme = appSettings.cursorTheme;
   };
   applyCursorTheme();
 
@@ -792,10 +785,6 @@ function loadGlue(candidates) {
   const inputHost = window.gwInstallGameInput({
     canvas: c,
     initialSettings: appSettings,
-    saveSettings: async (patch) => {
-      appSettings = await native().settings.set(patch);
-      return appSettings;
-    },
     diagnostics: window.gwDiagnostics,
     log,
   });
@@ -852,7 +841,8 @@ function loadGlue(candidates) {
     appSettings = await native().settings.get();
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   } catch (e) {
-    log('[warn] settings load failed:', e.message);
+    window.gwLoading?.fail('Settings could not be loaded.');
+    return log('[err] settings load failed:', e.message);
   }
 
   try {

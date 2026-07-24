@@ -17,7 +17,6 @@ import {
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
-import { INITIAL_PROGRESS, EMPTY_PREFETCH } from "../shared/progress.js";
 import { AllowlistError, AppError, ValidationError } from "../shared/errors.js";
 import { CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
@@ -599,12 +598,4 @@ export function emitSocketEvent(ownerId: number, event: SocketEvent): void {
       sendIfLive(win, IPC.socketEvent, toWireSocketEvent(event));
     }
   }
-}
-
-export function defaultProgress(): DownloadProgress {
-  return { ...INITIAL_PROGRESS };
-}
-
-export function defaultPrefetch(): PrefetchProgress {
-  return { ...EMPTY_PREFETCH };
 }
