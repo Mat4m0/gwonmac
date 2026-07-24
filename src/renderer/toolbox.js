@@ -144,13 +144,71 @@ function agentKind(type) {
 
 function text(id, value) {
   const element = document.getElementById(id);
-  if (element && element.textContent !== value) element.textContent = value;
+  if (!element || element.textContent === value) return 0;
+  element.textContent = value;
+  return 1;
+}
+
+function hidden(element, value) {
+  if (!element || element.hidden === value) return 0;
+  element.hidden = value;
+  return 1;
+}
+
+export function renderToolboxState(state) {
+  const root = document.getElementById("toolbox");
+  const target = document.getElementById("toolbox-target");
+  if (!root || !target) return 0;
+  let updates = 0;
+  if (root.dataset.status !== state.status) {
+    root.dataset.status = state.status;
+    updates += 1;
+  }
+  if (state.status !== "ready") {
+    return updates + hidden(root, true);
+  }
+
+  updates += text("toolbox-map-id", String(state.mapId));
+  updates += text("toolbox-instance", state.instanceName);
+  updates += text("toolbox-player-id", `Agent ${state.playerId}`);
+  updates += text("toolbox-player-x", state.playerX.toFixed(1));
+  updates += text("toolbox-player-y", state.playerY.toFixed(1));
+  if (root.dataset.mapId !== String(state.mapId)) {
+    root.dataset.mapId = String(state.mapId);
+    updates += 1;
+  }
+  if (root.dataset.agentId !== String(state.playerId)) {
+    root.dataset.agentId = String(state.playerId);
+    updates += 1;
+  }
+
+  updates += hidden(target, !state.targetValid);
+  if (state.targetValid) {
+    updates += text("toolbox-target-id", `Agent ${state.targetId}`);
+    updates += text("toolbox-target-type", state.targetKind);
+    updates += text("toolbox-target-x", state.targetX.toFixed(1));
+    updates += text("toolbox-target-y", state.targetY.toFixed(1));
+    updates += text("toolbox-target-distance", state.distance.toFixed(0));
+    updates += text("toolbox-target-range", state.rangeName);
+    if (target.dataset.range !== String(state.rangeBand)) {
+      target.dataset.range = String(state.rangeBand);
+      updates += 1;
+    }
+    if (root.dataset.targetId !== String(state.targetId)) {
+      root.dataset.targetId = String(state.targetId);
+      updates += 1;
+    }
+  } else if ("targetId" in root.dataset) {
+    delete root.dataset.targetId;
+    updates += 1;
+  }
+  updates += hidden(root, false);
+  return updates;
 }
 
 function mountRenderer(runtime) {
   const root = document.getElementById("toolbox");
-  const target = document.getElementById("toolbox-target");
-  if (!root || !target) return () => {};
+  if (!root || !document.getElementById("toolbox-target")) return () => {};
   let frame = 0;
   let lastSequence = -1;
   let cadenceAt = performance.now();
@@ -162,50 +220,28 @@ function mountRenderer(runtime) {
       runtime.memory.buffer,
       runtime.snapshotPointer,
     );
+    runtime.snapshotReads += 1;
+    if (state.reason === "writing" || state.reason === "snapshot") {
+      runtime.rejectedSnapshots += 1;
+    }
     window.gwToolboxState = state;
-    root.dataset.status = state.status;
     if (state.sequence === lastSequence) {
       frame = requestAnimationFrame(render);
       return;
     }
     lastSequence = state.sequence ?? lastSequence;
-    if (state.status !== "ready") {
-      root.hidden = true;
-      frame = requestAnimationFrame(render);
-      return;
-    }
-
-    text("toolbox-map-id", String(state.mapId));
-    text("toolbox-instance", state.instanceName);
-    text("toolbox-player-id", `Agent ${state.playerId}`);
-    text("toolbox-player-x", state.playerX.toFixed(1));
-    text("toolbox-player-y", state.playerY.toFixed(1));
-    root.dataset.mapId = String(state.mapId);
-    root.dataset.agentId = String(state.playerId);
-
-    target.hidden = !state.targetValid;
-    if (state.targetValid) {
-      text("toolbox-target-id", `Agent ${state.targetId}`);
-      text("toolbox-target-type", state.targetKind);
-      text("toolbox-target-x", state.targetX.toFixed(1));
-      text("toolbox-target-y", state.targetY.toFixed(1));
-      text("toolbox-target-distance", state.distance.toFixed(0));
-      text("toolbox-target-range", state.rangeName);
-      target.dataset.range = String(state.rangeBand);
-      root.dataset.targetId = String(state.targetId);
-    } else {
-      delete root.dataset.targetId;
-    }
+    runtime.domUpdates += renderToolboxState(state);
 
     const now = performance.now();
-    if (now - cadenceAt >= 1_000) {
+    if (state.status === "ready" && now - cadenceAt >= 1_000) {
       runtime.hertz =
         ((state.tickCount - cadenceTick) * 1_000) / (now - cadenceAt);
       cadenceAt = now;
       cadenceTick = state.tickCount;
     }
     runtime.lastRenderUs = (performance.now() - started) * 1_000;
-    root.hidden = false;
+    runtime.renderSamples.push(runtime.lastRenderUs);
+    if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
     frame = requestAnimationFrame(render);
   };
   frame = requestAnimationFrame(render);
@@ -279,6 +315,10 @@ async function install(instance, module) {
       tableSlot: manifest.tableSlot,
       hertz: 0,
       lastRenderUs: 0,
+      renderSamples: [],
+      snapshotReads: 0,
+      rejectedSnapshots: 0,
+      domUpdates: 0,
       installation: (window.gwToolboxInstallations ?? 0) + 1,
     };
     window.gwToolboxInstallations = runtime.installation;

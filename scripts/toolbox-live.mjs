@@ -192,6 +192,9 @@ try {
   const result = await page.evaluate(({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwToolboxState;
     const runtime = window.gwToolboxRuntime;
+    const renderSamples = [...(runtime?.renderSamples ?? [])]
+      .sort((left, right) => left - right);
+    const p95Index = Math.max(0, Math.ceil(renderSamples.length * 0.95) - 1);
     return {
       scenario: name,
       supported: runtime?.status === "installed",
@@ -221,6 +224,10 @@ try {
           }
         : null,
       renderUs: Number((runtime?.lastRenderUs ?? 0).toFixed(2)),
+      renderP95Us: Number((renderSamples[p95Index] ?? 0).toFixed(2)),
+      snapshotReads: runtime?.snapshotReads ?? 0,
+      rejectedSnapshots: runtime?.rejectedSnapshots ?? 0,
+      domUpdates: runtime?.domUpdates ?? 0,
       lifecycle: window.gwAutomation?.read() ?? null,
       installation: runtime?.installation ?? 0,
     };
@@ -240,7 +247,7 @@ try {
     || !result.map
     || (scenario === "target" && !result.target)
     || result.installation !== 1
-    || result.renderUs >= 250
+    || result.renderP95Us >= 250
     || rendererErrors.some((line) =>
       /unknown socket|unhandled|wasm.*trap/i.test(line),
     )

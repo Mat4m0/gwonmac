@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { readToolboxSnapshot } from "../../src/renderer/toolbox.js";
+import {
+  readToolboxSnapshot,
+  renderToolboxState,
+} from "../../src/renderer/toolbox.js";
 
 const MAGIC = 0x42545747;
 
@@ -55,6 +58,52 @@ describe("Toolbox snapshot ABI", () => {
     const noTarget = readToolboxSnapshot(snapshot({ flags: 3 }), 0);
     assert.equal(noTarget.status, "ready");
     assert.equal(noTarget.targetValid, false);
+  });
+});
+
+describe("Toolbox overlay rendering", () => {
+  it("renders fixtures and performs no redundant DOM writes", () => {
+    const ids = [
+      "toolbox",
+      "toolbox-target",
+      "toolbox-map-id",
+      "toolbox-instance",
+      "toolbox-player-id",
+      "toolbox-player-x",
+      "toolbox-player-y",
+      "toolbox-target-id",
+      "toolbox-target-type",
+      "toolbox-target-x",
+      "toolbox-target-y",
+      "toolbox-target-distance",
+      "toolbox-target-range",
+    ];
+    const elements = new Map(ids.map((id) => [
+      id,
+      { id, textContent: "", hidden: false, dataset: {} },
+    ]));
+    const previousDocument = globalThis.document;
+    globalThis.document = {
+      getElementById: (id) => elements.get(id) ?? null,
+    };
+    try {
+      const state = readToolboxSnapshot(snapshot(), 0);
+      assert.ok(renderToolboxState(state) > 0);
+      assert.equal(elements.get("toolbox-map-id").textContent, "133");
+      assert.equal(elements.get("toolbox-target-distance").textContent, "131");
+      assert.equal(elements.get("toolbox-target").hidden, false);
+      assert.equal(renderToolboxState(state), 0);
+
+      const withoutTarget = readToolboxSnapshot(
+        snapshot({ sequence: 4, flags: 3 }),
+        0,
+      );
+      assert.ok(renderToolboxState(withoutTarget) > 0);
+      assert.equal(elements.get("toolbox-target").hidden, true);
+      assert.equal("targetId" in elements.get("toolbox").dataset, false);
+    } finally {
+      globalThis.document = previousDocument;
+    }
   });
 });
 
