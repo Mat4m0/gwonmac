@@ -263,16 +263,42 @@ function summarizeFrames(samples) {
   const sorted = [...samples].sort((left, right) => left - right);
   const at = (percentile) =>
     sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] ?? 0;
+  const over = (milliseconds) =>
+    samples.filter((sample) => sample > milliseconds).length;
   return {
     count: sorted.length,
     p50Ms: Number(at(0.5).toFixed(3)),
     p95Ms: Number(at(0.95).toFixed(3)),
     p99Ms: Number(at(0.99).toFixed(3)),
     maxMs: Number((sorted.at(-1) ?? 0).toFixed(3)),
+    over20Ms: over(20),
+    over33Ms: over(100 / 3),
+    over50Ms: over(50),
   };
 }
 
-async function captureFrames(targetPage, hookEnabled) {
+async function readPerformanceMetrics(cdp) {
+  const { metrics } = await cdp.send("Performance.getMetrics");
+  return Object.fromEntries(metrics.map(({ name, value }) => [name, value]));
+}
+
+function summarizePerformanceMetrics(before, after) {
+  const durationMs = (name) =>
+    Number((((after[name] ?? 0) - (before[name] ?? 0)) * 1_000).toFixed(3));
+  return {
+    taskMs: durationMs("TaskDuration"),
+    scriptMs: durationMs("ScriptDuration"),
+    layoutMs: durationMs("LayoutDuration"),
+    styleMs: durationMs("RecalcStyleDuration"),
+    jsHeapUsedMiB: Number(((after.JSHeapUsedSize ?? 0) / (1024 ** 2)).toFixed(3)),
+    jsHeapDeltaKiB: Number(
+      (((after.JSHeapUsedSize ?? 0) - (before.JSHeapUsedSize ?? 0)) / 1_024)
+        .toFixed(3),
+    ),
+  };
+}
+
+async function captureFrames(targetPage, cdp, hookEnabled) {
   await targetPage.evaluate((enabled) => {
     window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
   }, hookEnabled);
@@ -291,6 +317,7 @@ async function captureFrames(targetPage, hookEnabled) {
   const tickBefore = await targetPage.evaluate(
     () => window.gwToolboxState.tickCount,
   );
+  const metricsBefore = await readPerformanceMetrics(cdp);
   await targetPage.evaluate(() =>
     window.gwNative.diagnostics.startCapture(1));
   let samples;
@@ -317,26 +344,32 @@ async function captureFrames(targetPage, hookEnabled) {
   const tickAfter = await targetPage.evaluate(
     () => window.gwToolboxState.tickCount,
   );
+  const metricsAfter = await readPerformanceMetrics(cdp);
   return {
     ...summarizeFrames(samples),
+    ...summarizePerformanceMetrics(metricsBefore, metricsAfter),
     ticks: tickAfter >= tickBefore
       ? tickAfter - tickBefore
       : tickAfter + (2 ** 32 - tickBefore),
   };
 }
 
-async function runPerformanceScenario(targetPage) {
+async function runPerformanceScenario(targetPage, cdp) {
   try {
-    const baseline = await captureFrames(targetPage, false);
-    const hooked = await captureFrames(targetPage, true);
+    const baseline = await captureFrames(targetPage, cdp, false);
+    const hooked = await captureFrames(targetPage, cdp, true);
     const regressionPercent = baseline.p95Ms > 0
       ? ((hooked.p95Ms / baseline.p95Ms) - 1) * 100
+      : Number.POSITIVE_INFINITY;
+    const p99RegressionPercent = baseline.p99Ms > 0
+      ? ((hooked.p99Ms / baseline.p99Ms) - 1) * 100
       : Number.POSITIVE_INFINITY;
     return {
       durationSecondsPerPhase: 60,
       baseline,
       hooked,
       p95RegressionPercent: Number(regressionPercent.toFixed(2)),
+      p99RegressionPercent: Number(p99RegressionPercent.toFixed(2)),
     };
   } finally {
     await targetPage.evaluate(() => {
@@ -368,12 +401,15 @@ const endpoint = await new Promise((resolve, reject) => {
 
 let browser;
 let page;
+let cdp;
 const rendererErrors = [];
 let keepAlive = leaveOpen;
 try {
   browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
   page = context.pages()[0] ?? await context.waitForEvent("page");
+  cdp = await context.newCDPSession(page);
+  await cdp.send("Performance.enable");
   page.on("console", (message) => {
     if (message.type() === "error") rendererErrors.push(message.text());
   });
@@ -406,7 +442,7 @@ try {
   } else if (scenario === "map-transition") {
     scenarioEvidence = await runMapTransitionScenario(page);
   } else if (scenario === "performance") {
-    scenarioEvidence = await runPerformanceScenario(page);
+    scenarioEvidence = await runPerformanceScenario(page, cdp);
   }
 
   const result = await page.evaluate(({ ticks, elapsedMs, scenario: name }) => {
@@ -501,10 +537,20 @@ try {
         || result.evidence.hooked.count < 3_000
         || result.evidence.hooked.ticks < 3_000
         || result.evidence.p95RegressionPercent > 2
+        || result.evidence.p99RegressionPercent > 2
+        || (
+          result.evidence.hooked.over33Ms
+          > result.evidence.baseline.over33Ms + 1
+        )
+        || (
+          result.evidence.hooked.over50Ms
+          > result.evidence.baseline.over50Ms + 1
+        )
       )
     )
     || result.installation !== 1
     || result.renderP95Us >= 250
+    || result.rejectedSnapshots !== 0
     || rendererErrors.some((line) =>
       /unknown socket|unhandled|wasm.*trap/i.test(line),
     )

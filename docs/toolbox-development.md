@@ -81,11 +81,16 @@ optional account binding and cannot be assumed by automation.
 
 `performance` takes two Level 1 captures and exact animation-frame samples:
 60 seconds with the hook slot disabled, then 60 seconds with the hook enabled.
-It requires at least 3,000 frames per phase and no more than 2% p95 regression.
+It reports p50, p95, p99, maximum frame time, long-frame counts, renderer
+task/script/layout time, JavaScript heap use, and hook calls. It requires at
+least 3,000 frames per phase, no more than 2% p95 or p99 regression, no new
+cluster of frames above 33 or 50 ms, and no torn snapshot.
 The baseline isolates the incremental companion/snapshot/overlay cost; it still
 uses the already transformed game module and its disabled dispatcher branch.
 The result also requires zero hook ticks in baseline and at least 3,000 hooked
-ticks, so a disconnected benchmark cannot pass.
+ticks, so a disconnected benchmark cannot pass. Task and heap values are
+diagnostic rather than gates because garbage collection and unrelated game
+work can move them between phases.
 
 The renderer lifecycle surface derives from existing state:
 
