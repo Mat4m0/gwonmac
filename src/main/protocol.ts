@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import type { SnapshotMetadata } from "../shared/contracts.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
+  isProxyFetchDestination,
   isProxyRoute,
   resolveProxyHost,
   rewriteProxyRedirect,
@@ -32,7 +33,8 @@ const CSP =
   "default-src 'self' gw:; script-src 'self' gw: 'unsafe-eval' 'wasm-unsafe-eval'; " +
   "style-src 'self' gw: 'unsafe-inline'; img-src 'self' gw: data:; " +
   "font-src 'self' gw:; connect-src 'self' gw:; worker-src 'self' gw: blob:; " +
-  "object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+  "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
+  "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 
 export interface ProtocolDeps {
@@ -232,6 +234,14 @@ async function handleSnapshot(request: Request): Promise<Response> {
 }
 
 async function handleProxy(request: Request, route: string, rest: string): Promise<Response> {
+  const destination =
+    request.destination || request.headers.get("sec-fetch-dest") || "";
+  if (!isProxyFetchDestination(destination)) {
+    return new Response("proxy route is fetch-only", {
+      status: 403,
+      headers: headers({ "Content-Type": "text/plain; charset=utf-8" }),
+    });
+  }
   let host: string;
   try {
     host = resolveProxyHost(route);
@@ -300,7 +310,13 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
     const out = new Headers(headers());
     for (const [k, v] of res.headers) {
       const key = k.toLowerCase();
-      if (key === "content-security-policy") continue;
+      if (
+        key === "content-security-policy"
+        || key === "content-security-policy-report-only"
+        || key === "x-content-type-options"
+      ) {
+        continue;
+      }
       out.set(k, key === "location" && safeLocation ? safeLocation : v);
     }
     requestSpan.end({ status: res.status });

@@ -30,7 +30,6 @@ test.describe("Electron application", () => {
     });
     const env = {
       ...process.env,
-      GW_ALLOW_PRIVATE: "1",
       GW_OFFLINE_SHELL: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;
@@ -221,7 +220,6 @@ test.describe("Electron application", () => {
     });
     const env = {
       ...process.env,
-      GW_ALLOW_PRIVATE: "1",
       GW_OFFLINE_SHELL: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;

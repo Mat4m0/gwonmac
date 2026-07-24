@@ -17,10 +17,13 @@ describe("integration: native sockets", () => {
         counters.set(name, (counters.get(name) ?? 0) + value),
       observe: (name, value) => observations.push({ name, value }),
     },
+    (destination) => {
+      assert.equal(destination, "127.0.0.1:6112");
+      return { host: "127.0.0.1", port: 6112, family: 4 };
+    },
   );
 
   before(async () => {
-    process.env.GW_ALLOW_PRIVATE = "1";
     await new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(6112, "127.0.0.1", resolve);
@@ -29,7 +32,6 @@ describe("integration: native sockets", () => {
 
   after(async () => {
     manager.closeAll();
-    delete process.env.GW_ALLOW_PRIVATE;
     await new Promise((resolve) => server.close(resolve));
   });
 

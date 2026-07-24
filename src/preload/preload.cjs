@@ -1,6 +1,7 @@
 // Sandboxed preload must be CommonJS — Electron's sandbox loader does not
 // execute ESM preload graphs, so this file stays self-contained.
 const { contextBridge, ipcRenderer } = require("electron");
+const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
 const IPC = {
   progressCurrent: "gw:progress:current",
@@ -76,7 +77,17 @@ const api = Object.freeze({
   },
   sockets: {
     connect: (destination) => ipcRenderer.invoke(IPC.socketConnect, destination),
-    send: (socketId, data) => ipcRenderer.invoke(IPC.socketSend, socketId, data),
+    send: (socketId, data) => {
+      if (
+        !data
+        || typeof data.byteLength !== "number"
+        || data.byteLength < 0
+        || data.byteLength > MAX_SOCKET_PAYLOAD_BYTES
+      ) {
+        return Promise.reject(new TypeError("invalid socket payload"));
+      }
+      return ipcRenderer.invoke(IPC.socketSend, socketId, data);
+    },
     close: (socketId) => ipcRenderer.invoke(IPC.socketClose, socketId),
     onEvent: (callback) => listen(IPC.socketEvent, callback),
   },

@@ -39,6 +39,11 @@ interface OwnedSocket {
 }
 
 export type SocketEventSink = (ownerId: number, event: SocketEvent) => void;
+export type SocketDestinationValidator = (destination: string) => {
+  host: string;
+  port: number;
+  family: 4 | 6;
+};
 export interface SocketMetrics {
   count(name: string, delta?: number): void;
   observe(name: string, durationUs: number): void;
@@ -54,14 +59,20 @@ export class SocketManager {
   private queuedBytes = 0;
   private readonly emit: SocketEventSink;
   private readonly metrics: SocketMetrics | null;
+  private readonly validateDestination: SocketDestinationValidator;
 
-  constructor(emit: SocketEventSink, metrics: SocketMetrics | null = null) {
+  constructor(
+    emit: SocketEventSink,
+    metrics: SocketMetrics | null = null,
+    validateDestination: SocketDestinationValidator = parseDestination,
+  ) {
     this.emit = emit;
     this.metrics = metrics;
+    this.validateDestination = validateDestination;
   }
 
   async connect(ownerId: number, destination: string): Promise<number> {
-    const parsed = parseDestination(destination);
+    const parsed = this.validateDestination(destination);
     const owned = this.byOwner.get(ownerId);
     if (owned && owned.size >= MAX_SOCKETS_PER_OWNER) {
       throw new AllowlistError(`socket limit ${MAX_SOCKETS_PER_OWNER} reached`);

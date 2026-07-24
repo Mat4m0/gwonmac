@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isProxyFetchDestination,
   PROXY_ROUTES,
   resolveProxyRoute,
   rewriteProxyRedirect,
@@ -54,6 +55,26 @@ describe("proxy-routes", () => {
       "https://account.arena.net.evil.invalid/next",
     ]) {
       assert.throws(() => rewriteProxyRedirect("account", location, upstream));
+    }
+  });
+
+  it("permits proxy routes only for fetch/XHR destinations", () => {
+    assert.equal(isProxyFetchDestination(""), true);
+    assert.equal(isProxyFetchDestination("empty"), true);
+    for (const destination of [
+      "document",
+      "iframe",
+      "frame",
+      "script",
+      "style",
+      "worker",
+      "sharedworker",
+      "serviceworker",
+      "manifest",
+      "object",
+      "embed",
+    ]) {
+      assert.equal(isProxyFetchDestination(destination), false, destination);
     }
   });
 });

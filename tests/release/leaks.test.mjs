@@ -233,6 +233,11 @@ test("release fuses keep Node and inspection disabled", () => {
 
 test("renderer permissions and embedded webviews fail closed", () => {
   const windowSource = readFileSync(path.join(root, "src/main/window.ts"), "utf8");
+  const ipcSource = readFileSync(path.join(root, "src/main/ipc.ts"), "utf8");
+  const protocolSource = readFileSync(
+    path.join(root, "src/main/protocol.ts"),
+    "utf8",
+  );
   assert.match(windowSource, /nodeIntegration: false/);
   assert.match(windowSource, /contextIsolation: true/);
   assert.match(windowSource, /sandbox: true/);
@@ -240,8 +245,13 @@ test("renderer permissions and embedded webviews fail closed", () => {
   assert.match(windowSource, /setPermissionRequestHandler/);
   assert.match(windowSource, /permission === "pointerLock"/);
   assert.match(windowSource, /webContents === win\.webContents/);
-  assert.match(windowSource, /isAppUrl\(webContents\.getURL\(\)\)/);
+  assert.match(windowSource, /isCanonicalRendererUrl\(webContents\.getURL\(\)\)/);
   assert.match(windowSource, /will-attach-webview[\s\S]*preventDefault/);
+  assert.match(ipcSource, /event\.senderFrame !== event\.sender\.mainFrame/);
+  assert.match(ipcSource, /isCanonicalRendererUrl\(event\.senderFrame\.url\)/);
+  assert.match(protocolSource, /frame-src 'none'/);
+  assert.match(protocolSource, /form-action 'none'/);
+  assert.match(protocolSource, /isProxyFetchDestination\(destination\)/);
 });
 
 test("official releases have one honest ad-hoc signing path", () => {

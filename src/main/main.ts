@@ -198,6 +198,14 @@ const sockets = new SocketManager(
     emitSocketEvent(ownerId, event);
   },
   { count, observe, gauge, peakGauge },
+  !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
+    ? (destination) => {
+        if (destination !== "127.0.0.1:6112") {
+          throw new Error("offline socket fixture permits only 127.0.0.1:6112");
+        }
+        return { host: "127.0.0.1", port: 6112, family: 4 };
+      }
+    : undefined,
 );
 
 function setProgress(next: DownloadProgress): void {

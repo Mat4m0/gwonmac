@@ -47,6 +47,8 @@ import {
   stopDiagnosticCapture,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
+import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import { MAX_QUEUED_BYTES } from "./core/sockets.js";
 import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
@@ -67,15 +69,10 @@ function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
   if (!win || win !== getMainWindow()) {
     throw new AllowlistError("unowned ipc sender");
   }
-  const rawUrl = event.senderFrame?.url ?? event.sender.getURL();
-  let trusted: boolean;
-  try {
-    const url = new URL(rawUrl);
-    trusted = url.protocol === "gw:" && url.hostname === "app";
-  } catch {
-    trusted = false;
+  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
+    throw new AllowlistError("ipc sender is not the main frame");
   }
-  if (!trusted) {
+  if (!isCanonicalRendererUrl(event.senderFrame.url)) {
     throw new AllowlistError("invalid ipc origin");
   }
   return win;
@@ -188,6 +185,11 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     if (!Number.isInteger(socketId)) throw new ValidationError("socketId must be an integer");
     if (!(data instanceof Uint8Array) && !ArrayBuffer.isView(data)) {
       throw new ValidationError("data must be a Uint8Array");
+    }
+    if (data.byteLength > MAX_QUEUED_BYTES) {
+      throw new ValidationError(
+        `socket payload exceeds ${MAX_QUEUED_BYTES} bytes`,
+      );
     }
     const bytes =
       data instanceof Uint8Array

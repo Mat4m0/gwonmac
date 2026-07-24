@@ -25,6 +25,7 @@ import {
   type WindowState,
 } from "./core/window-state.js";
 import { log } from "./diagnostics.js";
+import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import { isDevBuild } from "./protocol.js";
@@ -260,14 +261,14 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   win.webContents.on("will-navigate", (event, url) => {
-    if (!isAppUrl(url)) {
+    if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
       log("app", "warn", "security.navigationBlocked", { url });
     }
   });
 
   win.webContents.on("will-redirect", (event, url) => {
-    if (!isAppUrl(url)) {
+    if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
       log("app", "warn", "security.redirectBlocked", { url });
     }
@@ -281,7 +282,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     permission === "pointerLock" &&
     webContents === win.webContents &&
     isMainFrame &&
-    isAppUrl(webContents.getURL());
+    isCanonicalRendererUrl(webContents.getURL());
   win.webContents.session.setPermissionRequestHandler(
     (webContents, permission, callback, details) => {
       callback(mayLockPointer(webContents, permission, details.isMainFrame));
@@ -365,15 +366,6 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
         : "gw://app/",
   );
   return win;
-}
-
-function isAppUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw);
-    return url.protocol === "gw:" && url.hostname === "app";
-  } catch {
-    return false;
-  }
 }
 
 export async function resetGameInput(win: BrowserWindow): Promise<void> {

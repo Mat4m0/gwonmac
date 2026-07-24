@@ -11,7 +11,7 @@ test.describe("sandbox boundary", () => {
       const boundary = await fixture.page.evaluate(() => ({
         protocol: globalThis.location.protocol,
         search: globalThis.location.search,
-        toolboxHidden: document.getElementById("toolbox")?.hidden,
+        toolboxHidden: globalThis.document.getElementById("toolbox")?.hidden,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
         requireType: typeof window.require,
@@ -57,6 +57,25 @@ test.describe("sandbox boundary", () => {
         status: 503,
         cacheControl: "no-store",
       });
+
+      await fixture.page.evaluate(() => {
+        globalThis.location.assign("gw://app/account/login");
+      });
+      await fixture.page.waitForTimeout(100);
+      expect(new URL(fixture.page.url()).pathname).toBe("/");
+
+      const oversizedSocketError = await fixture.page.evaluate(async () => {
+        try {
+          await window.gwNative.sockets.send(
+            1,
+            new Uint8Array(4 * 1024 * 1024 + 1),
+          );
+          return null;
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error);
+        }
+      });
+      expect(oversizedSocketError).toContain("invalid socket payload");
     } finally {
       await closeOffline(fixture);
     }

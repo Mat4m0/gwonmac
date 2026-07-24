@@ -36,28 +36,12 @@ export function isPublicIpv4(ip: string): boolean {
 }
 
 export function isPublicIp(ip: string): boolean {
-  if (!ip.includes(":")) return isPublicIpv4(ip);
-  const h = ip.toLowerCase();
-  if (h === "::1" || h === "::") return false;
-  if (/^f[cd]/.test(h)) return false;
-  if (/^fe[89ab]/.test(h)) return false;
-  const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(h);
-  return m ? isPublicIpv4(m[1]!) : true;
+  return isPublicIpv4(ip);
 }
-
-let privateAllowWarned = false;
 
 export function assertPublicDestination(host: string, port: number): void {
   if (!isAllowedPort(port)) {
     throw new AllowlistError(`port ${port} is not allowed`);
-  }
-  // Test-only escape hatch for loopback fixtures; announce loudly when set.
-  if (process.env.GW_ALLOW_PRIVATE === "1") {
-    if (!privateAllowWarned) {
-      console.warn("GW_ALLOW_PRIVATE=1 — private destinations are allowed");
-      privateAllowWarned = true;
-    }
-    return;
   }
   if (!isPublicIp(host)) {
     throw new AllowlistError(`address ${host} is not public unicast`);
@@ -69,18 +53,10 @@ export interface Destination {
   port: number;
 }
 
-/** Only IPv4:port and [IPv6]:port — bare IPv6 without brackets is refused. */
+/** The official client currently resolves and connects through IPv4 only. */
 export function parseDestination(dest: string): Destination {
   if (typeof dest !== "string" || !dest) {
     throw new ValidationError(`malformed dest ${JSON.stringify(dest)}`);
-  }
-  const v6 = /^\[([0-9a-fA-F:.]+)\]:(\d+)$/.exec(dest);
-  if (v6) {
-    const port = Number(v6[2]);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      throw new ValidationError(`malformed dest ${JSON.stringify(dest)}`);
-    }
-    return { host: v6[1]!, port };
   }
   const v4 = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/.exec(dest);
   if (v4) {
