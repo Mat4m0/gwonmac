@@ -20,18 +20,26 @@ const FLAGS = Object.freeze({
   target: 1 << 2,
   loading: 1 << 3,
 });
+const KNOWN_FLAGS =
+  FLAGS.ready | FLAGS.player | FLAGS.target | FLAGS.loading;
 
-function stableFloat(value) {
-  return Number.isFinite(value) ? value : 0;
+/** @param {number} value */
+function validCoordinate(value) {
+  return Number.isFinite(value) && Math.abs(value) <= 1_000_000;
 }
 
+/** @param {number} type */
 function agentKind(type) {
   if ((type & 0x400) !== 0) return "Item";
   if ((type & 0x200) !== 0) return "Gadget";
   if ((type & 0xdb) !== 0) return "Living";
-  return "Unknown";
+  return null;
 }
 
+/**
+ * @param {ArrayBuffer} buffer
+ * @param {number} pointer
+ */
 export function readToolboxSnapshot(buffer, pointer) {
   if (
     !(buffer instanceof ArrayBuffer)
@@ -56,13 +64,13 @@ export function readToolboxSnapshot(buffer, pointer) {
     mapId: view.getUint32(20, true),
     instanceType: view.getUint32(24, true),
     playerId: view.getUint32(28, true),
-    playerX: stableFloat(view.getFloat32(32, true)),
-    playerY: stableFloat(view.getFloat32(36, true)),
+    playerX: view.getFloat32(32, true),
+    playerY: view.getFloat32(36, true),
     targetId: view.getUint32(40, true),
     targetType: view.getUint32(44, true),
-    targetX: stableFloat(view.getFloat32(48, true)),
-    targetY: stableFloat(view.getFloat32(52, true)),
-    distance: stableFloat(view.getFloat32(56, true)),
+    targetX: view.getFloat32(48, true),
+    targetY: view.getFloat32(52, true),
+    distance: view.getFloat32(56, true),
     rangeBand: view.getUint32(60, true),
   };
   const secondSequence = view.getUint32(8, true);
@@ -72,10 +80,14 @@ export function readToolboxSnapshot(buffer, pointer) {
     || byteLength !== TOOLBOX_SNAPSHOT_BYTES
     || firstSequence !== secondSequence
     || (secondSequence & 1) !== 0
+    || (flags & ~KNOWN_FLAGS) !== 0
   ) {
     return Object.freeze({ status: "waiting", reason: "snapshot" });
   }
   if ((flags & FLAGS.loading) !== 0) {
+    if (flags !== FLAGS.loading) {
+      return Object.freeze({ status: "waiting", reason: "corrupt" });
+    }
     return Object.freeze({
       status: "waiting",
       reason: "loading",
@@ -91,13 +103,43 @@ export function readToolboxSnapshot(buffer, pointer) {
       tickCount: state.tickCount,
     });
   }
+  if (
+    state.mapId === 0
+    || state.mapId > 2_000
+    || state.instanceType > 1
+    || state.playerId === 0
+    || !validCoordinate(state.playerX)
+    || !validCoordinate(state.playerY)
+  ) {
+    return Object.freeze({ status: "waiting", reason: "corrupt" });
+  }
   const targetValid = (flags & FLAGS.target) !== 0;
+  const targetKind = agentKind(state.targetType);
+  if (
+    targetValid
+      ? state.targetId === 0
+        || targetKind === null
+        || !validCoordinate(state.targetX)
+        || !validCoordinate(state.targetY)
+        || !Number.isFinite(state.distance)
+        || state.distance < 0
+        || state.rangeBand < 1
+        || state.rangeBand >= RANGE_NAMES.length
+      : state.targetId !== 0
+        || state.targetType !== 0
+        || state.targetX !== 0
+        || state.targetY !== 0
+        || state.distance !== 0
+        || state.rangeBand !== 0
+  ) {
+    return Object.freeze({ status: "waiting", reason: "corrupt" });
+  }
   return Object.freeze({
     status: "ready",
     ...state,
     instanceName: INSTANCE_NAMES[state.instanceType] ?? "Unknown",
     targetValid,
-    targetKind: targetValid ? agentKind(state.targetType) : "None",
-    rangeName: RANGE_NAMES[state.rangeBand] ?? "Unknown",
+    targetKind: targetValid ? (targetKind ?? "None") : "None",
+    rangeName: RANGE_NAMES[state.rangeBand] ?? "None",
   });
 }
