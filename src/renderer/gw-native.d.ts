@@ -17,6 +17,7 @@ declare global {
   interface LoadingController {
     set(message: string, fraction: number | null, detail?: string): void;
     fail(message: string): void;
+    failFilesystem(): void;
     done(): void;
     waitForClient(): Promise<boolean>;
   }
@@ -88,6 +89,15 @@ declare global {
       module: ArenaNetGraphicsModule;
       renderScale(): 1 | 1.5 | 2;
       firstFrame(): void;
+      log(...values: unknown[]): void;
+    }): void;
+    gwInstallGameFilesystem(options: {
+      module: {
+        addRunDependency(name: string): void;
+        removeRunDependency(name: string): void;
+        preRun?: () => void;
+      };
+      failed(error: unknown): void;
       log(...values: unknown[]): void;
     }): void;
     gwInstallGameInput(options: {

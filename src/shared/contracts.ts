@@ -168,6 +168,7 @@ export const IPC = {
   cacheClear: "gw:cache:clear",
   cacheDownloadAll: "gw:cache:downloadAll",
   cacheStopDownload: "gw:cache:stopDownload",
+  gameStorageReset: "gw:gameStorage:reset",
   diagnosticsGraphics: "gw:diagnostics:graphics",
   diagnosticsClockSync: "gw:diagnostics:clockSync",
   diagnosticsClockResult: "gw:diagnostics:clockResult",
@@ -220,6 +221,9 @@ export interface GwNativeApi {
     clearAndRestart(): Promise<boolean>;
     downloadAll(): Promise<boolean>;
     stopDownload(): Promise<void>;
+  };
+  gameStorage: {
+    resetAndRestart(): Promise<boolean>;
   };
   diagnostics: {
     clockSync(rendererNowUs: number): Promise<ClockSyncResponse>;

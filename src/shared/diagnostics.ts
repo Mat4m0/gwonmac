@@ -14,6 +14,7 @@ export type DiagnosticSubsystem =
   | "proxy"
   | "settings"
   | "credentials"
+  | "filesystem"
   | "release";
 
 export type DiagnosticScalar = string | number | boolean | null;
@@ -25,6 +26,7 @@ export const RENDERER_EVENT_NAMES = [
   "graphics.contextLost",
   "graphics.contextRestored",
   "client.glueLoadFailed",
+  "filesystem.persistenceFailed",
   "audio.resumeFailed",
   "pointerLock.failed",
 ] as const;

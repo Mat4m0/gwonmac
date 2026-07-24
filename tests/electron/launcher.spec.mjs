@@ -129,4 +129,43 @@ test.describe("launcher recovery", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("offers a scoped saved-file reset without trapping held input", async () => {
+    const fixture = await launchOffline("gw-filesystem-recovery-e2e-");
+    try {
+      const { app, page } = fixture;
+      // Let the offline boot settle so its expected client failure cannot
+      // overwrite the filesystem failure injected below.
+      await expect(page.locator("#loading-retry")).toBeVisible();
+      await page.evaluate(() => {
+        window.__nativeInputReset = false;
+        window.addEventListener("gw:input-reset", () => {
+          window.__nativeInputReset = true;
+        });
+        window.gwLoading.failFilesystem();
+      });
+      await expect(page.locator("#loading-label")).toHaveText(
+        "Saved game files could not be opened.",
+      );
+      await expect(page.locator("#loading-detail")).toContainText(
+        "Downloaded game data and your saved login are kept.",
+      );
+      await expect(page.locator("#loading-retry")).toHaveText(
+        "Reset Saved Files…",
+      );
+
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+      await page.locator("#loading-retry").click();
+      await expect(page.locator("#loading-retry")).toBeVisible();
+      await expect(page.locator("#loading-retry")).toBeEnabled();
+      expect(await page.evaluate(() => window.__nativeInputReset)).toBe(true);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

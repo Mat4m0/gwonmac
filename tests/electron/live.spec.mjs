@@ -40,7 +40,7 @@ test.describe("live client", () => {
     );
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
-    const application = await electron.launch({
+    let application = await electron.launch({
       cwd: root,
       args: [".", `--user-data-dir=${userData}`],
       env,
@@ -78,12 +78,22 @@ test.describe("live client", () => {
           renderer: diagnostics.latest["graphics.renderer"],
           hardware: diagnostics.latest["graphics.hardwareAcceleration"],
           browserGamepads: typeof globalThis.navigator.getGamepads === "function",
+          filesystem: {
+            cwd: globalThis.FS.cwd(),
+            skills: !globalThis.FS.analyzePath("Templates/Skills").error,
+            equipment: !globalThis.FS.analyzePath("Templates/Equipment").error,
+          },
           stats: window.gwStats(),
         };
       });
       expect(state.jspi).toBe(true);
       expect(state.hardware).toBe(true);
       expect(state.browserGamepads).toBe(true);
+      expect(state.filesystem).toEqual({
+        cwd: "/app:",
+        skills: true,
+        equipment: true,
+      });
       expect(state.stats.gamepadImports).toBe(true);
       expect(String(state.renderer)).not.toMatch(/swiftshader|llvmpipe|software/i);
       expect(state.stats.reads).toBeGreaterThan(0);
@@ -175,6 +185,56 @@ test.describe("live client", () => {
       expect(twoX.offscreenWidth).toBe(twoX.width);
       expect(twoX.offscreenHeight).toBe(twoX.height);
       await applyScale(1);
+
+      const persistenceProbe = "Templates/Skills/.gwonmac-persistence-check";
+      await page.evaluate(
+        ({ file, contents }) =>
+          new Promise((resolve, reject) => {
+            globalThis.FS.writeFile(file, contents);
+            globalThis.FS.syncfs(false, (error) =>
+              error ? reject(error) : resolve(),
+            );
+          }),
+        { file: persistenceProbe, contents: "persistent" },
+      );
+      await application.close();
+
+      application = await electron.launch({
+        cwd: root,
+        args: [".", `--user-data-dir=${userData}`],
+        env,
+        executablePath: electronBin,
+      });
+      const reopenedPage = await application.firstWindow({ timeout: 30_000 });
+      await reopenedPage.waitForLoadState("domcontentloaded");
+      await expect
+        .poll(
+          () =>
+            reopenedPage.evaluate(() =>
+              typeof globalThis.FS === "undefined"
+                ? ""
+                : globalThis.FS.cwd(),
+            ),
+          { timeout: 5 * 60_000, intervals: [500, 1_000] },
+        )
+        .toBe("/app:");
+      expect(
+        await reopenedPage.evaluate(
+          (file) =>
+            new globalThis.TextDecoder().decode(globalThis.FS.readFile(file)),
+          persistenceProbe,
+        ),
+      ).toBe("persistent");
+      await reopenedPage.evaluate(
+        (file) =>
+          new Promise((resolve, reject) => {
+            globalThis.FS.unlink(file);
+            globalThis.FS.syncfs(false, (error) =>
+              error ? reject(error) : resolve(),
+            );
+          }),
+        persistenceProbe,
+      );
     } finally {
       await application.close();
     }

@@ -16,6 +16,7 @@
   "include": [
     "src/renderer/gw-native.d.ts",
     "src/renderer/diagnostics.js",
+    "src/renderer/filesystem.js",
     "src/renderer/graphics.js",
     "src/renderer/harness.js",
     "src/renderer/input.js",

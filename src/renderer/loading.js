@@ -11,6 +11,8 @@ window.gwLoading = (function () {
   const root = el('loading'), bar = el('loading-bar'), fill = el('loading-fill');
   const label = el('loading-label'), detail = el('loading-detail');
   const retry = /** @type {HTMLButtonElement} */ (el('loading-retry'));
+  /** @type {'client' | 'filesystem'} */
+  let recovery = 'client';
 
   /** @param {number} n */
   const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB'
@@ -37,15 +39,18 @@ window.gwLoading = (function () {
      * @param {string} [sub]
      */
     set(text, frac, sub) {
+      recovery = 'client';
       label.textContent = text;
       label.classList.remove('error');
       detail.textContent = sub || '';
       retry.hidden = true;
+      retry.textContent = 'Retry';
       setBar(frac);
     },
 
     /** @param {string} text */
     fail(text) {
+      recovery = 'client';
       root.style.display = '';
       root.classList.remove('gone');
       label.textContent = text;
@@ -53,6 +58,22 @@ window.gwLoading = (function () {
       detail.textContent =
         'You can retry, or choose Help → Report a Problem.';
       retry.hidden = false;
+      retry.textContent = 'Retry';
+      bar.classList.remove('busy');
+      fill.style.width = '100%';
+      fill.style.background = '#b8452f';
+    },
+
+    failFilesystem() {
+      recovery = 'filesystem';
+      root.style.display = '';
+      root.classList.remove('gone');
+      label.textContent = 'Saved game files could not be opened.';
+      label.classList.add('error');
+      detail.textContent =
+        'Reset the local Guild Wars files to continue. Downloaded game data and your saved login are kept.';
+      retry.hidden = false;
+      retry.textContent = 'Reset Saved Files…';
       bar.classList.remove('busy');
       fill.style.width = '100%';
       fill.style.background = '#b8452f';
@@ -85,17 +106,28 @@ window.gwLoading = (function () {
 
   // A failed boot gets a one-click retry, same as View → Reload Game.
   retry?.addEventListener('click', async () => {
+    const requestedRecovery = recovery;
     retry.disabled = true;
-    api.set('Retrying the game client', null);
     try {
+      if (requestedRecovery === 'filesystem') {
+        api.set('Resetting saved game files', null);
+        const reset = await window.gwNative.gameStorage.resetAndRestart();
+        if (!reset) api.failFilesystem();
+        return;
+      }
+      api.set('Retrying the game client', null);
       await window.gwNative.client.retry();
       window.location.reload();
     } catch (error) {
-      api.fail(
-        error instanceof Error
-          ? error.message
-          : 'The game client still could not be prepared.',
-      );
+      if (requestedRecovery === 'filesystem') {
+        api.failFilesystem();
+      } else {
+        api.fail(
+          error instanceof Error
+            ? error.message
+            : 'The game client still could not be prepared.',
+        );
+      }
     } finally {
       retry.disabled = false;
     }

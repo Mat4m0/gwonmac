@@ -150,6 +150,10 @@ form’s privacy notice before attaching it.
 - When there is not enough disk space, the download stops before fetching more
   data. Free space, then resume.
 - Corrupt cached chunks are discarded and fetched again automatically.
+- If Guild Wars saved files cannot be opened, choose **Reset Saved Files…**.
+  After confirmation, this removes local game preferences, build templates,
+  screenshots, and chat logs, then restarts. Downloaded game data and the
+  saved login stay untouched.
 - The first unexpected renderer crash is recovered automatically. If it
   repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
 

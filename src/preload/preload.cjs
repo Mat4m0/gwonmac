@@ -22,6 +22,7 @@ const IPC = {
   cacheClear: "gw:cache:clear",
   cacheDownloadAll: "gw:cache:downloadAll",
   cacheStopDownload: "gw:cache:stopDownload",
+  gameStorageReset: "gw:gameStorage:reset",
   diagnosticsGraphics: "gw:diagnostics:graphics",
   diagnosticsClockSync: "gw:diagnostics:clockSync",
   diagnosticsClockResult: "gw:diagnostics:clockResult",
@@ -94,6 +95,9 @@ const api = Object.freeze({
     clearAndRestart: () => ipcRenderer.invoke(IPC.cacheClear),
     downloadAll: () => ipcRenderer.invoke(IPC.cacheDownloadAll),
     stopDownload: () => ipcRenderer.invoke(IPC.cacheStopDownload),
+  },
+  gameStorage: {
+    resetAndRestart: () => ipcRenderer.invoke(IPC.gameStorageReset),
   },
   diagnostics: {
     clockSync: (rendererNowUs) =>

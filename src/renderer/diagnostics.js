@@ -15,6 +15,7 @@
     'graphics.contextLost',
     'graphics.contextRestored',
     'client.glueLoadFailed',
+    'filesystem.persistenceFailed',
     'audio.resumeFailed',
     'pointerLock.failed',
   ]);

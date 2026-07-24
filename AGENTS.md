@@ -56,6 +56,9 @@ not only happy paths.
   `adProvider.showInterstitial`, `ageSignals.check`, `shop.initialize`, and
   `shop.inAppPurchase`.
 - `image.fileSize` is synchronous, so snapshot metadata loads before glue.
+- Renderer `preRun` owns the single `app:` IDBFS mount. Restore it, create both
+  template directories, and change into it before releasing the run dependency;
+  relative game files must never fall back to ephemeral MEMFS.
 - `dataStrategy` is the only launcher-intent state. The renderer resolves it
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.

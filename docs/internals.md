@@ -139,6 +139,20 @@ application replacements are manual, while the ArenaNet client updater remains
 automatic. Commerce, ads, browser, and event services remain inert capability
 stubs where the desktop client does not need the mobile integration.
 
+The renderer owns one persistent game filesystem initialization before the
+official client enters `main()`. It mounts and restores Emscripten IDBFS at
+`app:`, creates `Templates/Skills` and `Templates/Equipment`, changes the
+working directory to that mount, and persists the directory invariant before
+releasing the run dependency. This keeps the client's relative build-template,
+screenshot, chat-log, and preference writes in one durable origin. A restore
+or initial persist failure stops startup instead of silently running against
+ephemeral memory.
+
+The recovery action clears only IndexedDB for the owned `gw://app` session
+after native confirmation. It cannot clear the separate native chunk cache or
+encrypted credential file. There is no native arbitrary-file bridge and no
+production WASM rewrite.
+
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes
 per renderer, and closes an owner’s sockets on reload, renderer loss, or quit.

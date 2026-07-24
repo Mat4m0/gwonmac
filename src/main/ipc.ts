@@ -1,4 +1,11 @@
-import { BrowserWindow, dialog, ipcMain, shell, app, safeStorage } from "electron";
+import {
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  shell,
+  app,
+  safeStorage,
+} from "electron";
 import { writeFile } from "node:fs/promises";
 import type {
   AppSettings,
@@ -40,7 +47,7 @@ import {
   stopDiagnosticCapture,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
-import { getMainWindow, resetWindowState } from "./window.js";
+import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -91,7 +98,7 @@ function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolea
 }
 
 function logOperationFailure(
-  subsystem: "cache" | "settings",
+  subsystem: "cache" | "filesystem" | "settings",
   name: string,
   error: unknown,
 ): void {
@@ -231,6 +238,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.settingsReset, async (event) => {
     const win = assertSender(event);
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "warning",
       buttons: ["Reset Launcher Settings", "Cancel"],
@@ -302,6 +310,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.cacheClear, async (event) => {
     const win = assertSender(event);
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "warning",
       buttons: ["Clear and Restart", "Cancel"],
@@ -332,6 +341,34 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.cacheStopDownload, (event) => {
     assertSender(event);
     ctx.stopFullDownload();
+  });
+
+  ipcMain.handle(IPC.gameStorageReset, async (event) => {
+    const win = assertSender(event);
+    await resetGameInput(win);
+    const { response } = await dialog.showMessageBox(win, {
+      type: "warning",
+      buttons: ["Reset and Restart", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+      message: "Reset saved Guild Wars files?",
+      detail:
+        "This removes local Guild Wars settings, build templates, screenshots, and chat logs. Downloaded game data and your saved login stay untouched.",
+    });
+    if (response !== 0) return false;
+    try {
+      await win.webContents.session.clearStorageData({
+        origin: "gw://app",
+        storages: ["indexdb"],
+      });
+      log("filesystem", "warn", "filesystem.reset");
+      app.relaunch();
+      app.quit();
+      return true;
+    } catch (error) {
+      logOperationFailure("filesystem", "filesystem.resetFailed", error);
+      throw error;
+    }
   });
 
   ipcMain.handle(IPC.diagnosticsGraphics, async (event, value: unknown) => {

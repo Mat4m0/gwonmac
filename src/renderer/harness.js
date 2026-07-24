@@ -754,6 +754,21 @@ Module = {
   },
 };
 
+window.gwInstallGameFilesystem({
+  module: Module,
+  log,
+  failed(error) {
+    window.gwDiagnostics?.event('filesystem.persistenceFailed', error);
+    log(
+      '[err] persistent filesystem unavailable:',
+      error && typeof error === 'object' && 'name' in error
+        ? String(error.name)
+        : 'unknown error',
+    );
+    window.gwLoading?.failFilesystem();
+  },
+});
+
 let wired = false;
 
 /** @param {string} src @param {string[]} [candidates] */
