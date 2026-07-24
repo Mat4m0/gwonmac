@@ -163,6 +163,11 @@ form’s privacy notice before attaching it.
 The host app has no update-feed client. Replace it manually with a newer source
 or release build. ArenaNet client files still update automatically.
 
+Version 0.0.2 packages internal foundations for future Toolbox development,
+but they are dormant and invisible in normal use. The app serves ArenaNet's
+official WASM unchanged and does not install a Toolbox hook, load its companion
+kernel, observe game memory, or show Toolbox UI.
+
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually
 `~/Library/Application Support/Guild Wars`.

@@ -11,7 +11,7 @@ Use the cheapest layer that can prove the change:
 ```text
 transform/unit test
   -> synthetic kernel memory
-  -> deterministic overlay fixture
+  -> deterministic presentation prototype
   -> offline Electron
   -> one bounded live scenario
 ```
@@ -34,13 +34,16 @@ pnpm toolbox:visual -- target
 pnpm toolbox:visual -- map
 ```
 
-This launches an offline temporary profile, renders the real overlay markup and
-CSS from a deterministic state, writes one screenshot under
-`test-results/toolbox-visual/`, closes Electron, and removes the profile.
+This opens a standalone developer-only prototype at Retina 2×, writes one
+screenshot under `test-results/toolbox-visual/`, and closes Chromium. Its
+markup and CSS live under `scripts/toolbox-visual/`; they are not production
+navigation or packaged renderer assets.
 
 `toolbox:doctor` is local-only. It checks the existing profile, published
 client, exact WASM hash, transformed cache, saved-login presence, and complete
-snapshot residency. It never starts Electron or contacts ArenaNet.
+snapshot filename presence. It verifies executable artifacts, but labels
+snapshot chunks as presence-only because it does not hash their contents. It
+never starts Electron or contacts ArenaNet.
 
 ## Live scenarios
 
@@ -68,9 +71,10 @@ It never launches through Playwright's temporary Electron profile.
 Its parent-process IPC channel can only start and stop Level 1 diagnostics when
 the explicit Toolbox automation environment is active; capture mutation is not
 exposed to the sandboxed renderer.
-`scripts/toolbox-live.mjs` is only the process, connection, result, and shutdown
-coordinator. Fixed gameplay scenarios live in
-`scripts/toolbox-live/scenarios.mjs`; the paired Level 1 benchmark lives in
+`scripts/toolbox-live.mjs` owns process launch, CDP connection, bounded failure
+output, common acceptance, and shutdown. Each registry entry in
+`scripts/toolbox-live/scenarios.mjs` owns its action and semantic validation;
+the paired Level 1 benchmark lives in
 `scripts/toolbox-live/performance.mjs`. Add behavior to the narrow owner rather
 than growing another general automation framework.
 
@@ -96,7 +100,7 @@ than 2%, when p95 moves by more than 1 ms, on a new cluster of frames above 33
 or 50 ms, or on a torn snapshot. Requiring corroboration from both tail
 percentiles avoids treating a single 0.1 ms-quantized scheduling boundary as a
 Toolbox regression.
-The baseline isolates the incremental companion/snapshot/overlay cost; it still
+The baseline isolates the incremental companion/snapshot-observer cost; it still
 uses the already transformed game module and its disabled dispatcher branch.
 The result also requires zero hook ticks in baseline and at least 3,000 hooked
 ticks, so a disconnected benchmark cannot pass. Task and heap values are
@@ -139,7 +143,7 @@ For every new field or widget:
 4. Add synthetic kernel cases for valid, loading, missing, corrupt, and
    non-finite state.
 5. Extend or version the snapshot ABI.
-6. Render a fixture and prove an identical sequence performs zero DOM writes.
+6. Render the developer presentation fixture without adding production DOM.
 7. Run one scenario that changes the value in the real game.
 8. Record the remaining semantic coverage gap in this document.
 
@@ -224,7 +228,7 @@ failure results. Never expose `writeMemory`, `callFunction`, or `sendPacket`.
 | Hook lifecycle | Ready | continuous tick, reload, clean shutdown | one live map transition |
 | Map/player | Ready | live identity, 201-unit movement delta | one live map transition |
 | Target identity/distance | Ready | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
-| Overlay presentation | Ready | real canvas integration | deterministic visual QA |
+| Presentation prototype | Developer-only | deterministic fixture | future product decision |
 | Party | Not modeled | none | locate bounded roster |
 | Skills/recharge | Not modeled | none | locate skill context |
 | Effects/conditions | Not modeled | none | locate bounded effect collection |
@@ -244,7 +248,7 @@ A Toolbox feature is ready when:
 
 - the exact-build evidence is canonical and tested;
 - invalid/loading state cannot publish stale values;
-- the renderer performs no redundant work for an unchanged sequence;
+- the automation observer stays below its renderer-time budget;
 - no raw pointer, packet, or memory slice crosses Electron IPC;
 - cached startup does no transformation or network work;
 - one bounded scenario proves the real semantic change;

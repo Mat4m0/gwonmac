@@ -22,7 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
-  exact-build Toolbox companion + snapshot overlay
+  dormant exact-build Toolbox development foundation
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -39,7 +39,8 @@ arbitrary filesystem or URL fetch capability.
 
 | Path                      | Ownership                                                         |
 | ------------------------- | ----------------------------------------------------------------- |
-| `src/main/main.ts`        | composition root and application state                            |
+| `src/main/main.ts`        | composition root and application lifecycle                        |
+| `src/main/client-runtime.ts` | atomic generation, update, rollback, cache, selected WASM       |
 | `src/main/core/`          | updater, cache, DNS, sockets, credentials, settings, window state |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
@@ -112,7 +113,9 @@ or fails. There is no renderer-owned download or power state.
 
 `Module` must be declared with `var`; the generated glue redeclares it.
 `Gw.jspi.js` asks for `Gw.wasm`, so `locateFile` explicitly selects
-`Gw.jspi.wasm`. Full-file protocol responses stream from disk, allowing
+`Gw.jspi.wasm`. The protocol reads one immutable `ActiveClient` per request;
+its chunk store, snapshot metadata, artifact directory, and selected WASM can
+never come from different client generations. Full-file protocol responses stream from disk, allowing
 `WebAssembly.instantiateStreaming` to compile without first retaining the
 whole module in main-process memory. Cached Toolbox validation also streams
 both hashes; the official bytes are loaded only for a cold transform. Asyncify
@@ -179,8 +182,13 @@ arbitrary-file bridge and no production WASM rewrite.
 
 ### Toolbox instrumentation
 
-The official `Gw.jspi.wasm` remains canonical. Main hashes it after publication
-and recognizes only entries in the checked-in Toolbox build manifest. A known
+The official `Gw.jspi.wasm` remains canonical. In 0.0.2 normal and packaged
+sessions always serve it directly: they do no Toolbox transform, fetch no
+kernel, install no hook, start no snapshot observer, and contain no Toolbox UI.
+Only explicit non-packaged automation enables the development path.
+
+Automation hashes the official module after publication and recognizes only
+entries in the checked-in Toolbox build manifest. A known
 hash is transformed deterministically into a separate cache entry keyed by
 official hash, transform ABI, and manifest fingerprint. The transform clones
 one typed function, installs one dispatcher, and embeds the verified layout as
@@ -197,16 +205,19 @@ Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
 `slot + 1`, preserving zero as disabled. No table growth or all-functions
 instrumentation remains.
 
-After normal runtime initialization, the renderer allocates a config and
+After runtime initialization in explicit automation, the renderer dynamically
+loads the Toolbox runtime, allocates a config and
 64-byte snapshot through the game's allocator, instantiates the dependency-free
 `wasm32-unknown-unknown` companion against the exported memory, installs its
 callback, and enables the dispatcher last. The callback calls the relocated
 original exactly once before collecting checked map/player/target state.
 
-Snapshot ABI v1 uses an odd/even sequence lock and contains no pointers.
-The renderer reads at most once per animation frame, accepts only matching even
-sequences, and updates DOM only for a new sequence. All Toolbox state stays in
-the renderer; no memory view or per-frame call crosses preload or IPC.
+Snapshot ABI v1 uses named 64-byte `repr(C)` Layout and Snapshot structures,
+compile-time size assertions, checked pointer arithmetic, and an odd/even
+sequence lock. It contains no pointers. The automation observer reads at most
+once per animation frame and rejects unknown flags, invalid IDs/types/bands,
+and non-finite values. It publishes structured `gwToolboxState` without
+production DOM. No memory view or per-frame call crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes

@@ -1,11 +1,4 @@
-export const SCENARIOS = Object.freeze([
-  "boot",
-  "target",
-  "movement",
-  "reload",
-  "map-transition",
-  "performance",
-]);
+import { runPerformanceScenario } from "./performance.mjs";
 
 export async function waitForPlayable(page) {
   await page.waitForFunction(
@@ -155,16 +148,78 @@ async function runMapTransition(page) {
   return { before, loading, after, elapsedMs: Date.now() - startedAt };
 }
 
-const RUNNERS = Object.freeze({
-  boot: async () => null,
-  target: runTarget,
-  movement: runMovement,
-  reload: async () => null,
-  "map-transition": runMapTransition,
+const noEvidence = async () => null;
+const acceptEvidence = () => {};
+
+export const SCENARIOS = Object.freeze({
+  boot: Object.freeze({ run: noEvidence, validate: acceptEvidence }),
+  target: Object.freeze({
+    run: runTarget,
+    validate(result) {
+      if (
+        !result.evidence?.acquired?.valid
+        || (
+          result.evidence.initial.valid
+          && result.evidence.initial.id === result.evidence.acquired.id
+        )
+      ) {
+        throw new Error("target scenario did not acquire a different target");
+      }
+    },
+  }),
+  movement: Object.freeze({
+    run: runMovement,
+    validate(result) {
+      if (!(result.evidence?.distance > 5)) {
+        throw new Error("movement scenario did not move the player");
+      }
+    },
+  }),
+  reload: Object.freeze({ run: noEvidence, validate: acceptEvidence }),
+  "map-transition": Object.freeze({
+    run: runMapTransition,
+    validate(result) {
+      const evidence = result.evidence;
+      if (
+        evidence?.loading?.status !== "waiting"
+        || evidence.loading.reason !== "loading"
+        || evidence.loading.exposesMap
+        || evidence.loading.exposesPlayer
+        || evidence.loading.exposesTarget
+        || evidence.before.mapId === evidence.after.mapId
+      ) {
+        throw new Error("map transition exposed stale or unchanged state");
+      }
+    },
+  }),
+  performance: Object.freeze({
+    run: (_page, context) =>
+      runPerformanceScenario(
+        context.page,
+        context.cdp,
+        context.sendAutomationCommand,
+      ),
+    validate(result) {
+      const evidence = result.evidence;
+      if (
+        evidence?.baseline?.count < 3_000
+        || evidence.baseline.ticks !== 0
+        || evidence.hooked.count < 3_000
+        || evidence.hooked.ticks < 3_000
+        || (
+          evidence.p95RegressionPercent > 2
+          && evidence.p99RegressionPercent > 2
+        )
+        || evidence.hooked.p95Ms - evidence.baseline.p95Ms > 1
+        || evidence.hooked.over33Ms > evidence.baseline.over33Ms + 1
+        || evidence.hooked.over50Ms > evidence.baseline.over50Ms + 1
+      ) {
+        throw new Error("performance scenario exceeded its acceptance budget");
+      }
+    },
+  }),
 });
 
-export function runScenario(name, page) {
-  const runner = RUNNERS[name];
-  if (!runner) return null;
-  return runner(page);
+export function getScenario(name) {
+  return SCENARIOS[name] ?? null;
 }

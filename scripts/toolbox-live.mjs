@@ -11,13 +11,13 @@ import {
   parseToolboxObservations,
 } from "../build/tools/toolbox-observations.js";
 import {
-  runScenario,
-  SCENARIOS,
+  getScenario,
   waitForPlayable,
 } from "./toolbox-live/scenarios.mjs";
 import {
-  runPerformanceScenario,
-} from "./toolbox-live/performance.mjs";
+  validateCommonAcceptance,
+} from "./toolbox-live/acceptance.mjs";
+import { projectLiveResult } from "./toolbox-live/result.mjs";
 
 if (process.env.GW_LIVE_SMOKE !== "1") {
   console.error("toolbox:live requires GW_LIVE_SMOKE=1");
@@ -36,7 +36,8 @@ const scenarioArgument = process.argv.indexOf("--scenario");
 const scenario = scenarioArgument >= 0
   ? process.argv[scenarioArgument + 1]
   : "target";
-if (!SCENARIOS.includes(scenario)) {
+const selectedScenario = getScenario(scenario);
+if (!selectedScenario) {
   console.error(`unknown Toolbox live scenario: ${scenario}`);
   process.exit(2);
 }
@@ -109,9 +110,15 @@ async function sampleObservations(targetPage) {
   }, observations);
 }
 
-const output = [];
-child.stdout.on("data", (chunk) => output.push(chunk.toString()));
-child.stderr.on("data", (chunk) => output.push(chunk.toString()));
+const MAX_PROCESS_OUTPUT_BYTES = 256 * 1024;
+let processOutput = "";
+const captureProcessOutput = (chunk) => {
+  processOutput = `${processOutput}${chunk.toString()}`.slice(
+    -MAX_PROCESS_OUTPUT_BYTES,
+  );
+};
+child.stdout.on("data", captureProcessOutput);
+child.stderr.on("data", captureProcessOutput);
 
 const endpoint = await new Promise((resolve, reject) => {
   const timer = setTimeout(
@@ -166,154 +173,13 @@ try {
     elapsedMs: performance.now() - start.at,
   }), before);
   const observationsBefore = await sampleObservations(page);
-  const scenarioEvidence = scenario === "performance"
-    ? await runPerformanceScenario(page, cdp, sendAutomationCommand)
-    : await runScenario(scenario, page);
+  const scenarioEvidence = await selectedScenario.run(page, {
+    page,
+    cdp,
+    sendAutomationCommand,
+  });
 
-  const result = await page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {
-    const state = window.gwToolboxState;
-    const runtime = window.gwToolboxRuntime;
-    const diagnostics = await window.gwNative.diagnostics.current();
-    const storage = await window.navigator.storage.estimate();
-    const p95 = (name) => diagnostics.histograms[name]?.p95Us ?? 0;
-    const renderSamples = [...(runtime?.renderSamples ?? [])]
-      .sort((left, right) => left - right);
-    const p95Index = Math.max(0, Math.ceil(renderSamples.length * 0.95) - 1);
-    return {
-      scenario: name,
-      supported: runtime?.status === "installed",
-      buildId: runtime?.buildId ?? null,
-      hookCount: state?.tickCount ?? 0,
-      hookHertz: Number(((ticks * 1_000) / elapsedMs).toFixed(2)),
-      sequence: state?.sequence ?? 0,
-      map: state?.status === "ready"
-        ? {
-            id: state.mapId,
-            instance: state.instanceName,
-            player: {
-              id: state.playerId,
-              x: state.playerX,
-              y: state.playerY,
-            },
-          }
-        : null,
-      target: state?.targetValid
-        ? {
-            id: state.targetId,
-            type: state.targetKind,
-            x: state.targetX,
-            y: state.targetY,
-            distance: state.distance,
-            range: state.rangeName,
-          }
-        : null,
-      renderUs: Number((runtime?.lastRenderUs ?? 0).toFixed(2)),
-      renderP95Us: Number((renderSamples[p95Index] ?? 0).toFixed(2)),
-      snapshotReads: runtime?.snapshotReads ?? 0,
-      rejectedSnapshots: runtime?.rejectedSnapshots ?? 0,
-      domUpdates: runtime?.domUpdates ?? 0,
-      lifecycle: window.gwAutomation?.read() ?? null,
-      installation: runtime?.installation ?? 0,
-      host: {
-        wasmMemoryMiB: Number(
-          ((runtime?.memory?.buffer?.byteLength ?? 0) / (1024 ** 2)).toFixed(1),
-        ),
-        browserStorageMiB: Number(
-          ((storage.usage ?? 0) / (1024 ** 2)).toFixed(1),
-        ),
-        rendererCacheMiB: Number(
-          (
-            (Number(diagnostics.latest["renderer.memoryCacheBytes"]) || 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        mainRssMiB: Number(
-          (
-            (Number(diagnostics.latest["main.rssBytes"]) || 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        mainPeakRssMiB: Number(
-          (
-            (Number(diagnostics.latest["main.peakRssBytes"]) || 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        mainPeakArrayBuffersMiB: Number(
-          (
-            (Number(diagnostics.latest["main.peakArrayBuffersBytes"]) || 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        rendererRssMiB: Number(
-          (
-            (Number(diagnostics.latest["process.tab.rssBytes"]) || 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        gpuRssMiB: Number(
-          (
-            (Number(diagnostics.latest["process.gpu.rssBytes"]) || 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        mainEventLoopP99Us:
-          Number(diagnostics.latest["main.eventLoopP99Us"]) || 0,
-        submittedFps:
-          Number(diagnostics.latest["renderer.submittedFps"]) || 0,
-        snapshotReads: diagnostics.counters["snapshot.reads"] ?? 0,
-        snapshotMiB: Number(
-          (
-            (diagnostics.counters["snapshot.bytes"] ?? 0)
-            / (1024 ** 2)
-          ).toFixed(1),
-        ),
-        socketSends: diagnostics.counters["socket.rendererSendCalls"] ?? 0,
-        socketKiB: Number(
-          (
-            (diagnostics.counters["socket.rendererPayloadBytes"] ?? 0)
-            / 1_024
-          ).toFixed(1),
-        ),
-        p95Us: {
-          frameSubmit: p95("renderer.visibleSubmitInterval"),
-          swap: p95("renderer.swap"),
-          bitmapOut: p95("renderer.bitmapOut"),
-          bitmapPresent: p95("renderer.bitmapPresent"),
-          snapshotRead: p95("snapshot.rendererRead"),
-          socketSync: p95("socket.rendererSync"),
-          socketSettle: p95("socket.rendererSettle"),
-          socketWrite: p95("socket.writeCallback"),
-        },
-        milestonesMs: {
-          wasmInstantiate: Number(
-            (
-              (
-                (Number(diagnostics.latest["milestone.wasm.instantiate.endUs"]) || 0)
-                - (
-                  Number(
-                    diagnostics.latest["milestone.wasm.instantiate.beginUs"],
-                  ) || 0
-                )
-              ) / 1_000
-            ).toFixed(1),
-          ),
-          firstFrame: Number(
-            (
-              (Number(diagnostics.latest["milestone.frame.firstSubmitUs"]) || 0)
-              / 1_000
-            ).toFixed(1),
-          ),
-          startupComplete: Number(
-            (
-              (Number(diagnostics.latest["milestone.startup.completeUs"]) || 0)
-              / 1_000
-            ).toFixed(1),
-          ),
-        },
-      },
-    };
-  }, { ...cadence, scenario });
+  const result = await projectLiveResult(page, cadence, scenario);
   result.loginInputs = loginInputs;
   if (scenarioEvidence) result.evidence = scenarioEvidence;
   if (observations.length > 0) {
@@ -328,67 +194,8 @@ try {
     transformedCache: preflight.client.transformedCache,
   };
   result.rendererErrors = [...rendererErrors];
-  if (
-    !result.supported
-    || result.buildId !== 38771
-    || result.hookHertz < 1
-    || result.hookHertz > 240
-    || !result.map
-    || (
-      scenario === "target"
-      && (
-        !result.evidence.acquired.valid
-        || (
-          result.evidence.initial.valid
-          && result.evidence.initial.id === result.evidence.acquired.id
-        )
-      )
-    )
-    || (
-      scenario === "map-transition"
-      && (
-        result.evidence.loading.status !== "waiting"
-        || result.evidence.loading.reason !== "loading"
-        || result.evidence.loading.exposesMap
-        || result.evidence.loading.exposesPlayer
-        || result.evidence.loading.exposesTarget
-        || result.evidence.before.mapId === result.evidence.after.mapId
-      )
-    )
-    || (
-      scenario === "performance"
-      && (
-        result.evidence.baseline.count < 3_000
-        || result.evidence.baseline.ticks !== 0
-        || result.evidence.hooked.count < 3_000
-        || result.evidence.hooked.ticks < 3_000
-        || (
-          result.evidence.p95RegressionPercent > 2
-          && result.evidence.p99RegressionPercent > 2
-        )
-        || (
-          result.evidence.hooked.p95Ms
-          - result.evidence.baseline.p95Ms > 1
-        )
-        || (
-          result.evidence.hooked.over33Ms
-          > result.evidence.baseline.over33Ms + 1
-        )
-        || (
-          result.evidence.hooked.over50Ms
-          > result.evidence.baseline.over50Ms + 1
-        )
-      )
-    )
-    || result.installation !== 1
-    || result.renderP95Us >= 250
-    || result.rejectedSnapshots !== 0
-    || rendererErrors.some((line) =>
-      /unknown socket|unhandled|wasm.*trap/i.test(line),
-    )
-  ) {
-    throw new Error(`live acceptance failed: ${JSON.stringify(result)}`);
-  }
+  validateCommonAcceptance(result, preflight.client.buildId);
+  selectedScenario.validate(result);
   console.log(JSON.stringify(result));
 
   if (leaveOpen) {
@@ -417,7 +224,7 @@ try {
     JSON.stringify({
       message: error instanceof Error ? error.message : String(error),
       rendererErrors,
-      processOutput: output.slice(-200),
+      processOutput,
     }),
   );
   console.error(error);

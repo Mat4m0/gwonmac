@@ -1,3 +1,5 @@
+import { AUTOMATION_COMMAND } from "../../build/shared/automation.js";
+
 function summarizeFrames(samples) {
   const sorted = [...samples].sort((left, right) => left - right);
   const at = (percentile) =>
@@ -39,7 +41,9 @@ function summarizeMetrics(before, after) {
 
 async function setCapture(page, sendAutomationCommand, enabled) {
   await sendAutomationCommand(
-    enabled ? "diagnostics:start-level-1" : "diagnostics:stop",
+    enabled
+      ? AUTOMATION_COMMAND.startLevel1Capture
+      : AUTOMATION_COMMAND.stopCapture,
   );
   await page.waitForFunction(
     async (expected) =>

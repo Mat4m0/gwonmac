@@ -9,6 +9,11 @@ import {
 } from "../main/core/access-key.js";
 import { findToolboxBuild } from "../main/core/toolbox-builds.js";
 import { inspectToolboxCache } from "../main/core/toolbox-client.js";
+import {
+  readPublishedClientManifest,
+  verifyPublishedClientArtifacts,
+  type PublishedClientManifest,
+} from "../main/core/published-client.js";
 
 export interface ToolboxDoctorReport {
   profile: "ready" | "missing";
@@ -16,6 +21,7 @@ export interface ToolboxDoctorReport {
   artifacts: {
     ready: boolean;
     missing: string[];
+    integrity: "verified" | "invalid" | "unsealed";
   };
   client: {
     sha256: string | null;
@@ -29,14 +35,9 @@ export interface ToolboxDoctorReport {
     totalChunks: number;
     residentChunks: number;
     complete: boolean;
+    evidence: "presence-only";
   } | null;
   readyForCachedLive: boolean;
-}
-
-interface PublishedSnapshot {
-  size: unknown;
-  chunkSize: unknown;
-  chunkHashes: unknown;
 }
 
 export function defaultGuildWarsProfile(): string {
@@ -55,41 +56,29 @@ async function isFile(filename: string): Promise<boolean> {
 }
 
 async function snapshotResidency(
-  manifestPath: string,
+  manifest: PublishedClientManifest,
   chunksPath: string,
 ): Promise<ToolboxDoctorReport["snapshot"]> {
   try {
-    const value = JSON.parse(
-      await readFile(manifestPath, "utf8"),
-    ) as PublishedSnapshot;
-    if (
-      !Number.isSafeInteger(value.size)
-      || (value.size as number) <= 0
-      || !Number.isSafeInteger(value.chunkSize)
-      || (value.chunkSize as number) <= 0
-      || !Array.isArray(value.chunkHashes)
-      || !value.chunkHashes.every((hash) => typeof hash === "string")
-    ) {
-      return null;
-    }
     const residentNames = new Set(await readdir(chunksPath));
-    const hashes = value.chunkHashes as string[];
+    const hashes = manifest.chunkHashes;
     let residentChunks = 0;
     let residentBytes = 0;
     for (let index = 0; index < hashes.length; index += 1) {
       if (!residentNames.has(hashes[index]!)) continue;
       residentChunks += 1;
       residentBytes += Math.min(
-        value.chunkSize as number,
-        (value.size as number) - index * (value.chunkSize as number),
+        manifest.chunkSize,
+        manifest.size - index * manifest.chunkSize,
       );
     }
     return {
-      totalBytes: value.size as number,
+      totalBytes: manifest.size,
       residentBytes,
       totalChunks: hashes.length,
       residentChunks,
       complete: residentChunks === hashes.length,
+      evidence: "presence-only",
     };
   } catch {
     return null;
@@ -116,6 +105,22 @@ export async function inspectToolboxWorkspace(
     || (await isFile(path.join(profile, "credentials.bin")))
     || missing.length < required.length;
   const credentials = await isFile(path.join(profile, "credentials.bin"));
+  let manifest: PublishedClientManifest | null = null;
+  let artifactIntegrity: ToolboxDoctorReport["artifacts"]["integrity"] =
+    "invalid";
+  try {
+    manifest = await readPublishedClientManifest(
+      path.join(artifactsPath, "manifest.json"),
+    );
+    const verified = await verifyPublishedClientArtifacts(
+      artifactsPath,
+      manifest,
+    );
+    artifactIntegrity =
+      verified === true ? "verified" : verified === null ? "unsealed" : "invalid";
+  } catch {
+    // Invalid manifests remain unavailable and fail the preflight closed.
+  }
 
   let sha256: string | null = null;
   let build = null;
@@ -133,15 +138,19 @@ export async function inspectToolboxWorkspace(
       );
     }
   }
-  const snapshot = await snapshotResidency(
-    path.join(artifactsPath, "manifest.json"),
-    path.join(game, "chunks"),
-  );
-  const artifactsReady = missing.length === 0;
+  const snapshot = manifest
+    ? await snapshotResidency(manifest, path.join(game, "chunks"))
+    : null;
+  const artifactsReady =
+    missing.length === 0 && artifactIntegrity === "verified";
   return {
     profile: profileReady ? "ready" : "missing",
     credentials: credentials ? "saved" : "missing",
-    artifacts: { ready: artifactsReady, missing },
+    artifacts: {
+      ready: artifactsReady,
+      missing,
+      integrity: artifactIntegrity,
+    },
     client: {
       sha256,
       supported: build !== null,
