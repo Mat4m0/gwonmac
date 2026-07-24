@@ -55,20 +55,25 @@ const STARTUP_LABELS = {
 };
 
 const SNAPSHOT_URL = 'Gw.snapshot';
-let useJspi = true;
 /** @type {import('../shared/contracts.js').AppSettings | null} */
 let appSettings = null;
+/** @type {GameInputController | null} */
+let inputHost = null;
 /** @param {import('../shared/contracts.js').AppSettings['cursorTheme']} theme */
 function applyCursorTheme(theme) {
   document.documentElement.dataset.cursorTheme = theme;
 }
-// Settings UI can update the canonical object before the game glue has loaded.
-// loadGlue replaces this with the richer runtime application hook.
 window.gwApplySettings = (next) => {
+  const previousScale = appSettings?.renderScale;
   const updated = { ...next };
   appSettings = updated;
+  inputHost?.applySettings(updated);
   applyCursorTheme(updated.cursorTheme);
+  if (previousScale !== undefined && updated.renderScale !== previousScale) {
+    window.dispatchEvent(new globalThis.Event('resize'));
+  }
   window.gwDiagnostics?.setVisible(updated.showDiagnostics);
+  if (inputHost) log('settings applied');
 };
 
 // fileSize() is synchronous, so the size must be known before the glue loads.
@@ -401,7 +406,7 @@ Module = {
       typeof navigator.getGamepads === 'function' &&
       gamepadImports.every((name) => typeof imports.env?.[name] === 'function');
     log(`gamepad host: ${gamepadImportsAvailable ? 'available' : 'unavailable'}`);
-    const url = useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm';
+    const url = 'Gw.jspi.wasm';
     performance.mark('gw.wasm.instantiate.begin');
     milestone('wasm.instantiate.begin');
     window.gwAutomation?.set('runtime.instantiating');
@@ -439,7 +444,7 @@ Module = {
   // Both builds share an output basename, so Gw.jspi.js also asks for
   // "Gw.wasm". Without this it silently pairs with the Asyncify binary.
   /** @param {string} path */
-  locateFile: (path) => (useJspi && path === 'Gw.wasm') ? 'Gw.jspi.wasm' : path,
+  locateFile: (path) => path === 'Gw.wasm' ? 'Gw.jspi.wasm' : path,
 
   image: {
     _handles: new Map(),
@@ -726,8 +731,7 @@ Module = {
     log(`build info: program=${info.programId} build=${info.buildId}`);
   },
 
-  isMobile: /Android|iPhone|iPad|iPod|Mobile|Opera Mini|IEMobile/i.test(navigator.userAgent)
-            || navigator.maxTouchPoints > 0,
+  isMobile: false,
 
   requestFullScreen: () => Module.canvas.requestFullscreen?.(),
   requestFullscreen: () => Module.canvas.requestFullscreen?.(),
@@ -771,34 +775,19 @@ window.gwInstallGameFilesystem({
   },
 });
 
-let wired = false;
-
-/** @param {string} src @param {string[]} [candidates] */
-function appendGlue(src, candidates) {
-  useJspi = src === 'Gw.jspi.js';
-  log('loading', src, `(wasm: ${useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm'}) ...`);
+function appendGlue() {
+  const src = 'Gw.jspi.js';
+  log('loading', src, '(wasm: Gw.jspi.wasm) ...');
   const s = document.createElement('script');
   s.src = src;
   s.onerror = () => {
-    log(`[warn] ${src} not available`);
-    if (candidates) loadGlue(candidates.slice(1));
+    log(`[err] ${src} not available`);
+    window.gwLoading?.fail('The game client could not be loaded.');
   };
   document.body.appendChild(s);
 }
 
-// Wiring must happen once: loadGlue recurses when the preferred glue is
-// missing, and re-registering gave duplicate touch events and focus handlers.
-/** @param {string[]} candidates */
-function loadGlue(candidates) {
-  const src = candidates[0];
-  if (!src) {
-    window.gwLoading?.fail('No game build could be loaded.');
-    return log('[err] no glue could be loaded — check that the updater finished');
-  }
-  if (wired) return appendGlue(src);
-  wired = true;
-  useJspi = src === 'Gw.jspi.js';
-
+function loadGlue() {
   if (!appSettings) {
     window.gwLoading.fail('Settings were not ready.');
     return;
@@ -862,26 +851,12 @@ function loadGlue(candidates) {
     window.addEventListener(ev, resumeAudio, true);
   }
 
-  const inputHost = window.gwInstallGameInput({
+  inputHost = window.gwInstallGameInput({
     canvas: c,
     initialSettings: appSettings,
     diagnostics: window.gwDiagnostics,
     log,
   });
-  window.gwApplySettings = (next) => {
-    if (!appSettings) return;
-    const previousScale = appSettings.renderScale;
-    const updated = { ...next };
-    appSettings = updated;
-    inputHost.applySettings(updated);
-    applyCursorTheme(updated.cursorTheme);
-    if (updated.renderScale !== previousScale) {
-      window.dispatchEvent(new globalThis.Event('resize'));
-    }
-    window.gwDiagnostics?.setVisible(updated.showDiagnostics);
-    log('settings applied');
-  };
-
   // Text entry runs through these, not through keydown on the canvas. Stray
   // focus must bounce off, or a field silently swallows keys meant for the game.
   Module.oskInput = {
@@ -903,7 +878,7 @@ function loadGlue(candidates) {
   }
   log(`osk: ${Object.keys(Module.oskInput).length} fields, modal=${Module.oskIsModal}`);
 
-  appendGlue(src, candidates);
+  appendGlue();
 }
 
 (async function boot() {
@@ -958,10 +933,11 @@ function loadGlue(candidates) {
     applyResidentBits(meta.residentBits);
     log('snapshot:', snapshotSize, 'bytes,', snapshotChunkHashes.length,
         'chunks of', snapshotChunkSize, `(${residentHashes.size} resident)`);
-    await window.gwResolveDataStrategy?.(snapshotSize);
+    await window.gwResolveDataStrategy(snapshotSize);
   } catch (e) {
-    log(
-      '[warn] could not read snapshot metadata:',
+    window.gwLoading?.fail('Game data could not be prepared.');
+    return log(
+      '[err] could not prepare snapshot metadata:',
       e instanceof Error ? e.message : String(e),
     );
   }
@@ -972,7 +948,7 @@ function loadGlue(candidates) {
   }
 
   window.gwLoading.set('Starting the game…', null);
-  loadGlue(['Gw.jspi.js']);
+  loadGlue();
 })();
 
 })();
