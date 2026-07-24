@@ -191,15 +191,23 @@
     return form.querySelector('input[name="dataStrategy"]:checked')?.value || null;
   }
 
-  function readFormSettings() {
-    return {
-      renderScale: Number(form.renderScale.value),
-      pointerLock: form.pointerLock.checked,
-      cursorTheme: form.cursorTheme.value,
-      touchMode: form.touchMode.value,
-      showDiagnostics: form.showDiagnostics.checked,
-      dataStrategy: selectedStrategy(),
-    };
+  function patchForControl(control) {
+    switch (control.name) {
+      case 'renderScale':
+        return { renderScale: Number(control.value) };
+      case 'pointerLock':
+        return { pointerLock: control.checked };
+      case 'cursorTheme':
+        return { cursorTheme: control.value };
+      case 'touchMode':
+        return { touchMode: control.value };
+      case 'showDiagnostics':
+        return { showDiagnostics: control.checked };
+      case 'dataStrategy':
+        return { dataStrategy: selectedStrategy() };
+      default:
+        return null;
+    }
   }
 
   function fillForm(settings) {
@@ -525,6 +533,8 @@
 
   form.addEventListener('change', (event) => {
     if (!event.target.matches('input, select')) return;
+    const patch = patchForControl(event.target);
+    if (!patch) return;
     feedback.textContent = '';
     const strategyChanged = event.target.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
@@ -532,7 +542,7 @@
       const preview = byId('settings-cursor-preview');
       if (preview) preview.dataset.cursorTheme = event.target.value;
     }
-    void persistSettings(readFormSettings())
+    void persistSettings(patch)
       .then(async () => {
         flashSaved();
         if (!strategyChanged) return;

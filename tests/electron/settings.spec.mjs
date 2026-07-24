@@ -44,6 +44,20 @@ test.describe("settings experience", () => {
       );
 
       await page.locator('input[name="renderScale"][value="1.5"]').check();
+      await fixture.app.evaluate(({ Menu }) => {
+        const view = Menu.getApplicationMenu()?.items.find(
+          (item) => item.label === "View",
+        );
+        view?.submenu?.items
+          .find((item) => item.label === "Toggle Diagnostics")
+          ?.click();
+      });
+      await expect
+        .poll(async () =>
+          (await page.evaluate(() => window.gwNative.settings.get()))
+            .showDiagnostics,
+        )
+        .toBe(true);
       await page.locator("#settings-tab-controls").click();
       await page
         .locator('select[name="cursorTheme"]')
@@ -53,6 +67,7 @@ test.describe("settings experience", () => {
         .toMatchObject({
           renderScale: 1.5,
           cursorTheme: "guild-wars-2",
+          showDiagnostics: true,
         });
       await expect(page.locator("#canvas")).toHaveAttribute(
         "data-cursor-theme",

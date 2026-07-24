@@ -49,7 +49,7 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ cursorTheme: "guild-wars-2" }), {
       cursorTheme: "guild-wars-2",
     });
-    assert.deepEqual(parseSettingsPatch({ mystery: true }), {});
+    assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
     assert.throws(() => parseSettingsPatch({ pointerLock: "yes" }), AppError);
   });
 

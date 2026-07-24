@@ -19,6 +19,7 @@ const TOUCH_MODES = new Set<AppSettings["touchMode"]>([
   "augment",
   "off",
 ]);
+const SETTINGS_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 
 function asBool(v: unknown, field: string): boolean {
   if (typeof v !== "boolean") {
@@ -78,10 +79,17 @@ export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
     throw new AppError("bad_settings", "settings patch must be an object");
   }
   const src = raw as Record<string, unknown>;
+  const unknownKey = Object.keys(src).find((key) => !SETTINGS_KEYS.has(key));
+  if (unknownKey) {
+    throw new AppError(
+      "bad_settings",
+      `settings patch has unknown field ${JSON.stringify(unknownKey)}`,
+    );
+  }
   const parsed = parseSettings(src);
   const patch: AppSettingsPatch = {};
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof AppSettings)[]) {
-    if (key in src) {
+    if (Object.hasOwn(src, key)) {
       Object.assign(patch, { [key]: parsed[key] });
     }
   }
