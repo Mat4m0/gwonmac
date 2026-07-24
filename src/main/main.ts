@@ -1,4 +1,4 @@
-import { app, dialog, net, powerMonitor, session } from "electron";
+import { app, dialog, powerMonitor, session } from "electron";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -9,44 +9,12 @@ import {
   type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
-  type SnapshotMetadata,
 } from "../shared/contracts.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
-import {
-  ACCESS_KEY,
-  PATCH_REQUEST_TIMEOUT_MS,
-  PATCH_ROOT,
-  SNAPSHOT,
-  UA,
-} from "./core/access-key.js";
-import {
-  migrateLegacyPublishedClientManifest,
-  verifyPublishedClientArtifacts,
-} from "./core/published-client.js";
-import { ChunkStore } from "./core/chunk-store.js";
-import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
-import {
-  confirmClientCandidate,
-  readRejectedClient,
-  restoreUnconfirmedClient,
-} from "./core/client-compatibility.js";
-import type { Manifest } from "./core/manifest.js";
-import { PatchClient } from "./core/patch-client.js";
-import { encodedChunkLimit } from "./core/chunk-format.js";
-import {
-  fetchPatchBytes,
-  readBoundedResponse,
-  type PatchFetch,
-} from "./core/patch-transport.js";
-import { fullDownloadFailureMessage } from "./core/recovery.js";
+import { AUTOMATION_COMMAND } from "../shared/automation.js";
+import { ClientRuntime } from "./client-runtime.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
-import { buildSnapshotMetadata } from "./core/snapshot.js";
-import {
-  prepareToolboxClient,
-  type PreparedToolboxClient,
-} from "./core/toolbox-client.js";
-import { TOOLBOX_TRANSFORM_ABI } from "./core/toolbox-transform.js";
 import {
   count,
   exportDiagnosticsForWindow,
@@ -56,7 +24,6 @@ import {
   observe,
   peakGauge,
   setDiagnosticCaptureStoppedHandler,
-  span,
   startDiagnosticCapture,
   startDiagnostics,
   stopDiagnosticCapture,
@@ -70,6 +37,7 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { gamePaths } from "./paths.js";
+import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,
@@ -94,62 +62,8 @@ enableSandboxBeforeReady();
 registerGwScheme();
 wireLifecycle();
 
-let progress: DownloadProgress = { ...INITIAL_PROGRESS };
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
-
-let chunkStore: ChunkStore | null = null;
-let snapshotMeta: SnapshotMetadata | null = null;
-let saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
-let initialResidencyRecorded = false;
-let fullDownload: Promise<boolean> | null = null;
-let gameUpdate: Promise<void> | null = null;
 let settingsWrite: Promise<void> = Promise.resolve();
-let toolboxClient: PreparedToolboxClient | null = null;
-let candidateFrameReady = false;
-let candidateSocketReady = false;
-let candidateConfirmation: Promise<void> | null = null;
-
-function confirmCandidateIfReady(): Promise<void> {
-  if (!candidateFrameReady || !candidateSocketReady) return Promise.resolve();
-  if (candidateConfirmation) return candidateConfirmation;
-  candidateConfirmation = (async () => {
-    const paths = gamePaths();
-    const fingerprint = await confirmClientCandidate({
-      artifacts: paths.artifacts,
-      rejectedPath: paths.rejectedClient,
-    });
-    candidateFrameReady = false;
-    candidateSocketReady = false;
-    if (fingerprint) {
-      await pruneCurrentChunkCache();
-      log("update", "info", "client.candidatePromoted", { fingerprint });
-    }
-  })().finally(() => {
-    candidateConfirmation = null;
-  });
-  return candidateConfirmation;
-}
-
-async function pruneCurrentChunkCache(): Promise<void> {
-  const paths = gamePaths();
-  try {
-    const removed = await pruneUnreferencedChunks({
-      chunksDir: paths.chunks,
-      currentManifest: path.join(paths.artifacts, "manifest.json"),
-      previousManifest: path.join(paths.previousArtifacts, "manifest.json"),
-    });
-    if (removed.files > 0) {
-      log("cache", "info", "cache.staleChunksRemoved", {
-        files: removed.files,
-        bytes: removed.bytes,
-      });
-    }
-  } catch (error) {
-    log("cache", "warn", "cache.staleChunkCleanupSkipped", {
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   const operation = settingsWrite.then(async () => {
@@ -175,55 +89,12 @@ function resetAppSettings(): Promise<AppSettings> {
   return operation;
 }
 
-function selectedGameWasmPath(): string {
-  return (
-    toolboxClient?.wasmPath ??
-    path.join(gamePaths().artifacts, "Gw.jspi.wasm")
-  );
-}
-
-async function prepareToolbox(): Promise<void> {
-  const paths = gamePaths();
-  try {
-    toolboxClient = await prepareToolboxClient(
-      path.join(paths.artifacts, "Gw.jspi.wasm"),
-      paths.toolbox,
-    );
-    gauge("toolbox.supportedBuild", toolboxClient.build !== null);
-    log(
-      "wasm",
-      "info",
-      toolboxClient.transformed
-        ? "toolbox.clientPrepared"
-        : "toolbox.unsupportedBuild",
-      toolboxClient.build
-        ? {
-            buildId: toolboxClient.build.buildId,
-            transformAbi: TOOLBOX_TRANSFORM_ABI,
-          }
-        : {},
-    );
-  } catch (error) {
-    toolboxClient = null;
-    gauge("toolbox.supportedBuild", false);
-    log("wasm", "warn", "toolbox.prepareFailed", {
-      code:
-        error instanceof Error && "code" in error
-          ? String(error.code)
-          : "transform_failed",
-    });
-  }
-}
+let clientRuntime: ClientRuntime;
 
 const sockets = new SocketManager(
   (ownerId, event) => {
     if (event.type === "open") {
-      candidateSocketReady = true;
-      void confirmCandidateIfReady().catch((error) => {
-        log("update", "error", "client.candidatePromotionFailed", {
-          message: error instanceof Error ? error.message : String(error),
-        });
-      });
+      clientRuntime.noteSocketOpen();
     }
     if (event.type !== "data") {
       log("socket", "info", `socket.${event.type}`, {
@@ -246,7 +117,6 @@ const sockets = new SocketManager(
 );
 
 function setProgress(next: DownloadProgress): void {
-  progress = next;
   updateLongRunningTaskFeedback(next);
   sendToRenderer(IPC.progressEvent, next);
 }
@@ -329,394 +199,10 @@ async function applyPendingGameStorageClear(): Promise<void> {
   log("filesystem", "warn", "filesystem.resetCompleted");
 }
 
-function cdnChunkFetcher(compression: "none" | "gzip"): (
-  hash: string,
-  expectedLength: number,
-) => Promise<Uint8Array> {
-  const headers = {
-    "X-Access-Key": ACCESS_KEY,
-    "User-Agent": UA,
-    "Accept-Encoding": "identity",
-  };
-  const patchFetch: PatchFetch = async (url, init) => {
-    const request: RequestInit = {
-      redirect: "manual",
-      signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
-    };
-    if (init?.headers) request.headers = init.headers;
-    const response = await net.fetch(url, request);
-    return {
-      status: response.status,
-      body: await readBoundedResponse(response, init?.maxBytes ?? 1),
-    };
-  };
-  return async (hash, expectedLength) => {
-    const url = `${PATCH_ROOT}/${hash}.bin`;
-    return fetchPatchBytes({
-      fetch: patchFetch,
-      url,
-      headers,
-      maxBytes: encodedChunkLimit(expectedLength, compression),
-      onAttempt: (durationMs) => observe("cache.networkWire", durationMs * 1_000),
-    });
-  };
-}
-
-async function refreshSnapshotMeta(): Promise<void> {
-  if (!chunkStore) {
-    snapshotMeta = null;
-    return;
-  }
-  const residentIndices = await chunkStore.residentIndices();
-  snapshotMeta = buildSnapshotMetadata({
-    size: chunkStore.size,
-    chunkSize: chunkStore.chunkSize,
-    chunkHashes: chunkStore.hashes,
-    residentIndices,
-  });
-  const residentBytes = residentIndices.reduce(
-    (total, index) => total + chunkStore!.chunkByteLength(index),
-    0,
-  );
-  gauge("cache.residentChunks", residentIndices.length);
-  gauge("cache.residentBytes", residentBytes);
-  gauge("cache.totalChunks", chunkStore.hashes.length);
-  gauge("cache.totalBytes", chunkStore.size);
-  if (!initialResidencyRecorded) {
-    gauge("cache.initialResidentChunks", residentIndices.length);
-    gauge("cache.initialResidentBytes", residentBytes);
-    initialResidencyRecorded = true;
-  }
-}
-
-async function attachChunkStore(
-  manifest: Manifest,
-  chunksDir: string,
-  bootChunks: string,
-): Promise<void> {
-  const entry = manifest.entry(SNAPSHOT);
-  if (!entry) {
-    log("update", "warn", "manifest.snapshotMissing");
-    chunkStore = null;
-    snapshotMeta = null;
-    return;
-  }
-  await installChunkStore(
-    entry.size,
-    manifest.chunkSize,
-    entry.chunkHashes,
-    manifest.compression,
-    chunksDir,
-    bootChunks,
-  );
-}
-
-async function installChunkStore(
-  size: number,
-  chunkSize: number,
-  chunkHashes: string[],
-  compression: "none" | "gzip",
-  chunksDir: string,
-  bootChunks: string,
-): Promise<void> {
-  chunkStore = new ChunkStore({
-    chunksDir,
-    size,
-    chunkSize,
-    chunkHashes,
-    compression,
-    bootListPath: bootChunks,
-    fetch:
-      process.env.GW_REQUIRE_CACHED_CLIENT === "1"
-        ? async () => {
-            throw new Error("cached live probe cannot download missing chunks");
-          }
-        : cdnChunkFetcher(compression),
-    metrics: { count, observe, gauge, peak: peakGauge },
-  });
-  initialResidencyRecorded = false;
-  await refreshSnapshotMeta();
-
-  if (saveTouchedTimer) clearInterval(saveTouchedTimer);
-  saveTouchedTimer = setInterval(() => {
-    void chunkStore?.saveTouched().catch(() => undefined);
-  }, 5000);
-}
-
-async function attachLastPublishedClient(): Promise<void> {
-  const paths = gamePaths();
-  const value = await migrateLegacyPublishedClientManifest(paths.artifacts);
-  if (!value) throw new Error("no published client is available");
-  const verified = await verifyPublishedClientArtifacts(paths.artifacts, value);
-  if (verified !== true) {
-    throw new Error("last published client failed integrity verification");
-  }
-  await installChunkStore(
-    value.size,
-    value.chunkSize,
-    value.chunkHashes,
-    value.compressionMode,
-    paths.chunks,
-    paths.bootChunks,
-  );
-}
-
-async function afterClientReady(notice?: string): Promise<void> {
-  if (!chunkStore) return;
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "ready",
-    label: "Starting Guild Wars",
-    ...(notice ? { notice } : {}),
-  });
-
-  // Boot working-set prefetch runs after the client is free to start.
-  void chunkStore
-    .prefetch((p) => setPrefetch(p))
-    .then(() => refreshSnapshotMeta())
-    .catch((err) =>
-      log("cache", "warn", "prefetch.failed", {
-        message: err instanceof Error ? err.message : String(err),
-      }),
-    );
-}
-
-function downloadFullGame(): Promise<boolean> {
-  if (fullDownload) return fullDownload;
-  const store = chunkStore;
-  if (!store) {
-    return Promise.reject(
-      new Error("The game files are not ready yet. Try again in a moment."),
-    );
-  }
-  store.resume();
-  log("cache", "info", "fullDownload.started");
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "image",
-    label: "Downloading full game",
-  });
-  let lastProgressLogAt = 0;
-  fullDownload = store
-    .downloadAll({
-      onProgress: (value) => {
-        setProgress({
-          phase: "image",
-          label: "Downloading full game",
-          received: value.received,
-          total: value.total,
-          bytesPerSecond: value.bytesPerSecond,
-          secondsRemaining: value.secondsRemaining,
-          error: null,
-        });
-        const now = Date.now();
-        if (now - lastProgressLogAt >= 5_000) {
-          lastProgressLogAt = now;
-          log("cache", "info", "fullDownload.progress", {
-            received: value.received,
-            total: value.total,
-            bytesPerSecond: value.bytesPerSecond,
-            secondsRemaining: value.secondsRemaining,
-          });
-        }
-      },
-    })
-    .then(async (complete) => {
-      await refreshSnapshotMeta();
-      log(
-        "cache",
-        "info",
-        complete ? "fullDownload.completed" : "fullDownload.stopped",
-      );
-      setProgress({
-        ...INITIAL_PROGRESS,
-        phase: "ready",
-        label: complete ? "Full game downloaded" : "Download stopped",
-      });
-      return complete;
-    })
-    .catch((error) => {
-      log("cache", "error", "fullDownload.failed", {
-        code:
-          error instanceof Error && "code" in error
-            ? String(error.code)
-            : "unknown",
-        message: error instanceof Error ? error.message : String(error),
-      });
-      const message = fullDownloadFailureMessage(error);
-      setProgress({
-        ...INITIAL_PROGRESS,
-        phase: "ready",
-        label: "Download paused",
-      });
-      throw new Error(message, { cause: error });
-    })
-    .finally(() => {
-      fullDownload = null;
-    });
-  return fullDownload;
-}
-
-async function startGameUpdate(): Promise<void> {
-  // Offline shell tests skip ArenaNet contact entirely.
-  if (process.env.GW_OFFLINE_SHELL === "1") {
-    setProgress({
-      ...INITIAL_PROGRESS,
-      phase: "ready",
-      label: "Ready (offline shell)",
-    });
-    return;
-  }
-  if (process.env.GW_REQUIRE_CACHED_CLIENT === "1") {
-    try {
-      await attachLastPublishedClient();
-      await prepareToolbox();
-      gauge("update.usingCachedClient", true);
-      await afterClientReady("Live probe is using the existing cached client.");
-    } catch {
-      setProgress({
-        ...INITIAL_PROGRESS,
-        phase: "error",
-        label: "Cached live probe blocked",
-        error:
-          "The cached client is incomplete. No ArenaNet update was started.",
-      });
-    }
-    return;
-  }
-  const paths = gamePaths();
-  const patchClient = new PatchClient({
-    artifactsDir: paths.artifacts,
-    chunksDir: paths.chunks,
-    onProgress: (p) => {
-      setProgress(p);
-    },
-  });
-  const updateSpan = span("update", "clientUpdate");
-  try {
-    const rollback = await restoreUnconfirmedClient({
-      artifacts: paths.artifacts,
-      rejectedPath: paths.rejectedClient,
-      hostVersion: app.getVersion(),
-    });
-    if (rollback) {
-      log("update", "warn", "client.candidateRolledBack", {
-        fingerprint: rollback.fingerprint,
-      });
-    }
-    try {
-      const migrated = await migrateLegacyPublishedClientManifest(paths.artifacts);
-      if (migrated) {
-        log("update", "info", "client.integrityMetadataReady", {
-          fingerprint: migrated.clientFingerprint ?? null,
-        });
-      }
-    } catch (error) {
-      log("update", "warn", "client.integrityMigrationSkipped", {
-        reason: error instanceof Error ? error.name : "UnknownError",
-      });
-    }
-    const blockedFingerprint = await readRejectedClient(
-      paths.rejectedClient,
-      app.getVersion(),
-    );
-    const result = await patchClient.update({ blockedFingerprint });
-    if (result.blocked) {
-      await attachLastPublishedClient();
-      await pruneCurrentChunkCache();
-      await prepareToolbox();
-      gauge("update.usingCachedClient", true);
-      await afterClientReady(
-        "A newer game client did not start successfully, so the last working client is being used.",
-      );
-      updateSpan.end({
-        status: "rejectedCandidateSkipped",
-        fingerprint: result.fingerprint,
-      }, "warn");
-      return;
-    }
-    await attachChunkStore(result.manifest, paths.chunks, paths.bootChunks);
-    await pruneCurrentChunkCache();
-    await prepareToolbox();
-    await afterClientReady();
-    updateSpan.end({
-      status: result.candidate ? "candidate" : "ready",
-      fingerprint: result.fingerprint,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    try {
-      await attachLastPublishedClient();
-      await pruneCurrentChunkCache();
-      await prepareToolbox();
-      log("update", "warn", "patch.updateFallback", {
-        message,
-      });
-      gauge("update.usingCachedClient", true);
-      await afterClientReady(
-        "The game client update failed, so the previous client was restored.",
-      );
-      updateSpan.end({ status: "cachedFallback", message }, "warn");
-      return;
-    } catch (fallbackError) {
-      log("update", "error", "patch.updateFailed", {
-        message,
-        fallback:
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError),
-      });
-    }
-    updateSpan.end({ status: "error", message }, "error");
-    setProgress({
-      ...INITIAL_PROGRESS,
-      phase: "error",
-      label: "Update failed",
-      error:
-        "ArenaNet is unavailable and no previous game client could be restored.",
-    });
-  }
-}
-
-function requestGameUpdate(): Promise<void> {
-  if (gameUpdate) return gameUpdate;
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "starting",
-    label: "Checking the game client",
-  });
-  const expectedUserData = process.env.GW_EXPECT_USER_DATA;
-  if (
-    expectedUserData &&
-    path.resolve(expectedUserData) !== path.resolve(app.getPath("userData"))
-  ) {
-    log("app", "error", "app.unexpectedUserData");
-    setProgress({
-      ...INITIAL_PROGRESS,
-      phase: "error",
-      label: "Live probe blocked",
-      error: "The live probe selected an unexpected profile. No update was started.",
-    });
-    return Promise.resolve();
-  }
-  const operation = startGameUpdate().finally(() => {
-    if (gameUpdate === operation) gameUpdate = null;
-  });
-  gameUpdate = operation;
-  return operation;
-}
-
-async function retryGameUpdate(): Promise<void> {
-  await requestGameUpdate();
-  if (progress.phase === "error") {
-    throw new Error(progress.error ?? "The game client could not be prepared.");
-  }
-}
-
 function buildWindowHost(): WindowHost {
   return {
     sockets,
-    getProgress: () => progress,
+    getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
     exportDiagnostics: async () => {
@@ -731,18 +217,7 @@ function buildWindowHost(): WindowHost {
       void win.loadURL("gw://app/");
     },
     prepareRendererRecovery: async () => {
-      const paths = gamePaths();
-      const rollback = await restoreUnconfirmedClient({
-        artifacts: paths.artifacts,
-        rejectedPath: paths.rejectedClient,
-        hostVersion: app.getVersion(),
-      });
-      if (!rollback) return;
-      await attachLastPublishedClient();
-      await pruneCurrentChunkCache();
-      log("update", "warn", "client.candidateRolledBackAfterRendererCrash", {
-        fingerprint: rollback.fingerprint,
-      });
+      await clientRuntime.recoverRendererCrash();
     },
   };
 }
@@ -763,9 +238,9 @@ app.whenReady().then(async () => {
   await ensureDirs();
   await startDiagnostics();
   powerMonitor.on("suspend", () => {
-    if (!fullDownload) return;
+    if (!clientRuntime?.isDownloading) return;
     log("cache", "warn", "fullDownload.stoppedForSleep");
-    chunkStore?.stop();
+    clientRuntime.stopDownload();
   });
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
@@ -783,59 +258,62 @@ app.whenReady().then(async () => {
     });
   });
   await prepareWindowState();
+  const paths = gamePaths();
+  const expectedUserData = process.env.GW_EXPECT_USER_DATA;
+  const profileMatches =
+    !expectedUserData ||
+    path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
+  clientRuntime = new ClientRuntime({
+    paths,
+    hostVersion: app.getVersion(),
+    cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
+    offlineShell: process.env.GW_OFFLINE_SHELL === "1",
+    toolboxEnabled: TOOLBOX_AUTOMATION_ENABLED,
+    onProgress: setProgress,
+    onPrefetch: setPrefetch,
+  });
   setProtocolDeps({
-    getChunkStore: () => chunkStore,
-    getSnapshotMeta: () => snapshotMeta,
-    getGameWasmPath: selectedGameWasmPath,
+    getActiveClient: () => clientRuntime.active,
   });
   installGwProtocolHandler();
   log("protocol", "info", "protocol.installed");
 
   registerIpcHandlers({
     sockets,
-    getProgress: () => progress,
-    getChunkStore: () => chunkStore,
+    getProgress: () => clientRuntime.progress,
+    getChunkStore: () => clientRuntime.active?.store ?? null,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
-    downloadFullGame,
-    stopFullDownload: () => {
-      if (!fullDownload) return;
-      log("cache", "info", "fullDownload.stopRequested");
-      chunkStore?.stop();
-    },
-    confirmClientHealthy: async () => {
-      candidateFrameReady = true;
-      await confirmCandidateIfReady();
-    },
-    retryClient: retryGameUpdate,
+    downloadFullGame: () => clientRuntime.downloadAll(),
+    stopFullDownload: () => clientRuntime.stopDownload(),
+    confirmClientHealthy: () => clientRuntime.noteFramePresented(),
+    retryClient: () => clientRuntime.retryUpdate(),
   });
 
   onAppQuit(async () => {
     await flushWindowState();
     sockets.closeAll();
-    chunkStore?.stop();
     updateLongRunningTaskFeedback({
       ...INITIAL_PROGRESS,
       phase: "ready",
       label: "Quitting",
     });
-    if (saveTouchedTimer) clearInterval(saveTouchedTimer);
-    await chunkStore?.saveTouched().catch(() => undefined);
+    await clientRuntime.shutdown();
     await clearBrowserCookies("quit");
     await stopDiagnostics();
   });
 
   createMainWindow(buildWindowHost());
-  if (process.env.GW_TOOLBOX_AUTOMATION === "1") {
+  if (TOOLBOX_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
-      if (message === "diagnostics:start-level-1") {
+      if (message === AUTOMATION_COMMAND.startLevel1Capture) {
         void startDiagnosticCapture(1).catch((error) => {
           log("app", "error", "capture.automationStartFailed", {
             message: error instanceof Error ? error.message : String(error),
           });
         });
-      } else if (message === "diagnostics:stop") {
+      } else if (message === AUTOMATION_COMMAND.stopCapture) {
         void stopDiagnosticCapture();
       }
     });
@@ -858,7 +336,18 @@ app.whenReady().then(async () => {
     });
   }
   log("app", "info", "window.created");
-  void requestGameUpdate();
+  if (profileMatches) {
+    void clientRuntime.requestUpdate();
+  } else {
+    log("app", "error", "app.unexpectedUserData");
+    setProgress({
+      ...INITIAL_PROGRESS,
+      phase: "error",
+      label: "Live probe blocked",
+      error:
+        "The live probe selected an unexpected profile. No update was started.",
+    });
+  }
 
   app.on("activate", () => {
     if (!getMainWindow()) createMainWindow(buildWindowHost());

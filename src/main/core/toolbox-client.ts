@@ -15,7 +15,6 @@ import {
 export interface PreparedToolboxClient {
   wasmPath: string;
   build: KnownToolboxBuild | null;
-  transformed: boolean;
 }
 
 async function sha256File(filePath: string): Promise<string> {
@@ -85,14 +84,14 @@ export async function prepareToolboxClient(
   const inputHash = await sha256File(officialWasmPath);
   const build = findToolboxBuild(inputHash);
   if (!build) {
-    return { wasmPath: officialWasmPath, build: null, transformed: false };
+    return { wasmPath: officialWasmPath, build: null };
   }
   const cacheDir = path.join(cacheRoot, inputHash, String(TOOLBOX_TRANSFORM_ABI));
   const wasmPath = path.join(cacheDir, "Gw.jspi.wasm");
   const metadataPath = path.join(cacheDir, "metadata.json");
   const fingerprint = buildFingerprint(build);
   if (await isUsableCache(wasmPath, metadataPath, inputHash, fingerprint)) {
-    return { wasmPath, build, transformed: true };
+    return { wasmPath, build };
   }
 
   await mkdir(cacheDir, { recursive: true });
@@ -110,5 +109,5 @@ export async function prepareToolboxClient(
   if (!file.isFile() || file.size !== transformed.byteLength) {
     throw new Error("published derived Toolbox module is incomplete");
   }
-  return { wasmPath, build, transformed: true };
+  return { wasmPath, build };
 }

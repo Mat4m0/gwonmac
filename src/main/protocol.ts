@@ -38,15 +38,16 @@ const CSP =
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 
 export interface ProtocolDeps {
-  getChunkStore: () => ChunkStore | null;
-  getSnapshotMeta: () => SnapshotMetadata | null;
-  getGameWasmPath: () => string;
+  getActiveClient: () => {
+    artifactsDir: string;
+    store: ChunkStore;
+    snapshotMeta: SnapshotMetadata;
+    wasmPath: string;
+  } | null;
 }
 
 let deps: ProtocolDeps = {
-  getChunkStore: () => null,
-  getSnapshotMeta: () => null,
-  getGameWasmPath: () => path.join(gamePaths().artifacts, "Gw.jspi.wasm"),
+  getActiveClient: () => null,
 };
 
 export function setProtocolDeps(next: ProtocolDeps): void {
@@ -156,9 +157,8 @@ async function fileResponse(
 }
 
 async function handleSnapshot(request: Request): Promise<Response> {
-  const store = deps.getChunkStore();
-  const meta = deps.getSnapshotMeta();
-  if (!store || !meta || meta.size <= 0) {
+  const active = deps.getActiveClient();
+  if (!active || active.snapshotMeta.size <= 0) {
     return new Response("snapshot unavailable", {
       status: 503,
       headers: headers({
@@ -167,6 +167,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
       }),
     });
   }
+  const { store, snapshotMeta: meta } = active;
   const range = parseRangeHeader(request.headers.get("range"), meta.size);
   if (range === null || range === "unsatisfiable") {
     return new Response(null, {
@@ -348,13 +349,14 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   if (base === "Gw.snapshot") return handleSnapshot(request);
 
   if (base === "snapshot-metadata.json") {
-    const meta = deps.getSnapshotMeta();
-    if (!meta) {
+    const active = deps.getActiveClient();
+    if (!active) {
       return new Response("{}", {
         status: 503,
         headers: headers({ "Content-Type": "application/json" }),
       });
     }
+    const meta = active.snapshotMeta;
     const body = JSON.stringify(snapshotMetadataWire(meta));
     return new Response(body, {
       status: 200,
@@ -369,10 +371,15 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     ? base
     : null;
   if (artifactName) {
+    const active = deps.getActiveClient();
     const file =
       artifactName === "Gw.jspi.wasm"
-        ? deps.getGameWasmPath()
-        : path.join(gamePaths().artifacts, artifactName);
+        ? active?.wasmPath ??
+          path.join(gamePaths().artifacts, "Gw.jspi.wasm")
+        : path.join(
+            active?.artifactsDir ?? gamePaths().artifacts,
+            artifactName,
+          );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
     return fileResponse(file, request, mime);
   }

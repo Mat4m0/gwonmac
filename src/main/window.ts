@@ -28,6 +28,7 @@ import { log } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
+import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
 import { isDevBuild } from "./protocol.js";
 
 const BUG_REPORT_URL =
@@ -352,18 +353,10 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   installMenu(host, win);
-  const toolboxFixture =
-    process.env.GW_OFFLINE_SHELL === "1"
-    && ["map", "target"].includes(process.env.GW_TOOLBOX_FIXTURE ?? "")
-      ? process.env.GW_TOOLBOX_FIXTURE
-      : null;
-  const toolboxAutomation = process.env.GW_TOOLBOX_AUTOMATION === "1";
   void win.loadURL(
-    toolboxFixture
-      ? `gw://app/?toolbox-fixture=${toolboxFixture}`
-      : toolboxAutomation
-        ? "gw://app/?toolbox-automation=1"
-        : "gw://app/",
+    TOOLBOX_AUTOMATION_ENABLED
+      ? "gw://app/?toolbox-automation=1"
+      : "gw://app/",
   );
   return win;
 }
