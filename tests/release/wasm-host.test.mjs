@@ -32,8 +32,9 @@ test("persistent game files are prepared through supported Emscripten startup ho
   );
 
   assert.match(filesystem, /module\.preRun/);
-  assert.match(filesystem, /syncfs\(true/);
-  assert.match(filesystem, /syncfs\(false/);
+  assert.match(filesystem, /sync\(true/);
+  assert.match(filesystem, /sync\(false/);
+  assert.match(filesystem, /SYNC_TIMEOUT_MS/);
   assert.match(filesystem, /Templates\/Skills/);
   assert.match(filesystem, /Templates\/Equipment/);
   assert.match(filesystem, /chdir\(MOUNT\)/);

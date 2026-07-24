@@ -25,6 +25,7 @@ export const RENDERER_EVENT_NAMES = [
   "renderer.unhandledRejection",
   "graphics.contextLost",
   "graphics.contextRestored",
+  "graphics.presentationFailed",
   "client.glueLoadFailed",
   "filesystem.persistenceFailed",
   "audio.resumeFailed",
@@ -74,6 +75,7 @@ export interface RendererMetrics {
   swapTotalUs: number;
   swapMinUs: number;
   swapMaxUs: number;
+  presentationFailures: number;
   submitIntervalCount: number;
   submitIntervalTotalUs: number;
   submitIntervalMinUs: number;
@@ -234,6 +236,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "rafOver33",
     "rafOver50",
     "swapCount",
+    "presentationFailures",
     "swapTotalUs",
     "swapMinUs",
     "swapMaxUs",
@@ -431,7 +434,8 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     counters.every((key) => Number.isSafeInteger(record[key])) &&
     (record.rafOver50 as number) <= (record.rafOver33 as number) &&
     (record.rafOver33 as number) <= (record.rafOver16 as number) &&
-    (record.rafOver16 as number) <= (record.rafCount as number)
+    (record.rafOver16 as number) <= (record.rafCount as number) &&
+    (record.presentationFailures as number) <= (record.swapCount as number)
   );
 }
 

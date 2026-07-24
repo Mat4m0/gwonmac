@@ -198,6 +198,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("renderer.rafOver33", value.rafOver33);
   recorder.count("renderer.rafOver50", value.rafOver50);
   recorder.count("renderer.swaps", value.swapCount);
+  recorder.count("renderer.presentationFailures", value.presentationFailures);
   recorder.count("snapshot.reads", value.snapshotReads);
   recorder.count("snapshot.bytes", value.snapshotBytes);
   recorder.count("cache.memoryHits", value.memoryHits);
@@ -333,7 +334,12 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("snapshot.queuePromotions", value.queuePromotions);
   recorder.setLatest(
     "renderer.submittedFps",
-    value.intervalMs ? Math.round((value.swapCount * 1_000) / value.intervalMs) : 0,
+    value.intervalMs
+      ? Math.round(
+          ((value.swapCount - value.presentationFailures) * 1_000) /
+            value.intervalMs,
+        )
+      : 0,
   );
   if (captureLevel > 0) {
     for (let index = 0; index < value.socketSendEvents.length; index += 7) {
@@ -358,6 +364,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       rafCount: value.rafCount,
       rafMaxUs: Math.round(value.rafMaxUs),
       swapCount: value.swapCount,
+      presentationFailures: value.presentationFailures,
       swapMaxUs: Math.round(value.swapMaxUs),
       submitIntervalMaxUs: Math.round(value.submitIntervalMaxUs),
       snapshotReads: value.snapshotReads,

@@ -14,6 +14,7 @@
     'renderer.unhandledRejection',
     'graphics.contextLost',
     'graphics.contextRestored',
+    'graphics.presentationFailed',
     'client.glueLoadFailed',
     'filesystem.persistenceFailed',
     'audio.resumeFailed',
@@ -62,6 +63,7 @@
     swapTotalUs: 0,
     swapMinUs: 0,
     swapMaxUs: 0,
+    presentationFailures: 0,
     submitIntervalCount: 0,
     submitIntervalTotalUs: 0,
     submitIntervalMinUs: 0,
@@ -416,7 +418,13 @@
      * @param {boolean} [presented]
      */
     swap(swapUs, bitmapOutUs, bitmapPresentUs, presented = true) {
-      if (!presented) return;
+      observe(metrics, 'swap', swapUs);
+      observe(metrics, 'bitmapOut', bitmapOutUs, 'swapCount', false);
+      observe(metrics, 'bitmapPresent', bitmapPresentUs, 'swapCount', false);
+      if (!presented) {
+        metrics.presentationFailures++;
+        return;
+      }
       const submittedAt = performance.now();
       if (lastSubmitted) {
         const intervalUs = (submittedAt - lastSubmitted) * 1000;
@@ -428,9 +436,6 @@
         );
       }
       lastSubmitted = submittedAt;
-      observe(metrics, 'swap', swapUs);
-      observe(metrics, 'bitmapOut', bitmapOutUs, 'swapCount', false);
-      observe(metrics, 'bitmapPresent', bitmapPresentUs, 'swapCount', false);
       if (captureLevel > 0 && frameData.length <= 19_993) {
         const canvas =
           /** @type {HTMLCanvasElement | null} */ (
@@ -476,16 +481,6 @@
   });
   addEventListener('unhandledrejection', (event) => {
     recordEvent('renderer.unhandledRejection', event.reason);
-    void flush();
-  });
-  document.getElementById('canvas')?.addEventListener('webglcontextlost', () => {
-    performance.mark('gw.graphics.context-lost');
-    recordEvent('graphics.contextLost');
-    void flush();
-  });
-  document.getElementById('canvas')?.addEventListener('webglcontextrestored', () => {
-    performance.mark('gw.graphics.context-restored');
-    recordEvent('graphics.contextRestored');
     void flush();
   });
   void synchronizeClock();
