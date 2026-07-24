@@ -40,6 +40,19 @@ test.describe("sandbox boundary", () => {
           app.commandLine.hasSwitch("use-mock-keychain"),
         ),
       ).toBe(true);
+      const snapshotResponse = await fixture.page.evaluate(async () => {
+        const response = await window.fetch("Gw.snapshot", {
+          headers: { Range: "bytes=0-0" },
+        });
+        return {
+          status: response.status,
+          cacheControl: response.headers.get("cache-control"),
+        };
+      });
+      expect(snapshotResponse).toEqual({
+        status: 503,
+        cacheControl: "no-store",
+      });
     } finally {
       await closeOffline(fixture);
     }

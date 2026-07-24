@@ -240,6 +240,20 @@ async function clearBrowserCookies(phase: "startup" | "quit"): Promise<void> {
   }
 }
 
+async function clearBrowserNetworkCache(): Promise<void> {
+  try {
+    // Snapshot chunks are canonical in the native content-addressed store.
+    // Chromium's HTTP cache would only duplicate them and can retain stale
+    // same-URL client artifacts between exact-hash updates.
+    await session.defaultSession.clearCache();
+    log("app", "info", "browserCache.cleared.startup");
+  } catch (error) {
+    log("app", "warn", "browserCache.clearFailed.startup", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function applyPendingCacheClear(): Promise<void> {
   const paths = gamePaths();
   try {
@@ -704,6 +718,7 @@ app.whenReady().then(async () => {
     chunkStore?.stop();
   });
   await clearBrowserCookies("startup");
+  await clearBrowserNetworkCache();
   log("app", "info", "electron.ready");
   await loadSettings(gamePaths().settings, async (backupPath) => {
     log("settings", "error", "settings.corruptRecovered", {

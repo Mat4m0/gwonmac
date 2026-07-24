@@ -1,6 +1,6 @@
 import { app, protocol, net } from "electron";
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import type { SnapshotMetadata } from "../shared/contracts.js";
@@ -141,13 +141,14 @@ async function fileResponse(
     });
   }
 
-  const body = await readFile(filePath);
-  return new Response(body, {
+  const nodeStream = createReadStream(filePath);
+  const webStream = Readable.toWeb(nodeStream) as ReadableStream;
+  return new Response(webStream, {
     status: 200,
     headers: headers({
       "Content-Type": mime,
       "Accept-Ranges": "bytes",
-      "Content-Length": String(body.byteLength),
+      "Content-Length": String(st.size),
     }),
   });
 }
@@ -158,7 +159,10 @@ async function handleSnapshot(request: Request): Promise<Response> {
   if (!store || !meta || meta.size <= 0) {
     return new Response("snapshot unavailable", {
       status: 503,
-      headers: headers({ "Content-Type": "text/plain; charset=utf-8" }),
+      headers: headers({
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8",
+      }),
     });
   }
   const range = parseRangeHeader(request.headers.get("range"), meta.size);
@@ -166,6 +170,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
     return new Response(null, {
       status: 416,
       headers: headers({
+        "Cache-Control": "no-store",
         "Content-Range": `bytes */${meta.size}`,
         "Accept-Ranges": "bytes",
       }),
@@ -174,7 +179,10 @@ async function handleSnapshot(request: Request): Promise<Response> {
   const length = range.end - range.start + 1;
   // Official calls stay well under this; larger would block the main process.
   if (length > 8 * 1024 * 1024) {
-    return new Response("range too large", { status: 416, headers: headers() });
+    return new Response("range too large", {
+      status: 416,
+      headers: headers({ "Cache-Control": "no-store" }),
+    });
   }
   const requestSpan = span("snapshot", "read", {
     offsetBytes: range.start,
@@ -194,6 +202,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
       {
       status: 206,
       headers: headers({
+        "Cache-Control": "no-store",
         "Content-Type": "application/octet-stream",
         "Accept-Ranges": "bytes",
         "Content-Range": `bytes ${range.start}-${range.end}/${meta.size}`,
@@ -217,7 +226,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
         : "ArenaNet is unavailable. Guild Wars will retry this download.";
     return new Response(message, {
       status: 503,
-      headers: headers(),
+      headers: headers({ "Cache-Control": "no-store" }),
     });
   }
 }

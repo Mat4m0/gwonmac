@@ -163,7 +163,7 @@ export class SocketManager {
     this.metrics?.peakGauge?.("socket.peakActiveWrites", this.activeWrites);
     this.metrics?.peakGauge?.("socket.peakQueuedBytes", this.queuedBytes);
     await new Promise<void>((resolve, reject) => {
-      entry.socket.write(Buffer.from(data), (err) => {
+      entry.socket.write(data, (err) => {
         entry.queuedBytes = Math.max(0, entry.queuedBytes - data.byteLength);
         this.activeWrites = Math.max(0, this.activeWrites - 1);
         this.queuedBytes = Math.max(0, this.queuedBytes - data.byteLength);

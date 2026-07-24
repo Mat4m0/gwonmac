@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { writeAtomic, writeAtomicJson } from "./atomic-file.js";
@@ -540,14 +541,19 @@ async function isUsableCache(
     ) {
       return false;
     }
-    const bytes = await readFile(wasmPath);
-    return (
-      createHash("sha256").update(bytes).digest("hex") === metadata.outputSha256 &&
-      WebAssembly.validate(bytes)
-    );
+    const file = await stat(wasmPath);
+    return file.isFile()
+      && file.size > 0
+      && await sha256File(wasmPath) === metadata.outputSha256;
   } catch {
     return false;
   }
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 export async function inspectToolboxCache(
@@ -577,8 +583,7 @@ export async function prepareToolboxClient(
   officialWasmPath: string,
   cacheRoot: string,
 ): Promise<PreparedToolboxClient> {
-  const official = await readFile(officialWasmPath);
-  const inputHash = createHash("sha256").update(official).digest("hex");
+  const inputHash = await sha256File(officialWasmPath);
   const build = findToolboxBuild(inputHash);
   if (!build) {
     return { wasmPath: officialWasmPath, build: null, transformed: false };
@@ -601,6 +606,7 @@ export async function prepareToolboxClient(
   }
 
   await mkdir(cacheDir, { recursive: true });
+  const official = await readFile(officialWasmPath);
   const transformed = transformToolboxWasm(official, build);
   const outputHash = createHash("sha256").update(transformed).digest("hex");
   await writeAtomic(wasmPath, transformed);

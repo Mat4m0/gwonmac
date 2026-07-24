@@ -83,8 +83,12 @@ residency set is initialized with one directory scan and updated on
 publication. Snapshot requests never rescan every hash on disk.
 
 The renderer keeps a disposable 256 MB LRU of chunk bytes. The main-process
-content store is canonical. `image.fileSize` stays synchronous because the
-snapshot metadata is obtained before the Emscripten glue is appended.
+content store is canonical. Snapshot range responses are `no-store`, and
+Chromium's derived network cache is cleared at startup; otherwise it duplicates
+hundreds of megabytes of already-resident native chunks. This does not remove
+or redownload the canonical chunk store. `image.fileSize` stays synchronous
+because the snapshot metadata is obtained before the Emscripten glue is
+appended.
 
 Download concurrency is capped at eight. This is a conduct constraint as well
 as a performance setting: every installation uses the public client access key
@@ -102,7 +106,11 @@ or fails. There is no renderer-owned download or power state.
 
 `Module` must be declared with `var`; the generated glue redeclares it.
 `Gw.jspi.js` asks for `Gw.wasm`, so `locateFile` explicitly selects
-`Gw.jspi.wasm`. Asyncify is not a production fallback.
+`Gw.jspi.wasm`. Full-file protocol responses stream from disk, allowing
+`WebAssembly.instantiateStreaming` to compile without first retaining the
+whole module in main-process memory. Cached Toolbox validation also streams
+both hashes; the official bytes are loaded only for a cold transform. Asyncify
+is not a production fallback.
 
 Before `Gw.jspi.js` is appended, the renderer resolves the single
 `dataStrategy` setting against native cache residency. `null` owns the
@@ -193,10 +201,28 @@ fallback needed for the `0.0.1.2` datacenter sentinel.
 Game socket payloads are views into WebAssembly memory. The renderer copies
 each outbound view into a compact `Uint8Array` before crossing
 `contextBridge`; otherwise Electron can serialize the view’s entire backing
-memory for a packet only a few bytes long. Main still owns validation,
-backpressure, ordering, and the TCP write. Diagnostics reconcile logical,
+memory for a packet only a few bytes long. Electron's compact IPC value is
+written directly to the native socket without another `Buffer` copy. Main
+still owns validation, backpressure, ordering, and the TCP write. Diagnostics reconcile logical,
 source-backing, compact, IPC-backing, and written byte counts without recording
 packet contents.
+
+### Official-client memory floor
+
+The generated client mounts Emscripten IDBFS at `app:` and restores
+`app:/Gw.dat` before completing initialization. On the certified profile that
+file is about 919 MB, while the official WASM linear memory is about 369 MiB.
+Restoring IDBFS can therefore create a short-lived RSS peak above 1 GiB in both
+the browser/main and renderer processes even though steady resident memory
+falls sharply after the pages become reclaimable. This is not Toolbox state,
+the 256 MB snapshot LRU, or Chromium's network cache.
+
+Avoiding that peak requires an architectural replacement for the official
+synchronous Emscripten filesystem—such as a proven lazy native backend or a
+worker-hosted runtime—not a safe local copy removal. Do not clear IDBFS or
+patch the official glue speculatively: `Gw.dat` is persistent client state and
+removing it can turn memory pressure into repeated reconstruction and snapshot
+I/O.
 
 Closing the single game window is an application quit. The close event is
 converted to `app.quit()` before the renderer is destroyed, cleanup closes
