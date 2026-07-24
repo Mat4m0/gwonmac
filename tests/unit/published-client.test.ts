@@ -7,6 +7,7 @@ import { AppError } from "../../src/shared/errors.ts";
 
 describe("published client manifest", () => {
   const valid = {
+    clientFingerprint: "a".repeat(64),
     compressionMode: "gzip",
     chunkSize: 4,
     snapshot: "Gw.snapshot",
@@ -35,6 +36,10 @@ describe("published client manifest", () => {
     );
     assert.throws(
       () => parsePublishedClientManifest({ ...valid, chunkHashes: ["only"] }),
+      AppError,
+    );
+    assert.throws(
+      () => parsePublishedClientManifest({ ...valid, clientFingerprint: "bad" }),
       AppError,
     );
   });

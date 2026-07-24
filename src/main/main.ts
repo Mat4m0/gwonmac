@@ -23,6 +23,11 @@ import {
 } from "./core/access-key.js";
 import { readPublishedClientManifest } from "./core/published-client.js";
 import { ChunkStore } from "./core/chunk-store.js";
+import {
+  confirmClientCandidate,
+  readRejectedClient,
+  restoreUnconfirmedClient,
+} from "./core/client-compatibility.js";
 import type { Manifest } from "./core/manifest.js";
 import { PatchClient } from "./core/patch-client.js";
 import { fetchPatchBytes, type PatchFetch } from "./core/patch-transport.js";
@@ -430,10 +435,40 @@ async function startGameUpdate(): Promise<void> {
   });
   const updateSpan = span("update", "clientUpdate");
   try {
-    const manifest = await patchClient.update();
-    await attachChunkStore(manifest, paths.chunks, paths.bootChunks);
+    const rollback = await restoreUnconfirmedClient({
+      artifacts: paths.artifacts,
+      previousArtifacts: paths.previousArtifacts,
+      rejectedPath: paths.rejectedClient,
+      hostVersion: app.getVersion(),
+    });
+    if (rollback) {
+      log("update", "warn", "client.candidateRolledBack", {
+        fingerprint: rollback.fingerprint,
+      });
+    }
+    const blockedFingerprint = await readRejectedClient(
+      paths.rejectedClient,
+      app.getVersion(),
+    );
+    const result = await patchClient.update({ blockedFingerprint });
+    if (result.blocked) {
+      await attachLastPublishedClient();
+      gauge("update.usingCachedClient", true);
+      await afterClientReady(
+        "A newer game client did not start successfully, so the last working client is being used.",
+      );
+      updateSpan.end({
+        status: "rejectedCandidateSkipped",
+        fingerprint: result.fingerprint,
+      }, "warn");
+      return;
+    }
+    await attachChunkStore(result.manifest, paths.chunks, paths.bootChunks);
     await afterClientReady();
-    updateSpan.end({ status: "ready" });
+    updateSpan.end({
+      status: result.candidate ? "candidate" : "ready",
+      fingerprint: result.fingerprint,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     try {
@@ -483,6 +518,20 @@ function buildWindowHost(): WindowHost {
     reloadGame: (win) => {
       sockets.closeAll(win.webContents.id);
       void win.loadURL("gw://app/");
+    },
+    prepareRendererRecovery: async () => {
+      const paths = gamePaths();
+      const rollback = await restoreUnconfirmedClient({
+        artifacts: paths.artifacts,
+        previousArtifacts: paths.previousArtifacts,
+        rejectedPath: paths.rejectedClient,
+        hostVersion: app.getVersion(),
+      });
+      if (!rollback) return;
+      await attachLastPublishedClient();
+      log("update", "warn", "client.candidateRolledBackAfterRendererCrash", {
+        fingerprint: rollback.fingerprint,
+      });
     },
   };
 }
@@ -535,6 +584,17 @@ app.whenReady().then(async () => {
       if (!fullDownload) return;
       log("cache", "info", "fullDownload.stopRequested");
       chunkStore?.stop();
+    },
+    confirmClientHealthy: async () => {
+      const paths = gamePaths();
+      const fingerprint = await confirmClientCandidate({
+        artifacts: paths.artifacts,
+        previousArtifacts: paths.previousArtifacts,
+        rejectedPath: paths.rejectedClient,
+      });
+      if (fingerprint) {
+        log("update", "info", "client.candidatePromoted", { fingerprint });
+      }
     },
   });
 

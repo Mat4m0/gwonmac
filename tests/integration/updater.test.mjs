@@ -14,6 +14,11 @@ import { join } from "node:path";
 import http from "node:http";
 import { after, describe, it } from "node:test";
 import { PatchClient } from "../../build/main/core/patch-client.js";
+import {
+  confirmClientCandidate,
+  readRejectedClient,
+  restoreUnconfirmedClient,
+} from "../../build/main/core/client-compatibility.js";
 import { isProxyRoute, resolveProxyHost } from "../../build/main/core/proxy-routes.js";
 import { parseRangeHeader } from "../../build/main/core/ranges.js";
 
@@ -91,7 +96,9 @@ describe("integration: patch updater", () => {
       fetch: fetchFixture,
     });
 
-    await client.update();
+    const initial = await client.update();
+    assert.equal(initial.published, true);
+    assert.equal(initial.candidate, false);
     assert.equal((await readFile(join(artifacts, "Gw.jspi.js"))).toString(), js.toString());
     assert.equal((await stat(join(artifacts, "Gw.jspi.wasm"))).size, wasm.length);
     assert.ok(await readFile(join(artifacts, "snapshot-metadata.json"), "utf8"));
@@ -108,6 +115,75 @@ describe("integration: patch updater", () => {
     });
     await client2.update();
     assert.equal(fetches, 1);
+
+    // A changed upstream client remains a candidate until it submits a frame.
+    const versionEntry = manifestFiles.find((file) => file.name === "version.json");
+    const nextVersion = Buffer.from('{"build":2}');
+    const nextVersionHash = md5(nextVersion);
+    store.set(nextVersionHash, nextVersion);
+    versionEntry.size = nextVersion.length;
+    versionEntry.chunkHashes = [nextVersionHash];
+    const candidate = await client2.update();
+    assert.equal(candidate.candidate, true);
+    assert.equal(
+      (await readFile(join(artifacts, "version.json"))).toString(),
+      nextVersion.toString(),
+    );
+    assert.ok(await stat(`${artifacts}.previous`));
+    assert.ok(await stat(join(artifacts, ".candidate.json")));
+
+    // Restart before that frame restores the working client and blocks only
+    // this exact upstream fingerprint from being retried.
+    const rejectedPath = join(root, "rejected-client.json");
+    assert.deepEqual(
+      await restoreUnconfirmedClient({
+        artifacts,
+        previousArtifacts: `${artifacts}.previous`,
+        rejectedPath,
+        hostVersion: "1.0.0",
+      }),
+      { fingerprint: candidate.fingerprint },
+    );
+    assert.equal((await readFile(join(artifacts, "version.json"))).toString(), ver.toString());
+    assert.equal(
+      await readRejectedClient(rejectedPath, "1.0.0"),
+      candidate.fingerprint,
+    );
+    let blockedFetches = 0;
+    const blocked = await new PatchClient({
+      artifactsDir: artifacts,
+      chunksDir: chunks,
+      patchRoot: rootUrl,
+      fetch: async (url) => {
+        blockedFetches += 1;
+        return fetchFixture(url);
+      },
+    }).update({ blockedFingerprint: candidate.fingerprint });
+    assert.equal(blocked.blocked, true);
+    assert.equal(blockedFetches, 1);
+
+    // A different upstream client gets one fresh attempt and is promoted by
+    // the first-frame milestone.
+    const thirdVersion = Buffer.from('{"build":3}');
+    const thirdVersionHash = md5(thirdVersion);
+    store.set(thirdVersionHash, thirdVersion);
+    versionEntry.size = thirdVersion.length;
+    versionEntry.chunkHashes = [thirdVersionHash];
+    const freshCandidate = await client2.update({
+      blockedFingerprint: candidate.fingerprint,
+    });
+    assert.equal(freshCandidate.candidate, true);
+    assert.equal(
+      await confirmClientCandidate({
+        artifacts,
+        previousArtifacts: `${artifacts}.previous`,
+        rejectedPath,
+      }),
+      freshCandidate.fingerprint,
+    );
+    await assert.rejects(() => stat(`${artifacts}.previous`));
+    await assert.rejects(() => stat(join(artifacts, ".candidate.json")));
+    assert.equal(await readRejectedClient(rejectedPath, "1.0.0"), null);
 
     // Startup restores the last complete directory if a swap was interrupted.
     await rename(artifacts, `${artifacts}.previous`);

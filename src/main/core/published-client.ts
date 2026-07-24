@@ -4,6 +4,7 @@ import { SNAPSHOT } from "./access-key.js";
 import type { CompressionMode } from "./manifest.js";
 
 export interface PublishedClientManifest {
+  clientFingerprint?: string;
   compressionMode: CompressionMode;
   chunkSize: number;
   snapshot: typeof SNAPSHOT;
@@ -56,6 +57,16 @@ export function parsePublishedClientManifest(
       "published client manifest has invalid chunk hashes",
     );
   }
+  if (
+    value.clientFingerprint !== undefined &&
+    (typeof value.clientFingerprint !== "string" ||
+      !/^[a-f0-9]{64}$/.test(value.clientFingerprint))
+  ) {
+    throw new AppError(
+      "bad_manifest",
+      "published client manifest has invalid client fingerprint",
+    );
+  }
   const chunkSize = Number(value.chunkSize);
   const size = Number(value.size);
   if (value.chunkHashes.length !== Math.ceil(size / chunkSize)) {
@@ -65,6 +76,10 @@ export function parsePublishedClientManifest(
     );
   }
   return {
+    ...(typeof value.clientFingerprint === "string" &&
+    /^[a-f0-9]{64}$/.test(value.clientFingerprint)
+      ? { clientFingerprint: value.clientFingerprint }
+      : {}),
     compressionMode: value.compressionMode,
     chunkSize,
     snapshot: SNAPSHOT,

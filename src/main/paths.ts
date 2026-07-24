@@ -10,6 +10,8 @@ export interface GamePaths {
   game: string;
   manifest: string;
   artifacts: string;
+  previousArtifacts: string;
+  rejectedClient: string;
   chunks: string;
   bootChunks: string;
   cacheClearRequest: string;
@@ -26,6 +28,8 @@ export function gamePaths(userData = app.getPath("userData")): GamePaths {
     game,
     manifest: path.join(game, "manifest.json"),
     artifacts: path.join(game, "artifacts"),
+    previousArtifacts: path.join(game, "artifacts.previous"),
+    rejectedClient: path.join(game, "rejected-client.json"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),

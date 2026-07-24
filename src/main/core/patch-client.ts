@@ -27,6 +27,10 @@ import {
 } from "./access-key.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
 import { mapPool } from "./async-pool.js";
+import {
+  clientFingerprint,
+  markClientCandidate,
+} from "./client-compatibility.js";
 import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
 import { Manifest, type CompressionMode, type ManifestFileEntry } from "./manifest.js";
 import {
@@ -48,6 +52,14 @@ export interface PatchClientOptions {
   accessKey?: string;
   userAgent?: string;
   requestTimeoutMs?: number;
+}
+
+export interface PatchUpdateResult {
+  manifest: Manifest;
+  fingerprint: string;
+  published: boolean;
+  candidate: boolean;
+  blocked: boolean;
 }
 
 function defaultFetch(requestTimeoutMs: number): FetchLike {
@@ -248,6 +260,20 @@ export class PatchClient {
     }
   }
 
+  private async publishedFingerprint(): Promise<string | null> {
+    try {
+      return (
+        parsePublishedClientManifest(
+          JSON.parse(
+            await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+          ),
+        ).clientFingerprint ?? null
+      );
+    } catch {
+      return null;
+    }
+  }
+
   private async recoverArtifactSwap(stage: string, backup: string): Promise<void> {
     let currentExists = true;
     try {
@@ -262,8 +288,19 @@ export class PatchClient {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       backupExists = false;
     }
-    if (backupExists && currentExists) {
+    const candidateExists =
+      currentExists &&
+      (await stat(join(this.artifactsDir, ".candidate.json")).then(
+        () => true,
+        () => false,
+      ));
+    if (backupExists && currentExists && !candidateExists) {
       await rm(backup, { recursive: true, force: true });
+    } else if (backupExists && currentExists) {
+      throw new AppError(
+        "candidate_pending",
+        "client candidate must be confirmed or rolled back before updating",
+      );
     } else if (backupExists) {
       await rename(backup, this.artifactsDir);
     }
@@ -279,13 +316,26 @@ export class PatchClient {
   }
 
   /** Fetch JSPI client artifacts and publish snapshot metadata; never assembles Gw.snapshot. */
-  async update(): Promise<Manifest> {
+  async update(options?: {
+    blockedFingerprint?: string | null;
+  }): Promise<PatchUpdateResult> {
     const stage = `${this.artifactsDir}.next`;
     const backup = `${this.artifactsDir}.previous`;
     await this.recoverArtifactSwap(stage, backup);
     await mkdir(this.chunksDir, { recursive: true });
 
     const mf = await this.fetchManifest();
+    const fingerprint = clientFingerprint(mf);
+    if (fingerprint === options?.blockedFingerprint) {
+      return {
+        manifest: mf,
+        fingerprint,
+        published: false,
+        candidate: false,
+        blocked: true,
+      };
+    }
+    const previousFingerprint = await this.publishedFingerprint();
     const artifacts: {
       name: string;
       entry: ManifestFileEntry;
@@ -328,7 +378,13 @@ export class PatchClient {
         secondsRemaining: null,
         error: null,
       });
-      return mf;
+      return {
+        manifest: mf,
+        fingerprint,
+        published: false,
+        candidate: false,
+        blocked: false,
+      };
     }
 
     const sizes = new Map<string, number>();
@@ -364,6 +420,7 @@ export class PatchClient {
       });
     }
 
+    let hadCurrent: boolean;
     await mkdir(stage, { recursive: true });
     try {
       for (const artifact of artifacts) {
@@ -386,21 +443,24 @@ export class PatchClient {
       await writeAtomicJson(
         join(stage, "manifest.json"),
         parsePublishedClientManifest({
-        compressionMode: mf.compression,
-        chunkSize: mf.chunkSize,
-        snapshot: SNAPSHOT,
-        size: snapshotEntry.size,
-        chunkHashes: snapshotEntry.chunkHashes,
+          clientFingerprint: fingerprint,
+          compressionMode: mf.compression,
+          chunkSize: mf.chunkSize,
+          snapshot: SNAPSHOT,
+          size: snapshotEntry.size,
+          chunkHashes: snapshotEntry.chunkHashes,
         }),
       );
-      let hadCurrent = false;
       try {
         await stat(this.artifactsDir);
         hadCurrent = true;
       } catch {
         hadCurrent = false;
       }
+      const candidate =
+        hadCurrent && previousFingerprint !== fingerprint;
       if (hadCurrent) {
+        if (candidate) await markClientCandidate(stage, fingerprint);
         await rm(backup, { recursive: true, force: true });
         await rename(this.artifactsDir, backup);
       }
@@ -410,7 +470,9 @@ export class PatchClient {
         if (hadCurrent) await rename(backup, this.artifactsDir);
         throw error;
       }
-      if (hadCurrent) await rm(backup, { recursive: true, force: true });
+      if (hadCurrent && !candidate) {
+        await rm(backup, { recursive: true, force: true });
+      }
     } finally {
       await rm(stage, { recursive: true, force: true });
     }
@@ -424,6 +486,12 @@ export class PatchClient {
       secondsRemaining: null,
       error: null,
     });
-    return mf;
+    return {
+      manifest: mf,
+      fingerprint,
+      published: true,
+      candidate: hadCurrent && previousFingerprint !== fingerprint,
+      blocked: false,
+    };
   }
 }

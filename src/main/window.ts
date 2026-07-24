@@ -43,6 +43,7 @@ export interface WindowHost {
   startCapture: (level: 1 | 2) => Promise<void>;
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
+  prepareRendererRecovery: () => Promise<void>;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -302,9 +303,19 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
       log("renderer", "warn", "renderer.recoveryScheduled");
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
-        createMainWindow(host);
-        win.destroy();
-        log("renderer", "info", "renderer.recovered");
+        void host
+          .prepareRendererRecovery()
+          .catch((error) => {
+            log("renderer", "error", "renderer.recoveryPreparationFailed", {
+              message: error instanceof Error ? error.message : String(error),
+            });
+          })
+          .finally(() => {
+            if (isQuitting() || win.isDestroyed()) return;
+            createMainWindow(host);
+            win.destroy();
+            log("renderer", "info", "renderer.recovered");
+          });
       }, 500);
     } else if (details.reason !== "clean-exit") {
       dialog.showErrorBox(
