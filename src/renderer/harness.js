@@ -359,28 +359,6 @@ function readFromCache(offset, size) {
   return out;
 }
 
-// Host functions the glue awaits or calls .then() on. Returning undefined from
-// one throws "Cannot read properties of undefined (reading 'then')" mid-connect.
-const ASYNC_METHODS = new Set([
-  'adProvider.showInterstitial', 'ageSignals.check',
-  'shop.initialize', 'shop.inAppPurchase',
-]);
-
-// Call sites test `typeof Module.x.y === 'function'`, so every property must
-// read back callable.
-/** @param {string} name */
-const stub = (name) => new Proxy({}, {
-  get: (_, k) => {
-    /** @param {...any} args Generated stub call signature. */
-    return (...args) => {
-      const meth = `${name}.${String(k)}`;
-      log('[stub]', meth, args.length ? `(${args.length} args)` : '');
-      return ASYNC_METHODS.has(meth) ? Promise.resolve(undefined) : undefined;
-    };
-  },
-  has: () => true,
-});
-
 Module = {
   canvas:
     /** @type {HTMLCanvasElement} */ (document.getElementById('canvas')),
@@ -651,12 +629,6 @@ Module = {
       return native().dns.resolve(name);
     },
   },
-
-  shop:       stub('shop'),
-  adProvider: stub('adProvider'),
-  browser:    stub('browser'),
-  events:     stub('events'),
-  ageSignals: stub('ageSignals'),
 
   // All three methods must exist: the generated glue's missing-method branches
   // call their fallback without returning. Main owns encrypted persistence.
@@ -944,6 +916,18 @@ function loadGlue(candidates) {
     window.gwLoading?.done();
     window.gwAutomation?.set('toolbox.fixture');
     return;
+  }
+
+  try {
+    const { unavailablePlatformCapabilities } =
+      await import('./platform-capabilities.js');
+    Object.assign(Module, unavailablePlatformCapabilities(log));
+  } catch (error) {
+    window.gwLoading?.fail('The game host contract could not be loaded.');
+    return log(
+      '[err] platform contract load failed:',
+      error instanceof Error ? error.message : String(error),
+    );
   }
 
   window.addEventListener('gw:diagnostics-toggle', async () => {
