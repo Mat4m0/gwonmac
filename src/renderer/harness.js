@@ -940,6 +940,11 @@ function loadGlue(candidates) {
     return;
   }
   milestone('renderer.loaded');
+  if (new URL(window.location.href).searchParams.has('toolbox-fixture')) {
+    window.gwLoading?.done();
+    window.gwAutomation?.set('toolbox.fixture');
+    return;
+  }
 
   window.addEventListener('gw:diagnostics-toggle', async () => {
     appSettings = await native().settings.get();

@@ -27,6 +27,17 @@ pnpm test:unit
 pnpm test:integration
 ```
 
+For real CSS/layout feedback without a game or network session:
+
+```bash
+pnpm toolbox:visual -- target
+pnpm toolbox:visual -- map
+```
+
+This launches an offline temporary profile, renders the real overlay markup and
+CSS from a deterministic state, writes one screenshot under
+`test-results/toolbox-visual/`, closes Electron, and removes the profile.
+
 `toolbox:doctor` is local-only. It checks the existing profile, published
 client, exact WASM hash, transformed cache, saved-login presence, and complete
 snapshot residency. It never starts Electron or contacts ArenaNet.
@@ -167,8 +178,8 @@ failure results. Never expose `writeMemory`, `callFunction`, or `sendPacket`.
 
 | Domain | Foundation | Live evidence | Next proof |
 | --- | --- | --- | --- |
-| Hook lifecycle | Ready | continuous tick, clean shutdown | reload scenario |
-| Map/player | Ready | outpost identity and coordinates | live map transition |
+| Hook lifecycle | Ready | continuous tick, reload, clean shutdown | map transition |
+| Map/player | Ready | live identity, coordinates, movement | live map transition |
 | Target identity/distance | Ready | Living target | hostile/item/gadget/clear |
 | Overlay presentation | Ready | real canvas integration | deterministic visual QA |
 | Party | Not modeled | none | locate bounded roster |

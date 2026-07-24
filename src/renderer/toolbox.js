@@ -353,4 +353,31 @@ async function install(instance, module) {
 if (typeof window !== "undefined") {
   window.gwToolbox = Object.freeze({ install });
   window.dispatchEvent(new Event("gw-toolbox-ready"));
+  const fixture = new URL(window.location.href).searchParams.get(
+    "toolbox-fixture",
+  );
+  if (fixture === "map" || fixture === "target") {
+    const state = Object.freeze({
+      status: "ready",
+      sequence: 2,
+      tickCount: 120,
+      mapId: 133,
+      instanceType: 0,
+      instanceName: "Outpost",
+      playerId: 12,
+      playerX: -10_101,
+      playerY: 32_600,
+      targetValid: fixture === "target",
+      targetId: fixture === "target" ? 1 : 0,
+      targetType: fixture === "target" ? 0xdb : 0,
+      targetKind: fixture === "target" ? "Living" : "None",
+      targetX: fixture === "target" ? -9_595 : 0,
+      targetY: fixture === "target" ? 35_380 : 0,
+      distance: fixture === "target" ? 2_825.7 : 0,
+      rangeBand: fixture === "target" ? 7 : 0,
+      rangeName: fixture === "target" ? "Compass" : "None",
+    });
+    window.gwToolboxState = state;
+    renderToolboxState(state);
+  }
 }

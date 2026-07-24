@@ -351,7 +351,16 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   installMenu(host, win);
-  void win.loadURL("gw://app/");
+  const toolboxFixture =
+    process.env.GW_OFFLINE_SHELL === "1"
+    && ["map", "target"].includes(process.env.GW_TOOLBOX_FIXTURE ?? "")
+      ? process.env.GW_TOOLBOX_FIXTURE
+      : null;
+  void win.loadURL(
+    toolboxFixture
+      ? `gw://app/?toolbox-fixture=${toolboxFixture}`
+      : "gw://app/",
+  );
   return win;
 }
 
