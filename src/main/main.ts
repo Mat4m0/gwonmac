@@ -1,4 +1,4 @@
-import { app, dialog, net, session } from "electron";
+import { app, dialog, net, powerMonitor, session } from "electron";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -23,6 +23,7 @@ import {
 } from "./core/access-key.js";
 import { readPublishedClientManifest } from "./core/published-client.js";
 import { ChunkStore } from "./core/chunk-store.js";
+import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import {
   confirmClientCandidate,
   readRejectedClient,
@@ -31,6 +32,7 @@ import {
 import type { Manifest } from "./core/manifest.js";
 import { PatchClient } from "./core/patch-client.js";
 import { fetchPatchBytes, type PatchFetch } from "./core/patch-transport.js";
+import { fullDownloadFailureMessage } from "./core/recovery.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
@@ -90,6 +92,27 @@ let saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
 let initialResidencyRecorded = false;
 let fullDownload: Promise<boolean> | null = null;
 let settingsWrite: Promise<void> = Promise.resolve();
+
+async function pruneCurrentChunkCache(): Promise<void> {
+  const paths = gamePaths();
+  try {
+    const removed = await pruneUnreferencedChunks({
+      chunksDir: paths.chunks,
+      currentManifest: path.join(paths.artifacts, "manifest.json"),
+      previousManifest: path.join(paths.previousArtifacts, "manifest.json"),
+    });
+    if (removed.files > 0) {
+      log("cache", "info", "cache.staleChunksRemoved", {
+        files: removed.files,
+        bytes: removed.bytes,
+      });
+    }
+  } catch (error) {
+    log("cache", "warn", "cache.staleChunkCleanupSkipped", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   const operation = settingsWrite.then(async () => {
@@ -389,19 +412,7 @@ function downloadFullGame(): Promise<boolean> {
             : "unknown",
         message: error instanceof Error ? error.message : String(error),
       });
-      let cause: unknown = error;
-      let diskSpaceFailure = false;
-      while (cause instanceof Error) {
-        const code = "code" in cause ? String(cause.code) : "";
-        if (code === "disk_full" || code === "ENOSPC" || code === "EDQUOT") {
-          diskSpaceFailure = true;
-          break;
-        }
-        cause = cause.cause;
-      }
-      const message = diskSpaceFailure
-        ? "There is not enough free disk space to download the full game."
-        : "The download could not continue. Check your connection, then choose Resume Download.";
+      const message = fullDownloadFailureMessage(error);
       setProgress({
         ...INITIAL_PROGRESS,
         phase: "ready",
@@ -453,6 +464,7 @@ async function startGameUpdate(): Promise<void> {
     const result = await patchClient.update({ blockedFingerprint });
     if (result.blocked) {
       await attachLastPublishedClient();
+      await pruneCurrentChunkCache();
       gauge("update.usingCachedClient", true);
       await afterClientReady(
         "A newer game client did not start successfully, so the last working client is being used.",
@@ -464,6 +476,7 @@ async function startGameUpdate(): Promise<void> {
       return;
     }
     await attachChunkStore(result.manifest, paths.chunks, paths.bootChunks);
+    await pruneCurrentChunkCache();
     await afterClientReady();
     updateSpan.end({
       status: result.candidate ? "candidate" : "ready",
@@ -473,6 +486,7 @@ async function startGameUpdate(): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     try {
       await attachLastPublishedClient();
+      await pruneCurrentChunkCache();
       log("update", "warn", "patch.updateFallback", {
         message,
       });
@@ -529,6 +543,7 @@ function buildWindowHost(): WindowHost {
       });
       if (!rollback) return;
       await attachLastPublishedClient();
+      await pruneCurrentChunkCache();
       log("update", "warn", "client.candidateRolledBackAfterRendererCrash", {
         fingerprint: rollback.fingerprint,
       });
@@ -550,6 +565,11 @@ app.whenReady().then(async () => {
   await applyPendingCacheClear();
   await ensureDirs();
   await startDiagnostics();
+  powerMonitor.on("suspend", () => {
+    if (!fullDownload) return;
+    log("cache", "warn", "fullDownload.stoppedForSleep");
+    chunkStore?.stop();
+  });
   await clearBrowserCookies("startup");
   log("app", "info", "electron.ready");
   await loadSettings(gamePaths().settings, async (backupPath) => {
@@ -593,6 +613,7 @@ app.whenReady().then(async () => {
         rejectedPath: paths.rejectedClient,
       });
       if (fingerprint) {
+        await pruneCurrentChunkCache();
         log("update", "info", "client.candidatePromoted", { fingerprint });
       }
     },
