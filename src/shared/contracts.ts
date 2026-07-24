@@ -150,11 +150,7 @@ export interface UpdateStatus {
 
 export const IPC = {
   progressCurrent: "gw:progress:current",
-  progressSubscribe: "gw:progress:subscribe",
-  progressUnsubscribe: "gw:progress:unsubscribe",
   progressEvent: "gw:progress:event",
-  prefetchSubscribe: "gw:prefetch:subscribe",
-  prefetchUnsubscribe: "gw:prefetch:unsubscribe",
   prefetchEvent: "gw:prefetch:event",
   snapshotMetadata: "gw:snapshot:metadata",
   dnsResolve: "gw:dns:resolve",

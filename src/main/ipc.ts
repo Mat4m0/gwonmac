@@ -7,7 +7,6 @@ import type {
   DownloadProgress,
   ExternalLinkKind,
   GraphicsDiagnostics,
-  PrefetchProgress,
   SocketEvent,
   StoredCredentials,
 } from "../shared/contracts.js";
@@ -46,13 +45,10 @@ import { getMainWindow, resetWindowState } from "./window.js";
 export interface IpcContext {
   sockets: SocketManager;
   getProgress: () => DownloadProgress;
-  getPrefetch: () => PrefetchProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
-  subscribeProgress: (cb: (p: DownloadProgress) => void) => () => void;
-  subscribePrefetch: (cb: (p: PrefetchProgress) => void) => () => void;
   downloadFullGame: () => Promise<boolean>;
   stopFullDownload: () => void;
 }
@@ -120,62 +116,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = gamePaths();
   const credentials = new CredentialsStore(paths.credentials, safeStorage);
 
-  const progressSubs = new Map<number, () => void>();
-  const prefetchSubs = new Map<number, () => void>();
-  const watchedRenderers = new Set<number>();
-
-  const clearRendererSubscriptions = (rendererId: number): void => {
-    progressSubs.get(rendererId)?.();
-    progressSubs.delete(rendererId);
-    prefetchSubs.get(rendererId)?.();
-    prefetchSubs.delete(rendererId);
-    watchedRenderers.delete(rendererId);
-  };
-  const watchRenderer = (win: BrowserWindow): void => {
-    const rendererId = win.webContents.id;
-    if (watchedRenderers.has(rendererId)) return;
-    watchedRenderers.add(rendererId);
-    win.webContents.once("destroyed", () => clearRendererSubscriptions(rendererId));
-  };
-
   ipcMain.handle(IPC.progressCurrent, (event) => {
     assertSender(event);
     return ctx.getProgress();
-  });
-
-  ipcMain.handle(IPC.progressSubscribe, (event) => {
-    const win = assertSender(event);
-    const rendererId = win.webContents.id;
-    progressSubs.get(rendererId)?.();
-    const unsub = ctx.subscribeProgress((value) => {
-      sendIfLive(win, IPC.progressEvent, value);
-    });
-    progressSubs.set(rendererId, unsub);
-    watchRenderer(win);
-    sendIfLive(win, IPC.progressEvent, ctx.getProgress());
-  });
-
-  ipcMain.handle(IPC.progressUnsubscribe, (event) => {
-    const win = assertSender(event);
-    progressSubs.get(win.webContents.id)?.();
-    progressSubs.delete(win.webContents.id);
-  });
-
-  ipcMain.handle(IPC.prefetchSubscribe, (event) => {
-    const win = assertSender(event);
-    prefetchSubs.get(win.webContents.id)?.();
-    const unsub = ctx.subscribePrefetch((value) => {
-      sendIfLive(win, IPC.prefetchEvent, value);
-    });
-    prefetchSubs.set(win.webContents.id, unsub);
-    watchRenderer(win);
-    sendIfLive(win, IPC.prefetchEvent, ctx.getPrefetch());
-  });
-
-  ipcMain.handle(IPC.prefetchUnsubscribe, (event) => {
-    const win = assertSender(event);
-    prefetchSubs.get(win.webContents.id)?.();
-    prefetchSubs.delete(win.webContents.id);
   });
 
   ipcMain.handle(IPC.snapshotMetadata, async (event) => {

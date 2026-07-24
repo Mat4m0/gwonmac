@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("preload shares progress transport while keeping renderer listeners independent", async () => {
+test("preload keeps progress listeners independent without subscription commands", async () => {
   const listeners = new Map();
   const invokes = [];
   let api;
@@ -55,10 +55,7 @@ test("preload shares progress transport while keeping renderer listeners indepen
   const receivedB = [];
   const unsubscribeA = api.progress.onChange((value) => receivedA.push(value));
   const unsubscribeB = api.progress.onChange((value) => receivedB.push(value));
-  assert.equal(
-    invokes.filter((channel) => channel === "gw:progress:subscribe").length,
-    1,
-  );
+  assert.deepEqual(invokes, []);
 
   for (const handler of listeners.get("gw:progress:event")) {
     handler({}, { phase: "image", received: 1 });
@@ -67,10 +64,7 @@ test("preload shares progress transport while keeping renderer listeners indepen
   assert.equal(receivedB.length, 1);
 
   unsubscribeA();
-  assert.equal(
-    invokes.filter((channel) => channel === "gw:progress:unsubscribe").length,
-    0,
-  );
+  assert.deepEqual(invokes, []);
   for (const handler of listeners.get("gw:progress:event")) {
     handler({}, { phase: "image", received: 2 });
   }
@@ -78,9 +72,6 @@ test("preload shares progress transport while keeping renderer listeners indepen
   assert.equal(receivedB.length, 2);
 
   unsubscribeB();
-  assert.equal(
-    invokes.filter((channel) => channel === "gw:progress:unsubscribe").length,
-    1,
-  );
+  assert.deepEqual(invokes, []);
   assert.equal(listeners.get("gw:progress:event").length, 0);
 });

@@ -4,11 +4,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const IPC = {
   progressCurrent: "gw:progress:current",
-  progressSubscribe: "gw:progress:subscribe",
-  progressUnsubscribe: "gw:progress:unsubscribe",
   progressEvent: "gw:progress:event",
-  prefetchSubscribe: "gw:prefetch:subscribe",
-  prefetchUnsubscribe: "gw:prefetch:unsubscribe",
   prefetchEvent: "gw:prefetch:event",
   snapshotMetadata: "gw:snapshot:metadata",
   dnsResolve: "gw:dns:resolve",
@@ -52,46 +48,11 @@ function listen(eventChannel, callback) {
   };
 }
 
-function sharedSubscription(subscribeChannel, unsubscribeChannel, eventChannel) {
-  const callbacks = new Set();
-  const handler = (_event, value) => {
-    for (const callback of callbacks) callback(value);
-  };
-  return (callback) => {
-    callbacks.add(callback);
-    if (callbacks.size === 1) {
-      ipcRenderer.on(eventChannel, handler);
-      void ipcRenderer.invoke(subscribeChannel);
-    }
-    let active = true;
-    return () => {
-      if (!active) return;
-      active = false;
-      callbacks.delete(callback);
-      if (callbacks.size === 0) {
-        ipcRenderer.removeListener(eventChannel, handler);
-        void ipcRenderer.invoke(unsubscribeChannel);
-      }
-    };
-  };
-}
-
-const onProgress = sharedSubscription(
-  IPC.progressSubscribe,
-  IPC.progressUnsubscribe,
-  IPC.progressEvent,
-);
-const onPrefetch = sharedSubscription(
-  IPC.prefetchSubscribe,
-  IPC.prefetchUnsubscribe,
-  IPC.prefetchEvent,
-);
-
 const api = Object.freeze({
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
-    onChange: onProgress,
-    onPrefetch,
+    onChange: (callback) => listen(IPC.progressEvent, callback),
+    onPrefetch: (callback) => listen(IPC.prefetchEvent, callback),
   },
   snapshot: {
     metadata: async () => {

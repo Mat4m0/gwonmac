@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   EXTERNAL_URLS,
   DEFAULT_SETTINGS,
+  IPC,
   type AppSettings,
   type AppSettingsPatch,
   type DownloadProgress,
@@ -77,8 +78,6 @@ wireLifecycle();
 
 let progress: DownloadProgress = { ...INITIAL_PROGRESS };
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
-const progressListeners = new Set<(p: DownloadProgress) => void>();
-const prefetchListeners = new Set<(p: PrefetchProgress) => void>();
 
 let chunkStore: ChunkStore | null = null;
 let snapshotMeta: SnapshotMetadata | null = null;
@@ -128,13 +127,19 @@ const sockets = new SocketManager(
 function setProgress(next: DownloadProgress): void {
   progress = next;
   updateLongRunningTaskFeedback(next);
-  for (const listener of progressListeners) listener(next);
+  sendToRenderer(IPC.progressEvent, next);
 }
 
 function setPrefetch(next: PrefetchProgress): void {
   prefetch.completedChunks = next.completedChunks;
   prefetch.totalChunks = next.totalChunks;
-  for (const listener of prefetchListeners) listener({ ...prefetch });
+  sendToRenderer(IPC.prefetchEvent, { ...prefetch });
+}
+
+function sendToRenderer(channel: string, value: unknown): void {
+  const win = getMainWindow();
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+  win.webContents.send(channel, value);
 }
 
 async function ensureDirs(): Promise<void> {
@@ -517,19 +522,10 @@ app.whenReady().then(async () => {
   registerIpcHandlers({
     sockets,
     getProgress: () => progress,
-    getPrefetch: () => prefetch,
     getChunkStore: () => chunkStore,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
-    subscribeProgress: (cb) => {
-      progressListeners.add(cb);
-      return () => progressListeners.delete(cb);
-    },
-    subscribePrefetch: (cb) => {
-      prefetchListeners.add(cb);
-      return () => prefetchListeners.delete(cb);
-    },
     downloadFullGame,
     stopFullDownload: () => {
       if (!fullDownload) return;
