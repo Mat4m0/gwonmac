@@ -10,6 +10,8 @@ test.describe("sandbox boundary", () => {
     try {
       const boundary = await fixture.page.evaluate(() => ({
         protocol: globalThis.location.protocol,
+        search: globalThis.location.search,
+        toolboxHidden: document.getElementById("toolbox")?.hidden,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
         requireType: typeof window.require,
@@ -17,6 +19,8 @@ test.describe("sandbox boundary", () => {
       }));
       expect(boundary).toEqual({
         protocol: "gw:",
+        search: "",
+        toolboxHidden: true,
         keys: [
           "app",
           "cache",
@@ -53,6 +57,18 @@ test.describe("sandbox boundary", () => {
         status: 503,
         cacheControl: "no-store",
       });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("enables Toolbox presentation only for explicit developer sessions", async () => {
+    const fixture = await launchOffline("gw-toolbox-developer-e2e-", {
+      GW_TOOLBOX_AUTOMATION: "1",
+    });
+    try {
+      expect(new URL(fixture.page.url()).search).toBe("?toolbox-automation=1");
+      await expect(fixture.page.locator("#toolbox")).toBeHidden();
     } finally {
       await closeOffline(fixture);
     }

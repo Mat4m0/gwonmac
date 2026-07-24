@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import {
   renderToolboxState,
+  toolboxPresentationEnabled,
 } from "../../src/renderer/toolbox.js";
 import {
   readToolboxSnapshot,
@@ -64,6 +65,23 @@ describe("Toolbox snapshot ABI", () => {
 });
 
 describe("Toolbox overlay rendering", () => {
+  it("is available only to explicit developer and fixture sessions", () => {
+    assert.equal(toolboxPresentationEnabled("gw://app/"), false);
+    assert.equal(
+      toolboxPresentationEnabled("gw://app/?toolbox-automation=1"),
+      true,
+    );
+    assert.equal(
+      toolboxPresentationEnabled("gw://app/?toolbox-fixture=target"),
+      true,
+    );
+    assert.equal(
+      toolboxPresentationEnabled("gw://app/?toolbox-automation=0"),
+      false,
+    );
+    assert.equal(toolboxPresentationEnabled("not a URL"), false);
+  });
+
   it("renders fixtures and performs no redundant DOM writes", () => {
     const ids = [
       "toolbox",

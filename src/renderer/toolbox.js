@@ -6,6 +6,18 @@ import {
 
 const CONFIG_WORDS = 16;
 
+export function toolboxPresentationEnabled(rawUrl) {
+  try {
+    const parameters = new URL(rawUrl).searchParams;
+    const fixture = parameters.get("toolbox-fixture");
+    return parameters.get("toolbox-automation") === "1"
+      || fixture === "map"
+      || fixture === "target";
+  } catch {
+    return false;
+  }
+}
+
 function decodeManifest(module) {
   const sections = WebAssembly.Module.customSections(module, "toolbox_manifest");
   if (sections.length !== 1) return null;
@@ -228,7 +240,9 @@ async function install(instance, module) {
     };
     window.gwToolboxInstallations = runtime.installation;
     window.gwToolboxRuntime = runtime;
-    stopRenderer = mountRenderer(runtime);
+    if (toolboxPresentationEnabled(window.location.href)) {
+      stopRenderer = mountRenderer(runtime);
+    }
 
     const teardown = () => {
       stopRenderer();

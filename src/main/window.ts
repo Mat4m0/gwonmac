@@ -356,10 +356,13 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     && ["map", "target"].includes(process.env.GW_TOOLBOX_FIXTURE ?? "")
       ? process.env.GW_TOOLBOX_FIXTURE
       : null;
+  const toolboxAutomation = process.env.GW_TOOLBOX_AUTOMATION === "1";
   void win.loadURL(
     toolboxFixture
       ? `gw://app/?toolbox-fixture=${toolboxFixture}`
-      : "gw://app/",
+      : toolboxAutomation
+        ? "gw://app/?toolbox-automation=1"
+        : "gw://app/",
   );
   return win;
 }

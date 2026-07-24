@@ -180,7 +180,7 @@ test("the host has one manual application replacement path", () => {
 
 test("package metadata identifies the GPL project and canonical repository", () => {
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-  assert.equal(pkg.version, "0.0.1-alpha.1");
+  assert.equal(pkg.version, "0.0.2");
   assert.equal(pkg.license, "GPL-3.0-only");
   assert.equal(
     pkg.repository?.url,
