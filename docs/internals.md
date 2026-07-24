@@ -67,6 +67,12 @@ version.json
 Existing artifacts are verified chunk-by-chunk against the current manifest;
 equal file length is not treated as proof of equality. New artifacts are built
 in a part file, synced, and renamed only after every content hash passes.
+The published local manifest retains the executable artifacts' sizes and chunk
+hashes, so offline fallback is independently verifiable. A changed client is
+kept as a candidate beside one verified previous generation until its first
+presented frame. Failure before that signal durably rejects that exact client
+fingerprint for the current host version and restores the previous generation.
+Invalid or legacy-unverifiable state is never promoted into the rollback slot.
 
 `Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
 range onto 256 KB chunks, coalesces concurrent requests by content hash,
@@ -101,7 +107,9 @@ Before `Gw.jspi.js` is appended, the renderer resolves the single
 first-run choice, `quick` releases boot immediately, and incomplete `full`
 owns the foreground downloader. The game, audio context, sockets, and WebGL
 runtime cannot start behind the launcher. Cache residency—not a saved progress
-counter—is the download truth.
+counter—is the download truth. Full Game additionally runs the bounded
+content-hash verification pass at startup even when every expected filename is
+resident; corruption cannot bypass the repair path.
 
 Awaited host calls always return promises:
 

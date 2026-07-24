@@ -253,6 +253,50 @@ describe("chunk-store", () => {
     assert.equal(fetches, 1);
   });
 
+  it("bounds exhausted network work and resumes with verified chunks", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 10 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 30),
+    );
+    const hashes = payloads.map(hashOf);
+    let failedFetches = 0;
+    const unavailable = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async () => {
+        failedFetches += 1;
+        throw new Error("offline");
+      },
+    });
+
+    await assert.rejects(() =>
+      unavailable.downloadAll({
+        jobs: 3,
+        freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      }),
+    );
+    assert.ok(failedFetches > 0);
+    assert.ok(failedFetches <= 3);
+
+    const resumed = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async (hash) =>
+        new Uint8Array(payloads[hashes.indexOf(hash)]!),
+    });
+    assert.equal(
+      await resumed.downloadAll({
+        jobs: 3,
+        freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      }),
+      true,
+    );
+  });
+
   it("preserves completed chunks when a full download is stopped and resumed", async () => {
     const root = await freshDir();
     const payloads = Array.from({ length: 3 }, (_, index) =>

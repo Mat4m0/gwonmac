@@ -52,6 +52,7 @@ export interface IpcContext {
   downloadFullGame: () => Promise<boolean>;
   stopFullDownload: () => void;
   confirmClientHealthy: () => Promise<void>;
+  retryClient: () => Promise<void>;
 }
 
 function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -433,9 +434,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         rendererTimestampUs,
         milestoneFields,
       );
-      if (name === "frame.firstSubmit") {
-        await ctx.confirmClientHealthy();
-      }
     },
   );
 
@@ -479,6 +477,16 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.appRequestQuit, async (event) => {
     assertSender(event);
     app.quit();
+  });
+
+  ipcMain.handle(IPC.clientRetry, async (event) => {
+    assertSender(event);
+    await ctx.retryClient();
+  });
+
+  ipcMain.handle(IPC.clientHealthy, async (event) => {
+    assertSender(event);
+    await ctx.confirmClientHealthy();
   });
 
   ipcMain.handle(IPC.updateStatus, async (event) => {

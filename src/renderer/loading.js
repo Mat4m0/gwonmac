@@ -84,7 +84,22 @@ window.gwLoading = (function () {
   }).catch(() => {});
 
   // A failed boot gets a one-click retry, same as View → Reload Game.
-  retry?.addEventListener('click', () => { window.location.reload(); });
+  retry?.addEventListener('click', async () => {
+    retry.disabled = true;
+    api.set('Retrying the game client', null);
+    try {
+      await window.gwNative.client.retry();
+      window.location.reload();
+    } catch (error) {
+      api.fail(
+        error instanceof Error
+          ? error.message
+          : 'The game client still could not be prepared.',
+      );
+    } finally {
+      retry.disabled = false;
+    }
+  });
 
   // The artwork's ambient drift (loading.css) pauses while the window is
   // unfocused: an idle launcher in the background should cost zero GPU.

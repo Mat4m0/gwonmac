@@ -64,6 +64,50 @@ test.describe("launcher recovery", () => {
     }
   });
 
+  test("verifies apparently complete Full Game data before startup", async () => {
+    const size = 8 * 1024 ** 3;
+    const fixture = await launchOffline("gw-launcher-verify-e2e-", {
+      GW_OFFLINE_SNAPSHOT_SIZE: String(size),
+    });
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        window.gwNative.settings.set({ dataStrategy: "full" }),
+      );
+      await app.evaluate(({ ipcMain }, totalBytes) => {
+        ipcMain.removeHandler("gw:cache:info");
+        ipcMain.handle("gw:cache:info", () => ({
+          bytes: totalBytes,
+          chunks: 1,
+          totalBytes,
+          totalChunks: 1,
+        }));
+        ipcMain.removeHandler("gw:cache:downloadAll");
+        ipcMain.handle("gw:cache:downloadAll", () => {
+          globalThis.__fullGameVerificationCalls =
+            (globalThis.__fullGameVerificationCalls || 0) + 1;
+          throw new Error(
+            "A cached chunk was corrupt. Choose Resume Download to repair it.",
+          );
+        });
+      }, size);
+      await page.reload();
+
+      await expect(page.locator("#data-download")).toBeVisible();
+      await expect(page.locator("#data-download-status")).toContainText(
+        "cached chunk was corrupt",
+      );
+      await expect(page.locator("#data-download-toggle")).toHaveText(
+        "Resume Download",
+      );
+      expect(
+        await app.evaluate(() => globalThis.__fullGameVerificationCalls),
+      ).toBe(1);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("offers retry and diagnostics when the game client cannot start", async () => {
     const fixture = await launchOffline("gw-startup-recovery-e2e-");
     try {
@@ -76,6 +120,11 @@ test.describe("launcher recovery", () => {
       await expect(fixture.page.locator("#loading-detail")).toHaveText(
         "You can retry, or choose Help → Report a Problem.",
       );
+      await fixture.page.locator("#loading-retry").click();
+      await expect(fixture.page.locator("#loading-label")).toHaveText(
+        "No game build could be loaded.",
+      );
+      await expect(fixture.page.locator("#loading-retry")).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }

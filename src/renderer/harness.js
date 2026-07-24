@@ -372,138 +372,6 @@ const stub = (name) => new Proxy({}, {
   has: () => true,
 });
 
-// The game renders to an OffscreenCanvas and presents each frame as an
-// ImageBitmap; without this wiring it runs and paints nowhere visible. Mirrors
-// Od() in the shipped launcher, which patches imports before instantiating.
-/** @param {any} env ArenaNet's generated EGL import object. */
-function patchEgl(env) {
-  if (!env || typeof env.eglCreateContext !== 'function') {
-    return log('[warn] no eglCreateContext import — nothing will be presented');
-  }
-
-  const createContext = env.eglCreateContext;
-  /** @param {...any} args Generated EGL signature. */
-  env.eglCreateContext = (...args) => {
-    const visible = Module.canvas;
-    visible.offscreen = new OffscreenCanvas(visible.width, visible.height);
-    const offscreen = visible.offscreen;
-    Module.canvas = visible.offscreen;          // context is created on this
-    let ctx;
-    try {
-      ctx = createContext(...args);
-    } finally {
-      Module.canvas = visible;
-    }
-    Module.canvas.context = visible.getContext('bitmaprenderer');
-    log(`egl context on offscreen ${visible.width}x${visible.height}`);
-    scheduleGraphicsDiagnostics(visible, offscreen);
-    return ctx;
-  };
-
-  // The client owns canvas sizing. Render scale is the density it sees, not a
-  // second host-side resize competing with emscripten_set_canvas_element_size.
-  if (typeof env.emscripten_get_device_pixel_ratio === 'function') {
-    env.emscripten_get_device_pixel_ratio =
-      () => appSettings?.renderScale ?? 1;
-  }
-
-  const swap = env.eglSwapBuffers;
-  let firstFrame = true;
-  /** @param {...any} args Generated EGL signature. */
-  env.eglSwapBuffers = (...args) => {
-    const swapStarted = performance.now();
-    const ok = swap(...args);
-    const swapEnded = performance.now();
-    let bitmapOutUs = 0, bitmapPresentUs = 0;
-    let presented = false;
-    if (ok && Module.canvas.offscreen && Module.canvas.context) {
-      const outStarted = performance.now();
-      const bitmap = Module.canvas.offscreen.transferToImageBitmap();
-      const outEnded = performance.now();
-      Module.canvas.context.transferFromImageBitmap(bitmap);
-      bitmapOutUs = (outEnded - outStarted) * 1000;
-      bitmapPresentUs = (performance.now() - outEnded) * 1000;
-      presented = true;
-    }
-    window.gwDiagnostics?.swap(
-      (swapEnded - swapStarted) * 1000,
-      bitmapOutUs,
-      bitmapPresentUs,
-      presented);
-    if (firstFrame && presented) {
-      firstFrame = false;
-      performance.mark('gw.frame.first-submit');
-      milestone('frame.firstSubmit');
-      log('first frame presented');
-    }
-    return ok;
-  };
-
-  // Keep the offscreen buffer matched, or we present at the wrong resolution.
-  const setSize = env.emscripten_set_canvas_element_size;
-  if (typeof setSize === 'function') {
-    /**
-     * @param {unknown} target
-     * @param {number} w
-     * @param {number} h
-     */
-    env.emscripten_set_canvas_element_size = (target, w, h) => {
-      const rc = setSize(target, w, h);
-      if (rc === 0 && Module.canvas.offscreen) {
-        Module.canvas.offscreen.width = w;
-        Module.canvas.offscreen.height = h;
-        scheduleGraphicsDiagnostics(Module.canvas, Module.canvas.offscreen);
-      }
-      return rc;
-    };
-  }
-}
-
-let graphicsDiagnosticsFrame = 0;
-/** @param {HTMLCanvasElement} visible @param {OffscreenCanvas} offscreen */
-function scheduleGraphicsDiagnostics(visible, offscreen) {
-  cancelAnimationFrame(graphicsDiagnosticsFrame);
-  graphicsDiagnosticsFrame = requestAnimationFrame(async () => {
-    try {
-      const gl = offscreen.getContext('webgl2') || offscreen.getContext('webgl');
-      const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
-      const renderer = dbg
-        ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
-        : (gl ? 'unknown' : 'none');
-      const vendor = dbg
-        ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)
-        : (gl ? 'unknown' : 'none');
-      const attributes = gl?.getContextAttributes();
-      await native().diagnostics.recordGraphics({
-        userAgent: navigator.userAgent,
-        jspi: true,
-        webglVersion: gl
-          ? (gl.constructor?.name === 'WebGL2RenderingContext' ? 'WebGL2' : 'WebGL')
-          : 'none',
-        renderer: String(renderer),
-        vendor: String(vendor),
-        hardwareAcceleration: !/swiftshader|llvmpipe|software/i.test(String(renderer)),
-        canvasWidth: visible.width,
-        canvasHeight: visible.height,
-        offscreenWidth: offscreen.width,
-        offscreenHeight: offscreen.height,
-        drawingBufferWidth: gl?.drawingBufferWidth || 0,
-        drawingBufferHeight: gl?.drawingBufferHeight || 0,
-        devicePixelRatio: window.devicePixelRatio || 1,
-        renderScale: appSettings?.renderScale ?? 1,
-        antialias: !!attributes?.antialias,
-        samples: gl ? Number(gl.getParameter(gl.SAMPLES) || 0) : 0,
-      });
-      window.dispatchEvent(new globalThis.Event('gw:graphics-resized'));
-    } catch (e) {
-      log(
-        '[warn] graphics diagnostics failed:',
-        e instanceof Error ? e.message : String(e),
-      );
-    }
-  });
-}
-
 Module = {
   canvas:
     /** @type {HTMLCanvasElement} */ (document.getElementById('canvas')),
@@ -515,10 +383,26 @@ Module = {
   // Take over instantiation so the EGL imports can be patched first.
   /**
    * @param {any} imports ArenaNet's generated WebAssembly imports.
-   * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
-   */
+  * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
+  */
   instantiateWasm(imports, success) {
-    patchEgl(imports.env);
+    window.gwInstallGraphics({
+      env: imports.env,
+      module: Module,
+      renderScale: () => appSettings?.renderScale ?? 1,
+      firstFrame: () => {
+        performance.mark('gw.frame.first-submit');
+        milestone('frame.firstSubmit');
+        void native().client.healthy().catch((error) => {
+          log(
+            '[warn] client health confirmation failed:',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+        log('first frame presented');
+      },
+      log,
+    });
     const gamepadImports = [
       'emscripten_sample_gamepad_data',
       'emscripten_set_gamepadconnected_callback_on_thread',

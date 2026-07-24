@@ -20,6 +20,7 @@ test.describe("sandbox boundary", () => {
         keys: [
           "app",
           "cache",
+          "client",
           "credentials",
           "diagnostics",
           "dns",

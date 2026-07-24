@@ -1,5 +1,6 @@
 import { app } from "electron";
 import path from "node:path";
+import { clientGenerationPaths } from "./core/client-compatibility.js";
 
 export interface GamePaths {
   userData: string;
@@ -19,6 +20,7 @@ export interface GamePaths {
 
 export function gamePaths(userData = app.getPath("userData")): GamePaths {
   const game = path.join(userData, "game");
+  const artifacts = path.join(game, "artifacts");
   return {
     userData,
     settings: path.join(userData, "settings.json"),
@@ -27,8 +29,8 @@ export function gamePaths(userData = app.getPath("userData")): GamePaths {
     diagnostics: path.join(userData, "diagnostics"),
     game,
     manifest: path.join(game, "manifest.json"),
-    artifacts: path.join(game, "artifacts"),
-    previousArtifacts: path.join(game, "artifacts.previous"),
+    artifacts,
+    previousArtifacts: clientGenerationPaths(artifacts).previous,
     rejectedClient: path.join(game, "rejected-client.json"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),

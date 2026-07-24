@@ -1,9 +1,8 @@
 import { readdir, readFile, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { mapPool } from "./async-pool.js";
+import { isContentHash } from "./chunk-format.js";
 import { parsePublishedClientManifest } from "./published-client.js";
-
-const CONTENT_HASH = /^[a-f0-9]{32}(?:[a-f0-9]{8}|[a-f0-9]{32})?$/;
 
 export interface ChunkPruneResult {
   files: number;
@@ -54,7 +53,8 @@ export async function pruneUnreferencedChunks(options: {
     },
   );
   const stale = entries.filter(
-    (entry) => entry.isFile() && CONTENT_HASH.test(entry.name) && !keep.has(entry.name),
+    (entry) =>
+      entry.isFile() && isContentHash(entry.name) && !keep.has(entry.name),
   );
   let files = 0;
   let bytes = 0;

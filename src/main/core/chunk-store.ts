@@ -587,7 +587,6 @@ export class ChunkStore {
     const started = Date.now();
     const baseline = got;
     const rateAverage = new DownloadRateAverage(baseline, started);
-    let failed = 0;
     let firstFailure: unknown;
     let fatalFailure: unknown;
 
@@ -599,7 +598,6 @@ export class ChunkStore {
         try {
           await this.ensureChunk(i, "prefetch");
         } catch (error) {
-          failed += 1;
           firstFailure ??= error;
           if (isFatalLocalDownloadError(error)) fatalFailure ??= error;
           return;
@@ -614,15 +612,15 @@ export class ChunkStore {
           secondsRemaining: secondsRemaining(received, total, rate),
         });
       },
-      () => this.stopFlag || fatalFailure !== undefined,
+      () => this.stopFlag || firstFailure !== undefined,
     );
 
     if (fatalFailure !== undefined) throw fatalFailure;
     if (this.stopFlag) return false;
-    if (failed) {
+    if (firstFailure !== undefined) {
       throw new AppError(
         "download_partial",
-        `${failed} chunks could not be downloaded. Restart to retry.`,
+        "The download could not continue. Resume to retry.",
         { cause: firstFailure },
       );
     }

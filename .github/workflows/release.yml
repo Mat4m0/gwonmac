@@ -21,6 +21,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@cc4f6536e38d1126c5e3b0683d469a14f23bfea4 # v3.1.5
+        with:
+          fail-on-severity: high
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 11.13.1
@@ -29,24 +34,19 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Review dependency changes
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@cc4f6536e38d1126c5e3b0683d469a14f23bfea4 # v3.1.5
-        with:
-          fail-on-severity: high
       - run: pnpm audit --audit-level=high
       - run: pnpm verify
 
-  release:
+  release-build:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: verify
     runs-on: macos-15
     timeout-minutes: 45
     permissions:
-      attestations: write
-      artifact-metadata: write
-      contents: write
-      id-token: write
+      contents: read
+    outputs:
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -62,20 +62,13 @@ jobs:
 
       - name: Resolve release version
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           version="$(node -p "require('./package.json').version")"
-          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
             echo "package.json contains an invalid release version: $version" >&2
             exit 1
           fi
           tag="v$version"
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1 ||
-             gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Tag or release $tag already exists." >&2
-            exit 1
-          fi
           prerelease=false
           if [[ "$version" == *-* ]]; then
             prerelease=true
@@ -143,6 +136,62 @@ jobs:
             shasum -a 256 -c "$(basename "$CHECKSUM")"
           )
 
+      - name: Handoff verified release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: |
+            ${{ steps.assets.outputs.asset }}
+            ${{ steps.assets.outputs.checksum }}
+            ${{ steps.assets.outputs.sbom }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: release-build
+    runs-on: macos-15
+    timeout-minutes: 10
+    permissions:
+      attestations: write
+      artifact-metadata: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Receive verified release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Resolve and verify handoff
+        id: assets
+        env:
+          TAG: ${{ needs.release-build.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1 ||
+             gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Tag or release $TAG already exists." >&2
+            exit 1
+          fi
+          asset_count="$(find release-assets -type f -name '*.zip' | wc -l | tr -d ' ')"
+          sbom_count="$(find release-assets -type f -name '*.spdx.json' | wc -l | tr -d ' ')"
+          test "$asset_count" = "1"
+          test "$sbom_count" = "1"
+          asset="$(find release-assets -type f -name '*.zip' -print -quit)"
+          sbom="$(find release-assets -type f -name '*.spdx.json' -print -quit)"
+          checksum="release-assets/SHA256SUMS.txt"
+          test -f "$checksum"
+          (
+            cd release-assets
+            shasum -a 256 -c SHA256SUMS.txt
+          )
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+
       - name: Attest release provenance
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
@@ -160,8 +209,8 @@ jobs:
           CHECKSUM: ${{ steps.assets.outputs.checksum }}
           SBOM: ${{ steps.assets.outputs.sbom }}
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ steps.version.outputs.prerelease }}
-          TAG: ${{ steps.version.outputs.tag }}
+          PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
+          TAG: ${{ needs.release-build.outputs.tag }}
         run: |
           notes="> [!WARNING]
           > This is an alpha build. Back up important data and expect bugs."

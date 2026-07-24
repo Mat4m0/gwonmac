@@ -347,6 +347,7 @@
     const total = cache?.totalBytes || launcherTotalBytes;
     const received = cache?.bytes || 0;
     const complete = total > 0 && received >= total;
+    const ready = complete && !error;
     const fraction = total > 0 ? Math.min(1, received / total) : 0;
     dataDownloadFill.style.width = `${fraction * 100}%`;
 
@@ -383,15 +384,15 @@
         'You can resume now or close the launcher and continue later.';
     }
 
-    dataDownloadToggle.hidden = complete;
+    dataDownloadToggle.hidden = ready;
     dataDownloadToggle.disabled = downloadPhase === 'stopping';
     dataDownloadToggle.textContent = downloadPhase === 'stopping'
       ? 'Pausing…'
       : downloadPhase === 'running'
         ? 'Pause Download'
         : 'Resume Download';
-    dataDownloadPlay.textContent = complete ? 'Play Guild Wars' : 'Play Now Instead';
-    dataDownloadQuick.hidden = complete;
+    dataDownloadPlay.textContent = ready ? 'Play Guild Wars' : 'Play Now Instead';
+    dataDownloadQuick.hidden = ready;
   }
 
   async function refreshCache() {
@@ -519,7 +520,11 @@
       // to make, so let it continue without persisting fabricated intent.
       if (!Number.isFinite(total) || total <= 0) return;
       if (settings.dataStrategy === 'quick') return;
-      if (settings.dataStrategy === 'full' && cache.bytes >= total) return;
+      if (settings.dataStrategy === 'full' && cache.bytes >= total) {
+        // Filenames prove residency, not integrity. Full Game startup always
+        // runs the existing bounded verification pass before releasing boot.
+        if (await startFullDownload()) return;
+      }
 
       return new Promise((resolve) => {
         launcherResolve = resolve;
@@ -634,7 +639,10 @@
     void persistSettings(patch)
       .then(async () => {
         flashSaved();
-        if (!strategyChanged) return;
+        if (!strategyChanged) {
+          feedback.textContent = 'Settings saved.';
+          return;
+        }
         if (nextStrategy === 'quick' && downloadActive()) {
           await stopFullDownload();
         }
@@ -644,6 +652,10 @@
           : 'Quick Start will be used next time. Downloaded data is kept.';
       })
       .catch(() => {
+        if (currentSettings) {
+          fillForm(currentSettings);
+          applyRuntimeSettings(currentSettings);
+        }
         feedback.textContent = 'Settings could not be saved.';
       });
   });

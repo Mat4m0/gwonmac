@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import { Manifest } from "../../src/main/core/manifest.js";
 import { AppError } from "../../src/shared/errors.js";
 
+const hashA = "a".repeat(32);
+const hashB = "b".repeat(32);
+
 describe("manifest", () => {
   it("accepts flat files and finds by basename", () => {
     const mf = new Manifest({
       compressionMode: "none",
       chunkSize: 4,
-      files: [{ name: "a.bin", size: 6, chunkHashes: ["x", "y"] }],
+      files: [{ name: "a.bin", size: 6, chunkHashes: [hashA, hashB] }],
     });
     assert.equal(mf.find("a.bin"), "a.bin");
     assert.equal(mf.compression, "none");
@@ -29,7 +32,7 @@ describe("manifest", () => {
         {
           name: "Gw.jspi.wasm",
           size: 4,
-          chunkHashes: ["aa"],
+          chunkHashes: [hashA],
           parentIndex: 2,
         },
       ],
@@ -43,7 +46,7 @@ describe("manifest", () => {
         new Manifest({
           compressionMode: "none",
           chunkSize: 4,
-          files: [{ name: "a", size: 99, chunkHashes: ["x"] }],
+          files: [{ name: "a", size: 99, chunkHashes: [hashA] }],
         }),
       (e: unknown) => e instanceof AppError && e.code === "chunk_count",
     );
@@ -55,7 +58,7 @@ describe("manifest", () => {
         new Manifest({
           compressionMode: "brotli",
           chunkSize: 4,
-          files: [{ name: "a.bin", size: 6, chunkHashes: ["x", "y"] }],
+          files: [{ name: "a.bin", size: 6, chunkHashes: [hashA, hashB] }],
         }),
       (e: unknown) => e instanceof AppError && e.code === "bad_compression",
     );

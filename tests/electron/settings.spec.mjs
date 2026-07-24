@@ -153,4 +153,41 @@ test.describe("settings experience", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("restores canonical presentation when a settings save fails", async () => {
+    const fixture = await launchOffline("gw-settings-save-failure-e2e-");
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-controls").click();
+      await app.evaluate(({ ipcMain }) => {
+        ipcMain.removeHandler("gw:settings:set");
+        ipcMain.handle("gw:settings:set", () => {
+          throw new Error("forced settings write failure");
+        });
+      });
+
+      await page
+        .locator('select[name="cursorTheme"]')
+        .selectOption("guild-wars-2");
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "Settings could not be saved.",
+      );
+      await expect(
+        page.locator('select[name="cursorTheme"]'),
+      ).toHaveValue("guild-wars");
+      await expect(page.locator("#settings-cursor-preview")).toHaveAttribute(
+        "data-cursor-theme",
+        "guild-wars",
+      );
+      await expect(page.locator("#canvas")).toHaveAttribute(
+        "data-cursor-theme",
+        "guild-wars",
+      );
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

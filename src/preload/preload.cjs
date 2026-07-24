@@ -34,6 +34,8 @@ const IPC = {
   diagnosticsExport: "gw:diagnostics:export",
   appOpenExternal: "gw:app:openExternal",
   appRequestQuit: "gw:app:requestQuit",
+  clientRetry: "gw:client:retry",
+  clientHealthy: "gw:client:healthy",
   updateStatus: "gw:update:status",
 };
 
@@ -118,6 +120,10 @@ const api = Object.freeze({
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
+  },
+  client: {
+    retry: () => ipcRenderer.invoke(IPC.clientRetry),
+    healthy: () => ipcRenderer.invoke(IPC.clientHealthy),
   },
   update: {
     status: () => ipcRenderer.invoke(IPC.updateStatus),

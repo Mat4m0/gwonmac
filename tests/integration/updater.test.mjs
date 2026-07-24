@@ -212,9 +212,14 @@ describe("integration: patch updater", () => {
         return fetchFixture(url);
       },
     });
-    await repairing.update();
+    const repaired = await repairing.update({
+      blockedFingerprint: freshCandidate.fingerprint,
+    });
     assert.equal((await readFile(join(artifacts, "Gw.jspi.js"))).toString(), js.toString());
     assert.equal(repairFetches, 1);
+    assert.equal(repaired.blocked, false);
+    assert.equal(repaired.candidate, false);
+    await assert.rejects(() => stat(`${artifacts}.previous`));
 
     // A matching filename is not proof that a content-addressed chunk is intact.
     const jsHash = manifestFiles.find((file) => file.name === "Gw.jspi.js").chunkHashes[0];

@@ -12,3 +12,7 @@ export const HASH_ALGOS: Record<number, "md5" | "sha1" | "sha256"> = {
 };
 export const JSPI_ARTIFACTS = ["Gw.jspi.js", "Gw.jspi.wasm"] as const;
 export const COMMON_ARTIFACTS = ["version.json"] as const;
+export const CLIENT_ARTIFACTS = [
+  ...JSPI_ARTIFACTS,
+  ...COMMON_ARTIFACTS,
+] as const;

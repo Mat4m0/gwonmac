@@ -17,10 +17,10 @@ function rawManifest(overrides?: Partial<RawManifest>): RawManifest {
     compressionMode: "none",
     chunkSize: 16,
     files: [
-      { name: "Gw.jspi.js", size: 1, chunkHashes: ["js"] },
-      { name: "Gw.jspi.wasm", size: 1, chunkHashes: ["wasm"] },
-      { name: "version.json", size: 1, chunkHashes: ["version"] },
-      { name: "Gw.snapshot", size: 1, chunkHashes: ["snapshot"] },
+      { name: "Gw.jspi.js", size: 1, chunkHashes: ["a".repeat(32)] },
+      { name: "Gw.jspi.wasm", size: 1, chunkHashes: ["b".repeat(32)] },
+      { name: "version.json", size: 1, chunkHashes: ["c".repeat(32)] },
+      { name: "Gw.snapshot", size: 1, chunkHashes: ["d".repeat(32)] },
     ],
     ...overrides,
   };
@@ -47,7 +47,7 @@ describe("client compatibility", () => {
         ...rawManifest(),
         files: rawManifest().files!.map((entry) =>
           entry.name === "Gw.jspi.wasm"
-            ? { ...entry, chunkHashes: ["changed"] }
+            ? { ...entry, chunkHashes: ["e".repeat(32)] }
             : entry,
         ),
       }),
@@ -123,6 +123,20 @@ describe("client compatibility", () => {
     assert.equal(await missing(join(artifacts, ".candidate.json")), true);
     assert.equal(await missing(previousArtifacts), true);
     assert.equal(await missing(rejectedPath), true);
+  });
+
+  it("does not interpret unknown persisted record versions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gw-client-schema-"));
+    const rejectedPath = join(root, "rejected-client.json");
+    await writeFile(
+      rejectedPath,
+      JSON.stringify({
+        formatVersion: 2,
+        fingerprint: "a".repeat(64),
+        hostVersion: "1.0.0",
+      }),
+    );
+    assert.equal(await readRejectedClient(rejectedPath, "1.0.0"), null);
   });
 
   it("prefers the previous complete client when the marker is corrupt", async () => {

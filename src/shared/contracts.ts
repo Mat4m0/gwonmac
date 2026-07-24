@@ -180,6 +180,8 @@ export const IPC = {
   diagnosticsExport: "gw:diagnostics:export",
   appOpenExternal: "gw:app:openExternal",
   appRequestQuit: "gw:app:requestQuit",
+  clientRetry: "gw:client:retry",
+  clientHealthy: "gw:client:healthy",
   updateStatus: "gw:update:status",
 } as const;
 
@@ -238,6 +240,10 @@ export interface GwNativeApi {
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;
     requestQuit(): Promise<void>;
+  };
+  client: {
+    retry(): Promise<void>;
+    healthy(): Promise<void>;
   };
   update: {
     status(): Promise<UpdateStatus | null>;

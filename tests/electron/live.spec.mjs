@@ -128,6 +128,8 @@ test.describe("live client", () => {
           return {
             width: latest["graphics.drawingBufferWidth"] || 0,
             height: latest["graphics.drawingBufferHeight"] || 0,
+            offscreenWidth: latest["graphics.offscreenWidth"] || 0,
+            offscreenHeight: latest["graphics.offscreenHeight"] || 0,
           };
         });
 
@@ -140,6 +142,25 @@ test.describe("live client", () => {
         .toBeGreaterThan(0);
       const oneX = await dimensions();
       expect(oneX.width * oneX.height).toBeGreaterThan(0);
+      expect(oneX.offscreenWidth).toBe(oneX.width);
+      expect(oneX.offscreenHeight).toBe(oneX.height);
+      await applyScale(1.5);
+      await expect
+        .poll(async () => {
+          const oneAndHalfX = await dimensions();
+          return (
+            (oneAndHalfX.width * oneAndHalfX.height) /
+            (oneX.width * oneX.height)
+          );
+        }, { timeout: 30_000 })
+        .toBeGreaterThan(2);
+      const oneAndHalfX = await dimensions();
+      const oneAndHalfRatio =
+        (oneAndHalfX.width * oneAndHalfX.height) /
+        (oneX.width * oneX.height);
+      expect(oneAndHalfRatio).toBeLessThan(2.5);
+      expect(oneAndHalfX.offscreenWidth).toBe(oneAndHalfX.width);
+      expect(oneAndHalfX.offscreenHeight).toBe(oneAndHalfX.height);
       await applyScale(2);
       await expect
         .poll(async () => {
@@ -147,6 +168,12 @@ test.describe("live client", () => {
           return (twoX.width * twoX.height) / (oneX.width * oneX.height);
         }, { timeout: 30_000 })
         .toBeGreaterThan(3.5);
+      const twoX = await dimensions();
+      expect(
+        (twoX.width * twoX.height) / (oneX.width * oneX.height),
+      ).toBeLessThan(4.5);
+      expect(twoX.offscreenWidth).toBe(twoX.width);
+      expect(twoX.offscreenHeight).toBe(twoX.height);
       await applyScale(1);
     } finally {
       await application.close();

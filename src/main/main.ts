@@ -14,14 +14,16 @@ import {
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   ACCESS_KEY,
-  COMMON_ARTIFACTS,
-  JSPI_ARTIFACTS,
+  CLIENT_ARTIFACTS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
   UA,
 } from "./core/access-key.js";
-import { readPublishedClientManifest } from "./core/published-client.js";
+import {
+  readPublishedClientManifest,
+  verifyPublishedClientArtifacts,
+} from "./core/published-client.js";
 import { ChunkStore } from "./core/chunk-store.js";
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import {
@@ -91,6 +93,7 @@ let snapshotMeta: SnapshotMetadata | null = null;
 let saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
 let initialResidencyRecorded = false;
 let fullDownload: Promise<boolean> | null = null;
+let gameUpdate: Promise<void> | null = null;
 let settingsWrite: Promise<void> = Promise.resolve();
 
 async function pruneCurrentChunkCache(): Promise<void> {
@@ -311,15 +314,24 @@ async function installChunkStore(
 
 async function attachLastPublishedClient(): Promise<void> {
   const paths = gamePaths();
-  for (const name of [...JSPI_ARTIFACTS, ...COMMON_ARTIFACTS]) {
-    const file = await stat(path.join(paths.artifacts, name));
-    if (!file.isFile() || file.size <= 0) {
-      throw new Error(`last published client is missing ${name}`);
-    }
-  }
   const value = await readPublishedClientManifest(
     path.join(paths.artifacts, "manifest.json"),
   );
+  const verified = await verifyPublishedClientArtifacts(paths.artifacts, value);
+  if (verified === false) {
+    throw new Error("last published client failed integrity verification");
+  }
+  if (verified === null) {
+    // One compatibility bridge for clients published before executable hashes
+    // were persisted. The next successful update hard-cuts to strict metadata.
+    for (const name of CLIENT_ARTIFACTS) {
+      const file = await stat(path.join(paths.artifacts, name));
+      if (!file.isFile() || file.size <= 0) {
+        throw new Error(`last published client is missing ${name}`);
+      }
+    }
+    log("update", "warn", "client.legacyIntegrityMetadataMissing");
+  }
   await installChunkStore(
     value.size,
     value.chunkSize,
@@ -516,6 +528,27 @@ async function startGameUpdate(): Promise<void> {
   }
 }
 
+function requestGameUpdate(): Promise<void> {
+  if (gameUpdate) return gameUpdate;
+  setProgress({
+    ...INITIAL_PROGRESS,
+    phase: "starting",
+    label: "Checking the game client",
+  });
+  const operation = startGameUpdate().finally(() => {
+    if (gameUpdate === operation) gameUpdate = null;
+  });
+  gameUpdate = operation;
+  return operation;
+}
+
+async function retryGameUpdate(): Promise<void> {
+  await requestGameUpdate();
+  if (progress.phase === "error") {
+    throw new Error(progress.error ?? "The game client could not be prepared.");
+  }
+}
+
 function buildWindowHost(): WindowHost {
   return {
     sockets,
@@ -617,6 +650,7 @@ app.whenReady().then(async () => {
         log("update", "info", "client.candidatePromoted", { fingerprint });
       }
     },
+    retryClient: retryGameUpdate,
   });
 
   onAppQuit(async () => {
@@ -652,12 +686,7 @@ app.whenReady().then(async () => {
     }
   });
   log("app", "info", "window.created");
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "starting",
-    label: "Checking the game client",
-  });
-  void startGameUpdate();
+  void requestGameUpdate();
 
   app.on("activate", () => {
     if (!getMainWindow()) createMainWindow(buildWindowHost());

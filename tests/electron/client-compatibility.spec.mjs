@@ -18,7 +18,7 @@ async function pathExists(target) {
 test.describe("client compatibility", () => {
   test.skip(!existsSync(main), "run the build before Electron tests");
 
-  test("promotes a candidate only after the first submitted frame", async () => {
+  test("promotes a candidate only after the renderer health signal", async () => {
     const fingerprint = "a".repeat(64);
     let artifacts;
     let previous;
@@ -48,12 +48,49 @@ test.describe("client compatibility", () => {
     );
     try {
       expect(await pathExists(previous)).toBe(true);
-      await fixture.page.evaluate(() =>
-        window.gwNative.diagnostics.recordRendererMilestone(
-          "frame.firstSubmit",
-          performance.now() * 1_000,
-        ),
-      );
+      expect(
+        await fixture.page.evaluate(() => {
+          const canvas = globalThis.document.createElement("canvas");
+          canvas.width = 32;
+          canvas.height = 32;
+          const module = { canvas };
+          let frames = 0;
+          const env = {
+            eglCreateContext: () => {
+              module.canvas.getContext("webgl");
+              return 1;
+            },
+            eglSwapBuffers: () => 1,
+            emscripten_get_device_pixel_ratio: () => 1,
+            emscripten_set_canvas_element_size: () => 0,
+          };
+          window.gwInstallGraphics({
+            env,
+            module,
+            renderScale: () => 2,
+            firstFrame: () => {
+              frames += 1;
+              void window.gwNative.client.healthy();
+            },
+            log: () => undefined,
+          });
+          env.eglCreateContext();
+          env.emscripten_set_canvas_element_size(null, 64, 64);
+          env.eglSwapBuffers();
+          env.eglSwapBuffers();
+          return {
+            frames,
+            density: env.emscripten_get_device_pixel_ratio(),
+            visibleRestored: module.canvas === canvas,
+            offscreen: [canvas.offscreen.width, canvas.offscreen.height],
+          };
+        }),
+      ).toEqual({
+        frames: 1,
+        density: 2,
+        visibleRestored: true,
+        offscreen: [64, 64],
+      });
       await expect
         .poll(() => pathExists(path.join(artifacts, ".candidate.json")))
         .toBe(false);

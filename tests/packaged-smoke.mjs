@@ -15,6 +15,7 @@ import {
   FuseV1Options,
   getCurrentFuseWire,
 } from "@electron/fuses";
+import { macOSBundleVersions } from "../scripts/macos-version.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const appBundle = path.join(
@@ -30,7 +31,7 @@ const resources = path.join(appBundle, "Contents/Resources");
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 ).version;
-const macOSVersion = packageVersion.split("-", 1)[0];
+const macOSVersion = macOSBundleVersions(packageVersion);
 const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",
   path.join(appBundle, "Contents/Info.plist"),
@@ -39,11 +40,15 @@ assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
 assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
 assert.match(
   bundleInfo,
-  new RegExp(`"CFBundleShortVersionString" => "${macOSVersion.replaceAll(".", "\\.")}"`),
+  new RegExp(
+    `"CFBundleShortVersionString" => "${macOSVersion.appVersion.replaceAll(".", "\\.")}"`,
+  ),
 );
 assert.match(
   bundleInfo,
-  new RegExp(`"CFBundleVersion" => "${macOSVersion.replaceAll(".", "\\.")}"`),
+  new RegExp(
+    `"CFBundleVersion" => "${macOSVersion.buildVersion.replaceAll(".", "\\.")}"`,
+  ),
 );
 assert.deepEqual(
   await readFile(path.join(resources, "electron.icns")),

@@ -3,21 +3,22 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { macOSBundleVersions } from "./scripts/macos-version.mjs";
 
 const packageVersion = (
   JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
     version: string;
   }
 ).version;
-const macOSVersion = packageVersion.split("-", 1)[0]!;
+const macOSVersion = macOSBundleVersions(packageVersion);
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     name: "Guild Wars",
     executableName: "Guild Wars",
-    appVersion: macOSVersion,
-    buildVersion: macOSVersion,
+    appVersion: macOSVersion.appVersion,
+    buildVersion: macOSVersion.buildVersion,
     icon: path.resolve("assets/AppIcon.icns"),
     appBundleId: "com.gwdevhub.guildwars",
     appCategoryType: "public.app-category.games",

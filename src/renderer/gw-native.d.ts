@@ -21,6 +21,21 @@ declare global {
     waitForClient(): Promise<boolean>;
   }
 
+  interface ArenaNetEglImports {
+    eglCreateContext(...args: unknown[]): unknown;
+    eglSwapBuffers(...args: unknown[]): unknown;
+    emscripten_get_device_pixel_ratio?: () => number;
+    emscripten_set_canvas_element_size?(
+      target: unknown,
+      width: number,
+      height: number,
+    ): unknown;
+  }
+
+  interface ArenaNetGraphicsModule {
+    canvas: HTMLCanvasElement | OffscreenCanvas;
+  }
+
   interface RendererDiagnostics {
     resetForCapture(): Promise<void>;
     captureStarted(level: 1 | 2): void;
@@ -68,6 +83,13 @@ declare global {
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;
     gwStats(): Record<string, number | boolean>;
+    gwInstallGraphics(options: {
+      env: ArenaNetEglImports;
+      module: ArenaNetGraphicsModule;
+      renderScale(): 1 | 1.5 | 2;
+      firstFrame(): void;
+      log(...values: unknown[]): void;
+    }): void;
     gwInstallGameInput(options: {
       canvas: HTMLCanvasElement;
       initialSettings: AppSettings;

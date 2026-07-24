@@ -11,6 +11,20 @@ import type { Manifest } from "./manifest.js";
 
 const CANDIDATE_MARKER = ".candidate.json";
 
+export function clientGenerationPaths(artifacts: string): {
+  stage: string;
+  previous: string;
+  failed: string;
+  marker: string;
+} {
+  return {
+    stage: `${artifacts}.next`,
+    previous: `${artifacts}.previous`,
+    failed: `${artifacts}.failed`,
+    marker: path.join(artifacts, CANDIDATE_MARKER),
+  };
+}
+
 interface CandidateMarker {
   formatVersion: 1;
   fingerprint: string;
@@ -30,10 +44,28 @@ async function exists(target: string): Promise<boolean> {
 }
 
 function parseFingerprint(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
+    ? value
+    : null;
+}
+
+function parseCandidateMarker(value: unknown): CandidateMarker | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const fingerprint = (value as Record<string, unknown>).fingerprint;
-  return typeof fingerprint === "string" && /^[a-f0-9]{64}$/.test(fingerprint)
-    ? fingerprint
+  const record = value as Record<string, unknown>;
+  const fingerprint = parseFingerprint(record.fingerprint);
+  return record.formatVersion === 1 && fingerprint
+    ? { formatVersion: 1, fingerprint }
+    : null;
+}
+
+function parseRejectedClient(value: unknown): RejectedClient | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const fingerprint = parseFingerprint(record.fingerprint);
+  return record.formatVersion === 1 &&
+    fingerprint &&
+    typeof record.hostVersion === "string"
+    ? { formatVersion: 1, fingerprint, hostVersion: record.hostVersion }
     : null;
 }
 
@@ -68,7 +100,7 @@ export async function markClientCandidate(
     formatVersion: 1,
     fingerprint,
   };
-  await writeAtomicJson(path.join(artifacts, CANDIDATE_MARKER), marker);
+  await writeAtomicJson(clientGenerationPaths(artifacts).marker, marker);
 }
 
 export async function readRejectedClient(
@@ -76,10 +108,10 @@ export async function readRejectedClient(
   hostVersion: string,
 ): Promise<string | null> {
   try {
-    const value = JSON.parse(
-      await readFile(rejectedPath, "utf8"),
-    ) as Record<string, unknown>;
-    return value.hostVersion === hostVersion ? parseFingerprint(value) : null;
+    const value = parseRejectedClient(
+      JSON.parse(await readFile(rejectedPath, "utf8")),
+    );
+    return value?.hostVersion === hostVersion ? value.fingerprint : null;
   } catch {
     return null;
   }
@@ -91,7 +123,8 @@ export async function restoreUnconfirmedClient(options: {
   rejectedPath: string;
   hostVersion: string;
 }): Promise<{ fingerprint: string | null } | null> {
-  const markerPath = path.join(options.artifacts, CANDIDATE_MARKER);
+  const paths = clientGenerationPaths(options.artifacts);
+  const markerPath = paths.marker;
   let marker: unknown;
   try {
     marker = JSON.parse(await readFile(markerPath, "utf8"));
@@ -103,7 +136,7 @@ export async function restoreUnconfirmedClient(options: {
       return null;
     }
   }
-  const fingerprint = parseFingerprint(marker);
+  const fingerprint = parseCandidateMarker(marker)?.fingerprint ?? null;
   if (
     !(await exists(options.artifacts)) ||
     !(await exists(options.previousArtifacts))
@@ -111,7 +144,17 @@ export async function restoreUnconfirmedClient(options: {
     return null;
   }
 
-  const failed = `${options.artifacts}.failed`;
+  if (fingerprint) {
+    const rejected: RejectedClient = {
+      formatVersion: 1,
+      fingerprint,
+      hostVersion: options.hostVersion,
+    };
+    // Make rejection durable before moving either generation. A crash can
+    // safely repeat the swap; it must not re-try the same crashing candidate.
+    await writeAtomicJson(options.rejectedPath, rejected);
+  }
+  const failed = paths.failed;
   await rm(failed, { recursive: true, force: true });
   await rename(options.artifacts, failed);
   try {
@@ -121,14 +164,6 @@ export async function restoreUnconfirmedClient(options: {
     throw error;
   }
   await rm(failed, { recursive: true, force: true });
-  if (fingerprint) {
-    const rejected: RejectedClient = {
-      formatVersion: 1,
-      fingerprint,
-      hostVersion: options.hostVersion,
-    };
-    await writeAtomicJson(options.rejectedPath, rejected);
-  }
   return { fingerprint };
 }
 
@@ -137,12 +172,12 @@ export async function confirmClientCandidate(options: {
   previousArtifacts: string;
   rejectedPath: string;
 }): Promise<string | null> {
-  const markerPath = path.join(options.artifacts, CANDIDATE_MARKER);
+  const markerPath = clientGenerationPaths(options.artifacts).marker;
   let fingerprint: string | null;
   try {
-    fingerprint = parseFingerprint(
-      JSON.parse(await readFile(markerPath, "utf8")),
-    );
+    fingerprint =
+      parseCandidateMarker(JSON.parse(await readFile(markerPath, "utf8")))
+        ?.fingerprint ?? null;
   } catch {
     return null;
   }

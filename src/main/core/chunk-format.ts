@@ -7,14 +7,37 @@ import type { CompressionMode } from "./manifest.js";
 
 const gunzipAsync = promisify(gunzip);
 
-export function verifyChunkHash(hash: string, data: Uint8Array): void {
-  const algorithm = HASH_ALGOS[hash.length];
-  if (!algorithm) {
-    throw new AppError("hash_format", `unsupported chunk hash: ${hash}`);
+export function parseContentHash(value: unknown): string {
+  if (typeof value !== "string" || !HASH_ALGOS[value.length]) {
+    throw new AppError(
+      "hash_format",
+      `unsupported chunk hash: ${String(value)}`,
+    );
   }
+  const normalized = value.toLowerCase();
+  if (!/^[a-f0-9]+$/.test(normalized)) {
+    throw new AppError(
+      "hash_format",
+      `unsupported chunk hash: ${String(value)}`,
+    );
+  }
+  return normalized;
+}
+
+export function isContentHash(value: string): boolean {
+  try {
+    return parseContentHash(value) === value;
+  } catch {
+    return false;
+  }
+}
+
+export function verifyChunkHash(hash: string, data: Uint8Array): void {
+  const normalized = parseContentHash(hash);
+  const algorithm = HASH_ALGOS[normalized.length]!;
   const actual = createHash(algorithm).update(data).digest("hex");
-  if (actual !== hash.toLowerCase()) {
-    throw new AppError("hash_mismatch", `hash mismatch on chunk ${hash}`);
+  if (actual !== normalized) {
+    throw new AppError("hash_mismatch", `hash mismatch on chunk ${normalized}`);
   }
 }
 

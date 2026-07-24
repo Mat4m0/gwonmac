@@ -17,8 +17,7 @@ import {
 } from "../../shared/progress.js";
 import {
   ACCESS_KEY,
-  COMMON_ARTIFACTS,
-  JSPI_ARTIFACTS,
+  CLIENT_ARTIFACTS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   PREFETCH_JOBS,
@@ -29,6 +28,7 @@ import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
 import { mapPool } from "./async-pool.js";
 import {
   clientFingerprint,
+  clientGenerationPaths,
   markClientCandidate,
 } from "./client-compatibility.js";
 import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
@@ -37,7 +37,10 @@ import {
   fetchPatchBytes,
   type PatchFetch,
 } from "./patch-transport.js";
-import { parsePublishedClientManifest } from "./published-client.js";
+import {
+  parsePublishedClientManifest,
+  verifyPublishedClientArtifacts,
+} from "./published-client.js";
 import { publishSnapshotIndex } from "./snapshot.js";
 
 export type FetchLike = PatchFetch;
@@ -245,6 +248,15 @@ export class PatchClient {
         ),
       );
       const hashes = JSON.stringify(entry.chunkHashes);
+      const artifacts = CLIENT_ARTIFACTS.map((name) => {
+        const artifact = manifest.entry(name);
+        if (!artifact) throw new Error(`manifest is missing ${name}`);
+        return {
+          name,
+          size: artifact.size,
+          chunkHashes: artifact.chunkHashes,
+        };
+      });
       return (
         metadata.size === entry.size &&
         metadata.chunkSize === manifest.chunkSize &&
@@ -253,24 +265,33 @@ export class PatchClient {
         current.chunkSize === manifest.chunkSize &&
         current.snapshot === SNAPSHOT &&
         current.size === entry.size &&
-        JSON.stringify(current.chunkHashes) === hashes
+        JSON.stringify(current.chunkHashes) === hashes &&
+        current.clientFingerprint === clientFingerprint(manifest) &&
+        JSON.stringify(current.artifacts) === JSON.stringify(artifacts)
       );
     } catch {
       return false;
     }
   }
 
-  private async publishedFingerprint(): Promise<string | null> {
+  private async publishedGeneration(): Promise<{
+    fingerprint: string | null;
+    valid: boolean;
+  }> {
     try {
-      return (
-        parsePublishedClientManifest(
-          JSON.parse(
-            await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
-          ),
-        ).clientFingerprint ?? null
+      const manifest = parsePublishedClientManifest(
+        JSON.parse(
+          await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+        ),
       );
+      return {
+        fingerprint: manifest.clientFingerprint ?? null,
+        valid:
+          (await verifyPublishedClientArtifacts(this.artifactsDir, manifest)) ===
+          true,
+      };
     } catch {
-      return null;
+      return { fingerprint: null, valid: false };
     }
   }
 
@@ -290,7 +311,7 @@ export class PatchClient {
     }
     const candidateExists =
       currentExists &&
-      (await stat(join(this.artifactsDir, ".candidate.json")).then(
+      (await stat(clientGenerationPaths(this.artifactsDir).marker).then(
         () => true,
         () => false,
       ));
@@ -319,14 +340,19 @@ export class PatchClient {
   async update(options?: {
     blockedFingerprint?: string | null;
   }): Promise<PatchUpdateResult> {
-    const stage = `${this.artifactsDir}.next`;
-    const backup = `${this.artifactsDir}.previous`;
+    const generations = clientGenerationPaths(this.artifactsDir);
+    const stage = generations.stage;
+    const backup = generations.previous;
     await this.recoverArtifactSwap(stage, backup);
     await mkdir(this.chunksDir, { recursive: true });
 
     const mf = await this.fetchManifest();
     const fingerprint = clientFingerprint(mf);
-    if (fingerprint === options?.blockedFingerprint) {
+    const previousGeneration = await this.publishedGeneration();
+    if (
+      fingerprint === options?.blockedFingerprint &&
+      previousGeneration.valid
+    ) {
       return {
         manifest: mf,
         fingerprint,
@@ -335,7 +361,6 @@ export class PatchClient {
         blocked: true,
       };
     }
-    const previousFingerprint = await this.publishedFingerprint();
     const artifacts: {
       name: string;
       entry: ManifestFileEntry;
@@ -344,7 +369,7 @@ export class PatchClient {
       needsBuild: boolean;
     }[] = [];
 
-    for (const name of [...JSPI_ARTIFACTS, ...COMMON_ARTIFACTS]) {
+    for (const name of CLIENT_ARTIFACTS) {
       const path = mf.find(name);
       if (!path) {
         throw new AppError("manifest_missing", `manifest is missing ${name}`);
@@ -421,6 +446,7 @@ export class PatchClient {
     }
 
     let hadCurrent: boolean;
+    let candidate: boolean;
     await mkdir(stage, { recursive: true });
     try {
       for (const artifact of artifacts) {
@@ -444,6 +470,11 @@ export class PatchClient {
         join(stage, "manifest.json"),
         parsePublishedClientManifest({
           clientFingerprint: fingerprint,
+          artifacts: artifacts.map(({ name, entry }) => ({
+            name,
+            size: entry.size,
+            chunkHashes: entry.chunkHashes,
+          })),
           compressionMode: mf.compression,
           chunkSize: mf.chunkSize,
           snapshot: SNAPSHOT,
@@ -457,8 +488,10 @@ export class PatchClient {
       } catch {
         hadCurrent = false;
       }
-      const candidate =
-        hadCurrent && previousFingerprint !== fingerprint;
+      candidate =
+        hadCurrent &&
+        previousGeneration.valid &&
+        previousGeneration.fingerprint !== fingerprint;
       if (hadCurrent) {
         if (candidate) await markClientCandidate(stage, fingerprint);
         await rm(backup, { recursive: true, force: true });
@@ -490,7 +523,7 @@ export class PatchClient {
       manifest: mf,
       fingerprint,
       published: true,
-      candidate: hadCurrent && previousFingerprint !== fingerprint,
+      candidate,
       blocked: false,
     };
   }

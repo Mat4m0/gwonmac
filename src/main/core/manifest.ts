@@ -1,4 +1,5 @@
 import { AppError } from "../../shared/errors.js";
+import { parseContentHash } from "./chunk-format.js";
 
 export type CompressionMode = "none" | "gzip";
 
@@ -61,7 +62,10 @@ export class Manifest {
       if (f.chunkHashes.length !== expected) {
         throw new AppError("chunk_count", `chunk count mismatch for ${path}`);
       }
-      this.files[path] = f;
+      this.files[path] = {
+        ...f,
+        chunkHashes: f.chunkHashes.map(parseContentHash),
+      };
     }
   }
 

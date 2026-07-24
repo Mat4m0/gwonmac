@@ -5,6 +5,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { macOSBundleVersions } from "../../scripts/macos-version.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
@@ -207,9 +208,16 @@ test("packaged releases carry the project and third-party license notices", () =
 test("macOS derives numeric bundle versions from the package prerelease", () => {
   const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
   assert.match(forge, /const packageVersion =/);
-  assert.match(forge, /const macOSVersion = packageVersion\.split\("-", 1\)\[0\]/);
-  assert.match(forge, /appVersion: macOSVersion/);
-  assert.match(forge, /buildVersion: macOSVersion/);
+  assert.match(forge, /macOSBundleVersions\(packageVersion\)/);
+  const alpha1 = macOSBundleVersions("1.2.3-alpha.1");
+  const alpha2 = macOSBundleVersions("1.2.3-alpha.2");
+  const stable = macOSBundleVersions("1.2.3");
+  assert.equal(alpha1.appVersion, "1.2.3");
+  assert.notEqual(alpha1.buildVersion, alpha2.buildVersion);
+  assert.ok(
+    Number(alpha2.buildVersion.split(".").at(-1)) <
+      Number(stable.buildVersion.split(".").at(-1)),
+  );
 });
 
 test("release fuses keep Node and inspection disabled", () => {
@@ -257,7 +265,7 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
-  assert.match(workflow, /git\/ref\/tags\/\$tag/);
+  assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(workflow, /name: Smoke-test release candidate[\s\S]*pnpm test:packaged/);
   assert.match(workflow, /shasum -a 256 -c "\$\(basename "\$CHECKSUM"\)"/);
@@ -267,6 +275,23 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /sbom-path: \$\{\{ steps\.assets\.outputs\.sbom \}\}/);
   assert.match(workflow, /artifact-metadata: write/);
   assert.match(workflow, /actions\/dependency-review-action@[0-9a-f]{40}/);
+  assert.ok(
+    workflow.indexOf("actions/dependency-review-action@") <
+      workflow.indexOf("pnpm install --frozen-lockfile"),
+  );
+  const releaseBuild = workflow.slice(
+    workflow.indexOf("  release-build:"),
+    workflow.indexOf("\n  release:"),
+  );
+  const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
+  assert.match(releaseBuild, /permissions:\s+contents: read/);
+  assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
+  assert.match(releaseBuild, /actions\/upload-artifact@[0-9a-f]{40}/);
+  assert.match(releasePublish, /actions\/download-artifact@[0-9a-f]{40}/);
+  assert.doesNotMatch(
+    releasePublish,
+    /actions\/checkout|pnpm install|pnpm make|pnpm test/,
+  );
   assert.match(workflow, /--prerelease --latest=false/);
   assert.match(
     workflow,
@@ -275,6 +300,10 @@ test("release workflow publishes one tested, attested package version", () => {
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   assert.match(pkg.scripts.make, /scripts\/clean-output\.mjs/);
   assert.match(pkg.scripts.package, /scripts\/clean-output\.mjs/);
+  assert.match(
+    readFileSync(path.join(root, "scripts/build.mjs"), "utf8"),
+    /tsconfig\.renderer\.json/,
+  );
   const verification = readFileSync(
     path.join(root, "docs/release-verification.md"),
     "utf8",
