@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   copyFile,
   link,
@@ -10,10 +9,8 @@ import {
   stat,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { gunzip } from "node:zlib";
 import type { DownloadProgress } from "../../shared/contracts.js";
-import { AppError, HttpStatusError } from "../../shared/errors.js";
+import { AppError } from "../../shared/errors.js";
 import {
   DownloadRateAverage,
   secondsRemaining,
@@ -21,8 +18,6 @@ import {
 import {
   ACCESS_KEY,
   COMMON_ARTIFACTS,
-  FATAL_HTTP,
-  HASH_ALGOS,
   JSPI_ARTIFACTS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
@@ -31,15 +26,16 @@ import {
   UA,
 } from "./access-key.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
+import { mapPool } from "./async-pool.js";
+import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
 import { Manifest, type CompressionMode, type ManifestFileEntry } from "./manifest.js";
+import {
+  fetchPatchBytes,
+  type PatchFetch,
+} from "./patch-transport.js";
 import { publishSnapshotIndex } from "./snapshot.js";
 
-const gunzipAsync = promisify(gunzip);
-
-export type FetchLike = (
-  url: string,
-  init?: { headers?: Record<string, string>; method?: string },
-) => Promise<{ status: number; body: Uint8Array }>;
+export type FetchLike = PatchFetch;
 
 export interface PatchClientOptions {
   artifactsDir: string;
@@ -63,36 +59,6 @@ function defaultFetch(requestTimeoutMs: number): FetchLike {
     const res = await fetch(url, req);
     return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) };
   };
-}
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-async function mapPool<T>(items: T[], jobs: number, fn: (item: T) => Promise<void>): Promise<void> {
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(jobs, items.length) || 0 }, async () => {
-      while (true) {
-        const i = next++;
-        if (i >= items.length) return;
-        await fn(items[i]!);
-      }
-    }),
-  );
-}
-
-function verifyHash(hash: string, data: Uint8Array): void {
-  const algo = HASH_ALGOS[hash.length];
-  if (!algo) throw new AppError("hash_format", `unsupported chunk hash: ${hash}`);
-  if (createHash(algo).update(data).digest("hex") !== hash.toLowerCase()) {
-    throw new AppError("hash_mismatch", `hash mismatch on chunk ${hash}`);
-  }
-}
-
-async function decodeChunk(
-  data: Uint8Array,
-  compression: CompressionMode,
-): Promise<Uint8Array> {
-  return compression === "gzip" ? gunzipAsync(data) : data;
 }
 
 export class PatchClient {
@@ -125,25 +91,12 @@ export class PatchClient {
   }
 
   async getBytes(url: string, tries = 4): Promise<Uint8Array> {
-    let lastErr: unknown;
-    for (let attempt = 0; attempt < tries; attempt++) {
-      try {
-        const { status, body } = await this.fetchFn(url, { headers: this.headers });
-        if (status >= 400) {
-          const err = new HttpStatusError(status, `${url}: HTTP ${status}`);
-          if (FATAL_HTTP.has(status) || attempt === tries - 1) throw err;
-          await sleep(2 ** attempt * 1000);
-          continue;
-        }
-        return body;
-      } catch (e) {
-        lastErr = e;
-        if (e instanceof HttpStatusError && FATAL_HTTP.has(e.status)) throw e;
-        if (attempt === tries - 1) throw e;
-        await sleep(2 ** attempt * 1000);
-      }
-    }
-    throw lastErr instanceof Error ? lastErr : new AppError("fetch_failed", String(lastErr));
+    return fetchPatchBytes({
+      fetch: this.fetchFn,
+      url,
+      headers: this.headers,
+      tries,
+    });
   }
 
   async fetchManifest(): Promise<Manifest> {
@@ -164,7 +117,7 @@ export class PatchClient {
     const file = join(this.chunksDir, hash);
     try {
       const data = await readFile(file);
-      verifyHash(hash, data);
+      verifyChunkHash(hash, data);
       return true;
     } catch {
       await rm(file, { force: true }).catch(() => undefined);
@@ -177,7 +130,7 @@ export class PatchClient {
       await this.getBytes(`${this.patchRoot}/${hash}.bin`),
       compression,
     );
-    verifyHash(hash, data);
+    verifyChunkHash(hash, data);
     await writeAtomicInDir(this.chunksDir, hash, data);
     return data;
   }
@@ -255,11 +208,7 @@ export class PatchClient {
         const { bytesRead } = await file.read(data, 0, size, i * chunkSize);
         if (bytesRead !== size) return false;
         const hash = entry.chunkHashes[i]!;
-        const algo = HASH_ALGOS[hash.length];
-        if (!algo) return false;
-        if (createHash(algo).update(data).digest("hex") !== hash.toLowerCase()) {
-          return false;
-        }
+        verifyChunkHash(hash, data);
       }
       return true;
     } catch {

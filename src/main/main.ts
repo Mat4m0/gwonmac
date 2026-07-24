@@ -14,7 +14,6 @@ import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   ACCESS_KEY,
   COMMON_ARTIFACTS,
-  FATAL_HTTP,
   JSPI_ARTIFACTS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
@@ -24,6 +23,7 @@ import {
 import { ChunkStore } from "./core/chunk-store.js";
 import type { Manifest } from "./core/manifest.js";
 import { PatchClient } from "./core/patch-client.js";
+import { fetchPatchBytes, type PatchFetch } from "./core/patch-transport.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
@@ -167,43 +167,31 @@ async function applyPendingCacheClear(): Promise<void> {
   log("cache", "info", "cache.clearedAtStartup");
 }
 
-function cdnChunkFetcher(compressionHint: "none" | "gzip"): (hash: string) => Promise<Uint8Array> {
+function cdnChunkFetcher(): (hash: string) => Promise<Uint8Array> {
   const headers = {
     "X-Access-Key": ACCESS_KEY,
     "User-Agent": UA,
     "Accept-Encoding": "identity",
   };
+  const patchFetch: PatchFetch = async (url, init) => {
+    const request: RequestInit = {
+      signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
+    };
+    if (init?.headers) request.headers = init.headers;
+    const response = await net.fetch(url, request);
+    return {
+      status: response.status,
+      body: new Uint8Array(await response.arrayBuffer()),
+    };
+  };
   return async (hash) => {
     const url = `${PATCH_ROOT}/${hash}.bin`;
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const wireStarted = performance.now();
-      try {
-        const res = await net.fetch(url, {
-          headers,
-          signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
-        });
-        if (res.ok) {
-          // Compression is applied inside ChunkStore from the manifest mode.
-          void compressionHint;
-          const data = new Uint8Array(await res.arrayBuffer());
-          observe("cache.networkWire", (performance.now() - wireStarted) * 1_000);
-          return data;
-        }
-        observe("cache.networkWire", (performance.now() - wireStarted) * 1_000);
-        lastError = new Error(`chunk ${hash}: HTTP ${res.status}`);
-        if (FATAL_HTTP.has(res.status)) break;
-      } catch (error) {
-        observe("cache.networkWire", (performance.now() - wireStarted) * 1_000);
-        lastError = error;
-      }
-      if (attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1_000));
-      }
-    }
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`chunk ${hash}: download failed`);
+    return fetchPatchBytes({
+      fetch: patchFetch,
+      url,
+      headers,
+      onAttempt: (durationMs) => observe("cache.networkWire", durationMs * 1_000),
+    });
   };
 }
 
@@ -271,7 +259,7 @@ async function installChunkStore(
     chunkHashes,
     compression,
     bootListPath: bootChunks,
-    fetch: cdnChunkFetcher(compression),
+    fetch: cdnChunkFetcher(),
     metrics: { count, observe, gauge, peak: peakGauge },
   });
   initialResidencyRecorded = false;

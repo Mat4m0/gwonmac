@@ -1,22 +1,19 @@
-import { createHash } from "node:crypto";
 import { readFile, readdir, stat, statfs, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { gunzip } from "node:zlib";
 import type { PrefetchProgress } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import {
   DownloadRateAverage,
   secondsRemaining,
 } from "../../shared/progress.js";
-import { HASH_ALGOS, PREFETCH_JOBS } from "./access-key.js";
+import { PREFETCH_JOBS } from "./access-key.js";
+import { mapPool } from "./async-pool.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
+import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
 import { packResidentBits } from "./snapshot.js";
 
 const FREE_MARGIN = 512 * 1024 * 1024;
-const gunzipAsync = promisify(gunzip);
-
 export type ChunkBytesFetcher = (hash: string) => Promise<Uint8Array>;
 
 export interface ChunkStoreOptions {
@@ -53,40 +50,6 @@ export interface DownloadAllProgress {
   total: number;
   bytesPerSecond: number;
   secondsRemaining: number | null;
-}
-
-function verifyHash(hash: string, data: Uint8Array): void {
-  const algo = HASH_ALGOS[hash.length];
-  if (!algo) throw new AppError("hash_format", `unsupported chunk hash: ${hash}`);
-  const dig = createHash(algo).update(data).digest("hex");
-  if (dig !== hash.toLowerCase()) {
-    throw new AppError("hash_mismatch", `hash mismatch on chunk ${hash}`);
-  }
-}
-
-async function decodeChunk(
-  data: Uint8Array,
-  compression: CompressionMode,
-): Promise<Uint8Array> {
-  return compression === "gzip" ? gunzipAsync(data) : data;
-}
-
-async function mapPool<T>(
-  items: T[],
-  jobs: number,
-  fn: (item: T) => Promise<void>,
-  stopped: () => boolean = () => false,
-): Promise<void> {
-  let next = 0;
-  const workers = Array.from({ length: Math.min(jobs, items.length) || 0 }, async () => {
-    while (true) {
-      if (stopped()) return;
-      const i = next++;
-      if (i >= items.length) return;
-      await fn(items[i]!);
-    }
-  });
-  await Promise.all(workers);
 }
 
 function errorCode(error: unknown): string {
@@ -266,7 +229,7 @@ export class ChunkStore {
           this.metrics?.count("cache.diskBytes", data.byteLength);
           if (!this.verifiedHashes.has(hash)) {
             const verifyStarted = performance.now();
-            verifyHash(hash, data);
+            verifyChunkHash(hash, data);
             this.metrics?.observe(
               "cache.verify",
               (performance.now() - verifyStarted) * 1_000,
@@ -304,7 +267,7 @@ export class ChunkStore {
     const data = await decodeChunk(raw, this.compression);
     this.metrics?.observe("cache.decode", (performance.now() - decodeStarted) * 1_000);
     const hashStarted = performance.now();
-    verifyHash(hash, data);
+    verifyChunkHash(hash, data);
     this.metrics?.observe("cache.hash", (performance.now() - hashStarted) * 1_000);
     if (expectedLength !== undefined && data.byteLength !== expectedLength) {
       throw new AppError(
