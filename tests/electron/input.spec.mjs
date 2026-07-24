@@ -194,6 +194,66 @@ test.describe("renderer input", () => {
     }
   });
 
+  test("keeps the game canvas interactive through every renderer edge", async () => {
+    const fixture = await launchOffline("gw-input-viewport-edges-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const result = await page.evaluate(() => {
+        globalThis.document.getElementById("loading").classList.add("gone");
+        const canvas = globalThis.document.getElementById("canvas");
+        globalThis.__edgeMoves = [];
+        canvas.addEventListener("mousemove", (event) => {
+          globalThis.__edgeMoves.push([event.clientX, event.clientY]);
+        });
+        const points = [
+          [0, 0],
+          [globalThis.innerWidth - 1, 0],
+          [0, globalThis.innerHeight - 1],
+          [globalThis.innerWidth - 1, globalThis.innerHeight - 1],
+        ];
+        return {
+          viewport: [globalThis.innerWidth, globalThis.innerHeight],
+          canvas: [canvas.clientWidth, canvas.clientHeight],
+          edgeTargets: points.map(([x, y]) =>
+            globalThis.document.elementFromPoint(x, y)?.id ?? null,
+          ),
+          rootTheme: globalThis.document.documentElement.dataset.cursorTheme,
+          edgeCursor: globalThis.getComputedStyle(
+            globalThis.document.elementFromPoint(
+              globalThis.innerWidth - 1,
+              globalThis.innerHeight - 1,
+            ),
+          ).cursor,
+        };
+      });
+      expect(result.canvas).toEqual(result.viewport);
+      expect(result.edgeTargets).toEqual([
+        "canvas",
+        "canvas",
+        "canvas",
+        "canvas",
+      ]);
+      expect(result.rootTheme).toBe("guild-wars");
+      expect(result.edgeCursor).toContain("guild-wars.png");
+      await page.mouse.move(0, 0);
+      await page.mouse.move(result.viewport[0] - 1, 0);
+      await page.mouse.move(0, result.viewport[1] - 1);
+      await page.mouse.move(
+        result.viewport[0] - 1,
+        result.viewport[1] - 1,
+      );
+      expect(await page.evaluate(() => globalThis.__edgeMoves)).toEqual([
+        [0, 0],
+        [result.viewport[0] - 1, 0],
+        [0, result.viewport[1] - 1],
+        [result.viewport[0] - 1, result.viewport[1] - 1],
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("cancels an active synthetic tap before a rapid follow-up click", async () => {
     const fixture = await launchOffline("gw-double-click-cancel-e2e-");
     try {

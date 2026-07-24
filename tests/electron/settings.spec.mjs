@@ -69,7 +69,7 @@ test.describe("settings experience", () => {
           cursorTheme: "guild-wars-2",
           showDiagnostics: true,
         });
-      await expect(page.locator("#canvas")).toHaveAttribute(
+      await expect(page.locator("html")).toHaveAttribute(
         "data-cursor-theme",
         "guild-wars-2",
       );
@@ -107,7 +107,7 @@ test.describe("settings experience", () => {
         page.locator('select[name="cursorTheme"] option[value="system"]'),
       ).toHaveText("macOS Default");
       await page.locator('select[name="cursorTheme"]').selectOption("system");
-      await expect(page.locator("#canvas")).toHaveAttribute(
+      await expect(page.locator("html")).toHaveAttribute(
         "data-cursor-theme",
         "system",
       );
@@ -182,7 +182,7 @@ test.describe("settings experience", () => {
         "data-cursor-theme",
         "guild-wars",
       );
-      await expect(page.locator("#canvas")).toHaveAttribute(
+      await expect(page.locator("html")).toHaveAttribute(
         "data-cursor-theme",
         "guild-wars",
       );

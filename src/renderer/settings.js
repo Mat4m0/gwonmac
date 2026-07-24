@@ -154,8 +154,6 @@
 
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function applyRuntimeSettings(settings) {
-    const canvas = document.getElementById('canvas');
-    if (canvas) canvas.dataset.cursorTheme = settings.cursorTheme;
     const preview = byId('settings-cursor-preview');
     if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
     window.gwApplySettings?.(settings);

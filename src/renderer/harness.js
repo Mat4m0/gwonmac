@@ -54,11 +54,16 @@ const SNAPSHOT_URL = 'Gw.snapshot';
 let useJspi = true;
 /** @type {import('../shared/contracts.js').AppSettings | null} */
 let appSettings = null;
+/** @param {import('../shared/contracts.js').AppSettings['cursorTheme']} theme */
+function applyCursorTheme(theme) {
+  document.documentElement.dataset.cursorTheme = theme;
+}
 // Settings UI can update the canonical object before the game glue has loaded.
 // loadGlue replaces this with the richer runtime application hook.
 window.gwApplySettings = (next) => {
   const updated = { ...next };
   appSettings = updated;
+  applyCursorTheme(updated.cursorTheme);
   window.gwDiagnostics?.setVisible(updated.showDiagnostics);
 };
 
@@ -806,13 +811,7 @@ function loadGlue(candidates) {
       document.getElementById('canvas')
     );
   if (!c) throw new Error('missing renderer canvas');
-  const applyCursorTheme = () => {
-    const visible = document.getElementById('canvas');
-    if (visible && appSettings) {
-      visible.dataset.cursorTheme = appSettings.cursorTheme;
-    }
-  };
-  applyCursorTheme();
+  applyCursorTheme(appSettings.cursorTheme);
 
   c.focus();
   c.addEventListener('pointerdown', () => {
@@ -878,7 +877,7 @@ function loadGlue(candidates) {
     const updated = { ...next };
     appSettings = updated;
     inputHost.applySettings(updated);
-    applyCursorTheme();
+    applyCursorTheme(updated.cursorTheme);
     if (updated.renderScale !== previousScale) {
       window.dispatchEvent(new globalThis.Event('resize'));
     }
@@ -927,6 +926,7 @@ function loadGlue(candidates) {
 
   try {
     appSettings = await native().settings.get();
+    applyCursorTheme(appSettings.cursorTheme);
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   } catch (e) {
     window.gwLoading?.fail('Settings could not be loaded.');
