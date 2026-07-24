@@ -262,8 +262,41 @@ test.describe("renderer input", () => {
       expect(result).toEqual({
         afterReset: [],
         afterDiscrete: [-1],
-        complete: [-1, 1],
+        complete: [-1, 3],
       });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("allows pointer lock only for the owned game canvas", async () => {
+    const fixture = await launchOffline("gw-pointer-permission-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        globalThis.document.getElementById("loading").classList.add("gone");
+        globalThis.document.getElementById("canvas").focus();
+      });
+      const canvas = page.locator("#canvas");
+      const box = await canvas.boundingBox();
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "right" });
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => globalThis.document.pointerLockElement?.id ?? null,
+          ),
+        )
+        .toBe("canvas");
+      await page.mouse.up({ button: "right" });
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => globalThis.document.pointerLockElement?.id ?? null,
+          ),
+        )
+        .toBeNull();
     } finally {
       await closeOffline(fixture);
     }

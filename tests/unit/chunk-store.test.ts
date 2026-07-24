@@ -138,6 +138,35 @@ describe("chunk-store", () => {
     assert.deepEqual(await readFile(join(root, hash)), good);
   });
 
+  it("allows pause and sleep to interrupt resident-cache verification", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 4 }, (_, index) =>
+      Buffer.alloc(CHUNK * 256, index + 70),
+    );
+    const hashes = payloads.map(hashOf);
+    await Promise.all(
+      payloads.map((payload, index) =>
+        writeFile(join(root, hashes[index]!), payload),
+      ),
+    );
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: payloads.reduce((total, payload) => total + payload.length, 0),
+      chunkSize: payloads[0]!.length,
+      chunkHashes: hashes,
+      fetch: async () => {
+        throw new Error("resident verification must not fetch");
+      },
+    });
+
+    const download = store.downloadAll({
+      jobs: 1,
+      freeBytes: async () => 2 * 1024 ** 3,
+    });
+    setImmediate(() => store.stop());
+    assert.equal(await download, false);
+  });
+
   it("merges boot working set and never shrinks it", async () => {
     const root = await freshDir();
     const boot = join(root, "boot-chunks.json");

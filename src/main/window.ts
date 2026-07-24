@@ -273,10 +273,24 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     }
   });
 
-  win.webContents.session.setPermissionRequestHandler((_wc, _perm, callback) => {
-    callback(false);
-  });
-  win.webContents.session.setPermissionCheckHandler(() => false);
+  const mayLockPointer = (
+    webContents: Electron.WebContents | null,
+    permission: string,
+    isMainFrame: boolean,
+  ): boolean =>
+    permission === "pointerLock" &&
+    webContents === win.webContents &&
+    isMainFrame &&
+    isAppUrl(webContents.getURL());
+  win.webContents.session.setPermissionRequestHandler(
+    (webContents, permission, callback, details) => {
+      callback(mayLockPointer(webContents, permission, details.isMainFrame));
+    },
+  );
+  win.webContents.session.setPermissionCheckHandler(
+    (webContents, permission, _origin, details) =>
+      mayLockPointer(webContents, permission, details.isMainFrame),
+  );
   win.webContents.on("will-attach-webview", (event) => {
     event.preventDefault();
     log("app", "warn", "security.webviewBlocked");

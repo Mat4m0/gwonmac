@@ -357,11 +357,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     });
     if (response !== 0) return false;
     try {
-      await win.webContents.session.clearStorageData({
-        origin: "gw://app",
-        storages: ["indexdb"],
-      });
-      log("filesystem", "warn", "filesystem.reset");
+      await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
+      log("filesystem", "warn", "filesystem.resetRequested");
       app.relaunch();
       app.quit();
       return true;

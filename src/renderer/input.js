@@ -301,7 +301,10 @@
         cancelable: true,
         clientX: event.clientX,
         clientY: event.clientY,
-        deltaY: steps,
+        // ArenaNet's generated Emscripten glue defines one wheel step as
+        // three DOM lines. Sending a single line was divided by three again
+        // inside the client and never crossed its zoom threshold.
+        deltaY: steps * 3,
         deltaMode: globalThis.WheelEvent.DOM_DELTA_LINE,
         ctrlKey: event.ctrlKey,
         shiftKey: event.shiftKey,

@@ -17,6 +17,7 @@
    * @typedef {{
    *   analyzePath(path: string): { error: number },
    *   chdir(path: string): void,
+   *   lookupPath(path: string, options?: unknown): unknown,
    *   mkdir(path: string): void,
    *   mkdirTree(path: string): void,
    *   mount(type: unknown, options: { autoPersist: boolean }, path: string): void,
@@ -48,6 +49,19 @@
       const fs = /** @type {EmscriptenFileSystem} */ (runtime.FS);
       const idbfs = runtime.IDBFS;
       let finished = false;
+
+      // The desktop game code still builds template names with Windows
+      // backslashes (for example "\Name.st"). Emscripten's POSIX filesystem
+      // treats those as literal filename characters, so normalize once at its
+      // canonical lookup boundary. A leading Windows root means the mounted
+      // game directory here, not MEMFS "/".
+      const lookupPath = fs.lookupPath.bind(fs);
+      fs.lookupPath = (file, options) => {
+        const normalized = file.includes('\\')
+          ? file.replace(/^\\+/, '').replaceAll('\\', '/')
+          : file;
+        return lookupPath(normalized, options);
+      };
 
       /** @param {unknown} error */
       const stop = (error) => {

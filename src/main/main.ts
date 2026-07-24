@@ -14,14 +14,13 @@ import {
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   ACCESS_KEY,
-  CLIENT_ARTIFACTS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
   UA,
 } from "./core/access-key.js";
 import {
-  readPublishedClientManifest,
+  migrateLegacyPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
 import { ChunkStore } from "./core/chunk-store.js";
@@ -208,6 +207,23 @@ async function applyPendingCacheClear(): Promise<void> {
   log("cache", "info", "cache.clearedAtStartup");
 }
 
+async function applyPendingGameStorageClear(): Promise<void> {
+  const paths = gamePaths();
+  try {
+    await stat(paths.gameStorageClearRequest);
+  } catch {
+    return;
+  }
+  // Run before a renderer can mount IDBFS, otherwise auto-persisting game
+  // writes can race the destructive clear and recreate entries before quit.
+  await session.defaultSession.clearStorageData({
+    origin: "gw://app",
+    storages: ["indexdb"],
+  });
+  await rm(paths.gameStorageClearRequest, { force: true });
+  log("filesystem", "warn", "filesystem.resetCompleted");
+}
+
 function cdnChunkFetcher(): (hash: string) => Promise<Uint8Array> {
   const headers = {
     "X-Access-Key": ACCESS_KEY,
@@ -314,23 +330,11 @@ async function installChunkStore(
 
 async function attachLastPublishedClient(): Promise<void> {
   const paths = gamePaths();
-  const value = await readPublishedClientManifest(
-    path.join(paths.artifacts, "manifest.json"),
-  );
+  const value = await migrateLegacyPublishedClientManifest(paths.artifacts);
+  if (!value) throw new Error("no published client is available");
   const verified = await verifyPublishedClientArtifacts(paths.artifacts, value);
-  if (verified === false) {
+  if (verified !== true) {
     throw new Error("last published client failed integrity verification");
-  }
-  if (verified === null) {
-    // One compatibility bridge for clients published before executable hashes
-    // were persisted. The next successful update hard-cuts to strict metadata.
-    for (const name of CLIENT_ARTIFACTS) {
-      const file = await stat(path.join(paths.artifacts, name));
-      if (!file.isFile() || file.size <= 0) {
-        throw new Error(`last published client is missing ${name}`);
-      }
-    }
-    log("update", "warn", "client.legacyIntegrityMetadataMissing");
   }
   await installChunkStore(
     value.size,
@@ -460,13 +464,24 @@ async function startGameUpdate(): Promise<void> {
   try {
     const rollback = await restoreUnconfirmedClient({
       artifacts: paths.artifacts,
-      previousArtifacts: paths.previousArtifacts,
       rejectedPath: paths.rejectedClient,
       hostVersion: app.getVersion(),
     });
     if (rollback) {
       log("update", "warn", "client.candidateRolledBack", {
         fingerprint: rollback.fingerprint,
+      });
+    }
+    try {
+      const migrated = await migrateLegacyPublishedClientManifest(paths.artifacts);
+      if (migrated) {
+        log("update", "info", "client.integrityMetadataReady", {
+          fingerprint: migrated.clientFingerprint ?? null,
+        });
+      }
+    } catch (error) {
+      log("update", "warn", "client.integrityMigrationSkipped", {
+        reason: error instanceof Error ? error.name : "UnknownError",
       });
     }
     const blockedFingerprint = await readRejectedClient(
@@ -570,7 +585,6 @@ function buildWindowHost(): WindowHost {
       const paths = gamePaths();
       const rollback = await restoreUnconfirmedClient({
         artifacts: paths.artifacts,
-        previousArtifacts: paths.previousArtifacts,
         rejectedPath: paths.rejectedClient,
         hostVersion: app.getVersion(),
       });
@@ -596,6 +610,7 @@ app.whenReady().then(async () => {
     website: EXTERNAL_URLS.github,
   });
   await applyPendingCacheClear();
+  await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
   powerMonitor.on("suspend", () => {
@@ -642,7 +657,6 @@ app.whenReady().then(async () => {
       const paths = gamePaths();
       const fingerprint = await confirmClientCandidate({
         artifacts: paths.artifacts,
-        previousArtifacts: paths.previousArtifacts,
         rejectedPath: paths.rejectedClient,
       });
       if (fingerprint) {

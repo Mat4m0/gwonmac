@@ -121,7 +121,6 @@ test.describe("client compatibility", () => {
         await writeFile(
           path.join(previous, "manifest.json"),
           JSON.stringify({
-            clientFingerprint: "d".repeat(64),
             compressionMode: "none",
             chunkSize: 1,
             snapshot: "Gw.snapshot",

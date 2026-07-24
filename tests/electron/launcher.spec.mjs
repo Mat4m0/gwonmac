@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+import {
+  closeOffline,
+  launchOffline,
+  launchOfflineAt,
+  main,
+} from "./fixtures.mjs";
 
 test.describe("launcher recovery", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
@@ -164,6 +171,49 @@ test.describe("launcher recovery", () => {
       await expect(page.locator("#loading-retry")).toBeVisible();
       await expect(page.locator("#loading-retry")).toBeEnabled();
       expect(await page.evaluate(() => window.__nativeInputReset)).toBe(true);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("clears saved files before the replacement renderer can mount IDBFS", async () => {
+    let fixture = await launchOffline("gw-filesystem-reset-e2e-");
+    const { userData } = fixture;
+    try {
+      await fixture.page.evaluate(
+        () =>
+          new Promise((resolve, reject) => {
+            const request = globalThis.indexedDB.open(
+              "gwonmac-reset-probe",
+              1,
+            );
+            request.onupgradeneeded = () => {
+              request.result.createObjectStore("files");
+            };
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              request.result.close();
+              resolve();
+            };
+          }),
+      );
+      await fixture.app.close();
+      await writeFile(
+        path.join(userData, "clear-game-storage-on-start"),
+        "",
+      );
+
+      fixture = await launchOfflineAt(userData);
+      expect(
+        await fixture.page.evaluate(async () =>
+          (await globalThis.indexedDB.databases()).some(
+            (database) => database.name === "gwonmac-reset-probe",
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        existsSync(path.join(userData, "clear-game-storage-on-start")),
+      ).toBe(false);
     } finally {
       await closeOffline(fixture);
     }

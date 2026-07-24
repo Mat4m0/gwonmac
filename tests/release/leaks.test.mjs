@@ -238,7 +238,9 @@ test("renderer permissions and embedded webviews fail closed", () => {
   assert.match(windowSource, /sandbox: true/);
   assert.match(windowSource, /webviewTag: false/);
   assert.match(windowSource, /setPermissionRequestHandler/);
-  assert.match(windowSource, /setPermissionCheckHandler\(\(\) => false\)/);
+  assert.match(windowSource, /permission === "pointerLock"/);
+  assert.match(windowSource, /webContents === win\.webContents/);
+  assert.match(windowSource, /isAppUrl\(webContents\.getURL\(\)\)/);
   assert.match(windowSource, /will-attach-webview[\s\S]*preventDefault/);
 });
 
@@ -293,6 +295,11 @@ test("release workflow publishes one tested, attested package version", () => {
     /actions\/checkout|pnpm install|pnpm make|pnpm test/,
   );
   assert.match(workflow, /--prerelease --latest=false/);
+  assert.doesNotMatch(workflow, /This is an alpha build/);
+  assert.match(
+    workflow,
+    /if \[ "\$PRERELEASE" = "true" \]; then[\s\S]*This is a prerelease build/,
+  );
   assert.match(
     workflow,
     /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$SBOM"/,

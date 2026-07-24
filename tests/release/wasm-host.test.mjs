@@ -42,16 +42,24 @@ test("persistent game files are prepared through supported Emscripten startup ho
   assert.doesNotMatch(filesystem, /\bfetch\s*\(/);
 });
 
-test("saved-file recovery clears only the owned IndexedDB origin", async () => {
+test("saved-file recovery defers IndexedDB deletion until before renderer startup", async () => {
   const ipc = await readFile(path.join(root, "src/main/ipc.ts"), "utf8");
+  const main = await readFile(path.join(root, "src/main/main.ts"), "utf8");
   const resetHandler = ipc.slice(
     ipc.indexOf("ipcMain.handle(IPC.gameStorageReset"),
     ipc.indexOf("ipcMain.handle(IPC.diagnosticsGraphics"),
   );
 
   assert.match(resetHandler, /resetGameInput\(win\)/);
-  assert.match(resetHandler, /win\.webContents\.session\.clearStorageData/);
-  assert.match(resetHandler, /origin:\s*"gw:\/\/app"/);
-  assert.match(resetHandler, /storages:\s*\["indexdb"\]/);
+  assert.match(resetHandler, /paths\.gameStorageClearRequest/);
+  assert.doesNotMatch(resetHandler, /clearStorageData/);
   assert.doesNotMatch(resetHandler, /credentials|cacheClearRequest|recursive/);
+  assert.match(
+    main,
+    /applyPendingGameStorageClear[\s\S]*origin:\s*"gw:\/\/app"[\s\S]*storages:\s*\["indexdb"\]/,
+  );
+  assert.ok(
+    main.indexOf("await applyPendingGameStorageClear()") <
+      main.indexOf("createMainWindow(buildWindowHost())"),
+  );
 });

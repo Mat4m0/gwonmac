@@ -138,7 +138,6 @@ describe("integration: patch updater", () => {
     assert.deepEqual(
       await restoreUnconfirmedClient({
         artifacts,
-        previousArtifacts: `${artifacts}.previous`,
         rejectedPath,
         hostVersion: "1.0.0",
       }),
@@ -176,7 +175,6 @@ describe("integration: patch updater", () => {
     assert.equal(
       await confirmClientCandidate({
         artifacts,
-        previousArtifacts: `${artifacts}.previous`,
         rejectedPath,
       }),
       freshCandidate.fingerprint,

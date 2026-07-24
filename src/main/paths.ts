@@ -16,6 +16,7 @@ export interface GamePaths {
   chunks: string;
   bootChunks: string;
   cacheClearRequest: string;
+  gameStorageClearRequest: string;
 }
 
 export function gamePaths(userData = app.getPath("userData")): GamePaths {
@@ -35,6 +36,7 @@ export function gamePaths(userData = app.getPath("userData")): GamePaths {
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),
+    gameStorageClearRequest: path.join(userData, "clear-game-storage-on-start"),
   };
 }
 

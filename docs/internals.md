@@ -146,12 +146,14 @@ working directory to that mount, and persists the directory invariant before
 releasing the run dependency. This keeps the client's relative build-template,
 screenshot, chat-log, and preference writes in one durable origin. A restore
 or initial persist failure stops startup instead of silently running against
-ephemeral memory.
+ephemeral memory. At the Emscripten lookup boundary, Windows-style backslashes
+used by the official template code are normalized to POSIX separators.
 
-The recovery action clears only IndexedDB for the owned `gw://app` session
-after native confirmation. It cannot clear the separate native chunk cache or
-encrypted credential file. There is no native arbitrary-file bridge and no
-production WASM rewrite.
+After native confirmation, the recovery action records a restart request.
+Startup clears only IndexedDB for the owned `gw://app` session before a
+renderer can mount IDBFS, then removes the request. It cannot clear the
+separate native chunk cache or encrypted credential file. There is no native
+arbitrary-file bridge and no production WASM rewrite.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes

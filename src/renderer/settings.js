@@ -697,7 +697,9 @@
       return;
     }
     if (progress.phase !== 'image') return;
-    downloadPhase = 'running';
+    // Start/stop/finally exclusively own the operation phase. A queued native
+    // progress event must not resurrect a paused or already-settled download.
+    if (!fullDownloadPromise || downloadPhase !== 'running') return;
     currentDownloadProgress = progress;
     const next = {
       chunks: currentCache?.chunks ?? 0,

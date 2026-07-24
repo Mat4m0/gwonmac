@@ -73,7 +73,6 @@ describe("client compatibility", () => {
     assert.deepEqual(
       await restoreUnconfirmedClient({
         artifacts,
-        previousArtifacts,
         rejectedPath,
         hostVersion: "1.0.0",
       }),
@@ -86,7 +85,6 @@ describe("client compatibility", () => {
     assert.equal(
       await restoreUnconfirmedClient({
         artifacts,
-        previousArtifacts,
         rejectedPath,
         hostVersion: "1.0.0",
       }),
@@ -115,7 +113,6 @@ describe("client compatibility", () => {
     assert.equal(
       await confirmClientCandidate({
         artifacts,
-        previousArtifacts,
         rejectedPath,
       }),
       fingerprint,
@@ -153,7 +150,6 @@ describe("client compatibility", () => {
     assert.deepEqual(
       await restoreUnconfirmedClient({
         artifacts,
-        previousArtifacts,
         rejectedPath,
         hostVersion: "1.0.0",
       }),

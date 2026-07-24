@@ -119,7 +119,6 @@ export async function readRejectedClient(
 
 export async function restoreUnconfirmedClient(options: {
   artifacts: string;
-  previousArtifacts: string;
   rejectedPath: string;
   hostVersion: string;
 }): Promise<{ fingerprint: string | null } | null> {
@@ -139,7 +138,7 @@ export async function restoreUnconfirmedClient(options: {
   const fingerprint = parseCandidateMarker(marker)?.fingerprint ?? null;
   if (
     !(await exists(options.artifacts)) ||
-    !(await exists(options.previousArtifacts))
+    !(await exists(paths.previous))
   ) {
     return null;
   }
@@ -158,7 +157,7 @@ export async function restoreUnconfirmedClient(options: {
   await rm(failed, { recursive: true, force: true });
   await rename(options.artifacts, failed);
   try {
-    await rename(options.previousArtifacts, options.artifacts);
+    await rename(paths.previous, options.artifacts);
   } catch (error) {
     await rename(failed, options.artifacts);
     throw error;
@@ -169,7 +168,6 @@ export async function restoreUnconfirmedClient(options: {
 
 export async function confirmClientCandidate(options: {
   artifacts: string;
-  previousArtifacts: string;
   rejectedPath: string;
 }): Promise<string | null> {
   const markerPath = clientGenerationPaths(options.artifacts).marker;
@@ -183,7 +181,10 @@ export async function confirmClientCandidate(options: {
   }
   if (!fingerprint) return null;
   await rm(markerPath, { force: true });
-  await rm(options.previousArtifacts, { recursive: true, force: true });
+  await rm(clientGenerationPaths(options.artifacts).previous, {
+    recursive: true,
+    force: true,
+  });
   await rm(options.rejectedPath, { force: true });
   return fingerprint;
 }

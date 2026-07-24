@@ -203,7 +203,7 @@ jobs:
           subject-path: ${{ steps.assets.outputs.asset }}
           sbom-path: ${{ steps.assets.outputs.sbom }}
 
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         env:
           ASSET: ${{ steps.assets.outputs.asset }}
           CHECKSUM: ${{ steps.assets.outputs.checksum }}
@@ -212,18 +212,24 @@ jobs:
           PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
           TAG: ${{ needs.release-build.outputs.tag }}
         run: |
-          notes="> [!WARNING]
-          > This is an alpha build. Back up important data and expect bugs."
+          notes=""
           release_args=(--target "$GITHUB_SHA" --title "$TAG")
           if [ "$PRERELEASE" = "true" ]; then
             release_args+=(--prerelease --latest=false)
+            notes="> [!WARNING]
+          > This is a prerelease build. Back up important data and expect bugs."
           fi
-          notes="$notes
-
-          > [!NOTE]
+          signing_note="> [!NOTE]
           > This build is ad-hoc signed, not notarized by Apple. macOS blocks the
           > first launch; follow the install guide for the one-time per-app
           > approval. Do not disable Gatekeeper."
+          if [ -n "$notes" ]; then
+            notes="$notes
+
+          $signing_note"
+          else
+            notes="$signing_note"
+          fi
           notes="$notes
 
           Every release includes SHA-256 checksums, an SPDX SBOM, and GitHub

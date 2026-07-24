@@ -21,6 +21,10 @@ function fixture(options: {
   const calls: string[] = [];
   const failures: unknown[] = [];
   const fileSystem = {
+    lookupPath(value: string) {
+      calls.push(`lookup:${value}`);
+      return {};
+    },
     analyzePath() {
       return { error: options.mounted ? 0 : 44 };
     },
@@ -74,7 +78,7 @@ function fixture(options: {
   });
   assert.equal(typeof module.preRun, "function");
   module.preRun();
-  return { calls, failures };
+  return { calls, failures, fileSystem };
 }
 
 test("mounts, restores, prepares, and persists the game filesystem before main", () => {
@@ -101,6 +105,17 @@ test("reuses an existing mount while restoring every required invariant", () => 
   assert.equal(result.calls.some((call) => call.startsWith("mkdir:")), false);
   assert.ok(result.calls.includes("chdir:app:"));
   assert.ok(result.calls.includes("sync:false"));
+});
+
+test("normalizes Guild Wars desktop template paths at the filesystem boundary", () => {
+  const result = fixture();
+  result.calls.length = 0;
+  result.fileSystem.lookupPath("\\Templates\\Skills\\Test.st");
+  result.fileSystem.lookupPath("Templates\\Equipment\\Test.eq");
+  assert.deepEqual(result.calls, [
+    "lookup:Templates/Skills/Test.st",
+    "lookup:Templates/Equipment/Test.eq",
+  ]);
 });
 
 test("blocks game startup and reports an IndexedDB restore failure", () => {

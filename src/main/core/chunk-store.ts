@@ -544,7 +544,9 @@ export class ChunkStore {
       async (index) => {
         await this.verifyResident(index);
       },
+      () => this.stopFlag,
     );
+    if (this.stopFlag) return false;
     const todo: number[] = [];
     for (let i = 0; i < this.hashes.length; i++) {
       if (!(await this.isResident(i))) todo.push(i);

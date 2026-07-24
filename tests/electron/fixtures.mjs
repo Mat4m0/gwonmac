@@ -23,6 +23,10 @@ export async function launchOffline(
 ) {
   const userData = await mkdtemp(path.join(tmpdir(), prefix));
   await prepare(userData);
+  return launchOfflineAt(userData, environment);
+}
+
+export async function launchOfflineAt(userData, environment = {}) {
   const env = {
     ...process.env,
     GW_OFFLINE_SHELL: "1",
