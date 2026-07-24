@@ -2,14 +2,21 @@
 // Progress comes from the main-process updater via gwNative, not HTTP polling.
 
 window.gwLoading = (function () {
-  const el = (id) => document.getElementById(id);
+  /** @param {string} id */
+  const el = (id) => {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`missing renderer element: ${id}`);
+    return element;
+  };
   const root = el('loading'), bar = el('loading-bar'), fill = el('loading-fill');
   const label = el('loading-label'), detail = el('loading-detail');
-  const retry = el('loading-retry');
+  const retry = /** @type {HTMLButtonElement} */ (el('loading-retry'));
 
+  /** @param {number} n */
   const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB'
                               : (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB');
 
+  /** @param {number | null} frac */
   function setBar(frac) {
     if (frac === null) { bar.classList.add('busy'); return; }
     bar.classList.remove('busy');
@@ -20,18 +27,24 @@ window.gwLoading = (function () {
     if (root.classList.contains('gone')) return;
     root.classList.add('gone');
     setTimeout(() => { root.style.display = 'none'; }, 700);
-    document.getElementById('canvas').focus();
+    el('canvas').focus();
   }
 
   const api = {
+    /**
+     * @param {string} text
+     * @param {number | null} frac
+     * @param {string} [sub]
+     */
     set(text, frac, sub) {
       label.textContent = text;
       label.classList.remove('error');
       detail.textContent = sub || '';
-      if (retry) retry.hidden = true;
+      retry.hidden = true;
       setBar(frac);
     },
 
+    /** @param {string} text */
     fail(text) {
       root.style.display = '';
       root.classList.remove('gone');
@@ -39,7 +52,7 @@ window.gwLoading = (function () {
       label.classList.add('error');
       detail.textContent =
         'You can retry, or choose Help → Report a Problem.';
-      if (retry) retry.hidden = false;
+      retry.hidden = false;
       bar.classList.remove('busy');
       fill.style.width = '100%';
       fill.style.background = '#b8452f';
@@ -49,12 +62,15 @@ window.gwLoading = (function () {
       api.set('Ready', 1);
       finish();
     },
+    waitForClient,
   };
 
   // Art index is generated at package time next to the images.
   fetch('images/index.json').then((r) => r.ok ? r.json() : null).then((art) => {
     if (!art) return;
-    if (art.logo) el('loading-logo').src = art.logo;
+    if (art.logo) {
+      /** @type {HTMLImageElement} */ (el('loading-logo')).src = art.logo;
+    }
     if (art.credit) el('loading-credit').innerHTML = art.credit;
     if (!art.backgrounds || !art.backgrounds.length) return;
     const pick = art.backgrounds[Math.floor(Math.random() * art.backgrounds.length)];
@@ -77,7 +93,9 @@ window.gwLoading = (function () {
 
   // Project links are enum-selected so the renderer never invents arbitrary URLs.
   el('loading-links')?.addEventListener('click', (e) => {
-    const a = e.target.closest('a');
+    const target = e.target;
+    if (!(target instanceof globalThis.Element)) return;
+    const a = target.closest('a');
     if (!a) return;
     if (a.hasAttribute('data-settings')) {
       e.preventDefault();
@@ -85,7 +103,13 @@ window.gwLoading = (function () {
       return;
     }
     const kind = a.dataset.external;
-    if (!kind || !window.gwNative) return;
+    if (
+      kind !== 'github' &&
+      kind !== 'discord' &&
+      kind !== 'donate' &&
+      kind !== 'releases' &&
+      kind !== 'store'
+    ) return;
     e.preventDefault();
     void window.gwNative.app.openExternal(kind);
   });
@@ -107,7 +131,7 @@ window.gwLoading = (function () {
     links.prepend(link);
   })();
 
-  api.waitForClient = async function () {
+  async function waitForClient() {
     if (!window.gwNative) {
       api.fail('Native bridge missing — this page must run inside Guild Wars.app.');
       return false;
@@ -116,6 +140,7 @@ window.gwLoading = (function () {
 
     return new Promise((resolve) => {
       let settled = false;
+      /** @param {boolean} ok */
       const finish = (ok) => {
         if (settled) return;
         settled = true;
@@ -123,6 +148,7 @@ window.gwLoading = (function () {
         resolve(ok);
       };
 
+      /** @param {import('../shared/contracts.js').DownloadProgress} p */
       const apply = (p) => {
         if (p.error) { api.fail(p.error); finish(false); return; }
         if (p.phase === 'ready') {
@@ -148,7 +174,7 @@ window.gwLoading = (function () {
       const unsub = window.gwNative.progress.onChange(apply);
       void window.gwNative.progress.current().then(apply);
     });
-  };
+  }
 
   return api;
 })();

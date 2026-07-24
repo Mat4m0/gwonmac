@@ -9,22 +9,43 @@
     diagnostics,
     log,
   }) => {
+    /** @type {Map<string, {
+     *   target: EventTarget | null,
+     *   key: string,
+     *   code: string,
+     *   location: number
+     * }>} */
     const heldKeys = new Map();
+    /** @type {Map<number, {
+     *   target: EventTarget | null,
+     *   button: number,
+     *   clientX: number,
+     *   clientY: number,
+     *   screenX: number,
+     *   screenY: number
+     * }>} */
     const heldButtons = new Map();
+    /** @type {Map<number, Touch>} */
     const syntheticTouches = new Map();
+    /** @type {Set<number>} */
     const tapTimers = new Set();
     let touchMode = initialSettings.touchMode;
     let lockEnabled = initialSettings.pointerLock;
+    /** @type {{ time: number, x: number, y: number } | null} */
     let lastClick = null;
+    /** @type {{ x: number, y: number } | null} */
     let pendingTap = null;
     let touchId = 0;
+    /** @type {Touch | null} */
     let activeTouch = null;
+    /** @type {{ x: number, y: number } | null} */
     let virtualCursor = null;
     let resettingPointer = false;
     let pendingX = 0;
     let pendingY = 0;
     let resetFrame = 0;
 
+    /** @param {() => void} callback @param {number} delay */
     const schedule = (callback, delay) => {
       const timer = setTimeout(() => {
         tapTimers.delete(timer);
@@ -39,6 +60,7 @@
       tapTimers.clear();
     };
 
+    /** @param {number} x @param {number} y @param {number} identifier */
     const makeTouch = (x, y, identifier) => new Touch({
       identifier,
       target: canvas,
@@ -54,6 +76,10 @@
       force: 1,
     });
 
+    /**
+     * @param {'touchstart' | 'touchmove' | 'touchend' | 'touchcancel'} type
+     * @param {Touch} touch
+     */
     const sendTouch = (type, touch) => {
       const ended = type === 'touchend' || type === 'touchcancel';
       canvas.dispatchEvent(new TouchEvent(type, {
@@ -66,14 +92,20 @@
       }));
     };
 
+    /** @param {Touch} touch */
     const startTouch = (touch) => {
       syntheticTouches.set(touch.identifier, touch);
       sendTouch('touchstart', touch);
     };
+    /** @param {Touch} touch */
     const moveTouch = (touch) => {
       syntheticTouches.set(touch.identifier, touch);
       sendTouch('touchmove', touch);
     };
+    /**
+     * @param {'touchend' | 'touchcancel'} type
+     * @param {Touch} touch
+     */
     const finishTouch = (type, touch) => {
       syntheticTouches.delete(touch.identifier);
       sendTouch(type, touch);
@@ -89,6 +121,14 @@
       syntheticTouches.clear();
     };
 
+    /**
+     * @param {string} type
+     * @param {DOMRect} rect
+     * @param {number} buttons
+     * @param {number} button
+     * @param {number} movementX
+     * @param {number} movementY
+     */
     const sendMouse = (type, rect, buttons, button, movementX, movementY) => {
       if (!virtualCursor) return false;
       return canvas.dispatchEvent(new MouseEvent(type, {
@@ -184,6 +224,7 @@
     let wheelRemainder = 0;
     let wheelDirection = 0;
     let wheelAt = 0;
+    /** @type {WeakSet<WheelEvent>} */
     const normalizedWheels = new WeakSet();
     canvas.addEventListener('wheel', (event) => {
       if (
@@ -220,6 +261,7 @@
       canvas.dispatchEvent(normalized);
     }, { capture: true, passive: false });
 
+    /** @param {number} x @param {number} y @param {number} delay */
     const tapAt = (x, y, delay) => schedule(() => {
       const touch = makeTouch(x, y, ++touchId);
       startTouch(touch);
@@ -289,6 +331,7 @@
       finishTouch('touchcancel', touch);
     }, true);
 
+    /** @param {number} movementX @param {number} movementY */
     const sendDelta = (movementX, movementY) => {
       if (!virtualCursor) return;
       const rect = canvas.getBoundingClientRect();
@@ -345,12 +388,18 @@
         const request = canvas.requestPointerLock();
         request?.catch((error) => {
           diagnostics?.event('pointerLock.failed', error);
-          log('[warn] pointer lock refused:', error.message);
+          log(
+            '[warn] pointer lock refused:',
+            error instanceof Error ? error.message : String(error),
+          );
           releaseAll();
         });
       } catch (error) {
         diagnostics?.event('pointerLock.failed', error);
-        log('[warn] pointer lock refused:', error.message);
+        log(
+          '[warn] pointer lock refused:',
+          error instanceof Error ? error.message : String(error),
+        );
         releaseAll();
       }
     }, true);
@@ -391,6 +440,7 @@
 
     return Object.freeze({
       releaseAll,
+      /** @param {import('../shared/contracts.js').AppSettings} next */
       applySettings(next) {
         if (next.touchMode !== touchMode) {
           cancelSyntheticTouches();

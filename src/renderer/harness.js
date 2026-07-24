@@ -3,23 +3,30 @@
 //
 // Module MUST be var: the glue does `var Module = typeof Module != 'undefined'
 // ? Module : {}`, and a const/let here collides with it at parse time.
+/** @type {any} ArenaNet's generated Emscripten surface is the dynamic boundary. */
 var Module;
 
 (function () {
 'use strict';
 
 const LOG_LINES = 400;
+/** @type {string[]} */
 const logBuf = [];
 const native = () => window.gwNative;
+/**
+ * @param {import('../shared/diagnostics.js').RendererMilestone} name
+ * @param {import('../shared/diagnostics.js').RendererMilestoneFields} [fields]
+ */
 const milestone = (name, fields) => {
   void native().diagnostics
     .recordRendererMilestone(name, performance.now() * 1000, fields)
     .catch(() => {});
 };
 
+/** @param {...unknown} a */
 const log = (...a) => {
   console.log(...a);
-  logBuf.push(a.join(' '));
+  logBuf.push(a.map(String).join(' '));
   if (logBuf.length > LOG_LINES) logBuf.splice(0, logBuf.length - LOG_LINES);
   const el = document.getElementById('log');
   if (el && el.style.display !== 'none') {
@@ -30,6 +37,7 @@ const log = (...a) => {
 
 window.gwLog = (on = true) => {
   const el = document.getElementById('log');
+  if (!el) return false;
   el.style.display = on ? 'block' : 'none';
   if (on) { el.textContent = logBuf.join('\n'); el.scrollTop = el.scrollHeight; }
   return on;
@@ -44,26 +52,33 @@ const STARTUP_LABELS = {
 
 const SNAPSHOT_URL = 'Gw.snapshot';
 let useJspi = true;
+/** @type {import('../shared/contracts.js').AppSettings | null} */
 let appSettings = null;
 // Settings UI can update the canonical object before the game glue has loaded.
 // loadGlue replaces this with the richer runtime application hook.
 window.gwApplySettings = (next) => {
-  appSettings = { ...next };
-  window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
+  const updated = { ...next };
+  appSettings = updated;
+  window.gwDiagnostics?.setVisible(updated.showDiagnostics);
 };
 
 // fileSize() is synchronous, so the size must be known before the glue loads.
+/** @type {number | null} */
 let snapshotSize = null;
 let snapshotChunkSize = 262144;
+/** @type {string[]} */
 let snapshotChunkHashes = [];
 
 // Renderer memory is disposable; native chunk residency lives in the main process.
 const CHUNK_CACHE_MAX = 256 * 1024 * 1024;
+/** @type {Map<number, Uint8Array>} */
 const chunkCache = new Map();
 let chunkCacheBytes = 0;
 
 // Derived from snapshot-metadata residentBits — isCached must stay synchronous.
+/** @type {Set<string>} */
 const residentHashes = new Set();
+/** @param {number} i */
 const hashOf = (i) => snapshotChunkHashes[i] || '';
 
 const stats = {
@@ -75,7 +90,9 @@ const stats = {
   evictions: 0,
   promotions: 0,
 };
-let burstBytes = 0, burstTimer = null;
+let burstBytes = 0;
+/** @type {number | null} */
+let burstTimer = null;
 let lastSnapshotError = '';
 let gamepadImportsAvailable = false;
 
@@ -103,11 +120,13 @@ window.gwStats = () => {
   return s;
 };
 
+/** @param {number} i */
 function markResident(i) {
   const h = hashOf(i);
   if (h) residentHashes.add(h);
 }
 
+/** @param {Uint8Array} bits */
 function applyResidentBits(bits) {
   if (!bits || !bits.length) return;
   for (let i = 0; i < snapshotChunkHashes.length; i++) {
@@ -116,25 +135,35 @@ function applyResidentBits(bits) {
   }
 }
 
+/**
+ * @param {number} offset
+ * @param {number} size
+ * @returns {[number, number]}
+ */
 const chunkRange = (offset, size) => [
   Math.floor(offset / snapshotChunkSize),
   Math.floor((offset + size - 1) / snapshotChunkSize),
 ];
 
 // Re-insert on hit to move the entry to the LRU tail.
+/** @param {number} i */
 function cacheTouch(i) {
   const buf = chunkCache.get(i);
   if (buf !== undefined) { chunkCache.delete(i); chunkCache.set(i, buf); }
   return buf;
 }
 
+/** @param {number} i @param {Uint8Array} buf */
 function cachePut(i, buf) {
   if (chunkCache.has(i)) return;
   chunkCache.set(i, buf);
   chunkCacheBytes += buf.length;
   while (chunkCacheBytes > CHUNK_CACHE_MAX && chunkCache.size > 1) {
     const oldest = chunkCache.keys().next().value;
-    chunkCacheBytes -= chunkCache.get(oldest).length;
+    if (oldest === undefined) break;
+    const oldestBuffer = chunkCache.get(oldest);
+    if (!oldestBuffer) break;
+    chunkCacheBytes -= oldestBuffer.length;
     chunkCache.delete(oldest);
     stats.evictions++;
     window.gwDiagnostics?.scheduler('eviction');
@@ -142,8 +171,21 @@ function cachePut(i, buf) {
 }
 
 const MAX_CHUNK_REQUESTS = 8;
+/**
+ * @typedef {{
+ *   index: number,
+ *   priority: 'demand' | 'prefetch',
+ *   state: 'queued' | 'active',
+ *   promise: Promise<Uint8Array>,
+ *   resolve: (value: Uint8Array) => void,
+ *   reject: (reason?: unknown) => void
+ * }} ChunkTask
+ */
+/** @type {Map<number, ChunkTask>} */
 const inflight = new Map();
+/** @type {ChunkTask[]} */
 const demandQueue = [];
+/** @type {ChunkTask[]} */
 const prefetchQueue = [];
 let activeDemand = 0;
 let activePrefetch = 0;
@@ -159,6 +201,7 @@ window.gwSnapshotState = () => ({
   queuedPrefetch: prefetchQueue.length,
 });
 
+/** @param {ChunkTask} task */
 function promote(task) {
   if (task.priority !== 'prefetch' || task.state !== 'queued') return;
   const index = prefetchQueue.indexOf(task);
@@ -174,6 +217,11 @@ function drainChunkQueue() {
   while (activeDemand + activePrefetch < MAX_CHUNK_REQUESTS) {
     const task = demandQueue.shift() || prefetchQueue.shift();
     if (!task) return;
+    if (snapshotSize === null) {
+      task.reject(new Error('snapshot metadata is unavailable'));
+      inflight.delete(task.index);
+      continue;
+    }
     if (schedulerStopped && task.priority === 'prefetch') {
       task.reject(new Error('background download stopped'));
       inflight.delete(task.index);
@@ -221,6 +269,11 @@ addEventListener('beforeunload', () => {
   }
 });
 
+/**
+ * @param {number} i
+ * @param {'demand' | 'prefetch'} priority
+ * @returns {Promise<Uint8Array>}
+ */
 function chunkBytes(i, priority) {
   const hit = cacheTouch(i);
   if (hit !== undefined) {
@@ -237,8 +290,13 @@ function chunkBytes(i, priority) {
     return pending.promise;
   }
 
-  let resolve, reject;
+  /** @type {(value: Uint8Array) => void} */
+  let resolve = () => {};
+  /** @type {(reason?: unknown) => void} */
+  let reject = () => {};
+  /** @type {Promise<Uint8Array>} */
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  /** @type {ChunkTask} */
   const task = { index: i, priority, state: 'queued', promise, resolve, reject };
   inflight.set(i, task);
   (priority === 'demand' ? demandQueue : prefetchQueue).push(task);
@@ -246,6 +304,7 @@ function chunkBytes(i, priority) {
   return promise;
 }
 
+/** @param {number} first @param {number} last */
 async function fetchDemandChunks(first, last) {
   await Promise.all(
     Array.from({ length: last - first + 1 }, (_, n) =>
@@ -253,6 +312,11 @@ async function fetchDemandChunks(first, last) {
   );
 }
 
+/**
+ * @param {number} first
+ * @param {number} last
+ * @param {((bytes: number) => void) | undefined} progress
+ */
 async function fetchPrefetchChunks(first, last, progress) {
   for (let i = first; i <= last; i++) {
     const buf = await chunkBytes(i, 'prefetch');
@@ -261,6 +325,7 @@ async function fetchPrefetchChunks(first, last, progress) {
 }
 
 // Assemble a byte range from cached chunks; null if any part is missing.
+/** @param {number} offset @param {number} size */
 function readFromCache(offset, size) {
   const [first, last] = chunkRange(offset, size);
   if (first === last) {
@@ -294,11 +359,15 @@ const ASYNC_METHODS = new Set([
 
 // Call sites test `typeof Module.x.y === 'function'`, so every property must
 // read back callable.
+/** @param {string} name */
 const stub = (name) => new Proxy({}, {
-  get: (_, k) => (...args) => {
-    const meth = `${name}.${String(k)}`;
-    log('[stub]', meth, args.length ? `(${args.length} args)` : '');
-    return ASYNC_METHODS.has(meth) ? Promise.resolve(undefined) : undefined;
+  get: (_, k) => {
+    /** @param {...any} args Generated stub call signature. */
+    return (...args) => {
+      const meth = `${name}.${String(k)}`;
+      log('[stub]', meth, args.length ? `(${args.length} args)` : '');
+      return ASYNC_METHODS.has(meth) ? Promise.resolve(undefined) : undefined;
+    };
   },
   has: () => true,
 });
@@ -306,12 +375,14 @@ const stub = (name) => new Proxy({}, {
 // The game renders to an OffscreenCanvas and presents each frame as an
 // ImageBitmap; without this wiring it runs and paints nowhere visible. Mirrors
 // Od() in the shipped launcher, which patches imports before instantiating.
+/** @param {any} env ArenaNet's generated EGL import object. */
 function patchEgl(env) {
   if (!env || typeof env.eglCreateContext !== 'function') {
     return log('[warn] no eglCreateContext import — nothing will be presented');
   }
 
   const createContext = env.eglCreateContext;
+  /** @param {...any} args Generated EGL signature. */
   env.eglCreateContext = (...args) => {
     const visible = Module.canvas;
     visible.offscreen = new OffscreenCanvas(visible.width, visible.height);
@@ -333,11 +404,12 @@ function patchEgl(env) {
   // second host-side resize competing with emscripten_set_canvas_element_size.
   if (typeof env.emscripten_get_device_pixel_ratio === 'function') {
     env.emscripten_get_device_pixel_ratio =
-      () => appSettings.renderScale;
+      () => appSettings?.renderScale ?? 1;
   }
 
   const swap = env.eglSwapBuffers;
   let firstFrame = true;
+  /** @param {...any} args Generated EGL signature. */
   env.eglSwapBuffers = (...args) => {
     const swapStarted = performance.now();
     const ok = swap(...args);
@@ -370,6 +442,11 @@ function patchEgl(env) {
   // Keep the offscreen buffer matched, or we present at the wrong resolution.
   const setSize = env.emscripten_set_canvas_element_size;
   if (typeof setSize === 'function') {
+    /**
+     * @param {unknown} target
+     * @param {number} w
+     * @param {number} h
+     */
     env.emscripten_set_canvas_element_size = (target, w, h) => {
       const rc = setSize(target, w, h);
       if (rc === 0 && Module.canvas.offscreen) {
@@ -383,6 +460,7 @@ function patchEgl(env) {
 }
 
 let graphicsDiagnosticsFrame = 0;
+/** @param {HTMLCanvasElement} visible @param {OffscreenCanvas} offscreen */
 function scheduleGraphicsDiagnostics(visible, offscreen) {
   cancelAnimationFrame(graphicsDiagnosticsFrame);
   graphicsDiagnosticsFrame = requestAnimationFrame(async () => {
@@ -412,23 +490,33 @@ function scheduleGraphicsDiagnostics(visible, offscreen) {
         drawingBufferWidth: gl?.drawingBufferWidth || 0,
         drawingBufferHeight: gl?.drawingBufferHeight || 0,
         devicePixelRatio: window.devicePixelRatio || 1,
-        renderScale: appSettings.renderScale,
+        renderScale: appSettings?.renderScale ?? 1,
         antialias: !!attributes?.antialias,
         samples: gl ? Number(gl.getParameter(gl.SAMPLES) || 0) : 0,
       });
       window.dispatchEvent(new globalThis.Event('gw:graphics-resized'));
     } catch (e) {
-      log('[warn] graphics diagnostics failed:', e.message);
+      log(
+        '[warn] graphics diagnostics failed:',
+        e instanceof Error ? e.message : String(e),
+      );
     }
   });
 }
 
 Module = {
-  canvas: document.getElementById('canvas'),
+  canvas:
+    /** @type {HTMLCanvasElement} */ (document.getElementById('canvas')),
+  /** @param {unknown} t */
   print: (t) => log(t),
+  /** @param {unknown} t */
   printErr: (t) => log('[err]', t),
 
   // Take over instantiation so the EGL imports can be patched first.
+  /**
+   * @param {any} imports ArenaNet's generated WebAssembly imports.
+   * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
+   */
   instantiateWasm(imports, success) {
     patchEgl(imports.env);
     const gamepadImports = [
@@ -450,7 +538,10 @@ Module = {
       try {
         result = await WebAssembly.instantiateStreaming(fetch(url), imports);
       } catch (e) {
-        log('[warn] streaming instantiate failed, falling back:', e.message);
+        log(
+          '[warn] streaming instantiate failed, falling back:',
+          e instanceof Error ? e.message : String(e),
+        );
         milestone('wasm.streamingFallback');
         result = await WebAssembly.instantiate(
           await (await fetch(url)).arrayBuffer(),
@@ -462,7 +553,10 @@ Module = {
       success(result.instance, result.module);
     })().catch((error) => {
       window.gwDiagnostics?.event('client.glueLoadFailed', error);
-      log('[err] WASM instantiation failed:', error.message);
+      log(
+        '[err] WASM instantiation failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       window.gwLoading?.fail('The game client could not start.');
     });
     return {};   // signals that instantiation is in flight
@@ -470,6 +564,7 @@ Module = {
 
   // Both builds share an output basename, so Gw.jspi.js also asks for
   // "Gw.wasm". Without this it silently pairs with the Asyncify binary.
+  /** @param {string} path */
   locateFile: (path) => (useJspi && path === 'Gw.wasm') ? 'Gw.jspi.wasm' : path,
 
   image: {
@@ -480,6 +575,7 @@ Module = {
     // manifest, so the module asks for other files (ChatFilter.ini among
     // them); handing back a handle makes fileSize answer 4.2GB for a small ini
     // and the module aborts allocating for it.
+    /** @param {string} path */
     open(path) {
       if (!/(^|[/\\])Gw\.snapshot$/i.test(path)) {
         log(`image.open ${path} -> 0 (not in the image)`);
@@ -492,17 +588,26 @@ Module = {
     },
 
     // Synchronous by contract, hence the size read at boot.
+    /** @param {number} handle */
     fileSize(handle) {
       if (!this._handles.has(handle)) return log('[warn] image.fileSize on unknown handle', handle), 0;
       if (snapshotSize === null) return log('[warn] image.fileSize but no snapshot size known'), 0;
       return snapshotSize;
     },
 
+    /** @param {number} handle */
     close(handle) {
       log('image.close', handle);
       this._handles.delete(handle);
     },
 
+    /**
+     * @param {number} imageId
+     * @param {number} offset
+     * @param {unknown} _unused
+     * @param {number} buffer
+     * @param {number} bytes
+     */
     async readAsync(imageId, offset, _unused, buffer, bytes) {
       if (!this._handles.has(imageId)) throw new Error('bad image handle ' + imageId);
       const started = performance.now();
@@ -521,7 +626,7 @@ Module = {
 
       // Summarise a burst once it goes quiet for the optional game console.
       burstBytes += bytes;
-      clearTimeout(burstTimer);
+      if (burstTimer !== null) clearTimeout(burstTimer);
       burstTimer = setTimeout(() => {
         if (burstBytes > 4 * 1024 * 1024) {
           log(`image: read ${(burstBytes / 1048576).toFixed(1)}MB (mem ${stats.fromMemory}, ` +
@@ -535,6 +640,11 @@ Module = {
     },
 
     // Memory plus native residency both count; eviction must not erase native.
+    /**
+     * @param {number} handle
+     * @param {number} offset
+     * @param {number} size
+     */
     isCached(handle, offset, size) {
       const [first, last] = chunkRange(offset, size);
       for (let i = first; i <= last; i++) {
@@ -543,6 +653,12 @@ Module = {
       return 1;
     },
 
+    /**
+     * @param {number} handle
+     * @param {number} offset
+     * @param {number} size
+     * @param {(bytes: number) => void} progress
+     */
     async cacheAsync(handle, offset, size, progress) {
       const [first, last] = chunkRange(offset, size);
       await fetchPrefetchChunks(first, last, (n) => {
@@ -554,12 +670,26 @@ Module = {
   // Raw TCP owned by the main process. The glue assigns onopen/onclose/onmessage
   // on the returned object and calls onmessage with the payload, not an event.
   socket: {
+    /** @param {string} destAddr */
     connect(destAddr) {
       log('socket.connect', destAddr);
+      /** @type {number | null} */
       let id = null;
+      /** @type {import('../shared/contracts.js').SocketEvent[]} */
       const pending = [];
+      /**
+       * @typedef {{
+       *   onopen: (() => void) | null,
+       *   onclose: (() => void) | null,
+       *   onmessage: ((data: Uint8Array) => void) | null,
+       *   send(data: Uint8Array | ArrayBuffer): Promise<void>,
+       *   close(): void
+       * }} SocketShim
+       */
+      /** @type {SocketShim} */
       const sock = {
         onopen: null, onclose: null, onmessage: null,
+        /** @param {Uint8Array | ArrayBuffer} data */
         send: (data) => {
           if (id === null) throw new Error('socket not open yet');
           const source = data instanceof Uint8Array ? data : new Uint8Array(data);
@@ -581,6 +711,7 @@ Module = {
           void native().sockets.close(id);
         },
       };
+      /** @param {import('../shared/contracts.js').SocketEvent} ev */
       const deliver = (ev) => {
         if (ev.type === 'open') {
           if (sock.onopen) sock.onopen();
@@ -603,7 +734,10 @@ Module = {
         for (const ev of pending) if (ev.socketId === id) deliver(ev);
         pending.length = 0;
       }).catch((err) => {
-        log('socket.connect failed', err.message || err);
+        log(
+          'socket.connect failed',
+          err instanceof Error ? err.message : String(err),
+        );
         if (sock.onclose) sock.onclose();
         unsub();
       });
@@ -612,6 +746,7 @@ Module = {
   },
 
   dns: {
+    /** @param {string} name */
     async resolve(name) {
       log('dns.resolve', name);
       return native().dns.resolve(name);
@@ -636,6 +771,7 @@ Module = {
       log('secureStorage: returning saved credentials');
       return stored;
     },
+    /** @param {unknown} username @param {unknown} password */
     async storeCredentials(username, password) {
       if (typeof username !== 'string' || typeof password !== 'string') {
         throw new TypeError('credentials must be strings');
@@ -652,6 +788,7 @@ Module = {
   // No federated auth: reporting no providers falls back to email/password.
   // getAuthToken is absent and nativeAccount is left undefined on purpose.
   login: {
+    /** @param {unknown} name */
     hasProvider(name) {
       log(`login.hasProvider(${name}) -> false (no federated auth in this harness)`);
       return false;
@@ -662,6 +799,13 @@ Module = {
   // before glue load. The module still probes getPatchMode at image init.
   getPatchMode: async () => 'onDemand',
 
+  /**
+   * @param {unknown} stage
+   * @param {unknown} a
+   * @param {unknown} b
+   * @param {unknown} c
+   * @param {unknown} d
+   */
   setStartupProgress(stage, a, b, c, d) {
     log(`[startup] ${stage}`, [a, b, c, d].filter((v) => v !== undefined).join(' '));
     const L = window.gwLoading;
@@ -672,12 +816,23 @@ Module = {
       return L.done();
     }
     if (s === 'downloading' && typeof a === 'number') {
-      const eta = d > 0 ? `${Math.ceil(d / 60)} min remaining` : '';
-      const rate = c > 0 ? `${(c / 1048576).toFixed(1)} MB/s` : '';
+      const eta =
+        typeof d === 'number' && d > 0
+          ? `${Math.ceil(d / 60)} min remaining`
+          : '';
+      const rate =
+        typeof c === 'number' && c > 0
+          ? `${(c / 1048576).toFixed(1)} MB/s`
+          : '';
       return L.set('Preparing files needed to start', a / 100,
                    [rate, eta].filter(Boolean).join(' · '));
     }
-    L.set(STARTUP_LABELS[s] || 'Loading…', null);
+    L.set(
+      s in STARTUP_LABELS
+        ? STARTUP_LABELS[/** @type {keyof typeof STARTUP_LABELS} */ (s)]
+        : 'Loading…',
+      null,
+    );
   },
 
   handleFatalReadError() {
@@ -687,6 +842,7 @@ Module = {
       lastSnapshotError || 'No cached copy of the required game data is available.',
     );
   },
+  /** @param {import('../shared/diagnostics.js').RendererMilestoneFields} info */
   setBuildInfo(info) {
     milestone('build.info', {
       programId: info.programId,
@@ -706,6 +862,7 @@ Module = {
     milestone('runtime.initialized');
     log('runtime initialised');
   },
+  /** @param {unknown} reason */
   onAbort(reason) {
     milestone('wasm.abort');
     log('[err] WASM aborted:', reason);
@@ -715,6 +872,7 @@ Module = {
 
 let wired = false;
 
+/** @param {string} src @param {string[]} [candidates] */
 function appendGlue(src, candidates) {
   useJspi = src === 'Gw.jspi.js';
   log('loading', src, `(wasm: ${useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm'}) ...`);
@@ -729,6 +887,7 @@ function appendGlue(src, candidates) {
 
 // Wiring must happen once: loadGlue recurses when the preferred glue is
 // missing, and re-registering gave duplicate touch events and focus handlers.
+/** @param {string[]} candidates */
 function loadGlue(candidates) {
   const src = candidates[0];
   if (!src) {
@@ -739,10 +898,20 @@ function loadGlue(candidates) {
   wired = true;
   useJspi = src === 'Gw.jspi.js';
 
-  const c = document.getElementById('canvas');
+  if (!appSettings) {
+    window.gwLoading.fail('Settings were not ready.');
+    return;
+  }
+  const c =
+    /** @type {HTMLCanvasElement | null} */ (
+      document.getElementById('canvas')
+    );
+  if (!c) throw new Error('missing renderer canvas');
   const applyCursorTheme = () => {
     const visible = document.getElementById('canvas');
-    if (visible) visible.dataset.cursorTheme = appSettings.cursorTheme;
+    if (visible && appSettings) {
+      visible.dataset.cursorTheme = appSettings.cursorTheme;
+    }
   };
   applyCursorTheme();
 
@@ -754,13 +923,25 @@ function loadGlue(candidates) {
   // Outside Capacitor the client rewrites API hosts to same-origin first labels.
   // Map those onto gw://app/<route>/… so the main-process proxy can forward.
   const PROXY_LABELS = new Set(['webgate', 'account', 'help', 'store', 'www']);
+  /** @type {any} Browser overload boundary retained by the wrapper. */
   const origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+  XMLHttpRequest.prototype.open = /**
+   * @this {XMLHttpRequest}
+   * @param {string} method
+   * @param {string | URL} url
+   * @param {...any} rest Browser overload boundary.
+   */
+  function (
+    method,
+    url,
+    ...rest
+  ) {
     try {
       const u = new URL(url, location.href);
-      const label = u.pathname.replace(/^\/+/, '').split('/')[0];
+      const label = u.pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+      const hostLabel = u.hostname.split('.')[0] ?? '';
       if (PROXY_LABELS.has(label) ||
-          (u.hostname === location.hostname && PROXY_LABELS.has(u.hostname.split('.')[0]))) {
+          (u.hostname === location.hostname && PROXY_LABELS.has(hostLabel))) {
         const path = u.pathname.startsWith('/') ? u.pathname : '/' + u.pathname;
         const rewritten = `gw://app${path}${u.search}`;
         log(`api: ${method} ${path}`);
@@ -775,9 +956,13 @@ function loadGlue(candidates) {
     if (ctx && ctx.state === 'suspended') {
       ctx.resume()
         .then(() => log('audio: resumed'))
-        .catch((error) => window.gwDiagnostics?.event('audio.resumeFailed', error));
+        .catch(reportAudioFailure);
     }
   };
+  /** @param {unknown} error */
+  function reportAudioFailure(error) {
+    window.gwDiagnostics?.event('audio.resumeFailed', error);
+  }
   for (const ev of ['pointerdown', 'keydown']) {
     window.addEventListener(ev, resumeAudio, true);
   }
@@ -789,14 +974,16 @@ function loadGlue(candidates) {
     log,
   });
   window.gwApplySettings = (next) => {
+    if (!appSettings) return;
     const previousScale = appSettings.renderScale;
-    appSettings = { ...next };
-    inputHost.applySettings(appSettings);
+    const updated = { ...next };
+    appSettings = updated;
+    inputHost.applySettings(updated);
     applyCursorTheme();
-    if (appSettings.renderScale !== previousScale) {
+    if (updated.renderScale !== previousScale) {
       window.dispatchEvent(new globalThis.Event('resize'));
     }
-    window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
+    window.gwDiagnostics?.setVisible(updated.showDiagnostics);
     log('settings applied');
   };
 
@@ -815,7 +1002,9 @@ function loadGlue(candidates) {
     const el = Module.oskInput[type];
     if (!el) { log(`[warn] missing OSK element for "${type}"`); continue; }
     el.addEventListener('focus', () => { if (Module.oskActiveInput !== el) el.blur(); });
-    if (Module.oskIsModal) el.parentElement.classList.add('osk-input-container-modal');
+    if (Module.oskIsModal) {
+      el.parentElement?.classList.add('osk-input-container-modal');
+    }
   }
   log(`osk: ${Object.keys(Module.oskInput).length} fields, modal=${Module.oskIsModal}`);
 
@@ -842,7 +1031,10 @@ function loadGlue(candidates) {
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   } catch (e) {
     window.gwLoading?.fail('Settings could not be loaded.');
-    return log('[err] settings load failed:', e.message);
+    return log(
+      '[err] settings load failed:',
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   try {
@@ -855,7 +1047,10 @@ function loadGlue(candidates) {
         'chunks of', snapshotChunkSize, `(${residentHashes.size} resident)`);
     await window.gwResolveDataStrategy?.(snapshotSize);
   } catch (e) {
-    log('[warn] could not read snapshot metadata:', e.message);
+    log(
+      '[warn] could not read snapshot metadata:',
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   if (!('Suspending' in WebAssembly)) {

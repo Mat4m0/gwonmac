@@ -8,6 +8,7 @@
     25_000, 33_333, 50_000, 100_000, 250_000, 500_000, 1_000_000,
     5_000_000, Number.MAX_SAFE_INTEGER,
   ];
+  /** @type {Set<string>} */
   const rendererEventNames = new Set([
     'renderer.windowError',
     'renderer.unhandledRejection',
@@ -17,7 +18,17 @@
     'audio.resumeFailed',
     'pointerLock.failed',
   ]);
+  /** @returns {number[]} */
   const histogram = () => Array(histogramLimitsUs.length).fill(0);
+  /**
+   * Dynamic metric keys are confined to this histogram helper; the complete
+   * object returned by fresh() is checked against RendererMetrics below.
+   * @param {Record<string, any>} target
+   * @param {string} prefix
+   * @param {number} valueUs
+   * @param {string} [countKey]
+   * @param {boolean} [increment]
+   */
   const observe = (
     target,
     prefix,
@@ -35,6 +46,7 @@
     target[`${prefix}Histogram`][index < 0 ? histogramLimitsUs.length - 1 : index]++;
   };
 
+  /** @returns {import('../shared/diagnostics.js').RendererMetrics} */
   const fresh = () => ({
     intervalMs: 0,
     visible: !document.hidden,
@@ -126,7 +138,9 @@
   let clockOffsetUs = 0;
   let captureLevel = 0;
   let captureStartedAt = 0;
+  /** @type {number | null} */
   let captureStatusTimer = null;
+  /** @type {number[]} */
   let frameData = [];
 
   function updateCaptureStatus() {
@@ -141,15 +155,23 @@
       `${minutes}:${seconds}`;
   }
 
+  /** @param {string} message */
   function announceCapture(message) {
     const output = document.getElementById('capture-announcement');
     if (output) output.textContent = message;
   }
 
+  /** @param {unknown} value */
   function fingerprint(value) {
     const input = value instanceof Error
       ? `${value.name}:${value.stack || value.message}`
-      : String(value?.name || typeof value);
+      : String(
+        value &&
+          typeof value === 'object' &&
+          'name' in value
+          ? value.name
+          : typeof value,
+      );
     let hash = 0x811c9dc5;
     for (let index = 0; index < input.length; index++) {
       hash ^= input.charCodeAt(index);
@@ -158,6 +180,10 @@
     return (hash >>> 0).toString(16).padStart(8, '0');
   }
 
+  /**
+   * @param {import('../shared/diagnostics.js').RendererEventName} name
+   * @param {unknown} [value]
+   */
   function recordEvent(name, value) {
     if (!rendererEventNames.has(name)) {
       metrics.droppedRecords += 1;
@@ -200,6 +226,7 @@
     }
   }
 
+  /** @param {number} now */
   function frame(now) {
     if (lastRaf) {
       const deltaUs = (now - lastRaf) * 1000;
@@ -212,6 +239,7 @@
     requestAnimationFrame(frame);
   }
 
+  /** @param {Event} event */
   function markInput(event) {
     if (event.isTrusted && !pendingInput) pendingInput = performance.now();
   }
@@ -252,6 +280,7 @@
       lastSubmitted = 0;
       pendingInput = 0;
     },
+    /** @param {1 | 2} level */
     captureStarted(level) {
       captureLevel = level === 2 ? 2 : 1;
       captureStartedAt = performance.now();
@@ -260,7 +289,9 @@
       if (status) status.hidden = false;
       if (marker) marker.hidden = true;
       updateCaptureStatus();
-      window.clearInterval(captureStatusTimer);
+      if (captureStatusTimer !== null) {
+        window.clearInterval(captureStatusTimer);
+      }
       captureStatusTimer = setInterval(updateCaptureStatus, 1_000);
       announceCapture(
         captureLevel === 2
@@ -271,7 +302,9 @@
     captureStopped() {
       captureLevel = 0;
       frameData = [];
-      window.clearInterval(captureStatusTimer);
+      if (captureStatusTimer !== null) {
+        window.clearInterval(captureStatusTimer);
+      }
       captureStatusTimer = null;
       const status = document.getElementById('capture-status');
       if (status) status.hidden = true;
@@ -283,6 +316,7 @@
       if (marker) marker.hidden = false;
       announceCapture('Performance problem marked.');
     },
+    /** @param {string} name @param {unknown} [fields] */
     mark(name, fields) {
       try {
         performance.mark(`gw.${name}`, { detail: fields });
@@ -291,21 +325,36 @@
       }
     },
     event: recordEvent,
+    /**
+     * @param {number} durationUs
+     * @param {number} bytes
+     * @param {'memory' | 'native'} source
+     */
     snapshot(durationUs, bytes, source) {
       observe(metrics, 'snapshot', durationUs, 'snapshotReads');
       metrics.snapshotBytes += bytes;
       if (source === 'memory') metrics.memoryHits++;
       else if (source === 'native') metrics.nativeHits++;
     },
+    /** @param {'memory' | 'native' | 'coalesced'} source */
     cache(source) {
       if (source === 'memory') metrics.memoryHits++;
       else if (source === 'native') metrics.nativeHits++;
       else if (source === 'coalesced') metrics.coalesced++;
     },
+    /** @param {'eviction' | 'promotion'} event */
     scheduler(event) {
       if (event === 'eviction') metrics.cacheEvictions++;
       else if (event === 'promotion') metrics.queuePromotions++;
     },
+    /**
+     * @param {number} started
+     * @param {number} syncUs
+     * @param {number} payloadBytes
+     * @param {number} sourceBackingBytes
+     * @param {number} compactBytes
+     * @param {PromiseLike<unknown>} pending
+     */
     socketSend(
       started,
       syncUs,
@@ -333,6 +382,7 @@
         () => settle(1),
         () => settle(0),
       );
+      /** @param {0 | 1} status */
       function settle(status) {
         const durationUs = (performance.now() - started) * 1000;
         metrics.socketSettles++;
@@ -352,11 +402,18 @@
         }
       }
     },
+    /** @param {boolean} visible */
     setVisible(visible) {
       overlayVisible = !!visible;
       const output = document.getElementById('diagnostics');
       if (output) output.style.display = overlayVisible ? 'block' : 'none';
     },
+    /**
+     * @param {number} swapUs
+     * @param {number} bitmapOutUs
+     * @param {number} bitmapPresentUs
+     * @param {boolean} [presented]
+     */
     swap(swapUs, bitmapOutUs, bitmapPresentUs, presented = true) {
       if (!presented) return;
       const submittedAt = performance.now();
@@ -374,7 +431,10 @@
       observe(metrics, 'bitmapOut', bitmapOutUs, 'swapCount', false);
       observe(metrics, 'bitmapPresent', bitmapPresentUs, 'swapCount', false);
       if (captureLevel > 0 && frameData.length <= 19_993) {
-        const canvas = document.getElementById('canvas');
+        const canvas =
+          /** @type {HTMLCanvasElement | null} */ (
+            document.getElementById('canvas')
+          );
         frameData.push(
           submittedAt * 1000 + clockOffsetUs,
           swapUs,

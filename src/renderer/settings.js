@@ -2,62 +2,73 @@
 // Cache residency is the download-progress truth; dataStrategy is only intent.
 
 (function () {
-  const byId = (id) => document.getElementById(id);
-  const dialog = byId('settings-dialog');
-  const form = byId('settings-form');
-  const settingsDownload = byId('settings-download-full');
-  const settingsReset = byId('settings-reset-launcher');
+  /** @param {string} id */
+  const byId = (id) => {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`missing renderer element: ${id}`);
+    return element;
+  };
+  const dialog =
+    /** @type {HTMLDialogElement} */ (byId('settings-dialog'));
+  const form = /** @type {HTMLFormElement} */ (byId('settings-form'));
+  const settingsDownload =
+    /** @type {HTMLButtonElement} */ (byId('settings-download-full'));
+  const settingsReset =
+    /** @type {HTMLButtonElement} */ (byId('settings-reset-launcher'));
   const settingsCache = byId('settings-cache');
   const settingsDataNote = byId('settings-data-note');
   const settingsSaved = byId('settings-saved');
   const settingsProgress = byId('settings-progress');
   const settingsProgressFill = byId('settings-progress-fill');
-  const settingsPanes = form?.querySelector('.settings-panes');
+  const settingsPanes =
+    /** @type {HTMLElement} */ (form.querySelector('.settings-panes'));
   const feedback = byId('settings-feedback');
   const dataChoice = byId('data-choice');
-  const dataChoiceQuick = byId('data-choice-quick');
-  const dataChoiceFull = byId('data-choice-full');
+  const dataChoiceQuick =
+    /** @type {HTMLButtonElement} */ (byId('data-choice-quick'));
+  const dataChoiceFull =
+    /** @type {HTMLButtonElement} */ (byId('data-choice-full'));
   const dataChoiceFullSize = byId('data-choice-full-size');
   const dataDownload = byId('data-download');
   const dataDownloadStatus = byId('data-download-status');
   const dataDownloadDetail = byId('data-download-detail');
   const dataDownloadFill = byId('data-download-fill');
-  const dataDownloadToggle = byId('data-download-toggle');
-  const dataDownloadPlay = byId('data-download-play');
-  const dataDownloadQuick = byId('data-download-quick');
+  const dataDownloadToggle =
+    /** @type {HTMLButtonElement} */ (byId('data-download-toggle'));
+  const dataDownloadPlay =
+    /** @type {HTMLButtonElement} */ (byId('data-download-play'));
+  const dataDownloadQuick =
+    /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
+  const renderScale =
+    /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
+  const pointerLock =
+    /** @type {HTMLInputElement} */ (form.elements.namedItem('pointerLock'));
+  const cursorTheme =
+    /** @type {HTMLSelectElement} */ (form.elements.namedItem('cursorTheme'));
+  const touchMode =
+    /** @type {HTMLSelectElement} */ (form.elements.namedItem('touchMode'));
+  const showDiagnostics =
+    /** @type {HTMLInputElement} */ (form.elements.namedItem('showDiagnostics'));
 
-  if (
-    !dialog ||
-    !form ||
-    !settingsDownload ||
-    !settingsReset ||
-    !settingsCache ||
-    !settingsDataNote ||
-    !feedback ||
-    !dataChoice ||
-    !dataChoiceQuick ||
-    !dataChoiceFull ||
-    !dataChoiceFullSize ||
-    !dataDownload ||
-    !dataDownloadStatus ||
-    !dataDownloadDetail ||
-    !dataDownloadFill ||
-    !dataDownloadToggle ||
-    !dataDownloadPlay ||
-    !dataDownloadQuick ||
-    !window.gwNative
-  ) return;
-
+  /** @type {import('../shared/contracts.js').AppSettings | null} */
   let currentSettings = null;
+  /** @type {Promise<import('../shared/contracts.js').AppSettings> | null} */
   let settingsLoad = null;
+  /** @type {Promise<unknown>} */
   let settingsWrite = Promise.resolve();
+  /** @type {import('../shared/contracts.js').CacheInfo | null} */
   let currentCache = null;
+  /** @type {Promise<boolean> | null} */
   let fullDownloadPromise = null;
+  /** @type {'idle' | 'running' | 'stopping'} */
   let downloadPhase = 'idle';
+  /** @type {import('../shared/contracts.js').DownloadProgress | null} */
   let currentDownloadProgress = null;
   let downloadError = '';
+  /** @type {(() => void) | null} */
   let launcherResolve = null;
   let launcherTotalBytes = 0;
+  /** @type {number | null} */
   let savedTimer = null;
   let activeSettingsPane = 'data';
   const downloadActive = () =>
@@ -67,29 +78,38 @@
   function flashSaved() {
     if (!settingsSaved) return;
     settingsSaved.classList.add('show');
-    clearTimeout(savedTimer);
+    if (savedTimer !== null) clearTimeout(savedTimer);
     savedTimer = setTimeout(() => settingsSaved.classList.remove('show'), 1400);
   }
 
+  /** @param {string} name */
   function selectPane(name) {
-    if (!settingsPanes) return;
     activeSettingsPane = name;
     settingsPanes.dataset.active = name;
-    for (const tab of form.querySelectorAll('.settings-rtab')) {
+    for (const tab of /** @type {NodeListOf<HTMLElement>} */ (
+      form.querySelectorAll('.settings-rtab')
+    )) {
       const selected = tab.dataset.pane === name;
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
     }
   }
 
-  const railTabs = [...form.querySelectorAll('.settings-rtab')];
+  const railTabs = [.../** @type {NodeListOf<HTMLElement>} */ (
+    form.querySelectorAll('.settings-rtab')
+  )];
   for (const tab of railTabs) {
-    tab.addEventListener('click', () => selectPane(tab.dataset.pane));
+    tab.addEventListener('click', () => {
+      if (tab.dataset.pane) selectPane(tab.dataset.pane);
+    });
   }
 
   // Roving tabindex: arrows move between sections, Home/End jump.
-  form.querySelector('.settings-rail')?.addEventListener('keydown', (event) => {
-    const index = railTabs.indexOf(document.activeElement);
+  form.querySelector('.settings-rail')?.addEventListener('keydown', (rawEvent) => {
+    const event = /** @type {KeyboardEvent} */ (rawEvent);
+    const active = document.activeElement;
+    const index =
+      active instanceof globalThis.HTMLElement ? railTabs.indexOf(active) : -1;
     if (index < 0) return;
     let target = null;
     if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
@@ -104,13 +124,15 @@
     if (!target) return;
     event.preventDefault();
     target.focus();
-    selectPane(target.dataset.pane);
+    if (target.dataset.pane) selectPane(target.dataset.pane);
   });
 
+  /** @param {number} bytes */
   const size = (bytes) => bytes >= 1_073_741_824
     ? `${(bytes / 1_073_741_824).toFixed(2)} GB`
     : `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`;
 
+  /** @param {import('../shared/diagnostics.js').RendererMilestone} name */
   const launcherMilestone = (name) => {
     void window.gwNative.diagnostics
       .recordRendererMilestone(name, performance.now() * 1000)
@@ -130,6 +152,7 @@
     return settingsLoad;
   }
 
+  /** @param {import('../shared/contracts.js').AppSettings} settings */
   function applyRuntimeSettings(settings) {
     const canvas = document.getElementById('canvas');
     if (canvas) canvas.dataset.cursorTheme = settings.cursorTheme;
@@ -143,18 +166,26 @@
     if (!canvas) return;
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
-    const activeScale = Number(form.renderScale.value);
+    const activeScale = Number(renderScale.value);
     const offscreen = window.Module?.canvas?.offscreen;
-    for (const output of form.querySelectorAll('[data-render-scale]')) {
+    for (const output of /** @type {NodeListOf<HTMLElement>} */ (
+      form.querySelectorAll('[data-render-scale]')
+    )) {
       const scale = Number(output.dataset.renderScale);
+      const offscreenWidth = offscreen?.width;
+      const offscreenHeight = offscreen?.height;
       const measured =
         scale === activeScale &&
-        Number.isFinite(offscreen?.width) &&
-        Number.isFinite(offscreen?.height) &&
-        offscreen.width > 0 &&
-        offscreen.height > 0;
-      const backingWidth = measured ? offscreen.width : Math.round(width * scale);
-      const backingHeight = measured ? offscreen.height : Math.round(height * scale);
+        typeof offscreenWidth === 'number' &&
+        typeof offscreenHeight === 'number' &&
+        Number.isFinite(offscreenWidth) &&
+        Number.isFinite(offscreenHeight) &&
+        offscreenWidth > 0 &&
+        offscreenHeight > 0;
+      const backingWidth =
+        measured ? offscreenWidth : Math.round(width * scale);
+      const backingHeight =
+        measured ? offscreenHeight : Math.round(height * scale);
       output.textContent =
         `${measured ? '' : '≈ '}${backingWidth} × ${backingHeight}`;
       output.title = measured
@@ -164,6 +195,7 @@
   }
 
   // Serialize writes so a slower earlier write cannot replace newer intent.
+  /** @param {import('../shared/contracts.js').AppSettingsPatch} patch */
   function persistSettings(patch) {
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
@@ -179,6 +211,7 @@
     return !!cache?.totalBytes && cache.bytes >= cache.totalBytes;
   }
 
+  /** @param {import('../shared/contracts.js').CacheInfo | null} cache */
   function cacheStatus(cache) {
     if (!cache?.totalBytes) return 'Game data is still preparing…';
     if (cacheComplete(cache)) {
@@ -188,21 +221,52 @@
   }
 
   function selectedStrategy() {
-    return form.querySelector('input[name="dataStrategy"]:checked')?.value || null;
+    const selected =
+      /** @type {HTMLInputElement | null} */ (
+        form.querySelector('input[name="dataStrategy"]:checked')
+      );
+    return selected?.value === 'quick' || selected?.value === 'full'
+      ? selected.value
+      : null;
   }
 
+  /**
+   * @param {HTMLInputElement | HTMLSelectElement} control
+   * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
+   */
   function patchForControl(control) {
     switch (control.name) {
-      case 'renderScale':
-        return { renderScale: Number(control.value) };
+      case 'renderScale': {
+        const value = Number(control.value);
+        return value === 1 || value === 1.5 || value === 2
+          ? { renderScale: value }
+          : null;
+      }
       case 'pointerLock':
-        return { pointerLock: control.checked };
-      case 'cursorTheme':
-        return { cursorTheme: control.value };
-      case 'touchMode':
-        return { touchMode: control.value };
+        return control instanceof globalThis.HTMLInputElement
+          ? { pointerLock: control.checked }
+          : null;
+      case 'cursorTheme': {
+        const value = control.value;
+        return value === 'system' ||
+          value === 'guild-wars' ||
+          value === 'guild-wars-2'
+          ? { cursorTheme: value }
+          : null;
+      }
+      case 'touchMode': {
+        const value = control.value;
+        return value === 'dbltap' ||
+          value === 'translate' ||
+          value === 'augment' ||
+          value === 'off'
+          ? { touchMode: value }
+          : null;
+      }
       case 'showDiagnostics':
-        return { showDiagnostics: control.checked };
+        return control instanceof globalThis.HTMLInputElement
+          ? { showDiagnostics: control.checked }
+          : null;
       case 'dataStrategy':
         return { dataStrategy: selectedStrategy() };
       default:
@@ -210,13 +274,16 @@
     }
   }
 
+  /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
-    form.renderScale.value = String(settings.renderScale);
-    form.pointerLock.checked = !!settings.pointerLock;
-    form.cursorTheme.value = settings.cursorTheme;
-    form.touchMode.value = settings.touchMode;
-    form.showDiagnostics.checked = !!settings.showDiagnostics;
-    for (const radio of form.querySelectorAll('input[name="dataStrategy"]')) {
+    renderScale.value = String(settings.renderScale);
+    pointerLock.checked = settings.pointerLock;
+    cursorTheme.value = settings.cursorTheme;
+    touchMode.value = settings.touchMode;
+    showDiagnostics.checked = settings.showDiagnostics;
+    for (const radio of /** @type {NodeListOf<HTMLInputElement>} */ (
+      form.querySelectorAll('input[name="dataStrategy"]')
+    )) {
       radio.checked = radio.value === settings.dataStrategy;
     }
     const preview = byId('settings-cursor-preview');
@@ -296,10 +363,13 @@
       dataDownloadDetail.textContent = 'Verified data is being preserved.';
     } else if (downloadPhase === 'running') {
       const progress = currentDownloadProgress;
-      const rate = progress?.bytesPerSecond > 0
+      const rate = progress && progress.bytesPerSecond > 0
         ? ` · ${size(progress.bytesPerSecond)}/s avg`
         : '';
-      const eta = Number.isFinite(progress?.secondsRemaining)
+      const eta =
+        progress &&
+        progress.secondsRemaining !== null &&
+        Number.isFinite(progress.secondsRemaining)
         ? ` · about ${Math.max(1, Math.ceil(progress.secondsRemaining / 60))} min left`
         : '';
       dataDownloadStatus.textContent = progress?.total
@@ -391,6 +461,7 @@
     }
   }
 
+  /** @param {import('../shared/diagnostics.js').RendererMilestone} reason */
   function releaseGameBoot(reason) {
     if (!launcherResolve) return;
     dataChoice.hidden = true;
@@ -402,6 +473,10 @@
     resolve();
   }
 
+  /**
+   * @param {import('../shared/contracts.js').CacheInfo} cache
+   * @param {number} total
+   */
   function showChoice(cache, total) {
     currentCache = cache;
     launcherTotalBytes = total;
@@ -414,6 +489,10 @@
     launcherMilestone('launcher.choiceShown');
   }
 
+  /**
+   * @param {import('../shared/contracts.js').CacheInfo} cache
+   * @param {number} total
+   */
   function showFullDownload(cache, total) {
     currentCache = cache;
     launcherTotalBytes = total;
@@ -432,7 +511,8 @@
         window.gwNative.cache.info(),
       ]);
       const total = cache.totalBytes || snapshotBytes;
-      currentCache = { ...cache, totalBytes: total };
+      const resolvedCache = { ...cache, totalBytes: total };
+      currentCache = resolvedCache;
       launcherTotalBytes = total;
 
       // The offline acceptance shell has no snapshot. There is no real choice
@@ -444,14 +524,16 @@
       return new Promise((resolve) => {
         launcherResolve = resolve;
         if (settings.dataStrategy === 'full') {
-          showFullDownload(currentCache, total);
+          showFullDownload(resolvedCache, total);
         } else {
-          showChoice(currentCache, total);
+          showChoice(resolvedCache, total);
         }
       });
     } catch (error) {
       window.gwLoading?.fail(
-        error?.message || 'Launcher settings could not be loaded.',
+        error instanceof Error
+          ? error.message
+          : 'Launcher settings could not be loaded.',
       );
       return new Promise(() => {});
     }
@@ -477,6 +559,9 @@
     dataChoiceFull.disabled = true;
     try {
       await persistSettings({ dataStrategy: 'full' });
+      if (!currentCache) {
+        throw new Error("download status is not ready");
+      }
       launcherMilestone('launcher.fullSelected');
       showFullDownload(currentCache, launcherTotalBytes);
     } catch {
@@ -532,15 +617,19 @@
   window.addEventListener('gw:settings', () => { void openSettings(); });
 
   form.addEventListener('change', (event) => {
-    if (!event.target.matches('input, select')) return;
-    const patch = patchForControl(event.target);
+    const control = event.target;
+    if (
+      !(control instanceof globalThis.HTMLInputElement) &&
+      !(control instanceof globalThis.HTMLSelectElement)
+    ) return;
+    const patch = patchForControl(control);
     if (!patch) return;
     feedback.textContent = '';
-    const strategyChanged = event.target.name === 'dataStrategy';
+    const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
-    if (event.target.name === 'cursorTheme') {
+    if (control.name === 'cursorTheme') {
       const preview = byId('settings-cursor-preview');
-      if (preview) preview.dataset.cursorTheme = event.target.value;
+      preview.dataset.cursorTheme = control.value;
     }
     void persistSettings(patch)
       .then(async () => {
@@ -599,7 +688,8 @@
     downloadPhase = 'running';
     currentDownloadProgress = progress;
     const next = {
-      ...(currentCache || {}),
+      chunks: currentCache?.chunks ?? 0,
+      totalChunks: currentCache?.totalChunks ?? 0,
       bytes: Number.isFinite(progress.received)
         ? Math.max(progress.received, currentCache?.bytes || 0)
         : currentCache?.bytes || 0,

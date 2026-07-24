@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/renderer/gw-native.d.ts",
+    "src/renderer/diagnostics.js",
+    "src/renderer/harness.js",
+    "src/renderer/input.js",
+    "src/renderer/loading.js",
+    "src/renderer/settings.js",
+    "src/shared/contracts.ts",
+    "src/shared/diagnostics.ts"
+  ]
+}
