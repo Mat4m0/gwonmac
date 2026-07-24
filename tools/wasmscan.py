@@ -206,7 +206,7 @@ class WasmModule:
                 else:
                     _, q = sleb(d, q)
             elif spec == U32:
-                _, q = uleb(d, q)
+                val, q = uleb(d, q)
             elif spec == MEMARG:
                 align, q = uleb(d, q)
                 _, q = uleb(d, q)                    # offset

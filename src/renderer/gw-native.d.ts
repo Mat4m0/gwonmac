@@ -84,6 +84,18 @@ declare global {
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;
     gwStats(): Record<string, number | boolean>;
+    gwBuildInfo?: Readonly<{
+      programId: number;
+      buildId: number;
+    }>;
+    gwToolbox?: Readonly<{
+      install(
+        instance: WebAssembly.Instance,
+        module: WebAssembly.Module,
+      ): Promise<unknown>;
+    }>;
+    gwToolboxRuntime?: unknown;
+    gwToolboxState?: unknown;
     gwInstallGraphics(options: {
       env: ArenaNetEglImports;
       module: ArenaNetGraphicsModule;

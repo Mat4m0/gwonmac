@@ -38,11 +38,13 @@ const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 export interface ProtocolDeps {
   getChunkStore: () => ChunkStore | null;
   getSnapshotMeta: () => SnapshotMetadata | null;
+  getGameWasmPath: () => string;
 }
 
 let deps: ProtocolDeps = {
   getChunkStore: () => null,
   getSnapshotMeta: () => null,
+  getGameWasmPath: () => path.join(gamePaths().artifacts, "Gw.jspi.wasm"),
 };
 
 export function setProtocolDeps(next: ProtocolDeps): void {
@@ -342,7 +344,10 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     ? base
     : null;
   if (artifactName) {
-    const file = path.join(gamePaths().artifacts, artifactName);
+    const file =
+      artifactName === "Gw.jspi.wasm"
+        ? deps.getGameWasmPath()
+        : path.join(gamePaths().artifacts, artifactName);
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
     return fileResponse(file, request, mime);
   }

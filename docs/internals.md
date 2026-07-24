@@ -22,6 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
+  exact-build Toolbox companion + snapshot overlay
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -45,6 +46,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
 | `src/preload/preload.cjs` | self-contained sandbox-compatible bridge                          |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
+| `src/toolbox-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
 | `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
@@ -155,6 +157,32 @@ Startup clears only IndexedDB for the owned `gw://app` session before a
 renderer can mount IDBFS, then removes the request. It cannot clear the
 separate native chunk cache or encrypted credential file. There is no native
 arbitrary-file bridge and no production WASM rewrite.
+
+### Toolbox instrumentation
+
+The official `Gw.jspi.wasm` remains canonical. Main hashes it after publication
+and recognizes only entries in the checked-in Toolbox build manifest. A known
+hash is transformed deterministically into a separate cache entry keyed by
+official hash, transform ABI, and manifest fingerprint. The transform clones
+one typed function, installs one dispatcher, and embeds the verified layout as
+a custom section. Unknown hashes and transform failures serve the official
+module unchanged.
+
+Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
+446. It uses the stock table's null slot 0; the mutable global stores
+`slot + 1`, preserving zero as disabled. No table growth or all-functions
+instrumentation remains.
+
+After normal runtime initialization, the renderer allocates a config and
+64-byte snapshot through the game's allocator, instantiates the dependency-free
+`wasm32-unknown-unknown` companion against the exported memory, installs its
+callback, and enables the dispatcher last. The callback calls the relocated
+original exactly once before collecting checked map/player/target state.
+
+Snapshot ABI v1 uses an odd/even sequence lock and contains no pointers.
+The renderer reads at most once per animation frame, accepts only matching even
+sequences, and updates DOM only for a new sequence. All Toolbox state stays in
+the renderer; no memory view or per-frame call crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes

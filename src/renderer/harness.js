@@ -12,6 +12,10 @@ var Module;
 const LOG_LINES = 400;
 /** @type {string[]} */
 const logBuf = [];
+/** @type {WebAssembly.Instance | null} */
+let gameWasmInstance = null;
+/** @type {WebAssembly.Module | null} */
+let gameWasmModule = null;
 const native = () => window.gwNative;
 /**
  * @param {import('../shared/diagnostics.js').RendererMilestone} name
@@ -439,6 +443,8 @@ Module = {
       }
       performance.mark('gw.wasm.instantiate.end');
       milestone('wasm.instantiate.end');
+      gameWasmInstance = result.instance;
+      gameWasmModule = result.module;
       success(result.instance, result.module);
     })().catch((error) => {
       window.gwDiagnostics?.event('client.glueLoadFailed', error);
@@ -609,6 +615,9 @@ Module = {
         }
         else if (ev.type === 'close' || ev.type === 'error') {
           if (ev.type === 'error') log('socket error', ev.message);
+          // Native close is final. Clear the handle before the game callback;
+          // some client paths synchronously call close() again from onclose.
+          id = null;
           if (sock.onclose) sock.onclose();
           unsub();
         }
@@ -733,6 +742,10 @@ Module = {
   },
   /** @param {import('../shared/diagnostics.js').RendererMilestoneFields} info */
   setBuildInfo(info) {
+    window.gwBuildInfo = Object.freeze({
+      programId: Number(info.programId),
+      buildId: Number(info.buildId),
+    });
     milestone('build.info', {
       programId: info.programId,
       buildId: info.buildId,
@@ -750,6 +763,16 @@ Module = {
     performance.mark('gw.runtime.initialized');
     milestone('runtime.initialized');
     log('runtime initialised');
+    const startToolbox = () => {
+      if (!window.gwToolbox || !gameWasmInstance || !gameWasmModule) return;
+      void window.gwToolbox.install(gameWasmInstance, gameWasmModule)
+        .catch((error) => log(
+          '[toolbox]',
+          error instanceof Error ? error.message : String(error),
+        ));
+    };
+    if (window.gwToolbox) startToolbox();
+    else window.addEventListener('gw-toolbox-ready', startToolbox, { once: true });
   },
   /** @param {unknown} reason */
   onAbort(reason) {

@@ -38,6 +38,11 @@ import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
 import {
+  prepareToolboxClient,
+  TOOLBOX_TRANSFORM_ABI,
+  type PreparedToolboxClient,
+} from "./core/toolbox-transform.js";
+import {
   count,
   exportDiagnosticsForWindow,
   gauge,
@@ -94,6 +99,7 @@ let initialResidencyRecorded = false;
 let fullDownload: Promise<boolean> | null = null;
 let gameUpdate: Promise<void> | null = null;
 let settingsWrite: Promise<void> = Promise.resolve();
+let toolboxClient: PreparedToolboxClient | null = null;
 
 async function pruneCurrentChunkCache(): Promise<void> {
   const paths = gamePaths();
@@ -138,6 +144,46 @@ function resetAppSettings(): Promise<AppSettings> {
     () => undefined,
   );
   return operation;
+}
+
+function selectedGameWasmPath(): string {
+  return (
+    toolboxClient?.wasmPath ??
+    path.join(gamePaths().artifacts, "Gw.jspi.wasm")
+  );
+}
+
+async function prepareToolbox(): Promise<void> {
+  const paths = gamePaths();
+  try {
+    toolboxClient = await prepareToolboxClient(
+      path.join(paths.artifacts, "Gw.jspi.wasm"),
+      paths.toolbox,
+    );
+    gauge("toolbox.supportedBuild", toolboxClient.build !== null);
+    log(
+      "wasm",
+      "info",
+      toolboxClient.transformed
+        ? "toolbox.clientPrepared"
+        : "toolbox.unsupportedBuild",
+      toolboxClient.build
+        ? {
+            buildId: toolboxClient.build.buildId,
+            transformAbi: TOOLBOX_TRANSFORM_ABI,
+          }
+        : {},
+    );
+  } catch (error) {
+    toolboxClient = null;
+    gauge("toolbox.supportedBuild", false);
+    log("wasm", "warn", "toolbox.prepareFailed", {
+      code:
+        error instanceof Error && "code" in error
+          ? String(error.code)
+          : "transform_failed",
+    });
+  }
 }
 
 const sockets = new SocketManager(
@@ -492,6 +538,7 @@ async function startGameUpdate(): Promise<void> {
     if (result.blocked) {
       await attachLastPublishedClient();
       await pruneCurrentChunkCache();
+      await prepareToolbox();
       gauge("update.usingCachedClient", true);
       await afterClientReady(
         "A newer game client did not start successfully, so the last working client is being used.",
@@ -504,6 +551,7 @@ async function startGameUpdate(): Promise<void> {
     }
     await attachChunkStore(result.manifest, paths.chunks, paths.bootChunks);
     await pruneCurrentChunkCache();
+    await prepareToolbox();
     await afterClientReady();
     updateSpan.end({
       status: result.candidate ? "candidate" : "ready",
@@ -514,6 +562,7 @@ async function startGameUpdate(): Promise<void> {
     try {
       await attachLastPublishedClient();
       await pruneCurrentChunkCache();
+      await prepareToolbox();
       log("update", "warn", "patch.updateFallback", {
         message,
       });
@@ -550,6 +599,20 @@ function requestGameUpdate(): Promise<void> {
     phase: "starting",
     label: "Checking the game client",
   });
+  const expectedUserData = process.env.GW_EXPECT_USER_DATA;
+  if (
+    expectedUserData &&
+    path.resolve(expectedUserData) !== path.resolve(app.getPath("userData"))
+  ) {
+    log("app", "error", "app.unexpectedUserData");
+    setProgress({
+      ...INITIAL_PROGRESS,
+      phase: "error",
+      label: "Live probe blocked",
+      error: "The live probe selected an unexpected profile. No update was started.",
+    });
+    return Promise.resolve();
+  }
   const operation = startGameUpdate().finally(() => {
     if (gameUpdate === operation) gameUpdate = null;
   });
@@ -636,6 +699,7 @@ app.whenReady().then(async () => {
   setProtocolDeps({
     getChunkStore: () => chunkStore,
     getSnapshotMeta: () => snapshotMeta,
+    getGameWasmPath: selectedGameWasmPath,
   });
   installGwProtocolHandler();
   log("protocol", "info", "protocol.installed");
