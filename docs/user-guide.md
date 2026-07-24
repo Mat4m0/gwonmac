@@ -5,8 +5,8 @@ bundle game binaries.
 
 ## Install and start
 
-Current builds are ad-hoc signed local/source betas. No Apple developer
-subscription is required.
+Current builds are ad-hoc signed and not notarized. The project deliberately
+does not require a paid Apple Developer subscription.
 
 To build from source:
 
@@ -20,6 +20,10 @@ Open `out/Guild Wars-darwin-arm64/Guild Wars.app`. On the first launch macOS may
 block an ad-hoc build. Try to open the app once, then open **System Settings →
 Privacy & Security**, scroll to **Security**, click **Open Anyway**, and confirm
 the second prompt. Do not disable Gatekeeper globally.
+
+Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
+build/SBOM attestations. Follow [Verify a release](release-verification.md)
+before opening a downloaded build.
 
 The app then:
 

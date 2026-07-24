@@ -11,28 +11,6 @@ const packageVersion = (
 ).version;
 const macOSVersion = packageVersion.split("-", 1)[0]!;
 
-const signing = process.env.APPLE_IDENTITY
-  ? {
-      osxSign: {
-        identity: process.env.APPLE_IDENTITY,
-        hardenedRuntime: true,
-      },
-    }
-  : {};
-const notarization =
-  process.env.APPLE_ID &&
-  process.env.APPLE_APP_SPECIFIC_PASSWORD &&
-  process.env.APPLE_TEAM_ID
-    ? {
-        osxNotarize: {
-          tool: "notarytool" as const,
-          appleId: process.env.APPLE_ID,
-          appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
-          teamId: process.env.APPLE_TEAM_ID,
-        },
-      }
-    : {};
-
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -54,8 +32,6 @@ const config: ForgeConfig = {
     extendInfo: {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
     },
-    ...signing,
-    ...notarization,
     // Forge's own packaged output is out/; compiled JS lives in build/.
     ignore: (file) => {
       if (!file || file === "/") return false;
@@ -88,7 +64,7 @@ const config: ForgeConfig = {
         path.resolve(resourcesPath, "../..", "MacOS", "Electron"),
         {
           version: FuseVersion.V1,
-          resetAdHocDarwinSignature: !process.env.APPLE_IDENTITY && arch === "arm64",
+          resetAdHocDarwinSignature: arch === "arm64",
           strictlyRequireAllFuses: true,
           [FuseV1Options.RunAsNode]: false,
           [FuseV1Options.EnableCookieEncryption]: true,
@@ -103,7 +79,7 @@ const config: ForgeConfig = {
       );
     },
     postPackage: async (_config, result) => {
-      if (result.platform !== "darwin" || process.env.APPLE_IDENTITY) return;
+      if (result.platform !== "darwin") return;
       const { spawnSync } = await import("node:child_process");
       for (const outputPath of result.outputPaths) {
         const appPath = path.join(outputPath, "Guild Wars.app");

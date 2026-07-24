@@ -256,13 +256,16 @@ origin, sandboxed preload surface, absence of Node globals, actionable startup
 and download failures, renderer crash recovery, settings presentation,
 clock/metrics availability, and capture lifecycle.
 
-The opt-in live smoke passed on Apple Silicon on July 23, 2026 against the
-current production client: JSPI initialized, hardware acceleration was active,
-snapshot reads completed, and a frame was submitted. It does not prove:
+The opt-in live smoke exercises the current production client from a fresh
+profile: JSPI must initialize, hardware acceleration must be active, snapshot
+reads must complete, render scaling must change the real drawing buffer, and a
+frame must be submitted. A weekly macOS GitHub Actions canary runs this same
+test and records the client fingerprint and renderer in the workflow summary.
+Failures do not rewrite or hook ArenaNet binaries; they identify a host/client
+compatibility change for investigation. The canary does not prove:
 
 - a real account completes login;
 - ANGLE/Metal renders the real client correctly on every advertised Mac;
-- signing, notarization, and update credentials are valid.
 
 Those are explicit live release gates, not assumptions hidden behind unit
 tests.

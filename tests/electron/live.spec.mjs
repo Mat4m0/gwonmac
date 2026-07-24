@@ -1,5 +1,11 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +24,7 @@ test.describe("live client", () => {
 
   test("downloads, initializes JSPI, and submits a hardware frame", async () => {
     test.setTimeout(10 * 60_000);
+    rmSync(userData, { recursive: true, force: true });
     mkdirSync(userData, { recursive: true });
     writeFileSync(
       path.join(userData, "settings.json"),
@@ -80,6 +87,31 @@ test.describe("live client", () => {
       expect(state.stats.gamepadImports).toBe(true);
       expect(String(state.renderer)).not.toMatch(/swiftshader|llvmpipe|software/i);
       expect(state.stats.reads).toBeGreaterThan(0);
+      const publishedClient = JSON.parse(
+        readFileSync(
+          path.join(userData, "game", "artifacts", "manifest.json"),
+          "utf8",
+        ),
+      );
+      expect(publishedClient.clientFingerprint).toMatch(/^[a-f0-9]{64}$/);
+      console.log(
+        `ArenaNet client fingerprint: ${publishedClient.clientFingerprint}`,
+      );
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        appendFileSync(
+          process.env.GITHUB_STEP_SUMMARY,
+          [
+            "## ArenaNet client canary",
+            "",
+            `- Client fingerprint: \`${publishedClient.clientFingerprint}\``,
+            `- Renderer: ${String(state.renderer)}`,
+            "- JSPI initialized: yes",
+            "- Hardware frame submitted: yes",
+            "- Gamepad host imports: available",
+            "",
+          ].join("\n"),
+        );
+      }
 
       const applyScale = (renderScale) =>
         page.evaluate(async (scale) => {

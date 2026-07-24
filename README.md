@@ -5,6 +5,7 @@ install, no Wine, no compatibility layer to configure.
 
 [Download](https://github.com/Mat4m0/gwonmac/releases) ·
 [Install guide](docs/user-guide.md) ·
+[Verify a release](docs/release-verification.md) ·
 [Discord](https://discord.gg/Z9ft52RBD3) ·
 [Report a bug](https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml) ·
 [Support development](https://ko-fi.com/mat4m0)
@@ -31,8 +32,9 @@ from the [official store](https://store.guildwars.com/en-us).
    The app opens and stays trusted from then on.
 
 Releases are ad-hoc signed but not notarized by Apple, which is why macOS asks.
-Notarization needs a paid Apple Developer membership (~€100/year) that
-[donations](https://ko-fi.com/mat4m0) fund.
+The project deliberately does not require a paid Apple Developer membership.
+Every release includes SHA-256 checksums, an SPDX SBOM, and GitHub build
+attestations; see [Verify a release](docs/release-verification.md).
 
 ## How it works
 
@@ -110,10 +112,9 @@ under `apps/`.
 `src/shared/contracts.ts` is the single source of truth for IPC channels,
 settings, and every project link — the launcher and website both import it.
 
-Releases are cut from `main` by manual dispatch of the macOS workflow. Signing
-and notarization run automatically when the Apple credentials are configured;
-without them the workflow still ships an ad-hoc signed build and labels the
-release accordingly.
+Releases are cut from `main` by manual dispatch of the macOS workflow. The
+workflow verifies one ad-hoc signed package, generates checksums and an SPDX
+SBOM, attests that exact ZIP, and publishes those same tested files.
 
 ## Diagnostics
 
