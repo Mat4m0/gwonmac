@@ -251,7 +251,16 @@ test.describe("renderer input", () => {
   test("accumulates trackpad pixels without changing discrete wheel input", async () => {
     const fixture = await launchOffline("gw-wheel-e2e-");
     try {
+      await fixture.app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
       await startGameInput(fixture.page);
+      await fixture.page.evaluate(() =>
+        window.gwNative.diagnostics.startCapture(1),
+      );
       const result = await fixture.page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const observed = [];
@@ -302,6 +311,16 @@ test.describe("renderer input", () => {
           [0, 100],
         ],
       });
+      await fixture.page.evaluate(() => window.gwDiagnostics.flush());
+      const counters = await fixture.page.evaluate(async () =>
+        (await window.gwNative.diagnostics.current()).counters,
+      );
+      expect(counters["input.wheel.raw"]).toBe(5);
+      expect(counters["input.wheel.emitted"]).toBe(2);
+      expect(counters["input.wheel.trusted"] ?? 0).toBe(0);
+      await fixture.page.evaluate(() =>
+        window.gwNative.diagnostics.stopCapture(),
+      );
     } finally {
       await closeOffline(fixture);
     }

@@ -170,6 +170,17 @@ test.describe("diagnostics", () => {
       await page.evaluate(() => window.gwNative.diagnostics.startCapture(1));
       await page.evaluate(async () => {
         window.gwDiagnostics.swap(200, 50, 25);
+        window.gwDiagnostics.wheel(
+          60,
+          0,
+          true,
+          40,
+          0,
+          100,
+          0,
+          true,
+          false,
+        );
         await window.gwDiagnostics.flush();
       });
       await app.evaluate(({ Menu }) => {
@@ -247,6 +258,9 @@ test.describe("diagnostics", () => {
       expect(events).toContain("[redacted-path]");
       expect(events).toContain("[redacted-email]");
       expect(events).toContain("performance.problemmarked");
+      expect(events).toContain('"name":"input.wheel"');
+      expect(events).toContain('"rawdeltay":60');
+      expect(events).toContain('"emitteddeltay":100');
 
       const validated = await execFileAsync(process.execPath, [
         path.join(root, "build/tools/diagnostics/validate.js"),

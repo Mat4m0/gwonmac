@@ -212,6 +212,36 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("socket.rendererCompactBytes", value.socketCompactBytes);
   recorder.count("socket.rendererSettles", value.socketSettles);
   recorder.count("diagnostics.rendererDropped", value.droppedRecords);
+  recorder.count("input.wheel.raw", value.wheelEvents.length / 10);
+  for (let index = 0; index < value.wheelEvents.length; index += 10) {
+    if (value.wheelEvents[index + 3]) recorder.count("input.wheel.trusted");
+    if (value.wheelEvents[index + 7]! >= 0) {
+      recorder.count("input.wheel.emitted");
+    }
+    if (value.wheelEvents[index + 8]) {
+      recorder.count("input.wheel.callbackPrevented");
+    }
+    recorder.event(
+      "renderer",
+      "debug",
+      "input.wheel",
+      {
+        rawDeltaY: value.wheelEvents[index + 1]!,
+        rawMode: value.wheelEvents[index + 2]!,
+        trusted: Boolean(value.wheelEvents[index + 3]),
+        remainderBefore: value.wheelEvents[index + 4]!,
+        remainderAfter: value.wheelEvents[index + 5]!,
+        emittedDeltaY: value.wheelEvents[index + 6]!,
+        emittedMode:
+          value.wheelEvents[index + 7] === -1
+            ? null
+            : value.wheelEvents[index + 7]!,
+        callbackPrevented: Boolean(value.wheelEvents[index + 8]),
+        accumulatorReset: Boolean(value.wheelEvents[index + 9]),
+      },
+      { timestampUs: Math.round(value.wheelEvents[index]!) },
+    );
+  }
   for (const event of value.rendererEvents) {
     const subsystem = event.name.startsWith("graphics.") ? "graphics" : "renderer";
     const level =

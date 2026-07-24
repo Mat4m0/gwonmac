@@ -88,6 +88,7 @@ function metrics(): RendererMetrics {
     socketSettleHistogram: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     inputToSubmitHistogram: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     socketSendEvents: [1_000, 90, 400, 21, 64 * 1024 * 1024, 21, 1],
+    wheelEvents: [1_000, 60, 0, 1, 60, 20, 100, 0, 1, 0],
   };
 }
 
@@ -156,6 +157,13 @@ describe("renderer diagnostics boundary", () => {
       }),
       false,
     );
+    assert.equal(
+      isRendererMetrics({ ...metrics(), wheelEvents: [1, 2, 3] }),
+      false,
+    );
+    const badWheelMode = metrics();
+    badWheelMode.wheelEvents[2] = 7;
+    assert.equal(isRendererMetrics(badWheelMode), false);
   });
 });
 

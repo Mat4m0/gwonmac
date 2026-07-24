@@ -272,38 +272,85 @@
       if (document.visibilityState === 'hidden') releaseAll();
     });
 
-    // Pixel deltas from trackpads become bounded line steps; discrete mouse
+    // Pixel deltas from trackpads become bounded pixel steps; discrete mouse
     // wheel events pass through unchanged.
     /** @type {WeakSet<WheelEvent>} */
     const normalizedWheels = new WeakSet();
     canvas.addEventListener('wheel', (event) => {
       if (normalizedWheels.has(event)) return;
       if (event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL) {
+        const remainderBefore = wheelRemainder;
+        const rawDeltaY = event.deltaY;
+        const rawMode = event.deltaMode;
+        const trusted = event.isTrusted;
         resetWheel();
+        globalThis.queueMicrotask(() => {
+          diagnostics?.wheel(
+            rawDeltaY,
+            rawMode,
+            trusted,
+            remainderBefore,
+            0,
+            rawDeltaY,
+            rawMode,
+            event.defaultPrevented,
+            remainderBefore !== 0,
+          );
+        });
         return;
       }
       event.preventDefault();
       event.stopImmediatePropagation();
       const now = performance.now();
       const direction = Math.sign(event.deltaY);
-      if (!direction) return;
-      if (direction !== wheelDirection || now - wheelAt > 150) {
+      const remainderBefore = wheelRemainder;
+      const accumulatorReset =
+        direction !== 0 &&
+        (direction !== wheelDirection || now - wheelAt > 150);
+      if (accumulatorReset) {
         wheelRemainder = 0;
+      }
+      if (!direction) {
+        diagnostics?.wheel(
+          event.deltaY,
+          event.deltaMode,
+          event.isTrusted,
+          remainderBefore,
+          wheelRemainder,
+          0,
+          -1,
+          false,
+          false,
+        );
+        return;
       }
       wheelDirection = direction;
       wheelAt = now;
       wheelRemainder += event.deltaY;
       const steps = Math.max(-3, Math.min(3, Math.trunc(wheelRemainder / 100)));
-      if (!steps) return;
+      if (!steps) {
+        diagnostics?.wheel(
+          event.deltaY,
+          event.deltaMode,
+          event.isTrusted,
+          remainderBefore,
+          wheelRemainder,
+          0,
+          -1,
+          false,
+          accumulatorReset,
+        );
+        return;
+      }
       wheelRemainder -= steps * 100;
       const normalized = new globalThis.WheelEvent('wheel', {
         bubbles: true,
         cancelable: true,
         clientX: event.clientX,
         clientY: event.clientY,
-        // ArenaNet registers the raw Emscripten wheel callback and consumes
-        // its pixel delta directly. Bundle trackpad motion into full 100 px
-        // steps instead of converting through the unused browser helper.
+        // ArenaNet's callback receives raw deltaY and deltaMode values. Bundle
+        // trackpad motion into Emscripten's nominal 100 px wheel-step size so
+        // small pixel deltas are not lost individually.
         deltaY: steps * 100,
         deltaMode: globalThis.WheelEvent.DOM_DELTA_PIXEL,
         ctrlKey: event.ctrlKey,
@@ -313,6 +360,17 @@
       });
       normalizedWheels.add(normalized);
       canvas.dispatchEvent(normalized);
+      diagnostics?.wheel(
+        event.deltaY,
+        event.deltaMode,
+        event.isTrusted,
+        remainderBefore,
+        wheelRemainder,
+        normalized.deltaY,
+        normalized.deltaMode,
+        normalized.defaultPrevented,
+        accumulatorReset,
+      );
     }, { capture: true, passive: false });
 
     /** @param {number} x @param {number} y @param {number} delay */
@@ -460,13 +518,6 @@
         document.pointerLockElement !== canvas ||
         !event.isTrusted
       ) return;
-      if ((event.buttons & 2) === 0) {
-        const rect = canvas.getBoundingClientRect();
-        sendMouse('mouseup', rect, 0, 2, 0, 0);
-        heldButtons.delete(2);
-        releasePointer();
-        return;
-      }
       event.stopImmediatePropagation();
       event.preventDefault();
       if (resettingPointer) {

@@ -7,6 +7,17 @@ import type {
 declare global {
   interface GameInputDiagnostics {
     event(name: string, value?: unknown): void;
+    wheel(
+      rawDeltaY: number,
+      rawMode: number,
+      trusted: boolean,
+      remainderBefore: number,
+      remainderAfter: number,
+      emittedDeltaY: number,
+      emittedMode: number,
+      callbackPrevented: boolean,
+      accumulatorReset: boolean,
+    ): void;
   }
 
   interface GameInputController {
@@ -44,6 +55,17 @@ declare global {
     problemMarked(): void;
     mark(name: string, fields?: unknown): void;
     event(name: RendererEventName, value?: unknown): void;
+    wheel(
+      rawDeltaY: number,
+      rawMode: number,
+      trusted: boolean,
+      remainderBefore: number,
+      remainderAfter: number,
+      emittedDeltaY: number,
+      emittedMode: number,
+      callbackPrevented: boolean,
+      accumulatorReset: boolean,
+    ): void;
     snapshot(
       durationUs: number,
       bytes: number,

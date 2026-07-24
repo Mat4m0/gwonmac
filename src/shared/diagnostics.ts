@@ -138,6 +138,13 @@ export interface RendererMetrics {
   socketSettleHistogram: number[];
   inputToSubmitHistogram: number[];
   socketSendEvents: number[];
+  /**
+   * Capture-only records, stride 10:
+   * timestampUs, rawDeltaY, rawMode, trusted, remainderBefore,
+   * remainderAfter, emittedDeltaY, emittedMode, callbackPrevented,
+   * accumulatorReset.
+   */
+  wheelEvents: number[];
 }
 
 export interface RendererFrameBatch {
@@ -356,6 +363,30 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
         item <= Number.MAX_SAFE_INTEGER &&
         (index % 7 !== 6 || item === 0 || item === 1),
     )
+  ) {
+    return false;
+  }
+  if (
+    !Array.isArray(record.wheelEvents) ||
+    record.wheelEvents.length > 10 * 256 ||
+    record.wheelEvents.length % 10 !== 0 ||
+    !record.wheelEvents.every((item, index) => {
+      if (typeof item !== "number" || !Number.isFinite(item)) return false;
+      switch (index % 10) {
+        case 0:
+          return item >= 0 && item <= Number.MAX_SAFE_INTEGER;
+        case 2:
+          return item === 0 || item === 1 || item === 2;
+        case 3:
+        case 8:
+        case 9:
+          return item === 0 || item === 1;
+        case 7:
+          return item === -1 || item === 0 || item === 1 || item === 2;
+        default:
+          return Math.abs(item) <= 1_000_000;
+      }
+    })
   ) {
     return false;
   }
