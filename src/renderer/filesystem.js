@@ -8,6 +8,7 @@
 
   const MOUNT = 'app:';
   const DEPENDENCY = 'gw-persistent-filesystem';
+  const SYNC_TIMEOUT_MS = 30_000;
   const REQUIRED_DIRECTORIES = [
     `${MOUNT}/Templates/Skills`,
     `${MOUNT}/Templates/Equipment`,
@@ -21,8 +22,11 @@
    *   open(path: unknown, ...args: unknown[]): unknown,
    *   rename(oldPath: string, newPath: string): void,
    *   unlink(path: string): void,
+   *   mknod(path: string, ...args: unknown[]): unknown,
    *   mkdir(path: string): void,
    *   mkdirTree(path: string): void,
+   *   rmdir(path: string): void,
+   *   symlink(oldPath: string, newPath: string): void,
    *   mount(type: unknown, options: { autoPersist: boolean }, path: string): void,
    *   syncfs(populate: boolean, callback: (error?: unknown) => void): void,
    * }} EmscriptenFileSystem
@@ -65,13 +69,27 @@
         log('persistent filesystem ready');
         module.removeRunDependency(DEPENDENCY);
       };
+      /**
+       * @param {boolean} populate
+       * @param {(error?: unknown) => void} callback
+       */
+      const sync = (populate, callback) => {
+        const timer = setTimeout(
+          () => callback(new Error('persistent filesystem sync timed out')),
+          SYNC_TIMEOUT_MS,
+        );
+        fs.syncfs(populate, (error) => {
+          clearTimeout(timer);
+          callback(error);
+        });
+      };
 
       try {
         if (fs.analyzePath(MOUNT).error) {
           fs.mkdir(MOUNT);
           fs.mount(idbfs, { autoPersist: true }, MOUNT);
         }
-        fs.syncfs(true, (restoreError) => {
+        sync(true, (restoreError) => {
           if (restoreError) {
             stop(restoreError);
             return;
@@ -83,7 +101,7 @@
             fs.chdir(MOUNT);
             // Persist the directory invariant before the game can create a
             // template, screenshot, chat log, or diagnostic file beneath it.
-            fs.syncfs(false, (persistError) => {
+            sync(false, (persistError) => {
               if (persistError) stop(persistError);
               else {
                 // Normalize at the public operations, not only lookupPath:
@@ -93,6 +111,11 @@
                 const open = fs.open.bind(fs);
                 const rename = fs.rename.bind(fs);
                 const unlink = fs.unlink.bind(fs);
+                const mknod = fs.mknod.bind(fs);
+                const mkdir = fs.mkdir.bind(fs);
+                const mkdirTree = fs.mkdirTree.bind(fs);
+                const rmdir = fs.rmdir.bind(fs);
+                const symlink = fs.symlink.bind(fs);
                 /** @param {string} file */
                 const normalize = (file) =>
                   file.includes('\\')
@@ -109,6 +132,12 @@
                 fs.rename = (oldPath, newPath) =>
                   rename(normalize(oldPath), normalize(newPath));
                 fs.unlink = (file) => unlink(normalize(file));
+                fs.mknod = (file, ...args) => mknod(normalize(file), ...args);
+                fs.mkdir = (file) => mkdir(normalize(file));
+                fs.mkdirTree = (file) => mkdirTree(normalize(file));
+                fs.rmdir = (file) => rmdir(normalize(file));
+                fs.symlink = (oldPath, newPath) =>
+                  symlink(normalize(oldPath), normalize(newPath));
                 ready();
               }
             });

@@ -17,6 +17,7 @@ function fixture(options: {
   mounted?: boolean;
   restoreError?: unknown;
   persistError?: unknown;
+  syncNever?: boolean;
 } = {}) {
   const calls: string[] = [];
   const failures: unknown[] = [];
@@ -35,6 +36,10 @@ function fixture(options: {
     unlink(value: string) {
       calls.push(`unlink:${value}`);
     },
+    mknod(value: string) {
+      calls.push(`mknod:${value}`);
+      return {};
+    },
     analyzePath() {
       return { error: options.mounted ? 0 : 44 };
     },
@@ -46,10 +51,17 @@ function fixture(options: {
     },
     syncfs(populate: boolean, callback: SyncCallback) {
       calls.push(`sync:${populate}`);
+      if (options.syncNever) return;
       callback(populate ? options.restoreError : options.persistError);
     },
     mkdirTree(value: string) {
       calls.push(`mkdirTree:${value}`);
+    },
+    rmdir(value: string) {
+      calls.push(`rmdir:${value}`);
+    },
+    symlink(oldPath: string, newPath: string) {
+      calls.push(`symlink:${oldPath}:${newPath}`);
     },
     chdir(value: string) {
       calls.push(`chdir:${value}`);
@@ -67,6 +79,13 @@ function fixture(options: {
   const context = {
     FS: fileSystem,
     IDBFS: {},
+    setTimeout: options.syncNever
+      ? (callback: () => void) => {
+          callback();
+          return 1;
+        }
+      : setTimeout,
+    clearTimeout: options.syncNever ? () => undefined : clearTimeout,
     window: {} as {
       gwInstallGameFilesystem?: (options: {
         module: typeof module;
@@ -127,11 +146,24 @@ test("normalizes Guild Wars desktop template paths at the filesystem boundary", 
     "Templates\\Skills\\New.st",
   );
   result.fileSystem.unlink("Templates\\Skills\\New.st");
+  result.fileSystem.mknod("Templates\\Skills\\Created.st");
+  result.fileSystem.mkdir("Templates\\Screenshots");
+  result.fileSystem.mkdirTree("Templates\\Nested\\Path");
+  result.fileSystem.rmdir("Templates\\Nested\\Path");
+  result.fileSystem.symlink(
+    "Templates\\Skills\\Created.st",
+    "Templates\\Skills\\Linked.st",
+  );
   assert.deepEqual(result.calls, [
     "lookup:Templates/Skills/Test.st",
     "open:Templates/Equipment/Test.eq",
     "rename:Templates/Skills/Old.st:Templates/Skills/New.st",
     "unlink:Templates/Skills/New.st",
+    "mknod:Templates/Skills/Created.st",
+    "mkdir:Templates/Screenshots",
+    "mkdirTree:Templates/Nested/Path",
+    "rmdir:Templates/Nested/Path",
+    "symlink:Templates/Skills/Created.st:Templates/Skills/Linked.st",
   ]);
 });
 
@@ -150,6 +182,16 @@ test("blocks game startup when the directory invariant cannot be persisted", () 
   const error = new Error("persist failed");
   const result = fixture({ persistError: error });
   assert.deepEqual(result.failures, [error]);
+  assert.equal(
+    result.calls.includes("remove:gw-persistent-filesystem"),
+    false,
+  );
+});
+
+test("blocks game startup when IndexedDB synchronization stalls", () => {
+  const result = fixture({ syncNever: true });
+  assert.equal(result.failures.length, 1);
+  assert.match(String(result.failures[0]), /sync timed out/);
   assert.equal(
     result.calls.includes("remove:gw-persistent-filesystem"),
     false,
