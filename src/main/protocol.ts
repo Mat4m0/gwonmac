@@ -190,7 +190,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
     offsetBytes: range.start,
     bytes: length,
     priority: request.headers.get("x-gw-priority") ?? "demand",
-  }, undefined, request.headers.get("x-gw-trace-id") ?? undefined);
+  });
   try {
     const priority =
       request.headers.get("x-gw-priority") === "prefetch"

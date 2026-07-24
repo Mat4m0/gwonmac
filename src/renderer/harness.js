@@ -16,6 +16,7 @@ const logBuf = [];
 let gameWasmInstance = null;
 /** @type {WebAssembly.Module | null} */
 let gameWasmModule = null;
+let disposeSocketHost = () => {};
 const native = () => window.gwNative;
 /**
  * @param {import('../shared/diagnostics.js').RendererMilestone} name
@@ -249,7 +250,6 @@ function drainChunkQueue() {
     void fetch(SNAPSHOT_URL, {
       headers: {
         Range: `bytes=${start}-${end}`,
-        'X-GW-Trace-Id': crypto.randomUUID(),
         'X-GW-Priority': task.priority,
       },
     }).then(async (res) => {
@@ -277,6 +277,7 @@ function drainChunkQueue() {
 
 addEventListener('beforeunload', () => {
   schedulerStopped = true;
+  disposeSocketHost();
   for (const task of prefetchQueue.splice(0)) {
     inflight.delete(task.index);
     task.reject(new Error('background download stopped'));
@@ -320,7 +321,7 @@ function chunkBytes(i, priority) {
 
 /** @param {number} first @param {number} last */
 async function fetchDemandChunks(first, last) {
-  await Promise.all(
+  return Promise.all(
     Array.from({ length: last - first + 1 }, (_, n) =>
       chunkBytes(first + n, 'demand')),
   );
@@ -338,12 +339,15 @@ async function fetchPrefetchChunks(first, last, progress) {
   }
 }
 
-// Assemble a byte range from cached chunks; null if any part is missing.
-/** @param {number} offset @param {number} size */
-function readFromCache(offset, size) {
+/**
+ * @param {number} offset
+ * @param {number} size
+ * @param {(index: number) => Uint8Array | undefined} chunk
+ */
+function assembleRange(offset, size, chunk) {
   const [first, last] = chunkRange(offset, size);
   if (first === last) {
-    const buf = cacheTouch(first);
+    const buf = chunk(first);
     if (buf === undefined) return null;
     const start = offset - first * snapshotChunkSize;
     return buf.subarray(start, start + size);
@@ -352,7 +356,7 @@ function readFromCache(offset, size) {
   let pos = offset, written = 0;
   while (written < size) {
     const i = Math.floor(pos / snapshotChunkSize);
-    const buf = cacheTouch(i);
+    const buf = chunk(i);
     if (buf === undefined) return null;
     const off = pos - i * snapshotChunkSize;
     const take = Math.min(size - written, buf.length - off);
@@ -362,6 +366,12 @@ function readFromCache(offset, size) {
     pos += take;
   }
   return out;
+}
+
+// Assemble a byte range from cached chunks; null if any part is missing.
+/** @param {number} offset @param {number} size */
+function readFromCache(offset, size) {
+  return assembleRange(offset, size, cacheTouch);
 }
 
 Module = {
@@ -494,8 +504,8 @@ Module = {
       const source = data === null ? 'native' : 'memory';
       if (data === null) {
         const [first, last] = chunkRange(offset, bytes);
-        await fetchDemandChunks(first, last);
-        data = readFromCache(offset, bytes);
+        const fetched = await fetchDemandChunks(first, last);
+        data = assembleRange(offset, bytes, (index) => fetched[index - first]);
       }
       if (data === null || data.length !== bytes) {
         throw new Error(`image read ${offset}+${bytes}: assembled ${data && data.length}`);
@@ -543,87 +553,6 @@ Module = {
       await fetchPrefetchChunks(first, last, (n) => {
         try { progress(n); } catch (e) { log('[cache progress]', e); }
       });
-    },
-  },
-
-  // Raw TCP owned by the main process. The glue assigns onopen/onclose/onmessage
-  // on the returned object and calls onmessage with the payload, not an event.
-  socket: {
-    /** @param {string} destAddr */
-    connect(destAddr) {
-      log('socket.connect', destAddr);
-      /** @type {number | null} */
-      let id = null;
-      /** @type {import('../shared/contracts.js').SocketEvent[]} */
-      const pending = [];
-      /**
-       * @typedef {{
-       *   onopen: (() => void) | null,
-       *   onclose: (() => void) | null,
-       *   onmessage: ((data: Uint8Array) => void) | null,
-       *   send(data: Uint8Array | ArrayBuffer): Promise<void>,
-       *   close(): void
-       * }} SocketShim
-       */
-      /** @type {SocketShim} */
-      const sock = {
-        onopen: null, onclose: null, onmessage: null,
-        /** @param {Uint8Array | ArrayBuffer} data */
-        send: (data) => {
-          if (id === null) throw new Error('socket not open yet');
-          const source = data instanceof Uint8Array ? data : new Uint8Array(data);
-          const bytes = Uint8Array.from(source);
-          const started = performance.now();
-          const pending = native().sockets.send(id, bytes);
-          window.gwDiagnostics?.socketSend(
-            started,
-            (performance.now() - started) * 1000,
-            source.byteLength,
-            source.buffer.byteLength,
-            bytes.buffer.byteLength,
-            pending,
-          );
-          return pending;
-        },
-        close: () => {
-          if (id === null) return;
-          void native().sockets.close(id);
-        },
-      };
-      /** @param {import('../shared/contracts.js').SocketEvent} ev */
-      const deliver = (ev) => {
-        if (ev.type === 'open') {
-          if (sock.onopen) sock.onopen();
-        } else if (ev.type === 'data') {
-          if (sock.onmessage) sock.onmessage(ev.data);
-        }
-        else if (ev.type === 'close' || ev.type === 'error') {
-          if (ev.type === 'error') log('socket error', ev.message);
-          // Native close is final. Clear the handle before the game callback;
-          // some client paths synchronously call close() again from onclose.
-          id = null;
-          if (sock.onclose) sock.onclose();
-          unsub();
-        }
-      };
-      const unsub = native().sockets.onEvent((ev) => {
-        if (id === null) { pending.push(ev); return; }
-        if (ev.socketId !== id) return;
-        deliver(ev);
-      });
-      void native().sockets.connect(destAddr).then((sid) => {
-        id = sid;
-        for (const ev of pending) if (ev.socketId === id) deliver(ev);
-        pending.length = 0;
-      }).catch((err) => {
-        log(
-          'socket.connect failed',
-          err instanceof Error ? err.message : String(err),
-        );
-        if (sock.onclose) sock.onclose();
-        unsub();
-      });
-      return sock;
     },
   },
 
@@ -894,9 +823,19 @@ function loadGlue() {
   }
 
   try {
-    const { unavailablePlatformCapabilities } =
-      await import('./platform-capabilities.js');
+    const [{ unavailablePlatformCapabilities }, { createSocketHost }] =
+      await Promise.all([
+        import('./platform-capabilities.js'),
+        import('./socket-host.js'),
+      ]);
     Object.assign(Module, unavailablePlatformCapabilities(log));
+    const socketHost = createSocketHost({
+      native: native().sockets,
+      diagnostics: window.gwDiagnostics,
+      log,
+    });
+    Module.socket = socketHost.socket;
+    disposeSocketHost = socketHost.dispose;
   } catch (error) {
     window.gwLoading?.fail('The game host contract could not be loaded.');
     return log(
