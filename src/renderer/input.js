@@ -377,7 +377,7 @@
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       canvas.classList.toggle('cursor-hidden', locked);
-      if (virtualCursor && !locked) releasePointer();
+      if (virtualCursor && !locked) releaseAll();
     });
     document.addEventListener('pointerlockerror', () => {
       diagnostics?.event('pointerLock.failed');
@@ -387,10 +387,15 @@
 
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     log(`touch mode: ${touchMode}`);
+    canvas.dataset.inputReady = 'true';
 
     return Object.freeze({
       releaseAll,
       applySettings(next) {
+        if (next.touchMode !== touchMode) {
+          cancelSyntheticTouches();
+          lastClick = null;
+        }
         touchMode = next.touchMode;
         lockEnabled = next.pointerLock;
         if (!lockEnabled) releasePointer();

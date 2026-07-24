@@ -138,6 +138,27 @@ export class ChunkStore {
     return packResidentBits(this.hashes.length, await this.residentIndices());
   }
 
+  private async verifyResident(index: number): Promise<boolean> {
+    const hash = this.hashes[index];
+    if (!hash || !this.residentHashes.has(hash)) return false;
+    const path = this.chunkPath(hash);
+    try {
+      const data = await readFile(path);
+      if (data.byteLength !== this.chunkByteLength(index)) {
+        throw new AppError("chunk_length", `cached chunk ${hash} has invalid length`);
+      }
+      verifyChunkHash(hash, data);
+      this.verifiedHashes.add(hash);
+      return true;
+    } catch {
+      this.unmarkResident(hash);
+      this.verifiedHashes.delete(hash);
+      this.metrics?.count("cache.corruptChunks");
+      await unlink(path).catch(() => undefined);
+      return false;
+    }
+  }
+
   async initializeResidency(): Promise<void> {
     if (!this.residentReady) {
       this.residentReady = readdir(this.chunksDir)
@@ -509,6 +530,21 @@ export class ChunkStore {
   } = {}): Promise<boolean> {
     const jobs = opts.jobs ?? PREFETCH_JOBS;
     this.stopFlag = false;
+    await this.initializeResidency();
+    const residentRepresentatives = new Map<string, number>();
+    for (let index = 0; index < this.hashes.length; index++) {
+      const hash = this.hashes[index]!;
+      if (this.residentHashes.has(hash) && !residentRepresentatives.has(hash)) {
+        residentRepresentatives.set(hash, index);
+      }
+    }
+    await mapPool(
+      [...residentRepresentatives.values()],
+      jobs,
+      async (index) => {
+        await this.verifyResident(index);
+      },
+    );
     const todo: number[] = [];
     for (let i = 0; i < this.hashes.length; i++) {
       if (!(await this.isResident(i))) todo.push(i);

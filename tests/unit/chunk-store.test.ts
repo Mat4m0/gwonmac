@@ -113,6 +113,31 @@ describe("chunk-store", () => {
     assert.equal(fetches, 1);
   });
 
+  it("verifies and repairs resident chunks before full-download completion", async () => {
+    const root = await freshDir();
+    const good = Buffer.alloc(CHUNK, 4);
+    const hash = hashOf(good);
+    await writeFile(join(root, hash), Buffer.alloc(CHUNK, 8));
+    let fetches = 0;
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK,
+      chunkSize: CHUNK,
+      chunkHashes: [hash],
+      fetch: async () => {
+        fetches += 1;
+        return new Uint8Array(good);
+      },
+    });
+
+    assert.equal(
+      await store.downloadAll({ freeBytes: async () => 2 * 1024 ** 3 }),
+      true,
+    );
+    assert.equal(fetches, 1);
+    assert.deepEqual(await readFile(join(root, hash)), good);
+  });
+
   it("merges boot working set and never shrinks it", async () => {
     const root = await freshDir();
     const boot = join(root, "boot-chunks.json");

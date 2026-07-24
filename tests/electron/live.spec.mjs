@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +19,18 @@ test.describe("live client", () => {
   test("downloads, initializes JSPI, and submits a hardware frame", async () => {
     test.setTimeout(10 * 60_000);
     mkdirSync(userData, { recursive: true });
+    writeFileSync(
+      path.join(userData, "settings.json"),
+      JSON.stringify({
+        renderScale: 1,
+        pointerLock: true,
+        cursorTheme: "guild-wars",
+        touchMode: "dbltap",
+        showDiagnostics: false,
+        dataStrategy: "quick",
+      }),
+      { mode: 0o600 },
+    );
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
     const application = await electron.launch({
@@ -41,9 +53,6 @@ test.describe("live client", () => {
           { timeout: 5 * 60_000, intervals: [500, 1_000, 2_000] },
         )
         .toBe("ready");
-
-      const quickStart = page.locator("#data-choice-quick");
-      if (await quickStart.isVisible()) await quickStart.click();
 
       await expect
         .poll(

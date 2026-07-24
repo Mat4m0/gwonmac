@@ -144,6 +144,11 @@ test.describe("diagnostics", () => {
         window.gwDiagnostics.swap(200, 50, 25);
         await window.gwDiagnostics.flush();
       });
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.getMenuItemById("mark-performance-problem")
+          ?.click();
+      });
       await page.evaluate(() => window.gwNative.diagnostics.stopCapture());
 
       const target = path.join(diagnosticRoot, "capture.gwdiag");
@@ -213,6 +218,7 @@ test.describe("diagnostics", () => {
       expect(events).toContain("[redacted]");
       expect(events).toContain("[redacted-path]");
       expect(events).toContain("[redacted-email]");
+      expect(events).toContain("performance.problemmarked");
 
       const validated = await execFileAsync(process.execPath, [
         path.join(root, "build/tools/diagnostics/validate.js"),

@@ -2,6 +2,20 @@ import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 
+async function startGameInput(page) {
+  const canvas = page.locator("#canvas");
+  const quickStart = page.locator("#data-choice-quick");
+  await expect
+    .poll(
+      async () =>
+        (await canvas.getAttribute("data-input-ready")) === "true" ||
+        (await quickStart.isVisible()),
+    )
+    .toBe(true);
+  if (await quickStart.isVisible()) await quickStart.click();
+  await expect(canvas).toHaveAttribute("data-input-ready", "true");
+}
+
 test.describe("renderer input", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
@@ -9,6 +23,7 @@ test.describe("renderer input", () => {
     const fixture = await launchOffline("gw-input-e2e-");
     try {
       const { page } = fixture;
+      await startGameInput(page);
       await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         globalThis.document.getElementById("loading").classList.add("gone");
@@ -87,6 +102,7 @@ test.describe("renderer input", () => {
   test("accumulates trackpad pixels without changing discrete wheel input", async () => {
     const fixture = await launchOffline("gw-wheel-e2e-");
     try {
+      await startGameInput(fixture.page);
       const steps = await fixture.page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const observed = [];
@@ -123,6 +139,56 @@ test.describe("renderer input", () => {
         return observed;
       });
       expect(steps).toEqual([1, -1]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("releases held keys and buttons when pointer lock is lost", async () => {
+    const fixture = await launchOffline("gw-pointer-loss-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        globalThis.document.getElementById("loading").classList.add("gone");
+        window.__inputReleases = [];
+        window.addEventListener("keyup", (event) => {
+          if (!event.isTrusted) {
+            window.__inputReleases.push(`key:${event.code}`);
+          }
+        });
+        window.addEventListener("mouseup", (event) => {
+          if (!event.isTrusted) {
+            window.__inputReleases.push(`mouse:${event.button}`);
+          }
+        });
+        Object.defineProperty(globalThis.document, "pointerLockElement", {
+          configurable: true,
+          value: canvas,
+        });
+        canvas.requestPointerLock = () => Promise.resolve();
+        canvas.focus();
+      });
+      const box = await page.locator("#canvas").boundingBox();
+      await page.keyboard.down("w");
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "right" });
+      await page.evaluate(() => {
+        Object.defineProperty(globalThis.document, "pointerLockElement", {
+          configurable: true,
+          value: null,
+        });
+        globalThis.document.dispatchEvent(
+          new globalThis.Event("pointerlockchange"),
+        );
+      });
+      expect(await page.evaluate(() => window.__inputReleases)).toEqual([
+        "key:KeyW",
+        "mouse:2",
+      ]);
+      await page.keyboard.up("w");
+      await page.mouse.up({ button: "right" });
     } finally {
       await closeOffline(fixture);
     }
