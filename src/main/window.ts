@@ -8,7 +8,11 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from "electron";
-import type { AppSettings, DownloadProgress } from "../shared/contracts.js";
+import type {
+  AppSettings,
+  AppSettingsPatch,
+  DownloadProgress,
+} from "../shared/contracts.js";
 import { EXTERNAL_URLS } from "../shared/contracts.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
@@ -33,7 +37,7 @@ export interface WindowHost {
   sockets: SocketManager;
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
-  setSettings: (value: AppSettings) => Promise<AppSettings>;
+  updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
   exportDiagnostics: () => Promise<string>;
   markPerformanceProblem: () => void;
   startCapture: (level: 1 | 2) => Promise<void>;
@@ -462,10 +466,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           click: async () => {
             await resetGameInput(win);
             const cur = await host.getSettings();
-            await host.setSettings({
-              ...cur,
-              showDiagnostics: !cur.showDiagnostics,
-            });
+            await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
             if (win.isDestroyed() || win.webContents.isDestroyed()) return;
             void win.webContents.executeJavaScript(
               "window.dispatchEvent(new CustomEvent('gw:diagnostics-toggle'))",

@@ -604,6 +604,38 @@ test.describe("Electron application", () => {
     });
     expect(await page.evaluate(() => window.__wheelSteps)).toEqual([[1, 1]]);
 
+    const touchResetEvents = await page.evaluate(async () => {
+      const canvas = globalThis.document.getElementById("canvas");
+      const events = [];
+      for (const type of ["touchstart", "touchend", "touchcancel"]) {
+        canvas.addEventListener(type, () => events.push(type));
+      }
+      const mouse = (type) =>
+        canvas.dispatchEvent(new globalThis.MouseEvent(type, {
+          bubbles: true,
+          button: 0,
+          clientX: 100,
+          clientY: 100,
+        }));
+
+      await window.gwTouchMode("translate");
+      mouse("mousedown");
+      window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
+
+      await window.gwTouchMode("dbltap");
+      window.gwTap(100, 100);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return events;
+    });
+    expect(touchResetEvents).toEqual([
+      "touchstart",
+      "touchcancel",
+      "touchstart",
+      "touchcancel",
+    ]);
+
     const bridge = await page.evaluate(() => ({
       hasNative: typeof window.gwNative === "object" && window.gwNative !== null,
       keys: window.gwNative ? Object.keys(window.gwNative).sort() : [],
@@ -857,6 +889,20 @@ test.describe("Electron application", () => {
     await expect(
       page.locator('input[name="renderScale"][value="1"]'),
     ).toBeChecked();
+    await app.evaluate(({ Menu }) => {
+      const view = Menu.getApplicationMenu()?.items.find(
+        (item) => item.label === "View",
+      );
+      view?.submenu?.items
+        .find((item) => item.label === "Toggle Diagnostics")
+        ?.click();
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(async () =>
+          (await window.gwNative.settings.get()).showDiagnostics),
+      )
+      .toBe(true);
     await page.locator('input[name="renderScale"][value="1.5"]').check();
     await expect(
       page.locator('input[name="renderScale"][value="1.5"]'),

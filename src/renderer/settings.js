@@ -152,8 +152,7 @@
   // Serialize writes so a slower earlier write cannot replace newer intent.
   function persistSettings(patch) {
     const operation = settingsWrite.then(async () => {
-      const current = await loadSettings();
-      const saved = await window.gwNative.settings.set({ ...current, ...patch });
+      const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
       applyRuntimeSettings(saved);
       return saved;

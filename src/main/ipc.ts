@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain, shell, app, safeStorage } from "electro
 import { writeFile } from "node:fs/promises";
 import type {
   AppSettings,
+  AppSettingsPatch,
   CacheInfo,
   DownloadProgress,
   ExternalLinkKind,
@@ -15,13 +16,13 @@ import {
   isRendererMetrics,
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
-import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { INITIAL_PROGRESS, EMPTY_PREFETCH } from "../shared/progress.js";
 import { AllowlistError, AppError, ValidationError } from "../shared/errors.js";
 import { CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
 import { checkForUpdate } from "./update-check.js";
-import { loadSettings, saveSettings } from "./core/settings.js";
+import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata, snapshotMetadataWire } from "./core/snapshot.js";
 import type { ChunkStore } from "./core/chunk-store.js";
@@ -48,6 +49,9 @@ export interface IpcContext {
   getProgress: () => DownloadProgress;
   getPrefetch: () => PrefetchProgress;
   getChunkStore: () => ChunkStore | null;
+  getSettings: () => Promise<AppSettings>;
+  updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
+  resetSettings: () => Promise<AppSettings>;
   subscribeProgress: (cb: (p: DownloadProgress) => void) => () => void;
   subscribePrefetch: (cb: (p: PrefetchProgress) => void) => () => void;
   downloadFullGame: () => Promise<boolean>;
@@ -119,7 +123,21 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   const progressSubs = new Map<number, () => void>();
   const prefetchSubs = new Map<number, () => void>();
-  const socketSubs = new Map<number, () => void>();
+  const watchedRenderers = new Set<number>();
+
+  const clearRendererSubscriptions = (rendererId: number): void => {
+    progressSubs.get(rendererId)?.();
+    progressSubs.delete(rendererId);
+    prefetchSubs.get(rendererId)?.();
+    prefetchSubs.delete(rendererId);
+    watchedRenderers.delete(rendererId);
+  };
+  const watchRenderer = (win: BrowserWindow): void => {
+    const rendererId = win.webContents.id;
+    if (watchedRenderers.has(rendererId)) return;
+    watchedRenderers.add(rendererId);
+    win.webContents.once("destroyed", () => clearRendererSubscriptions(rendererId));
+  };
 
   ipcMain.handle(IPC.progressCurrent, (event) => {
     assertSender(event);
@@ -128,11 +146,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.progressSubscribe, (event) => {
     const win = assertSender(event);
-    progressSubs.get(win.webContents.id)?.();
+    const rendererId = win.webContents.id;
+    progressSubs.get(rendererId)?.();
     const unsub = ctx.subscribeProgress((value) => {
       sendIfLive(win, IPC.progressEvent, value);
     });
-    progressSubs.set(win.webContents.id, unsub);
+    progressSubs.set(rendererId, unsub);
+    watchRenderer(win);
     sendIfLive(win, IPC.progressEvent, ctx.getProgress());
   });
 
@@ -149,6 +169,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       sendIfLive(win, IPC.prefetchEvent, value);
     });
     prefetchSubs.set(win.webContents.id, unsub);
+    watchRenderer(win);
     sendIfLive(win, IPC.prefetchEvent, ctx.getPrefetch());
   });
 
@@ -237,23 +258,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     await ctx.sockets.close(socketId as number, win.webContents.id);
   });
 
-  ipcMain.handle(IPC.socketSubscribe, (event) => {
-    const win = assertSender(event);
-    socketSubs.get(win.webContents.id)?.();
-    // Events are pushed from the SocketManager sink registered in main.ts.
-    socketSubs.set(win.webContents.id, () => undefined);
-  });
-
-  ipcMain.handle(IPC.socketUnsubscribe, (event) => {
-    const win = assertSender(event);
-    socketSubs.get(win.webContents.id)?.();
-    socketSubs.delete(win.webContents.id);
-  });
-
   ipcMain.handle(IPC.settingsGet, async (event) => {
     assertSender(event);
     try {
-      return await loadSettings(paths.settings);
+      return await ctx.getSettings();
     } catch (error) {
       logOperationFailure("settings", "settings.loadFailed", error);
       throw error;
@@ -263,8 +271,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.settingsSet, async (event, value: unknown) => {
     assertSender(event);
     try {
-      const previous = await loadSettings(paths.settings);
-      const saved = await saveSettings(paths.settings, value as AppSettings);
+      const previous = await ctx.getSettings();
+      const saved = await ctx.updateSettings(parseSettingsPatch(value));
       if (previous.dataStrategy !== saved.dataStrategy) {
         log("settings", "info", "launcher.strategyChanged", {
           strategy: saved.dataStrategy ?? "unselected",
@@ -290,7 +298,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     });
     if (response !== 0) return null;
     try {
-      const settings = await saveSettings(paths.settings, { ...DEFAULT_SETTINGS });
+      const settings = await ctx.resetSettings();
       await resetWindowState(win);
       log("settings", "info", "settings.reset");
       return settings;

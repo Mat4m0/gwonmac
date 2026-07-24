@@ -196,6 +196,38 @@ describe("chunk-store", () => {
     assert.equal(fetches, 0);
   });
 
+  it("fails fast and preserves fatal local download errors", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 3 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 20),
+    );
+    const hashes = payloads.map(hashOf);
+    let fetches = 0;
+    const diskError = Object.assign(new Error("disk filled during write"), {
+      code: "ENOSPC",
+    });
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async () => {
+        fetches += 1;
+        throw diskError;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        store.downloadAll({
+          jobs: 1,
+          freeBytes: async () => 10 * 1024 * 1024 * 1024,
+        }),
+      (error) => error === diskError,
+    );
+    assert.equal(fetches, 1);
+  });
+
   it("preserves completed chunks when a full download is stopped and resumed", async () => {
     const root = await freshDir();
     const payloads = Array.from({ length: 3 }, (_, index) =>

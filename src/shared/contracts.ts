@@ -106,6 +106,8 @@ export interface AppSettings {
   dataStrategy: "quick" | "full" | null;
 }
 
+export type AppSettingsPatch = Partial<AppSettings>;
+
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 1,
   pointerLock: true,
@@ -159,8 +161,6 @@ export const IPC = {
   socketConnect: "gw:socket:connect",
   socketSend: "gw:socket:send",
   socketClose: "gw:socket:close",
-  socketSubscribe: "gw:socket:subscribe",
-  socketUnsubscribe: "gw:socket:unsubscribe",
   socketEvent: "gw:socket:event",
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
@@ -209,7 +209,7 @@ export interface GwNativeApi {
   };
   settings: {
     get(): Promise<AppSettings>;
-    set(value: AppSettings): Promise<AppSettings>;
+    set(value: AppSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
   };
   credentials: {

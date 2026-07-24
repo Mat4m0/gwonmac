@@ -823,6 +823,9 @@ function loadGlue(candidates) {
   }, true);
 
   function releaseAllInputs() {
+    // Cancel synthetic gestures before mouseup: translate/augment mode must
+    // observe an interruption as touchcancel, never as a normal touchend.
+    cancelSyntheticTouches();
     for (const input of heldKeys.values()) {
       input.target?.dispatchEvent(new globalThis.KeyboardEvent('keyup', {
         bubbles: true,
@@ -846,7 +849,6 @@ function loadGlue(candidates) {
       }));
     }
     heldButtons.clear();
-    cancelSyntheticTouches();
     releasePointer();
   }
 
@@ -902,7 +904,7 @@ function loadGlue(candidates) {
   window.gwTouchMode = async (m) => {
     if (!['dbltap', 'translate', 'augment', 'off'].includes(m)) return log(`[warn] unknown mode ${m}`);
     touchMode = m;
-    appSettings = await native().settings.set({ ...appSettings, touchMode: m });
+    appSettings = await native().settings.set({ touchMode: m });
     log(`touch mode: ${m}`);
     return m;
   };
@@ -923,6 +925,20 @@ function loadGlue(candidates) {
     }));
   };
 
+  const syntheticTouches = new Map();
+  const startTouch = (touch) => {
+    syntheticTouches.set(touch.identifier, touch);
+    sendTouch('touchstart', touch);
+  };
+  const moveTouch = (touch) => {
+    syntheticTouches.set(touch.identifier, touch);
+    sendTouch('touchmove', touch);
+  };
+  const finishTouch = (type, touch) => {
+    syntheticTouches.delete(touch.identifier);
+    sendTouch(type, touch);
+  };
+
   // Timers are tracked so an in-flight pair can be cancelled: a tap landing
   // inside a later click's mouse stream trips the game's input assertion
   // (evt.buttonState, FrMouse.cpp:486).
@@ -930,8 +946,8 @@ function loadGlue(candidates) {
   const cancelTaps = () => { tapTimers.forEach(clearTimeout); tapTimers = []; };
   const tapAt = (x, y, delay) => tapTimers.push(setTimeout(() => {
     const t = mkTouch(x, y, ++touchId);
-    sendTouch('touchstart', t);
-    tapTimers.push(setTimeout(() => sendTouch('touchend', t), 30));
+    startTouch(t);
+    tapTimers.push(setTimeout(() => finishTouch('touchend', t), 30));
   }, delay));
 
   // Registered in capture and before the glue loads, so these run ahead of the
@@ -948,14 +964,14 @@ function loadGlue(candidates) {
       return;                // mouse always passes through
     }
     active = mkTouch(e.clientX, e.clientY, ++touchId);
-    sendTouch('touchstart', active);
+    startTouch(active);
     if (touchMode === 'translate') e.stopImmediatePropagation();
   }, true);
 
   c.addEventListener('mousemove', (e) => {
     if (touchMode === 'off' || touchMode === 'dbltap' || !active) return;
     active = mkTouch(e.clientX, e.clientY, active.identifier);
-    sendTouch('touchmove', active);
+    moveTouch(active);
     if (touchMode === 'translate') e.stopImmediatePropagation();
   }, true);
 
@@ -971,7 +987,7 @@ function loadGlue(candidates) {
     if (touchMode === 'off' || e.button !== 0 || !active) return;
     const t = mkTouch(e.clientX, e.clientY, active.identifier);
     active = null;
-    sendTouch('touchend', t);
+    finishTouch('touchend', t);
     if (touchMode === 'translate') e.stopImmediatePropagation();
   }, true);
 
@@ -981,22 +997,23 @@ function loadGlue(candidates) {
       if (!active) return;
       const t = active;
       active = null;
-      sendTouch('touchcancel', t);
+      finishTouch('touchcancel', t);
     }, true);
   }
   cancelSyntheticTouches = () => {
     cancelTaps();
     pendingTap = null;
-    if (!active) return;
-    const touch = active;
     active = null;
-    sendTouch('touchcancel', touch);
+    for (const touch of syntheticTouches.values()) {
+      sendTouch('touchcancel', touch);
+    }
+    syntheticTouches.clear();
   };
 
   window.gwTap = (x, y) => {
     const t = mkTouch(x, y, ++touchId);
-    sendTouch('touchstart', t);
-    setTimeout(() => sendTouch('touchend', t), 40);
+    startTouch(t);
+    tapTimers.push(setTimeout(() => finishTouch('touchend', t), 40));
   };
   window.gwDoubleTap = (x, y) => { window.gwTap(x, y); setTimeout(() => window.gwTap(x, y), 120); };
   log(`touch mode: ${touchMode} (gwTouchMode('off') to disable)`);
@@ -1061,7 +1078,7 @@ function loadGlue(candidates) {
 
   window.gwPointerLock = async (on) => {
     lockEnabled = !!on;
-    appSettings = await native().settings.set({ ...appSettings, pointerLock: !!on });
+    appSettings = await native().settings.set({ pointerLock: !!on });
     if (!on) releaseLock();
     log(`pointer lock: ${on ? 'enabled' : 'disabled'}`);
     return lockEnabled;

@@ -3,6 +3,9 @@ import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
+  DEFAULT_SETTINGS,
+  type AppSettings,
+  type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
   type SnapshotMetadata,
@@ -81,6 +84,31 @@ let snapshotMeta: SnapshotMetadata | null = null;
 let saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
 let initialResidencyRecorded = false;
 let fullDownload: Promise<boolean> | null = null;
+let settingsWrite: Promise<void> = Promise.resolve();
+
+function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+  const operation = settingsWrite.then(async () => {
+    const settingsPath = gamePaths().settings;
+    const current = await loadSettings(settingsPath);
+    return saveSettings(settingsPath, { ...current, ...patch });
+  });
+  settingsWrite = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
+
+function resetAppSettings(): Promise<AppSettings> {
+  const operation = settingsWrite.then(() =>
+    saveSettings(gamePaths().settings, { ...DEFAULT_SETTINGS }),
+  );
+  settingsWrite = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
 
 const sockets = new SocketManager(
   (ownerId, event) => {
@@ -369,10 +397,19 @@ function downloadFullGame(): Promise<boolean> {
             : "unknown",
         message: error instanceof Error ? error.message : String(error),
       });
-      const message =
-        error instanceof Error && "code" in error && error.code === "disk_full"
-          ? "There is not enough free disk space to download the full game."
-          : "ArenaNet is unavailable. The download can resume later.";
+      let cause: unknown = error;
+      let diskSpaceFailure = false;
+      while (cause instanceof Error) {
+        const code = "code" in cause ? String(cause.code) : "";
+        if (code === "disk_full" || code === "ENOSPC" || code === "EDQUOT") {
+          diskSpaceFailure = true;
+          break;
+        }
+        cause = cause.cause;
+      }
+      const message = diskSpaceFailure
+        ? "There is not enough free disk space to download the full game."
+        : "The download could not continue. Check your connection, then choose Resume Download.";
       setProgress({
         ...INITIAL_PROGRESS,
         phase: "ready",
@@ -448,7 +485,7 @@ function buildWindowHost(): WindowHost {
     sockets,
     getProgress: () => progress,
     getSettings: () => loadSettings(gamePaths().settings),
-    setSettings: (value) => saveSettings(gamePaths().settings, value),
+    updateSettings: updateAppSettings,
     exportDiagnostics: async () => {
       const win = getMainWindow();
       return win ? exportDiagnosticsForWindow(win) : "";
@@ -504,6 +541,9 @@ app.whenReady().then(async () => {
     getProgress: () => progress,
     getPrefetch: () => prefetch,
     getChunkStore: () => chunkStore,
+    getSettings: () => loadSettings(gamePaths().settings),
+    updateSettings: updateAppSettings,
+    resetSettings: resetAppSettings,
     subscribeProgress: (cb) => {
       progressListeners.add(cb);
       return () => progressListeners.delete(cb);

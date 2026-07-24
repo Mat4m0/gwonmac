@@ -2,6 +2,7 @@ import { readFile, rename } from "node:fs/promises";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
+  type AppSettingsPatch,
 } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
@@ -70,6 +71,21 @@ export function parseSettings(raw: unknown): AppSettings {
     out.dataStrategy = src.dataStrategy;
   }
   return out;
+}
+
+export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
+  if (raw === null || raw === undefined || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AppError("bad_settings", "settings patch must be an object");
+  }
+  const src = raw as Record<string, unknown>;
+  const parsed = parseSettings(src);
+  const patch: AppSettingsPatch = {};
+  for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof AppSettings)[]) {
+    if (key in src) {
+      Object.assign(patch, { [key]: parsed[key] });
+    }
+  }
+  return patch;
 }
 
 export async function loadSettings(

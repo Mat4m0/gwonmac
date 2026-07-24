@@ -15,8 +15,6 @@ const IPC = {
   socketConnect: "gw:socket:connect",
   socketSend: "gw:socket:send",
   socketClose: "gw:socket:close",
-  socketSubscribe: "gw:socket:subscribe",
-  socketUnsubscribe: "gw:socket:unsubscribe",
   socketEvent: "gw:socket:event",
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
@@ -43,26 +41,57 @@ const IPC = {
   updateStatus: "gw:update:status",
 };
 
-function subscribe(subscribeChannel, unsubscribeChannel, eventChannel, callback) {
+function listen(eventChannel, callback) {
   const handler = (_event, value) => callback(value);
   ipcRenderer.on(eventChannel, handler);
-  void ipcRenderer.invoke(subscribeChannel);
   let active = true;
   return () => {
     if (!active) return;
     active = false;
     ipcRenderer.removeListener(eventChannel, handler);
-    void ipcRenderer.invoke(unsubscribeChannel);
   };
 }
+
+function sharedSubscription(subscribeChannel, unsubscribeChannel, eventChannel) {
+  const callbacks = new Set();
+  const handler = (_event, value) => {
+    for (const callback of callbacks) callback(value);
+  };
+  return (callback) => {
+    callbacks.add(callback);
+    if (callbacks.size === 1) {
+      ipcRenderer.on(eventChannel, handler);
+      void ipcRenderer.invoke(subscribeChannel);
+    }
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      callbacks.delete(callback);
+      if (callbacks.size === 0) {
+        ipcRenderer.removeListener(eventChannel, handler);
+        void ipcRenderer.invoke(unsubscribeChannel);
+      }
+    };
+  };
+}
+
+const onProgress = sharedSubscription(
+  IPC.progressSubscribe,
+  IPC.progressUnsubscribe,
+  IPC.progressEvent,
+);
+const onPrefetch = sharedSubscription(
+  IPC.prefetchSubscribe,
+  IPC.prefetchUnsubscribe,
+  IPC.prefetchEvent,
+);
 
 const api = Object.freeze({
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
-    onChange: (callback) =>
-      subscribe(IPC.progressSubscribe, IPC.progressUnsubscribe, IPC.progressEvent, callback),
-    onPrefetch: (callback) =>
-      subscribe(IPC.prefetchSubscribe, IPC.prefetchUnsubscribe, IPC.prefetchEvent, callback),
+    onChange: onProgress,
+    onPrefetch,
   },
   snapshot: {
     metadata: async () => {
@@ -85,8 +114,7 @@ const api = Object.freeze({
     connect: (destination) => ipcRenderer.invoke(IPC.socketConnect, destination),
     send: (socketId, data) => ipcRenderer.invoke(IPC.socketSend, socketId, data),
     close: (socketId) => ipcRenderer.invoke(IPC.socketClose, socketId),
-    onEvent: (callback) =>
-      subscribe(IPC.socketSubscribe, IPC.socketUnsubscribe, IPC.socketEvent, callback),
+    onEvent: (callback) => listen(IPC.socketEvent, callback),
   },
   settings: {
     get: () => ipcRenderer.invoke(IPC.settingsGet),

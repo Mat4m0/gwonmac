@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.js";
 import { AppError } from "../../src/shared/errors.js";
-import { loadSettings, parseSettings, saveSettings } from "../../src/main/core/settings.js";
+import {
+  loadSettings,
+  parseSettings,
+  parseSettingsPatch,
+  saveSettings,
+} from "../../src/main/core/settings.js";
 
 describe("settings", () => {
   it("exposes the documented defaults", () => {
@@ -38,6 +43,14 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
+  });
+
+  it("validates patches without filling fields from defaults", () => {
+    assert.deepEqual(parseSettingsPatch({ cursorTheme: "guild-wars-2" }), {
+      cursorTheme: "guild-wars-2",
+    });
+    assert.deepEqual(parseSettingsPatch({ mystery: true }), {});
+    assert.throws(() => parseSettingsPatch({ pointerLock: "yes" }), AppError);
   });
 
   it("loads defaults for missing or corrupt files", async () => {

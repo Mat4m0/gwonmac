@@ -89,6 +89,16 @@ async function mapPool<T>(
   await Promise.all(workers);
 }
 
+function errorCode(error: unknown): string {
+  return error instanceof Error && "code" in error
+    ? String(error.code)
+    : "";
+}
+
+function isFatalLocalDownloadError(error: unknown): boolean {
+  return ["EACCES", "EDQUOT", "ENOSPC", "EROFS"].includes(errorCode(error));
+}
+
 export class ChunkStore {
   readonly size: number;
   readonly chunkSize: number;
@@ -579,6 +589,8 @@ export class ChunkStore {
     const baseline = got;
     const rateAverage = new DownloadRateAverage(baseline, started);
     let failed = 0;
+    let firstFailure: unknown;
+    let fatalFailure: unknown;
 
     await mapPool(
       todo,
@@ -587,8 +599,10 @@ export class ChunkStore {
         const size = this.chunkByteLength(i);
         try {
           await this.ensureChunk(i, "prefetch");
-        } catch {
+        } catch (error) {
           failed += 1;
+          firstFailure ??= error;
+          if (isFatalLocalDownloadError(error)) fatalFailure ??= error;
           return;
         }
         got += size;
@@ -601,14 +615,16 @@ export class ChunkStore {
           secondsRemaining: secondsRemaining(received, total, rate),
         });
       },
-      () => this.stopFlag,
+      () => this.stopFlag || fatalFailure !== undefined,
     );
 
+    if (fatalFailure !== undefined) throw fatalFailure;
     if (this.stopFlag) return false;
     if (failed) {
       throw new AppError(
         "download_partial",
         `${failed} chunks could not be downloaded. Restart to retry.`,
+        { cause: firstFailure },
       );
     }
     return true;
