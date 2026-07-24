@@ -49,10 +49,8 @@
     let activeTouch = null;
     /** @type {{ x: number, y: number } | null} */
     let virtualCursor = null;
-    let resettingPointer = false;
-    let pendingX = 0;
-    let pendingY = 0;
-    let resetFrame = 0;
+    let pointerWanted = false;
+    let releasing = false;
     let wheelRemainder = 0;
     let wheelDirection = 0;
     let wheelAt = 0;
@@ -61,6 +59,18 @@
       wheelRemainder = 0;
       wheelDirection = 0;
       wheelAt = 0;
+    };
+
+    const currentButtons = () => {
+      let buttons = 0;
+      for (const button of heldButtons.keys()) {
+        if (button === 0) buttons |= 1;
+        else if (button === 1) buttons |= 4;
+        else if (button === 2) buttons |= 2;
+        else if (button === 3) buttons |= 8;
+        else if (button === 4) buttons |= 16;
+      }
+      return buttons;
     };
 
     /** @param {() => void} callback @param {number} delay */
@@ -171,20 +181,17 @@
     };
 
     function releasePointer() {
+      pointerWanted = false;
       virtualCursor = null;
-      resettingPointer = false;
-      pendingX = 0;
-      pendingY = 0;
-      cancelAnimationFrame(resetFrame);
       canvas.classList.remove('cursor-hidden');
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     }
 
-    function releaseAll() {
-      // Translate/augment gestures must see interruption, not a normal mouseup.
-      cancelSyntheticTouches();
-      resetWheel();
-      for (const input of heldKeys.values()) {
+    /** @param {(code: string) => boolean} [matches] */
+    function releaseKeys(matches = () => true) {
+      const inputs = [...heldKeys.entries()].filter(([code]) => matches(code));
+      for (const [code] of inputs) heldKeys.delete(code);
+      for (const [, input] of inputs) {
         const release = new globalThis.KeyboardEvent('keyup', {
           bubbles: true,
           cancelable: true,
@@ -206,8 +213,13 @@
         });
         input.target?.dispatchEvent(release);
       }
-      heldKeys.clear();
-      for (const input of heldButtons.values()) {
+    }
+
+    function releaseButtons() {
+      const inputs = [...heldButtons.values()];
+      heldButtons.clear();
+      releasePointer();
+      for (const input of inputs) {
         input.target?.dispatchEvent(new MouseEvent('mouseup', {
           bubbles: true,
           cancelable: true,
@@ -223,12 +235,24 @@
           metaKey: input.metaKey,
         }));
       }
-      heldButtons.clear();
-      releasePointer();
+    }
+
+    function releaseAll() {
+      if (releasing) return;
+      releasing = true;
+      try {
+        // Translate/augment gestures must see interruption, not a normal mouseup.
+        cancelSyntheticTouches();
+        resetWheel();
+        releaseKeys();
+        releaseButtons();
+      } finally {
+        releasing = false;
+      }
     }
 
     window.addEventListener('keydown', (event) => {
-      if (!event.isTrusted || event.repeat) return;
+      if (!event.isTrusted || (event.repeat && heldKeys.has(event.code))) return;
       heldKeys.set(event.code, {
         target: event.target,
         key: event.key,
@@ -244,7 +268,19 @@
       });
     }, true);
     window.addEventListener('keyup', (event) => {
-      if (event.isTrusted) heldKeys.delete(event.code);
+      if (!event.isTrusted) return;
+      heldKeys.delete(event.code);
+      if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
+        releaseKeys((code) =>
+          code !== 'MetaLeft' &&
+          code !== 'MetaRight' &&
+          code !== 'ShiftLeft' &&
+          code !== 'ShiftRight' &&
+          code !== 'ControlLeft' &&
+          code !== 'ControlRight' &&
+          code !== 'AltLeft' &&
+          code !== 'AltRight');
+      }
     }, true);
     window.addEventListener('mousedown', (event) => {
       if (!event.isTrusted) return;
@@ -263,6 +299,19 @@
     }, true);
     window.addEventListener('mouseup', (event) => {
       if (event.isTrusted) heldButtons.delete(event.button);
+    }, true);
+    window.addEventListener('mousemove', (event) => {
+      if (!event.isTrusted || heldButtons.size === 0) return;
+      for (const input of heldButtons.values()) {
+        input.clientX = event.clientX;
+        input.clientY = event.clientY;
+        input.screenX = event.screenX;
+        input.screenY = event.screenY;
+        input.ctrlKey = event.ctrlKey;
+        input.shiftKey = event.shiftKey;
+        input.altKey = event.altKey;
+        input.metaKey = event.metaKey;
+      }
     }, true);
 
     window.addEventListener('blur', releaseAll);
@@ -398,32 +447,12 @@
       ) {
         virtualCursor.x = nextX;
         virtualCursor.y = nextY;
-        sendMouse('mousemove', rect, 2, 0, movementX, movementY);
+        sendMouse('mousemove', rect, currentButtons(), 0, movementX, movementY);
         return;
       }
-      const stepX =
-        Math.max(0, Math.min(rect.width, nextX)) - virtualCursor.x;
-      const stepY =
-        Math.max(0, Math.min(rect.height, nextY)) - virtualCursor.y;
-      virtualCursor.x += stepX;
-      virtualCursor.y += stepY;
-      sendMouse('mousemove', rect, 2, 0, stepX, stepY);
-      pendingX += movementX - stepX;
-      pendingY += movementY - stepY;
-      if (resettingPointer) return;
-      resettingPointer = true;
-      sendMouse('mouseup', rect, 0, 2, 0, 0);
-      virtualCursor = { x: rect.width / 2, y: rect.height / 2 };
-      sendMouse('mousedown', rect, 2, 2, 0, 0);
-      resetFrame = requestAnimationFrame(() => {
-        resettingPointer = false;
-        if (document.pointerLockElement !== canvas || !virtualCursor) return;
-        const replayX = pendingX;
-        const replayY = pendingY;
-        pendingX = 0;
-        pendingY = 0;
-        if (replayX || replayY) sendDelta(replayX, replayY);
-      });
+      virtualCursor.x = Math.max(0, Math.min(rect.width, nextX));
+      virtualCursor.y = Math.max(0, Math.min(rect.height, nextY));
+      sendMouse('mousemove', rect, currentButtons(), 0, movementX, movementY);
     };
 
     canvas.addEventListener('mousedown', (event) => {
@@ -433,27 +462,29 @@
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       };
-      resettingPointer = false;
-      pendingX = 0;
-      pendingY = 0;
+      pointerWanted = true;
       if (document.pointerLockElement === canvas) return;
       try {
         const request = canvas.requestPointerLock();
-        request?.catch((error) => {
-          diagnostics?.event('pointerLock.failed', error);
-          log(
-            '[warn] pointer lock refused:',
-            error instanceof Error ? error.message : String(error),
-          );
-          releaseAll();
-        });
+        request?.then(() => {
+          if (!pointerWanted && document.pointerLockElement === canvas) {
+            document.exitPointerLock();
+          }
+        }).catch((error) => {
+            diagnostics?.event('pointerLock.failed', error);
+            log(
+              '[warn] pointer lock refused:',
+              error instanceof Error ? error.message : String(error),
+            );
+            releaseButtons();
+          });
       } catch (error) {
         diagnostics?.event('pointerLock.failed', error);
         log(
           '[warn] pointer lock refused:',
           error instanceof Error ? error.message : String(error),
         );
-        releaseAll();
+        releaseButtons();
       }
     }, true);
 
@@ -465,26 +496,28 @@
       ) return;
       event.stopImmediatePropagation();
       event.preventDefault();
-      if (resettingPointer) {
-        pendingX += event.movementX;
-        pendingY += event.movementY;
-      } else {
-        sendDelta(event.movementX, event.movementY);
-      }
+      sendDelta(event.movementX, event.movementY);
     }, true);
 
     document.addEventListener('mouseup', (event) => {
-      if (event.button === 2 && event.isTrusted) releasePointer();
+      if (event.button === 2 && event.isTrusted) {
+        pointerWanted = false;
+        releasePointer();
+      }
     }, true);
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas;
       canvas.classList.toggle('cursor-hidden', locked);
-      if (virtualCursor && !locked) releaseAll();
+      if (locked && !pointerWanted) {
+        document.exitPointerLock();
+      } else if (virtualCursor && !locked) {
+        releaseButtons();
+      }
     });
     document.addEventListener('pointerlockerror', () => {
       diagnostics?.event('pointerLock.failed');
       log('[warn] pointer lock failed (needs a user gesture and focused document)');
-      releaseAll();
+      releaseButtons();
     });
     document.documentElement.addEventListener('mouseleave', releaseAll);
 
@@ -501,7 +534,7 @@
         }
         touchMode = next.touchMode;
         lockEnabled = next.pointerLock;
-        if (!lockEnabled) releasePointer();
+        if (!lockEnabled) releaseButtons();
       },
     });
   };

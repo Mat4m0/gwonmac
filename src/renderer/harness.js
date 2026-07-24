@@ -800,7 +800,11 @@ function loadGlue() {
   for (const type in Module.oskInput) {
     const el = Module.oskInput[type];
     if (!el) { log(`[warn] missing OSK element for "${type}"`); continue; }
-    el.addEventListener('focus', () => { if (Module.oskActiveInput !== el) el.blur(); });
+    el.addEventListener('focus', () => {
+      globalThis.queueMicrotask(() => {
+        if (Module.oskActiveInput !== el && document.activeElement === el) el.blur();
+      });
+    });
     if (Module.oskIsModal) {
       el.parentElement?.classList.add('osk-input-container-modal');
     }

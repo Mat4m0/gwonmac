@@ -408,7 +408,7 @@ test.describe("renderer input", () => {
     }
   });
 
-  test("releases held keys and buttons when pointer lock is lost", async () => {
+  test("releases only held mouse buttons when pointer lock is lost", async () => {
     const fixture = await launchOffline("gw-pointer-loss-e2e-");
     try {
       const { page } = fixture;
@@ -450,7 +450,6 @@ test.describe("renderer input", () => {
         );
       });
       expect(await page.evaluate(() => window.__inputReleases)).toEqual([
-        "key:KeyW:87:87",
         "mouse:2",
       ]);
       await page.keyboard.up("w");
