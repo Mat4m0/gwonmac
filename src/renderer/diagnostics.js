@@ -126,7 +126,6 @@
     socketSettleHistogram: histogram(),
     inputToSubmitHistogram: histogram(),
     socketSendEvents: [],
-    wheelEvents: [],
   });
 
   let metrics = fresh();
@@ -327,46 +326,6 @@
       }
     },
     event: recordEvent,
-    /**
-     * @param {number} rawDeltaY
-     * @param {number} rawMode
-     * @param {boolean} trusted
-     * @param {number} remainderBefore
-     * @param {number} remainderAfter
-     * @param {number} emittedDeltaY
-     * @param {number} emittedMode
-     * @param {boolean} callbackPrevented
-     * @param {boolean} accumulatorReset
-     */
-    wheel(
-      rawDeltaY,
-      rawMode,
-      trusted,
-      remainderBefore,
-      remainderAfter,
-      emittedDeltaY,
-      emittedMode,
-      callbackPrevented,
-      accumulatorReset,
-    ) {
-      if (captureLevel === 0) return;
-      if (metrics.wheelEvents.length > 10 * 255) {
-        metrics.droppedRecords++;
-        return;
-      }
-      metrics.wheelEvents.push(
-        performance.now() * 1000 + clockOffsetUs,
-        rawDeltaY,
-        rawMode,
-        trusted ? 1 : 0,
-        remainderBefore,
-        remainderAfter,
-        emittedDeltaY,
-        emittedMode,
-        callbackPrevented ? 1 : 0,
-        accumulatorReset ? 1 : 0,
-      );
-    },
     /**
      * @param {number} durationUs
      * @param {number} bytes

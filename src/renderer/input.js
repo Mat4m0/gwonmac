@@ -279,69 +279,25 @@
     canvas.addEventListener('wheel', (event) => {
       if (normalizedWheels.has(event)) return;
       if (event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL) {
-        const remainderBefore = wheelRemainder;
-        const rawDeltaY = event.deltaY;
-        const rawMode = event.deltaMode;
-        const trusted = event.isTrusted;
         resetWheel();
-        globalThis.queueMicrotask(() => {
-          diagnostics?.wheel(
-            rawDeltaY,
-            rawMode,
-            trusted,
-            remainderBefore,
-            0,
-            rawDeltaY,
-            rawMode,
-            event.defaultPrevented,
-            remainderBefore !== 0,
-          );
-        });
         return;
       }
       event.preventDefault();
       event.stopImmediatePropagation();
       const now = performance.now();
       const direction = Math.sign(event.deltaY);
-      const remainderBefore = wheelRemainder;
-      const accumulatorReset =
+      if (
         direction !== 0 &&
-        (direction !== wheelDirection || now - wheelAt > 150);
-      if (accumulatorReset) {
+        (direction !== wheelDirection || now - wheelAt > 150)
+      ) {
         wheelRemainder = 0;
       }
-      if (!direction) {
-        diagnostics?.wheel(
-          event.deltaY,
-          event.deltaMode,
-          event.isTrusted,
-          remainderBefore,
-          wheelRemainder,
-          0,
-          -1,
-          false,
-          false,
-        );
-        return;
-      }
+      if (!direction) return;
       wheelDirection = direction;
       wheelAt = now;
       wheelRemainder += event.deltaY;
       const steps = Math.max(-3, Math.min(3, Math.trunc(wheelRemainder / 100)));
-      if (!steps) {
-        diagnostics?.wheel(
-          event.deltaY,
-          event.deltaMode,
-          event.isTrusted,
-          remainderBefore,
-          wheelRemainder,
-          0,
-          -1,
-          false,
-          accumulatorReset,
-        );
-        return;
-      }
+      if (!steps) return;
       wheelRemainder -= steps * 100;
       const normalized = new globalThis.WheelEvent('wheel', {
         bubbles: true,
@@ -360,17 +316,6 @@
       });
       normalizedWheels.add(normalized);
       canvas.dispatchEvent(normalized);
-      diagnostics?.wheel(
-        event.deltaY,
-        event.deltaMode,
-        event.isTrusted,
-        remainderBefore,
-        wheelRemainder,
-        normalized.deltaY,
-        normalized.deltaMode,
-        normalized.defaultPrevented,
-        accumulatorReset,
-      );
     }, { capture: true, passive: false });
 
     /** @param {number} x @param {number} y @param {number} delay */

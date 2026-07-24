@@ -215,12 +215,10 @@ Level 0 is always active:
 - cache/disk/network/protocol spans;
 - GPU, power, thermal, lifecycle, crash, and context-loss signals.
 
-Level 1 adds fixed-width per-frame records and bounded numeric wheel samples
-(raw mode/delta, accumulator result, emitted event, and callback prevention).
-The renderer batches them; the main process writes `frames.bin` asynchronously
-with a 128 MB ceiling. Level 2 adds an argument-filtered Chromium trace with
-selected supported categories, a 256 MB buffer, an 80% stop threshold, and a
-120-second time limit.
+Level 1 adds fixed-width per-frame records. The renderer batches them; the main
+process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
+an argument-filtered Chromium trace with selected supported categories, a 256
+MB buffer, an 80% stop threshold, and a 120-second time limit.
 The existing main-to-renderer capture command path also owns a noninteractive
 recording indicator, elapsed timer, and problem-marker acknowledgement; it
 does not add a preload capability.
