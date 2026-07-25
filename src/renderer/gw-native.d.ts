@@ -138,15 +138,15 @@ declare global {
       };
       module: {
         HEAPU8?: Uint8Array;
-        HEAPU32?: Uint32Array;
       };
     }): void;
-    gwInstallTemplateSaveCompatibility(
+    gwInstallTemplateSaveCompatibility(options: {
       imports: {
         env?: Record<string, (...args: unknown[]) => unknown>;
-      },
-      module: { HEAPU8?: Uint8Array },
-    ): void;
+      };
+      module: { HEAPU8?: Uint8Array };
+      exports(): { malloc?: (bytes: number) => number } | null;
+    }): void;
     gwInstallGlProgramCache(options: {
       imports: {
         env?: Record<string, (...args: unknown[]) => unknown>;

@@ -388,7 +388,17 @@ Module = {
   * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
   */
   instantiateWasm(imports, success) {
-    window.gwInstallTemplateSaveCompatibility(imports, Module);
+    window.gwInstallTemplateSaveCompatibility({
+      imports,
+      module: Module,
+      // The directory listing hands the client a block it frees itself, so it
+      // has to come from the client's own allocator, which only exists once
+      // instantiation below resolves.
+      exports: () =>
+        /** @type {{ malloc?: (bytes: number) => number }} */ (
+          gameWasmInstance?.exports ?? null
+        ),
+    });
     window.gwInstallTemplateFilesystemTrace({
       imports,
       module: Module,

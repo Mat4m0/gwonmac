@@ -42,6 +42,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/main.ts`        | composition root and application lifecycle                        |
 | `src/main/client-runtime.ts` | atomic generation, update, rollback, cache, selected WASM       |
 | `src/main/core/`          | updater, cache, DNS, sockets, credentials, settings, window state |
+| `src/main/core/wasm-binary.ts` | WASM section codec shared by both transforms and the re-certifier |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
@@ -186,15 +187,61 @@ errno, and requested/written byte counts. It never records a filename, path, or
 file content, does not cross IPC, and is not included in `.gwdiag` exports.
 Normal launches retain the original imports unchanged.
 
-Static inspection identifies the pre-open failure as the web implementation of
-`PathCreateDirectory` in `EmscriptenPath.cpp`, which returns error 2 without
-touching Emscripten FS. For the exact certified client hash, a deterministic
-same-size transform redirects only that call to the existing
-`__syscall_stat64` import with an impossible stat-buffer sentinel. The renderer
-recognizes the sentinel, decodes the wide path, permits only
-`Templates/Skills` or `Templates/Equipment`, calls synchronous `FS.mkdirTree`,
-and returns the real success/error result. Ordinary stat calls remain
-unchanged.
+`internal/upstream/` holds the full record: the defect report written for
+ArenaNet, the client internals we had to recover, the bridge contract, the
+re-certification procedure for a new client build, and the investigation log.
+Read it before changing anything below.
+
+Every index and offset the transform carries belongs to one exact client build.
+`pnpm template:recertify` re-derives them from a new one by shape — body bytes,
+resolved signatures, and caller-set intersection — and refuses rather than
+guessing when a locator finds the wrong number of candidates. It recovers
+indices, not semantics; `internal/upstream/recertify.md` still owns re-measuring
+what the client's path helpers actually do.
+
+Four `Base/Os` file routines ship unimplemented and never reach Emscripten FS.
+Creating a directory returns error 2 unconditionally, which is why a build save
+fails before any syscall. Enumerating a directory does nothing, which is why
+"Load from Skills Template" lists nothing, and deriving an entry's name writes
+nothing. Deleting a file is `assert("not implemented")` followed by
+`unreachable`, so removing or renaming a build aborts the client. A fifth
+routine is implemented but wrong: `File::Open` mode 1 is meant to open an
+existing file, and the client uses it to ask whether a rename's destination is
+already taken — but in this build it opens `O_RDWR | O_CREAT`, so the probe
+creates the file it is testing for and every rename is refused. The module
+imports no `mkdir`, `getdents`, or `unlink`, so none of this is reachable from
+JavaScript as shipped.
+
+For the exact certified client hash, a deterministic transform appends five
+forwarders and repoints only the template, chat-log, and screenshot call sites
+at them. Appending leaves every existing function index valid, and the stub
+bodies stay intact so the model paths that also call them keep today's
+behaviour. Each forwarder passes the stub's arguments to the existing
+`__syscall_newfstatat` import behind a dirfd marker no real call can produce.
+The `File::Open` forwarder is the one exception: it asks the host first and
+calls the real function only when the file is there, so the load and write
+paths keep their own behaviour and only the probe changes.
+
+The renderer answers the five markers against the mounted IDBFS: create a
+directory tree, list a wildcard, turn an entry into the name the client keys a
+template by, delete a file, and answer whether one exists. Renaming needs no
+marker of its own — the client implements it as probe, write the new name, then
+delete the old. Paths must stay relative and free of traversal, so the client
+cannot address anything outside its own mount. Directory entries the
+mount cannot describe are skipped rather than failing the whole listing. The
+listing block is allocated with the client's own `malloc` because the client
+frees it. Ordinary `newfstatat` calls remain unchanged.
+
+Three details in that contract are load-bearing, and each one cost a round of
+build, ship, and try again. The enumeration flag selects the entry kind — the
+template scans ask for `*.txt` with files and `*` with directories — so
+answering both with files fills the subdirectory list with folders named after
+the templates. A template is keyed by its path below the type directory in
+Windows form with a leading separator, `\Test`, which is what the client's own
+save path builds and what its list filter matches against the current
+subdirectory; a bare `Test` registers but never lists. And the host removes the
+extension itself, because `Path::RemoveExtension` in this build takes the last
+character of the name with it.
 
 The downloaded official module remains canonical. The derived module is
 verified by input hash, instruction signature, WebAssembly validation, and
