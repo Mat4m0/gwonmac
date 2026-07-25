@@ -126,8 +126,8 @@ application’s Resources directory.
 
 ## Verification
 
-`pnpm check` is the inner loop: typecheck, lint, and unit tests. It needs no
-build and launches no windows.
+`pnpm check` is the inner loop: typecheck, lint, markdown link check, unit
+tests, and policy tests. It needs no build and launches no windows.
 
 ```bash
 pnpm check
@@ -140,13 +140,19 @@ run them against that output:
 ```bash
 pnpm build
 pnpm lint
+pnpm check:links
 pnpm test:unit
 pnpm test:integration
 pnpm test:electron
+pnpm test:policy
 pnpm test:release
 pnpm package
 pnpm test:packaged
 ```
+
+`pnpm test:policy` holds the repository invariants that need no build: import
+boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
+artifacts, and documentation links.
 
 `pnpm verify` runs that gate end to end, and CI runs it on every pull request.
 The website is not part of it: `apps/website` has its own path-filtered

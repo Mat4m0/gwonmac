@@ -1,9 +1,9 @@
 # Electron performance record
 
 This is the evidence log for performance changes to the packaged macOS
-application. `port-plan.md` defines the budgets and acceptance rules; this file
-records measurements and conclusions. Level 2 traces locate causes but are
-profiler-contaminated. Only clean Level 1 captures establish improvements.
+application. It records measurements and the conclusions drawn from them.
+Level 2 traces locate causes but are profiler-contaminated. Only clean Level 1
+captures establish improvements.
 
 ## Baseline environment
 

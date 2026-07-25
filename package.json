@@ -23,6 +23,7 @@
     "dev": "pnpm build && electron-forge start",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json",
     "lint": "eslint .",
+    "check:links": "node scripts/check-markdown-links.mjs",
     "test:unit": "node --import ./tests/ts-hook.mjs --experimental-strip-types --test tests/unit/*.ts",
     "test:integration": "node --test tests/integration/*.mjs",
     "test:electron": "playwright test --config=tests/electron/playwright.config.mjs",
@@ -36,7 +37,7 @@
     "toolbox:transform": "pnpm build && node build/tools/toolbox-transform.js",
     "template:recertify": "pnpm build && node build/tools/template-save-recertify.js",
     "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website generate && pnpm --filter gw-website build && node tests/website-smoke.mjs",
-    "check": "pnpm typecheck && pnpm lint && pnpm test:unit && pnpm test:policy",
+    "check": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test:unit && pnpm test:policy",
     "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron",
     "package": "pnpm build && node scripts/clean-output.mjs && electron-forge package",
     "make": "pnpm build && node scripts/clean-output.mjs && electron-forge make",
@@ -45,7 +46,7 @@
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
-    "verify": "pnpm lint && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
+    "verify": "pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

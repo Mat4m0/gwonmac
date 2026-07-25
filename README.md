@@ -83,7 +83,7 @@ The first online run fetches the small JSPI client artifacts.
 | `pnpm package`                                                           | Build a local `.app` under `out/`           |
 | `pnpm make`                                                              | Build the distributable `.zip`              |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
-| `pnpm check`                                                             | Fast inner loop: typecheck, lint, unit      |
+| `pnpm check`                                                             | Fast inner loop: static checks and policy   |
 | `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites (run `pnpm build` first)        |
 | `pnpm test:website`                                                      | The `apps/website` suite                    |
 | `pnpm verify`                                                            | The complete local gate                     |
@@ -169,7 +169,7 @@ downloaded data.
 - [Internals](docs/internals.md) — process model, security boundaries,
   updater/cache design, renderer host surface, diagnostics format
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) ·
-  [Product brief](PRODUCT.md) · [Port plan](port-plan.md)
+  [Product brief](PRODUCT.md)
 
 ## Credits
 
