@@ -167,7 +167,8 @@ class WasmModule:
     def decode_body(self, start, end):
         """Walk one function body, yielding (offset, opcode, value).
 
-        `value` is the decoded operand for i32.const and None otherwise.
+        `value` is the decoded operand for i32.const and linear-memory
+        instructions, and None otherwise.
         Raises DecodeError on anything unrecognised rather than guessing --
         a silent resync would reintroduce exactly the false positives this
         decoder exists to eliminate.

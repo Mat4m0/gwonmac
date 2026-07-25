@@ -70,6 +70,10 @@ function manifest(bytes: Uint8Array): KnownToolboxBuild {
       mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
       playerNumber: 9, agentId: 10, agentX: 11, agentY: 12, agentType: 13,
       agentPlayerNumber: 14, agentModelType: 15,
+      cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
+      cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
+      cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
+      cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
     },
   };
 }
@@ -97,7 +101,9 @@ describe("targeted Toolbox WebAssembly transform", () => {
         transformAbi: TOOLBOX_TRANSFORM_ABI,
         snapshotAbi: 1,
         snapshotBytes: 64,
-        configBytes: 68,
+        cursorSnapshotAbi: 1,
+        cursorSnapshotBytes: 4160,
+        configBytes: 116,
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,

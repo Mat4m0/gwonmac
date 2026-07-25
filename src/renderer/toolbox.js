@@ -1,5 +1,8 @@
+import { createCursorConsumer } from "./toolbox-cursor.js";
 import {
   readToolboxSnapshot,
+  TOOLBOX_CURSOR_ABI,
+  TOOLBOX_CURSOR_BYTES,
   TOOLBOX_SNAPSHOT_ABI,
   TOOLBOX_SNAPSHOT_BYTES,
 } from "./toolbox-snapshot.js";
@@ -13,6 +16,8 @@ function decodeManifest(module) {
     if (
       value?.snapshotAbi !== TOOLBOX_SNAPSHOT_ABI
       || value?.snapshotBytes !== TOOLBOX_SNAPSHOT_BYTES
+      || value?.cursorSnapshotAbi !== TOOLBOX_CURSOR_ABI
+      || value?.cursorSnapshotBytes !== TOOLBOX_CURSOR_BYTES
       || !Number.isSafeInteger(value?.buildId)
       || value.buildId <= 0
       || !Number.isSafeInteger(value?.programId)
@@ -50,8 +55,11 @@ function recordLifecycle(state) {
   }
 }
 
-/** @param {any} runtime */
-function observeSnapshots(runtime) {
+/**
+ * @param {any} runtime
+ * @param {{ poll: () => void }} cursor
+ */
+function observeSnapshots(runtime, cursor) {
   let frame = 0;
   let cadenceAt = performance.now();
   let cadenceTick = 0;
@@ -80,6 +88,8 @@ function observeSnapshots(runtime) {
     runtime.lastRenderUs = (performance.now() - started) * 1_000;
     runtime.renderSamples.push(runtime.lastRenderUs);
     if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
+    // Outside the measured window: lastRenderUs stays the snapshot read cost.
+    cursor.poll();
     frame = requestAnimationFrame(observe);
   };
   frame = requestAnimationFrame(observe);
@@ -118,11 +128,14 @@ export async function installToolbox(instance, module) {
 
   let snapshotPointer = 0;
   let configPointer = 0;
+  let cursorPointer = 0;
   let stopObserver = () => {};
+  let disposeCursor = () => {};
   try {
     snapshotPointer = Number(exports.malloc(TOOLBOX_SNAPSHOT_BYTES));
     configPointer = Number(exports.malloc(manifest.configBytes));
-    if (!snapshotPointer || !configPointer) {
+    cursorPointer = Number(exports.malloc(TOOLBOX_CURSOR_BYTES));
+    if (!snapshotPointer || !configPointer || !cursorPointer) {
       throw new Error("Toolbox allocation failed");
     }
     new Uint32Array(
@@ -145,10 +158,23 @@ export async function installToolbox(instance, module) {
         TOOLBOX_SNAPSHOT_BYTES,
         configPointer,
         manifest.configBytes,
+        cursorPointer,
+        TOOLBOX_CURSOR_BYTES,
       ) !== 1
     ) {
       throw new Error("Toolbox kernel rejected its ABI");
     }
+
+    const element = document.getElementById("canvas");
+    if (!element) throw new Error("Toolbox cursor target is missing");
+    const cursor = createCursorConsumer({
+      element,
+      memory: exports.memory,
+      cursorPointer,
+      // The empty string hands the canvas back to the stylesheet theme.
+      fallback: "",
+    });
+    disposeCursor = cursor.dispose;
 
     table.set(manifest.tableSlot, kernel.instance.exports.toolbox_tick);
     const runtime = {
@@ -164,6 +190,10 @@ export async function installToolbox(instance, module) {
       renderSamples: [],
       snapshotReads: 0,
       rejectedSnapshots: 0,
+      // Presentation state only: no pixels and no pointer leave this module.
+      get cursor() {
+        return cursor.state;
+      },
       installation: (window.gwToolboxInstallations ?? 0) + 1,
       /** @param {boolean} enabled */
       setHookEnabledForBenchmark(enabled) {
@@ -174,15 +204,17 @@ export async function installToolbox(instance, module) {
     };
     window.gwToolboxInstallations = runtime.installation;
     window.gwToolboxRuntime = runtime;
-    stopObserver = observeSnapshots(runtime);
+    stopObserver = observeSnapshots(runtime, cursor);
     hookSlot.value = manifest.tableSlot + 1;
 
     const teardown = () => {
       hookSlot.value = 0;
       stopObserver();
+      disposeCursor();
       if (table.get(manifest.tableSlot) === kernel.instance.exports.toolbox_tick) {
         table.set(manifest.tableSlot, null);
       }
+      free(cursorPointer);
       free(configPointer);
       free(snapshotPointer);
       window.gwToolboxRuntime = null;
@@ -193,6 +225,8 @@ export async function installToolbox(instance, module) {
   } catch (error) {
     hookSlot.value = 0;
     stopObserver();
+    disposeCursor();
+    if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
     window.gwToolboxState = Object.freeze({

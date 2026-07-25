@@ -16,6 +16,18 @@ export interface ToolboxLayout {
   agentType: number;
   agentPlayerNumber: number;
   agentModelType: number;
+  cursorActiveArt: number;
+  cursorSoftwareModel: number;
+  cursorShowCount: number;
+  cursorColorBuffer: number;
+  cursorArtHotspot: number;
+  cursorArtTexture: number;
+  cursorHandleKey: number;
+  cursorHandleObject: number;
+  cursorViewTexture: number;
+  cursorTextureType: number;
+  cursorTextureWidth: number;
+  cursorTextureHeight: number;
 }
 
 export const TOOLBOX_LAYOUT_FIELDS = [
@@ -36,6 +48,18 @@ export const TOOLBOX_LAYOUT_FIELDS = [
   "agentType",
   "agentPlayerNumber",
   "agentModelType",
+  "cursorActiveArt",
+  "cursorSoftwareModel",
+  "cursorShowCount",
+  "cursorColorBuffer",
+  "cursorArtHotspot",
+  "cursorArtTexture",
+  "cursorHandleKey",
+  "cursorHandleObject",
+  "cursorViewTexture",
+  "cursorTextureType",
+  "cursorTextureWidth",
+  "cursorTextureHeight",
 ] as const satisfies readonly (keyof ToolboxLayout)[];
 
 export function toolboxLayoutWords(layout: ToolboxLayout): number[] {
@@ -86,6 +110,22 @@ export const TOOLBOX_BUILDS: readonly KnownToolboxBuild[] = Object.freeze([
       agentType: 0x9c,
       agentPlayerNumber: 0xf4,
       agentModelType: 0xf6,
+      // Live-probe confirmed for build 38771. The game decodes the active
+      // cursor into these fixed buffers on every change and then calls an
+      // empty Emscripten sink. cursorColorBuffer is 32x32 BGRA, pitch 128;
+      // its own alpha already matches the redundant A8 mask.
+      cursorActiveArt: 0x5a1620,
+      cursorSoftwareModel: 0x5a1624,
+      cursorShowCount: 0x5a1628,
+      cursorColorBuffer: 0x298d90,
+      cursorArtHotspot: 0x00,
+      cursorArtTexture: 0x0c,
+      cursorHandleKey: 0x08,
+      cursorHandleObject: 0x00,
+      cursorViewTexture: 0x08,
+      cursorTextureType: 0x0c,
+      cursorTextureWidth: 0x14,
+      cursorTextureHeight: 0x18,
     }),
   }),
 ]);

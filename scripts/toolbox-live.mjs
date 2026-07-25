@@ -178,6 +178,9 @@ try {
     page,
     cdp,
     sendAutomationCommand,
+    sampleObservations: observations.length > 0
+      ? () => sampleObservations(page)
+      : null,
   });
 
   result = await projectLiveResult(page, cadence, scenario);
