@@ -147,6 +147,84 @@ test.describe("renderer input", () => {
     }
   });
 
+  test("restates keys macOS rewrites while Option is held", async () => {
+    const fixture = await launchOffline("gw-option-key-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        window.__gameKeys = [];
+        // Registered after the game input host, so anything it stops — the
+        // rewritten original — never arrives here or at the client.
+        for (const type of ["keydown", "keyup"]) {
+          window.addEventListener(
+            type,
+            (event) => {
+              if (event.code !== "KeyW") return;
+              window.__gameKeys.push(
+                `${event.type}:${event.key}:${event.keyCode}`,
+              );
+            },
+            true,
+          );
+        }
+        globalThis.document.getElementById("canvas").focus();
+      });
+
+      // macOS reports the Option layer in `key` while leaving `code` alone, so
+      // a key pressed before Option is held is released as a different key.
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const alt = 1;
+      const sendW = (type, key, modifiers = 0, text = undefined) =>
+        cdp.send("Input.dispatchKeyEvent", {
+          type,
+          key,
+          code: "KeyW",
+          windowsVirtualKeyCode: 87,
+          nativeVirtualKeyCode: 87,
+          modifiers,
+          ...(text === undefined ? {} : { text }),
+        });
+
+      await sendW("keyDown", "w");
+      await sendW("keyUp", "∑", alt);
+      await sendW("keyDown", "∑", alt);
+      // The registry must hold the restated key, or the interruption path
+      // releases a key the client never saw pressed.
+      await page.evaluate(() =>
+        window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")),
+      );
+
+      expect(await page.evaluate(() => window.__gameKeys)).toEqual([
+        "keydown:w:87",
+        "keyup:w:87",
+        "keydown:w:87",
+        "keyup:w:87",
+      ]);
+
+      // The client relays key events from its own text fields to the canvas,
+      // so a rewritten release strands a key there too. Restating must not
+      // cost the field the character the OS composed.
+      await page.evaluate(() => {
+        window.__gameKeys = [];
+        const text = globalThis.document.getElementById("osk-input-text");
+        window.Module.oskActiveInput = text;
+        text.value = "";
+        text.focus();
+      });
+      await sendW("keyDown", "∑", alt, "∑");
+      await sendW("keyUp", "w");
+      expect(
+        await page.evaluate(() => ({
+          keys: window.__gameKeys,
+          typed: globalThis.document.getElementById("osk-input-text").value,
+        })),
+      ).toEqual({ keys: ["keydown:w:87", "keyup:w:87"], typed: "∑" });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("uses the native click count for double-tap compatibility", async () => {
     const fixture = await launchOffline("gw-double-click-e2e-");
     try {

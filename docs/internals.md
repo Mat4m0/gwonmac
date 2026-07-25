@@ -387,6 +387,20 @@ held-input registry releases keys, buttons, and touches when focus or native UI
 consumes an input release. Pointer lock uses a virtual cursor and recycles a
 held drag at canvas edges so camera rotation does not stall.
 
+The client identifies a key by `KeyboardEvent.key`, so its held-key state is
+character state, not physical state. macOS makes Option a text modifier, which
+rewrites that character for as long as Option is held: `W` arrives as `∑` on a
+US layout, and as a bound character on others — a German Option+L is `@`, which
+the client reads as the `2` key. A press and its release therefore disagree
+whenever Option is held across only one of them, and the key the client believes
+is down never comes up. The input host reads the OS layout map, restates the
+event with the unmodified character of `event.code`, and stops the rewritten
+original so the client sees exactly one event per physical transition. Text
+fields are restated too, because the client relays their key events to the
+canvas; only propagation is stopped, so the field still types the composed
+character. Command is different — macOS withholds the release entirely — and
+that stays handled by releasing every non-modifier key when Command comes up.
+
 ## Diagnostics
 
 Every event uses an integer monotonic microsecond timestamp, sequence number,
