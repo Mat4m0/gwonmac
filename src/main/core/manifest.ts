@@ -80,10 +80,15 @@ export class Manifest {
       }
       return value;
     };
+    // The live service omits the field on flat entries by sending null, not by
+    // leaving it out. Rejecting that stopped every client update from applying.
     const validateParent = (value: unknown, kind: string): number => {
-      if (value === undefined) return 0;
+      if (value === undefined || value === null) return 0;
       if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) >= dirs.length) {
-        throw new AppError("manifest_parent", `invalid ${kind} parent index`);
+        throw new AppError(
+          "manifest_parent",
+          `invalid ${kind} parent index ${JSON.stringify(value)} of ${dirs.length}`,
+        );
       }
       return value as number;
     };
