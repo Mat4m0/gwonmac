@@ -287,9 +287,9 @@ test.describe("Electron application", () => {
       expect(externalAfter - externalBefore).toBeLessThan(16 * 1024 * 1024);
       expect(result.summary.counters["socket.rendererSendCalls"]).toBe(20);
       expect(result.summary.counters["socket.rendererPayloadBytes"]).toBe(420);
-      expect(result.summary.counters["socket.rendererSourceBackingBytes"]).toBe(
-        20 * 64 * 1024 * 1024,
-      );
+      expect(
+        result.summary.latest["socket.rendererPeakSourceBackingBytes"],
+      ).toBe(64 * 1024 * 1024);
       expect(result.summary.counters["socket.rendererCompactBytes"]).toBe(420);
       expect(result.summary.counters["socket.ipcPayloadBytes"]).toBe(420);
       expect(result.summary.counters["socket.ipcBackingBytes"]).toBe(420);

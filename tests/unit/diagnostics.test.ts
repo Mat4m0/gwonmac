@@ -13,11 +13,11 @@ function metrics(): RendererMetrics {
   return {
     intervalMs: 2000,
     visible: true,
+    focused: true,
     rafCount: 120,
     rafTotalUs: 2_000_000,
     rafMinUs: 16_000,
     rafMaxUs: 17_000,
-    rafOver16: 4,
     rafOver33: 0,
     rafOver50: 0,
     swapCount: 120,
@@ -51,6 +51,8 @@ function metrics(): RendererMetrics {
     memoryHits: 1,
     nativeHits: 1,
     coalesced: 0,
+    glProgramQueryHits: 0,
+    glProgramQueryMisses: 0,
     memoryCacheBytes: 1024,
     memoryCacheChunks: 1,
     pendingChunks: 0,
@@ -62,7 +64,7 @@ function metrics(): RendererMetrics {
     queuePromotions: 0,
     socketSendCalls: 1,
     socketPayloadBytes: 21,
-    socketSourceBackingBytes: 64 * 1024 * 1024,
+    socketSourceBackingMaxBytes: 64 * 1024 * 1024,
     socketCompactBytes: 21,
     socketSyncTotalUs: 90,
     socketSyncMinUs: 90,
@@ -226,6 +228,50 @@ describe("capture validation", () => {
     assert.deepEqual(validateCapture(capture), []);
     capture.summary.droppedEvents = 2;
     assert.match(validateCapture(capture).join("\n"), /2 flight-recorder events/);
+  });
+
+  it("refuses to call a Level 2 capture complete without its Chromium trace", () => {
+    const capture: Capture = {
+      manifest: {
+        formatVersion: 1,
+        applicationVersion: "1.0.0",
+        sessionId: "session",
+        captureLevel: 2,
+        exportedAt: new Date(0).toISOString(),
+        droppedEventCount: 0,
+        includedFiles: [
+          "manifest.json",
+          "summary.json",
+          "events.jsonl",
+          "histograms.json",
+          "environment.json",
+          "settings-redacted.json",
+        ],
+        redaction: "passed",
+        profilerContaminated: false,
+      },
+      summary: {
+        sessionId: "session",
+        uptimeMs: 1000,
+        captureLevel: 2,
+        droppedEvents: 0,
+        counters: {},
+        histograms: {},
+        latest: {},
+      },
+      environment: {},
+    };
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /Level 2 capture has no Chromium trace/,
+    );
+    capture.manifest.includedFiles.push("chromium-trace.json");
+    assert.deepEqual(validateCapture(capture), []);
+    // A capture that never asked for a trace is not missing one.
+    capture.manifest.includedFiles.pop();
+    capture.manifest.captureLevel = 1;
+    capture.summary.captureLevel = 1;
+    assert.deepEqual(validateCapture(capture), []);
   });
 
   it("validates the machine-readable report without requiring it in old captures", () => {

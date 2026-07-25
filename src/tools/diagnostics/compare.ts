@@ -192,7 +192,6 @@ function compare(before: Capture, after: Capture): void {
   console.log("\nSocket bytes             before       after");
   for (const [label, metric] of [
     ["logical payload", "socket.rendererPayloadBytes"],
-    ["source backing", "socket.rendererSourceBackingBytes"],
     ["compact payload", "socket.rendererCompactBytes"],
     ["IPC payload", "socket.ipcPayloadBytes"],
     ["IPC backing", "socket.ipcBackingBytes"],

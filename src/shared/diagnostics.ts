@@ -64,11 +64,13 @@ export const DIAGNOSTIC_BUCKETS_US = [
 export interface RendererMetrics {
   intervalMs: number;
   visible: boolean;
+  /** Window focus, which `visible` cannot report: an unfocused or occluded
+   * macOS window stops being composited while `document.hidden` stays false. */
+  focused: boolean;
   rafCount: number;
   rafTotalUs: number;
   rafMinUs: number;
   rafMaxUs: number;
-  rafOver16: number;
   rafOver33: number;
   rafOver50: number;
   swapCount: number;
@@ -102,6 +104,8 @@ export interface RendererMetrics {
   memoryHits: number;
   nativeHits: number;
   coalesced: number;
+  glProgramQueryHits: number;
+  glProgramQueryMisses: number;
   memoryCacheBytes: number;
   memoryCacheChunks: number;
   pendingChunks: number;
@@ -113,7 +117,7 @@ export interface RendererMetrics {
   queuePromotions: number;
   socketSendCalls: number;
   socketPayloadBytes: number;
-  socketSourceBackingBytes: number;
+  socketSourceBackingMaxBytes: number;
   socketCompactBytes: number;
   socketSyncTotalUs: number;
   socketSyncMinUs: number;
@@ -232,7 +236,6 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "rafTotalUs",
     "rafMinUs",
     "rafMaxUs",
-    "rafOver16",
     "rafOver33",
     "rafOver50",
     "swapCount",
@@ -266,6 +269,8 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "memoryHits",
     "nativeHits",
     "coalesced",
+    "glProgramQueryHits",
+    "glProgramQueryMisses",
     "memoryCacheBytes",
     "memoryCacheChunks",
     "pendingChunks",
@@ -277,7 +282,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "queuePromotions",
     "socketSendCalls",
     "socketPayloadBytes",
-    "socketSourceBackingBytes",
+    "socketSourceBackingMaxBytes",
     "socketCompactBytes",
     "socketSyncTotalUs",
     "socketSyncMinUs",
@@ -295,6 +300,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
   if (
     !(
       typeof record.visible === "boolean" &&
+      typeof record.focused === "boolean" &&
       numeric.every(
         (key) =>
           typeof record[key] === "number" &&
@@ -364,8 +370,6 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
   }
   if (
     record.socketCompactBytes !== record.socketPayloadBytes ||
-    (record.socketSourceBackingBytes as number) <
-      (record.socketPayloadBytes as number) ||
     !record.socketSendEvents.every((_item, index, events) => {
       if (index % 7 !== 0) return true;
       return events[index + 4]! >= events[index + 3]! &&
@@ -390,7 +394,6 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
   };
   const counters = [
     "rafCount",
-    "rafOver16",
     "rafOver33",
     "rafOver50",
     "swapCount",
@@ -399,6 +402,8 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "memoryHits",
     "nativeHits",
     "coalesced",
+    "glProgramQueryHits",
+    "glProgramQueryMisses",
     "memoryCacheBytes",
     "memoryCacheChunks",
     "pendingChunks",
@@ -410,7 +415,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "queuePromotions",
     "socketSendCalls",
     "socketPayloadBytes",
-    "socketSourceBackingBytes",
+    "socketSourceBackingMaxBytes",
     "socketCompactBytes",
     "socketSettles",
     "inputToSubmitCount",
@@ -433,8 +438,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     bounded("inputToSubmit") &&
     counters.every((key) => Number.isSafeInteger(record[key])) &&
     (record.rafOver50 as number) <= (record.rafOver33 as number) &&
-    (record.rafOver33 as number) <= (record.rafOver16 as number) &&
-    (record.rafOver16 as number) <= (record.rafCount as number) &&
+    (record.rafOver33 as number) <= (record.rafCount as number) &&
     (record.presentationFailures as number) <= (record.swapCount as number)
   );
 }
