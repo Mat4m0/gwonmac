@@ -45,10 +45,10 @@ test("no second production runtime remains", () => {
 
 test("only the public client access key is UUID-shaped", () => {
   const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-  const allowed = new Set([
-    "2043FE79-F32D-4FD7-8C27-0D47231C4F03",
-    "258EAFA5-E914-47DA-95CA-C5AB0DC85B11",
-  ]);
+  // One entry, the public client access key. The RFC 6455 WebSocket GUID used
+  // to sit beside it; it belonged to the retired Python runtime's relay and
+  // matches nothing in the tree, so it is gone.
+  const allowed = new Set(["2043FE79-F32D-4FD7-8C27-0D47231C4F03"]);
   const hits = [];
   for (const file of tracked) {
     if (file === "tests/policy/forbidden-artifacts.test.mjs") continue;

@@ -113,7 +113,8 @@ are profiler-contaminated and do not establish gains.
 Do not commit downloaded game binaries, snapshots, manifests, credentials,
 diagnostic exports, or private traffic. The public client access key in
 `src/main/core/access-key.ts` identifies the official client, not a player;
-release tests exempt only its exact value.
+policy tests exempt that one value and fail on any other UUID-shaped string in
+a tracked file.
 
 Loading artwork is ArenaNet material used by this interoperability project and
 credited in the UI. Do not add third-party fonts or assets without an explicit
