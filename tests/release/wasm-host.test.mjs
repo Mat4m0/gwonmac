@@ -113,15 +113,91 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
     "utf8",
   );
 
-  assert.match(transform, /callOffset: 0x365a23/);
-  assert.match(transform, /1883197770cc74fe48d308f097359a08/);
+  assert.match(transform, /b0319704f3072d6948a66026a35af5eb/);
+  assert.match(transform, /68c6e09cec0f6992058a44a5617ca9ea/);
   assert.match(transform, /WebAssembly\.validate\(output\)/);
+  assert.match(transform, /unsupported input/);
+  assert.match(transform, /is not the expected stub/);
+  assert.match(transform, /call site signature mismatch/);
   assert.match(runtime, /prepareTemplateSaveClient/);
-  assert.match(bridge, /BRIDGE_SENTINEL = 1/);
-  assert.match(bridge, /Templates\/Skills/);
-  assert.match(bridge, /Templates\/Equipment/);
+
+  // The derived module and the host agree on the dirfd markers by hand. If the
+  // two copies ever drift, every bridged call silently becomes a real stat.
+  const markers = (source) =>
+    [...source.matchAll(/-70_?00(\d)/g)].map((found) => found[1]);
+  assert.deepEqual(markers(transform), ["1", "2", "3", "4", "5"]);
+  assert.deepEqual(markers(bridge), ["1", "2", "3", "4", "5"]);
+
+  assert.match(bridge, /__syscall_newfstatat/);
   assert.match(bridge, /mkdirTree\(directory\)/);
+  // The listing block is freed by the client, so it must be its own allocation.
+  assert.match(bridge, /exports\(\)\?\.malloc/);
   assert.doesNotMatch(bridge, /gwNative|ipc|fetch\s*\(/i);
+});
+
+test("a new client build can be re-certified without hand-derivation", async () => {
+  const recert = await readFile(
+    path.join(root, "src/main/core/template-save-recert.ts"),
+    "utf8",
+  );
+  const cli = await readFile(
+    path.join(root, "src/tools/template-save-recertify.ts"),
+    "utf8",
+  );
+  const manifest = JSON.parse(
+    await readFile(path.join(root, "package.json"), "utf8"),
+  );
+
+  // The regression mode recertify.md makes step 0: prove the tool reproduces
+  // today's certified entry before pointing it at a new build.
+  assert.match(cli, /--expect-certified/);
+  assert.match(recert, /compareToCertified/);
+  assert.equal(
+    manifest.scripts["template:recertify"],
+    "pnpm build && node build/tools/template-save-recertify.js",
+  );
+
+  // Derivation must stay shape-based. A remembered index would defeat the point.
+  assert.match(recert, /caller-set intersection|callers\(/);
+  assert.doesNotMatch(recert, /localFunction: \d+/);
+
+  // Every ambiguity is a finding, never a best guess.
+  assert.match(recert, /expected exactly one/);
+  assert.match(recert, /expected exactly 2 template scans/);
+});
+
+test("the WASM section codec has exactly one home", async () => {
+  const shared = await readFile(
+    path.join(root, "src/main/core/wasm-binary.ts"),
+    "utf8",
+  );
+  assert.match(shared, /export function splitSections/);
+  assert.match(shared, /export function parseCode/);
+  // `Buffer.prototype.slice` aliases, so a transform that sliced its input
+  // would rewrite the caller's bytes. Every slice here must copy.
+  assert.match(shared, /function copyRange/);
+  assert.doesNotMatch(shared, /bodies\.push\(bytes\.slice/);
+
+  for (const file of [
+    "src/main/core/toolbox-transform.ts",
+    "src/main/core/template-save-compat.ts",
+    "src/main/core/template-save-recert.ts",
+  ]) {
+    const source = await readFile(path.join(root, file), "utf8");
+    assert.match(source, /from "\.\/wasm-binary\.js"/, `${file} must share the codec`);
+    for (const primitive of [
+      "splitSections",
+      "parseCode",
+      "encodeCode",
+      "readUleb",
+    ]) {
+      assert.doesNotMatch(
+        source,
+        new RegExp(`^function ${primitive}\\(`, "m"),
+        `${file} redefines ${primitive}`,
+      );
+    }
+  }
 });
 
 test("saved-file recovery defers IndexedDB deletion until before renderer startup", async () => {

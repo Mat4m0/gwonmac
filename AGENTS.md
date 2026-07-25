@@ -46,6 +46,7 @@ not only happy paths.
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
 | `tests/`                  | unit, integration, Electron, packaged, and release invariants |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                |
+| `internal/upstream/`      | upstream client defects, workaround, re-certification          |
 
 ## Load-bearing constraints
 
@@ -154,6 +155,12 @@ focus opt out and say why. The production-network smoke is explicitly opt-in:
 ```bash
 pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
+
+When an ArenaNet client update lands and build templates stop working, the
+`wasm.templateSaveCompatible` gauge in a `.gwdiag` says so, and
+`pnpm template:recertify` re-derives the certified build entry by shape rather
+than by remembered index. It recovers indices, not semantics —
+`internal/upstream/recertify.md` owns the rest.
 
 For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in
 `docs/toolbox-development.md`, and finish with one scoped `toolbox:live`
