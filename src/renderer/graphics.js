@@ -91,11 +91,15 @@
         visible.offscreen.addEventListener('webglcontextlost', (event) => {
           event.preventDefault();
           performance.mark('gw.graphics.context-lost');
+          // Program objects do not survive the context; anything memoized
+          // about them has to go with it.
+          window.dispatchEvent(new globalThis.Event('gw:graphics-context-reset'));
           window.gwDiagnostics?.event('graphics.contextLost');
           void window.gwDiagnostics?.flush();
         });
         visible.offscreen.addEventListener('webglcontextrestored', () => {
           performance.mark('gw.graphics.context-restored');
+          window.dispatchEvent(new globalThis.Event('gw:graphics-context-reset'));
           window.gwDiagnostics?.event('graphics.contextRestored');
           void window.gwDiagnostics?.flush();
         });
