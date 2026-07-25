@@ -42,6 +42,7 @@
     "diagnostics:summarize": "tsc && node build/tools/diagnostics/summarize.js",
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
+    "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
     "verify": "pnpm lint && pnpm test && pnpm test:release && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {
