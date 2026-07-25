@@ -183,6 +183,78 @@
       }));
     };
 
+    // macOS treats Option as a text modifier, so a held Option rewrites
+    // KeyboardEvent.key: W arrives as "∑" on a US layout, and as an unrelated
+    // ASCII character ("@", "|") on others. ArenaNet's client identifies keys
+    // by that string, so an Option-held release never clears the key its press
+    // registered — holding Option to read merchant names while running left
+    // movement keys down for good. The physical key is in `code`; ask the OS
+    // what that key produces unmodified, and restate the event before the
+    // client (or our own held-key registry) sees it.
+    /** @type {Map<string, string>} */
+    let layoutKeys = new Map();
+    const readLayoutKeys = () => {
+      const layout = navigator.keyboard?.getLayoutMap?.();
+      if (!layout) {
+        log('[warn] keyboard layout unavailable; Option-held keys may stick');
+        return;
+      }
+      layout.then((map) => {
+        layoutKeys = new Map(map);
+      }).catch((error) => {
+        diagnostics?.event('keyboard.layoutFailed', error);
+        log(
+          '[warn] keyboard layout unreadable:',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    };
+    readLayoutKeys();
+    // Chromium has no layout-change event, and switching input source does not
+    // reach the game while another window owns it. Re-reading on focus is the
+    // last moment before the new layout can produce a key.
+    window.addEventListener('focus', readLayoutKeys);
+
+    /**
+     * Returns the key the client should see, having already re-dispatched a
+     * corrected event in place of a modifier-rewritten one.
+     * @param {KeyboardEvent} event
+     */
+    const layoutKey = (event) => {
+      const target = event.target;
+      if (!event.altKey || !target) return event.key;
+      const key = layoutKeys.get(event.code);
+      if (!key || key.toUpperCase() === event.key.toUpperCase()) return event.key;
+      // One event per physical transition: the rewritten one must not also
+      // reach the client, or a layout whose Option layer produces a bound
+      // character presses that binding and never releases it — a German
+      // Option+L is "@", which the client reads as the 2 key going down.
+      // Text entry is restated too: the client's own OSK fields relay key
+      // events to the canvas, so they carry the same rewrite to the same
+      // state. Only propagation stops here, so the field still types the
+      // character the OS composed.
+      event.stopImmediatePropagation();
+      const restated = new globalThis.KeyboardEvent(event.type, {
+        bubbles: true,
+        cancelable: true,
+        key,
+        code: event.code,
+        location: event.location,
+        repeat: event.repeat,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+      });
+      Object.defineProperties(restated, {
+        charCode: { value: event.charCode },
+        keyCode: { value: event.keyCode },
+        which: { value: event.which },
+      });
+      target.dispatchEvent(restated);
+      return key;
+    };
+
     function releasePointer() {
       pointerWanted = false;
       virtualCursor = null;
@@ -259,10 +331,12 @@
     }
 
     window.addEventListener('keydown', (event) => {
-      if (!event.isTrusted || (event.repeat && heldKeys.has(event.code))) return;
+      if (!event.isTrusted) return;
+      const key = layoutKey(event);
+      if (event.repeat && heldKeys.has(event.code)) return;
       heldKeys.set(event.code, {
         target: event.target,
-        key: event.key,
+        key,
         code: event.code,
         location: event.location,
         charCode: event.charCode,
@@ -276,6 +350,7 @@
     }, true);
     window.addEventListener('keyup', (event) => {
       if (!event.isTrusted) return;
+      layoutKey(event);
       heldKeys.delete(event.code);
       if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
         releaseKeys((code) =>
