@@ -47,7 +47,7 @@ function fixture(search = "?template-fs-trace=1", openResult = 17) {
   const window = {} as {
     gwInstallTemplateFilesystemTrace?: (options: {
       imports: typeof imports;
-      module: { HEAPU8: Uint8Array; HEAPU32: Uint32Array };
+      module: { HEAPU8: Uint8Array };
     }) => void;
     gwTemplateFilesystemTrace?: () => ReadonlyArray<Record<string, unknown>>;
   };
@@ -76,7 +76,9 @@ function fixture(search = "?template-fs-trace=1", openResult = 17) {
     HEAPU32,
     imports,
     logs,
-    module: { HEAPU8, HEAPU32 },
+    // The generated glue publishes only `Module.HEAPU8`; the trace has to
+    // derive anything wider itself, so the fixture must not hand it more.
+    module: { HEAPU8 },
     openat,
     fdWrite,
     window,

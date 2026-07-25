@@ -75,22 +75,33 @@
   }
 
   /**
-   * @param {{ HEAPU32?: Uint32Array }} module
+   * The generated glue publishes only `Module.HEAPU8`, so every wider view has
+   * to be taken from its buffer. Reading `Module.HEAPU32` yields `undefined`
+   * and silently drops every byte count from the trace.
+   *
+   * @param {{ HEAPU8?: Uint8Array }} module
+   */
+  function words(module) {
+    return module.HEAPU8 ? new Uint32Array(module.HEAPU8.buffer) : undefined;
+  }
+
+  /**
+   * @param {{ HEAPU8?: Uint8Array }} module
    * @param {number} pointer
    */
   function readU32(module, pointer) {
-    const heap = module.HEAPU32;
+    const heap = words(module);
     const index = pointer >>> 2;
     return heap && pointer >= 0 && index < heap.length ? heap[index] : undefined;
   }
 
   /**
-   * @param {{ HEAPU32?: Uint32Array }} module
+   * @param {{ HEAPU8?: Uint8Array }} module
    * @param {number} iov
    * @param {number} count
    */
   function requestedBytes(module, iov, count) {
-    const heap = module.HEAPU32;
+    const heap = words(module);
     if (!heap || !Number.isSafeInteger(count) || count < 0 || count > 1024) {
       return undefined;
     }
@@ -111,7 +122,7 @@
    *     env?: Record<string, (...args: any[]) => any>;
    *     wasi_snapshot_preview1?: Record<string, (...args: any[]) => any>;
    *   };
-   *   module: { HEAPU8?: Uint8Array; HEAPU32?: Uint32Array };
+   *   module: { HEAPU8?: Uint8Array };
    * }} options
    */
   window.gwInstallTemplateFilesystemTrace = ({ imports, module }) => {

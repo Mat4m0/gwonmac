@@ -33,6 +33,7 @@
     "toolbox:recertify": "pnpm build && node build/tools/toolbox-recertify.js",
     "toolbox:visual": "pnpm build && node scripts/toolbox-visual.mjs",
     "toolbox:transform": "pnpm build && node build/tools/toolbox-transform.js",
+    "template:recertify": "pnpm build && node build/tools/template-save-recertify.js",
     "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website generate && pnpm --filter gw-website build && node tests/website-smoke.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm test:unit",
     "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron",
