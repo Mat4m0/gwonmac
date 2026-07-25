@@ -1,35 +1,39 @@
-import { BrowserWindow, dialog, ipcMain, shell, app, safeStorage } from "electron";
+import {
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  shell,
+  app,
+  safeStorage,
+} from "electron";
 import { writeFile } from "node:fs/promises";
 import type {
   AppSettings,
+  AppSettingsPatch,
   CacheInfo,
   DownloadProgress,
   ExternalLinkKind,
   GraphicsDiagnostics,
-  PrefetchProgress,
   SocketEvent,
-  StoredCredentials,
 } from "../shared/contracts.js";
 import {
   isRendererFrameBatch,
   isRendererMetrics,
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
-import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
-import { INITIAL_PROGRESS, EMPTY_PREFETCH } from "../shared/progress.js";
-import { AllowlistError, AppError, ValidationError } from "../shared/errors.js";
+import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import { AllowlistError, ValidationError } from "../shared/errors.js";
 import { CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
 import { checkForUpdate } from "./update-check.js";
-import { loadSettings, saveSettings } from "./core/settings.js";
+import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
-import { buildSnapshotMetadata, snapshotMetadataWire } from "./core/snapshot.js";
+import { buildSnapshotMetadata } from "./core/snapshot.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
   count,
   diagnosticSummary,
   diagnosticTimestampUs,
-  exportDiagnosticsForWindow,
   log,
   recordGraphics,
   recordRendererMetrics,
@@ -37,21 +41,23 @@ import {
   recordRendererMilestone,
   recordClockOffset,
   span,
-  startDiagnosticCapture,
-  stopDiagnosticCapture,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
-import { getMainWindow, resetWindowState } from "./window.js";
+import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import { MAX_QUEUED_BYTES } from "./core/sockets.js";
+import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
   sockets: SocketManager;
   getProgress: () => DownloadProgress;
-  getPrefetch: () => PrefetchProgress;
   getChunkStore: () => ChunkStore | null;
-  subscribeProgress: (cb: (p: DownloadProgress) => void) => () => void;
-  subscribePrefetch: (cb: (p: PrefetchProgress) => void) => () => void;
+  getSettings: () => Promise<AppSettings>;
+  updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
+  resetSettings: () => Promise<AppSettings>;
   downloadFullGame: () => Promise<boolean>;
   stopFullDownload: () => void;
+  confirmClientHealthy: () => Promise<void>;
+  retryClient: () => Promise<void>;
 }
 
 function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -59,15 +65,10 @@ function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
   if (!win || win !== getMainWindow()) {
     throw new AllowlistError("unowned ipc sender");
   }
-  const rawUrl = event.senderFrame?.url ?? event.sender.getURL();
-  let trusted: boolean;
-  try {
-    const url = new URL(rawUrl);
-    trusted = url.protocol === "gw:" && url.hostname === "app";
-  } catch {
-    trusted = false;
+  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
+    throw new AllowlistError("ipc sender is not the main frame");
   }
-  if (!trusted) {
+  if (!isCanonicalRendererUrl(event.senderFrame.url)) {
     throw new AllowlistError("invalid ipc origin");
   }
   return win;
@@ -90,7 +91,7 @@ function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolea
 }
 
 function logOperationFailure(
-  subsystem: "cache" | "settings",
+  subsystem: "cache" | "filesystem" | "settings",
   name: string,
   error: unknown,
 ): void {
@@ -117,45 +118,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = gamePaths();
   const credentials = new CredentialsStore(paths.credentials, safeStorage);
 
-  const progressSubs = new Map<number, () => void>();
-  const prefetchSubs = new Map<number, () => void>();
-  const socketSubs = new Map<number, () => void>();
-
   ipcMain.handle(IPC.progressCurrent, (event) => {
     assertSender(event);
     return ctx.getProgress();
-  });
-
-  ipcMain.handle(IPC.progressSubscribe, (event) => {
-    const win = assertSender(event);
-    progressSubs.get(win.webContents.id)?.();
-    const unsub = ctx.subscribeProgress((value) => {
-      sendIfLive(win, IPC.progressEvent, value);
-    });
-    progressSubs.set(win.webContents.id, unsub);
-    sendIfLive(win, IPC.progressEvent, ctx.getProgress());
-  });
-
-  ipcMain.handle(IPC.progressUnsubscribe, (event) => {
-    const win = assertSender(event);
-    progressSubs.get(win.webContents.id)?.();
-    progressSubs.delete(win.webContents.id);
-  });
-
-  ipcMain.handle(IPC.prefetchSubscribe, (event) => {
-    const win = assertSender(event);
-    prefetchSubs.get(win.webContents.id)?.();
-    const unsub = ctx.subscribePrefetch((value) => {
-      sendIfLive(win, IPC.prefetchEvent, value);
-    });
-    prefetchSubs.set(win.webContents.id, unsub);
-    sendIfLive(win, IPC.prefetchEvent, ctx.getPrefetch());
-  });
-
-  ipcMain.handle(IPC.prefetchUnsubscribe, (event) => {
-    const win = assertSender(event);
-    prefetchSubs.get(win.webContents.id)?.();
-    prefetchSubs.delete(win.webContents.id);
   });
 
   ipcMain.handle(IPC.snapshotMetadata, async (event) => {
@@ -166,23 +131,21 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         process.env.GW_OFFLINE_SHELL === "1"
           ? Number(process.env.GW_OFFLINE_SNAPSHOT_SIZE ?? 0)
           : 0;
-      return snapshotMetadataWire(
-        buildSnapshotMetadata({
-          size: Number.isSafeInteger(offlineSize) && offlineSize > 0
-            ? offlineSize
-            : 0,
-          chunkSize: 262144,
-          chunkHashes: [],
-          residentIndices: [],
-        }),
-      );
+      return buildSnapshotMetadata({
+        size: Number.isSafeInteger(offlineSize) && offlineSize > 0
+          ? offlineSize
+          : 0,
+        chunkSize: 262144,
+        chunkHashes: [],
+        residentIndices: [],
+      });
     }
     const bits = await store.residentBits();
     return {
       size: store.size,
       chunkSize: store.chunkSize,
       chunkHashes: store.hashes,
-      residentBits: Buffer.from(bits).toString("base64"),
+      residentBits: bits,
     };
   });
 
@@ -217,6 +180,11 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     if (!(data instanceof Uint8Array) && !ArrayBuffer.isView(data)) {
       throw new ValidationError("data must be a Uint8Array");
     }
+    if (data.byteLength > MAX_QUEUED_BYTES) {
+      throw new ValidationError(
+        `socket payload exceeds ${MAX_QUEUED_BYTES} bytes`,
+      );
+    }
     const bytes =
       data instanceof Uint8Array
         ? data
@@ -237,23 +205,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     await ctx.sockets.close(socketId as number, win.webContents.id);
   });
 
-  ipcMain.handle(IPC.socketSubscribe, (event) => {
-    const win = assertSender(event);
-    socketSubs.get(win.webContents.id)?.();
-    // Events are pushed from the SocketManager sink registered in main.ts.
-    socketSubs.set(win.webContents.id, () => undefined);
-  });
-
-  ipcMain.handle(IPC.socketUnsubscribe, (event) => {
-    const win = assertSender(event);
-    socketSubs.get(win.webContents.id)?.();
-    socketSubs.delete(win.webContents.id);
-  });
-
   ipcMain.handle(IPC.settingsGet, async (event) => {
     assertSender(event);
     try {
-      return await loadSettings(paths.settings);
+      return await ctx.getSettings();
     } catch (error) {
       logOperationFailure("settings", "settings.loadFailed", error);
       throw error;
@@ -263,8 +218,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.settingsSet, async (event, value: unknown) => {
     assertSender(event);
     try {
-      const previous = await loadSettings(paths.settings);
-      const saved = await saveSettings(paths.settings, value as AppSettings);
+      const previous = await ctx.getSettings();
+      const saved = await ctx.updateSettings(parseSettingsPatch(value));
       if (previous.dataStrategy !== saved.dataStrategy) {
         log("settings", "info", "launcher.strategyChanged", {
           strategy: saved.dataStrategy ?? "unselected",
@@ -279,6 +234,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.settingsReset, async (event) => {
     const win = assertSender(event);
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "warning",
       buttons: ["Reset Launcher Settings", "Cancel"],
@@ -290,7 +246,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     });
     if (response !== 0) return null;
     try {
-      const settings = await saveSettings(paths.settings, { ...DEFAULT_SETTINGS });
+      const settings = await ctx.resetSettings();
       await resetWindowState(win);
       log("settings", "info", "settings.reset");
       return settings;
@@ -305,14 +261,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     try {
       return await credentials.load();
     } catch (error) {
-      if (error instanceof AppError && error.code === "credentials_corrupt") {
-        // A previous Keychain-backed ciphertext cannot be opened after the
-        // deliberate mock-provider cutover. Remove it once and let the game ask
-        // again; never expose ciphertext details to the renderer or recorder.
-        await credentials.clear();
-        log("credentials", "warn", "credentials.unreadableCleared");
-        return null;
-      }
       log("credentials", "error", "credentials.loadFailed");
       throw error;
     }
@@ -321,7 +269,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.credentialsSave, async (event, value: unknown) => {
     assertSender(event);
     try {
-      await credentials.save(value as StoredCredentials);
+      await credentials.save(value);
     } catch (error) {
       log("credentials", "error", "credentials.saveFailed");
       throw error;
@@ -350,6 +298,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.cacheClear, async (event) => {
     const win = assertSender(event);
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "warning",
       buttons: ["Clear and Restart", "Cancel"],
@@ -380,6 +329,31 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.cacheStopDownload, (event) => {
     assertSender(event);
     ctx.stopFullDownload();
+  });
+
+  ipcMain.handle(IPC.gameStorageReset, async (event) => {
+    const win = assertSender(event);
+    await resetGameInput(win);
+    const { response } = await dialog.showMessageBox(win, {
+      type: "warning",
+      buttons: ["Reset and Restart", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+      message: "Reset saved Guild Wars files?",
+      detail:
+        "This removes local Guild Wars settings, build templates, screenshots, and chat logs. Downloaded game data and your saved login stay untouched.",
+    });
+    if (response !== 0) return false;
+    try {
+      await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
+      log("filesystem", "warn", "filesystem.resetRequested");
+      app.relaunch();
+      app.quit();
+      return true;
+    } catch (error) {
+      logOperationFailure("filesystem", "filesystem.resetFailed", error);
+      throw error;
+    }
   });
 
   ipcMain.handle(IPC.diagnosticsGraphics, async (event, value: unknown) => {
@@ -490,24 +464,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return diagnosticSummary();
   });
 
-  ipcMain.handle(IPC.diagnosticsStartCapture, async (event, level: unknown) => {
-    assertSender(event);
-    if (level !== 1 && level !== 2) {
-      throw new ValidationError("diagnostics level must be 1 or 2");
-    }
-    await startDiagnosticCapture(level);
-  });
-
-  ipcMain.handle(IPC.diagnosticsStopCapture, async (event) => {
-    assertSender(event);
-    await stopDiagnosticCapture();
-  });
-
-  ipcMain.handle(IPC.diagnosticsExport, async (event) => {
-    const win = assertSender(event);
-    return exportDiagnosticsForWindow(win);
-  });
-
   ipcMain.handle(IPC.appOpenExternal, async (event, kind: unknown) => {
     assertSender(event);
     if (
@@ -527,6 +483,16 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     app.quit();
   });
 
+  ipcMain.handle(IPC.clientRetry, async (event) => {
+    assertSender(event);
+    await ctx.retryClient();
+  });
+
+  ipcMain.handle(IPC.clientHealthy, async (event) => {
+    assertSender(event);
+    await ctx.confirmClientHealthy();
+  });
+
   ipcMain.handle(IPC.updateStatus, async (event) => {
     assertSender(event);
     return checkForUpdate();
@@ -543,9 +509,20 @@ function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
     typeof record.renderer === "string" &&
     typeof record.vendor === "string" &&
     typeof record.hardwareAcceleration === "boolean" &&
-    ["canvasWidth", "canvasHeight", "devicePixelRatio", "renderScale"].every(
+    [
+      "canvasWidth",
+      "canvasHeight",
+      "offscreenWidth",
+      "offscreenHeight",
+      "drawingBufferWidth",
+      "drawingBufferHeight",
+      "devicePixelRatio",
+      "renderScale",
+      "samples",
+    ].every(
       (key) => typeof record[key] === "number" && Number.isFinite(record[key]),
     ) &&
+    typeof record.antialias === "boolean" &&
     record.userAgent.length <= 2_048 &&
     record.webglVersion.length <= 1_024 &&
     record.renderer.length <= 1_024 &&
@@ -554,6 +531,17 @@ function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
     (record.canvasWidth as number) <= 32_768 &&
     (record.canvasHeight as number) >= 0 &&
     (record.canvasHeight as number) <= 32_768 &&
+    (record.offscreenWidth as number) >= 0 &&
+    (record.offscreenWidth as number) <= 32_768 &&
+    (record.offscreenHeight as number) >= 0 &&
+    (record.offscreenHeight as number) <= 32_768 &&
+    (record.drawingBufferWidth as number) >= 0 &&
+    (record.drawingBufferWidth as number) <= 32_768 &&
+    (record.drawingBufferHeight as number) >= 0 &&
+    (record.drawingBufferHeight as number) <= 32_768 &&
+    Number.isInteger(record.samples) &&
+    (record.samples as number) >= 0 &&
+    (record.samples as number) <= 64 &&
     (record.devicePixelRatio as number) > 0 &&
     (record.devicePixelRatio as number) <= 16 &&
     (record.renderScale === 1 ||
@@ -569,12 +557,4 @@ export function emitSocketEvent(ownerId: number, event: SocketEvent): void {
       sendIfLive(win, IPC.socketEvent, toWireSocketEvent(event));
     }
   }
-}
-
-export function defaultProgress(): DownloadProgress {
-  return { ...INITIAL_PROGRESS };
-}
-
-export function defaultPrefetch(): PrefetchProgress {
-  return { ...EMPTY_PREFETCH };
 }

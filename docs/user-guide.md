@@ -5,8 +5,8 @@ bundle game binaries.
 
 ## Install and start
 
-Current builds are ad-hoc signed local/source betas. No Apple developer
-subscription is required.
+Current builds are ad-hoc signed and not notarized. The project deliberately
+does not require a paid Apple Developer subscription.
 
 To build from source:
 
@@ -20,6 +20,10 @@ Open `out/Guild Wars-darwin-arm64/Guild Wars.app`. On the first launch macOS may
 block an ad-hoc build. Try to open the app once, then open **System Settings →
 Privacy & Security**, scroll to **Security**, click **Open Anyway**, and confirm
 the second prompt. Do not disable Gatekeeper globally.
+
+Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
+build/SBOM attestations. Follow [Verify a release](release-verification.md)
+before opening a downloaded build.
 
 The app then:
 
@@ -48,6 +52,12 @@ While downloading you may pause, return to Quick Start, or explicitly choose
 **Play Now Instead**; only that last action starts the game early and lets the
 full download continue in the background.
 
+The displayed transfer rate is a short moving average, so chunk-completion
+bursts do not make the number jump between unrealistic highs and lows. While a
+full download is active, progress also appears on the application’s Dock icon.
+macOS may turn the display off, but the app prevents download suspension until
+the task finishes or is paused.
+
 To schedule the complete game from a running session:
 
 1. Open **Guild Wars → Settings…**.
@@ -70,10 +80,28 @@ The app confirms the action and restarts. Small client files stay installed.
 
 Settings save immediately. **Game Data** owns the canonical Quick Start/Full
 Game strategy, optional current-session download, and cache controls.
-**Graphics quality** changes rendering resolution; keep **Best performance —
-1×** unless a sharper image is worth the extra GPU work.
-**Controls** owns right-drag pointer locking. Touch compatibility and the local
-performance overlay live under the collapsed **Advanced** section.
+**Graphics quality** changes rendering resolution. **Retina — 2×** is the
+visual-quality default; choose 1.5× or 1× when higher frame rate or lower GPU
+memory use matters more than sharpness.
+Settings shows the backing resolution for the current window beside every
+scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
+four times as many pixels.
+**Controls** owns right-drag pointer locking and the macOS Default, Guild Wars,
+and Guild Wars 2 cursor choices, with an in-panel cursor preview. Guild Wars is
+the default. Cursor size follows macOS display and accessibility settings.
+Touch compatibility and the local performance overlay stay under
+**Advanced**, outside the normal setup path. Settings reopens to the pane most
+recently used during the current session.
+
+The official WebAssembly client currently requests a WebGL context without
+multisampling, so its in-game antialiasing list may contain only **None**. The
+host does not display options the client cannot provide; the 1.5× and 2×
+render scales are the available supersampling choices.
+
+The official client contains browser Gamepad support and community reports
+confirm that controllers work. Physical controller behavior is not part of
+the automated release gate because the project has no dedicated test
+controller yet.
 
 Settings are always available with **Command-,**, **Guild Wars → Settings…**,
 or the **Settings** link on the loading screen. **Reset Launcher Settings…**
@@ -104,16 +132,41 @@ Choose **Help → Report a Problem…**.
 - For stutter, choose **Record Performance Problem**, reproduce it, press
   **Cmd+Shift+M** when it is visible, then use **View → Stop Capture**.
 
+An always-visible capture indicator shows the recording type and elapsed time.
+After **Cmd+Shift+M**, it confirms that the problem marker was registered.
+
 The app creates one `.gwdiag` file and can open the project’s bug form or reveal
 the file in Finder. The export is redacted and excludes credentials, account
 identifiers, packet contents, request/response bodies, headers, cookies,
 filesystem paths, and crash dumps. GitHub issues are public, so review the bug
 form’s privacy notice before attaching it.
 
+## Recovery behavior
+
+- If startup cannot reach ArenaNet, the previous verified client is restored
+  when available. Otherwise the launcher presents **Retry** as the primary
+  recovery action.
+- Pausing, closing, losing the network, or sleeping during a full download does
+  not discard verified chunks. Choose **Resume Download** to continue.
+- When there is not enough disk space, the download stops before fetching more
+  data. Free space, then resume.
+- Corrupt cached chunks are discarded and fetched again automatically.
+- If Guild Wars saved files cannot be opened, choose **Reset Saved Files…**.
+  After confirmation, this removes local game preferences, build templates,
+  screenshots, and chat logs, then restarts. Downloaded game data and the
+  saved login stay untouched.
+- The first unexpected renderer crash is recovered automatically. If it
+  repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
+
 ## Updates and local data
 
 The host app has no update-feed client. Replace it manually with a newer source
 or release build. ArenaNet client files still update automatically.
+
+Version 0.0.2 packages internal foundations for future Toolbox development,
+but they are dormant and invisible in normal use. The app serves ArenaNet's
+official WASM unchanged and does not install a Toolbox hook, load its companion
+kernel, observe game memory, or show Toolbox UI.
 
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually

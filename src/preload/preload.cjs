@@ -1,22 +1,17 @@
 // Sandboxed preload must be CommonJS — Electron's sandbox loader does not
 // execute ESM preload graphs, so this file stays self-contained.
 const { contextBridge, ipcRenderer } = require("electron");
+const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
 const IPC = {
   progressCurrent: "gw:progress:current",
-  progressSubscribe: "gw:progress:subscribe",
-  progressUnsubscribe: "gw:progress:unsubscribe",
   progressEvent: "gw:progress:event",
-  prefetchSubscribe: "gw:prefetch:subscribe",
-  prefetchUnsubscribe: "gw:prefetch:unsubscribe",
   prefetchEvent: "gw:prefetch:event",
   snapshotMetadata: "gw:snapshot:metadata",
   dnsResolve: "gw:dns:resolve",
   socketConnect: "gw:socket:connect",
   socketSend: "gw:socket:send",
   socketClose: "gw:socket:close",
-  socketSubscribe: "gw:socket:subscribe",
-  socketUnsubscribe: "gw:socket:unsubscribe",
   socketEvent: "gw:socket:event",
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
@@ -28,6 +23,7 @@ const IPC = {
   cacheClear: "gw:cache:clear",
   cacheDownloadAll: "gw:cache:downloadAll",
   cacheStopDownload: "gw:cache:stopDownload",
+  gameStorageReset: "gw:gameStorage:reset",
   diagnosticsGraphics: "gw:diagnostics:graphics",
   diagnosticsClockSync: "gw:diagnostics:clockSync",
   diagnosticsClockResult: "gw:diagnostics:clockResult",
@@ -35,58 +31,51 @@ const IPC = {
   diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
   diagnosticsCurrent: "gw:diagnostics:current",
-  diagnosticsStartCapture: "gw:diagnostics:startCapture",
-  diagnosticsStopCapture: "gw:diagnostics:stopCapture",
-  diagnosticsExport: "gw:diagnostics:export",
   appOpenExternal: "gw:app:openExternal",
   appRequestQuit: "gw:app:requestQuit",
+  clientRetry: "gw:client:retry",
+  clientHealthy: "gw:client:healthy",
   updateStatus: "gw:update:status",
 };
 
-function subscribe(subscribeChannel, unsubscribeChannel, eventChannel, callback) {
+function listen(eventChannel, callback) {
   const handler = (_event, value) => callback(value);
   ipcRenderer.on(eventChannel, handler);
-  void ipcRenderer.invoke(subscribeChannel);
   let active = true;
   return () => {
     if (!active) return;
     active = false;
     ipcRenderer.removeListener(eventChannel, handler);
-    void ipcRenderer.invoke(unsubscribeChannel);
   };
 }
 
-const api = Object.freeze({
+const api = {
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
-    onChange: (callback) =>
-      subscribe(IPC.progressSubscribe, IPC.progressUnsubscribe, IPC.progressEvent, callback),
-    onPrefetch: (callback) =>
-      subscribe(IPC.prefetchSubscribe, IPC.prefetchUnsubscribe, IPC.prefetchEvent, callback),
+    onChange: (callback) => listen(IPC.progressEvent, callback),
+    onPrefetch: (callback) => listen(IPC.prefetchEvent, callback),
   },
   snapshot: {
-    metadata: async () => {
-      const wire = await ipcRenderer.invoke(IPC.snapshotMetadata);
-      const bin = atob(wire.residentBits);
-      const residentBits = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) residentBits[i] = bin.charCodeAt(i);
-      return {
-        size: wire.size,
-        chunkSize: wire.chunkSize,
-        chunkHashes: wire.chunkHashes,
-        residentBits,
-      };
-    },
+    metadata: () => ipcRenderer.invoke(IPC.snapshotMetadata),
   },
   dns: {
     resolve: (name) => ipcRenderer.invoke(IPC.dnsResolve, name),
   },
   sockets: {
     connect: (destination) => ipcRenderer.invoke(IPC.socketConnect, destination),
-    send: (socketId, data) => ipcRenderer.invoke(IPC.socketSend, socketId, data),
+    send: (socketId, data) => {
+      if (
+        !data
+        || typeof data.byteLength !== "number"
+        || data.byteLength < 0
+        || data.byteLength > MAX_SOCKET_PAYLOAD_BYTES
+      ) {
+        return Promise.reject(new TypeError("invalid socket payload"));
+      }
+      return ipcRenderer.invoke(IPC.socketSend, socketId, data);
+    },
     close: (socketId) => ipcRenderer.invoke(IPC.socketClose, socketId),
-    onEvent: (callback) =>
-      subscribe(IPC.socketSubscribe, IPC.socketUnsubscribe, IPC.socketEvent, callback),
+    onEvent: (callback) => listen(IPC.socketEvent, callback),
   },
   settings: {
     get: () => ipcRenderer.invoke(IPC.settingsGet),
@@ -103,6 +92,9 @@ const api = Object.freeze({
     clearAndRestart: () => ipcRenderer.invoke(IPC.cacheClear),
     downloadAll: () => ipcRenderer.invoke(IPC.cacheDownloadAll),
     stopDownload: () => ipcRenderer.invoke(IPC.cacheStopDownload),
+  },
+  gameStorage: {
+    resetAndRestart: () => ipcRenderer.invoke(IPC.gameStorageReset),
   },
   diagnostics: {
     clockSync: (rendererNowUs) =>
@@ -122,17 +114,20 @@ const api = Object.freeze({
         fields,
       ),
     current: () => ipcRenderer.invoke(IPC.diagnosticsCurrent),
-    startCapture: (level) => ipcRenderer.invoke(IPC.diagnosticsStartCapture, level),
-    stopCapture: () => ipcRenderer.invoke(IPC.diagnosticsStopCapture),
-    export: () => ipcRenderer.invoke(IPC.diagnosticsExport),
   },
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
   },
+  client: {
+    retry: () => ipcRenderer.invoke(IPC.clientRetry),
+    healthy: () => ipcRenderer.invoke(IPC.clientHealthy),
+  },
   update: {
     status: () => ipcRenderer.invoke(IPC.updateStatus),
   },
-});
+};
+for (const namespace of Object.values(api)) Object.freeze(namespace);
+Object.freeze(api);
 
 contextBridge.exposeInMainWorld("gwNative", api);

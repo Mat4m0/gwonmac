@@ -3,23 +3,35 @@
 //
 // Module MUST be var: the glue does `var Module = typeof Module != 'undefined'
 // ? Module : {}`, and a const/let here collides with it at parse time.
+/** @type {any} ArenaNet's generated Emscripten surface is the dynamic boundary. */
 var Module;
 
 (function () {
 'use strict';
 
 const LOG_LINES = 400;
+/** @type {string[]} */
 const logBuf = [];
+/** @type {WebAssembly.Instance | null} */
+let gameWasmInstance = null;
+/** @type {WebAssembly.Module | null} */
+let gameWasmModule = null;
+let disposeSocketHost = () => {};
 const native = () => window.gwNative;
+/**
+ * @param {import('../shared/diagnostics.js').RendererMilestone} name
+ * @param {import('../shared/diagnostics.js').RendererMilestoneFields} [fields]
+ */
 const milestone = (name, fields) => {
   void native().diagnostics
     .recordRendererMilestone(name, performance.now() * 1000, fields)
     .catch(() => {});
 };
 
+/** @param {...unknown} a */
 const log = (...a) => {
   console.log(...a);
-  logBuf.push(a.join(' '));
+  logBuf.push(a.map(String).join(' '));
   if (logBuf.length > LOG_LINES) logBuf.splice(0, logBuf.length - LOG_LINES);
   const el = document.getElementById('log');
   if (el && el.style.display !== 'none') {
@@ -30,6 +42,7 @@ const log = (...a) => {
 
 window.gwLog = (on = true) => {
   const el = document.getElementById('log');
+  if (!el) return false;
   el.style.display = on ? 'block' : 'none';
   if (on) { el.textContent = logBuf.join('\n'); el.scrollTop = el.scrollHeight; }
   return on;
@@ -43,33 +56,44 @@ const STARTUP_LABELS = {
 };
 
 const SNAPSHOT_URL = 'Gw.snapshot';
-let useJspi = true;
-let appSettings = {
-  renderScale: 1,
-  pointerLock: true,
-  touchMode: 'dbltap',
-  showDiagnostics: false,
-  dataStrategy: null,
-};
-// Settings UI can update the canonical object before the game glue has loaded.
-// loadGlue replaces this with the richer runtime application hook.
+/** @type {import('../shared/contracts.js').AppSettings | null} */
+let appSettings = null;
+/** @type {GameInputController | null} */
+let inputHost = null;
+/** @param {import('../shared/contracts.js').AppSettings['cursorTheme']} theme */
+function applyCursorTheme(theme) {
+  document.documentElement.dataset.cursorTheme = theme;
+}
 window.gwApplySettings = (next) => {
-  appSettings = { ...next };
-  window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
+  const previousScale = appSettings?.renderScale;
+  const updated = { ...next };
+  appSettings = updated;
+  inputHost?.applySettings(updated);
+  applyCursorTheme(updated.cursorTheme);
+  if (previousScale !== undefined && updated.renderScale !== previousScale) {
+    window.dispatchEvent(new globalThis.Event('resize'));
+  }
+  window.gwDiagnostics?.setVisible(updated.showDiagnostics);
+  if (inputHost) log('settings applied');
 };
 
 // fileSize() is synchronous, so the size must be known before the glue loads.
+/** @type {number | null} */
 let snapshotSize = null;
 let snapshotChunkSize = 262144;
+/** @type {string[]} */
 let snapshotChunkHashes = [];
 
 // Renderer memory is disposable; native chunk residency lives in the main process.
 const CHUNK_CACHE_MAX = 256 * 1024 * 1024;
+/** @type {Map<number, Uint8Array>} */
 const chunkCache = new Map();
 let chunkCacheBytes = 0;
 
 // Derived from snapshot-metadata residentBits — isCached must stay synchronous.
+/** @type {Set<string>} */
 const residentHashes = new Set();
+/** @param {number} i */
 const hashOf = (i) => snapshotChunkHashes[i] || '';
 
 const stats = {
@@ -81,8 +105,11 @@ const stats = {
   evictions: 0,
   promotions: 0,
 };
-let burstBytes = 0, burstTimer = null;
+let burstBytes = 0;
+/** @type {number | null} */
+let burstTimer = null;
 let lastSnapshotError = '';
+let gamepadImportsAvailable = false;
 
 window.gwEvictMemory = () => {
   const n = chunkCache.size;
@@ -101,17 +128,20 @@ window.gwStats = () => {
     memoryCacheMB: +(chunkCacheBytes / 1048576).toFixed(1),
     memoryCacheChunks: chunkCache.size,
     residentHashes: residentHashes.size,
+    gamepadImports: gamepadImportsAvailable,
   };
   if (console.table) console.table(s);
   else console.log(s);
   return s;
 };
 
+/** @param {number} i */
 function markResident(i) {
   const h = hashOf(i);
   if (h) residentHashes.add(h);
 }
 
+/** @param {Uint8Array} bits */
 function applyResidentBits(bits) {
   if (!bits || !bits.length) return;
   for (let i = 0; i < snapshotChunkHashes.length; i++) {
@@ -120,25 +150,35 @@ function applyResidentBits(bits) {
   }
 }
 
+/**
+ * @param {number} offset
+ * @param {number} size
+ * @returns {[number, number]}
+ */
 const chunkRange = (offset, size) => [
   Math.floor(offset / snapshotChunkSize),
   Math.floor((offset + size - 1) / snapshotChunkSize),
 ];
 
 // Re-insert on hit to move the entry to the LRU tail.
+/** @param {number} i */
 function cacheTouch(i) {
   const buf = chunkCache.get(i);
   if (buf !== undefined) { chunkCache.delete(i); chunkCache.set(i, buf); }
   return buf;
 }
 
+/** @param {number} i @param {Uint8Array} buf */
 function cachePut(i, buf) {
   if (chunkCache.has(i)) return;
   chunkCache.set(i, buf);
   chunkCacheBytes += buf.length;
   while (chunkCacheBytes > CHUNK_CACHE_MAX && chunkCache.size > 1) {
     const oldest = chunkCache.keys().next().value;
-    chunkCacheBytes -= chunkCache.get(oldest).length;
+    if (oldest === undefined) break;
+    const oldestBuffer = chunkCache.get(oldest);
+    if (!oldestBuffer) break;
+    chunkCacheBytes -= oldestBuffer.length;
     chunkCache.delete(oldest);
     stats.evictions++;
     window.gwDiagnostics?.scheduler('eviction');
@@ -146,8 +186,21 @@ function cachePut(i, buf) {
 }
 
 const MAX_CHUNK_REQUESTS = 8;
+/**
+ * @typedef {{
+ *   index: number,
+ *   priority: 'demand' | 'prefetch',
+ *   state: 'queued' | 'active',
+ *   promise: Promise<Uint8Array>,
+ *   resolve: (value: Uint8Array) => void,
+ *   reject: (reason?: unknown) => void
+ * }} ChunkTask
+ */
+/** @type {Map<number, ChunkTask>} */
 const inflight = new Map();
+/** @type {ChunkTask[]} */
 const demandQueue = [];
+/** @type {ChunkTask[]} */
 const prefetchQueue = [];
 let activeDemand = 0;
 let activePrefetch = 0;
@@ -163,6 +216,7 @@ window.gwSnapshotState = () => ({
   queuedPrefetch: prefetchQueue.length,
 });
 
+/** @param {ChunkTask} task */
 function promote(task) {
   if (task.priority !== 'prefetch' || task.state !== 'queued') return;
   const index = prefetchQueue.indexOf(task);
@@ -178,6 +232,11 @@ function drainChunkQueue() {
   while (activeDemand + activePrefetch < MAX_CHUNK_REQUESTS) {
     const task = demandQueue.shift() || prefetchQueue.shift();
     if (!task) return;
+    if (snapshotSize === null) {
+      task.reject(new Error('snapshot metadata is unavailable'));
+      inflight.delete(task.index);
+      continue;
+    }
     if (schedulerStopped && task.priority === 'prefetch') {
       task.reject(new Error('background download stopped'));
       inflight.delete(task.index);
@@ -191,7 +250,6 @@ function drainChunkQueue() {
     void fetch(SNAPSHOT_URL, {
       headers: {
         Range: `bytes=${start}-${end}`,
-        'X-GW-Trace-Id': crypto.randomUUID(),
         'X-GW-Priority': task.priority,
       },
     }).then(async (res) => {
@@ -219,12 +277,18 @@ function drainChunkQueue() {
 
 addEventListener('beforeunload', () => {
   schedulerStopped = true;
+  disposeSocketHost();
   for (const task of prefetchQueue.splice(0)) {
     inflight.delete(task.index);
     task.reject(new Error('background download stopped'));
   }
 });
 
+/**
+ * @param {number} i
+ * @param {'demand' | 'prefetch'} priority
+ * @returns {Promise<Uint8Array>}
+ */
 function chunkBytes(i, priority) {
   const hit = cacheTouch(i);
   if (hit !== undefined) {
@@ -241,8 +305,13 @@ function chunkBytes(i, priority) {
     return pending.promise;
   }
 
-  let resolve, reject;
+  /** @type {(value: Uint8Array) => void} */
+  let resolve = () => {};
+  /** @type {(reason?: unknown) => void} */
+  let reject = () => {};
+  /** @type {Promise<Uint8Array>} */
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  /** @type {ChunkTask} */
   const task = { index: i, priority, state: 'queued', promise, resolve, reject };
   inflight.set(i, task);
   (priority === 'demand' ? demandQueue : prefetchQueue).push(task);
@@ -250,13 +319,19 @@ function chunkBytes(i, priority) {
   return promise;
 }
 
+/** @param {number} first @param {number} last */
 async function fetchDemandChunks(first, last) {
-  await Promise.all(
+  return Promise.all(
     Array.from({ length: last - first + 1 }, (_, n) =>
       chunkBytes(first + n, 'demand')),
   );
 }
 
+/**
+ * @param {number} first
+ * @param {number} last
+ * @param {((bytes: number) => void) | undefined} progress
+ */
 async function fetchPrefetchChunks(first, last, progress) {
   for (let i = first; i <= last; i++) {
     const buf = await chunkBytes(i, 'prefetch');
@@ -264,11 +339,15 @@ async function fetchPrefetchChunks(first, last, progress) {
   }
 }
 
-// Assemble a byte range from cached chunks; null if any part is missing.
-function readFromCache(offset, size) {
+/**
+ * @param {number} offset
+ * @param {number} size
+ * @param {(index: number) => Uint8Array | undefined} chunk
+ */
+function assembleRange(offset, size, chunk) {
   const [first, last] = chunkRange(offset, size);
   if (first === last) {
-    const buf = cacheTouch(first);
+    const buf = chunk(first);
     if (buf === undefined) return null;
     const start = offset - first * snapshotChunkSize;
     return buf.subarray(start, start + size);
@@ -277,7 +356,7 @@ function readFromCache(offset, size) {
   let pos = offset, written = 0;
   while (written < size) {
     const i = Math.floor(pos / snapshotChunkSize);
-    const buf = cacheTouch(i);
+    const buf = chunk(i);
     if (buf === undefined) return null;
     const off = pos - i * snapshotChunkSize;
     const take = Math.min(size - written, buf.length - off);
@@ -289,106 +368,67 @@ function readFromCache(offset, size) {
   return out;
 }
 
-// Host functions the glue awaits or calls .then() on. Returning undefined from
-// one throws "Cannot read properties of undefined (reading 'then')" mid-connect.
-const ASYNC_METHODS = new Set([
-  'adProvider.showInterstitial', 'ageSignals.check',
-  'shop.initialize', 'shop.inAppPurchase',
-]);
-
-// Call sites test `typeof Module.x.y === 'function'`, so every property must
-// read back callable.
-const stub = (name) => new Proxy({}, {
-  get: (_, k) => (...args) => {
-    const meth = `${name}.${String(k)}`;
-    log('[stub]', meth, args.length ? `(${args.length} args)` : '');
-    return ASYNC_METHODS.has(meth) ? Promise.resolve(undefined) : undefined;
-  },
-  has: () => true,
-});
-
-// The game renders to an OffscreenCanvas and presents each frame as an
-// ImageBitmap; without this wiring it runs and paints nowhere visible. Mirrors
-// Od() in the shipped launcher, which patches imports before instantiating.
-function patchEgl(env) {
-  if (!env || typeof env.eglCreateContext !== 'function') {
-    return log('[warn] no eglCreateContext import — nothing will be presented');
-  }
-
-  const createContext = env.eglCreateContext;
-  env.eglCreateContext = (...args) => {
-    const visible = Module.canvas;
-    visible.offscreen = new OffscreenCanvas(visible.width, visible.height);
-    Module.canvas = visible.offscreen;          // context is created on this
-    const ctx = createContext(...args);
-    Module.canvas = visible;
-    Module.canvas.context = visible.getContext('bitmaprenderer');
-    log(`egl context on offscreen ${visible.width}x${visible.height}`);
-    return ctx;
-  };
-
-  const swap = env.eglSwapBuffers;
-  let firstFrame = true;
-  env.eglSwapBuffers = (...args) => {
-    const swapStarted = performance.now();
-    const ok = swap(...args);
-    const swapEnded = performance.now();
-    let bitmapOutUs = 0, bitmapPresentUs = 0;
-    let presented = false;
-    if (ok && Module.canvas.offscreen && Module.canvas.context) {
-      const outStarted = performance.now();
-      const bitmap = Module.canvas.offscreen.transferToImageBitmap();
-      const outEnded = performance.now();
-      Module.canvas.context.transferFromImageBitmap(bitmap);
-      bitmapOutUs = (outEnded - outStarted) * 1000;
-      bitmapPresentUs = (performance.now() - outEnded) * 1000;
-      presented = true;
-    }
-    window.gwDiagnostics?.swap(
-      (swapEnded - swapStarted) * 1000,
-      bitmapOutUs,
-      bitmapPresentUs,
-      presented);
-    if (firstFrame && presented) {
-      firstFrame = false;
-      performance.mark('gw.frame.first-submit');
-      milestone('frame.firstSubmit');
-      log('first frame presented');
-    }
-    return ok;
-  };
-
-  // Keep the offscreen buffer matched, or we present at the wrong resolution.
-  const setSize = env.emscripten_set_canvas_element_size;
-  if (typeof setSize === 'function') {
-    env.emscripten_set_canvas_element_size = (target, w, h) => {
-      const rc = setSize(target, w, h);
-      if (rc === 0 && Module.canvas.offscreen) {
-        Module.canvas.offscreen.width = w;
-        Module.canvas.offscreen.height = h;
-      }
-      return rc;
-    };
-  }
+// Assemble a byte range from cached chunks; null if any part is missing.
+/** @param {number} offset @param {number} size */
+function readFromCache(offset, size) {
+  return assembleRange(offset, size, cacheTouch);
 }
 
 Module = {
-  canvas: document.getElementById('canvas'),
+  canvas:
+    /** @type {HTMLCanvasElement} */ (document.getElementById('canvas')),
+  /** @param {unknown} t */
   print: (t) => log(t),
+  /** @param {unknown} t */
   printErr: (t) => log('[err]', t),
 
   // Take over instantiation so the EGL imports can be patched first.
+  /**
+   * @param {any} imports ArenaNet's generated WebAssembly imports.
+  * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
+  */
   instantiateWasm(imports, success) {
-    patchEgl(imports.env);
-    const url = useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm';
+    window.gwInstallGraphics({
+      env: imports.env,
+      module: Module,
+      renderScale: () => appSettings?.renderScale ?? 1,
+      firstFrame: () => {
+        performance.mark('gw.frame.first-submit');
+        milestone('frame.firstSubmit');
+        void native().client.healthy().catch((error) => {
+          log(
+            '[warn] client health confirmation failed:',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+        log('first frame presented');
+      },
+      log,
+    });
+    const gamepadImports = [
+      'emscripten_sample_gamepad_data',
+      'emscripten_set_gamepadconnected_callback_on_thread',
+      'emscripten_set_gamepaddisconnected_callback_on_thread',
+      'emscripten_get_num_gamepads',
+      'emscripten_get_gamepad_status',
+    ];
+    gamepadImportsAvailable =
+      typeof navigator.getGamepads === 'function' &&
+      gamepadImports.every((name) => typeof imports.env?.[name] === 'function');
+    log(`gamepad host: ${gamepadImportsAvailable ? 'available' : 'unavailable'}`);
+    const url = 'Gw.jspi.wasm';
     performance.mark('gw.wasm.instantiate.begin');
     milestone('wasm.instantiate.begin');
+    window.gwAutomation?.set('runtime.instantiating');
     (async () => {
       let result;
       try {
         result = await WebAssembly.instantiateStreaming(fetch(url), imports);
       } catch (e) {
-        log('[warn] streaming instantiate failed, falling back:', e.message);
+        log(
+          '[warn] streaming instantiate failed, falling back:',
+          e instanceof Error ? e.message : String(e),
+        );
         milestone('wasm.streamingFallback');
         result = await WebAssembly.instantiate(
           await (await fetch(url)).arrayBuffer(),
@@ -397,10 +437,15 @@ Module = {
       }
       performance.mark('gw.wasm.instantiate.end');
       milestone('wasm.instantiate.end');
+      gameWasmInstance = result.instance;
+      gameWasmModule = result.module;
       success(result.instance, result.module);
     })().catch((error) => {
       window.gwDiagnostics?.event('client.glueLoadFailed', error);
-      log('[err] WASM instantiation failed:', error.message);
+      log(
+        '[err] WASM instantiation failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       window.gwLoading?.fail('The game client could not start.');
     });
     return {};   // signals that instantiation is in flight
@@ -408,7 +453,8 @@ Module = {
 
   // Both builds share an output basename, so Gw.jspi.js also asks for
   // "Gw.wasm". Without this it silently pairs with the Asyncify binary.
-  locateFile: (path) => (useJspi && path === 'Gw.wasm') ? 'Gw.jspi.wasm' : path,
+  /** @param {string} path */
+  locateFile: (path) => path === 'Gw.wasm' ? 'Gw.jspi.wasm' : path,
 
   image: {
     _handles: new Map(),
@@ -418,6 +464,7 @@ Module = {
     // manifest, so the module asks for other files (ChatFilter.ini among
     // them); handing back a handle makes fileSize answer 4.2GB for a small ini
     // and the module aborts allocating for it.
+    /** @param {string} path */
     open(path) {
       if (!/(^|[/\\])Gw\.snapshot$/i.test(path)) {
         log(`image.open ${path} -> 0 (not in the image)`);
@@ -430,17 +477,26 @@ Module = {
     },
 
     // Synchronous by contract, hence the size read at boot.
+    /** @param {number} handle */
     fileSize(handle) {
       if (!this._handles.has(handle)) return log('[warn] image.fileSize on unknown handle', handle), 0;
       if (snapshotSize === null) return log('[warn] image.fileSize but no snapshot size known'), 0;
       return snapshotSize;
     },
 
+    /** @param {number} handle */
     close(handle) {
       log('image.close', handle);
       this._handles.delete(handle);
     },
 
+    /**
+     * @param {number} imageId
+     * @param {number} offset
+     * @param {unknown} _unused
+     * @param {number} buffer
+     * @param {number} bytes
+     */
     async readAsync(imageId, offset, _unused, buffer, bytes) {
       if (!this._handles.has(imageId)) throw new Error('bad image handle ' + imageId);
       const started = performance.now();
@@ -448,8 +504,8 @@ Module = {
       const source = data === null ? 'native' : 'memory';
       if (data === null) {
         const [first, last] = chunkRange(offset, bytes);
-        await fetchDemandChunks(first, last);
-        data = readFromCache(offset, bytes);
+        const fetched = await fetchDemandChunks(first, last);
+        data = assembleRange(offset, bytes, (index) => fetched[index - first]);
       }
       if (data === null || data.length !== bytes) {
         throw new Error(`image read ${offset}+${bytes}: assembled ${data && data.length}`);
@@ -459,7 +515,7 @@ Module = {
 
       // Summarise a burst once it goes quiet for the optional game console.
       burstBytes += bytes;
-      clearTimeout(burstTimer);
+      if (burstTimer !== null) clearTimeout(burstTimer);
       burstTimer = setTimeout(() => {
         if (burstBytes > 4 * 1024 * 1024) {
           log(`image: read ${(burstBytes / 1048576).toFixed(1)}MB (mem ${stats.fromMemory}, ` +
@@ -473,6 +529,11 @@ Module = {
     },
 
     // Memory plus native residency both count; eviction must not erase native.
+    /**
+     * @param {number} handle
+     * @param {number} offset
+     * @param {number} size
+     */
     isCached(handle, offset, size) {
       const [first, last] = chunkRange(offset, size);
       for (let i = first; i <= last; i++) {
@@ -481,6 +542,12 @@ Module = {
       return 1;
     },
 
+    /**
+     * @param {number} handle
+     * @param {number} offset
+     * @param {number} size
+     * @param {(bytes: number) => void} progress
+     */
     async cacheAsync(handle, offset, size, progress) {
       const [first, last] = chunkRange(offset, size);
       await fetchPrefetchChunks(first, last, (n) => {
@@ -489,78 +556,13 @@ Module = {
     },
   },
 
-  // Raw TCP owned by the main process. The glue assigns onopen/onclose/onmessage
-  // on the returned object and calls onmessage with the payload, not an event.
-  socket: {
-    connect(destAddr) {
-      log('socket.connect', destAddr);
-      let id = null;
-      const pending = [];
-      const sock = {
-        onopen: null, onclose: null, onmessage: null,
-        send: (data) => {
-          if (id === null) throw new Error('socket not open yet');
-          const source = data instanceof Uint8Array ? data : new Uint8Array(data);
-          const bytes = Uint8Array.from(source);
-          const started = performance.now();
-          const pending = native().sockets.send(id, bytes);
-          window.gwDiagnostics?.socketSend(
-            started,
-            (performance.now() - started) * 1000,
-            source.byteLength,
-            source.buffer.byteLength,
-            bytes.buffer.byteLength,
-            pending,
-          );
-          return pending;
-        },
-        close: () => {
-          if (id === null) return;
-          void native().sockets.close(id);
-        },
-      };
-      const deliver = (ev) => {
-        if (ev.type === 'open') {
-          if (sock.onopen) sock.onopen();
-        } else if (ev.type === 'data') {
-          if (sock.onmessage) sock.onmessage(ev.data);
-        }
-        else if (ev.type === 'close' || ev.type === 'error') {
-          if (ev.type === 'error') log('socket error', ev.message);
-          if (sock.onclose) sock.onclose();
-          unsub();
-        }
-      };
-      const unsub = native().sockets.onEvent((ev) => {
-        if (id === null) { pending.push(ev); return; }
-        if (ev.socketId !== id) return;
-        deliver(ev);
-      });
-      void native().sockets.connect(destAddr).then((sid) => {
-        id = sid;
-        for (const ev of pending) if (ev.socketId === id) deliver(ev);
-        pending.length = 0;
-      }).catch((err) => {
-        log('socket.connect failed', err.message || err);
-        if (sock.onclose) sock.onclose();
-        unsub();
-      });
-      return sock;
-    },
-  },
-
   dns: {
+    /** @param {string} name */
     async resolve(name) {
       log('dns.resolve', name);
       return native().dns.resolve(name);
     },
   },
-
-  shop:       stub('shop'),
-  adProvider: stub('adProvider'),
-  browser:    stub('browser'),
-  events:     stub('events'),
-  ageSignals: stub('ageSignals'),
 
   // All three methods must exist: the generated glue's missing-method branches
   // call their fallback without returning. Main owns encrypted persistence.
@@ -574,6 +576,7 @@ Module = {
       log('secureStorage: returning saved credentials');
       return stored;
     },
+    /** @param {unknown} username @param {unknown} password */
     async storeCredentials(username, password) {
       if (typeof username !== 'string' || typeof password !== 'string') {
         throw new TypeError('credentials must be strings');
@@ -590,6 +593,7 @@ Module = {
   // No federated auth: reporting no providers falls back to email/password.
   // getAuthToken is absent and nativeAccount is left undefined on purpose.
   login: {
+    /** @param {unknown} name */
     hasProvider(name) {
       log(`login.hasProvider(${name}) -> false (no federated auth in this harness)`);
       return false;
@@ -600,6 +604,13 @@ Module = {
   // before glue load. The module still probes getPatchMode at image init.
   getPatchMode: async () => 'onDemand',
 
+  /**
+   * @param {unknown} stage
+   * @param {unknown} a
+   * @param {unknown} b
+   * @param {unknown} c
+   * @param {unknown} d
+   */
   setStartupProgress(stage, a, b, c, d) {
     log(`[startup] ${stage}`, [a, b, c, d].filter((v) => v !== undefined).join(' '));
     const L = window.gwLoading;
@@ -610,12 +621,23 @@ Module = {
       return L.done();
     }
     if (s === 'downloading' && typeof a === 'number') {
-      const eta = d > 0 ? `${Math.ceil(d / 60)} min remaining` : '';
-      const rate = c > 0 ? `${(c / 1048576).toFixed(1)} MB/s` : '';
+      const eta =
+        typeof d === 'number' && d > 0
+          ? `${Math.ceil(d / 60)} min remaining`
+          : '';
+      const rate =
+        typeof c === 'number' && c > 0
+          ? `${(c / 1048576).toFixed(1)} MB/s`
+          : '';
       return L.set('Preparing files needed to start', a / 100,
                    [rate, eta].filter(Boolean).join(' · '));
     }
-    L.set(STARTUP_LABELS[s] || 'Loading…', null);
+    L.set(
+      s in STARTUP_LABELS
+        ? STARTUP_LABELS[/** @type {keyof typeof STARTUP_LABELS} */ (s)]
+        : 'Loading…',
+      null,
+    );
   },
 
   handleFatalReadError() {
@@ -625,7 +647,12 @@ Module = {
       lastSnapshotError || 'No cached copy of the required game data is available.',
     );
   },
+  /** @param {import('../shared/diagnostics.js').RendererMilestoneFields} info */
   setBuildInfo(info) {
+    window.gwBuildInfo = Object.freeze({
+      programId: Number(info.programId),
+      buildId: Number(info.buildId),
+    });
     milestone('build.info', {
       programId: info.programId,
       buildId: info.buildId,
@@ -633,8 +660,7 @@ Module = {
     log(`build info: program=${info.programId} build=${info.buildId}`);
   },
 
-  isMobile: /Android|iPhone|iPad|iPod|Mobile|Opera Mini|IEMobile/i.test(navigator.userAgent)
-            || navigator.maxTouchPoints > 0,
+  isMobile: false,
 
   requestFullScreen: () => Module.canvas.requestFullscreen?.(),
   requestFullscreen: () => Module.canvas.requestFullscreen?.(),
@@ -642,55 +668,84 @@ Module = {
   onRuntimeInitialized() {
     performance.mark('gw.runtime.initialized');
     milestone('runtime.initialized');
+    window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
+    if (
+      new URL(window.location.href).searchParams.get('toolbox-automation') === '1'
+      && gameWasmInstance
+      && gameWasmModule
+    ) {
+      const toolboxInstance = gameWasmInstance;
+      const toolboxModule = gameWasmModule;
+      void import('./toolbox.js')
+        .then(({ installToolbox }) =>
+          installToolbox(toolboxInstance, toolboxModule))
+        .catch((error) => log(
+          '[toolbox]',
+          error instanceof Error ? error.message : String(error),
+        ));
+    }
   },
+  /** @param {unknown} reason */
   onAbort(reason) {
     milestone('wasm.abort');
     log('[err] WASM aborted:', reason);
     window.gwLoading?.fail('The game client stopped unexpectedly.');
   },
+  /** @param {unknown} code */
+  onExit(code) {
+    log('WASM exited:', code);
+    if (code === 0) {
+      void native().app.requestQuit().catch((error) => {
+        log(
+          '[err] clean client exit could not close the app:',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    } else {
+      window.gwLoading?.fail('The game client stopped unexpectedly.');
+    }
+  },
 };
 
-let wired = false;
+window.gwInstallGameFilesystem({
+  module: Module,
+  log,
+  failed(error) {
+    window.gwDiagnostics?.event('filesystem.persistenceFailed', error);
+    log(
+      '[err] persistent filesystem unavailable:',
+      error && typeof error === 'object' && 'name' in error
+        ? String(error.name)
+        : 'unknown error',
+    );
+    window.gwLoading?.failFilesystem();
+  },
+});
 
-function appendGlue(src, candidates) {
-  useJspi = src === 'Gw.jspi.js';
-  log('loading', src, `(wasm: ${useJspi ? 'Gw.jspi.wasm' : 'Gw.wasm'}) ...`);
+function appendGlue() {
+  const src = 'Gw.jspi.js';
+  log('loading', src, '(wasm: Gw.jspi.wasm) ...');
   const s = document.createElement('script');
   s.src = src;
   s.onerror = () => {
-    log(`[warn] ${src} not available`);
-    if (candidates) loadGlue(candidates.slice(1));
+    log(`[err] ${src} not available`);
+    window.gwLoading?.fail('The game client could not be loaded.');
   };
   document.body.appendChild(s);
 }
 
-// Wiring must happen once: loadGlue recurses when the preferred glue is
-// missing, and re-registering gave duplicate touch events and focus handlers.
-function loadGlue(candidates) {
-  const src = candidates[0];
-  if (!src) {
-    window.gwLoading?.fail('No game build could be loaded.');
-    return log('[err] no glue could be loaded — check that the updater finished');
+function loadGlue() {
+  if (!appSettings) {
+    window.gwLoading.fail('Settings were not ready.');
+    return;
   }
-  if (wired) return appendGlue(src);
-  wired = true;
-  useJspi = src === 'Gw.jspi.js';
-
-  // Backing size is CSS size × renderScale, deliberately independent of DPR.
-  const c = Module.canvas;
-  const syncCanvas = () => {
-    const scale = appSettings.renderScale || 1;
-    c.width = Math.round(window.innerWidth * scale);
-    c.height = Math.round(window.innerHeight * scale);
-    if (c.offscreen) {
-      c.offscreen.width = c.width;
-      c.offscreen.height = c.height;
-    }
-    log(`canvas ${c.width}x${c.height} (scale ${scale})`);
-  };
-  syncCanvas();
-  window.addEventListener('resize', syncCanvas);
+  const c =
+    /** @type {HTMLCanvasElement | null} */ (
+      document.getElementById('canvas')
+    );
+  if (!c) throw new Error('missing renderer canvas');
+  applyCursorTheme(appSettings.cursorTheme);
 
   c.focus();
   c.addEventListener('pointerdown', () => {
@@ -700,13 +755,25 @@ function loadGlue(candidates) {
   // Outside Capacitor the client rewrites API hosts to same-origin first labels.
   // Map those onto gw://app/<route>/… so the main-process proxy can forward.
   const PROXY_LABELS = new Set(['webgate', 'account', 'help', 'store', 'www']);
+  /** @type {any} Browser overload boundary retained by the wrapper. */
   const origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+  XMLHttpRequest.prototype.open = /**
+   * @this {XMLHttpRequest}
+   * @param {string} method
+   * @param {string | URL} url
+   * @param {...any} rest Browser overload boundary.
+   */
+  function (
+    method,
+    url,
+    ...rest
+  ) {
     try {
       const u = new URL(url, location.href);
-      const label = u.pathname.replace(/^\/+/, '').split('/')[0];
+      const label = u.pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+      const hostLabel = u.hostname.split('.')[0] ?? '';
       if (PROXY_LABELS.has(label) ||
-          (u.hostname === location.hostname && PROXY_LABELS.has(u.hostname.split('.')[0]))) {
+          (u.hostname === location.hostname && PROXY_LABELS.has(hostLabel))) {
         const path = u.pathname.startsWith('/') ? u.pathname : '/' + u.pathname;
         const rewritten = `gw://app${path}${u.search}`;
         log(`api: ${method} ${path}`);
@@ -721,245 +788,23 @@ function loadGlue(candidates) {
     if (ctx && ctx.state === 'suspended') {
       ctx.resume()
         .then(() => log('audio: resumed'))
-        .catch((error) => window.gwDiagnostics?.event('audio.resumeFailed', error));
+        .catch(reportAudioFailure);
     }
   };
+  /** @param {unknown} error */
+  function reportAudioFailure(error) {
+    window.gwDiagnostics?.event('audio.resumeFailed', error);
+  }
   for (const ev of ['pointerdown', 'keydown']) {
     window.addEventListener(ev, resumeAudio, true);
   }
 
-  // ---- mouse -> touch --------------------------------------------------
-  let touchMode = appSettings.touchMode || 'dbltap';
-  const DBL_MS = 400, DBL_PX = 10;
-  let lastClick = null, pendingTap = null, touchId = 0, active = null;
-
-  window.gwTouchMode = async (m) => {
-    if (!['dbltap', 'translate', 'augment', 'off'].includes(m)) return log(`[warn] unknown mode ${m}`);
-    touchMode = m;
-    appSettings = await native().settings.set({ ...appSettings, touchMode: m });
-    log(`touch mode: ${m}`);
-    return m;
-  };
-
-  const mkTouch = (x, y, id) => new Touch({
-    identifier: id, target: c,
-    clientX: x, clientY: y, pageX: x, pageY: y, screenX: x, screenY: y,
-    radiusX: 5, radiusY: 5, rotationAngle: 0, force: 1,
+  inputHost = window.gwInstallGameInput({
+    canvas: c,
+    initialSettings: appSettings,
+    diagnostics: window.gwDiagnostics,
+    log,
   });
-
-  const sendTouch = (type, touch) => {
-    const ended = type === 'touchend' || type === 'touchcancel';
-    c.dispatchEvent(new TouchEvent(type, {
-      bubbles: true, cancelable: true, composed: true,
-      touches: ended ? [] : [touch],
-      targetTouches: ended ? [] : [touch],
-      changedTouches: [touch],
-    }));
-  };
-
-  // Timers are tracked so an in-flight pair can be cancelled: a tap landing
-  // inside a later click's mouse stream trips the game's input assertion
-  // (evt.buttonState, FrMouse.cpp:486).
-  let tapTimers = [];
-  const cancelTaps = () => { tapTimers.forEach(clearTimeout); tapTimers = []; };
-  const tapAt = (x, y, delay) => tapTimers.push(setTimeout(() => {
-    const t = mkTouch(x, y, ++touchId);
-    sendTouch('touchstart', t);
-    tapTimers.push(setTimeout(() => sendTouch('touchend', t), 30));
-  }, delay));
-
-  // Registered in capture and before the glue loads, so these run ahead of the
-  // module's own listeners -- which is what makes suppression possible.
-  c.addEventListener('mousedown', (e) => {
-    if (touchMode === 'off' || e.button !== 0) return;
-    if (touchMode === 'dbltap') {
-      cancelTaps();          // nothing may land between this down and its up
-      const now = performance.now();
-      const near = lastClick && now - lastClick.t < DBL_MS &&
-        Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < DBL_PX;
-      if (near) { lastClick = null; pendingTap = { x: e.clientX, y: e.clientY }; }
-      else lastClick = { t: now, x: e.clientX, y: e.clientY };
-      return;                // mouse always passes through
-    }
-    active = mkTouch(e.clientX, e.clientY, ++touchId);
-    sendTouch('touchstart', active);
-    if (touchMode === 'translate') e.stopImmediatePropagation();
-  }, true);
-
-  c.addEventListener('mousemove', (e) => {
-    if (touchMode === 'off' || touchMode === 'dbltap' || !active) return;
-    active = mkTouch(e.clientX, e.clientY, active.identifier);
-    sendTouch('touchmove', active);
-    if (touchMode === 'translate') e.stopImmediatePropagation();
-  }, true);
-
-  c.addEventListener('mouseup', (e) => {
-    if (touchMode === 'dbltap') {
-      if (e.button !== 0 || !pendingTap) return;
-      const { x, y } = pendingTap;
-      pendingTap = null;
-      tapAt(x, y, 20);       // both taps, after the mouse stream has finished
-      tapAt(x, y, 100);
-      return;
-    }
-    if (touchMode === 'off' || e.button !== 0 || !active) return;
-    const t = mkTouch(e.clientX, e.clientY, active.identifier);
-    active = null;
-    sendTouch('touchend', t);
-    if (touchMode === 'translate') e.stopImmediatePropagation();
-  }, true);
-
-  // A drag leaving the canvas would otherwise strand a touch as held.
-  for (const ev of ['mouseleave', 'blur']) {
-    c.addEventListener(ev, () => {
-      if (!active) return;
-      const t = active;
-      active = null;
-      sendTouch('touchcancel', t);
-    }, true);
-  }
-
-  window.gwTap = (x, y) => {
-    const t = mkTouch(x, y, ++touchId);
-    sendTouch('touchstart', t);
-    setTimeout(() => sendTouch('touchend', t), 40);
-  };
-  window.gwDoubleTap = (x, y) => { window.gwTap(x, y); setTimeout(() => window.gwTap(x, y), 120); };
-  log(`touch mode: ${touchMode} (gwTouchMode('off') to disable)`);
-
-  // ---- pointer lock for right-drag camera -------------------------------
-  // Without it the cursor leaves the window mid-swing. While locked
-  // clientX/clientY freeze and only movementX/Y move, so we feed the module a
-  // virtual cursor: accumulate the movement and re-dispatch mousemove with
-  // those coordinates, canvas-relative.
-  //
-  // The module clamps that cursor to the canvas itself, so a virtual cursor
-  // walked off an edge stalls the camera however far the mouse keeps moving.
-  // On reaching one we end the drag there, recentre, and open a new one --
-  // the module sees a fresh grab from the middle and keeps turning.
-  let lockEnabled = appSettings.pointerLock !== false;
-  let virt = null;
-  let resetting = false, pendingX = 0, pendingY = 0, resetFrame = 0;
-
-  // movementX/Y go through the constructor, not assignment afterwards: they
-  // are readonly accessors on the prototype, so a later write silently no-ops.
-  const sendMouse = (type, r, buttons, button, mx, my) => c.dispatchEvent(
-    new MouseEvent(type, {
-      bubbles: true, cancelable: true, composed: true,
-      clientX: r.left + virt.x, clientY: r.top + virt.y,
-      screenX: window.screenX + r.left + virt.x,
-      screenY: window.screenY + r.top + virt.y,
-      movementX: mx, movementY: my, buttons, button,
-    }));
-
-  const sendDelta = (mx, my) => {
-    const r = c.getBoundingClientRect();
-    const nx = virt.x + mx, ny = virt.y + my;
-    if (nx >= 0 && ny >= 0) {
-      virt.x = nx;
-      virt.y = ny;
-      sendMouse('mousemove', r, 2, 0, mx, my);
-      return;
-    }
-    // Walk only as far as the edge, bank the overshoot, recycle the drag.
-    const sx = nx < 0 ? -virt.x : mx, sy = ny < 0 ? -virt.y : my;
-    virt.x += sx;
-    virt.y += sy;
-    sendMouse('mousemove', r, 2, 0, sx, sy);
-    pendingX += mx - sx;
-    pendingY += my - sy;
-    if (resetting) return;
-    resetting = true;
-    sendMouse('mouseup', r, 0, 2, 0, 0);
-    virt = { x: r.width / 2, y: r.height / 2 };
-    sendMouse('mousedown', r, 2, 2, 0, 0);
-    // A frame's grace: the module has to see the regrab before more movement
-    // against it means anything. Whatever arrived meanwhile replays here.
-    resetFrame = requestAnimationFrame(() => {
-      resetting = false;
-      if (document.pointerLockElement !== c || !virt) return;
-      const px = pendingX, py = pendingY;
-      pendingX = pendingY = 0;
-      if (px || py) sendDelta(px, py);
-    });
-  };
-
-  window.gwPointerLock = async (on) => {
-    lockEnabled = !!on;
-    appSettings = await native().settings.set({ ...appSettings, pointerLock: !!on });
-    if (!on) releaseLock();
-    log(`pointer lock: ${on ? 'enabled' : 'disabled'}`);
-    return lockEnabled;
-  };
-  window.gwApplySettings = (next) => {
-    const previousScale = appSettings.renderScale;
-    appSettings = { ...next };
-    touchMode = appSettings.touchMode || 'dbltap';
-    lockEnabled = appSettings.pointerLock !== false;
-    if (!lockEnabled) releaseLock();
-    if (appSettings.renderScale !== previousScale) syncCanvas();
-    window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
-    log('settings applied');
-  };
-
-  c.addEventListener('mousedown', (e) => {
-    if (e.button !== 2 || !lockEnabled || !e.isTrusted) return;
-    const r = c.getBoundingClientRect();
-    virt = { x: e.clientX - r.left, y: e.clientY - r.top };
-    resetting = false;
-    pendingX = pendingY = 0;
-    c.classList.add('cursor-hidden');
-    // A plain call, no unadjustedMovement: that option is refused often
-    // enough that its fallback matters, and the fallback ran from a promise
-    // callback, outside the gesture context pointer lock requires.
-    if (document.pointerLockElement !== c) {
-      try {
-        c.requestPointerLock();
-      } catch (err) {
-        window.gwDiagnostics?.event('pointerLock.failed', err);
-        log('[warn] pointer lock refused:', err.message);
-      }
-    }
-  }, true);
-
-  // On document, not the canvas: once locked the cursor has no position, and
-  // Chrome delivers the moves to the document rather than the locked element.
-  document.addEventListener('mousemove', (e) => {
-    if (!virt || document.pointerLockElement !== c || !e.isTrusted) return;
-    e.stopImmediatePropagation();
-    e.preventDefault();
-    if (resetting) { pendingX += e.movementX; pendingY += e.movementY; return; }
-    sendDelta(e.movementX, e.movementY);
-  }, true);
-
-  // blur too: a button released while unfocused never produces a mouseup here
-  // and would strand the cursor locked.
-  function releaseLock() {
-    virt = null;
-    resetting = false;
-    pendingX = pendingY = 0;
-    cancelAnimationFrame(resetFrame);
-    c.classList.remove('cursor-hidden');
-    if (document.pointerLockElement === c) document.exitPointerLock();
-  }
-  document.addEventListener('mouseup', (e) => {
-    if (e.button === 2 && e.isTrusted) releaseLock();
-  }, true);
-  window.addEventListener('blur', releaseLock);
-  // Esc drops the lock without a mouseup, which would stall a held drag.
-  document.addEventListener('pointerlockchange', () => {
-    if (virt && document.pointerLockElement !== c) releaseLock();
-  });
-  document.addEventListener('pointerlockerror', () => {
-    window.gwDiagnostics?.event('pointerLock.failed');
-    log('[warn] pointer lock failed (needs a user gesture, and a focused document)');
-  });
-
-  // Right-drag turns the camera, so the context menu has to go. The shipped
-  // client suppresses it unconditionally and so do we -- which does cost the
-  // right-click route into devtools.
-  c.addEventListener('contextmenu', (e) => e.preventDefault());
-
   // Text entry runs through these, not through keydown on the canvas. Stray
   // focus must bounce off, or a field silently swallows keys meant for the game.
   Module.oskInput = {
@@ -974,12 +819,18 @@ function loadGlue(candidates) {
   for (const type in Module.oskInput) {
     const el = Module.oskInput[type];
     if (!el) { log(`[warn] missing OSK element for "${type}"`); continue; }
-    el.addEventListener('focus', () => { if (Module.oskActiveInput !== el) el.blur(); });
-    if (Module.oskIsModal) el.parentElement.classList.add('osk-input-container-modal');
+    el.addEventListener('focus', () => {
+      globalThis.queueMicrotask(() => {
+        if (Module.oskActiveInput !== el && document.activeElement === el) el.blur();
+      });
+    });
+    if (Module.oskIsModal) {
+      el.parentElement?.classList.add('osk-input-container-modal');
+    }
   }
   log(`osk: ${Object.keys(Module.oskInput).length} fields, modal=${Module.oskIsModal}`);
 
-  appendGlue(src, candidates);
+  appendGlue();
 }
 
 (async function boot() {
@@ -988,6 +839,27 @@ function loadGlue(candidates) {
     return;
   }
   milestone('renderer.loaded');
+  try {
+    const [{ unavailablePlatformCapabilities }, { createSocketHost }] =
+      await Promise.all([
+        import('./platform-capabilities.js'),
+        import('./socket-host.js'),
+      ]);
+    Object.assign(Module, unavailablePlatformCapabilities(log));
+    const socketHost = createSocketHost({
+      native: native().sockets,
+      diagnostics: window.gwDiagnostics,
+      log,
+    });
+    Module.socket = socketHost.socket;
+    disposeSocketHost = socketHost.dispose;
+  } catch (error) {
+    window.gwLoading?.fail('The game host contract could not be loaded.');
+    return log(
+      '[err] platform contract load failed:',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 
   window.addEventListener('gw:diagnostics-toggle', async () => {
     appSettings = await native().settings.get();
@@ -999,9 +871,14 @@ function loadGlue(candidates) {
 
   try {
     appSettings = await native().settings.get();
+    applyCursorTheme(appSettings.cursorTheme);
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   } catch (e) {
-    log('[warn] settings load failed:', e.message);
+    window.gwLoading?.fail('Settings could not be loaded.');
+    return log(
+      '[err] settings load failed:',
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   try {
@@ -1012,9 +889,13 @@ function loadGlue(candidates) {
     applyResidentBits(meta.residentBits);
     log('snapshot:', snapshotSize, 'bytes,', snapshotChunkHashes.length,
         'chunks of', snapshotChunkSize, `(${residentHashes.size} resident)`);
-    await window.gwResolveDataStrategy?.(snapshotSize);
+    await window.gwResolveDataStrategy(snapshotSize);
   } catch (e) {
-    log('[warn] could not read snapshot metadata:', e.message);
+    window.gwLoading?.fail('Game data could not be prepared.');
+    return log(
+      '[err] could not prepare snapshot metadata:',
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   if (!('Suspending' in WebAssembly)) {
@@ -1022,31 +903,8 @@ function loadGlue(candidates) {
     return log('[err] JSPI unavailable');
   }
 
-  // Record graphics diagnostics once a WebGL context is obtainable.
-  try {
-    const probe = document.createElement('canvas');
-    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
-    const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
-    const renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : (gl ? 'unknown' : 'none');
-    const vendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : (gl ? 'unknown' : 'none');
-    await native().diagnostics.recordGraphics({
-      userAgent: navigator.userAgent,
-      jspi: true,
-      webglVersion: gl ? (gl instanceof WebGL2RenderingContext ? 'WebGL2' : 'WebGL') : 'none',
-      renderer: String(renderer),
-      vendor: String(vendor),
-      hardwareAcceleration: !/swiftshader|llvmpipe|software/i.test(String(renderer)),
-      canvasWidth: Math.round(window.innerWidth * (appSettings.renderScale || 1)),
-      canvasHeight: Math.round(window.innerHeight * (appSettings.renderScale || 1)),
-      devicePixelRatio: window.devicePixelRatio || 1,
-      renderScale: appSettings.renderScale || 1,
-    });
-  } catch (e) {
-    log('[warn] graphics diagnostics failed:', e.message);
-  }
-
   window.gwLoading.set('Starting the game…', null);
-  loadGlue(['Gw.jspi.js']);
+  loadGlue();
 })();
 
 })();

@@ -3,12 +3,18 @@ import {
   BrowserWindow,
   dialog,
   Menu,
+  powerSaveBlocker,
   screen,
   shell,
   type MenuItemConstructorOptions,
 } from "electron";
-import type { AppSettings } from "../shared/contracts.js";
+import type {
+  AppSettings,
+  AppSettingsPatch,
+  DownloadProgress,
+} from "../shared/contracts.js";
 import { EXTERNAL_URLS } from "../shared/contracts.js";
+import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
 import {
   defaultWindowState,
@@ -19,8 +25,10 @@ import {
   type WindowState,
 } from "./core/window-state.js";
 import { log } from "./diagnostics.js";
+import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
+import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
 import { isDevBuild } from "./protocol.js";
 
 const BUG_REPORT_URL =
@@ -29,13 +37,15 @@ const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface WindowHost {
   sockets: SocketManager;
+  getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
-  setSettings: (value: AppSettings) => Promise<AppSettings>;
+  updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
   exportDiagnostics: () => Promise<string>;
   markPerformanceProblem: () => void;
   startCapture: (level: 1 | 2) => Promise<void>;
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
+  prepareRendererRecovery: () => Promise<void>;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -44,6 +54,29 @@ let restoredWindowState: WindowState | null = null;
 let lastNormalBounds: WindowBounds | null = null;
 let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
 let windowStateWrite: Promise<void> = Promise.resolve();
+let downloadPowerBlockerId: number | null = null;
+
+export function updateLongRunningTaskFeedback(
+  value: DownloadProgress,
+  win = mainWindow,
+): boolean {
+  const feedback = longRunningTaskFeedback(value);
+  if (feedback.preventAppSuspension && downloadPowerBlockerId === null) {
+    downloadPowerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+    log("app", "info", "download.appSuspensionPrevented");
+  } else if (!feedback.preventAppSuspension && downloadPowerBlockerId !== null) {
+    powerSaveBlocker.stop(downloadPowerBlockerId);
+    downloadPowerBlockerId = null;
+    log("app", "info", "download.appSuspensionRestored");
+  }
+
+  const preventingAppSuspension =
+    downloadPowerBlockerId !== null &&
+    powerSaveBlocker.isStarted(downloadPowerBlockerId);
+  if (!win || win.isDestroyed()) return preventingAppSuspension;
+  win.setProgressBar(feedback.dockProgress);
+  return preventingAppSuspension;
+}
 
 function workAreas(): WindowBounds[] {
   return screen.getAllDisplays().map((display) => ({ ...display.workArea }));
@@ -197,6 +230,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   mainWindow = win;
+  updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
   win.once("ready-to-show", () => {
@@ -228,23 +262,37 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   win.webContents.on("will-navigate", (event, url) => {
-    if (!isAppUrl(url)) {
+    if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
       log("app", "warn", "security.navigationBlocked", { url });
     }
   });
 
   win.webContents.on("will-redirect", (event, url) => {
-    if (!isAppUrl(url)) {
+    if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
       log("app", "warn", "security.redirectBlocked", { url });
     }
   });
 
-  win.webContents.session.setPermissionRequestHandler((_wc, _perm, callback) => {
-    callback(false);
-  });
-  win.webContents.session.setPermissionCheckHandler(() => false);
+  const mayLockPointer = (
+    webContents: Electron.WebContents | null,
+    permission: string,
+    isMainFrame: boolean,
+  ): boolean =>
+    permission === "pointerLock" &&
+    webContents === win.webContents &&
+    isMainFrame &&
+    isCanonicalRendererUrl(webContents.getURL());
+  win.webContents.session.setPermissionRequestHandler(
+    (webContents, permission, callback, details) => {
+      callback(mayLockPointer(webContents, permission, details.isMainFrame));
+    },
+  );
+  win.webContents.session.setPermissionCheckHandler(
+    (webContents, permission, _origin, details) =>
+      mayLockPointer(webContents, permission, details.isMainFrame),
+  );
   win.webContents.on("will-attach-webview", (event) => {
     event.preventDefault();
     log("app", "warn", "security.webviewBlocked");
@@ -271,9 +319,19 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
       log("renderer", "warn", "renderer.recoveryScheduled");
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
-        createMainWindow(host);
-        win.destroy();
-        log("renderer", "info", "renderer.recovered");
+        void host
+          .prepareRendererRecovery()
+          .catch((error) => {
+            log("renderer", "error", "renderer.recoveryPreparationFailed", {
+              message: error instanceof Error ? error.message : String(error),
+            });
+          })
+          .finally(() => {
+            if (isQuitting() || win.isDestroyed()) return;
+            createMainWindow(host);
+            win.destroy();
+            log("renderer", "info", "renderer.recovered");
+          });
       }, 500);
     } else if (details.reason !== "clean-exit") {
       dialog.showErrorBox(
@@ -295,16 +353,22 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   installMenu(host, win);
-  void win.loadURL("gw://app/");
+  void win.loadURL(
+    TOOLBOX_AUTOMATION_ENABLED
+      ? "gw://app/?toolbox-automation=1"
+      : "gw://app/",
+  );
   return win;
 }
 
-function isAppUrl(raw: string): boolean {
+export async function resetGameInput(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
   try {
-    const url = new URL(raw);
-    return url.protocol === "gw:" && url.hostname === "app";
+    await win.webContents.executeJavaScript(
+      "window.dispatchEvent(new CustomEvent('gw:input-reset'))",
+    );
   } catch {
-    return false;
+    // Reload/quit can destroy the renderer between the liveness check and send.
   }
 }
 
@@ -338,6 +402,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
   const reportProblem = async (): Promise<void> => {
+    await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
       buttons: [
@@ -377,9 +442,10 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
               {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
-                click: () => {
+                click: async () => {
                   if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-                  void win.webContents.executeJavaScript(
+                  await resetGameInput(win);
+                  await win.webContents.executeJavaScript(
                     "window.dispatchEvent(new CustomEvent('gw:settings'))",
                   );
                 },
@@ -410,7 +476,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         {
           id: "reset-window-state",
           label: "Reset Window Size and Position",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void resetWindowState(win).catch(() => {
               log("app", "error", "window.stateResetFailed");
             });
@@ -420,11 +487,9 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         {
           label: "Toggle Diagnostics",
           click: async () => {
+            await resetGameInput(win);
             const cur = await host.getSettings();
-            await host.setSettings({
-              ...cur,
-              showDiagnostics: !cur.showDiagnostics,
-            });
+            await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
             if (win.isDestroyed() || win.webContents.isDestroyed()) return;
             void win.webContents.executeJavaScript(
               "window.dispatchEvent(new CustomEvent('gw:diagnostics-toggle'))",
@@ -432,8 +497,10 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           },
         },
         {
+          id: "start-performance-capture",
           label: "Start Performance Capture",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void host.startCapture(1).catch((error) => {
               dialog.showErrorBox(
                 "Capture could not start",
@@ -446,11 +513,16 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "mark-performance-problem",
           label: "Mark Performance Problem",
           accelerator: "CmdOrCtrl+Shift+M",
-          click: () => host.markPerformanceProblem(),
+          click: async () => {
+            await resetGameInput(win);
+            host.markPerformanceProblem();
+          },
         },
         {
+          id: "start-chromium-trace",
           label: "Start Chromium Trace",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void host.startCapture(2).catch((error) => {
               dialog.showErrorBox(
                 "Trace could not start",
@@ -460,8 +532,10 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           },
         },
         {
+          id: "stop-capture",
           label: "Stop Capture",
-          click: () => {
+          click: async () => {
+            await resetGameInput(win);
             void host.stopCapture();
           },
         },
@@ -469,6 +543,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           label: "Reload Game",
           accelerator: "CmdOrCtrl+R",
           click: async () => {
+            await resetGameInput(win);
             if (host.sockets.size(win.webContents.id) > 0) {
               const { response } = await dialog.showMessageBox(win, {
                 type: "warning",

@@ -22,6 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
+  dormant exact-build Toolbox development foundation
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -38,21 +39,23 @@ arbitrary filesystem or URL fetch capability.
 
 | Path                      | Ownership                                                         |
 | ------------------------- | ----------------------------------------------------------------- |
-| `src/main/main.ts`        | composition root and application state                            |
+| `src/main/main.ts`        | composition root and application lifecycle                        |
+| `src/main/client-runtime.ts` | atomic generation, update, rollback, cache, selected WASM       |
 | `src/main/core/`          | updater, cache, DNS, sockets, credentials, settings, window state |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
 | `src/preload/preload.cjs` | self-contained sandbox-compatible bridge                          |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
+| `src/toolbox-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
 | `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
 
 The preload is deliberately self-contained CommonJS. Electron’s sandboxed
 preload loader does not execute a local ESM dependency graph. Release tests
-therefore assert that its channel list exactly matches the canonical shared
-contract.
+therefore assert that every canonical channel is present in both the preload
+and the main-process wiring. The bridge and each nested namespace are frozen.
 
 ## Game update and snapshot cache
 
@@ -64,9 +67,21 @@ Gw.jspi.wasm
 version.json
 ```
 
+The remote manifest has bounded size, file and directory counts, names,
+parent topology, and chunk references. Required product basenames must be
+unique. Network bodies are streamed beneath call-site byte ceilings and gzip
+decoding cannot exceed the manifest's exact expected chunk length.
 Existing artifacts are verified chunk-by-chunk against the current manifest;
 equal file length is not treated as proof of equality. New artifacts are built
 in a part file, synced, and renamed only after every content hash passes.
+The published local manifest retains the executable artifacts' sizes and chunk
+hashes, so offline fallback is independently verifiable. A changed client is
+kept as a candidate beside one verified previous generation until it has both
+presented a frame and opened a game TCP connection. A login-screen frame alone
+cannot discard the rollback generation. Failure before both signals durably
+rejects that exact client fingerprint for the current host version and restores
+the previous generation.
+Invalid or legacy-unverifiable state is never promoted into the rollback slot.
 
 `Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
 range onto 256 KB chunks, coalesces concurrent requests by content hash,
@@ -75,25 +90,48 @@ residency set is initialized with one directory scan and updated on
 publication. Snapshot requests never rescan every hash on disk.
 
 The renderer keeps a disposable 256 MB LRU of chunk bytes. The main-process
-content store is canonical. `image.fileSize` stays synchronous because the
-snapshot metadata is obtained before the Emscripten glue is appended.
+content store is canonical. Snapshot range responses are `no-store`, and
+Chromium's derived network cache is cleared at startup; otherwise it duplicates
+hundreds of megabytes of already-resident native chunks. This does not remove
+or redownload the canonical chunk store. `image.fileSize` stays synchronous
+because the snapshot metadata is obtained before the Emscripten glue is
+appended.
 
 Download concurrency is capped at eight. This is a conduct constraint as well
 as a performance setting: every installation uses the public client access key
-against ArenaNet’s production service.
+against ArenaNet’s production service. Individual patch requests have a
+30-second ceiling and retain the existing bounded exponential retry policy.
+
+Full-image progress uses one time-weighted rate average after a short warm-up;
+the same value drives the displayed transfer rate and ETA. The main process
+derives native task feedback from the canonical `image` progress phase: the
+Dock shows determinate or indeterminate progress and
+`prevent-app-suspension` remains active until the download completes, pauses,
+or fails. There is no renderer-owned download or power state.
 
 ## WASM host
 
 `Module` must be declared with `var`; the generated glue redeclares it.
 `Gw.jspi.js` asks for `Gw.wasm`, so `locateFile` explicitly selects
-`Gw.jspi.wasm`. Asyncify is not a production fallback.
+`Gw.jspi.wasm`. The protocol reads one immutable `ActiveClient` per request;
+its chunk store, snapshot metadata, artifact directory, and selected WASM can
+never come from different client generations. Full-file protocol responses stream from disk, allowing
+`WebAssembly.instantiateStreaming` to compile without first retaining the
+whole module in main-process memory. Cached Toolbox validation also streams
+both hashes; the official bytes are loaded only for a cold transform. Asyncify
+is not a production fallback.
 
 Before `Gw.jspi.js` is appended, the renderer resolves the single
 `dataStrategy` setting against native cache residency. `null` owns the
 first-run choice, `quick` releases boot immediately, and incomplete `full`
-owns the foreground downloader. The game, audio context, sockets, and WebGL
-runtime cannot start behind the launcher. Cache residency—not a saved progress
-counter—is the download truth.
+owns the foreground downloader. Main owns native download execution, canonical
+progress, and power state; the renderer keeps one coalesced UI operation phase
+and derives presentation from progress plus cache residency. The game, audio
+context, sockets, and WebGL runtime cannot start behind the launcher. Cache
+residency—not a saved progress counter—is the download truth. Full Game
+additionally runs the bounded content-hash verification pass at startup even
+when every expected filename is resident; corruption cannot bypass the repair
+path.
 
 Awaited host calls always return promises:
 
@@ -102,7 +140,6 @@ image.cacheAsync
 dns.resolve
 secureStorage.getCredentials/storeCredentials/clearCredentials
 adProvider.showInterstitial
-ageSignals.check
 shop.initialize/inAppPurchase
 ```
 
@@ -113,15 +150,74 @@ stable signing identity, the main process enables Chromium's
 `use-mock-keychain` provider before ready. Electron `safeStorage` therefore
 uses a local mock profile key rather than macOS Keychain: it prevents recurring
 OS prompts and casual plaintext disclosure, but does not defend the saved
-login from software running as the same user. An unreadable pre-cutover
-Keychain-backed ciphertext is deleted once and the game prompts again.
+login from software running as the same user. An unreadable ciphertext is never
+deleted by a read; the failure is recorded without credential content and the
+game prompts again. A later explicit save atomically replaces it.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 No federated provider is advertised, allowing the client’s username/password
 flow to own the UI. The app has no independent update feed;
 application replacements are manual, while the ArenaNet client updater remains
-automatic. Commerce, ads, browser, and event services remain inert capability
-stubs where the desktop client does not need the mobile integration.
+automatic. Properly guarded browser, analytics, age-signal, and federated-auth
+namespaces are absent. The two namespaces with defective absence guards
+(`adProvider` and `shop`) are narrow plain objects whose unavailable operations
+reject with the promise shapes expected by the client.
+
+The renderer owns one persistent game filesystem initialization before the
+official client enters `main()`. It mounts and restores Emscripten IDBFS at
+`app:`, creates `Templates/Skills` and `Templates/Equipment`, changes the
+working directory to that mount, and persists the directory invariant before
+releasing the run dependency. This keeps the client's relative build-template,
+screenshot, chat-log, and preference writes in one durable origin. A restore
+or initial persist failure stops startup instead of silently running against
+ephemeral memory. At Emscripten's public file-operation boundary, Windows-style
+backslashes used by the official template code are normalized to POSIX
+separators before lookup, create, rename, or delete logic sees them.
+
+After native confirmation, the recovery action records a restart request.
+Startup clears only IndexedDB for the owned `gw://app` session before a
+renderer can mount IDBFS, then removes the request. It cannot clear the
+separate native chunk cache or encrypted credential file. There is no native
+arbitrary-file bridge and no production WASM rewrite.
+
+### Toolbox instrumentation
+
+The official `Gw.jspi.wasm` remains canonical. In 0.0.2 normal and packaged
+sessions always serve it directly: they do no Toolbox transform, fetch no
+kernel, install no hook, start no snapshot observer, and contain no Toolbox UI.
+Only explicit non-packaged automation enables the development path.
+
+Automation hashes the official module after publication and recognizes only
+entries in the checked-in Toolbox build manifest. A known
+hash is transformed deterministically into a separate cache entry keyed by
+official hash, transform ABI, and manifest fingerprint. The transform clones
+one typed function, installs one dispatcher, and embeds the verified layout as
+a custom section. Unknown hashes and transform failures serve the official
+module unchanged.
+
+`toolbox-transform.ts` is the pure byte transform. `toolbox-client.ts` owns
+streaming hash validation, cache reuse, and atomic derived publication. The
+manifest's ordered layout fields generate the embedded `layoutWords`; the
+renderer does not maintain a second field-order list.
+
+Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
+446. It uses the stock table's null slot 0; the mutable global stores
+`slot + 1`, preserving zero as disabled. No table growth or all-functions
+instrumentation remains.
+
+After runtime initialization in explicit automation, the renderer dynamically
+loads the Toolbox runtime, allocates a config and
+64-byte snapshot through the game's allocator, instantiates the dependency-free
+`wasm32-unknown-unknown` companion against the exported memory, installs its
+callback, and enables the dispatcher last. The callback calls the relocated
+original exactly once before collecting checked map/player/target state.
+
+Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
+compile-time size assertions, checked pointer arithmetic, and an odd/even
+sequence lock. It contains no pointers. The automation observer reads at most
+once per animation frame and rejects unknown flags, invalid IDs/types/bands,
+and non-finite values. It publishes structured `gwToolboxState` without
+production DOM. No memory view or per-frame call crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes
@@ -132,10 +228,28 @@ fallback needed for the `0.0.1.2` datacenter sentinel.
 Game socket payloads are views into WebAssembly memory. The renderer copies
 each outbound view into a compact `Uint8Array` before crossing
 `contextBridge`; otherwise Electron can serialize the view’s entire backing
-memory for a packet only a few bytes long. Main still owns validation,
-backpressure, ordering, and the TCP write. Diagnostics reconcile logical,
+memory for a packet only a few bytes long. Electron's compact IPC value is
+written directly to the native socket without another `Buffer` copy. Main
+still owns validation, backpressure, ordering, and the TCP write. Diagnostics reconcile logical,
 source-backing, compact, IPC-backing, and written byte counts without recording
 packet contents.
+
+### Official-client memory floor
+
+The generated client mounts Emscripten IDBFS at `app:` and restores
+`app:/Gw.dat` before completing initialization. On the certified profile that
+file is about 919 MB, while the official WASM linear memory is about 369 MiB.
+Restoring IDBFS can therefore create a short-lived RSS peak above 1 GiB in both
+the browser/main and renderer processes even though steady resident memory
+falls sharply after the pages become reclaimable. This is not Toolbox state,
+the 256 MB snapshot LRU, or Chromium's network cache.
+
+Avoiding that peak requires an architectural replacement for the official
+synchronous Emscripten filesystem—such as a proven lazy native backend or a
+worker-hosted runtime—not a safe local copy removal. Do not clear IDBFS or
+patch the official glue speculatively: `Gw.dat` is persistent client state and
+removing it can turn memory pressure into repeated reconstruction and snapshot
+I/O.
 
 Closing the single game window is an application quit. The close event is
 converted to `app.quit()` before the renderer is destroyed, cleanup closes
@@ -148,13 +262,17 @@ reserved for unexpected loss while the application is not quitting.
 
 The client creates a WebGL context on an `OffscreenCanvas`. The EGL import
 patch presents each successful swap through `transferToImageBitmap()` and the
-visible canvas’s `bitmaprenderer`. Backing dimensions are CSS dimensions times
-the selected render scale, deliberately independent of device pixel ratio.
+visible canvas’s `bitmaprenderer`. The client remains the only canvas-size
+owner; the host supplies the selected render scale through Emscripten’s device
+pixel ratio import and mirrors client-requested sizes to the offscreen buffer.
 
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
-fullscreen, touch translation, and right-drag pointer lock. Pointer lock uses a
-virtual cursor and recycles a held drag at canvas edges so camera rotation does
-not stall.
+fullscreen, touch translation, trackpad-wheel normalization, and right-drag
+pointer lock. `input.js` owns the canvas input listeners and accepts validated
+settings from the settings owner; it does not persist settings itself. One
+held-input registry releases keys, buttons, and touches when focus or native UI
+consumes an input release. Pointer lock uses a virtual cursor and recycles a
+held drag at canvas edges so camera rotation does not stall.
 
 ## Diagnostics
 
@@ -183,6 +301,9 @@ Level 1 adds fixed-width per-frame records. The renderer batches them; the main
 process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
 an argument-filtered Chromium trace with selected supported categories, a 256
 MB buffer, an 80% stop threshold, and a 120-second time limit.
+The existing main-to-renderer capture command path also owns a noninteractive
+recording indicator, elapsed timer, and problem-marker acknowledgement; it
+does not add a preload capability.
 
 `.gwdiag` is a ZIP with:
 
@@ -233,19 +354,41 @@ and should locate a bottleneck, not provide the final before/after number.
 ## Verification boundaries
 
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
-cache coalescing, hash validation, resume behavior, and diagnostics payloads.
-Integration tests exercise artifact publication and rollback against an
-in-memory patch fixture. Playwright launches the real Electron shell and
-asserts the protocol origin, sandboxed preload surface, absence of Node globals,
+cache coalescing, hash validation, insufficient-disk rejection, interrupted
+full-download resume, smoothed rates, native task-state derivation, and
+diagnostics payloads. Integration tests exercise artifact publication,
+corruption repair, rollback, and bounded unresponsive requests against local
+fixtures. Playwright launches the real Electron shell and asserts the protocol
+origin, sandboxed preload surface, absence of Node globals, actionable startup
+and download failures, renderer crash recovery, settings presentation,
 clock/metrics availability, and capture lifecycle.
 
-The opt-in live smoke passed on Apple Silicon on July 23, 2026 against the
-current production client: JSPI initialized, hardware acceleration was active,
-snapshot reads completed, and a frame was submitted. It does not prove:
+The opt-in live smoke exercises the current production client from a fresh
+profile: JSPI must initialize, hardware acceleration must be active, snapshot
+reads must complete, render scaling must change the real drawing buffer, and a
+frame must be submitted. A weekly macOS GitHub Actions canary runs this same
+test and records the client fingerprint and renderer in the workflow summary.
+Failures do not rewrite or hook ArenaNet binaries; they identify a host/client
+compatibility change for investigation. The canary does not prove:
 
 - a real account completes login;
 - ANGLE/Metal renders the real client correctly on every advertised Mac;
-- signing, notarization, and update credentials are valid.
 
 Those are explicit live release gates, not assumptions hidden behind unit
 tests.
+
+Toolbox development uses the layered, cached-safe workflow in
+`docs/toolbox-development.md`. Unknown client hashes always use the official
+WASM unchanged, and a live Toolbox run cannot update the client unless update
+permission is explicit.
+
+The dependency audit has one explicit exception for
+`GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
+reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and
+upstream published the memory-bound fix only for the API-incompatible 5.x
+line. The compatible 5.x edge is pinned to 5.0.8. No game, renderer, preload,
+main-process runtime, or packaged dependency accepts these development glob
+patterns. A release invariant forbids production dependencies in either
+workspace package while the exception exists, preventing it from masking a
+shipped vulnerable edge. Remove the exception as soon as the upstream parents
+adopt patched compatible dependencies.

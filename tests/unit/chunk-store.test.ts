@@ -113,6 +113,60 @@ describe("chunk-store", () => {
     assert.equal(fetches, 1);
   });
 
+  it("verifies and repairs resident chunks before full-download completion", async () => {
+    const root = await freshDir();
+    const good = Buffer.alloc(CHUNK, 4);
+    const hash = hashOf(good);
+    await writeFile(join(root, hash), Buffer.alloc(CHUNK, 8));
+    let fetches = 0;
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK,
+      chunkSize: CHUNK,
+      chunkHashes: [hash],
+      fetch: async () => {
+        fetches += 1;
+        return new Uint8Array(good);
+      },
+    });
+
+    assert.equal(
+      await store.downloadAll({ freeBytes: async () => 2 * 1024 ** 3 }),
+      true,
+    );
+    assert.equal(fetches, 1);
+    assert.deepEqual(await readFile(join(root, hash)), good);
+  });
+
+  it("allows pause and sleep to interrupt resident-cache verification", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 4 }, (_, index) =>
+      Buffer.alloc(CHUNK * 256, index + 70),
+    );
+    const hashes = payloads.map(hashOf);
+    await Promise.all(
+      payloads.map((payload, index) =>
+        writeFile(join(root, hashes[index]!), payload),
+      ),
+    );
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: payloads.reduce((total, payload) => total + payload.length, 0),
+      chunkSize: payloads[0]!.length,
+      chunkHashes: hashes,
+      fetch: async () => {
+        throw new Error("resident verification must not fetch");
+      },
+    });
+
+    const download = store.downloadAll({
+      jobs: 1,
+      freeBytes: async () => 2 * 1024 ** 3,
+    });
+    setImmediate(() => store.stop());
+    assert.equal(await download, false);
+  });
+
   it("merges boot working set and never shrinks it", async () => {
     const root = await freshDir();
     const boot = join(root, "boot-chunks.json");
@@ -168,6 +222,143 @@ describe("chunk-store", () => {
     assert.equal(fetched.has(hashes[0]!), false);
     assert.equal(fetched.has(hashes[1]!), true);
     assert.equal(fetched.has(hashes[2]!), true);
+  });
+
+  it("fails before downloading when the full image does not fit", async () => {
+    const root = await freshDir();
+    const payload = Buffer.alloc(CHUNK, 11);
+    const hash = hashOf(payload);
+    let fetches = 0;
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK,
+      chunkSize: CHUNK,
+      chunkHashes: [hash],
+      fetch: async () => {
+        fetches += 1;
+        return new Uint8Array(payload);
+      },
+    });
+
+    await assert.rejects(
+      () => store.downloadAll({ freeBytes: async () => 0 }),
+      (error) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "disk_full",
+    );
+    assert.equal(fetches, 0);
+  });
+
+  it("fails fast and preserves fatal local download errors", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 3 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 20),
+    );
+    const hashes = payloads.map(hashOf);
+    let fetches = 0;
+    const diskError = Object.assign(new Error("disk filled during write"), {
+      code: "ENOSPC",
+    });
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async () => {
+        fetches += 1;
+        throw diskError;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        store.downloadAll({
+          jobs: 1,
+          freeBytes: async () => 10 * 1024 * 1024 * 1024,
+        }),
+      (error) => error === diskError,
+    );
+    assert.equal(fetches, 1);
+  });
+
+  it("bounds exhausted network work and resumes with verified chunks", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 10 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 30),
+    );
+    const hashes = payloads.map(hashOf);
+    let failedFetches = 0;
+    const unavailable = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async () => {
+        failedFetches += 1;
+        throw new Error("offline");
+      },
+    });
+
+    await assert.rejects(() =>
+      unavailable.downloadAll({
+        jobs: 3,
+        freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      }),
+    );
+    assert.ok(failedFetches > 0);
+    assert.ok(failedFetches <= 3);
+
+    const resumed = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async (hash) =>
+        new Uint8Array(payloads[hashes.indexOf(hash)]!),
+    });
+    assert.equal(
+      await resumed.downloadAll({
+        jobs: 3,
+        freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      }),
+      true,
+    );
+  });
+
+  it("preserves completed chunks when a full download is stopped and resumed", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 3 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 60),
+    );
+    const hashes = payloads.map(hashOf);
+    const fetches: string[] = [];
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async (hash) => {
+        fetches.push(hash);
+        return new Uint8Array(payloads[hashes.indexOf(hash)]!);
+      },
+    });
+
+    const stopped = await store.downloadAll({
+      jobs: 1,
+      freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      onProgress: () => store.stop(),
+    });
+    assert.equal(stopped, false);
+    assert.deepEqual(fetches, [hashes[0]]);
+
+    store.resume();
+    const completed = await store.downloadAll({
+      jobs: 1,
+      freeBytes: async () => 10 * 1024 * 1024 * 1024,
+    });
+    assert.equal(completed, true);
+    assert.deepEqual(fetches, hashes);
   });
 
   it("caps native fetches at eight and promotes queued demand", async () => {

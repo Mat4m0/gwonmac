@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -39,5 +40,30 @@ fs.copyFileSync(
   path.resolve("build/preload/preload.cjs"),
 );
 
+const kernel = spawnSync(
+  "rustc",
+  [
+    "src/toolbox-kernel/lib.rs",
+    "--edition=2021",
+    "--target",
+    "wasm32-unknown-unknown",
+    "--crate-type",
+    "cdylib",
+    "-C",
+    "opt-level=s",
+    "-C",
+    "panic=abort",
+    "-C",
+    "link-arg=--import-memory",
+    "-C",
+    "link-arg=--strip-all",
+    "-o",
+    path.join(dest, "toolbox-kernel.wasm"),
+  ],
+  { stdio: "inherit" },
+);
+if (kernel.status !== 0) process.exit(kernel.status ?? 1);
+
 console.log(`copied renderer -> ${dest}`);
 console.log("copied preload.cjs -> build/preload/preload.cjs");
+console.log("compiled toolbox-kernel.wasm -> build/renderer");

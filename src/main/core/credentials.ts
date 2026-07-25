@@ -57,7 +57,7 @@ export class CredentialsStore {
     }
   }
 
-  async save(value: StoredCredentials): Promise<void> {
+  async save(value: unknown): Promise<void> {
     const cleaned = parseCredentials(value);
     if (!this.storage.isEncryptionAvailable()) {
       throw new AppError("credentials_unavailable", "credential encryption is unavailable");

@@ -24,6 +24,7 @@ function metrics(): RendererMetrics {
     swapTotalUs: 12_000,
     swapMinUs: 50,
     swapMaxUs: 300,
+    presentationFailures: 0,
     submitIntervalCount: 119,
     submitIntervalTotalUs: 1_983_333,
     submitIntervalMinUs: 16_000,
@@ -124,6 +125,10 @@ describe("renderer diagnostics boundary", () => {
     assert.equal(isRendererMetrics(inconsistent), false);
     assert.equal(
       isRendererMetrics({ ...metrics(), rafOver50: 2, rafOver33: 1 }),
+      false,
+    );
+    assert.equal(
+      isRendererMetrics({ ...metrics(), presentationFailures: 121 }),
       false,
     );
     assert.equal(

@@ -23,42 +23,29 @@ the module bytes, never in-process.
 ## Scripts
 
 ### `wasmscan.py` — decoder and scanner
-Full instruction decode (17,596/17,596 functions, no failures). Resolves string
-and assertion anchors to function indices, and byte patterns to code offsets.
+Full instruction decode (build 38,771: 17,600/17,600 functions, no failures).
+Resolves string and assertion anchors to function indices, and byte patterns to
+code offsets.
 
     python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
 
 Source paths are stored as `../../../../Gw/Ui/UiRoot.cpp` — relative prefix,
 forward slashes — so Win32-form paths need normalising and tail-matching.
 
-### `wasmpatch.py` — table growth
-Appends every function to the indirect table, so all 17,596 are callable and
-hookable rather than the 4,681 that are address-taken. Also leaves growth
-headroom, which a side module needs for its own function pointers; stock has
-`min == max == 4682`, so `table.grow` fails outright.
+### Production targeted transform
 
-Safe as a byte rewrite because it appends only. Adding an *import* would
-renumber every defined function and would need a real rewriter.
+The application and developer CLI share the TypeScript transformer in
+`src/main/core/toolbox-transform.ts`. It accepts only an exact supported hash,
+clones one selected function, inserts one typed dispatcher, and uses the
+verified null table slot without growing the table:
 
-### `wasmdetour.py` — static detours
-Moves each function's body to an appended `gwca_orig_<f>` and replaces it with a
-dispatcher reading a hook table in linear memory. Gives MinHook's
-create/enable/disable/trampoline semantics, and unlike table redirection it
-intercepts **direct** calls.
+    pnpm toolbox:transform -- dist/Gw.jspi.wasm build/Gw.toolbox.wasm
 
-    python3 tools/wasmdetour.py in.wasm out.wasm --all
-
-`--all` is deliberately target-agnostic: it dispatches every function uniformly
-and encodes nothing about which ones matter.
-
-Exports two globals so consumers read the layout off the binary rather than
-compiling against generated constants: `gwca_hook_base` (mutable, the hook
-table) and `gwca_orig_slot_base` (immutable, where the originals were parked).
-Everything else — first function index, function count, table size, build_id —
-is already readable from the module, so nothing needs baking in and a repatched
-client needs no rebuild.
-
-Measured: +1.05 MB (12.8%), boots the real client with zero page errors.
+The former table-growth and all-functions detour experiments were removed.
+They rewrote far more of the client than the production hook requires.
+`src/main/core/toolbox-client.ts` separately owns official-file hashing,
+derived-cache validation, and atomic publication; neither the CLI nor main
+duplicates those policies.
 
 ### `gensyms.py` — symbol recovery
 The module is stripped, but naming information survives: 219 imports and 44
@@ -71,8 +58,32 @@ Also emits `string_xrefs.csv` plus a Ghidra importer. Ghidra cannot derive those
 xrefs itself: `i32.const 1052749` is just an integer, and code and linear memory
 are separate address spaces, so nothing marks a constant as a pointer.
 
+### `gwca_anchor_probe.py` — GWCA source-anchor survival
+
+Compares `Scanner::FindAssertion(file, message, ...)` calls in a GWCA source
+tree with strings and decoded references in a Guild Wars WASM build. It reports
+which old file/assertion pairs still identify exactly one WASM function:
+
+    python3 tools/gwca_anchor_probe.py path/to/GWCA/Source dist/Gw.jspi.wasm
+
+This does not claim that the old function signature or structure layout still
+matches. It is a triage tool for choosing re-derivation targets.
+
 ## Pipeline
 
-    python3 tools/wasmpatch.py  dist/Gw.jspi.wasm build/patched.wasm
-    python3 tools/wasmdetour.py build/patched.wasm build/shared.wasm --all
-    python3 tools/gensyms.py    dist/Gw.jspi.wasm build/
+    python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
+    python3 tools/gensyms.py dist/Gw.jspi.wasm build/
+    pnpm toolbox:transform -- dist/Gw.jspi.wasm build/Gw.toolbox.wasm
+
+## Toolbox workspace
+
+    pnpm toolbox:doctor
+    pnpm toolbox:recertify -- path/to/Gw.jspi.wasm
+    GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target
+
+`toolbox:doctor` is local-only. `toolbox:recertify` reports semantic hook and
+table candidates without publishing a transformed client. The live runner is
+cached-only unless `--allow-update` is explicitly supplied and supports at
+most 16 typed scalar observations through `--observe`.
+Its coordinator, fixed gameplay scenarios, and paired performance capture are
+kept in separate modules under `scripts/toolbox-live/`.

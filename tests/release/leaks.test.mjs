@@ -5,6 +5,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { macOSBundleVersions } from "../../scripts/macos-version.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
@@ -98,12 +99,22 @@ test("only the public client access key is UUID-shaped", () => {
   assert.deepEqual(hits, []);
 });
 
-test("sandboxed preload and main process declare the same IPC channels", () => {
-  const contracts = readFileSync(path.join(root, "src/shared/contracts.ts"), "utf8");
+test("every canonical IPC channel is wired through preload and main", async () => {
+  const { IPC } = await import(
+    new URL("../../build/shared/contracts.js", import.meta.url)
+  );
   const preload = readFileSync(path.join(root, "src/preload/preload.cjs"), "utf8");
-  const channels = (text) =>
-    [...text.matchAll(/"gw:[^"]+"/g)].map((match) => match[0]).sort();
-  assert.deepEqual(channels(preload), channels(contracts));
+  const main = tracked
+    .filter((file) => file.startsWith("src/main/"))
+    .map((file) => readFileSync(path.join(root, file), "utf8"))
+    .join("\n");
+  for (const [key, channel] of Object.entries(IPC)) {
+    assert.ok(
+      preload.includes(JSON.stringify(channel)),
+      `${key} is missing from the preload`,
+    );
+    assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
+  }
 });
 
 test("saved login has one encrypted owner-only persistence surface", () => {
@@ -179,7 +190,7 @@ test("the host has one manual application replacement path", () => {
 
 test("package metadata identifies the GPL project and canonical repository", () => {
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-  assert.equal(pkg.version, "0.0.1-alpha.1");
+  assert.equal(pkg.version, "0.0.2");
   assert.equal(pkg.license, "GPL-3.0-only");
   assert.equal(
     pkg.repository?.url,
@@ -207,14 +218,20 @@ test("packaged releases carry the project and third-party license notices", () =
 test("macOS derives numeric bundle versions from the package prerelease", () => {
   const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
   assert.match(forge, /const packageVersion =/);
-  assert.match(forge, /const macOSVersion = packageVersion\.split\("-", 1\)\[0\]/);
-  assert.match(forge, /appVersion: macOSVersion/);
-  assert.match(forge, /buildVersion: macOSVersion/);
+  assert.match(forge, /macOSBundleVersions\(packageVersion\)/);
+  const alpha1 = macOSBundleVersions("1.2.3-alpha.1");
+  const alpha2 = macOSBundleVersions("1.2.3-alpha.2");
+  const stable = macOSBundleVersions("1.2.3");
+  assert.equal(alpha1.appVersion, "1.2.3");
+  assert.notEqual(alpha1.buildVersion, alpha2.buildVersion);
+  assert.ok(
+    Number(alpha2.buildVersion.split(".").at(-1)) <
+      Number(stable.buildVersion.split(".").at(-1)),
+  );
 });
 
 test("release fuses keep Node and inspection disabled", () => {
   const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
-  assert.match(forge, /hardenedRuntime: true/);
   assert.match(forge, /\[FuseV1Options\.RunAsNode\]: false/);
   assert.match(forge, /\[FuseV1Options\.EnableNodeOptionsEnvironmentVariable\]: false/);
   assert.match(forge, /\[FuseV1Options\.EnableNodeCliInspectArguments\]: false/);
@@ -226,46 +243,39 @@ test("release fuses keep Node and inspection disabled", () => {
 
 test("renderer permissions and embedded webviews fail closed", () => {
   const windowSource = readFileSync(path.join(root, "src/main/window.ts"), "utf8");
+  const ipcSource = readFileSync(path.join(root, "src/main/ipc.ts"), "utf8");
+  const protocolSource = readFileSync(
+    path.join(root, "src/main/protocol.ts"),
+    "utf8",
+  );
   assert.match(windowSource, /nodeIntegration: false/);
   assert.match(windowSource, /contextIsolation: true/);
   assert.match(windowSource, /sandbox: true/);
   assert.match(windowSource, /webviewTag: false/);
   assert.match(windowSource, /setPermissionRequestHandler/);
-  assert.match(windowSource, /setPermissionCheckHandler\(\(\) => false\)/);
+  assert.match(windowSource, /permission === "pointerLock"/);
+  assert.match(windowSource, /webContents === win\.webContents/);
+  assert.match(windowSource, /isCanonicalRendererUrl\(webContents\.getURL\(\)\)/);
   assert.match(windowSource, /will-attach-webview[\s\S]*preventDefault/);
+  assert.match(ipcSource, /event\.senderFrame !== event\.sender\.mainFrame/);
+  assert.match(ipcSource, /isCanonicalRendererUrl\(event\.senderFrame\.url\)/);
+  assert.match(protocolSource, /frame-src 'none'/);
+  assert.match(protocolSource, /form-action 'none'/);
+  assert.match(protocolSource, /isProxyFetchDestination\(destination\)/);
 });
 
-test("official releases import, verify, and remove a stable signing identity", () => {
+test("official releases have one honest ad-hoc signing path", () => {
   const workflow = readFileSync(
     path.join(root, ".github/workflows/release.yml"),
     "utf8",
   );
-  // Signing is conditional until the Apple Developer account exists, but the
-  // signed path must still verify the full Developer ID + notarization chain,
-  // and the unsigned path must be detected — never silently assumed.
-  for (const secret of [
-    "APPLE_IDENTITY",
-    "APPLE_TEAM_ID",
-    "APPLE_CERTIFICATE_P12",
-    "APPLE_CERTIFICATE_PASSWORD",
-  ]) {
-    assert.match(workflow, new RegExp(`secrets\\.${secret}`));
-    assert.match(workflow, new RegExp(`-n "\\$${secret}"`));
-  }
-  assert.match(workflow, /steps\.signing\.outputs\.signed == 'true'/);
-  assert.match(workflow, /security create-keychain/);
-  assert.match(workflow, /security import/);
-  assert.match(workflow, /security set-key-partition-list/);
-  assert.match(workflow, /Authority=Developer ID Application/);
-  assert.match(workflow, /TeamIdentifier=\$APPLE_TEAM_ID/);
-  assert.match(workflow, /flags=\.\*runtime/);
-  assert.match(workflow, /spctl --assess --type execute/);
-  assert.match(workflow, /xcrun stapler validate/);
-  // The unsigned fallback must verify the ad-hoc signature explicitly and
-  // label the release as not notarized.
+  const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
+  assert.doesNotMatch(workflow, /APPLE_|Developer ID|notary|stapler/);
+  assert.doesNotMatch(forge, /APPLE_|osxSign|osxNotarize/);
+  assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
+  assert.match(workflow, /codesign --verify --deep --strict/);
   assert.match(workflow, /Signature=adhoc/);
   assert.match(workflow, /ad-hoc signed, not notarized/);
-  assert.match(workflow, /if: always\(\)[\s\S]*security delete-keychain/);
 });
 
 test("release workflow publishes one tested, attested package version", () => {
@@ -277,11 +287,84 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
-  assert.match(workflow, /git\/ref\/tags\/\$tag/);
+  assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(workflow, /name: Smoke-test release candidate[\s\S]*pnpm test:packaged/);
-  assert.match(workflow, /shasum -a 256/);
-  assert.match(workflow, /actions\/attest-build-provenance@[0-9a-f]{40}/);
+  assert.match(workflow, /shasum -a 256 -c "\$\(basename "\$CHECKSUM"\)"/);
+  assert.match(workflow, /anchore\/sbom-action@[0-9a-f]{40}/);
+  assert.match(workflow, /format: spdx-json/);
+  assert.match(workflow, /actions\/attest@[0-9a-f]{40}/);
+  assert.match(workflow, /sbom-path: \$\{\{ steps\.assets\.outputs\.sbom \}\}/);
+  assert.match(workflow, /artifact-metadata: write/);
+  assert.match(workflow, /actions\/dependency-review-action@[0-9a-f]{40}/);
+  assert.ok(
+    workflow.indexOf("actions/dependency-review-action@") <
+      workflow.indexOf("pnpm install --frozen-lockfile"),
+  );
+  assert.match(workflow, /run: pnpm audit --audit-level=high/);
+  const releaseBuild = workflow.slice(
+    workflow.indexOf("  release-build:"),
+    workflow.indexOf("\n  release:"),
+  );
+  const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
+  assert.match(releaseBuild, /permissions:\s+contents: read/);
+  assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
+  assert.match(releaseBuild, /actions\/upload-artifact@[0-9a-f]{40}/);
+  assert.match(releasePublish, /actions\/download-artifact@[0-9a-f]{40}/);
+  assert.doesNotMatch(
+    releasePublish,
+    /actions\/checkout|pnpm install|pnpm make|pnpm test/,
+  );
   assert.match(workflow, /--prerelease --latest=false/);
-  assert.match(workflow, /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM"/);
+  assert.doesNotMatch(workflow, /This is an alpha build/);
+  assert.match(
+    workflow,
+    /if \[ "\$PRERELEASE" = "true" \]; then[\s\S]*This is a prerelease build/,
+  );
+  assert.match(
+    workflow,
+    /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$SBOM"/,
+  );
+  const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+  const websitePkg = JSON.parse(
+    readFileSync(path.join(root, "apps/website/package.json"), "utf8"),
+  );
+  assert.equal(pkg.dependencies, undefined);
+  assert.equal(websitePkg.dependencies, undefined);
+  const workspace = readFileSync(
+    path.join(root, "pnpm-workspace.yaml"),
+    "utf8",
+  );
+  assert.match(
+    workspace,
+    /auditConfig:\n {2}ignoreGhsas:\n {4}- GHSA-mh99-v99m-4gvg\n$/,
+  );
+  assert.match(pkg.scripts.make, /scripts\/clean-output\.mjs/);
+  assert.match(pkg.scripts.package, /scripts\/clean-output\.mjs/);
+  assert.match(
+    readFileSync(path.join(root, "scripts/build.mjs"), "utf8"),
+    /tsconfig\.renderer\.json/,
+  );
+  const verification = readFileSync(
+    path.join(root, "docs/release-verification.md"),
+    "utf8",
+  );
+  assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
+  assert.match(verification, /gh attestation verify/);
+  assert.doesNotMatch(verification, /xattr|spctl --master-disable/);
+});
+
+test("the scheduled canary exercises the latest ArenaNet client conservatively", () => {
+  const workflow = readFileSync(
+    path.join(root, ".github/workflows/client-canary.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /schedule:[\s\S]*cron:/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /runs-on: macos-15/);
+  assert.match(workflow, /timeout-minutes: 20/);
+  assert.match(workflow, /GW_LIVE_SMOKE: "1"/);
+  assert.match(workflow, /tests\/electron\/live\.spec\.mjs/);
+  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
+  assert.doesNotMatch(workflow, /upload-artifact|issues: write/);
 });

@@ -2,90 +2,114 @@
 // Cache residency is the download-progress truth; dataStrategy is only intent.
 
 (function () {
-  const byId = (id) => document.getElementById(id);
-  const dialog = byId('settings-dialog');
-  const form = byId('settings-form');
-  const settingsDownload = byId('settings-download-full');
-  const settingsReset = byId('settings-reset-launcher');
+  /** @param {string} id */
+  const byId = (id) => {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`missing renderer element: ${id}`);
+    return element;
+  };
+  const dialog =
+    /** @type {HTMLDialogElement} */ (byId('settings-dialog'));
+  const form = /** @type {HTMLFormElement} */ (byId('settings-form'));
+  const settingsDownload =
+    /** @type {HTMLButtonElement} */ (byId('settings-download-full'));
+  const settingsReset =
+    /** @type {HTMLButtonElement} */ (byId('settings-reset-launcher'));
   const settingsCache = byId('settings-cache');
   const settingsDataNote = byId('settings-data-note');
   const settingsSaved = byId('settings-saved');
   const settingsProgress = byId('settings-progress');
   const settingsProgressFill = byId('settings-progress-fill');
-  const settingsPanes = form?.querySelector('.settings-panes');
+  const settingsPanes =
+    /** @type {HTMLElement} */ (form.querySelector('.settings-panes'));
   const feedback = byId('settings-feedback');
   const dataChoice = byId('data-choice');
-  const dataChoiceQuick = byId('data-choice-quick');
-  const dataChoiceFull = byId('data-choice-full');
+  const dataChoiceQuick =
+    /** @type {HTMLButtonElement} */ (byId('data-choice-quick'));
+  const dataChoiceFull =
+    /** @type {HTMLButtonElement} */ (byId('data-choice-full'));
   const dataChoiceFullSize = byId('data-choice-full-size');
   const dataDownload = byId('data-download');
   const dataDownloadStatus = byId('data-download-status');
   const dataDownloadDetail = byId('data-download-detail');
   const dataDownloadFill = byId('data-download-fill');
-  const dataDownloadToggle = byId('data-download-toggle');
-  const dataDownloadPlay = byId('data-download-play');
-  const dataDownloadQuick = byId('data-download-quick');
+  const dataDownloadToggle =
+    /** @type {HTMLButtonElement} */ (byId('data-download-toggle'));
+  const dataDownloadPlay =
+    /** @type {HTMLButtonElement} */ (byId('data-download-play'));
+  const dataDownloadQuick =
+    /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
+  const renderScale =
+    /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
+  const pointerLock =
+    /** @type {HTMLInputElement} */ (form.elements.namedItem('pointerLock'));
+  const cursorTheme =
+    /** @type {HTMLSelectElement} */ (form.elements.namedItem('cursorTheme'));
+  const touchMode =
+    /** @type {HTMLSelectElement} */ (form.elements.namedItem('touchMode'));
+  const showDiagnostics =
+    /** @type {HTMLInputElement} */ (form.elements.namedItem('showDiagnostics'));
 
-  if (
-    !dialog ||
-    !form ||
-    !settingsDownload ||
-    !settingsReset ||
-    !settingsCache ||
-    !settingsDataNote ||
-    !feedback ||
-    !dataChoice ||
-    !dataChoiceQuick ||
-    !dataChoiceFull ||
-    !dataChoiceFullSize ||
-    !dataDownload ||
-    !dataDownloadStatus ||
-    !dataDownloadDetail ||
-    !dataDownloadFill ||
-    !dataDownloadToggle ||
-    !dataDownloadPlay ||
-    !dataDownloadQuick ||
-    !window.gwNative
-  ) return;
-
+  /** @type {import('../shared/contracts.js').AppSettings | null} */
   let currentSettings = null;
+  /** @type {Promise<import('../shared/contracts.js').AppSettings> | null} */
   let settingsLoad = null;
+  /** @type {Promise<unknown>} */
   let settingsWrite = Promise.resolve();
+  /** @type {import('../shared/contracts.js').CacheInfo | null} */
   let currentCache = null;
+  /** @type {Promise<boolean> | null} */
   let fullDownloadPromise = null;
-  let fullDownloadActive = false;
-  let fullDownloadStopping = false;
+  /** @type {'idle' | 'running' | 'stopping'} */
+  let downloadPhase = 'idle';
+  /** @type {import('../shared/contracts.js').DownloadProgress | null} */
   let currentDownloadProgress = null;
+  let downloadError = '';
+  /** @type {(() => void) | null} */
   let launcherResolve = null;
   let launcherTotalBytes = 0;
+  /** @type {number | null} */
   let savedTimer = null;
+  let activeSettingsPane = 'data';
+  const downloadActive = () =>
+    downloadPhase === 'running' || downloadPhase === 'stopping';
 
   // Auto-save proof: a brief "Saved" note in the header when a change lands.
   function flashSaved() {
     if (!settingsSaved) return;
     settingsSaved.classList.add('show');
-    clearTimeout(savedTimer);
+    if (savedTimer !== null) clearTimeout(savedTimer);
     savedTimer = setTimeout(() => settingsSaved.classList.remove('show'), 1400);
   }
 
+  /** @param {string} name */
   function selectPane(name) {
-    if (!settingsPanes) return;
+    activeSettingsPane = name;
     settingsPanes.dataset.active = name;
-    for (const tab of form.querySelectorAll('.settings-rtab')) {
+    for (const tab of /** @type {NodeListOf<HTMLElement>} */ (
+      form.querySelectorAll('.settings-rtab')
+    )) {
       const selected = tab.dataset.pane === name;
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
     }
   }
 
-  const railTabs = [...form.querySelectorAll('.settings-rtab')];
+  const railTabs = [.../** @type {NodeListOf<HTMLElement>} */ (
+    form.querySelectorAll('.settings-rtab')
+  )];
   for (const tab of railTabs) {
-    tab.addEventListener('click', () => selectPane(tab.dataset.pane));
+    tab.addEventListener('click', () => {
+      if (tab.dataset.pane) selectPane(tab.dataset.pane);
+    });
   }
 
   // Roving tabindex: arrows move between sections, Home/End jump.
-  form.querySelector('.settings-rail')?.addEventListener('keydown', (event) => {
-    const index = railTabs.indexOf(document.activeElement);
+  form.querySelector('.settings-rail')?.addEventListener('keydown', (rawEvent) => {
+    const event = /** @type {KeyboardEvent} */ (rawEvent);
+    const active = document.activeElement;
+    const index =
+      active instanceof globalThis.HTMLElement ? railTabs.indexOf(active) : -1;
     if (index < 0) return;
     let target = null;
     if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
@@ -100,13 +124,15 @@
     if (!target) return;
     event.preventDefault();
     target.focus();
-    selectPane(target.dataset.pane);
+    if (target.dataset.pane) selectPane(target.dataset.pane);
   });
 
+  /** @param {number} bytes */
   const size = (bytes) => bytes >= 1_073_741_824
     ? `${(bytes / 1_073_741_824).toFixed(2)} GB`
     : `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`;
 
+  /** @param {import('../shared/diagnostics.js').RendererMilestone} name */
   const launcherMilestone = (name) => {
     void window.gwNative.diagnostics
       .recordRendererMilestone(name, performance.now() * 1000)
@@ -126,13 +152,53 @@
     return settingsLoad;
   }
 
+  /** @param {import('../shared/contracts.js').AppSettings} settings */
+  function applyRuntimeSettings(settings) {
+    const preview = byId('settings-cursor-preview');
+    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
+    window.gwApplySettings?.(settings);
+  }
+
+  function updateRenderScaleDimensions() {
+    const canvas = document.getElementById('canvas');
+    if (!canvas) return;
+    const width = canvas.clientWidth || window.innerWidth;
+    const height = canvas.clientHeight || window.innerHeight;
+    const activeScale = Number(renderScale.value);
+    const offscreen = window.Module?.canvas?.offscreen;
+    for (const output of /** @type {NodeListOf<HTMLElement>} */ (
+      form.querySelectorAll('[data-render-scale]')
+    )) {
+      const scale = Number(output.dataset.renderScale);
+      const offscreenWidth = offscreen?.width;
+      const offscreenHeight = offscreen?.height;
+      const measured =
+        scale === activeScale &&
+        typeof offscreenWidth === 'number' &&
+        typeof offscreenHeight === 'number' &&
+        Number.isFinite(offscreenWidth) &&
+        Number.isFinite(offscreenHeight) &&
+        offscreenWidth > 0 &&
+        offscreenHeight > 0;
+      const backingWidth =
+        measured ? offscreenWidth : Math.round(width * scale);
+      const backingHeight =
+        measured ? offscreenHeight : Math.round(height * scale);
+      output.textContent =
+        `${measured ? '' : '≈ '}${backingWidth} × ${backingHeight}`;
+      output.title = measured
+        ? 'Current measured backing buffer'
+        : 'Estimated backing resolution';
+    }
+  }
+
   // Serialize writes so a slower earlier write cannot replace newer intent.
+  /** @param {import('../shared/contracts.js').AppSettingsPatch} patch */
   function persistSettings(patch) {
     const operation = settingsWrite.then(async () => {
-      const current = await loadSettings();
-      const saved = await window.gwNative.settings.set({ ...current, ...patch });
+      const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      window.gwApplySettings?.(saved);
+      applyRuntimeSettings(saved);
       return saved;
     });
     settingsWrite = operation.catch(() => undefined);
@@ -143,6 +209,7 @@
     return !!cache?.totalBytes && cache.bytes >= cache.totalBytes;
   }
 
+  /** @param {import('../shared/contracts.js').CacheInfo | null} cache */
   function cacheStatus(cache) {
     if (!cache?.totalBytes) return 'Game data is still preparing…';
     if (cacheComplete(cache)) {
@@ -152,27 +219,74 @@
   }
 
   function selectedStrategy() {
-    return form.querySelector('input[name="dataStrategy"]:checked')?.value || null;
+    const selected =
+      /** @type {HTMLInputElement | null} */ (
+        form.querySelector('input[name="dataStrategy"]:checked')
+      );
+    return selected?.value === 'quick' || selected?.value === 'full'
+      ? selected.value
+      : null;
   }
 
-  function readFormSettings() {
-    return {
-      renderScale: Number(form.renderScale.value),
-      pointerLock: form.pointerLock.checked,
-      touchMode: form.touchMode.value,
-      showDiagnostics: form.showDiagnostics.checked,
-      dataStrategy: selectedStrategy(),
-    };
+  /**
+   * @param {HTMLInputElement | HTMLSelectElement} control
+   * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
+   */
+  function patchForControl(control) {
+    switch (control.name) {
+      case 'renderScale': {
+        const value = Number(control.value);
+        return value === 1 || value === 1.5 || value === 2
+          ? { renderScale: value }
+          : null;
+      }
+      case 'pointerLock':
+        return control instanceof globalThis.HTMLInputElement
+          ? { pointerLock: control.checked }
+          : null;
+      case 'cursorTheme': {
+        const value = control.value;
+        return value === 'system' ||
+          value === 'guild-wars' ||
+          value === 'guild-wars-2'
+          ? { cursorTheme: value }
+          : null;
+      }
+      case 'touchMode': {
+        const value = control.value;
+        return value === 'dbltap' ||
+          value === 'translate' ||
+          value === 'augment' ||
+          value === 'off'
+          ? { touchMode: value }
+          : null;
+      }
+      case 'showDiagnostics':
+        return control instanceof globalThis.HTMLInputElement
+          ? { showDiagnostics: control.checked }
+          : null;
+      case 'dataStrategy':
+        return { dataStrategy: selectedStrategy() };
+      default:
+        return null;
+    }
   }
 
+  /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
-    form.renderScale.value = String(settings.renderScale);
-    form.pointerLock.checked = !!settings.pointerLock;
-    form.touchMode.value = settings.touchMode;
-    form.showDiagnostics.checked = !!settings.showDiagnostics;
-    for (const radio of form.querySelectorAll('input[name="dataStrategy"]')) {
+    renderScale.value = String(settings.renderScale);
+    pointerLock.checked = settings.pointerLock;
+    cursorTheme.value = settings.cursorTheme;
+    touchMode.value = settings.touchMode;
+    showDiagnostics.checked = settings.showDiagnostics;
+    for (const radio of /** @type {NodeListOf<HTMLInputElement>} */ (
+      form.querySelectorAll('input[name="dataStrategy"]')
+    )) {
       radio.checked = radio.value === settings.dataStrategy;
     }
+    const preview = byId('settings-cursor-preview');
+    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
+    updateRenderScaleDimensions();
   }
 
   function renderSettingsData(cache = currentCache) {
@@ -211,10 +325,10 @@
     // line already says "Full game ready" and the action disappears.
     if (cacheComplete(cache)) {
       settingsDownload.hidden = true;
-    } else if (fullDownloadStopping) {
+    } else if (downloadPhase === 'stopping') {
       settingsDownload.textContent = 'Stopping Download…';
       settingsDownload.disabled = true;
-    } else if (fullDownloadActive) {
+    } else if (downloadPhase === 'running') {
       settingsDownload.textContent = 'Pause Download';
       settingsDownload.disabled = false;
     } else if (!cache?.totalBytes) {
@@ -226,31 +340,35 @@
     }
   }
 
-  function renderLauncherDownload(cache = currentCache, error = '') {
+  function renderLauncherDownload(cache = currentCache, error = downloadError) {
     currentCache = cache;
     const total = cache?.totalBytes || launcherTotalBytes;
     const received = cache?.bytes || 0;
     const complete = total > 0 && received >= total;
+    const ready = complete && !error;
     const fraction = total > 0 ? Math.min(1, received / total) : 0;
     dataDownloadFill.style.width = `${fraction * 100}%`;
 
     if (error) {
       dataDownloadStatus.textContent = error;
       dataDownloadDetail.textContent =
-        'Verified data is preserved. Retry, use Quick Start, or close the launcher.';
+        'Verified data is safe. Choose Resume Download to try again.';
     } else if (complete) {
       dataDownloadStatus.textContent = `Full game ready · ${size(received)} downloaded`;
       dataDownloadDetail.textContent =
         'Guild Wars will not start until you choose Play Guild Wars.';
-    } else if (fullDownloadStopping) {
+    } else if (downloadPhase === 'stopping') {
       dataDownloadStatus.textContent = `Pausing · ${cacheStatus(cache)}`;
       dataDownloadDetail.textContent = 'Verified data is being preserved.';
-    } else if (fullDownloadActive) {
+    } else if (downloadPhase === 'running') {
       const progress = currentDownloadProgress;
-      const rate = progress?.bytesPerSecond > 0
-        ? ` · ${size(progress.bytesPerSecond)}/s`
+      const rate = progress && progress.bytesPerSecond > 0
+        ? ` · ${size(progress.bytesPerSecond)}/s avg`
         : '';
-      const eta = Number.isFinite(progress?.secondsRemaining)
+      const eta =
+        progress &&
+        progress.secondsRemaining !== null &&
+        Number.isFinite(progress.secondsRemaining)
         ? ` · about ${Math.max(1, Math.ceil(progress.secondsRemaining / 60))} min left`
         : '';
       dataDownloadStatus.textContent = progress?.total
@@ -258,21 +376,21 @@
         : `Starting download · ${cacheStatus(cache)}`;
       dataDownloadDetail.textContent =
         'Guild Wars has not started. You can pause or close the launcher and continue later.';
-    } else if (!fullDownloadActive) {
+    } else if (!downloadActive()) {
       dataDownloadStatus.textContent = `Download paused · ${cacheStatus(cache)}`;
       dataDownloadDetail.textContent =
         'You can resume now or close the launcher and continue later.';
     }
 
-    dataDownloadToggle.hidden = complete;
-    dataDownloadToggle.disabled = fullDownloadStopping;
-    dataDownloadToggle.textContent = fullDownloadStopping
+    dataDownloadToggle.hidden = ready;
+    dataDownloadToggle.disabled = downloadPhase === 'stopping';
+    dataDownloadToggle.textContent = downloadPhase === 'stopping'
       ? 'Pausing…'
-      : fullDownloadActive
+      : downloadPhase === 'running'
         ? 'Pause Download'
         : 'Resume Download';
-    dataDownloadPlay.textContent = complete ? 'Play Guild Wars' : 'Play Now Instead';
-    dataDownloadQuick.hidden = complete;
+    dataDownloadPlay.textContent = ready ? 'Play Guild Wars' : 'Play Now Instead';
+    dataDownloadQuick.hidden = ready;
   }
 
   async function refreshCache() {
@@ -285,14 +403,15 @@
 
   function startFullDownload() {
     if (fullDownloadPromise) return fullDownloadPromise;
-    fullDownloadActive = true;
-    fullDownloadStopping = false;
+    downloadError = '';
+    downloadPhase = 'running';
     currentDownloadProgress = null;
     renderSettingsData();
     if (!dataDownload.hidden) renderLauncherDownload();
 
     fullDownloadPromise = window.gwNative.cache.downloadAll()
       .then(async (complete) => {
+        downloadError = '';
         const cache = await window.gwNative.cache.info();
         currentCache = cache;
         renderSettingsData(cache);
@@ -305,13 +424,13 @@
       .catch((error) => {
         const message =
           error?.message || 'The full game download could not continue.';
+        downloadError = message;
         if (dialog.open) feedback.textContent = message;
         if (!dataDownload.hidden) renderLauncherDownload(currentCache, message);
         return false;
       })
       .finally(async () => {
-        fullDownloadActive = false;
-        fullDownloadStopping = false;
+        downloadPhase = 'idle';
         currentDownloadProgress = null;
         fullDownloadPromise = null;
         await refreshCache().catch(() => {
@@ -325,14 +444,14 @@
   }
 
   async function stopFullDownload() {
-    if (!fullDownloadActive || fullDownloadStopping) return;
-    fullDownloadStopping = true;
+    if (downloadPhase !== 'running') return;
+    downloadPhase = 'stopping';
     renderSettingsData();
     if (!dataDownload.hidden) renderLauncherDownload();
     try {
       await window.gwNative.cache.stopDownload();
     } catch {
-      fullDownloadStopping = false;
+      downloadPhase = 'running';
       feedback.textContent = 'The download could not be paused.';
       renderSettingsData();
       if (!dataDownload.hidden) {
@@ -341,6 +460,7 @@
     }
   }
 
+  /** @param {import('../shared/diagnostics.js').RendererMilestone} reason */
   function releaseGameBoot(reason) {
     if (!launcherResolve) return;
     dataChoice.hidden = true;
@@ -352,6 +472,10 @@
     resolve();
   }
 
+  /**
+   * @param {import('../shared/contracts.js').CacheInfo} cache
+   * @param {number} total
+   */
   function showChoice(cache, total) {
     currentCache = cache;
     launcherTotalBytes = total;
@@ -364,6 +488,10 @@
     launcherMilestone('launcher.choiceShown');
   }
 
+  /**
+   * @param {import('../shared/contracts.js').CacheInfo} cache
+   * @param {number} total
+   */
   function showFullDownload(cache, total) {
     currentCache = cache;
     launcherTotalBytes = total;
@@ -382,26 +510,33 @@
         window.gwNative.cache.info(),
       ]);
       const total = cache.totalBytes || snapshotBytes;
-      currentCache = { ...cache, totalBytes: total };
+      const resolvedCache = { ...cache, totalBytes: total };
+      currentCache = resolvedCache;
       launcherTotalBytes = total;
 
       // The offline acceptance shell has no snapshot. There is no real choice
       // to make, so let it continue without persisting fabricated intent.
       if (!Number.isFinite(total) || total <= 0) return;
       if (settings.dataStrategy === 'quick') return;
-      if (settings.dataStrategy === 'full' && cache.bytes >= total) return;
+      if (settings.dataStrategy === 'full' && cache.bytes >= total) {
+        // Filenames prove residency, not integrity. Full Game startup always
+        // runs the existing bounded verification pass before releasing boot.
+        if (await startFullDownload()) return;
+      }
 
       return new Promise((resolve) => {
         launcherResolve = resolve;
         if (settings.dataStrategy === 'full') {
-          showFullDownload(currentCache, total);
+          showFullDownload(resolvedCache, total);
         } else {
-          showChoice(currentCache, total);
+          showChoice(resolvedCache, total);
         }
       });
     } catch (error) {
       window.gwLoading?.fail(
-        error?.message || 'Launcher settings could not be loaded.',
+        error instanceof Error
+          ? error.message
+          : 'Launcher settings could not be loaded.',
       );
       return new Promise(() => {});
     }
@@ -427,6 +562,9 @@
     dataChoiceFull.disabled = true;
     try {
       await persistSettings({ dataStrategy: 'full' });
+      if (!currentCache) {
+        throw new Error("download status is not ready");
+      }
       launcherMilestone('launcher.fullSelected');
       showFullDownload(currentCache, launcherTotalBytes);
     } catch {
@@ -439,7 +577,7 @@
   });
 
   dataDownloadToggle.addEventListener('click', () => {
-    if (fullDownloadActive) void stopFullDownload();
+    if (downloadActive()) void stopFullDownload();
     else void startFullDownload();
   });
 
@@ -451,7 +589,7 @@
   dataDownloadQuick.addEventListener('click', async () => {
     dataDownloadQuick.disabled = true;
     try {
-      if (fullDownloadActive) await stopFullDownload();
+      if (downloadActive()) await stopFullDownload();
       await persistSettings({ dataStrategy: 'quick' });
       releaseGameBoot('launcher.quickSelected');
     } catch {
@@ -467,7 +605,7 @@
       else dialog.setAttribute('open', '');
     }
     feedback.textContent = '';
-    selectPane('data');
+    selectPane(activeSettingsPane);
     settingsCache.textContent = 'Checking downloaded game data…';
     try {
       await settingsWrite;
@@ -482,15 +620,28 @@
   window.addEventListener('gw:settings', () => { void openSettings(); });
 
   form.addEventListener('change', (event) => {
-    if (!event.target.matches('input, select')) return;
+    const control = event.target;
+    if (
+      !(control instanceof globalThis.HTMLInputElement) &&
+      !(control instanceof globalThis.HTMLSelectElement)
+    ) return;
+    const patch = patchForControl(control);
+    if (!patch) return;
     feedback.textContent = '';
-    const strategyChanged = event.target.name === 'dataStrategy';
+    const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
-    void persistSettings(readFormSettings())
+    if (control.name === 'cursorTheme') {
+      const preview = byId('settings-cursor-preview');
+      preview.dataset.cursorTheme = control.value;
+    }
+    void persistSettings(patch)
       .then(async () => {
         flashSaved();
-        if (!strategyChanged) return;
-        if (nextStrategy === 'quick' && fullDownloadActive) {
+        if (!strategyChanged) {
+          feedback.textContent = 'Settings saved.';
+          return;
+        }
+        if (nextStrategy === 'quick' && downloadActive()) {
           await stopFullDownload();
         }
         renderSettingsData();
@@ -499,13 +650,17 @@
           : 'Quick Start will be used next time. Downloaded data is kept.';
       })
       .catch(() => {
+        if (currentSettings) {
+          fillForm(currentSettings);
+          applyRuntimeSettings(currentSettings);
+        }
         feedback.textContent = 'Settings could not be saved.';
       });
   });
 
   settingsDownload.addEventListener('click', () => {
     feedback.textContent = '';
-    if (fullDownloadActive) void stopFullDownload();
+    if (downloadActive()) void stopFullDownload();
     else void startFullDownload();
   });
 
@@ -526,7 +681,7 @@
       currentSettings = reset;
       fillForm(reset);
       renderSettingsData();
-      window.gwApplySettings?.(reset);
+      applyRuntimeSettings(reset);
       feedback.textContent =
         'Launcher settings reset. The download choice will appear next launch.';
     } catch {
@@ -535,15 +690,18 @@
   });
 
   window.gwNative.progress.onChange((progress) => {
-    if (progress.phase === 'ready' && !fullDownloadActive) {
+    if (progress.phase === 'ready' && !downloadActive()) {
       void refreshCache().catch(() => {});
       return;
     }
     if (progress.phase !== 'image') return;
-    fullDownloadActive = true;
+    // Start/stop/finally exclusively own the operation phase. A queued native
+    // progress event must not resurrect a paused or already-settled download.
+    if (!fullDownloadPromise || downloadPhase !== 'running') return;
     currentDownloadProgress = progress;
     const next = {
-      ...(currentCache || {}),
+      chunks: currentCache?.chunks ?? 0,
+      totalChunks: currentCache?.totalChunks ?? 0,
       bytes: Number.isFinite(progress.received)
         ? Math.max(progress.received, currentCache?.bytes || 0)
         : currentCache?.bytes || 0,
@@ -564,10 +722,13 @@
   window.gwNative.progress.onPrefetch((progress) => {
     if (
       !dialog.open ||
-      fullDownloadActive ||
+      downloadActive() ||
       !progress?.totalChunks ||
       progress.completedChunks >= progress.totalChunks
     ) return;
     settingsCache.textContent = 'Caching recently used areas in the background…';
   });
+
+  window.addEventListener('resize', updateRenderScaleDimensions);
+  window.addEventListener('gw:graphics-resized', updateRenderScaleDimensions);
 })();

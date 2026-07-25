@@ -1,20 +1,23 @@
-import { createHash } from "node:crypto";
 import { readFile, readdir, stat, statfs, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { gunzip } from "node:zlib";
 import type { PrefetchProgress } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
-import { bytesPerSecond, secondsRemaining } from "../../shared/progress.js";
-import { HASH_ALGOS, PREFETCH_JOBS } from "./access-key.js";
+import {
+  DownloadRateAverage,
+  secondsRemaining,
+} from "../../shared/progress.js";
+import { PREFETCH_JOBS } from "./access-key.js";
+import { mapPool } from "./async-pool.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
+import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
 import { packResidentBits } from "./snapshot.js";
 
 const FREE_MARGIN = 512 * 1024 * 1024;
-const gunzipAsync = promisify(gunzip);
-
-export type ChunkBytesFetcher = (hash: string) => Promise<Uint8Array>;
+export type ChunkBytesFetcher = (
+  hash: string,
+  expectedLength: number,
+) => Promise<Uint8Array>;
 
 export interface ChunkStoreOptions {
   chunksDir: string;
@@ -52,38 +55,14 @@ export interface DownloadAllProgress {
   secondsRemaining: number | null;
 }
 
-function verifyHash(hash: string, data: Uint8Array): void {
-  const algo = HASH_ALGOS[hash.length];
-  if (!algo) throw new AppError("hash_format", `unsupported chunk hash: ${hash}`);
-  const dig = createHash(algo).update(data).digest("hex");
-  if (dig !== hash.toLowerCase()) {
-    throw new AppError("hash_mismatch", `hash mismatch on chunk ${hash}`);
-  }
+function errorCode(error: unknown): string {
+  return error instanceof Error && "code" in error
+    ? String(error.code)
+    : "";
 }
 
-async function decodeChunk(
-  data: Uint8Array,
-  compression: CompressionMode,
-): Promise<Uint8Array> {
-  return compression === "gzip" ? gunzipAsync(data) : data;
-}
-
-async function mapPool<T>(
-  items: T[],
-  jobs: number,
-  fn: (item: T) => Promise<void>,
-  stopped: () => boolean = () => false,
-): Promise<void> {
-  let next = 0;
-  const workers = Array.from({ length: Math.min(jobs, items.length) || 0 }, async () => {
-    while (true) {
-      if (stopped()) return;
-      const i = next++;
-      if (i >= items.length) return;
-      await fn(items[i]!);
-    }
-  });
-  await Promise.all(workers);
+function isFatalLocalDownloadError(error: unknown): boolean {
+  return ["EACCES", "EDQUOT", "ENOSPC", "EROFS"].includes(errorCode(error));
 }
 
 export class ChunkStore {
@@ -160,6 +139,27 @@ export class ChunkStore {
 
   async residentBits(): Promise<Uint8Array> {
     return packResidentBits(this.hashes.length, await this.residentIndices());
+  }
+
+  private async verifyResident(index: number): Promise<boolean> {
+    const hash = this.hashes[index];
+    if (!hash || !this.residentHashes.has(hash)) return false;
+    const path = this.chunkPath(hash);
+    try {
+      const data = await readFile(path);
+      if (data.byteLength !== this.chunkByteLength(index)) {
+        throw new AppError("chunk_length", `cached chunk ${hash} has invalid length`);
+      }
+      verifyChunkHash(hash, data);
+      this.verifiedHashes.add(hash);
+      return true;
+    } catch {
+      this.unmarkResident(hash);
+      this.verifiedHashes.delete(hash);
+      this.metrics?.count("cache.corruptChunks");
+      await unlink(path).catch(() => undefined);
+      return false;
+    }
   }
 
   async initializeResidency(): Promise<void> {
@@ -253,7 +253,7 @@ export class ChunkStore {
           this.metrics?.count("cache.diskBytes", data.byteLength);
           if (!this.verifiedHashes.has(hash)) {
             const verifyStarted = performance.now();
-            verifyHash(hash, data);
+            verifyChunkHash(hash, data);
             this.metrics?.observe(
               "cache.verify",
               (performance.now() - verifyStarted) * 1_000,
@@ -288,17 +288,14 @@ export class ChunkStore {
     this.metrics?.count("cache.networkFetches");
     this.metrics?.count("cache.networkBytes", raw.byteLength);
     const decodeStarted = performance.now();
-    const data = await decodeChunk(raw, this.compression);
+    if (expectedLength === undefined) {
+      throw new AppError("chunk_length", `missing expected length for ${hash}`);
+    }
+    const data = await decodeChunk(raw, this.compression, expectedLength);
     this.metrics?.observe("cache.decode", (performance.now() - decodeStarted) * 1_000);
     const hashStarted = performance.now();
-    verifyHash(hash, data);
+    verifyChunkHash(hash, data);
     this.metrics?.observe("cache.hash", (performance.now() - hashStarted) * 1_000);
-    if (expectedLength !== undefined && data.byteLength !== expectedLength) {
-      throw new AppError(
-        "chunk_length",
-        `chunk ${hash} length ${data.byteLength}, expected ${expectedLength}`,
-      );
-    }
     const writeStarted = performance.now();
     await writeAtomicInDir(this.chunksDir, hash, data);
     this.metrics?.observe("cache.write", (performance.now() - writeStarted) * 1_000);
@@ -436,7 +433,7 @@ export class ChunkStore {
         (performance.now() - task.queuedAt) * 1_000,
       );
       this.updateQueueMetrics();
-      void this.fetchFn!(task.hash)
+      void this.fetchFn!(task.hash, task.expectedLength)
         .then(task.resolve, task.reject)
         .finally(() => {
           if (task.priority === "demand") this.activeDemand -= 1;
@@ -533,6 +530,23 @@ export class ChunkStore {
   } = {}): Promise<boolean> {
     const jobs = opts.jobs ?? PREFETCH_JOBS;
     this.stopFlag = false;
+    await this.initializeResidency();
+    const residentRepresentatives = new Map<string, number>();
+    for (let index = 0; index < this.hashes.length; index++) {
+      const hash = this.hashes[index]!;
+      if (this.residentHashes.has(hash) && !residentRepresentatives.has(hash)) {
+        residentRepresentatives.set(hash, index);
+      }
+    }
+    await mapPool(
+      [...residentRepresentatives.values()],
+      jobs,
+      async (index) => {
+        await this.verifyResident(index);
+      },
+      () => this.stopFlag,
+    );
+    if (this.stopFlag) return false;
     const todo: number[] = [];
     for (let i = 0; i < this.hashes.length; i++) {
       if (!(await this.isResident(i))) todo.push(i);
@@ -574,7 +588,9 @@ export class ChunkStore {
 
     const started = Date.now();
     const baseline = got;
-    let failed = 0;
+    const rateAverage = new DownloadRateAverage(baseline, started);
+    let firstFailure: unknown;
+    let fatalFailure: unknown;
 
     await mapPool(
       todo,
@@ -583,13 +599,14 @@ export class ChunkStore {
         const size = this.chunkByteLength(i);
         try {
           await this.ensureChunk(i, "prefetch");
-        } catch {
-          failed += 1;
+        } catch (error) {
+          firstFailure ??= error;
+          if (isFatalLocalDownloadError(error)) fatalFailure ??= error;
           return;
         }
         got += size;
         const received = Math.min(got, total);
-        const rate = bytesPerSecond(received - baseline, started);
+        const rate = rateAverage.update(received);
         opts.onProgress?.({
           received,
           total,
@@ -597,14 +614,16 @@ export class ChunkStore {
           secondsRemaining: secondsRemaining(received, total, rate),
         });
       },
-      () => this.stopFlag,
+      () => this.stopFlag || firstFailure !== undefined,
     );
 
+    if (fatalFailure !== undefined) throw fatalFailure;
     if (this.stopFlag) return false;
-    if (failed) {
+    if (firstFailure !== undefined) {
       throw new AppError(
         "download_partial",
-        `${failed} chunks could not be downloaded. Restart to retry.`,
+        "The download could not continue. Resume to retry.",
+        { cause: firstFailure },
       );
     }
     return true;

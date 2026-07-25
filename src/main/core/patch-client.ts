@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   copyFile,
   link,
@@ -10,32 +9,48 @@ import {
   stat,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { gunzip } from "node:zlib";
 import type { DownloadProgress } from "../../shared/contracts.js";
-import { AppError, HttpStatusError } from "../../shared/errors.js";
-import { bytesPerSecond, secondsRemaining } from "../../shared/progress.js";
+import { AppError } from "../../shared/errors.js";
+import {
+  DownloadRateAverage,
+  secondsRemaining,
+} from "../../shared/progress.js";
 import {
   ACCESS_KEY,
-  COMMON_ARTIFACTS,
-  FATAL_HTTP,
-  HASH_ALGOS,
-  JSPI_ARTIFACTS,
+  CLIENT_ARTIFACTS,
+  MAX_PATCH_MANIFEST_BYTES,
+  PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   PREFETCH_JOBS,
+  REQUIRED_PATCH_FILES,
   SNAPSHOT,
   UA,
 } from "./access-key.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
+import { mapPool } from "./async-pool.js";
+import {
+  clientFingerprint,
+  clientGenerationPaths,
+  markClientCandidate,
+} from "./client-compatibility.js";
+import {
+  decodeChunk,
+  encodedChunkLimit,
+  verifyChunkHash,
+} from "./chunk-format.js";
 import { Manifest, type CompressionMode, type ManifestFileEntry } from "./manifest.js";
+import {
+  fetchPatchBytes,
+  readBoundedResponse,
+  type PatchFetch,
+} from "./patch-transport.js";
+import {
+  parsePublishedClientManifest,
+  verifyPublishedClientArtifacts,
+} from "./published-client.js";
 import { publishSnapshotIndex } from "./snapshot.js";
 
-const gunzipAsync = promisify(gunzip);
-
-export type FetchLike = (
-  url: string,
-  init?: { headers?: Record<string, string>; method?: string },
-) => Promise<{ status: number; body: Uint8Array }>;
+export type FetchLike = PatchFetch;
 
 export interface PatchClientOptions {
   artifactsDir: string;
@@ -46,45 +61,31 @@ export interface PatchClientOptions {
   onProgress?: (p: DownloadProgress) => void;
   accessKey?: string;
   userAgent?: string;
+  requestTimeoutMs?: number;
 }
 
-function defaultFetch(): FetchLike {
+export interface PatchUpdateResult {
+  manifest: Manifest;
+  fingerprint: string;
+  published: boolean;
+  candidate: boolean;
+  blocked: boolean;
+}
+
+function defaultFetch(requestTimeoutMs: number): FetchLike {
   return async (url, init) => {
-    const req: RequestInit = { method: init?.method ?? "GET" };
+    const req: RequestInit = {
+      method: init?.method ?? "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(requestTimeoutMs),
+    };
     if (init?.headers) req.headers = init.headers;
     const res = await fetch(url, req);
-    return { status: res.status, body: new Uint8Array(await res.arrayBuffer()) };
+    return {
+      status: res.status,
+      body: await readBoundedResponse(res, init?.maxBytes ?? MAX_PATCH_MANIFEST_BYTES),
+    };
   };
-}
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-async function mapPool<T>(items: T[], jobs: number, fn: (item: T) => Promise<void>): Promise<void> {
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(jobs, items.length) || 0 }, async () => {
-      while (true) {
-        const i = next++;
-        if (i >= items.length) return;
-        await fn(items[i]!);
-      }
-    }),
-  );
-}
-
-function verifyHash(hash: string, data: Uint8Array): void {
-  const algo = HASH_ALGOS[hash.length];
-  if (!algo) throw new AppError("hash_format", `unsupported chunk hash: ${hash}`);
-  if (createHash(algo).update(data).digest("hex") !== hash.toLowerCase()) {
-    throw new AppError("hash_mismatch", `hash mismatch on chunk ${hash}`);
-  }
-}
-
-async function decodeChunk(
-  data: Uint8Array,
-  compression: CompressionMode,
-): Promise<Uint8Array> {
-  return compression === "gzip" ? gunzipAsync(data) : data;
 }
 
 export class PatchClient {
@@ -100,7 +101,8 @@ export class PatchClient {
     this.artifactsDir = opts.artifactsDir;
     this.chunksDir = opts.chunksDir;
     this.patchRoot = opts.patchRoot ?? PATCH_ROOT;
-    this.fetchFn = opts.fetch ?? defaultFetch();
+    this.fetchFn =
+      opts.fetch ?? defaultFetch(opts.requestTimeoutMs ?? PATCH_REQUEST_TIMEOUT_MS);
     this.jobs = opts.jobs ?? PREFETCH_JOBS;
     this.onProgress = opts.onProgress;
     this.headers = {
@@ -115,26 +117,19 @@ export class PatchClient {
     this.onProgress?.(p);
   }
 
-  async getBytes(url: string, tries = 4): Promise<Uint8Array> {
-    let lastErr: unknown;
-    for (let attempt = 0; attempt < tries; attempt++) {
-      try {
-        const { status, body } = await this.fetchFn(url, { headers: this.headers });
-        if (status >= 400) {
-          const err = new HttpStatusError(status, `${url}: HTTP ${status}`);
-          if (FATAL_HTTP.has(status) || attempt === tries - 1) throw err;
-          await sleep(2 ** attempt * 1000);
-          continue;
-        }
-        return body;
-      } catch (e) {
-        lastErr = e;
-        if (e instanceof HttpStatusError && FATAL_HTTP.has(e.status)) throw e;
-        if (attempt === tries - 1) throw e;
-        await sleep(2 ** attempt * 1000);
-      }
-    }
-    throw lastErr instanceof Error ? lastErr : new AppError("fetch_failed", String(lastErr));
+  async getBytes(
+    url: string,
+    options: { maxBytes: number; tries?: number },
+  ): Promise<Uint8Array> {
+    const request = {
+      fetch: this.fetchFn,
+      url,
+      headers: this.headers,
+      maxBytes: options.maxBytes,
+    };
+    return fetchPatchBytes(
+      options.tries === undefined ? request : { ...request, tries: options.tries },
+    );
   }
 
   async fetchManifest(): Promise<Manifest> {
@@ -147,15 +142,28 @@ export class PatchClient {
       secondsRemaining: null,
       error: null,
     });
-    const body = await this.getBytes(`${this.patchRoot}/manifest.json`);
-    return new Manifest(JSON.parse(new TextDecoder().decode(body)));
+    const body = await this.getBytes(`${this.patchRoot}/manifest.json`, {
+      maxBytes: MAX_PATCH_MANIFEST_BYTES,
+    });
+    let raw: unknown;
+    try {
+      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+    } catch (error) {
+      throw new AppError("manifest_format", "invalid manifest JSON", { cause: error });
+    }
+    const manifest = new Manifest(raw);
+    manifest.requireUniqueBasenames(REQUIRED_PATCH_FILES);
+    return manifest;
   }
 
-  private async chunkCached(hash: string): Promise<boolean> {
+  private async chunkCached(hash: string, expectedLength: number): Promise<boolean> {
     const file = join(this.chunksDir, hash);
     try {
       const data = await readFile(file);
-      verifyHash(hash, data);
+      if (data.byteLength !== expectedLength) {
+        throw new AppError("chunk_length", `cached chunk ${hash} has invalid length`);
+      }
+      verifyChunkHash(hash, data);
       return true;
     } catch {
       await rm(file, { force: true }).catch(() => undefined);
@@ -163,12 +171,19 @@ export class PatchClient {
     }
   }
 
-  private async storeChunk(hash: string, compression: CompressionMode): Promise<Uint8Array> {
+  private async storeChunk(
+    hash: string,
+    compression: CompressionMode,
+    expectedLength: number,
+  ): Promise<Uint8Array> {
     const data = await decodeChunk(
-      await this.getBytes(`${this.patchRoot}/${hash}.bin`),
+      await this.getBytes(`${this.patchRoot}/${hash}.bin`, {
+        maxBytes: encodedChunkLimit(expectedLength, compression),
+      }),
       compression,
+      expectedLength,
     );
-    verifyHash(hash, data);
+    verifyChunkHash(hash, data);
     await writeAtomicInDir(this.chunksDir, hash, data);
     return data;
   }
@@ -181,19 +196,35 @@ export class PatchClient {
     outPath: string,
     entry: ManifestFileEntry,
     compression: CompressionMode,
-    progress: { got: number; total: number; started: number; sizes: Map<string, number> },
+    progress: {
+      got: number;
+      total: number;
+      rate: DownloadRateAverage;
+      sizes: Map<string, number>;
+    },
   ): Promise<void> {
     const hashes = entry.chunkHashes;
     const missing: string[] = [];
-    for (const h of hashes) {
-      if (!(await this.chunkCached(h))) missing.push(h);
+    for (let i = 0; i < hashes.length; i++) {
+      const h = hashes[i]!;
+      const expectedLength = progress.sizes.get(h);
+      if (expectedLength === undefined) {
+        throw new AppError("chunk_length", `missing expected length for ${h}`);
+      }
+      if (!(await this.chunkCached(h, expectedLength))) {
+        missing.push(h);
+      }
     }
     const unique = [...new Set(missing)];
 
     await mapPool(unique, this.jobs, async (h) => {
-      await this.storeChunk(h, compression);
-      progress.got += progress.sizes.get(h) ?? 0;
-      const rate = bytesPerSecond(progress.got, progress.started);
+      const expectedLength = progress.sizes.get(h);
+      if (expectedLength === undefined) {
+        throw new AppError("chunk_length", `missing expected length for ${h}`);
+      }
+      await this.storeChunk(h, compression, expectedLength);
+      progress.got += expectedLength;
+      const rate = progress.rate.update(progress.got);
       this.emit({
         phase: "client",
         label: "Preparing files needed to start",
@@ -241,11 +272,7 @@ export class PatchClient {
         const { bytesRead } = await file.read(data, 0, size, i * chunkSize);
         if (bytesRead !== size) return false;
         const hash = entry.chunkHashes[i]!;
-        const algo = HASH_ALGOS[hash.length];
-        if (!algo) return false;
-        if (createHash(algo).update(data).digest("hex") !== hash.toLowerCase()) {
-          return false;
-        }
+        verifyChunkHash(hash, data);
       }
       return true;
     } catch {
@@ -263,10 +290,21 @@ export class PatchClient {
       const metadata = JSON.parse(
         await readFile(join(this.artifactsDir, "snapshot-metadata.json"), "utf8"),
       ) as Record<string, unknown>;
-      const current = JSON.parse(
-        await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
-      ) as Record<string, unknown>;
+      const current = parsePublishedClientManifest(
+        JSON.parse(
+          await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+        ),
+      );
       const hashes = JSON.stringify(entry.chunkHashes);
+      const artifacts = CLIENT_ARTIFACTS.map((name) => {
+        const artifact = manifest.entry(name);
+        if (!artifact) throw new Error(`manifest is missing ${name}`);
+        return {
+          name,
+          size: artifact.size,
+          chunkHashes: artifact.chunkHashes,
+        };
+      });
       return (
         metadata.size === entry.size &&
         metadata.chunkSize === manifest.chunkSize &&
@@ -275,10 +313,33 @@ export class PatchClient {
         current.chunkSize === manifest.chunkSize &&
         current.snapshot === SNAPSHOT &&
         current.size === entry.size &&
-        JSON.stringify(current.chunkHashes) === hashes
+        JSON.stringify(current.chunkHashes) === hashes &&
+        current.clientFingerprint === clientFingerprint(manifest) &&
+        JSON.stringify(current.artifacts) === JSON.stringify(artifacts)
       );
     } catch {
       return false;
+    }
+  }
+
+  private async publishedGeneration(): Promise<{
+    fingerprint: string | null;
+    valid: boolean;
+  }> {
+    try {
+      const manifest = parsePublishedClientManifest(
+        JSON.parse(
+          await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+        ),
+      );
+      return {
+        fingerprint: manifest.clientFingerprint ?? null,
+        valid:
+          (await verifyPublishedClientArtifacts(this.artifactsDir, manifest)) ===
+          true,
+      };
+    } catch {
+      return { fingerprint: null, valid: false };
     }
   }
 
@@ -296,8 +357,19 @@ export class PatchClient {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       backupExists = false;
     }
-    if (backupExists && currentExists) {
+    const candidateExists =
+      currentExists &&
+      (await stat(clientGenerationPaths(this.artifactsDir).marker).then(
+        () => true,
+        () => false,
+      ));
+    if (backupExists && currentExists && !candidateExists) {
       await rm(backup, { recursive: true, force: true });
+    } else if (backupExists && currentExists) {
+      throw new AppError(
+        "candidate_pending",
+        "client candidate must be confirmed or rolled back before updating",
+      );
     } else if (backupExists) {
       await rename(backup, this.artifactsDir);
     }
@@ -313,13 +385,30 @@ export class PatchClient {
   }
 
   /** Fetch JSPI client artifacts and publish snapshot metadata; never assembles Gw.snapshot. */
-  async update(): Promise<Manifest> {
-    const stage = `${this.artifactsDir}.next`;
-    const backup = `${this.artifactsDir}.previous`;
+  async update(options?: {
+    blockedFingerprint?: string | null;
+  }): Promise<PatchUpdateResult> {
+    const generations = clientGenerationPaths(this.artifactsDir);
+    const stage = generations.stage;
+    const backup = generations.previous;
     await this.recoverArtifactSwap(stage, backup);
     await mkdir(this.chunksDir, { recursive: true });
 
     const mf = await this.fetchManifest();
+    const fingerprint = clientFingerprint(mf);
+    const previousGeneration = await this.publishedGeneration();
+    if (
+      fingerprint === options?.blockedFingerprint &&
+      previousGeneration.valid
+    ) {
+      return {
+        manifest: mf,
+        fingerprint,
+        published: false,
+        candidate: false,
+        blocked: true,
+      };
+    }
     const artifacts: {
       name: string;
       entry: ManifestFileEntry;
@@ -328,7 +417,7 @@ export class PatchClient {
       needsBuild: boolean;
     }[] = [];
 
-    for (const name of [...JSPI_ARTIFACTS, ...COMMON_ARTIFACTS]) {
+    for (const name of CLIENT_ARTIFACTS) {
       const path = mf.find(name);
       if (!path) {
         throw new AppError("manifest_missing", `manifest is missing ${name}`);
@@ -362,7 +451,13 @@ export class PatchClient {
         secondsRemaining: null,
         error: null,
       });
-      return mf;
+      return {
+        manifest: mf,
+        fingerprint,
+        published: false,
+        candidate: false,
+        blocked: false,
+      };
     }
 
     const sizes = new Map<string, number>();
@@ -373,13 +468,18 @@ export class PatchClient {
         const h = entry.chunkHashes[i]!;
         const n = this.chunkBytes(entry, mf.chunkSize, i);
         sizes.set(h, n);
-        if (!missing.has(h) && !(await this.chunkCached(h))) {
+        if (!missing.has(h) && !(await this.chunkCached(h, n))) {
           missing.add(h);
           total += n;
         }
       }
     }
-    const progress = { got: 0, total, started: Date.now(), sizes };
+    const progress = {
+      got: 0,
+      total,
+      rate: new DownloadRateAverage(),
+      sizes,
+    };
 
     if (total) {
       this.emit({
@@ -393,6 +493,8 @@ export class PatchClient {
       });
     }
 
+    let hadCurrent: boolean;
+    let candidate: boolean;
     await mkdir(stage, { recursive: true });
     try {
       for (const artifact of artifacts) {
@@ -412,21 +514,34 @@ export class PatchClient {
         chunkSize: mf.chunkSize,
         chunkHashes: snapshotEntry.chunkHashes,
       });
-      await writeAtomicJson(join(stage, "manifest.json"), {
-        compressionMode: mf.compression,
-        chunkSize: mf.chunkSize,
-        snapshot: SNAPSHOT,
-        size: snapshotEntry.size,
-        chunkHashes: snapshotEntry.chunkHashes,
-      });
-      let hadCurrent = false;
+      await writeAtomicJson(
+        join(stage, "manifest.json"),
+        parsePublishedClientManifest({
+          clientFingerprint: fingerprint,
+          artifacts: artifacts.map(({ name, entry }) => ({
+            name,
+            size: entry.size,
+            chunkHashes: entry.chunkHashes,
+          })),
+          compressionMode: mf.compression,
+          chunkSize: mf.chunkSize,
+          snapshot: SNAPSHOT,
+          size: snapshotEntry.size,
+          chunkHashes: snapshotEntry.chunkHashes,
+        }),
+      );
       try {
         await stat(this.artifactsDir);
         hadCurrent = true;
       } catch {
         hadCurrent = false;
       }
+      candidate =
+        hadCurrent &&
+        previousGeneration.valid &&
+        previousGeneration.fingerprint !== fingerprint;
       if (hadCurrent) {
+        if (candidate) await markClientCandidate(stage, fingerprint);
         await rm(backup, { recursive: true, force: true });
         await rename(this.artifactsDir, backup);
       }
@@ -436,7 +551,9 @@ export class PatchClient {
         if (hadCurrent) await rename(backup, this.artifactsDir);
         throw error;
       }
-      if (hadCurrent) await rm(backup, { recursive: true, force: true });
+      if (hadCurrent && !candidate) {
+        await rm(backup, { recursive: true, force: true });
+      }
     } finally {
       await rm(stage, { recursive: true, force: true });
     }
@@ -450,6 +567,12 @@ export class PatchClient {
       secondsRemaining: null,
       error: null,
     });
-    return mf;
+    return {
+      manifest: mf,
+      fingerprint,
+      published: true,
+      candidate,
+      blocked: false,
+    };
   }
 }

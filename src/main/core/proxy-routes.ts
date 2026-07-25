@@ -26,6 +26,10 @@ export function isProxyRoute(route: string): boolean {
   return Object.hasOwn(PROXY_ROUTES, route.toLowerCase());
 }
 
+export function isProxyFetchDestination(destination: string): boolean {
+  return destination === "" || destination === "empty";
+}
+
 export function rewriteProxyRedirect(
   route: string,
   location: string,

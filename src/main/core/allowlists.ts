@@ -3,7 +3,6 @@ import { AllowlistError, ValidationError } from "../../shared/errors.js";
 export const ALLOWED_PORTS = new Set([6112, 80, 443]);
 
 export const ALLOWED_DOMAINS = ["arenanetworks.com", "guildwars.com"] as const;
-export const DNS_SUFFIXES = ALLOWED_DOMAINS;
 
 export function isAllowedPort(port: number): boolean {
   return ALLOWED_PORTS.has(port);
@@ -17,8 +16,6 @@ export function allowedName(
   if (!h) return false;
   return domains.some((d) => h === d || h.endsWith("." + d));
 }
-
-export const dnsSuffixAllowed = (name: string): boolean => allowedName(name);
 
 export function isPublicIpv4(ip: string): boolean {
   const p = ip.split(".");
@@ -38,35 +35,13 @@ export function isPublicIpv4(ip: string): boolean {
   return true;
 }
 
-export const isPublicUnicastIPv4 = isPublicIpv4;
-
 export function isPublicIp(ip: string): boolean {
-  if (!ip.includes(":")) return isPublicIpv4(ip);
-  const h = ip.toLowerCase();
-  if (h === "::1" || h === "::") return false;
-  if (/^f[cd]/.test(h)) return false;
-  if (/^fe[89ab]/.test(h)) return false;
-  const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(h);
-  return m ? isPublicIpv4(m[1]!) : true;
+  return isPublicIpv4(ip);
 }
-
-export function isPublicUnicastIPv6(host: string): boolean {
-  return isPublicIp(host);
-}
-
-let privateAllowWarned = false;
 
 export function assertPublicDestination(host: string, port: number): void {
   if (!isAllowedPort(port)) {
     throw new AllowlistError(`port ${port} is not allowed`);
-  }
-  // Test-only escape hatch for loopback fixtures; announce loudly when set.
-  if (process.env.GW_ALLOW_PRIVATE === "1") {
-    if (!privateAllowWarned) {
-      console.warn("GW_ALLOW_PRIVATE=1 — private destinations are allowed");
-      privateAllowWarned = true;
-    }
-    return;
   }
   if (!isPublicIp(host)) {
     throw new AllowlistError(`address ${host} is not public unicast`);
@@ -78,18 +53,10 @@ export interface Destination {
   port: number;
 }
 
-/** Only IPv4:port and [IPv6]:port — bare IPv6 without brackets is refused. */
+/** The official client currently resolves and connects through IPv4 only. */
 export function parseDestination(dest: string): Destination {
   if (typeof dest !== "string" || !dest) {
     throw new ValidationError(`malformed dest ${JSON.stringify(dest)}`);
-  }
-  const v6 = /^\[([0-9a-fA-F:.]+)\]:(\d+)$/.exec(dest);
-  if (v6) {
-    const port = Number(v6[2]);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      throw new ValidationError(`malformed dest ${JSON.stringify(dest)}`);
-    }
-    return { host: v6[1]!, port };
   }
   const v4 = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/.exec(dest);
   if (v4) {

@@ -1,0 +1,38 @@
+name: ArenaNet client canary
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arenanet-client-canary
+  cancel-in-progress: false
+
+jobs:
+  live-client:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.13.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Exercise the current production client
+        env:
+          GW_LIVE_SMOKE: "1"
+        run: |
+          pnpm build
+          pnpm exec playwright test \
+            --config=tests/electron/playwright.config.mjs \
+            tests/electron/live.spec.mjs

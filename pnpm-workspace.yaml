@@ -6,9 +6,13 @@ publicHoistPattern:
 confirmModulesPurge: false
 blockExoticSubdeps: false
 overrides:
+  "brace-expansion@": 5.0.8
   tar: 7.5.19
   tmp: 0.2.7
 allowBuilds:
   esbuild: true
   fs-xattr: true
   macos-alias: true
+auditConfig:
+  ignoreGhsas:
+    - GHSA-mh99-v99m-4gvg

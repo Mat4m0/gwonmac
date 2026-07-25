@@ -49,6 +49,10 @@ describe("allowlists", () => {
       "fe80::1",
       "fc00::1",
       "::ffff:127.0.0.1",
+      "0:0:0:0:0:0:0:1",
+      "::ffff:7f00:1",
+      "::ffff:a00:1",
+      "2606:4700::1",
       "not.an.ip",
       "1.2.3",
     ]) {
@@ -59,19 +63,14 @@ describe("allowlists", () => {
       "54.196.189.234",
       "172.15.0.1",
       "172.32.0.1",
-      "2606:4700::1",
-      "::ffff:8.8.8.8",
     ]) {
       assert.equal(isPublicIp(ip), true, ip);
     }
   });
 
-  it("parses IPv4:port and [IPv6]:port only", () => {
+  it("parses IPv4 destinations only", () => {
     assert.deepEqual(parseDestination("8.8.8.8:6112"), { host: "8.8.8.8", port: 6112 });
-    assert.deepEqual(parseDestination("[2606:4700::1]:443"), {
-      host: "2606:4700::1",
-      port: 443,
-    });
+    assert.throws(() => parseDestination("[2606:4700::1]:443"), ValidationError);
     assert.throws(() => parseDestination("2606:4700::1:443"), ValidationError);
     assert.throws(() => parseDestination("bad"), ValidationError);
   });

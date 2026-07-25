@@ -1,28 +1,20 @@
-import { app, dialog, net, session } from "electron";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { app, dialog, powerMonitor, session } from "electron";
+import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
+  DEFAULT_SETTINGS,
+  IPC,
+  type AppSettings,
+  type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
-  type SnapshotMetadata,
 } from "../shared/contracts.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
-import {
-  ACCESS_KEY,
-  COMMON_ARTIFACTS,
-  FATAL_HTTP,
-  JSPI_ARTIFACTS,
-  PATCH_ROOT,
-  SNAPSHOT,
-  UA,
-} from "./core/access-key.js";
-import { ChunkStore } from "./core/chunk-store.js";
-import type { Manifest } from "./core/manifest.js";
-import { PatchClient } from "./core/patch-client.js";
+import { AUTOMATION_COMMAND } from "../shared/automation.js";
+import { ClientRuntime } from "./client-runtime.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
-import { buildSnapshotMetadata } from "./core/snapshot.js";
 import {
   count,
   exportDiagnosticsForWindow,
@@ -32,7 +24,6 @@ import {
   observe,
   peakGauge,
   setDiagnosticCaptureStoppedHandler,
-  span,
   startDiagnosticCapture,
   startDiagnostics,
   stopDiagnosticCapture,
@@ -46,6 +37,7 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { gamePaths } from "./paths.js";
+import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,
@@ -53,7 +45,9 @@ import {
   flushWindowState,
   getMainWindow,
   prepareWindowState,
+  resetGameInput,
   type WindowHost,
+  updateLongRunningTaskFeedback,
 } from "./window.js";
 
 // Ad-hoc builds have no stable code identity, so Chromium's profile encryption
@@ -68,19 +62,40 @@ enableSandboxBeforeReady();
 registerGwScheme();
 wireLifecycle();
 
-let progress: DownloadProgress = { ...INITIAL_PROGRESS };
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
-const progressListeners = new Set<(p: DownloadProgress) => void>();
-const prefetchListeners = new Set<(p: PrefetchProgress) => void>();
+let settingsWrite: Promise<void> = Promise.resolve();
 
-let chunkStore: ChunkStore | null = null;
-let snapshotMeta: SnapshotMetadata | null = null;
-let saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
-let initialResidencyRecorded = false;
-let fullDownload: Promise<boolean> | null = null;
+function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+  const operation = settingsWrite.then(async () => {
+    const settingsPath = gamePaths().settings;
+    const current = await loadSettings(settingsPath);
+    return saveSettings(settingsPath, { ...current, ...patch });
+  });
+  settingsWrite = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
+
+function resetAppSettings(): Promise<AppSettings> {
+  const operation = settingsWrite.then(() =>
+    saveSettings(gamePaths().settings, { ...DEFAULT_SETTINGS }),
+  );
+  settingsWrite = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
+
+let clientRuntime: ClientRuntime;
 
 const sockets = new SocketManager(
   (ownerId, event) => {
+    if (event.type === "open") {
+      clientRuntime.noteSocketOpen();
+    }
     if (event.type !== "data") {
       log("socket", "info", `socket.${event.type}`, {
         socketId: event.socketId,
@@ -91,17 +106,35 @@ const sockets = new SocketManager(
     emitSocketEvent(ownerId, event);
   },
   { count, observe, gauge, peakGauge },
+  !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
+    ? (destination) => {
+        if (destination !== "127.0.0.1:6112") {
+          throw new Error("offline socket fixture permits only 127.0.0.1:6112");
+        }
+        return { host: "127.0.0.1", port: 6112, family: 4 };
+      }
+    : undefined,
 );
 
 function setProgress(next: DownloadProgress): void {
-  progress = next;
-  for (const listener of progressListeners) listener(next);
+  updateLongRunningTaskFeedback(next);
+  sendToRenderer(IPC.progressEvent, next);
 }
 
 function setPrefetch(next: PrefetchProgress): void {
   prefetch.completedChunks = next.completedChunks;
   prefetch.totalChunks = next.totalChunks;
-  for (const listener of prefetchListeners) listener({ ...prefetch });
+  sendToRenderer(IPC.prefetchEvent, { ...prefetch });
+}
+
+function sendToRenderer(channel: string, value: unknown): void {
+  const win = getMainWindow();
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+  try {
+    win.webContents.send(channel, value);
+  } catch {
+    // Renderer teardown can race a native progress callback.
+  }
 }
 
 async function ensureDirs(): Promise<void> {
@@ -122,6 +155,20 @@ async function clearBrowserCookies(phase: "startup" | "quit"): Promise<void> {
   }
 }
 
+async function clearBrowserNetworkCache(): Promise<void> {
+  try {
+    // Snapshot chunks are canonical in the native content-addressed store.
+    // Chromium's HTTP cache would only duplicate them and can retain stale
+    // same-URL client artifacts between exact-hash updates.
+    await session.defaultSession.clearCache();
+    log("app", "info", "browserCache.cleared.startup");
+  } catch (error) {
+    log("app", "warn", "browserCache.clearFailed.startup", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function applyPendingCacheClear(): Promise<void> {
   const paths = gamePaths();
   try {
@@ -135,312 +182,29 @@ async function applyPendingCacheClear(): Promise<void> {
   log("cache", "info", "cache.clearedAtStartup");
 }
 
-function cdnChunkFetcher(compressionHint: "none" | "gzip"): (hash: string) => Promise<Uint8Array> {
-  const headers = {
-    "X-Access-Key": ACCESS_KEY,
-    "User-Agent": UA,
-    "Accept-Encoding": "identity",
-  };
-  return async (hash) => {
-    const url = `${PATCH_ROOT}/${hash}.bin`;
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const wireStarted = performance.now();
-      try {
-        const res = await net.fetch(url, { headers });
-        if (res.ok) {
-          // Compression is applied inside ChunkStore from the manifest mode.
-          void compressionHint;
-          const data = new Uint8Array(await res.arrayBuffer());
-          observe("cache.networkWire", (performance.now() - wireStarted) * 1_000);
-          return data;
-        }
-        observe("cache.networkWire", (performance.now() - wireStarted) * 1_000);
-        lastError = new Error(`chunk ${hash}: HTTP ${res.status}`);
-        if (FATAL_HTTP.has(res.status)) break;
-      } catch (error) {
-        observe("cache.networkWire", (performance.now() - wireStarted) * 1_000);
-        lastError = error;
-      }
-      if (attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1_000));
-      }
-    }
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`chunk ${hash}: download failed`);
-  };
-}
-
-async function refreshSnapshotMeta(): Promise<void> {
-  if (!chunkStore) {
-    snapshotMeta = null;
-    return;
-  }
-  const residentIndices = await chunkStore.residentIndices();
-  snapshotMeta = buildSnapshotMetadata({
-    size: chunkStore.size,
-    chunkSize: chunkStore.chunkSize,
-    chunkHashes: chunkStore.hashes,
-    residentIndices,
-  });
-  const residentBytes = residentIndices.reduce(
-    (total, index) => total + chunkStore!.chunkByteLength(index),
-    0,
-  );
-  gauge("cache.residentChunks", residentIndices.length);
-  gauge("cache.residentBytes", residentBytes);
-  gauge("cache.totalChunks", chunkStore.hashes.length);
-  gauge("cache.totalBytes", chunkStore.size);
-  if (!initialResidencyRecorded) {
-    gauge("cache.initialResidentChunks", residentIndices.length);
-    gauge("cache.initialResidentBytes", residentBytes);
-    initialResidencyRecorded = true;
-  }
-}
-
-async function attachChunkStore(
-  manifest: Manifest,
-  chunksDir: string,
-  bootChunks: string,
-): Promise<void> {
-  const entry = manifest.entry(SNAPSHOT);
-  if (!entry) {
-    log("update", "warn", "manifest.snapshotMissing");
-    chunkStore = null;
-    snapshotMeta = null;
-    return;
-  }
-  await installChunkStore(
-    entry.size,
-    manifest.chunkSize,
-    entry.chunkHashes,
-    manifest.compression,
-    chunksDir,
-    bootChunks,
-  );
-}
-
-async function installChunkStore(
-  size: number,
-  chunkSize: number,
-  chunkHashes: string[],
-  compression: "none" | "gzip",
-  chunksDir: string,
-  bootChunks: string,
-): Promise<void> {
-  chunkStore = new ChunkStore({
-    chunksDir,
-    size,
-    chunkSize,
-    chunkHashes,
-    compression,
-    bootListPath: bootChunks,
-    fetch: cdnChunkFetcher(compression),
-    metrics: { count, observe, gauge, peak: peakGauge },
-  });
-  initialResidencyRecorded = false;
-  await refreshSnapshotMeta();
-
-  if (saveTouchedTimer) clearInterval(saveTouchedTimer);
-  saveTouchedTimer = setInterval(() => {
-    void chunkStore?.saveTouched().catch(() => undefined);
-  }, 5000);
-}
-
-async function attachLastPublishedClient(): Promise<void> {
+async function applyPendingGameStorageClear(): Promise<void> {
   const paths = gamePaths();
-  for (const name of [...JSPI_ARTIFACTS, ...COMMON_ARTIFACTS]) {
-    const file = await stat(path.join(paths.artifacts, name));
-    if (!file.isFile() || file.size <= 0) {
-      throw new Error(`last published client is missing ${name}`);
-    }
-  }
-  const value = JSON.parse(
-    await readFile(path.join(paths.artifacts, "manifest.json"), "utf8"),
-  ) as Record<string, unknown>;
-  if (
-    (value.compressionMode !== "none" && value.compressionMode !== "gzip") ||
-    !Number.isSafeInteger(value.chunkSize) ||
-    (value.chunkSize as number) <= 0 ||
-    !Number.isSafeInteger(value.size) ||
-    (value.size as number) <= 0 ||
-    !Array.isArray(value.chunkHashes) ||
-    !value.chunkHashes.every((hash) => typeof hash === "string")
-  ) {
-    throw new Error("last published client manifest is invalid");
-  }
-  await installChunkStore(
-    value.size as number,
-    value.chunkSize as number,
-    value.chunkHashes as string[],
-    value.compressionMode,
-    paths.chunks,
-    paths.bootChunks,
-  );
-}
-
-async function afterClientReady(notice?: string): Promise<void> {
-  if (!chunkStore) return;
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "ready",
-    label: "Starting Guild Wars",
-    ...(notice ? { notice } : {}),
-  });
-
-  // Boot working-set prefetch runs after the client is free to start.
-  void chunkStore
-    .prefetch((p) => setPrefetch(p))
-    .then(() => refreshSnapshotMeta())
-    .catch((err) =>
-      log("cache", "warn", "prefetch.failed", {
-        message: err instanceof Error ? err.message : String(err),
-      }),
-    );
-}
-
-function downloadFullGame(): Promise<boolean> {
-  if (fullDownload) return fullDownload;
-  const store = chunkStore;
-  if (!store) {
-    return Promise.reject(
-      new Error("The game files are not ready yet. Try again in a moment."),
-    );
-  }
-  store.resume();
-  log("cache", "info", "fullDownload.started");
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "image",
-    label: "Downloading full game",
-  });
-  let lastProgressLogAt = 0;
-  fullDownload = store
-    .downloadAll({
-      onProgress: (value) => {
-        setProgress({
-          phase: "image",
-          label: "Downloading full game",
-          received: value.received,
-          total: value.total,
-          bytesPerSecond: value.bytesPerSecond,
-          secondsRemaining: value.secondsRemaining,
-          error: null,
-        });
-        const now = Date.now();
-        if (now - lastProgressLogAt >= 5_000) {
-          lastProgressLogAt = now;
-          log("cache", "info", "fullDownload.progress", {
-            received: value.received,
-            total: value.total,
-            bytesPerSecond: value.bytesPerSecond,
-            secondsRemaining: value.secondsRemaining,
-          });
-        }
-      },
-    })
-    .then(async (complete) => {
-      await refreshSnapshotMeta();
-      log(
-        "cache",
-        "info",
-        complete ? "fullDownload.completed" : "fullDownload.stopped",
-      );
-      setProgress({
-        ...INITIAL_PROGRESS,
-        phase: "ready",
-        label: complete ? "Full game downloaded" : "Download stopped",
-      });
-      return complete;
-    })
-    .catch((error) => {
-      log("cache", "error", "fullDownload.failed", {
-        code:
-          error instanceof Error && "code" in error
-            ? String(error.code)
-            : "unknown",
-        message: error instanceof Error ? error.message : String(error),
-      });
-      const message =
-        error instanceof Error && "code" in error && error.code === "disk_full"
-          ? "There is not enough free disk space to download the full game."
-          : "ArenaNet is unavailable. The download can resume later.";
-      setProgress({
-        ...INITIAL_PROGRESS,
-        phase: "ready",
-        label: "Download paused",
-      });
-      throw new Error(message, { cause: error });
-    })
-    .finally(() => {
-      fullDownload = null;
-    });
-  return fullDownload;
-}
-
-async function startGameUpdate(): Promise<void> {
-  // Offline shell tests skip ArenaNet contact entirely.
-  if (process.env.GW_OFFLINE_SHELL === "1") {
-    setProgress({
-      ...INITIAL_PROGRESS,
-      phase: "ready",
-      label: "Ready (offline shell)",
-    });
-    return;
-  }
-  const paths = gamePaths();
-  const patchClient = new PatchClient({
-    artifactsDir: paths.artifacts,
-    chunksDir: paths.chunks,
-    onProgress: (p) => {
-      setProgress(p);
-    },
-  });
-  const updateSpan = span("update", "clientUpdate");
   try {
-    const manifest = await patchClient.update();
-    await attachChunkStore(manifest, paths.chunks, paths.bootChunks);
-    await afterClientReady();
-    updateSpan.end({ status: "ready" });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    try {
-      await attachLastPublishedClient();
-      log("update", "warn", "patch.updateFallback", {
-        message,
-      });
-      gauge("update.usingCachedClient", true);
-      await afterClientReady(
-        "The game client update failed, so the previous client was restored.",
-      );
-      updateSpan.end({ status: "cachedFallback", message }, "warn");
-      return;
-    } catch (fallbackError) {
-      log("update", "error", "patch.updateFailed", {
-        message,
-        fallback:
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError),
-      });
-    }
-    updateSpan.end({ status: "error", message }, "error");
-    setProgress({
-      ...INITIAL_PROGRESS,
-      phase: "error",
-      label: "Update failed",
-      error:
-        "ArenaNet is unavailable and no previous game client could be restored.",
-    });
+    await stat(paths.gameStorageClearRequest);
+  } catch {
+    return;
   }
+  // Run before a renderer can mount IDBFS, otherwise auto-persisting game
+  // writes can race the destructive clear and recreate entries before quit.
+  await session.defaultSession.clearStorageData({
+    origin: "gw://app",
+    storages: ["indexdb"],
+  });
+  await rm(paths.gameStorageClearRequest, { force: true });
+  log("filesystem", "warn", "filesystem.resetCompleted");
 }
 
 function buildWindowHost(): WindowHost {
   return {
     sockets,
+    getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
-    setSettings: (value) => saveSettings(gamePaths().settings, value),
+    updateSettings: updateAppSettings,
     exportDiagnostics: async () => {
       const win = getMainWindow();
       return win ? exportDiagnosticsForWindow(win) : "";
@@ -451,6 +215,9 @@ function buildWindowHost(): WindowHost {
     reloadGame: (win) => {
       sockets.closeAll(win.webContents.id);
       void win.loadURL("gw://app/");
+    },
+    prepareRendererRecovery: async () => {
+      await clientRuntime.recoverRendererCrash();
     },
   };
 }
@@ -467,9 +234,16 @@ app.whenReady().then(async () => {
     website: EXTERNAL_URLS.github,
   });
   await applyPendingCacheClear();
+  await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
+  powerMonitor.on("suspend", () => {
+    if (!clientRuntime?.isDownloading) return;
+    log("cache", "warn", "fullDownload.stoppedForSleep");
+    clientRuntime.stopDownload();
+  });
   await clearBrowserCookies("startup");
+  await clearBrowserNetworkCache();
   log("app", "info", "electron.ready");
   await loadSettings(gamePaths().settings, async (backupPath) => {
     log("settings", "error", "settings.corruptRecovered", {
@@ -484,67 +258,96 @@ app.whenReady().then(async () => {
     });
   });
   await prepareWindowState();
+  const paths = gamePaths();
+  const expectedUserData = process.env.GW_EXPECT_USER_DATA;
+  const profileMatches =
+    !expectedUserData ||
+    path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
+  clientRuntime = new ClientRuntime({
+    paths,
+    hostVersion: app.getVersion(),
+    cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
+    offlineShell: process.env.GW_OFFLINE_SHELL === "1",
+    toolboxEnabled: TOOLBOX_AUTOMATION_ENABLED,
+    onProgress: setProgress,
+    onPrefetch: setPrefetch,
+  });
   setProtocolDeps({
-    getChunkStore: () => chunkStore,
-    getSnapshotMeta: () => snapshotMeta,
+    getActiveClient: () => clientRuntime.active,
   });
   installGwProtocolHandler();
   log("protocol", "info", "protocol.installed");
 
   registerIpcHandlers({
     sockets,
-    getProgress: () => progress,
-    getPrefetch: () => prefetch,
-    getChunkStore: () => chunkStore,
-    subscribeProgress: (cb) => {
-      progressListeners.add(cb);
-      return () => progressListeners.delete(cb);
-    },
-    subscribePrefetch: (cb) => {
-      prefetchListeners.add(cb);
-      return () => prefetchListeners.delete(cb);
-    },
-    downloadFullGame,
-    stopFullDownload: () => {
-      if (!fullDownload) return;
-      log("cache", "info", "fullDownload.stopRequested");
-      chunkStore?.stop();
-    },
+    getProgress: () => clientRuntime.progress,
+    getChunkStore: () => clientRuntime.active?.store ?? null,
+    getSettings: () => loadSettings(gamePaths().settings),
+    updateSettings: updateAppSettings,
+    resetSettings: resetAppSettings,
+    downloadFullGame: () => clientRuntime.downloadAll(),
+    stopFullDownload: () => clientRuntime.stopDownload(),
+    confirmClientHealthy: () => clientRuntime.noteFramePresented(),
+    retryClient: () => clientRuntime.retryUpdate(),
   });
 
   onAppQuit(async () => {
     await flushWindowState();
     sockets.closeAll();
-    chunkStore?.stop();
-    if (saveTouchedTimer) clearInterval(saveTouchedTimer);
-    await chunkStore?.saveTouched().catch(() => undefined);
+    updateLongRunningTaskFeedback({
+      ...INITIAL_PROGRESS,
+      phase: "ready",
+      label: "Quitting",
+    });
+    await clientRuntime.shutdown();
     await clearBrowserCookies("quit");
     await stopDiagnostics();
   });
 
   createMainWindow(buildWindowHost());
-  setDiagnosticCaptureStoppedHandler(async () => {
-    const win = getMainWindow();
-    if (!win || win.isDestroyed()) return;
-    const { response } = await dialog.showMessageBox(win, {
-      type: "info",
-      buttons: ["Export Now…", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      message: "Performance capture finished",
-      detail: "Export it now while the capture context is fresh.",
+  if (TOOLBOX_AUTOMATION_ENABLED) {
+    process.on("message", (message) => {
+      if (message === AUTOMATION_COMMAND.startLevel1Capture) {
+        void startDiagnosticCapture(1).catch((error) => {
+          log("app", "error", "capture.automationStartFailed", {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+      } else if (message === AUTOMATION_COMMAND.stopCapture) {
+        void stopDiagnosticCapture();
+      }
     });
-    if (response === 0) {
-      await exportProblemReport(win, () => exportDiagnosticsForWindow(win));
-    }
-  });
+  } else {
+    setDiagnosticCaptureStoppedHandler(async () => {
+      const win = getMainWindow();
+      if (!win || win.isDestroyed()) return;
+      await resetGameInput(win);
+      const { response } = await dialog.showMessageBox(win, {
+        type: "info",
+        buttons: ["Export Now…", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+        message: "Performance capture finished",
+        detail: "Export it now while the capture context is fresh.",
+      });
+      if (response === 0) {
+        await exportProblemReport(win, () => exportDiagnosticsForWindow(win));
+      }
+    });
+  }
   log("app", "info", "window.created");
-  setProgress({
-    ...INITIAL_PROGRESS,
-    phase: "starting",
-    label: "Checking the game client",
-  });
-  void startGameUpdate();
+  if (profileMatches) {
+    void clientRuntime.requestUpdate();
+  } else {
+    log("app", "error", "app.unexpectedUserData");
+    setProgress({
+      ...INITIAL_PROGRESS,
+      phase: "error",
+      label: "Live probe blocked",
+      error:
+        "The live probe selected an unexpected profile. No update was started.",
+    });
+  }
 
   app.on("activate", () => {
     if (!getMainWindow()) createMainWindow(buildWindowHost());

@@ -82,8 +82,14 @@ export interface GraphicsDiagnostics {
   hardwareAcceleration: boolean;
   canvasWidth: number;
   canvasHeight: number;
+  offscreenWidth: number;
+  offscreenHeight: number;
+  drawingBufferWidth: number;
+  drawingBufferHeight: number;
   devicePixelRatio: number;
-  renderScale: number;
+  renderScale: AppSettings["renderScale"];
+  antialias: boolean;
+  samples: number;
 }
 
 export interface ClockSyncResponse {
@@ -94,14 +100,18 @@ export interface ClockSyncResponse {
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
   pointerLock: boolean;
+  cursorTheme: "system" | "guild-wars" | "guild-wars-2";
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
 }
 
+export type AppSettingsPatch = Partial<AppSettings>;
+
 export const DEFAULT_SETTINGS: AppSettings = {
-  renderScale: 1,
+  renderScale: 2,
   pointerLock: true,
+  cursorTheme: "guild-wars",
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,
@@ -140,19 +150,13 @@ export interface UpdateStatus {
 
 export const IPC = {
   progressCurrent: "gw:progress:current",
-  progressSubscribe: "gw:progress:subscribe",
-  progressUnsubscribe: "gw:progress:unsubscribe",
   progressEvent: "gw:progress:event",
-  prefetchSubscribe: "gw:prefetch:subscribe",
-  prefetchUnsubscribe: "gw:prefetch:unsubscribe",
   prefetchEvent: "gw:prefetch:event",
   snapshotMetadata: "gw:snapshot:metadata",
   dnsResolve: "gw:dns:resolve",
   socketConnect: "gw:socket:connect",
   socketSend: "gw:socket:send",
   socketClose: "gw:socket:close",
-  socketSubscribe: "gw:socket:subscribe",
-  socketUnsubscribe: "gw:socket:unsubscribe",
   socketEvent: "gw:socket:event",
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
@@ -164,6 +168,7 @@ export const IPC = {
   cacheClear: "gw:cache:clear",
   cacheDownloadAll: "gw:cache:downloadAll",
   cacheStopDownload: "gw:cache:stopDownload",
+  gameStorageReset: "gw:gameStorage:reset",
   diagnosticsGraphics: "gw:diagnostics:graphics",
   diagnosticsClockSync: "gw:diagnostics:clockSync",
   diagnosticsClockResult: "gw:diagnostics:clockResult",
@@ -171,11 +176,10 @@ export const IPC = {
   diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
   diagnosticsCurrent: "gw:diagnostics:current",
-  diagnosticsStartCapture: "gw:diagnostics:startCapture",
-  diagnosticsStopCapture: "gw:diagnostics:stopCapture",
-  diagnosticsExport: "gw:diagnostics:export",
   appOpenExternal: "gw:app:openExternal",
   appRequestQuit: "gw:app:requestQuit",
+  clientRetry: "gw:client:retry",
+  clientHealthy: "gw:client:healthy",
   updateStatus: "gw:update:status",
 } as const;
 
@@ -201,7 +205,7 @@ export interface GwNativeApi {
   };
   settings: {
     get(): Promise<AppSettings>;
-    set(value: AppSettings): Promise<AppSettings>;
+    set(value: AppSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
   };
   credentials: {
@@ -215,6 +219,9 @@ export interface GwNativeApi {
     downloadAll(): Promise<boolean>;
     stopDownload(): Promise<void>;
   };
+  gameStorage: {
+    resetAndRestart(): Promise<boolean>;
+  };
   diagnostics: {
     clockSync(rendererNowUs: number): Promise<ClockSyncResponse>;
     recordClockOffset(offsetUs: number, rttUs: number): Promise<void>;
@@ -227,13 +234,14 @@ export interface GwNativeApi {
       fields?: RendererMilestoneFields,
     ): Promise<void>;
     current(): Promise<DiagnosticSummary>;
-    startCapture(level: 1 | 2): Promise<void>;
-    stopCapture(): Promise<void>;
-    export(): Promise<string>;
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;
     requestQuit(): Promise<void>;
+  };
+  client: {
+    retry(): Promise<void>;
+    healthy(): Promise<void>;
   };
   update: {
     status(): Promise<UpdateStatus | null>;

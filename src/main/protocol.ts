@@ -1,11 +1,12 @@
 import { app, protocol, net } from "electron";
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import type { SnapshotMetadata } from "../shared/contracts.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
+  isProxyFetchDestination,
   isProxyRoute,
   resolveProxyHost,
   rewriteProxyRedirect,
@@ -32,17 +33,21 @@ const CSP =
   "default-src 'self' gw:; script-src 'self' gw: 'unsafe-eval' 'wasm-unsafe-eval'; " +
   "style-src 'self' gw: 'unsafe-inline'; img-src 'self' gw: data:; " +
   "font-src 'self' gw:; connect-src 'self' gw:; worker-src 'self' gw: blob:; " +
-  "object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+  "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
+  "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 
 export interface ProtocolDeps {
-  getChunkStore: () => ChunkStore | null;
-  getSnapshotMeta: () => SnapshotMetadata | null;
+  getActiveClient: () => {
+    artifactsDir: string;
+    store: ChunkStore;
+    snapshotMeta: SnapshotMetadata;
+    wasmPath: string;
+  } | null;
 }
 
 let deps: ProtocolDeps = {
-  getChunkStore: () => null,
-  getSnapshotMeta: () => null,
+  getActiveClient: () => null,
 };
 
 export function setProtocolDeps(next: ProtocolDeps): void {
@@ -139,31 +144,36 @@ async function fileResponse(
     });
   }
 
-  const body = await readFile(filePath);
-  return new Response(body, {
+  const nodeStream = createReadStream(filePath);
+  const webStream = Readable.toWeb(nodeStream) as ReadableStream;
+  return new Response(webStream, {
     status: 200,
     headers: headers({
       "Content-Type": mime,
       "Accept-Ranges": "bytes",
-      "Content-Length": String(body.byteLength),
+      "Content-Length": String(st.size),
     }),
   });
 }
 
 async function handleSnapshot(request: Request): Promise<Response> {
-  const store = deps.getChunkStore();
-  const meta = deps.getSnapshotMeta();
-  if (!store || !meta || meta.size <= 0) {
+  const active = deps.getActiveClient();
+  if (!active || active.snapshotMeta.size <= 0) {
     return new Response("snapshot unavailable", {
       status: 503,
-      headers: headers({ "Content-Type": "text/plain; charset=utf-8" }),
+      headers: headers({
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8",
+      }),
     });
   }
+  const { store, snapshotMeta: meta } = active;
   const range = parseRangeHeader(request.headers.get("range"), meta.size);
   if (range === null || range === "unsatisfiable") {
     return new Response(null, {
       status: 416,
       headers: headers({
+        "Cache-Control": "no-store",
         "Content-Range": `bytes */${meta.size}`,
         "Accept-Ranges": "bytes",
       }),
@@ -172,13 +182,16 @@ async function handleSnapshot(request: Request): Promise<Response> {
   const length = range.end - range.start + 1;
   // Official calls stay well under this; larger would block the main process.
   if (length > 8 * 1024 * 1024) {
-    return new Response("range too large", { status: 416, headers: headers() });
+    return new Response("range too large", {
+      status: 416,
+      headers: headers({ "Cache-Control": "no-store" }),
+    });
   }
   const requestSpan = span("snapshot", "read", {
     offsetBytes: range.start,
     bytes: length,
     priority: request.headers.get("x-gw-priority") ?? "demand",
-  }, undefined, request.headers.get("x-gw-trace-id") ?? undefined);
+  });
   try {
     const priority =
       request.headers.get("x-gw-priority") === "prefetch"
@@ -192,6 +205,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
       {
       status: 206,
       headers: headers({
+        "Cache-Control": "no-store",
         "Content-Type": "application/octet-stream",
         "Accept-Ranges": "bytes",
         "Content-Range": `bytes ${range.start}-${range.end}/${meta.size}`,
@@ -215,12 +229,20 @@ async function handleSnapshot(request: Request): Promise<Response> {
         : "ArenaNet is unavailable. Guild Wars will retry this download.";
     return new Response(message, {
       status: 503,
-      headers: headers(),
+      headers: headers({ "Cache-Control": "no-store" }),
     });
   }
 }
 
 async function handleProxy(request: Request, route: string, rest: string): Promise<Response> {
+  const destination =
+    request.destination || request.headers.get("sec-fetch-dest") || "";
+  if (!isProxyFetchDestination(destination)) {
+    return new Response("proxy route is fetch-only", {
+      status: 403,
+      headers: headers({ "Content-Type": "text/plain; charset=utf-8" }),
+    });
+  }
   let host: string;
   try {
     host = resolveProxyHost(route);
@@ -289,7 +311,13 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
     const out = new Headers(headers());
     for (const [k, v] of res.headers) {
       const key = k.toLowerCase();
-      if (key === "content-security-policy") continue;
+      if (
+        key === "content-security-policy"
+        || key === "content-security-policy-report-only"
+        || key === "x-content-type-options"
+      ) {
+        continue;
+      }
       out.set(k, key === "location" && safeLocation ? safeLocation : v);
     }
     requestSpan.end({ status: res.status });
@@ -321,13 +349,14 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   if (base === "Gw.snapshot") return handleSnapshot(request);
 
   if (base === "snapshot-metadata.json") {
-    const meta = deps.getSnapshotMeta();
-    if (!meta) {
+    const active = deps.getActiveClient();
+    if (!active) {
       return new Response("{}", {
         status: 503,
         headers: headers({ "Content-Type": "application/json" }),
       });
     }
+    const meta = active.snapshotMeta;
     const body = JSON.stringify(snapshotMetadataWire(meta));
     return new Response(body, {
       status: 200,
@@ -342,7 +371,15 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     ? base
     : null;
   if (artifactName) {
-    const file = path.join(gamePaths().artifacts, artifactName);
+    const active = deps.getActiveClient();
+    const file =
+      artifactName === "Gw.jspi.wasm"
+        ? active?.wasmPath ??
+          path.join(gamePaths().artifacts, "Gw.jspi.wasm")
+        : path.join(
+            active?.artifactsDir ?? gamePaths().artifacts,
+            artifactName,
+          );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
     return fileResponse(file, request, mime);
   }

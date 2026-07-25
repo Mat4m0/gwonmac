@@ -56,6 +56,9 @@ not only happy paths.
   `adProvider.showInterstitial`, `ageSignals.check`, `shop.initialize`, and
   `shop.inAppPurchase`.
 - `image.fileSize` is synchronous, so snapshot metadata loads before glue.
+- Renderer `preRun` owns the single `app:` IDBFS mount. Restore it, create both
+  template directories, and change into it before releasing the run dependency;
+  relative game files must never fall back to ephemeral MEMFS.
 - `dataStrategy` is the only launcher-intent state. The renderer resolves it
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.
@@ -135,6 +138,11 @@ production-network smoke is explicitly opt-in:
 ```bash
 GW_LIVE_SMOKE=1 pnpm test:electron
 ```
+
+For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in
+`docs/toolbox-development.md`, and finish with one scoped `toolbox:live`
+scenario. Live Toolbox runs are cached-only unless `--allow-update` is
+explicit; do not bypass that guard or use a temporary Electron profile.
 
 Before finishing, check for a second source of truth, retained old paths,
 unnecessary structure, harder debugging, broken architecture decisions, and

@@ -23,6 +23,10 @@ screenshots, loading artwork, the application icon, and derived favicons are
 fan-project visual material and are not relicensed under GPL-3.0-only. Their
 inclusion does not grant permission to reuse them separately.
 
+The optional Guild Wars and Guild Wars 2 cursor artwork is included on the
+same basis for interoperability and visual compatibility. The project claims
+no ownership of, or additional rights in, that artwork.
+
 ## QT Friz Quad
 
 QT Friz Quad is © 1992 QualiType and is distributed under the SIL Open Font
