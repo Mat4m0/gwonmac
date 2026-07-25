@@ -10,6 +10,7 @@ export default tseslint.config(
       "out/**",
       "node_modules/**",
       "**/node_modules/**",
+      ".claude/**",
       ".pnpm-store/**",
       "dist/**",
       "dist-release/**",

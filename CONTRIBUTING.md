@@ -23,10 +23,14 @@ pnpm install --frozen-lockfile
 pnpm verify
 ```
 
+`pnpm check` (typecheck, lint, unit) is the fast loop while you work. If you
+touch `apps/website`, run `pnpm test:website` too — it has its own CI workflow
+and is not part of `pnpm verify`.
+
 The live test is opt-in because it contacts ArenaNet:
 
 ```bash
-GW_LIVE_SMOKE=1 pnpm test:electron
+pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
 Keep download concurrency at eight. Never commit downloaded game artifacts,

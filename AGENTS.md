@@ -120,8 +120,19 @@ application’s Resources directory.
 
 ## Verification
 
+`pnpm check` is the inner loop: typecheck, lint, and unit tests. It needs no
+build and launches no windows.
+
 ```bash
-pnpm typecheck
+pnpm check
+```
+
+The full gate needs a build first. Entry points (`dev`, `package`, `make`,
+`toolbox:*`) build themselves; the `test:*` suites do not, so build once and
+run them against that output:
+
+```bash
+pnpm build
 pnpm lint
 pnpm test:unit
 pnpm test:integration
@@ -131,12 +142,17 @@ pnpm package
 pnpm test:packaged
 ```
 
-`pnpm verify` runs the complete local gate. Electron and integration tests need
-permission to launch a local app and bind loopback fixtures. The
-production-network smoke is explicitly opt-in:
+`pnpm verify` runs that gate end to end, and CI runs it on every pull request.
+The website is not part of it: `apps/website` has its own path-filtered
+workflow, and `pnpm test:website` runs that suite locally.
+
+Electron and integration tests need permission to launch a local app and bind
+loopback fixtures. Test launches set `GW_BACKGROUND_LAUNCH=1` so the window
+appears without stealing keyboard focus; the few specs that assert on real OS
+focus opt out and say why. The production-network smoke is explicitly opt-in:
 
 ```bash
-GW_LIVE_SMOKE=1 pnpm test:electron
+pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
 For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in

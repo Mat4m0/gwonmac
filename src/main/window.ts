@@ -31,6 +31,11 @@ import { gamePaths, preloadPath } from "./paths.js";
 import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
 import { isDevBuild } from "./protocol.js";
 
+// Tests launch the app dozens of times; without this they steal keyboard focus
+// on every launch. Focus-dependent specs leave the flag unset.
+const BACKGROUND_LAUNCH =
+  !app.isPackaged && process.env.GW_BACKGROUND_LAUNCH === "1";
+
 const BUG_REPORT_URL =
   `${EXTERNAL_URLS.github}/issues/new?template=bug-report.yml`;
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
@@ -210,6 +215,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
         primaryWorkArea(),
       )
     : null;
+  if (BACKGROUND_LAUNCH) app.dock?.hide();
   const win = new BrowserWindow({
     ...(initialState?.bounds ?? { width: 1280, height: 800 }),
     minWidth: 800,
@@ -235,7 +241,8 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
 
   win.once("ready-to-show", () => {
     if (initialState?.mode === "maximized") win.maximize();
-    win.show();
+    if (BACKGROUND_LAUNCH) win.showInactive();
+    else win.show();
     if (initialState?.mode === "fullscreen") win.setFullScreen(true);
   });
 

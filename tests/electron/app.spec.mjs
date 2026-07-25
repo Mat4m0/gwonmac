@@ -31,6 +31,7 @@ test.describe("Electron application", () => {
     const env = {
       ...process.env,
       GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-electron-quit-e2e-"));
@@ -95,6 +96,7 @@ test.describe("Electron application", () => {
   });
 
   test("restores fullscreen and normal bounds, then resets safely", async () => {
+    // No GW_BACKGROUND_LAUNCH: setFullScreen is unreliable on a non-key window.
     const env = { ...process.env, GW_OFFLINE_SHELL: "1" };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-window-state-e2e-"));
@@ -225,6 +227,7 @@ test.describe("Electron application", () => {
     const env = {
       ...process.env,
       GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-electron-socket-e2e-"));
@@ -311,7 +314,11 @@ test.describe("Electron application", () => {
   });
 
   test("saved login survives an application relaunch without Keychain", async () => {
-    const env = { ...process.env, GW_OFFLINE_SHELL: "1" };
+    const env = {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-e2e-"));
     const launch = () =>
@@ -355,6 +362,7 @@ test.describe("Electron application", () => {
     const env = {
       ...process.env,
       GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
       GW_OFFLINE_SNAPSHOT_SIZE: String(8 * 1024 ** 3),
     };
     delete env.ELECTRON_RUN_AS_NODE;

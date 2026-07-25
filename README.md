@@ -83,14 +83,17 @@ The first online run fetches the small JSPI client artifacts.
 | `pnpm package`                                                           | Build a local `.app` under `out/`           |
 | `pnpm make`                                                              | Build the distributable `.zip`              |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
-| `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites                                 |
+| `pnpm check`                                                             | Fast inner loop: typecheck, lint, unit      |
+| `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites (run `pnpm build` first)        |
+| `pnpm test:website`                                                      | The `apps/website` suite                    |
 | `pnpm verify`                                                            | The complete local gate                     |
 
 `pnpm test:electron` launches a real macOS application process, so it needs
-permission to open GUI applications. The networked smoke test is opt-in:
+permission to open GUI applications. Those launches run in the background and
+do not take keyboard focus. The networked smoke test is opt-in:
 
 ```bash
-GW_LIVE_SMOKE=1 pnpm test:electron
+pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
 ### Repository layout

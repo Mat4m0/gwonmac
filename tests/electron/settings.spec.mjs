@@ -125,7 +125,10 @@ test.describe("settings experience", () => {
   });
 
   test("keeps settings keyboard navigation and reduced motion accessible", async () => {
-    const fixture = await launchOffline("gw-settings-accessibility-e2e-");
+    // toBeFocused() requires document.hasFocus(), so this launch takes focus.
+    const fixture = await launchOffline("gw-settings-accessibility-e2e-", {
+      GW_BACKGROUND_LAUNCH: "0",
+    });
     try {
       const { page } = fixture;
       await page.emulateMedia({ reducedMotion: "reduce" });

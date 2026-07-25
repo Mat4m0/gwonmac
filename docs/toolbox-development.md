@@ -21,10 +21,8 @@ ArenaNet. A live run certifies semantics; it is not the primary debugger.
 
 ```bash
 pnpm toolbox:doctor
-pnpm typecheck
-pnpm lint
-pnpm test:unit
-pnpm test:integration
+pnpm check
+pnpm build && pnpm test:integration
 ```
 
 For real CSS/layout feedback without a game or network session:

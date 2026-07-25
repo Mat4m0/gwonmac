@@ -354,6 +354,21 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.doesNotMatch(verification, /xattr|spctl --master-disable/);
 });
 
+test("the website suite runs on its own path-filtered workflow", () => {
+  const workflow = readFileSync(
+    path.join(root, ".github/workflows/website.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /runs-on: ubuntu-latest/);
+  assert.match(workflow, /run: pnpm test:website/);
+  assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
+  assert.match(workflow, /permissions:\n {2}contents: read/);
+  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
+  assert.doesNotMatch(workflow, /contents: write|id-token: write|issues: write/);
+  const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.doesNotMatch(pkg.scripts.verify, /test:website/);
+});
+
 test("the scheduled canary exercises the latest ArenaNet client conservatively", () => {
   const workflow = readFileSync(
     path.join(root, ".github/workflows/client-canary.yml"),

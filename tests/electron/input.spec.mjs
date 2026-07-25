@@ -368,7 +368,10 @@ test.describe("renderer input", () => {
   });
 
   test("allows pointer lock only for the owned game canvas", async () => {
-    const fixture = await launchOffline("gw-pointer-permission-e2e-");
+    // Real pointer lock needs a focused widget, so this launch takes focus.
+    const fixture = await launchOffline("gw-pointer-permission-e2e-", {
+      GW_BACKGROUND_LAUNCH: "0",
+    });
     try {
       const { page } = fixture;
       await startGameInput(page);
