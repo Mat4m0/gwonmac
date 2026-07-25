@@ -12,14 +12,21 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Markdown files tracked by git, plus new ones that are not gitignored. */
+/**
+ * Markdown files tracked by git, plus new ones that are not gitignored.
+ * A file deleted but not yet staged is still cached, so existence is checked
+ * here: without it the whole run dies on ENOENT and reports nothing, exactly
+ * when a deletion has just broken links elsewhere.
+ */
 export function listMarkdownFiles(root = repoRoot) {
   const out = execFileSync(
     "git",
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
     { cwd: root, encoding: "utf8" },
   );
-  return [...new Set(out.split("\0").filter(Boolean))].sort();
+  return [...new Set(out.split("\0").filter(Boolean))]
+    .filter((file) => existsSync(join(root, file)))
+    .sort();
 }
 
 /** True for targets we do not resolve on disk: URLs, mailto:, bare anchors. */
@@ -39,9 +46,12 @@ function stripCodeSpans(line) {
 // A CommonMark inline destination is either angle-bracketed or space-free, and
 // is followed by an optional title and the closing paren. Anchoring on that
 // paren keeps prose like `[b](my doc.md)` — not a link — out of the results.
-const INLINE_LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^\s()]+)\s*(?:"[^"]*"|'[^']*')?\s*\)/g;
+// Matching the destination alone rather than label-and-destination is what
+// makes a badge, `[![alt](img.svg)](doc.md)`, yield both targets: consuming the
+// label would swallow the inner image and hide the outer link.
+const INLINE_DESTINATION = /\]\(\s*(<[^>]*>|[^\s()]+)\s*(?:"[^"]*"|'[^']*')?\s*\)/g;
 const REFERENCE_DEFINITION = /^ {0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)/;
-const HTML_ATTRIBUTE = /\b(?:href|src)\s*=\s*"([^"]*)"/gi;
+const HTML_ATTRIBUTE = /\b(?:href|src)\s*=\s*("[^"]*"|'[^']*')/gi;
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 
 /**
@@ -71,8 +81,8 @@ export function extractLocalTargets(source) {
     const definition = REFERENCE_DEFINITION.exec(line);
     if (definition) raw.push(definition[1]);
 
-    for (const match of line.matchAll(INLINE_LINK)) raw.push(match[1]);
-    for (const match of line.matchAll(HTML_ATTRIBUTE)) raw.push(match[1]);
+    for (const match of line.matchAll(INLINE_DESTINATION)) raw.push(match[1]);
+    for (const match of line.matchAll(HTML_ATTRIBUTE)) raw.push(match[1].slice(1, -1));
 
     for (const candidate of raw) {
       const target = candidate.startsWith("<") ? candidate.slice(1, -1).trim() : candidate;

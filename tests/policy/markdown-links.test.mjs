@@ -98,11 +98,51 @@ test("link syntaxes that carry a target are all extracted", () => {
       "![image](img/b.png)",
       "[ref]: c.md",
       '<a href="d.md">x</a> <img src="e.png">',
+      "<a href='single.md'>x</a>",
       "[angled](<f g.md>)",
+      "[![badge](img/shield.svg)](setup.md)",
     ].join("\n"),
   ).map((found) => found.target);
 
-  assert.deepEqual(targets, ["a.md", "img/b.png", "c.md", "d.md", "e.png", "f g.md"]);
+  assert.deepEqual(targets, [
+    "a.md",
+    "img/b.png",
+    "c.md",
+    "d.md",
+    "e.png",
+    "single.md",
+    "f g.md",
+    "img/shield.svg",
+    "setup.md",
+  ]);
+});
+
+test("a badge link reports the outer destination, not only the image it wraps", () => {
+  // The common README shape. Extracting the image alone would let the document's
+  // front-door link rot silently.
+  const dir = fixture({
+    "README.md": "[![build](docs/badge.svg)](docs/MISSING.md)\n",
+    "docs/badge.svg": "",
+  });
+
+  assert.deepEqual(findBrokenLinks(dir, ["README.md"]), [
+    { file: "README.md", line: 1, target: "docs/MISSING.md" },
+  ]);
+});
+
+test("a tracked file deleted from the working tree is skipped, not fatal", () => {
+  // `git ls-files --cached` still lists it between `rm` and `git add`. Reading
+  // it would throw ENOENT and bury the broken links the deletion just created.
+  const dir = fixture({ "README.md": "See [gone](docs/gone.md).\n" }, { git: true });
+  fs.mkdirSync(path.join(dir, "docs"));
+  fs.writeFileSync(path.join(dir, "docs/gone.md"), "");
+  spawnSync("git", ["add", "-A"], { cwd: dir });
+  fs.rmSync(path.join(dir, "docs/gone.md"));
+
+  const { status, stderr } = runChecker(dir);
+
+  assert.equal(status, 1);
+  assert.match(stderr, /^README\.md:1: missing link target docs\/gone\.md$/m);
 });
 
 test("code blocks, code spans, URLs and bare anchors are not treated as links", () => {
