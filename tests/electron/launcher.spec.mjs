@@ -78,6 +78,11 @@ test.describe("launcher recovery", () => {
     });
     try {
       const { app, page } = fixture;
+      // The first boot parks on the strategy choice, because it resolves with
+      // the default settings and therefore never runs a Full Game
+      // verification. Waiting for it leaves the reload as the only boot that
+      // can call downloadAll, which is what the count below asserts.
+      await expect(page.locator("#data-choice")).toBeVisible();
       await page.evaluate(() =>
         window.gwNative.settings.set({ dataStrategy: "full" }),
       );
@@ -98,12 +103,6 @@ test.describe("launcher recovery", () => {
           );
         });
       }, size);
-      // The first boot may still be resolving its data strategy when the
-      // handler above is installed, and its call would otherwise be counted
-      // alongside the reload's. Only the reload is under test.
-      await app.evaluate(() => {
-        globalThis.__fullGameVerificationCalls = 0;
-      });
       await page.reload();
 
       await expect(page.locator("#data-download")).toBeVisible();
