@@ -22,6 +22,8 @@
     "src/renderer/input.js",
     "src/renderer/loading.js",
     "src/renderer/settings.js",
+    "src/renderer/template-filesystem-trace.js",
+    "src/renderer/template-save-compatibility.js",
     "src/shared/contracts.ts",
     "src/shared/diagnostics.ts"
   ]

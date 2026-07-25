@@ -164,6 +164,13 @@
     if (output) output.textContent = message;
   }
 
+  /** @param {'gw.snapshot.resolve' | 'gw.frame.submit'} name */
+  function traceMark(name) {
+    if (captureLevel !== 2) return;
+    performance.mark(name);
+    performance.clearMarks(name);
+  }
+
   /** @param {unknown} value */
   function fingerprint(value) {
     const input = value instanceof Error
@@ -338,6 +345,7 @@
       metrics.snapshotBytes += bytes;
       if (source === 'memory') metrics.memoryHits++;
       else if (source === 'native') metrics.nativeHits++;
+      traceMark('gw.snapshot.resolve');
     },
     /** @param {'memory' | 'native' | 'coalesced'} source */
     cache(source) {
@@ -436,6 +444,7 @@
         );
       }
       lastSubmitted = submittedAt;
+      traceMark('gw.frame.submit');
       if (captureLevel > 0 && frameData.length <= 19_993) {
         const canvas =
           /** @type {HTMLCanvasElement | null} */ (

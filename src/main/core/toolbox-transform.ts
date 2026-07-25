@@ -4,12 +4,13 @@ import {
   toolboxLayoutWords,
   type KnownToolboxBuild,
 } from "./toolbox-builds.js";
+import { applyTemplateSaveCompatibility } from "./template-save-compat.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const TOOLBOX_TRANSFORM_ABI = 2;
+export const TOOLBOX_TRANSFORM_ABI = 3;
 export const TOOLBOX_HOOK_EXPORT = "toolbox_hook_slot";
 export const TOOLBOX_ORIGINAL_EXPORT = "toolbox_tick_original";
 export const TOOLBOX_MANIFEST_SECTION = "toolbox_manifest";
@@ -440,7 +441,8 @@ export function transformToolboxWasm(
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
 
-  const sections = splitSections(input);
+  const compatibleInput = applyTemplateSaveCompatibility(input);
+  const sections = splitSections(compatibleInput);
   const types = parseTypes(sectionById(sections, 1));
   const importCount = countFunctionImports(sectionById(sections, 2));
   const functionTypes = parseVectorOfUleb(sectionById(sections, 3));

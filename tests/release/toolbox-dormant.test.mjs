@@ -29,5 +29,6 @@ test("Toolbox automation is disabled in packaged sessions", () => {
     /!app\.isPackaged && process\.env\.GW_TOOLBOX_AUTOMATION === "1"/,
   );
   assert.match(runtime, /if \(!this\.options\.toolboxEnabled\)/);
-  assert.match(runtime, /return \{ wasmPath: officialWasm, build: null \}/);
+  assert.match(runtime, /prepareTemplateSaveClient/);
+  assert.match(runtime, /return \{ wasmPath: prepared\.wasmPath, build: null \}/);
 });

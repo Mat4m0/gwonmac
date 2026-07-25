@@ -13,6 +13,7 @@ export interface GamePaths {
   artifacts: string;
   previousArtifacts: string;
   rejectedClient: string;
+  compatibility: string;
   toolbox: string;
   chunks: string;
   bootChunks: string;
@@ -34,6 +35,7 @@ export function gamePaths(userData = app.getPath("userData")): GamePaths {
     artifacts,
     previousArtifacts: clientGenerationPaths(artifacts).previous,
     rejectedClient: path.join(game, "rejected-client.json"),
+    compatibility: path.join(game, "compatibility"),
     toolbox: path.join(game, "toolbox"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),

@@ -131,6 +131,10 @@ Choose **Help → Report a Problem…**.
   choose **Export Recent Diagnostics…**.
 - For stutter, choose **Record Performance Problem**, reproduce it, press
   **Cmd+Shift+M** when it is visible, then use **View → Stop Capture**.
+- When investigating a repeatable long loading stall with a Chromium trace,
+  start the trace and wait five seconds before entering the portal or changing
+  maps. Stop the capture after the destination has rendered. The initial wait
+  keeps CPU-profiler startup outside the transition being investigated.
 
 An always-visible capture indicator shows the recording type and elapsed time.
 After **Cmd+Shift+M**, it confirms that the problem marker was registered.
@@ -164,9 +168,11 @@ The host app has no update-feed client. Replace it manually with a newer source
 or release build. ArenaNet client files still update automatically.
 
 Version 0.0.2 packages internal foundations for future Toolbox development,
-but they are dormant and invisible in normal use. The app serves ArenaNet's
-official WASM unchanged and does not install a Toolbox hook, load its companion
-kernel, observe game memory, or show Toolbox UI.
+but they are dormant and invisible in normal use. The app does not install a
+Toolbox hook, load its companion kernel, observe game memory, or show Toolbox
+UI. For certified ArenaNet build 38,771, it derives one narrowly patched module
+that connects the client's missing template-directory operation to its
+sandboxed persistent filesystem; the downloaded official artifact is unchanged.
 
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually

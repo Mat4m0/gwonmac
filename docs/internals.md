@@ -171,21 +171,51 @@ releasing the run dependency. This keeps the client's relative build-template,
 screenshot, chat-log, and preference writes in one durable origin. A restore
 or initial persist failure stops startup instead of silently running against
 ephemeral memory. At Emscripten's public file-operation boundary, Windows-style
-backslashes used by the official template code are normalized to POSIX
-separators before lookup, create, rename, or delete logic sees them.
+backslashes are normalized to POSIX separators before lookup, create, rename,
+or delete logic sees them. Static inspection of the current official WASM
+shows that its template path builder normally inserts `/`; the normalization
+is a boundary invariant, not an explanation of template-save success.
+
+For template-save investigation only, launching the application with
+`GW_TEMPLATE_FS_TRACE=1` adds `template-fs-trace=1` to the trusted renderer URL.
+Before instantiation, the renderer then wraps the official module's
+`__syscall_openat`, `__syscall_ftruncate64`, `fd_read`, `fd_write`,
+`fd_pwrite`, `fd_seek`, and `fd_close` imports.
+The bounded console trace records only the template kind, flags, descriptor,
+errno, and requested/written byte counts. It never records a filename, path, or
+file content, does not cross IPC, and is not included in `.gwdiag` exports.
+Normal launches retain the original imports unchanged.
+
+Static inspection identifies the pre-open failure as the web implementation of
+`PathCreateDirectory` in `EmscriptenPath.cpp`, which returns error 2 without
+touching Emscripten FS. For the exact certified client hash, a deterministic
+same-size transform redirects only that call to the existing
+`__syscall_stat64` import with an impossible stat-buffer sentinel. The renderer
+recognizes the sentinel, decodes the wide path, permits only
+`Templates/Skills` or `Templates/Equipment`, calls synchronous `FS.mkdirTree`,
+and returns the real success/error result. Ordinary stat calls remain
+unchanged.
+
+The downloaded official module remains canonical. The derived module is
+verified by input hash, instruction signature, WebAssembly validation, and
+expected output hash, then atomically cached and streamed by the existing
+protocol path. Unknown builds use the official module. The derived cache is
+rebuildable from the official artifact and old compatibility generations are
+deleted when the selected client changes.
 
 After native confirmation, the recovery action records a restart request.
 Startup clears only IndexedDB for the owned `gw://app` session before a
 renderer can mount IDBFS, then removes the request. It cannot clear the
 separate native chunk cache or encrypted credential file. There is no native
-arbitrary-file bridge and no production WASM rewrite.
+arbitrary-file bridge.
 
 ### Toolbox instrumentation
 
-The official `Gw.jspi.wasm` remains canonical. In 0.0.2 normal and packaged
-sessions always serve it directly: they do no Toolbox transform, fetch no
-kernel, install no hook, start no snapshot observer, and contain no Toolbox UI.
-Only explicit non-packaged automation enables the development path.
+The official `Gw.jspi.wasm` remains canonical. Normal and packaged sessions
+apply only the certified template-save compatibility transform described
+above: they do no Toolbox transform, fetch no kernel, install no Toolbox hook,
+start no snapshot observer, and contain no Toolbox UI. Only explicit
+non-packaged automation enables the Toolbox development path.
 
 Automation hashes the official module after publication and recognizes only
 entries in the checked-in Toolbox build manifest. A known
@@ -299,8 +329,12 @@ Level 0 is always active:
 
 Level 1 adds fixed-width per-frame records. The renderer batches them; the main
 process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
-an argument-filtered Chromium trace with selected supported categories, a 256
-MB buffer, an 80% stop threshold, and a 120-second time limit.
+an argument-filtered Chromium trace with selected supported categories, a
+256 MB buffer, an 80% stop threshold, and a 120-second time limit.
+During Level 2 only, fixed-name `gw.frame.submit` and `gw.snapshot.resolve`
+User Timing marks place frame and snapshot boundaries directly on Chromium's
+trace clock. They carry no arguments and are cleared from the renderer's
+Performance Timeline immediately after emission.
 The existing main-to-renderer capture command path also owns a noninteractive
 recording indicator, elapsed timer, and problem-marker acknowledgement; it
 does not add a preload capability.
@@ -350,6 +384,15 @@ The comparison tool warns about architecture, OS, app version, GPU renderer,
 render scale, canvas size, capture level, visibility, same-session and
 overlapping-window differences. Deep traces are labeled profiler-contaminated
 and should locate a bottleneck, not provide the final before/after number.
+
+`pnpm diagnostics:attribute-stalls <capture.gwdiag> [threshold-ms]` requires a
+Level 2 capture made by a build with the trace markers above. It finds
+consecutive submitted-frame marks beyond the threshold, counts snapshot
+resolutions inside each interval, reconstructs V8 CPU-profiler stacks, and
+reports CPU categories, hot leaves, hot complete stacks, and the longest
+overlapping renderer-thread trace events. Captures without the markers fail
+report the incompatibility instead of attempting cross-clock timestamp
+inference.
 
 ## Verification boundaries
 

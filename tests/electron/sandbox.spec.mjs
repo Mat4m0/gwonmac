@@ -104,4 +104,16 @@ test.describe("sandbox boundary", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("passes an explicit template filesystem trace request to the renderer", async () => {
+    const fixture = await launchOffline("gw-template-fs-trace-e2e-", {
+      GW_TEMPLATE_FS_TRACE: "1",
+    });
+    try {
+      expect(new URL(fixture.page.url()).search).toBe("?template-fs-trace=1");
+      await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

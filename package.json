@@ -40,6 +40,7 @@
     "diagnostics:validate": "tsc && node build/tools/diagnostics/validate.js",
     "diagnostics:summarize": "tsc && node build/tools/diagnostics/summarize.js",
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
+    "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:release && pnpm test:website && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {

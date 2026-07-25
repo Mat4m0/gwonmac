@@ -131,6 +131,31 @@ declare global {
       failed(error: unknown): void;
       log(...values: unknown[]): void;
     }): void;
+    gwInstallTemplateFilesystemTrace(options: {
+      imports: {
+        env?: Record<string, (...args: unknown[]) => unknown>;
+        wasi_snapshot_preview1?: Record<string, (...args: unknown[]) => unknown>;
+      };
+      module: {
+        HEAPU8?: Uint8Array;
+        HEAPU32?: Uint32Array;
+      };
+    }): void;
+    gwInstallTemplateSaveCompatibility(
+      imports: {
+        env?: Record<string, (...args: unknown[]) => unknown>;
+      },
+      module: { HEAPU8?: Uint8Array },
+    ): void;
+    gwTemplateFilesystemTrace?(): ReadonlyArray<Readonly<{
+      sequence: number;
+      operation: string;
+      kind?: "skills" | "equipment";
+      fd?: number;
+      errno?: number;
+      requested?: number;
+      written?: number;
+    }>>;
     gwInstallGameInput(options: {
       canvas: HTMLCanvasElement;
       initialSettings: AppSettings;

@@ -353,11 +353,15 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   installMenu(host, win);
-  void win.loadURL(
-    TOOLBOX_AUTOMATION_ENABLED
-      ? "gw://app/?toolbox-automation=1"
-      : "gw://app/",
-  );
+  const rendererParameters = new URLSearchParams();
+  if (TOOLBOX_AUTOMATION_ENABLED) {
+    rendererParameters.set("toolbox-automation", "1");
+  }
+  if (process.env.GW_TEMPLATE_FS_TRACE === "1") {
+    rendererParameters.set("template-fs-trace", "1");
+  }
+  const rendererQuery = rendererParameters.toString();
+  void win.loadURL(`gw://app/${rendererQuery ? `?${rendererQuery}` : ""}`);
   return win;
 }
 

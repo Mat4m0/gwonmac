@@ -479,6 +479,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       const wanted = [
         "electron",
         "blink",
+        "blink.user_timing",
         "cc",
         "gpu",
         "viz",

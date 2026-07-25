@@ -388,6 +388,11 @@ Module = {
   * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
   */
   instantiateWasm(imports, success) {
+    window.gwInstallTemplateSaveCompatibility(imports, Module);
+    window.gwInstallTemplateFilesystemTrace({
+      imports,
+      module: Module,
+    });
     window.gwInstallGraphics({
       env: imports.env,
       module: Module,

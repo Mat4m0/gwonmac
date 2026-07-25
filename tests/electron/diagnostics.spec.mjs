@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
@@ -68,6 +69,13 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-label")).toContainText(
         "Chromium trace",
       );
+      await page.waitForTimeout(500);
+      await page.evaluate(async () => {
+        window.gwDiagnostics.snapshot(100, 4096, "memory");
+        window.gwDiagnostics.swap(100, 50, 25);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        window.gwDiagnostics.swap(100, 50, 25);
+      });
       expect(
         await app.evaluate(({ Menu }) => {
           const item = Menu.getApplicationMenu()?.getMenuItemById(
@@ -88,6 +96,16 @@ test.describe("diagnostics", () => {
       );
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
+      const diagnosticsDirectory = path.join(fixture.userData, "diagnostics");
+      const traceName = (await readdir(diagnosticsDirectory)).find((name) =>
+        name.startsWith("chromium-") && name.endsWith(".json"));
+      expect(traceName).toBeTruthy();
+      const trace = JSON.parse(
+        await readFile(path.join(diagnosticsDirectory, traceName), "utf8"),
+      );
+      const traceNames = new Set(trace.traceEvents.map((event) => event.name));
+      expect(traceNames.has("gw.snapshot.resolve")).toBe(true);
+      expect(traceNames.has("gw.frame.submit")).toBe(true);
     } finally {
       await closeOffline(fixture);
     }

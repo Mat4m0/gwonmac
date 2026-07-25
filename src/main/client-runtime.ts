@@ -38,6 +38,7 @@ import {
 } from "./core/published-client.js";
 import { fullDownloadFailureMessage } from "./core/recovery.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
+import { prepareTemplateSaveClient } from "./core/template-save-client.js";
 import {
   prepareToolboxClient,
   type PreparedToolboxClient,
@@ -156,7 +157,30 @@ export class ClientRuntime {
     );
     if (!this.options.toolboxEnabled) {
       gauge("toolbox.supportedBuild", false);
-      return { wasmPath: officialWasm, build: null };
+      try {
+        const prepared = await prepareTemplateSaveClient(
+          officialWasm,
+          this.options.paths.compatibility,
+        );
+        gauge("wasm.templateSaveCompatible", prepared.compatible);
+        log(
+          "wasm",
+          prepared.compatible ? "info" : "warn",
+          prepared.compatible
+            ? "wasm.templateSavePrepared"
+            : "wasm.templateSaveUnsupported",
+        );
+        return { wasmPath: prepared.wasmPath, build: null };
+      } catch (error) {
+        gauge("wasm.templateSaveCompatible", false);
+        log("wasm", "warn", "wasm.templateSavePrepareFailed", {
+          code:
+            error instanceof Error && "code" in error
+              ? String(error.code)
+              : "transform_failed",
+        });
+        return { wasmPath: officialWasm, build: null };
+      }
     }
     try {
       const prepared = await prepareToolboxClient(
@@ -164,6 +188,7 @@ export class ClientRuntime {
         this.options.paths.toolbox,
       );
       gauge("toolbox.supportedBuild", prepared.build !== null);
+      gauge("wasm.templateSaveCompatible", prepared.build !== null);
       log(
         "wasm",
         "info",

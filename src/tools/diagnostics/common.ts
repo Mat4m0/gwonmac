@@ -187,7 +187,7 @@ export function analyzeFrames(bytes: Uint8Array): FrameAnalysis {
 
 export async function withCapture<T>(
   capturePath: string,
-  action: (capture: Capture) => T | Promise<T>,
+  action: (capture: Capture, root: string) => T | Promise<T>,
 ): Promise<T> {
   const root = await mkdtemp(path.join(tmpdir(), "gwdiag-"));
   try {
@@ -215,7 +215,7 @@ export async function withCapture<T>(
           error instanceof Error ? error.message : String(error);
       }
     }
-    return await action(capture);
+    return await action(capture, root);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
