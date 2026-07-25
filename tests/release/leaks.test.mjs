@@ -1,7 +1,9 @@
+// Repository-contents, font-licence, action-pinning and fuse policy live in
+// tests/policy/. This file keeps the release-shape assertions that need the
+// compiled build under build/.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -13,58 +15,6 @@ const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" 
   .split("\n")
   .filter((file) => file && existsSync(path.join(root, file)));
 
-test("no downloaded game artifacts or generated output are tracked", () => {
-  const forbidden = [
-    /\.key$/i,
-    /\.apk$/i,
-    /\.wasm$/i,
-    /(^|\/)Gw\.js$/i,
-    /(^|\/)Gw\.jspi\.js$/i,
-    /(^|\/)Gw\.snapshot$/i,
-    /(^|\/)(manifest|version)\.json$/i,
-    /\.gwdiag$/i,
-    /\.dmp$/i,
-    /(^|\/)credentials\.bin$/i,
-    /^(build|out|node_modules|gwpatch-cache)\//i,
-  ];
-  const hits = tracked.filter((file) => forbidden.some((pattern) => pattern.test(file)));
-  assert.deepEqual(hits, []);
-});
-
-test("the only bundled font is the pinned OFL-licensed QT Friz Quad", () => {
-  const fontDirectory = path.join(root, "src/renderer/fonts");
-  assert.deepEqual(
-    readdirSync(fontDirectory).sort(),
-    ["COPYING-QUALITYPE", "QTFrizQuad.otf"],
-  );
-  const font = readFileSync(path.join(fontDirectory, "QTFrizQuad.otf"));
-  assert.equal(
-    createHash("sha256").update(font).digest("hex"),
-    "ecde72ff2f34841942c2043837310cac9354713e28e854e3938eaef16d6d39b2",
-  );
-  const license = readFileSync(
-    path.join(fontDirectory, "COPYING-QUALITYPE"),
-    "utf8",
-  );
-  assert.match(license, /Copyright \(c\) 1992 QualiType/);
-  assert.match(license, /SIL OPEN FONT LICENSE[\s\S]*Version 1\.1/);
-  const css = readFileSync(path.join(root, "src/renderer/loading.css"), "utf8");
-  assert.match(css, /font-family: "QT Friz Quad"/);
-  assert.match(css, /url\("fonts\/QTFrizQuad\.otf"\)/);
-});
-
-test("no second production runtime remains", () => {
-  for (const file of [
-    "gw.py",
-    "gw.command",
-    "gwpatch.py",
-    "getsnapshot.py",
-    "harness/index.html",
-  ]) {
-    assert.equal(tracked.includes(file), false, `${file} is still tracked`);
-  }
-});
-
 test("macOS identity uses the Guild Wars name and configured application icon", () => {
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   assert.equal(pkg.productName, "Guild Wars");
@@ -75,28 +25,6 @@ test("macOS identity uses the Guild Wars name and configured application icon", 
   const icon = readFileSync(path.join(root, "assets/AppIcon.icns"));
   assert.equal(icon.subarray(0, 4).toString("ascii"), "icns");
   assert.ok(icon.length > 100_000, "application icon is unexpectedly small");
-});
-
-test("only the public client access key is UUID-shaped", () => {
-  const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-  const allowed = new Set([
-    "2043FE79-F32D-4FD7-8C27-0D47231C4F03",
-    "258EAFA5-E914-47DA-95CA-C5AB0DC85B11",
-  ]);
-  const hits = [];
-  for (const file of tracked) {
-    if (file === "tests/release/leaks.test.mjs") continue;
-    let text;
-    try {
-      text = readFileSync(path.join(root, file), "utf8");
-    } catch {
-      continue;
-    }
-    for (const match of text.matchAll(uuid)) {
-      if (!allowed.has(match[0].toUpperCase())) hits.push(`${file}:${match[0]}`);
-    }
-  }
-  assert.deepEqual(hits, []);
 });
 
 test("every canonical IPC channel is wired through preload and main", async () => {
@@ -230,17 +158,6 @@ test("macOS derives numeric bundle versions from the package prerelease", () => 
   );
 });
 
-test("release fuses keep Node and inspection disabled", () => {
-  const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
-  assert.match(forge, /\[FuseV1Options\.RunAsNode\]: false/);
-  assert.match(forge, /\[FuseV1Options\.EnableNodeOptionsEnvironmentVariable\]: false/);
-  assert.match(forge, /\[FuseV1Options\.EnableNodeCliInspectArguments\]: false/);
-  assert.match(forge, /\[FuseV1Options\.EnableEmbeddedAsarIntegrityValidation\]: true/);
-  assert.match(forge, /\[FuseV1Options\.OnlyLoadAppFromAsar\]: true/);
-  assert.match(forge, /\[FuseV1Options\.GrantFileProtocolExtraPrivileges\]: false/);
-  assert.match(forge, /\[FuseV1Options\.WasmTrapHandlers\]: true/);
-});
-
 test("renderer permissions and embedded webviews fail closed", () => {
   const windowSource = readFileSync(path.join(root, "src/main/window.ts"), "utf8");
   const ipcSource = readFileSync(path.join(root, "src/main/ipc.ts"), "utf8");
@@ -284,19 +201,18 @@ test("release workflow publishes one tested, attested package version", () => {
     "utf8",
   );
   assert.match(workflow, /runs-on: macos-15/);
-  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(workflow, /name: Smoke-test release candidate[\s\S]*pnpm test:packaged/);
   assert.match(workflow, /shasum -a 256 -c "\$\(basename "\$CHECKSUM"\)"/);
-  assert.match(workflow, /anchore\/sbom-action@[0-9a-f]{40}/);
+  assert.match(workflow, /anchore\/sbom-action@/);
   assert.match(workflow, /format: spdx-json/);
-  assert.match(workflow, /actions\/attest@[0-9a-f]{40}/);
+  assert.match(workflow, /actions\/attest@/);
   assert.match(workflow, /sbom-path: \$\{\{ steps\.assets\.outputs\.sbom \}\}/);
   assert.match(workflow, /artifact-metadata: write/);
-  assert.match(workflow, /actions\/dependency-review-action@[0-9a-f]{40}/);
+  assert.match(workflow, /actions\/dependency-review-action@/);
   assert.ok(
     workflow.indexOf("actions/dependency-review-action@") <
       workflow.indexOf("pnpm install --frozen-lockfile"),
@@ -309,8 +225,8 @@ test("release workflow publishes one tested, attested package version", () => {
   const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
   assert.match(releaseBuild, /permissions:\s+contents: read/);
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
-  assert.match(releaseBuild, /actions\/upload-artifact@[0-9a-f]{40}/);
-  assert.match(releasePublish, /actions\/download-artifact@[0-9a-f]{40}/);
+  assert.match(releaseBuild, /actions\/upload-artifact@/);
+  assert.match(releasePublish, /actions\/download-artifact@/);
   assert.doesNotMatch(
     releasePublish,
     /actions\/checkout|pnpm install|pnpm make|pnpm test/,
@@ -363,7 +279,6 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.match(workflow, /run: pnpm test:website/);
   assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
   assert.match(workflow, /permissions:\n {2}contents: read/);
-  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
   assert.doesNotMatch(workflow, /contents: write|id-token: write|issues: write/);
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
   assert.doesNotMatch(pkg.scripts.verify, /test:website/);
@@ -380,6 +295,5 @@ test("the scheduled canary exercises the latest ArenaNet client conservatively",
   assert.match(workflow, /timeout-minutes: 20/);
   assert.match(workflow, /GW_LIVE_SMOKE: "1"/);
   assert.match(workflow, /tests\/electron\/live\.spec\.mjs/);
-  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/);
   assert.doesNotMatch(workflow, /upload-artifact|issues: write/);
 });
