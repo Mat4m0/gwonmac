@@ -113,7 +113,18 @@ export class PatchClient {
     };
   }
 
-  private emit(p: DownloadProgress): void {
+  /**
+   * Download progress only. "ready" is not this class's to declare: the
+   * launcher treats it as "the main process has an active client", which is
+   * true only after ClientRuntime activates one. Emitting it here let the
+   * renderer read snapshot metadata while there was still no active client,
+   * get size 0, and silently stream the whole game over the network instead.
+   */
+  private emit(
+    p: DownloadProgress & {
+      phase: Exclude<DownloadProgress["phase"], "ready">;
+    },
+  ): void {
     this.onProgress?.(p);
   }
 
@@ -442,15 +453,6 @@ export class PatchClient {
       wanted.length === 0 &&
       (await this.snapshotIndexesMatch(snapshotEntry, mf))
     ) {
-      this.emit({
-        phase: "ready",
-        label: "Ready",
-        received: 0,
-        total: 0,
-        bytesPerSecond: 0,
-        secondsRemaining: null,
-        error: null,
-      });
       return {
         manifest: mf,
         fingerprint,
@@ -558,15 +560,6 @@ export class PatchClient {
       await rm(stage, { recursive: true, force: true });
     }
 
-    this.emit({
-      phase: "ready",
-      label: "Ready",
-      received: total,
-      total,
-      bytesPerSecond: 0,
-      secondsRemaining: null,
-      error: null,
-    });
     return {
       manifest: mf,
       fingerprint,

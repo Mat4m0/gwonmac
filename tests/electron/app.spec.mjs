@@ -44,6 +44,9 @@ test.describe("Electron application", () => {
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
+      // The socket host arrives behind a dynamic import, so it is not present
+      // at domcontentloaded. Wait for the capability instead of racing it.
+      await page.waitForFunction(() => window.Module?.socket !== undefined);
       await page.evaluate(async () => {
         const sock = window.Module.socket.connect("127.0.0.1:6112");
         await new Promise((resolve, reject) => {
@@ -287,9 +290,9 @@ test.describe("Electron application", () => {
       expect(externalAfter - externalBefore).toBeLessThan(16 * 1024 * 1024);
       expect(result.summary.counters["socket.rendererSendCalls"]).toBe(20);
       expect(result.summary.counters["socket.rendererPayloadBytes"]).toBe(420);
-      expect(result.summary.counters["socket.rendererSourceBackingBytes"]).toBe(
-        20 * 64 * 1024 * 1024,
-      );
+      expect(
+        result.summary.latest["socket.rendererPeakSourceBackingBytes"],
+      ).toBe(64 * 1024 * 1024);
       expect(result.summary.counters["socket.rendererCompactBytes"]).toBe(420);
       expect(result.summary.counters["socket.ipcPayloadBytes"]).toBe(420);
       expect(result.summary.counters["socket.ipcBackingBytes"]).toBe(420);

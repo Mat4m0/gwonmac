@@ -420,6 +420,7 @@ Module = {
       },
       log,
     });
+    window.gwInstallGlProgramCache({ imports, module: Module, log });
     const gamepadImports = [
       'emscripten_sample_gamepad_data',
       'emscripten_set_gamepadconnected_callback_on_thread',

@@ -89,15 +89,22 @@ describe("integration: patch updater", () => {
         : { status: 404, body: new Uint8Array() };
     };
 
+    // "ready" means the main process has an active client, which only
+    // ClientRuntime can know. A premature one here let the renderer read
+    // snapshot metadata before a client existed and stream the whole game.
+    const phases = [];
     const client = new PatchClient({
       artifactsDir: artifacts,
       chunksDir: chunks,
       patchRoot: rootUrl,
       fetch: fetchFixture,
+      onProgress: (p) => phases.push(p.phase),
     });
 
     const initial = await client.update();
     assert.equal(initial.published, true);
+    assert.ok(phases.length > 0, "the downloader reported no progress at all");
+    assert.deepEqual(phases.filter((phase) => phase === "ready"), []);
     assert.equal(initial.candidate, false);
     assert.equal((await readFile(join(artifacts, "Gw.jspi.js"))).toString(), js.toString());
     assert.equal((await stat(join(artifacts, "Gw.jspi.wasm"))).size, wasm.length);
@@ -112,9 +119,12 @@ describe("integration: patch updater", () => {
         fetches += 1;
         return fetchFixture(url);
       },
+      onProgress: (p) => phases.push(p.phase),
     });
     await client2.update();
     assert.equal(fetches, 1);
+    // The up-to-date fast path is the one that used to announce readiness.
+    assert.deepEqual(phases.filter((phase) => phase === "ready"), []);
 
     // A changed upstream client remains a candidate until it submits a frame.
     const versionEntry = manifestFiles.find((file) => file.name === "version.json");

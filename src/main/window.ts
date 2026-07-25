@@ -263,6 +263,24 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   win.on("enter-full-screen", persistMode);
   win.on("leave-full-screen", persistMode);
 
+  // A window that is unfocused, occluded, minimized, or mid-resize stops
+  // being composited, which stops requestAnimationFrame with no CPU spent
+  // anywhere. `document.hidden` does not report any of that on macOS, so
+  // without these a stall of that kind is indistinguishable from a real one.
+  // Main stays responsive while the renderer is frozen, so these timestamps
+  // are the reliable ones to line up against frames.bin.
+  win.on("focus", () => log("app", "info", "window.focused"));
+  win.on("blur", () => log("app", "info", "window.blurred"));
+  win.on("minimize", () => log("app", "info", "window.minimized"));
+  win.on("restore", () => log("app", "info", "window.restored"));
+  win.on("hide", () => log("app", "info", "window.hidden"));
+  win.on("show", () => log("app", "info", "window.shown"));
+  // Only the settled events. Electron emits `will-resize` and `will-move` once
+  // per step of a live drag, which would flood the bounded event ring and
+  // evict the very evidence these listeners exist to keep.
+  win.on("resized", () => log("app", "info", "window.resized"));
+  win.on("moved", () => log("app", "info", "window.moved"));
+
   win.webContents.setWindowOpenHandler(() => {
     log("app", "warn", "security.windowOpenBlocked");
     return { action: "deny" };

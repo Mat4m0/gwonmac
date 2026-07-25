@@ -318,6 +318,14 @@ export function validateCapture(capture: Capture): string[] {
       errors.push(`manifest does not declare ${file}`);
     }
   }
+  if (
+    capture.manifest.captureLevel === 2 &&
+    !capture.manifest.includedFiles.includes("chromium-trace.json")
+  ) {
+    // A failed startRecording or stopRecording drops the trace silently while
+    // the manifest still claims Level 2, so the export looks complete.
+    errors.push("Level 2 capture has no Chromium trace");
+  }
   if (capture.summary.droppedEvents > 0) {
     errors.push(`${capture.summary.droppedEvents} flight-recorder events were dropped`);
   }

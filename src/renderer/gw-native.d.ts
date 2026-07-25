@@ -42,7 +42,6 @@ declare global {
     captureStarted(level: 1 | 2): void;
     captureStopped(): void;
     problemMarked(): void;
-    mark(name: string, fields?: unknown): void;
     event(name: RendererEventName, value?: unknown): void;
     snapshot(
       durationUs: number,
@@ -50,6 +49,7 @@ declare global {
       source: "memory" | "native",
     ): void;
     cache(source: "memory" | "native" | "coalesced"): void;
+    glProgramQuery(hit: boolean): void;
     scheduler(event: "eviction" | "promotion"): void;
     socketSend(
       started: number,
@@ -147,6 +147,17 @@ declare global {
       module: { HEAPU8?: Uint8Array };
       exports(): { malloc?: (bytes: number) => number } | null;
     }): void;
+    gwInstallGlProgramCache(options: {
+      imports: {
+        env?: Record<string, (...args: unknown[]) => unknown>;
+      };
+      module: { HEAPU8?: Uint8Array };
+      log(...values: unknown[]): void;
+    }): void;
+    gwGlRecon?(): Readonly<{
+      livePrograms: number;
+      passThrough: Record<string, number>;
+    }>;
     gwTemplateFilesystemTrace?(): ReadonlyArray<Readonly<{
       sequence: number;
       operation: string;

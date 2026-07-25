@@ -100,6 +100,53 @@ test.describe("client compatibility", () => {
         visibleRestored: true,
         offscreen: [64, 64],
       });
+      // The cache is a separate renderer script; prove index.html loads it,
+      // that an incomplete program is never frozen, and that a completed one
+      // stops costing a round trip.
+      expect(
+        await fixture.page.evaluate(() => {
+          // Installing a second cache into the live page would otherwise
+          // overwrite gwGlRecon and bump the session's real query counters.
+          const realRecon = window.gwGlRecon;
+          const realDiagnostics = window.gwDiagnostics;
+          window.gwDiagnostics = { ...realDiagnostics, glProgramQuery: () => {} };
+          const module = { HEAPU8: new Uint8Array(new ArrayBuffer(1024)) };
+          const calls = [];
+          let answer = 0;
+          const env = {
+            glGetProgramiv: (program, pname, p) => {
+              calls.push(pname);
+              new Int32Array(module.HEAPU8.buffer)[p >>> 2] = answer;
+            },
+            glCreateProgram: () => 1,
+            glLinkProgram: () => undefined,
+            glDeleteProgram: () => undefined,
+          };
+          window.gwInstallGlProgramCache({
+            imports: { env },
+            module,
+            log: () => undefined,
+          });
+          const read = (pname) => {
+            env.glGetProgramiv(1, pname, 64);
+            return new Int32Array(module.HEAPU8.buffer)[16];
+          };
+          env.glCreateProgram();
+          const polling = [read(0x91b1), read(0x91b1)];
+          answer = 1;
+          const completed = read(0x91b1);
+          answer = 0;
+          const held = read(0x91b1);
+          window.gwGlRecon = realRecon;
+          window.gwDiagnostics = realDiagnostics;
+          return { polling, completed, held, calls: calls.length };
+        }),
+      ).toEqual({
+        polling: [0, 0],
+        completed: 1,
+        held: 1,
+        calls: 3,
+      });
       expect(await pathExists(path.join(artifacts, ".candidate.json"))).toBe(true);
       await fixture.page.evaluate(async () => {
         const socket = window.Module.socket.connect("127.0.0.1:6112");

@@ -5,6 +5,7 @@ import type {
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
+import { AppError } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   ACCESS_KEY,
@@ -447,13 +448,16 @@ export class ClientRuntime {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      // Identify the failure by code, so comparing sessions does not depend on
+      // matching English prose.
+      const code = error instanceof AppError ? error.code : null;
       try {
         await this.activatePublishedAndReady(
           "The game client update failed, so the previous client was restored.",
         );
-        log("update", "warn", "patch.updateFallback", { message });
+        log("update", "warn", "patch.updateFallback", { code, message });
         gauge("update.usingCachedClient", true);
-        updateSpan.end({ status: "cachedFallback", message }, "warn");
+        updateSpan.end({ status: "cachedFallback", code, message }, "warn");
         return;
       } catch (fallbackError) {
         log("update", "error", "patch.updateFailed", {

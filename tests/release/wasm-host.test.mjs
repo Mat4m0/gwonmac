@@ -99,6 +99,42 @@ test("template file tracing is explicit, bounded, and attached only at the impor
   assert.doesNotMatch(trace, /WebAssembly\.(?:Module|Instance)\.prototype/);
 });
 
+test("the GL program cache memoizes only shader-completion state, and only once it is true", async () => {
+  const cache = await readFile(
+    path.join(root, "src/renderer/gl-program-cache.js"),
+    "utf8",
+  );
+  const harness = await readFile(path.join(root, "src/renderer/harness.js"), "utf8");
+  const graphics = await readFile(path.join(root, "src/renderer/graphics.js"), "utf8");
+
+  // KHR_parallel_shader_compile completion, and nothing else.
+  assert.match(cache, /COMPLETION_STATUS_KHR = 0x91b1/);
+
+  // The complete invalidator set, plus the context-loss edge.
+  assert.match(cache, /glCreateProgram/);
+  assert.match(cache, /glLinkProgram/);
+  assert.match(cache, /glDeleteProgram/);
+  assert.match(cache, /'gw:graphics-context-reset'/);
+  assert.match(graphics, /'gw:graphics-context-reset'/);
+  assert.match(harness, /gwInstallGlProgramCache/);
+
+  // Only a true completion is recorded. Freezing false would make the client
+  // poll a program that never finishes.
+  assert.match(cache, /=== GL_TRUE\) programs\.set\(program, true\)/);
+
+  const code = cache.replace(/\/\/.*$/gm, "");
+  // VALIDATE_STATUS depends on current GL state, so no invalidation set can
+  // exist for it; the rest either change outside link, are already memoized by
+  // the generated glue, or were measured at one query per program.
+  for (const forbidden of [/0x8b82/i, /0x8b83/i, /0x8b84/i, /0x8b85/i, /0x8b80/i, /0x8b86/i, /0x8b89/i, /0x8a36/i]) {
+    assert.doesNotMatch(code, forbidden);
+  }
+  // Reading glGetError clears the flag, and useProgram issues no round trip.
+  assert.doesNotMatch(code, /glGetError|glUseProgram|glGetShaderiv/);
+  assert.doesNotMatch(cache, /gwNative|ipc|fetch\s*\(/i);
+  assert.doesNotMatch(cache, /WebAssembly\.(?:Module|Instance)\.prototype/);
+});
+
 test("template saving uses one exact-build derived WASM and a restricted mkdir bridge", async () => {
   const transform = await readFile(
     path.join(root, "src/main/core/template-save-compat.ts"),

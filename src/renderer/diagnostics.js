@@ -52,11 +52,11 @@
   const fresh = () => ({
     intervalMs: 0,
     visible: !document.hidden,
+    focused: document.hasFocus(),
     rafCount: 0,
     rafTotalUs: 0,
     rafMinUs: 0,
     rafMaxUs: 0,
-    rafOver16: 0,
     rafOver33: 0,
     rafOver50: 0,
     swapCount: 0,
@@ -90,6 +90,8 @@
     memoryHits: 0,
     nativeHits: 0,
     coalesced: 0,
+    glProgramQueryHits: 0,
+    glProgramQueryMisses: 0,
     memoryCacheBytes: 0,
     memoryCacheChunks: 0,
     pendingChunks: 0,
@@ -101,7 +103,7 @@
     queuePromotions: 0,
     socketSendCalls: 0,
     socketPayloadBytes: 0,
-    socketSourceBackingBytes: 0,
+    socketSourceBackingMaxBytes: 0,
     socketCompactBytes: 0,
     socketSyncTotalUs: 0,
     socketSyncMinUs: 0,
@@ -241,7 +243,6 @@
     if (lastRaf) {
       const deltaUs = (now - lastRaf) * 1000;
       observe(metrics, 'raf', deltaUs);
-      if (deltaUs > 16667) metrics.rafOver16++;
       if (deltaUs > 33333) metrics.rafOver33++;
       if (deltaUs > 50000) metrics.rafOver50++;
     }
@@ -264,6 +265,7 @@
     frameData = [];
     batch.intervalMs = now - periodStarted;
     batch.visible = !document.hidden;
+    batch.focused = document.hasFocus();
     periodStarted = now;
     flushing = true;
     try {
@@ -326,14 +328,6 @@
       if (marker) marker.hidden = false;
       announceCapture('Performance problem marked.');
     },
-    /** @param {string} name @param {unknown} [fields] */
-    mark(name, fields) {
-      try {
-        performance.mark(`gw.${name}`, { detail: fields });
-      } catch {
-        performance.mark(`gw.${name}`);
-      }
-    },
     event: recordEvent,
     /**
      * @param {number} durationUs
@@ -352,6 +346,14 @@
       if (source === 'memory') metrics.memoryHits++;
       else if (source === 'native') metrics.nativeHits++;
       else if (source === 'coalesced') metrics.coalesced++;
+    },
+    // Proves the GL program-state cache is engaged against the live client:
+    // the glue is downloaded at runtime, so a renamed import would otherwise
+    // look identical to "the fix stopped helping".
+    /** @param {boolean} hit */
+    glProgramQuery(hit) {
+      if (hit) metrics.glProgramQueryHits++;
+      else metrics.glProgramQueryMisses++;
     },
     /** @param {'eviction' | 'promotion'} event */
     scheduler(event) {
@@ -379,9 +381,9 @@
         Number.MAX_SAFE_INTEGER,
         metrics.socketPayloadBytes + payloadBytes,
       );
-      metrics.socketSourceBackingBytes = Math.min(
-        Number.MAX_SAFE_INTEGER,
-        metrics.socketSourceBackingBytes + sourceBackingBytes,
+      metrics.socketSourceBackingMaxBytes = Math.max(
+        metrics.socketSourceBackingMaxBytes,
+        sourceBackingBytes,
       );
       metrics.socketCompactBytes = Math.min(
         Number.MAX_SAFE_INTEGER,

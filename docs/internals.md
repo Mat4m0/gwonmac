@@ -343,6 +343,26 @@ visible canvas’s `bitmaprenderer`. The client remains the only canvas-size
 owner; the host supplies the selected render scale through Emscripten’s device
 pixel ratio import and mirrors client-requested sizes to the offscreen buffer.
 
+A second import patch memoizes asynchronous shader-compile completion. The
+client uses `KHR_parallel_shader_compile` and polls
+`glGetProgramiv(program, COMPLETION_STATUS_KHR)` in a loop; Chromium cannot
+answer that from its client-side cache, so every poll flushes the command
+buffer and waits on the GPU process. A recon session measured 36,713 polls
+against roughly 250 programs in seven minutes.
+
+Only completion is cached, and only once it reads true. False is the answer the
+client is polling for a change in, so freezing it would leave the client
+polling a program that never finishes; true is terminal until the next
+`glLinkProgram`, which clears the entry, as does losing the WebGL context. The
+cache tracks a program only while the host has seen it created and not deleted,
+so a recycled name starts cold and a name from before install is never
+recorded. Every other query passes through untouched, including
+`GL_VALIDATE_STATUS` — evaluated against current GL state rather than the
+program — and the link-derived pnames, which the client was measured asking
+exactly once per program. A missing import disables the whole patch rather than
+half of it, and the `gl.programQuery*` counters prove it is engaged against the
+downloaded client.
+
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
 fullscreen, touch translation, trackpad-wheel normalization, and right-drag
 pointer lock. `input.js` owns the canvas input listeners and accepts validated
@@ -372,16 +392,51 @@ Level 0 is always active:
   distributions, merged without reducing them to averages;
 - event-loop and process samples;
 - cache/disk/network/protocol spans;
-- GPU, power, thermal, lifecycle, crash, and context-loss signals.
+- GPU, power, thermal, lifecycle, crash, and context-loss signals;
+- window focus, minimize, hide, and resize/move brackets, plus a per-batch
+  renderer `focused` flag.
+
+Window state is load-bearing for stall attribution. An unfocused, occluded, or
+mid-resize window stops being composited, which stops `requestAnimationFrame`
+with no CPU spent in any process — indistinguishable from a real freeze unless
+it is recorded. `document.hidden` reports none of that on macOS, so the main
+process records the transitions itself; it stays responsive while the renderer
+is frozen, which makes its timestamps the ones to line up against `frames.bin`.
+
+GPU process feature status is sampled at export, not at Electron ready: the GPU
+process does not exist when the recorder starts, and Chromium's
+pre-initialization answer reads as software rendering on a machine that is in
+fact running ANGLE on Metal. Sampling late also means that if the GPU process
+has died, “disabled” is the truth rather than an artefact.
+
+At launch the diagnostics directory keeps only `session-*.jsonl`; everything
+else is removed, including Chromium's `.<bundle-id>.XXXXXX` atomic-write
+temporaries, which a prefix-matching sweep could never reach.
 
 Level 1 adds fixed-width per-frame records. The renderer batches them; the main
 process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
 an argument-filtered Chromium trace with selected supported categories, a
 256 MB buffer, an 80% stop threshold, and a 120-second time limit.
+The trace is deleted at quit and by the launch sweep, deliberately not after an
+export: the recorded capture level stays at 2 for the rest of the session, so
+discarding it there would make a second export declare Level 2 with no trace and
+fail its own validation. Its size is recorded as `capture.traceBytes`. If a
+trace is ever lost, drop the broad `blink` category before reducing the buffer.
+A Level 2 capture whose manifest declares no `chromium-trace.json` fails
+validation instead of looking complete.
+
+Record Level 2 for fifteen to thirty seconds and stop immediately after the
+hitch. The buffer fills in roughly half a minute of heavy activity, and a trace
+that stops short of the export leaves the stalls after it unattributed.
+
 During Level 2 only, fixed-name `gw.frame.submit` and `gw.snapshot.resolve`
 User Timing marks place frame and snapshot boundaries directly on Chromium's
 trace clock. They carry no arguments and are cleared from the renderer's
-Performance Timeline immediately after emission.
+Performance Timeline immediately after emission. Under an active trace each
+mark costs about 114 µs — roughly 1.3% of a capture, and the third hottest leaf
+in it. That cost is `performance.mark` emitting an argument-filtered trace
+event; `performance.clearMarks` was measured at 0.3 µs and is not the lever.
+It is one more reason Level 2 locates causes but cannot establish gains.
 The existing main-to-renderer capture command path also owns a noninteractive
 recording indicator, elapsed timer, and problem-marker acknowledgement; it
 does not add a preload capability.
@@ -423,9 +478,18 @@ Event-loop delay uses reset five-second windows at 5 ms resolution. When
 `frames.bin` exists, the tools calculate exact visible-only frame percentiles,
 FPS, and stalls from its fixed-width records.
 
-Exports fail closed on credential-shaped content. Chromium net bodies, HTTP
-headers, account request bodies, TCP payloads, and crash dumps are never
-included. Crashpad is local-only and retains at most three dumps.
+`socket.rendererSettle` measures how long the renderer takes to settle a send
+promise, so it reports *renderer* stalls, not network latency: a frozen renderer
+cannot run the continuation. `socket.writeCallback` is the main-side write, and
+subtracting the two is what separates TCP backpressure from a renderer stall.
+
+Exports fail closed on credential-shaped content. Trace redaction is a single
+streaming pass with a 64 KB boundary overlap that asserts each chunk is a fixed
+point before writing it; a second read-back would re-run an idempotent
+redaction with a smaller overlap over a file that can reach a quarter of a
+gigabyte, and could not detect anything the first pass missed. Chromium net
+bodies, HTTP headers, account request bodies, TCP payloads, and crash dumps are
+never included. Crashpad is local-only and retains at most three dumps.
 
 The comparison tool warns about architecture, OS, app version, GPU renderer,
 render scale, canvas size, capture level, visibility, same-session and
@@ -440,6 +504,16 @@ reports CPU categories, hot leaves, hot complete stacks, and the longest
 overlapping renderer-thread trace events. Captures without the markers fail
 report the incompatibility instead of attempting cross-clock timestamp
 inference.
+
+`pnpm diagnostics:attribute-frames <capture.gwdiag> [threshold-ms]` is its
+Level 1 counterpart, and Level 1 is the level that can establish gains. It joins
+visible-frame gaps from `frames.bin` to the main-process events within a second
+and a half either side — the main process keeps running while the renderer is
+frozen, so its timestamps are the reliable side of the join. Each stall is
+attributed to composition loss when the window changed state, to the main
+process when its event loop actually blocked, and otherwise to the renderer.
+Captures recorded before window-state tracking say so rather than claiming the
+window was steady.
 
 ## Verification boundaries
 

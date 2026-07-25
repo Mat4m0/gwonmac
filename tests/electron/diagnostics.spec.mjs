@@ -183,6 +183,15 @@ test.describe("diagnostics", () => {
             .join("\n"),
           { mode: 0o600 },
         );
+        // Chromium's atomic-write temporary for an interrupted trace, and an
+        // old-format log. Neither matches a capture-file prefix, so both used
+        // to survive every launch — one of them at 111 MB.
+        await writeFile(
+          path.join(directory, ".com.gwdevhub.guildwars.mpNbZp"),
+          '{"traceEvents":[',
+          { mode: 0o600 },
+        );
+        await writeFile(path.join(directory, "session-13880.log"), "legacy");
       },
     );
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-e2e-"));
@@ -276,6 +285,27 @@ test.describe("diagnostics", () => {
       expect(events).toContain("[redacted-path]");
       expect(events).toContain("[redacted-email]");
       expect(events).toContain("performance.problemmarked");
+
+      const environment = JSON.parse(
+        await readFile(path.join(extracted, "environment.json"), "utf8"),
+      );
+      // Sampled at export, so it agrees with the renderer's own probe instead
+      // of reporting the pre-initialization defaults from before ready.
+      if (environment.graphics?.hardwareAcceleration === true) {
+        expect(environment.gpu.featureStatus.gpu_compositing).not.toBe(
+          "disabled_software",
+        );
+      }
+
+      // The directory keeps session logs and nothing else — including the
+      // seeded atomic-write temporary and the legacy log.
+      const remaining = await readdir(path.join(fixture.userData, "diagnostics"));
+      expect(remaining).toContain(`session-${previousSessionId}.jsonl`);
+      expect(remaining).not.toContain(".com.gwdevhub.guildwars.mpNbZp");
+      expect(remaining).not.toContain("session-13880.log");
+      // A Level 1 capture's frames-<session>.bin is still live here; only the
+      // Chromium trace is discarded once the export exists.
+      expect(remaining.filter((name) => name.startsWith("chromium-"))).toEqual([]);
 
       const validated = await execFileAsync(process.execPath, [
         path.join(root, "build/tools/diagnostics/validate.js"),

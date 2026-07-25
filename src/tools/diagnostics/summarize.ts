@@ -25,7 +25,12 @@ if (!input) {
 
     console.log(`Session       ${manifest.sessionId}`);
     console.log(`App           ${manifest.applicationVersion}`);
-    console.log(`Client build  ${String(summary.latest["client.buildId"] ?? "unknown")}`);
+    console.log(
+      `Client build  ${String(summary.latest["client.buildId"] ?? "unknown")}` +
+        (summary.latest["update.usingCachedClient"]
+          ? " (UPDATE FAILED — running the cached client)"
+          : ""),
+    );
     console.log(`Capture       level ${manifest.captureLevel}`);
     console.log(
       `Trace impact  ${manifest.profilerContaminated ? "profiler-contaminated" : "clean"}`,
@@ -114,17 +119,19 @@ if (!input) {
     console.log("");
     console.log("Socket");
     const socketPayload = c["socket.rendererPayloadBytes"] ?? 0;
-    const sourceBacking = c["socket.rendererSourceBackingBytes"] ?? 0;
+    const sourceBacking = Number(
+      summary.latest["socket.rendererPeakSourceBackingBytes"] ?? 0,
+    );
     const compactBytes = c["socket.rendererCompactBytes"] ?? 0;
     const ipcPayload = c["socket.ipcPayloadBytes"] ?? 0;
     const ipcBacking = c["socket.ipcBackingBytes"] ?? 0;
     console.log(
       `  sends / bytes    ${c["socket.rendererSendCalls"] ?? 0} / ${socketPayload}`,
     );
-    console.log(
-      `  source / compact ${sourceBacking} / ${compactBytes} bytes ` +
-        `(${multiple(sourceBacking, socketPayload)} source-to-payload)`,
-    );
+    console.log(`  compact payload  ${compactBytes} bytes`);
+    // Session-scoped, unlike every other value here: one WASM heap, proving
+    // the view was compacted rather than copied wholesale.
+    console.log(`  peak view backing ${sourceBacking} bytes (whole session)`);
     console.log(
       `  IPC payload/backing ${ipcPayload} / ${ipcBacking} bytes ` +
         `(${multiple(ipcBacking, ipcPayload)} backing-to-payload)`,

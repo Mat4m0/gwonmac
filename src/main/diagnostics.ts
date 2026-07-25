@@ -194,7 +194,6 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
 
 export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("renderer.raf", value.rafCount);
-  recorder.count("renderer.rafOver16", value.rafOver16);
   recorder.count("renderer.rafOver33", value.rafOver33);
   recorder.count("renderer.rafOver50", value.rafOver50);
   recorder.count("renderer.swaps", value.swapCount);
@@ -204,11 +203,13 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("cache.memoryHits", value.memoryHits);
   recorder.count("cache.nativeHits", value.nativeHits);
   recorder.count("cache.coalesced", value.coalesced);
+  recorder.count("gl.programQueryHits", value.glProgramQueryHits);
+  recorder.count("gl.programQueryMisses", value.glProgramQueryMisses);
   recorder.count("socket.rendererSendCalls", value.socketSendCalls);
   recorder.count("socket.rendererPayloadBytes", value.socketPayloadBytes);
-  recorder.count(
-    "socket.rendererSourceBackingBytes",
-    value.socketSourceBackingBytes,
+  recorder.setPeak(
+    "socket.rendererPeakSourceBackingBytes",
+    value.socketSourceBackingMaxBytes,
   );
   recorder.count("socket.rendererCompactBytes", value.socketCompactBytes);
   recorder.count("socket.rendererSettles", value.socketSettles);
@@ -311,6 +312,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
     value.inputToSubmitMaxUs,
   );
   recorder.setLatest("renderer.visible", value.visible);
+  recorder.setLatest("renderer.focused", value.focused);
   recorder.setLatest("renderer.memoryCacheBytes", value.memoryCacheBytes);
   recorder.setLatest("renderer.memoryCacheChunks", value.memoryCacheChunks);
   recorder.setLatest("renderer.pendingChunks", value.pendingChunks);
@@ -318,12 +320,6 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.setLatest("snapshot.activePrefetch", value.activePrefetch);
   recorder.setLatest("snapshot.queuedDemand", value.queuedDemand);
   recorder.setLatest("snapshot.queuedPrefetch", value.queuedPrefetch);
-  recorder.setLatest(
-    "socket.sourceBackingRatio",
-    value.socketPayloadBytes
-      ? value.socketSourceBackingBytes / value.socketPayloadBytes
-      : 0,
-  );
   recorder.setPeak("renderer.peakMemoryCacheBytes", value.memoryCacheBytes);
   recorder.setPeak("renderer.peakPendingChunks", value.pendingChunks);
   recorder.setPeak(
@@ -381,7 +377,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       queuedPrefetch: value.queuedPrefetch,
       socketSendCalls: value.socketSendCalls,
       socketPayloadBytes: value.socketPayloadBytes,
-      socketSourceBackingBytes: value.socketSourceBackingBytes,
+      socketSourceBackingMaxBytes: value.socketSourceBackingMaxBytes,
       socketCompactBytes: value.socketCompactBytes,
       socketSyncMaxUs: Math.round(value.socketSyncMaxUs),
       socketSettles: value.socketSettles,
@@ -446,7 +442,10 @@ async function stopTrace(): Promise<void> {
   try {
     await contentTracing.stopRecording(target);
     lastTracePath = target;
-    recorder.event("app", "info", "chromiumTrace.stopped");
+    // Size is the first thing anyone asks after an export goes wrong.
+    const bytes = await stat(target).then((info) => info.size, () => 0);
+    recorder.setLatest("capture.traceBytes", bytes);
+    recorder.event("app", "info", "chromiumTrace.stopped", { bytes });
   } catch (err) {
     recorder.event("app", "error", "chromiumTrace.stopFailed", {
       message: err instanceof Error ? err.message : String(err),
@@ -673,17 +672,35 @@ function sampleEventLoop(): void {
   eventLoopWindowStartedUs = sampledAtUs;
 }
 
+/**
+ * The recorder owns the diagnostics directory outright, and the only entries
+ * that must outlive a launch are earlier sessions' JSONL. A whitelist is the
+ * rule: prefix matching missed Chromium's `.<bundle-id>.XXXXXX` atomic-write
+ * temporaries, which left a truncated 111 MB trace behind for days.
+ */
+function staleDiagnosticEntries(names: string[]): string[] {
+  return names.filter((name) => !/^session-.+\.jsonl$/.test(name));
+}
+
+/**
+ * Sampled at export, not at ready: the GPU process does not exist when the
+ * recorder starts, so Chromium answers with pre-initialization defaults that
+ * read as software rendering. If the process has since died, "disabled" is
+ * then the truth, and that is exactly what the reader needs.
+ */
+async function gpuEnvironment(): Promise<Record<string, unknown>> {
+  return {
+    featureStatus: app.getGPUFeatureStatus(),
+    info: await app.getGPUInfo("basic").catch(() => null),
+  };
+}
+
 export async function startDiagnostics(): Promise<void> {
   crashReporter.start({ uploadToServer: false, compress: true });
   const diagnosticsDir = gamePaths().diagnostics;
-  const staleCaptures = (await readdir(diagnosticsDir).catch(() => []))
-    .filter(
-      (name) =>
-        name.startsWith("frames-") ||
-        name.startsWith("chromium-") ||
-        name.startsWith("export-"),
-    )
-    .map((name) => path.join(diagnosticsDir, name));
+  const staleCaptures = staleDiagnosticEntries(
+    await readdir(diagnosticsDir).catch(() => []),
+  ).map((name) => path.join(diagnosticsDir, name));
   await Promise.all(
     staleCaptures.map((file) => rm(file, { recursive: true, force: true })),
   );
@@ -720,8 +737,6 @@ export async function startDiagnostics(): Promise<void> {
     appVersion: app.getVersion(),
     versions: versions(),
     startedAt: recorder.startedWall,
-    gpuFeatureStatus: app.getGPUFeatureStatus(),
-    gpuInfo: await app.getGPUInfo("basic").catch(() => null),
   };
   recorder.event("app", "info", "diagnostics.started", {
     sessionId: recorder.sessionId,
@@ -755,12 +770,26 @@ export async function startDiagnostics(): Promise<void> {
   }, SAMPLE_INTERVAL_MS);
 }
 
+/**
+ * A Level 2 trace is tens to hundreds of megabytes. Remove it by the exact
+ * path we hold — never a glob, and never anything a session still needs.
+ */
+async function discardTrace(): Promise<void> {
+  if (!lastTracePath) return;
+  const target = lastTracePath;
+  lastTracePath = "";
+  await rm(target, { force: true }).catch(() => undefined);
+}
+
 export async function stopDiagnostics(): Promise<void> {
   if (sampler) clearInterval(sampler);
   sampler = null;
   eventLoop.disable();
   await stopDiagnosticCapture("shutdown");
   await recorder.flush();
+  // A session that is never exported still bounds itself at quit rather than
+  // waiting for the next launch to sweep.
+  await discardTrace();
 }
 
 export async function flushDiagnostics(): Promise<void> {
@@ -777,18 +806,6 @@ function assertRedacted(text: string): void {
   }
 }
 
-async function assertFileRedacted(file: string): Promise<void> {
-  const stream = createReadStream(file, { encoding: "utf8" });
-  let carry = "";
-  for await (const chunk of stream) {
-    const text = carry + chunk;
-    if (containsSensitiveText(text)) {
-      throw new Error("diagnostics trace failed redaction scan");
-    }
-    carry = text.slice(-4_096);
-  }
-}
-
 async function sanitizeTraceFile(source: string, target: string): Promise<void> {
   const input = createReadStream(source, {
     encoding: "utf8",
@@ -802,13 +819,19 @@ async function sanitizeTraceFile(source: string, target: string): Promise<void> 
       const split = Math.max(0, text.length - 64 * 1024);
       const ready = text.slice(0, split);
       carry = text.slice(split);
-      if (ready) await output.write(ready);
+      // Fail closed in the same pass. A second read-back could only re-run an
+      // idempotent redaction with a smaller boundary overlap than this one,
+      // over a file that can reach a quarter of a gigabyte.
+      if (ready) {
+        assertRedacted(ready);
+        await output.write(ready);
+      }
     }
+    assertRedacted(carry);
     await output.write(carry);
   } finally {
     await output.close();
   }
-  await assertFileRedacted(target);
 }
 
 export async function exportDiagnosticsZip(
@@ -933,7 +956,12 @@ export async function exportDiagnosticsZip(
       ...(previous ? { "previous-events.jsonl": previous.text } : {}),
       "histograms.json": JSON.stringify(summary.histograms, null, 2),
       "environment.json": JSON.stringify(
-        { ...environment, graphics, electronVersions: extras.electronVersions },
+        {
+          ...environment,
+          gpu: await gpuEnvironment(),
+          graphics,
+          electronVersions: extras.electronVersions,
+        },
         null,
         2,
       ),
@@ -954,6 +982,10 @@ export async function exportDiagnosticsZip(
     await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
     await chmod(zipPart, 0o600);
     await rename(zipPart, zipPath);
+    // The trace deliberately survives the export. `recordedCaptureLevel` stays
+    // at 2 for the rest of the session, so discarding here would make a second
+    // export declare Level 2 with no trace and fail its own validation. Quit
+    // and the launch sweep are what bound it.
     return zipPath;
   } finally {
     await rm(staging, { recursive: true, force: true });
