@@ -54,7 +54,13 @@ GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario movement
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario reload
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario map-transition
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario performance
+GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario cursor-capture
 ```
+
+`cursor-capture` is human-assisted. It prints eight prompts (arrow, hover, salvage,
+identify, drag, world map) and records only typed transitions at 20 Hz, bounded to
+192 changes. It pairs the observed scalars with the renderer's published cursor
+state, so one run shows both what the game committed and what reached Chromium.
 
 The default is cached-only. Main skips the client updater, and the chunk store
 is physically unable to fetch a missing chunk. `--allow-update` is the explicit
@@ -174,13 +180,55 @@ skill ready -> activated -> recharged
 effect absent -> present -> removed
 ```
 
+## Cursor pipeline
+
+The cursor is the first shipped Toolbox feature, so the Toolbox path is no
+longer developer-only. `toolbox-policy.ts` has two gates and nothing else:
+`TOOLBOX_AUTOMATION_ENABLED` (non-packaged, `GW_TOOLBOX_AUTOMATION=1`) and the
+player's `nativeCursor` setting, which is off by default. Either one enables
+the transform in main and adds the matching renderer parameter
+(`toolbox-automation=1` or `native-cursor=1`) that lets `harness.js` import
+`toolbox.js`. Both are read once per launch, because the choice decides which
+WASM main is served. When you develop against automation you are exercising the
+same code path a player gets, so treat a regression there as user-facing.
+
+The web client kept ArenaNet's Win32 cursor structure and stubbed only its final
+step: `GlDev` decodes the active cursor into fixed buffers, then calls
+`EmscriptenWindow::ChangeCursorIcon`, whose body is empty. The finished bitmap is
+therefore always present and unused, and the kernel only has to read it.
+
+Facts that cost real effort to establish. Do not re-derive them:
+
+- The colour buffer is **BGRA**, proven live by matching three fingerprint pixels
+  against known art. The kernel publishes canonical RGBA.
+- The A8 mask buffer is redundant: it agreed with the colour buffer's own alpha in
+  198 of 198 live samples. Do not read it.
+- `s_activeArt` is **not** a stable identity. One session showed 21 distinct art
+  pointers for 9 distinct cursors, so the change key is a hash of the pixels.
+- The in-engine software cursor is dead in this build: a read-only caps word keeps
+  `s_swCursorModel` null. The kernel treats a non-null value as unsupported rather
+  than competing with it.
+- The game's DXT decoder rounds differently from offline extraction, so certify
+  cursor pixels within a per-channel tolerance, never by exact hash.
+
+Presentation is constrained by Chromium, not by taste. Custom cursors above
+**32 CSS px** are dropped whenever the cursor rect leaves the visual viewport, so
+the authoring grid is fixed at 32 and there is no size option. Retina crispness
+requires an `image-set` 2x candidate; a plain 32x32 image is handed to macOS at
+scale 1 and upscaled. Cursor images are fetched as images, so `img-src` governs
+them and `blob:` is unavailable. A trailing keyword is mandatory.
+
 ## Client recertification
 
-Inspect an official candidate without transforming it:
+Inspect an official candidate:
 
 ```bash
 pnpm toolbox:recertify -- path/to/Gw.jspi.wasm
 ```
+
+Pass the official module. The tool applies the template-save transform first
+when that build is known, because main does the same, and reports both the
+official hash and the derived hash it actually inspected.
 
 The compact report includes the hash, WASM validity, known-build status,
 semantic main-loop export index and signature, table shape, and first empty
@@ -195,6 +243,19 @@ slots. An unknown hash is only a candidate. Certification still requires:
 
 Unknown builds continue serving the official client unchanged.
 
+The two transforms are chained, not alternatives. Both rewrite the same official
+module, so neither output contains the other's fix; main prepares the
+template-save client first and layers the Toolbox transform on top of it.
+`TOOLBOX_BUILDS[].sha256` is therefore a template-save **output** hash, pinned by
+a unit test, and recertification order is fixed: certify the template-save build
+first, then certify the Toolbox transform against its output.
+
+The template-save transform only appends functions, so the main-loop index, the
+free table slot and every layout address stay those of the official build.
+
+An opted-in launch that cannot produce a Toolbox module still returns the
+template-save client, so an uncertified build costs the cursor and nothing else.
+
 ## ABI evolution
 
 Keep the core snapshot small. Do not turn it into a speculative global game
@@ -202,6 +263,7 @@ model. Add a bounded region only when its first feature requires it:
 
 ```text
 core snapshot       lifecycle, map, player, target
+cursor snapshot     one 32x32 bitmap, hotspot, generation
 party snapshot      fixed-capacity party entries
 agent snapshot      filtered bounded agents
 skill/effect state  bounded domain collections
@@ -224,7 +286,8 @@ failure results. Never expose `writeMemory`, `callFunction`, or `sendPacket`.
 | Hook lifecycle | Ready | continuous tick, reload, clean shutdown | one live map transition |
 | Map/player | Ready | live identity, 201-unit movement delta | one live map transition |
 | Target identity/distance | Ready | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
-| Presentation prototype | Developer-only | deterministic fixture | future product decision |
+| Cursor | Ready | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
+| Cursor presentation | Shipped, opt-in | offline Electron + `cursor-capture` | opted-in play on a fresh certified build |
 | Party | Not modeled | none | locate bounded roster |
 | Skills/recharge | Not modeled | none | locate skill context |
 | Effects/conditions | Not modeled | none | locate bounded effect collection |

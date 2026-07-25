@@ -8,6 +8,7 @@ import {
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
 import { findToolboxBuild } from "../main/core/toolbox-builds.js";
+import { findTemplateSaveBuild } from "../main/core/template-save-compat.js";
 import { inspectToolboxCache } from "../main/core/toolbox-client.js";
 import {
   readPublishedClientManifest,
@@ -129,10 +130,14 @@ export async function inspectToolboxWorkspace(
   if (!missing.includes("Gw.jspi.wasm")) {
     const bytes = await readFile(path.join(artifactsPath, "Gw.jspi.wasm"));
     sha256 = createHash("sha256").update(bytes).digest("hex");
-    build = findToolboxBuild(sha256);
+    // The Toolbox transform consumes the template-save client, so resolve the
+    // same chain main resolves rather than the raw official hash.
+    const toolboxInput =
+      findTemplateSaveBuild(sha256)?.outputSha256 ?? sha256;
+    build = findToolboxBuild(toolboxInput);
     if (build) {
       transformedCache = await inspectToolboxCache(
-        sha256,
+        toolboxInput,
         build,
         path.join(game, "toolbox"),
       );

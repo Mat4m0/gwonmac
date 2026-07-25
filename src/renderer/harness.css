@@ -3,15 +3,6 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
             background:#000; color:#fe0000; font:14px Tahoma,sans-serif; }
 #canvas { display:block; width:100%; height:100%; }
 #canvas:focus { outline:none; }
-[data-cursor-theme="system"] {
-  cursor: default;
-}
-[data-cursor-theme="guild-wars"] {
-  cursor: url("assets/cursors/guild-wars.png") 0 0, default;
-}
-[data-cursor-theme="guild-wars-2"] {
-  cursor: url("assets/cursors/guild-wars-2.png") 0 0, default;
-}
 /* Pointer lock hides the cursor on its own, but not when the grab is refused. */
 #canvas.cursor-hidden { cursor:none !important; }
 
@@ -345,20 +336,6 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: #cbbd9d99;
   font-size: 12px;
   text-wrap: pretty;
-}
-
-#settings-cursor-preview {
-  display: flex;
-  min-height: 54px;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
-  border: 1px dashed #67583e;
-  border-radius: 2px;
-  color: #cbbd9db3;
-  background: #201a145e;
-  font: 12px/1.4 Tahoma, sans-serif;
 }
 
 .settings-footerbar {

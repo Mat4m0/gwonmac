@@ -14,6 +14,21 @@ const FLAG_PLAYER_VALID: u32 = 1 << 1;
 const FLAG_TARGET_VALID: u32 = 1 << 2;
 const FLAG_LOADING: u32 = 1 << 3;
 
+const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
+const CURSOR_MAGIC: u32 = 0x4354_5747;
+const CURSOR_ABI_AND_SIZE: u32 = (CURSOR_BYTES << 16) | 1;
+
+const FLAG_CURSOR_VALID: u32 = 1 << 0;
+const FLAG_CURSOR_HIDDEN: u32 = 1 << 1;
+const FLAG_CURSOR_UNSUPPORTED: u32 = 1 << 2;
+
+const CURSOR_EDGE: u32 = 32;
+const CURSOR_WORDS: u32 = CURSOR_EDGE * CURSOR_EDGE;
+const CURSOR_PIXEL_BYTES: u32 = CURSOR_WORDS * 4;
+// 'grtx', the texture handle's access key.
+const CURSOR_TEXTURE_KEY: u32 = 0x6772_7478;
+const CURSOR_TEXTURE_TYPE: u32 = 10;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Layout {
@@ -34,6 +49,18 @@ struct Layout {
     agent_type: u32,
     agent_player_number: u32,
     agent_model_type: u32,
+    cursor_active_art: u32,
+    cursor_software_model: u32,
+    cursor_show_count: u32,
+    cursor_color_buffer: u32,
+    cursor_art_hotspot: u32,
+    cursor_art_texture: u32,
+    cursor_handle_key: u32,
+    cursor_handle_object: u32,
+    cursor_view_texture: u32,
+    cursor_texture_type: u32,
+    cursor_texture_width: u32,
+    cursor_texture_height: u32,
 }
 
 impl Layout {
@@ -55,6 +82,18 @@ impl Layout {
         agent_type: 0,
         agent_player_number: 0,
         agent_model_type: 0,
+        cursor_active_art: 0,
+        cursor_software_model: 0,
+        cursor_show_count: 0,
+        cursor_color_buffer: 0,
+        cursor_art_hotspot: 0,
+        cursor_art_texture: 0,
+        cursor_handle_key: 0,
+        cursor_handle_object: 0,
+        cursor_view_texture: 0,
+        cursor_texture_type: 0,
+        cursor_texture_width: 0,
+        cursor_texture_height: 0,
     };
 }
 
@@ -79,14 +118,37 @@ struct Snapshot {
     range_band: u32,
 }
 
-const _: [(); 68] = [(); size_of::<Layout>()];
+// Separate bounded region: the 64-byte core snapshot is full, and the cursor
+// bitmap is far too large to live in it.
+#[repr(C)]
+struct CursorSnapshot {
+    magic: u32,
+    abi_and_size: u32,
+    sequence: u32,
+    flags: u32,
+    generation: u32,
+    width: u32,
+    height: u32,
+    hotspot_x: u32,
+    hotspot_y: u32,
+    pixel_hash: u32,
+    reserved: [u32; 6],
+    pixels: [u32; 1024],
+}
+
+const _: [(); 116] = [(); size_of::<Layout>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
+const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 
 static mut SNAPSHOT_PTR: u32 = 0;
 static mut LAYOUT: Layout = Layout::EMPTY;
 static mut INITIALIZED: bool = false;
 static mut TICK_COUNT: u32 = 0;
 static mut SEQUENCE: u32 = 0;
+static mut CURSOR_PTR: u32 = 0;
+static mut CURSOR_SEQUENCE: u32 = 0;
+static mut CURSOR_GENERATION: u32 = 0;
+static mut CURSOR_PUBLISHED: CursorPublished = CursorPublished::EMPTY;
 
 #[link(wasm_import_module = "game")]
 extern "C" {
@@ -127,6 +189,10 @@ fn contains(address: u32, bytes: u32) -> bool {
 
 unsafe fn read_u32(address: u32) -> Option<u32> {
     contains(address, 4).then(|| unsafe { read_volatile(address as *const u32) })
+}
+
+unsafe fn read_i32(address: u32) -> Option<i32> {
+    contains(address, 4).then(|| unsafe { read_volatile(address as *const i32) })
 }
 
 unsafe fn read_u16(address: u32) -> Option<u16> {
@@ -412,29 +478,220 @@ unsafe fn publish(state: State) {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CursorState {
+    hash: u32,
+    hotspot_x: u32,
+    hotspot_y: u32,
+    hidden: bool,
+    source: u32,
+}
+
+// The published identity. The active art pointer is not stable across cursor
+// changes, so the pixel hash is the only usable change key.
+#[derive(Clone, Copy, PartialEq)]
+struct CursorPublished {
+    flags: u32,
+    hash: u32,
+    hotspot_x: u32,
+    hotspot_y: u32,
+}
+
+impl CursorPublished {
+    const EMPTY: Self = Self {
+        flags: 0,
+        hash: 0,
+        hotspot_x: 0,
+        hotspot_y: 0,
+    };
+}
+
+// FNV-1a over the source BGRA words, so an unchanged cursor costs one pass and
+// no conversion. None means unreadable or never committed by the game.
+unsafe fn hash_cursor_pixels(source: u32) -> Option<u32> {
+    let mut hash: u32 = 0x811c_9dc5;
+    let mut committed: u32 = 0;
+    for index in 0..CURSOR_WORDS {
+        let word = unsafe { read_u32(indexed(source, index, 4)?)? };
+        hash = (hash ^ word).wrapping_mul(0x0100_0193);
+        committed |= word;
+    }
+    (committed != 0).then_some(hash)
+}
+
+// The readback that fills the colour buffer uses a hard-coded pitch, so a
+// source texture that is not 32x32 would have misfilled it.
+unsafe fn read_cursor(layout: Layout) -> Option<CursorState> {
+    let art = unsafe { pointer(layout.cursor_active_art, 24)? };
+    let handle = unsafe { pointer(offset(art, layout.cursor_art_texture)?, 12)? };
+    if unsafe { read_u32(offset(handle, layout.cursor_handle_key)?)? }
+        != CURSOR_TEXTURE_KEY
+    {
+        return None;
+    }
+    let view = unsafe { pointer(offset(handle, layout.cursor_handle_object)?, 12)? };
+    let texture = unsafe { pointer(offset(view, layout.cursor_view_texture)?, 0x68)? };
+    if unsafe { read_u32(offset(texture, layout.cursor_texture_type)?)? }
+        != CURSOR_TEXTURE_TYPE
+        || unsafe { read_u32(offset(texture, layout.cursor_texture_width)?)? }
+            != CURSOR_EDGE
+        || unsafe { read_u32(offset(texture, layout.cursor_texture_height)?)? }
+            != CURSOR_EDGE
+    {
+        return None;
+    }
+
+    let hotspot = offset(art, layout.cursor_art_hotspot)?;
+    let hotspot_x = unsafe { read_u32(hotspot)? };
+    let hotspot_y = unsafe { read_u32(offset(hotspot, 4)?)? };
+    if hotspot_x >= CURSOR_EDGE || hotspot_y >= CURSOR_EDGE {
+        return None;
+    }
+
+    let source = layout.cursor_color_buffer;
+    if !contains(source, CURSOR_PIXEL_BYTES) {
+        return None;
+    }
+    let hash = unsafe { hash_cursor_pixels(source)? };
+    let hidden = unsafe { read_i32(layout.cursor_show_count) }
+        .is_some_and(|count| count < 0);
+    Some(CursorState {
+        hash,
+        hotspot_x,
+        hotspot_y,
+        hidden,
+        source,
+    })
+}
+
+unsafe fn collect_cursor(layout: Layout) -> Result<CursorState, u32> {
+    if unsafe { read_u32(layout.cursor_software_model) } != Some(0) {
+        return Err(FLAG_CURSOR_UNSUPPORTED);
+    }
+    unsafe { read_cursor(layout) }.ok_or(0)
+}
+
+// `source` is None for a header-only update: it clears CURSOR_VALID without
+// disturbing the last good pixels.
+unsafe fn publish_cursor(published: CursorPublished, source: Option<u32>) {
+    let next = unsafe { CURSOR_SEQUENCE }.wrapping_add(2) & !1;
+    let cursor = unsafe { CURSOR_PTR as *mut CursorSnapshot };
+    unsafe {
+        write_volatile(&mut (*cursor).sequence, next.wrapping_sub(1));
+        write_volatile(&mut (*cursor).magic, CURSOR_MAGIC);
+        write_volatile(&mut (*cursor).abi_and_size, CURSOR_ABI_AND_SIZE);
+        write_volatile(&mut (*cursor).flags, published.flags);
+    }
+    if let Some(source) = source {
+        unsafe {
+            CURSOR_GENERATION = CURSOR_GENERATION.wrapping_add(1);
+            write_volatile(&mut (*cursor).generation, CURSOR_GENERATION);
+            write_volatile(&mut (*cursor).width, CURSOR_EDGE);
+            write_volatile(&mut (*cursor).height, CURSOR_EDGE);
+            write_volatile(&mut (*cursor).hotspot_x, published.hotspot_x);
+            write_volatile(&mut (*cursor).hotspot_y, published.hotspot_y);
+            write_volatile(&mut (*cursor).pixel_hash, published.hash);
+        }
+        for index in 0..CURSOR_WORDS {
+            let word = indexed(source, index, 4)
+                .and_then(|address| unsafe { read_u32(address) })
+                .unwrap_or(0);
+            // BGRA -> RGBA: keep alpha and green, swap red and blue.
+            let rgba =
+                (word & 0xff00_ff00) | ((word >> 16) & 0xff) | ((word & 0xff) << 16);
+            unsafe { write_volatile(&mut (*cursor).pixels[index as usize], rgba) };
+        }
+    }
+    unsafe {
+        write_volatile(&mut (*cursor).sequence, next);
+        CURSOR_SEQUENCE = next;
+        CURSOR_PUBLISHED = published;
+    }
+}
+
+unsafe fn tick_cursor(layout: Layout) {
+    let last = unsafe { CURSOR_PUBLISHED };
+    match unsafe { collect_cursor(layout) } {
+        Ok(state) => {
+            let published = CursorPublished {
+                flags: FLAG_CURSOR_VALID
+                    | if state.hidden { FLAG_CURSOR_HIDDEN } else { 0 },
+                hash: state.hash,
+                hotspot_x: state.hotspot_x,
+                hotspot_y: state.hotspot_y,
+            };
+            if published != last {
+                // Show/hide moves the flags alone, and the region already holds
+                // the bitmap `published.hash` names, so skip the 4 KB rewrite.
+                let bitmap = last.flags & FLAG_CURSOR_VALID == 0
+                    || published.hash != last.hash
+                    || published.hotspot_x != last.hotspot_x
+                    || published.hotspot_y != last.hotspot_y;
+                unsafe { publish_cursor(published, bitmap.then_some(state.source)) };
+            }
+        }
+        Err(flags) => {
+            if flags != last.flags {
+                unsafe { publish_cursor(CursorPublished { flags, ..last }, None) };
+            }
+        }
+    }
+}
+
+// The region comes from the game's allocator, so clear it before the renderer
+// can observe it.
+unsafe fn clear_cursor() {
+    let cursor = unsafe { CURSOR_PTR as *mut CursorSnapshot };
+    unsafe {
+        write_volatile(&mut (*cursor).generation, 0);
+        write_volatile(&mut (*cursor).width, 0);
+        write_volatile(&mut (*cursor).height, 0);
+        write_volatile(&mut (*cursor).hotspot_x, 0);
+        write_volatile(&mut (*cursor).hotspot_y, 0);
+        write_volatile(&mut (*cursor).pixel_hash, 0);
+    }
+    for index in 0..6 {
+        unsafe { write_volatile(&mut (*cursor).reserved[index], 0) };
+    }
+    for index in 0..CURSOR_WORDS {
+        unsafe { write_volatile(&mut (*cursor).pixels[index as usize], 0) };
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn toolbox_init(
     snapshot_ptr: u32,
     snapshot_size: u32,
     config_ptr: u32,
     config_size: u32,
+    cursor_ptr: u32,
+    cursor_size: u32,
 ) -> u32 {
     if snapshot_size != SNAPSHOT_BYTES
         || config_size != CONFIG_BYTES
+        || cursor_size != CURSOR_BYTES
         || snapshot_ptr & 3 != 0
         || config_ptr & 3 != 0
+        || cursor_ptr & 3 != 0
         || !contains(snapshot_ptr, snapshot_size)
         || !contains(config_ptr, config_size)
+        || !contains(cursor_ptr, cursor_size)
     {
         return 0;
     }
     unsafe {
         SNAPSHOT_PTR = snapshot_ptr;
+        CURSOR_PTR = cursor_ptr;
         LAYOUT = read_volatile(config_ptr as *const Layout);
         INITIALIZED = true;
         TICK_COUNT = 0;
         SEQUENCE = 0;
+        CURSOR_SEQUENCE = 0;
+        CURSOR_GENERATION = 0;
+        CURSOR_PUBLISHED = CursorPublished::EMPTY;
         publish(State::empty());
+        clear_cursor();
+        publish_cursor(CursorPublished::EMPTY, None);
     }
     1
 }
@@ -448,5 +705,6 @@ pub unsafe extern "C" fn toolbox_tick(context: u32) {
         }
         TICK_COUNT = TICK_COUNT.wrapping_add(1);
         publish(collect(LAYOUT));
+        tick_cursor(LAYOUT);
     }
 }

@@ -250,6 +250,82 @@ async function runMapTransition(page) {
   };
 }
 
+// Human-assisted cursor evidence. FrCursor decodes the active cursor into two
+// fixed buffers before calling an empty Emscripten sink, so typed scalar reads
+// are enough to prove the buffers are live, identify which cursor is loaded,
+// and settle the colour channel order. Nothing here dumps memory: the caller
+// chooses at most 16 addresses and only their transitions are recorded.
+const CURSOR_PHASES = Object.freeze([
+  Object.freeze({ seconds: 20, ask: "leave the plain arrow over open ground" }),
+  Object.freeze({ seconds: 12, ask: "open the inventory and hover an item" }),
+  Object.freeze({ seconds: 12, ask: "use a salvage kit, then hover a salvageable item" }),
+  Object.freeze({ seconds: 8, ask: "press Escape and return to the plain arrow" }),
+  Object.freeze({ seconds: 12, ask: "use an identification kit, then hover an unidentified item" }),
+  Object.freeze({ seconds: 8, ask: "press Escape and return to the plain arrow" }),
+  Object.freeze({ seconds: 12, ask: "drag an inventory item and hold it" }),
+  Object.freeze({ seconds: 10, ask: "open the world map and hover a travel destination" }),
+]);
+const CURSOR_SAMPLE_INTERVAL_MS = 50;
+const CURSOR_MAX_CHANGES = 192;
+
+async function runCursorCapture(page, { sampleObservations }) {
+  if (!sampleObservations) {
+    throw new Error("cursor-capture requires at least one --observe address");
+  }
+  const changes = [];
+  const startedAt = Date.now();
+  let overflow = 0;
+  let previous = "";
+  for (const [index, phase] of CURSOR_PHASES.entries()) {
+    console.log(JSON.stringify({
+      checkpoint: "cursor-phase",
+      phase: index + 1,
+      of: CURSOR_PHASES.length,
+      seconds: phase.seconds,
+      please: phase.ask,
+    }));
+    const until = Date.now() + phase.seconds * 1_000;
+    while (Date.now() < until) {
+      const values = await sampleObservations();
+      // Renderer-side effect of the same change: what the consumer published
+      // and how long the CSS it handed Chromium is. No pixels, no pointers.
+      const applied = await page.evaluate(() => {
+        const cursor = window.gwToolboxRuntime?.cursor;
+        const canvas = globalThis.document.getElementById("canvas");
+        return cursor
+          ? { ...cursor, inline: canvas?.style.cursor.slice(0, 24) ?? "" }
+          : null;
+      });
+      const key = JSON.stringify([values.map((entry) => entry.value), applied]);
+      if (key !== previous) {
+        previous = key;
+        if (changes.length < CURSOR_MAX_CHANGES) {
+          changes.push({
+            atMs: Date.now() - startedAt,
+            phase: index + 1,
+            values,
+            applied,
+          });
+        } else {
+          overflow += 1;
+        }
+      }
+      await page.waitForTimeout(CURSOR_SAMPLE_INTERVAL_MS);
+    }
+  }
+  return {
+    addresses: changes[0]?.values.map((entry) => ({
+      type: entry.type,
+      address: `0x${entry.address.toString(16)}`,
+    })) ?? [],
+    phases: CURSOR_PHASES.length,
+    sampleIntervalMs: CURSOR_SAMPLE_INTERVAL_MS,
+    changeCount: changes.length + overflow,
+    overflow,
+    changes,
+  };
+}
+
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
@@ -278,6 +354,14 @@ export const SCENARIOS = Object.freeze({
     },
   }),
   reload: Object.freeze({ run: noEvidence, validate: acceptEvidence }),
+  "cursor-capture": Object.freeze({
+    run: runCursorCapture,
+    validate(result) {
+      if (!(result.evidence?.changeCount > 1)) {
+        throw new Error("cursor capture observed no state transition");
+      }
+    },
+  }),
   "map-transition": Object.freeze({
     run: runMapTransition,
     validate(result) {

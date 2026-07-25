@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   toolboxLayoutWords,
+  TOOLBOX_BUILDS,
   type KnownToolboxBuild,
 } from "../../src/main/core/toolbox-builds.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
 import {
   inspectToolboxCandidate,
   TOOLBOX_HOOK_EXPORT,
@@ -70,6 +72,10 @@ function manifest(bytes: Uint8Array): KnownToolboxBuild {
       mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
       playerNumber: 9, agentId: 10, agentX: 11, agentY: 12, agentType: 13,
       agentPlayerNumber: 14, agentModelType: 15,
+      cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
+      cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
+      cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
+      cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
     },
   };
 }
@@ -97,7 +103,9 @@ describe("targeted Toolbox WebAssembly transform", () => {
         transformAbi: TOOLBOX_TRANSFORM_ABI,
         snapshotAbi: 1,
         snapshotBytes: 64,
-        configBytes: 68,
+        cursorSnapshotAbi: 1,
+        cursorSnapshotBytes: 4160,
+        configBytes: 116,
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,
@@ -136,5 +144,22 @@ describe("targeted Toolbox WebAssembly transform", () => {
       () => transformToolboxWasm(input, { ...manifest(input), hookParams: ["i64"] }),
       /signature/,
     );
+  });
+});
+
+describe("Toolbox client chain", () => {
+  it("certifies the Toolbox transform against the template-save output", () => {
+    // The Toolbox transform is layered on the template-save client so opting
+    // into the game cursor never costs template save/load. If either manifest
+    // is recertified without the other, this pairing is what breaks first.
+    for (const build of TOOLBOX_BUILDS) {
+      const source = TEMPLATE_SAVE_BUILDS.find(
+        (candidate) => candidate.outputSha256 === build.sha256,
+      );
+      assert.ok(
+        source,
+        `Toolbox build ${build.buildId} does not consume any template-save output`,
+      );
+    }
   });
 });

@@ -42,6 +42,8 @@ const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface WindowHost {
   sockets: SocketManager;
+  /** Launch-time opt-in; the renderer only loads the Toolbox when it is set. */
+  nativeCursor: boolean;
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
@@ -205,6 +207,18 @@ export async function resetWindowState(win = mainWindow): Promise<void> {
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
+}
+
+/** The only renderer URL. A reload that dropped these would drop the Toolbox. */
+export function rendererUrl(options: { nativeCursor: boolean }): string {
+  const parameters = new URLSearchParams();
+  if (TOOLBOX_AUTOMATION_ENABLED) parameters.set("toolbox-automation", "1");
+  if (options.nativeCursor) parameters.set("native-cursor", "1");
+  if (process.env.GW_TEMPLATE_FS_TRACE === "1") {
+    parameters.set("template-fs-trace", "1");
+  }
+  const query = parameters.toString();
+  return `gw://app/${query ? `?${query}` : ""}`;
 }
 
 export function createMainWindow(host: WindowHost): BrowserWindow {
@@ -378,15 +392,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   installMenu(host, win);
-  const rendererParameters = new URLSearchParams();
-  if (TOOLBOX_AUTOMATION_ENABLED) {
-    rendererParameters.set("toolbox-automation", "1");
-  }
-  if (process.env.GW_TEMPLATE_FS_TRACE === "1") {
-    rendererParameters.set("template-fs-trace", "1");
-  }
-  const rendererQuery = rendererParameters.toString();
-  void win.loadURL(`gw://app/${rendererQuery ? `?${rendererQuery}` : ""}`);
+  void win.loadURL(rendererUrl(host));
   return win;
 }
 

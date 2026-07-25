@@ -240,17 +240,11 @@
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
           <h3 id="settings-controls-title" class="sr-only">Controls</h3>
-          <label class="settings-field">Cursor style
-            <select name="cursorTheme">
-              <option value="system">macOS Default</option>
-              <option value="guild-wars">Guild Wars</option>
-              <option value="guild-wars-2">Guild Wars 2</option>
-            </select>
+          <label class="settings-check">
+            <input type="checkbox" name="nativeCursor">
+            <span>Use the game's own cursor</span>
           </label>
-          <div id="settings-cursor-preview" data-cursor-theme="guild-wars">
-            Move the pointer here to preview
-          </div>
-          <p class="settings-note">Game cursor artwork is used for interoperability and remains owned by its respective rights holders.</p>
+          <p class="settings-note">Reads the cursor from your own installed Guild Wars client while you play, instead of the macOS pointer. Nothing is downloaded and no artwork ships with this app. Takes effect the next time you open this app.</p>
         </section>
 
         <section class="settings-pane" id="settings-pane-advanced" role="tabpanel"

@@ -8,7 +8,9 @@ describe("canonical renderer URL", () => {
       "gw://app/",
       "gw://app/index.html",
       "gw://app/?toolbox-automation=1",
+      "gw://app/?native-cursor=1",
       "gw://app/?template-fs-trace=1",
+      "gw://app/?toolbox-automation=1&native-cursor=1",
       "gw://app/?toolbox-automation=1&template-fs-trace=1",
     ]) {
       assert.equal(isCanonicalRendererUrl(url), true, url);

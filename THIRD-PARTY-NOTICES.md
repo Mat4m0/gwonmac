@@ -23,9 +23,12 @@ screenshots, loading artwork, the application icon, and derived favicons are
 fan-project visual material and are not relicensed under GPL-3.0-only. Their
 inclusion does not grant permission to reuse them separately.
 
-The optional Guild Wars and Guild Wars 2 cursor artwork is included on the
-same basis for interoperability and visual compatibility. The project claims
-no ownership of, or additional rights in, that artwork.
+No cursor artwork is distributed with this application. When the player turns
+on the optional game cursor, the host reads the bitmap the player's own
+installed Guild Wars client has already decoded in its own memory and draws it
+over the game view for the duration of that session. That artwork is never
+copied into this repository, the packaged application, or any release
+artifact.
 
 ## QT Friz Quad
 

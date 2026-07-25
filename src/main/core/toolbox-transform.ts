@@ -143,6 +143,8 @@ function buildManifestSection(build: KnownToolboxBuild): Section {
       transformAbi: TOOLBOX_TRANSFORM_ABI,
       snapshotAbi: 1,
       snapshotBytes: 64,
+      cursorSnapshotAbi: 1,
+      cursorSnapshotBytes: 4160,
       configBytes: layoutWords.length * 4,
       programId: build.programId,
       buildId: build.buildId,

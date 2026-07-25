@@ -41,8 +41,8 @@
     /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
   const renderScale =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
-  const cursorTheme =
-    /** @type {HTMLSelectElement} */ (form.elements.namedItem('cursorTheme'));
+  const nativeCursor =
+    /** @type {HTMLInputElement} */ (form.elements.namedItem('nativeCursor'));
   const touchMode =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('touchMode'));
   const showDiagnostics =
@@ -150,13 +150,6 @@
     return settingsLoad;
   }
 
-  /** @param {import('../shared/contracts.js').AppSettings} settings */
-  function applyRuntimeSettings(settings) {
-    const preview = byId('settings-cursor-preview');
-    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
-    window.gwApplySettings?.(settings);
-  }
-
   function updateRenderScaleDimensions() {
     const canvas = document.getElementById('canvas');
     if (!canvas) return;
@@ -196,7 +189,7 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      applyRuntimeSettings(saved);
+      window.gwApplySettings?.(saved);
       return saved;
     });
     settingsWrite = operation.catch(() => undefined);
@@ -238,14 +231,10 @@
           ? { renderScale: value }
           : null;
       }
-      case 'cursorTheme': {
-        const value = control.value;
-        return value === 'system' ||
-          value === 'guild-wars' ||
-          value === 'guild-wars-2'
-          ? { cursorTheme: value }
+      case 'nativeCursor':
+        return control instanceof globalThis.HTMLInputElement
+          ? { nativeCursor: control.checked }
           : null;
-      }
       case 'touchMode': {
         const value = control.value;
         return value === 'dbltap' ||
@@ -269,7 +258,7 @@
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
     renderScale.value = String(settings.renderScale);
-    cursorTheme.value = settings.cursorTheme;
+    nativeCursor.checked = settings.nativeCursor;
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
     for (const radio of /** @type {NodeListOf<HTMLInputElement>} */ (
@@ -277,8 +266,6 @@
     )) {
       radio.checked = radio.value === settings.dataStrategy;
     }
-    const preview = byId('settings-cursor-preview');
-    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
     updateRenderScaleDimensions();
   }
 
@@ -623,15 +610,16 @@
     feedback.textContent = '';
     const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
-    if (control.name === 'cursorTheme') {
-      const preview = byId('settings-cursor-preview');
-      preview.dataset.cursorTheme = control.value;
-    }
     void persistSettings(patch)
       .then(async () => {
         flashSaved();
         if (!strategyChanged) {
-          feedback.textContent = 'Settings saved.';
+          // The cursor setting selects which client module this launch serves,
+          // and that choice is read once at startup. Reload Game reuses it, so
+          // only reopening the application applies a change.
+          feedback.textContent = control.name === 'nativeCursor'
+            ? 'Saved. The cursor changes the next time you open this app.'
+            : 'Settings saved.';
           return;
         }
         if (nextStrategy === 'quick' && downloadActive()) {
@@ -645,7 +633,7 @@
       .catch(() => {
         if (currentSettings) {
           fillForm(currentSettings);
-          applyRuntimeSettings(currentSettings);
+          window.gwApplySettings?.(currentSettings);
         }
         feedback.textContent = 'Settings could not be saved.';
       });
@@ -671,12 +659,18 @@
     try {
       const reset = await window.gwNative.settings.reset();
       if (!reset) return;
+      // The reset unticks the cursor box, but this launch keeps the client
+      // module it already chose, so say so rather than let the box and the
+      // screen disagree.
+      const cursorCleared = currentSettings?.nativeCursor === true;
       currentSettings = reset;
       fillForm(reset);
       renderSettingsData();
-      applyRuntimeSettings(reset);
-      feedback.textContent =
-        'Launcher settings reset. The download choice will appear next launch.';
+      window.gwApplySettings?.(reset);
+      feedback.textContent = cursorCleared
+        ? 'Launcher settings reset. The download choice and the plain cursor '
+          + 'apply the next time you open this app.'
+        : 'Launcher settings reset. The download choice will appear next launch.';
     } catch {
       feedback.textContent = 'Launcher settings could not be reset.';
     }
