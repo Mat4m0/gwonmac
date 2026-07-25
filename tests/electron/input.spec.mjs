@@ -19,6 +19,51 @@ async function startGameInput(page) {
 test.describe("renderer input", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
+  test("keeps game text entry native-assistance free without blurring the game", async () => {
+    const fixture = await launchOffline("gw-text-input-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const result = await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const inputs = [...globalThis.document.querySelectorAll(".osk-input")];
+        const text = globalThis.document.getElementById("osk-input-text");
+        let clientSawCanvasBlur = false;
+        canvas.addEventListener("blur", () => {
+          clientSawCanvasBlur = true;
+        });
+
+        canvas.focus();
+        window.Module.oskActiveInput = text;
+        text.focus();
+
+        const attributes = Object.fromEntries(
+          ["autocomplete", "autocorrect", "autocapitalize", "spellcheck", "writingsuggestions"]
+            .map((name) => [name, inputs.map((input) => input.getAttribute(name))]),
+        );
+        const activeElement = globalThis.document.activeElement?.id;
+        window.Module.oskActiveInput = null;
+        text.blur();
+        canvas.focus();
+        return { activeElement, attributes, clientSawCanvasBlur };
+      });
+
+      expect(result).toEqual({
+        activeElement: "osk-input-text",
+        attributes: {
+          autocomplete: Array(5).fill("off"),
+          autocorrect: Array(5).fill("off"),
+          autocapitalize: Array(5).fill("off"),
+          spellcheck: Array(5).fill("false"),
+          writingsuggestions: Array(5).fill("false"),
+        },
+        clientSawCanvasBlur: false,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases held input and cancels synthetic touches", async () => {
     const fixture = await launchOffline("gw-input-e2e-");
     try {

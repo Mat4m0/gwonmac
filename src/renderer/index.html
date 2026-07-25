@@ -108,12 +108,34 @@
 </div>
 
 <!-- The module probes for Module.oskInput and concludes it cannot accept text
-     at all without these. It focuses them programmatically, hence tabindex=-1. -->
-<div class="osk-input-container"><input type="text" id="osk-input-text" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
-<div class="osk-input-container"><input type="email" id="osk-input-email" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
-<div class="osk-input-container"><input type="password" id="osk-input-password" class="osk-input" tabindex="-1"></div>
-<div class="osk-input-container"><input type="number" id="osk-input-number" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
-<div class="osk-input-container"><textarea id="osk-input-multiline" class="osk-input" rows="3" tabindex="-1"></textarea></div>
+     at all without these. It focuses them programmatically, hence tabindex=-1.
+     The game owns editing, so browser writing assistance must not rewrite its
+     input/composition event stream. -->
+<div class="osk-input-container">
+  <input type="text" id="osk-input-text" class="osk-input" tabindex="-1"
+         enterkeyhint="enter" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <input type="email" id="osk-input-email" class="osk-input" tabindex="-1"
+         enterkeyhint="enter" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <input type="password" id="osk-input-password" class="osk-input" tabindex="-1"
+         autocomplete="off" autocorrect="off" autocapitalize="off"
+         spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <input type="number" id="osk-input-number" class="osk-input" tabindex="-1"
+         enterkeyhint="enter" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <textarea id="osk-input-multiline" class="osk-input" rows="3" tabindex="-1"
+            autocomplete="off" autocorrect="off" autocapitalize="off"
+            spellcheck="false" writingsuggestions="false"></textarea>
+</div>
 
 <div id="log"></div>
 <output id="diagnostics" aria-live="off"></output>

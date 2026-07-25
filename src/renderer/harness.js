@@ -820,6 +820,14 @@ function loadGlue() {
     multiline: document.getElementById('osk-input-multiline'),
   };
   Module.oskIsModal = Module.isMobile;   // on desktop the field stays behind the canvas
+  const oskInputs = new Set(Object.values(Module.oskInput).filter(Boolean));
+
+  // The desktop text proxy is part of the game, not a loss of game focus.
+  // Keep the client's canvas-blur callback from muting audio while chat is
+  // active. Real window blur still reaches the canvas and releases input.
+  c.addEventListener('blur', (event) => {
+    if (oskInputs.has(event.relatedTarget)) event.stopImmediatePropagation();
+  }, true);
 
   for (const type in Module.oskInput) {
     const el = Module.oskInput[type];
