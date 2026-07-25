@@ -236,7 +236,6 @@ test.describe("diagnostics", () => {
             electronVersions: { electron: process.versions.electron },
             settings: {
               renderScale: 1,
-              pointerLock: true,
               cursorTheme: "guild-wars",
               touchMode: "dbltap",
               showDiagnostics: false,

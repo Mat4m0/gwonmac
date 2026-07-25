@@ -456,6 +456,96 @@ test.describe("renderer input", () => {
     }
   });
 
+  test("recycles a held camera drag instead of stalling at an edge", async () => {
+    const fixture = await launchOffline("gw-pointer-edge-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const canvas = page.locator("#canvas");
+      const box = await canvas.boundingBox();
+      await page.evaluate(({ x, y, width, height }) => {
+        const gameCanvas = globalThis.document.getElementById("canvas");
+        globalThis.document.getElementById("loading").classList.add("gone");
+        globalThis.__cameraEvents = [];
+        for (const type of ["mousemove", "mouseup", "mousedown"]) {
+          gameCanvas.addEventListener(type, (event) => {
+            if (!event.isTrusted) {
+              globalThis.__cameraEvents.push({
+                type,
+                button: event.button,
+                buttons: event.buttons,
+                clientX: event.clientX,
+                movementX: event.movementX,
+              });
+            }
+          });
+        }
+        gameCanvas.getBoundingClientRect = () =>
+          new globalThis.DOMRect(x + 95, y, width, height);
+        Object.defineProperty(globalThis.document, "pointerLockElement", {
+          configurable: true,
+          value: gameCanvas,
+        });
+        globalThis.document.exitPointerLock = () => {
+          Object.defineProperty(globalThis.document, "pointerLockElement", {
+            configurable: true,
+            value: null,
+          });
+        };
+        gameCanvas.focus();
+      }, box);
+
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "right" });
+      await page.mouse.move(box.x + 80, box.y + 100);
+      await expect
+        .poll(() => page.evaluate(() => globalThis.__cameraEvents))
+        .toEqual([
+          {
+            type: "mousemove",
+            button: 0,
+            buttons: 2,
+            clientX: box.x + 95,
+            movementX: -5,
+          },
+          {
+            type: "mouseup",
+            button: 2,
+            buttons: 0,
+            clientX: box.x + 95,
+            movementX: 0,
+          },
+          {
+            type: "mousedown",
+            button: 2,
+            buttons: 2,
+            clientX: box.x + 95 + box.width / 2,
+            movementX: 0,
+          },
+          {
+            type: "mousemove",
+            button: 0,
+            buttons: 2,
+            clientX: box.x + 95 + box.width / 2 - 15,
+            movementX: -15,
+          },
+        ]);
+      await page.mouse.move(box.x + 70, box.y + 100);
+      await expect
+        .poll(() => page.evaluate(() => globalThis.__cameraEvents.at(-1)))
+        .toEqual({
+          type: "mousemove",
+          button: 0,
+          buttons: 2,
+          clientX: box.x + 95 + box.width / 2 - 25,
+          movementX: -10,
+        });
+      await page.mouse.up({ button: "right" });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases only held mouse buttons when pointer lock is lost", async () => {
     const fixture = await launchOffline("gw-pointer-loss-e2e-");
     try {

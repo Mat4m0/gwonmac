@@ -99,7 +99,6 @@ export interface ClockSyncResponse {
 
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
-  pointerLock: boolean;
   cursorTheme: "system" | "guild-wars" | "guild-wars-2";
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
@@ -110,7 +109,6 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
-  pointerLock: true,
   cursorTheme: "guild-wars",
   touchMode: "dbltap",
   showDiagnostics: false,

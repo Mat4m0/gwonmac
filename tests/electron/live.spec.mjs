@@ -30,7 +30,6 @@ test.describe("live client", () => {
       path.join(userData, "settings.json"),
       JSON.stringify({
         renderScale: 1,
-        pointerLock: true,
         cursorTheme: "guild-wars",
         touchMode: "dbltap",
         showDiagnostics: false,

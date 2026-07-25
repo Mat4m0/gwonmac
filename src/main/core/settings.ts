@@ -42,7 +42,6 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
-  if ("pointerLock" in src) out.pointerLock = asBool(src.pointerLock, "pointerLock");
   if ("cursorTheme" in src) {
     if (!CURSOR_THEMES.has(src.cursorTheme as AppSettings["cursorTheme"])) {
       throw new AppError("bad_settings", "settings.cursorTheme has unknown type/value");

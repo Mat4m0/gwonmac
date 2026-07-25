@@ -41,8 +41,6 @@
     /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
   const renderScale =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
-  const pointerLock =
-    /** @type {HTMLInputElement} */ (form.elements.namedItem('pointerLock'));
   const cursorTheme =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('cursorTheme'));
   const touchMode =
@@ -240,10 +238,6 @@
           ? { renderScale: value }
           : null;
       }
-      case 'pointerLock':
-        return control instanceof globalThis.HTMLInputElement
-          ? { pointerLock: control.checked }
-          : null;
       case 'cursorTheme': {
         const value = control.value;
         return value === 'system' ||
@@ -275,7 +269,6 @@
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
     renderScale.value = String(settings.renderScale);
-    pointerLock.checked = settings.pointerLock;
     cursorTheme.value = settings.cursorTheme;
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;

@@ -41,7 +41,6 @@
     /** @type {Set<number>} */
     const tapTimers = new Set();
     let touchMode = initialSettings.touchMode;
-    let lockEnabled = initialSettings.pointerLock;
     /** @type {{ x: number, y: number } | null} */
     let pendingTap = null;
     let touchId = 0;
@@ -50,6 +49,10 @@
     /** @type {{ x: number, y: number } | null} */
     let virtualCursor = null;
     let pointerWanted = false;
+    let resettingPointer = false;
+    let pendingPointerX = 0;
+    let pendingPointerY = 0;
+    let pointerResetFrame = 0;
     let releasing = false;
     let wheelRemainder = 0;
     let wheelDirection = 0;
@@ -183,6 +186,10 @@
     function releasePointer() {
       pointerWanted = false;
       virtualCursor = null;
+      resettingPointer = false;
+      pendingPointerX = 0;
+      pendingPointerY = 0;
+      cancelAnimationFrame(pointerResetFrame);
       canvas.classList.remove('cursor-hidden');
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     }
@@ -450,19 +457,45 @@
         sendMouse('mousemove', rect, currentButtons(), 0, movementX, movementY);
         return;
       }
-      virtualCursor.x = Math.max(0, Math.min(rect.width, nextX));
-      virtualCursor.y = Math.max(0, Math.min(rect.height, nextY));
-      sendMouse('mousemove', rect, currentButtons(), 0, movementX, movementY);
+      const stepX =
+        Math.max(0, Math.min(rect.width, nextX)) - virtualCursor.x;
+      const stepY =
+        Math.max(0, Math.min(rect.height, nextY)) - virtualCursor.y;
+      virtualCursor.x += stepX;
+      virtualCursor.y += stepY;
+      const buttons = currentButtons();
+      sendMouse('mousemove', rect, buttons, 0, stepX, stepY);
+      pendingPointerX += movementX - stepX;
+      pendingPointerY += movementY - stepY;
+      if (resettingPointer) return;
+      resettingPointer = true;
+      // The client steers from absolute coordinates. Re-grab at center while
+      // the physical button remains held, then replay the unconsumed delta.
+      sendMouse('mouseup', rect, buttons & ~2, 2, 0, 0);
+      virtualCursor = { x: rect.width / 2, y: rect.height / 2 };
+      sendMouse('mousedown', rect, buttons, 2, 0, 0);
+      pointerResetFrame = requestAnimationFrame(() => {
+        resettingPointer = false;
+        if (document.pointerLockElement !== canvas || !virtualCursor) return;
+        const replayX = pendingPointerX;
+        const replayY = pendingPointerY;
+        pendingPointerX = 0;
+        pendingPointerY = 0;
+        if (replayX || replayY) sendDelta(replayX, replayY);
+      });
     };
 
     canvas.addEventListener('mousedown', (event) => {
-      if (event.button !== 2 || !lockEnabled || !event.isTrusted) return;
+      if (event.button !== 2 || !event.isTrusted) return;
       const rect = canvas.getBoundingClientRect();
       virtualCursor = {
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       };
       pointerWanted = true;
+      resettingPointer = false;
+      pendingPointerX = 0;
+      pendingPointerY = 0;
       if (document.pointerLockElement === canvas) return;
       try {
         const request = canvas.requestPointerLock();
@@ -496,7 +529,12 @@
       ) return;
       event.stopImmediatePropagation();
       event.preventDefault();
-      sendDelta(event.movementX, event.movementY);
+      if (resettingPointer) {
+        pendingPointerX += event.movementX;
+        pendingPointerY += event.movementY;
+      } else {
+        sendDelta(event.movementX, event.movementY);
+      }
     }, true);
 
     document.addEventListener('mouseup', (event) => {
@@ -533,8 +571,6 @@
           cancelSyntheticTouches();
         }
         touchMode = next.touchMode;
-        lockEnabled = next.pointerLock;
-        if (!lockEnabled) releaseButtons();
       },
     });
   };

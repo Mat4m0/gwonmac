@@ -16,7 +16,6 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
-      pointerLock: true,
       cursorTheme: "guild-wars",
       touchMode: "dbltap",
       showDiagnostics: false,
@@ -32,12 +31,10 @@ describe("settings", () => {
     });
     assert.equal("patchMode" in got, false);
     assert.equal(got.renderScale, 2);
-    assert.equal(got.pointerLock, true);
     assert.equal("mystery" in got, false);
   });
 
   it("rejects unknown types", () => {
-    assert.throws(() => parseSettings({ pointerLock: "yes" }), AppError);
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
     assert.throws(() => parseSettings({ cursorTheme: "custom" }), AppError);
     assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
@@ -50,7 +47,6 @@ describe("settings", () => {
       cursorTheme: "guild-wars-2",
     });
     assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
-    assert.throws(() => parseSettingsPatch({ pointerLock: "yes" }), AppError);
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -83,7 +79,6 @@ describe("settings", () => {
     assert.deepEqual(Object.keys(disk).sort(), [
       "cursorTheme",
       "dataStrategy",
-      "pointerLock",
       "renderScale",
       "showDiagnostics",
       "touchMode",

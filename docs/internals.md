@@ -366,7 +366,7 @@ downloaded client.
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
 fullscreen, touch translation, trackpad-wheel normalization, and right-drag
 pointer lock. `input.js` owns the canvas input listeners and accepts validated
-settings from the settings owner; it does not persist settings itself. One
+touch settings from the settings owner; it does not persist settings itself. One
 held-input registry releases keys, buttons, and touches when focus or native UI
 consumes an input release. Pointer lock uses a virtual cursor and recycles a
 held drag at canvas edges so camera rotation does not stall.

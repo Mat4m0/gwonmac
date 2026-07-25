@@ -86,9 +86,10 @@ memory use matters more than sharpness.
 Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
-**Controls** owns right-drag pointer locking and the macOS Default, Guild Wars,
-and Guild Wars 2 cursor choices, with an in-panel cursor preview. Guild Wars is
-the default. Cursor size follows macOS display and accessibility settings.
+Right-drag always locks the pointer while steering the camera and restores it
+on release. **Controls** owns the macOS Default, Guild Wars, and Guild Wars 2
+cursor choices, with an in-panel cursor preview. Guild Wars is the default.
+Cursor size follows macOS display and accessibility settings.
 Touch compatibility and the local performance overlay stay under
 **Advanced**, outside the normal setup path. Settings reopens to the pane most
 recently used during the current session.
