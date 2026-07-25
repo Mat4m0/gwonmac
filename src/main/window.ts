@@ -416,7 +416,7 @@ export async function exportProblemReport(
       cancelId: 2,
       message: "Problem report ready",
       detail:
-        "Send the single .gwdiag file when reporting the problem. It contains redacted diagnostics and no credentials.",
+        "Diagnostics are optional. To attach this report on GitHub, compress the .gwdiag file to a .zip in Finder first. It is redacted and contains no credentials.",
     });
     if (response === 0) await shell.openExternal(BUG_REPORT_URL);
     if (response === 1) shell.showItemInFolder(saved);

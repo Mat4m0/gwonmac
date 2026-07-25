@@ -126,7 +126,8 @@ are cleared at startup and quit.
 
 ## Report a problem
 
-Choose **Help → Report a Problem…**.
+Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
+in the app to export diagnostics and open it. Diagnostics are optional.
 
 - For a crash, startup, download, graphics, input, audio, or login problem,
   choose **Export Recent Diagnostics…**.
@@ -140,11 +141,12 @@ Choose **Help → Report a Problem…**.
 An always-visible capture indicator shows the recording type and elapsed time.
 After **Cmd+Shift+M**, it confirms that the problem marker was registered.
 
-The app creates one `.gwdiag` file and can open the project’s bug form or reveal
-the file in Finder. The export is redacted and excludes credentials, account
-identifiers, packet contents, request/response bodies, headers, cookies,
-filesystem paths, and crash dumps. GitHub issues are public, so review the bug
-form’s privacy notice before attaching it.
+The app creates one `.gwdiag` file and can reveal it in Finder. GitHub does not
+accept that extension directly: Control-click the file, choose **Compress**,
+and attach the resulting `.zip`. The export is redacted and excludes
+credentials, account identifiers, packet contents, request/response bodies,
+headers, cookies, filesystem paths, and crash dumps. GitHub issues are public,
+so review the bug form’s privacy notice before attaching it.
 
 ## Recovery behavior
 
