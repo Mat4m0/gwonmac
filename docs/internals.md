@@ -22,7 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
-  dormant exact-build Toolbox development foundation
+  opt-in exact-build Toolbox foundation
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -258,19 +258,32 @@ arbitrary-file bridge.
 
 ### Toolbox instrumentation
 
-The official `Gw.jspi.wasm` remains canonical. Normal and packaged sessions
-apply only the certified template-save compatibility transform described
-above: they do no Toolbox transform, fetch no kernel, install no Toolbox hook,
-start no snapshot observer, and contain no Toolbox UI. Only explicit
-non-packaged automation enables the Toolbox development path.
+The official `Gw.jspi.wasm` remains canonical. By default a session applies
+only the certified template-save compatibility transform described above: it
+does no Toolbox transform, fetches no kernel, installs no Toolbox hook, starts
+no snapshot observer, and contains no Toolbox UI. There is no Toolbox UI in any
+session.
 
-Automation hashes the official module after publication and recognizes only
+Two gates, and only these two, enable the Toolbox path. `toolbox-policy.ts`
+holds both: `TOOLBOX_AUTOMATION_ENABLED` stays non-packaged and
+`GW_TOOLBOX_AUTOMATION`-gated, and `toolboxEnabledFor(settings)` adds the
+player-facing `nativeCursor` opt-in, which defaults to false. Main reads the
+setting once at startup and passes the result as `ClientRuntime.toolboxEnabled`,
+because the choice selects which WASM main the launch serves; a change takes
+effect at the next game start. The same value writes the renderer's
+`native-cursor=1` parameter — `toolbox-automation=1` for automation — and
+`renderer-trust.ts` allow-lists both. `harness.js` dynamically imports
+`toolbox.js` only when one of them is present, so a renderer URL without them
+cannot reach the Toolbox at all.
+
+Enabled sessions hash the official module after publication and recognize only
 entries in the checked-in Toolbox build manifest. A known
 hash is transformed deterministically into a separate cache entry keyed by
 official hash, transform ABI, and manifest fingerprint. The transform clones
 one typed function, installs one dispatcher, and embeds the verified layout as
 a custom section. Unknown hashes and transform failures serve the official
-module unchanged.
+module unchanged, so an uncertified build stays fully playable and the cursor
+falls back to the plain macOS pointer.
 
 `toolbox-transform.ts` is the pure byte transform. `toolbox-client.ts` owns
 streaming hash validation, cache reuse, and atomic derived publication. The
@@ -282,7 +295,7 @@ Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
 `slot + 1`, preserving zero as disabled. No table growth or all-functions
 instrumentation remains.
 
-After runtime initialization in explicit automation, the renderer dynamically
+After runtime initialization in an enabled session, the renderer dynamically
 loads the Toolbox runtime, allocates a config and
 64-byte snapshot through the game's allocator, instantiates the dependency-free
 `wasm32-unknown-unknown` companion against the exported memory, installs its
@@ -291,10 +304,13 @@ original exactly once before collecting checked map/player/target state.
 
 Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
-sequence lock. It contains no pointers. The automation observer reads at most
+sequence lock. It contains no pointers. The snapshot observer reads at most
 once per animation frame and rejects unknown flags, invalid IDs/types/bands,
 and non-finite values. It publishes structured `gwToolboxState` without
-production DOM. No memory view or per-frame call crosses preload or IPC.
+production DOM. The cursor consumer is the one part that reaches production
+DOM, and only as an inline `cursor` on the game canvas; losing the cursor
+clears that inline value and nothing else. No memory view or per-frame call
+crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes

@@ -263,7 +263,6 @@ test.describe("renderer input", () => {
           edgeTargets: points.map(([x, y]) =>
             globalThis.document.elementFromPoint(x, y)?.id ?? null,
           ),
-          rootTheme: globalThis.document.documentElement.dataset.cursorTheme,
           edgeCursor: globalThis.getComputedStyle(
             globalThis.document.elementFromPoint(
               globalThis.innerWidth - 1,
@@ -279,8 +278,9 @@ test.describe("renderer input", () => {
         "canvas",
         "canvas",
       ]);
-      expect(result.rootTheme).toBe("guild-wars");
-      expect(result.edgeCursor).toContain("guild-wars.png");
+      // No cursor artwork ships, and this session did not opt in, so the very
+      // edge of the canvas is the plain macOS pointer.
+      expect(result.edgeCursor).toBe("auto");
       await page.mouse.move(0, 0);
       await page.mouse.move(result.viewport[0] - 1, 0);
       await page.mouse.move(0, result.viewport[1] - 1);

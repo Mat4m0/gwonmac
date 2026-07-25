@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 
 // Drives the renderer's cursor consumer against a synthetic cursor region.
@@ -68,14 +70,14 @@ async function driveCursor(page, steps) {
       return { width: image.naturalWidth, height: image.naturalHeight, columns };
     };
 
-    const theme = cursorOf(canvas);
+    const resting = cursorOf(canvas);
     const consumer = createCursorConsumer({
       element: canvas,
       memory: { buffer },
       cursorPointer: 0,
       fallback: "",
     });
-    const observed = { theme: shapeOf(theme), steps: {} };
+    const observed = { resting: shapeOf(resting), steps: {} };
     try {
       for (const step of script) {
         if (step.publish) publish(step.publish);
@@ -115,18 +117,10 @@ async function driveCursor(page, steps) {
 test.describe("toolbox cursor presentation", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
-  test("renders the game cursor as a 32 px image-set and hands back the theme", async () => {
+  test("renders the game cursor as a 32 px image-set and hands back the plain pointer", async () => {
     const fixture = await launchOffline("gw-toolbox-cursor-e2e-");
     try {
       const { page } = fixture;
-      await expect
-        .poll(() =>
-          page.evaluate(
-            () => globalThis.document.documentElement.dataset.cursorTheme,
-          ),
-        )
-        .toBe("guild-wars");
-
       const observed = await driveCursor(page, [
         {
           name: "cursor",
@@ -165,8 +159,10 @@ test.describe("toolbox cursor presentation", () => {
         { name: "disposed", dispose: true },
       ]);
 
-      // The stylesheet theme is the resting state of the canvas.
-      expect(observed.theme).toContain("guild-wars.png");
+      // No cursor artwork is bundled any more, so the resting state of the
+      // canvas -- and the fallback in every failure below -- is the plain
+      // macOS pointer, not a stylesheet image.
+      expect(observed.resting).toBe("auto");
       const cursor = observed.steps.cursor;
 
       // (a) 1x and 2x candidates, an authoring-grid hotspot, and the mandatory
@@ -202,9 +198,10 @@ test.describe("toolbox cursor presentation", () => {
         columns: [clear, clear, opaque, opaque, opaque, opaque],
       });
 
-      // (c) the settings dialog and the rest of the chrome keep the theme.
-      expect(cursor.dialog).toBe(observed.theme);
-      expect(cursor.root).toBe(observed.theme);
+      // (c) the game cursor is confined to the canvas: the settings dialog and
+      // the rest of the chrome keep the plain pointer.
+      expect(cursor.dialog).toBe(observed.resting);
+      expect(cursor.root).toBe(observed.resting);
       expect(cursor.dialog).not.toContain("<png>");
 
       // (d) pointer lock's `cursor: none !important` outranks the inline value.
@@ -219,16 +216,66 @@ test.describe("toolbox cursor presentation", () => {
       // A hidden cursor is `none` on the canvas alone.
       expect(observed.steps.hidden.canvas).toBe("none");
       expect(observed.steps.hidden.state.hidden).toBe(true);
-      expect(observed.steps.hidden.dialog).toBe(observed.theme);
+      expect(observed.steps.hidden.dialog).toBe(observed.resting);
 
-      // (b) losing the cursor hands the canvas back to the stylesheet theme.
-      expect(observed.steps.invalid.canvas).toBe(observed.theme);
+      // (b) losing the cursor -- or disposing the consumer -- hands the canvas
+      // back to the plain macOS pointer, which is the whole fallback story.
+      expect(observed.steps.invalid.canvas).toBe(observed.resting);
       expect(observed.steps.invalid.inline).toBe("");
       expect(observed.steps.invalid.state.valid).toBe(false);
-      expect(observed.steps.disposed.canvas).toBe(observed.theme);
+      expect(observed.steps.disposed.canvas).toBe(observed.resting);
       expect(observed.steps.disposed.inline).toBe("");
     } finally {
       await closeOffline(fixture);
+    }
+  });
+
+  // The opt-in is only real if a saved `nativeCursor` survives the whole chain:
+  // settings file -> toolboxEnabledFor -> renderer URL -> trust check. Without
+  // the parameter, harness.js never imports toolbox.js and no cursor appears.
+  test("a saved opt-in reaches the renderer as native-cursor=1", async () => {
+    const seed = (value) => async (userData) =>
+      writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({
+          renderScale: 2,
+          nativeCursor: value,
+          touchMode: "dbltap",
+          showDiagnostics: false,
+          dataStrategy: "quick",
+        }),
+        { mode: 0o600 },
+      );
+
+    const optedIn = await launchOffline("gw-cursor-opt-in-e2e-", {}, seed(true));
+    try {
+      const search = await optedIn.page.evaluate(
+        () => globalThis.location.search,
+      );
+      expect(search).toContain("native-cursor=1");
+      // Automation is off in this launch, so it must be the only parameter.
+      expect(search).not.toContain("toolbox-automation");
+      // Main loads this URL programmatically, so rendering proves nothing about
+      // the allow-list. Every IPC call re-checks the sender frame's URL, so a
+      // `native-cursor` that renderer-trust rejected fails right here instead.
+      expect(
+        await optedIn.page.evaluate(() => globalThis.gwNative.settings.get()),
+      ).toMatchObject({ nativeCursor: true });
+    } finally {
+      await closeOffline(optedIn);
+    }
+
+    const optedOut = await launchOffline(
+      "gw-cursor-opt-out-e2e-",
+      {},
+      seed(false),
+    );
+    try {
+      expect(
+        await optedOut.page.evaluate(() => globalThis.location.search),
+      ).toBe("");
+    } finally {
+      await closeOffline(optedOut);
     }
   });
 });

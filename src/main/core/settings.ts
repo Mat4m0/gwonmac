@@ -8,11 +8,6 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
-const CURSOR_THEMES = new Set<AppSettings["cursorTheme"]>([
-  "system",
-  "guild-wars",
-  "guild-wars-2",
-]);
 const TOUCH_MODES = new Set<AppSettings["touchMode"]>([
   "dbltap",
   "translate",
@@ -42,11 +37,8 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
-  if ("cursorTheme" in src) {
-    if (!CURSOR_THEMES.has(src.cursorTheme as AppSettings["cursorTheme"])) {
-      throw new AppError("bad_settings", "settings.cursorTheme has unknown type/value");
-    }
-    out.cursorTheme = src.cursorTheme as AppSettings["cursorTheme"];
+  if ("nativeCursor" in src) {
+    out.nativeCursor = asBool(src.nativeCursor, "nativeCursor");
   }
   if ("touchMode" in src) {
     if (!TOUCH_MODES.has(src.touchMode as AppSettings["touchMode"])) {

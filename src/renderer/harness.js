@@ -60,16 +60,11 @@ const SNAPSHOT_URL = 'Gw.snapshot';
 let appSettings = null;
 /** @type {GameInputController | null} */
 let inputHost = null;
-/** @param {import('../shared/contracts.js').AppSettings['cursorTheme']} theme */
-function applyCursorTheme(theme) {
-  document.documentElement.dataset.cursorTheme = theme;
-}
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
   appSettings = updated;
   inputHost?.applySettings(updated);
-  applyCursorTheme(updated.cursorTheme);
   if (previousScale !== undefined && updated.renderScale !== previousScale) {
     window.dispatchEvent(new globalThis.Event('resize'));
   }
@@ -686,8 +681,10 @@ Module = {
     milestone('runtime.initialized');
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
+    const parameters = new URL(window.location.href).searchParams;
     if (
-      new URL(window.location.href).searchParams.get('toolbox-automation') === '1'
+      (parameters.get('toolbox-automation') === '1'
+        || parameters.get('native-cursor') === '1')
       && gameWasmInstance
       && gameWasmModule
     ) {
@@ -761,7 +758,6 @@ function loadGlue() {
       document.getElementById('canvas')
     );
   if (!c) throw new Error('missing renderer canvas');
-  applyCursorTheme(appSettings.cursorTheme);
 
   c.focus();
   c.addEventListener('pointerdown', () => {
@@ -895,7 +891,6 @@ function loadGlue() {
 
   try {
     appSettings = await native().settings.get();
-    applyCursorTheme(appSettings.cursorTheme);
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   } catch (e) {
     window.gwLoading?.fail('Settings could not be loaded.');

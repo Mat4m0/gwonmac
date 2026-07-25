@@ -16,10 +16,32 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
-      cursorTheme: "guild-wars",
+      nativeCursor: false,
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
+    });
+  });
+
+  it("keeps the game cursor opt-in and drops the retired theme key", () => {
+    // A profile written before the cursor became a boolean carries
+    // `cursorTheme`. It is an unknown field, so it is ignored rather than
+    // rejected: nothing else the player chose may be lost with it.
+    const got = parseSettings({
+      cursorTheme: "guild-wars-2",
+      renderScale: 1,
+      touchMode: "off",
+      showDiagnostics: true,
+      dataStrategy: "full",
+    });
+    assert.equal("cursorTheme" in got, false);
+    assert.equal(got.nativeCursor, false);
+    assert.deepEqual(got, {
+      renderScale: 1,
+      nativeCursor: false,
+      touchMode: "off",
+      showDiagnostics: true,
+      dataStrategy: "full",
     });
   });
 
@@ -36,17 +58,19 @@ describe("settings", () => {
 
   it("rejects unknown types", () => {
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
-    assert.throws(() => parseSettings({ cursorTheme: "custom" }), AppError);
+    assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
     assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
 
   it("validates patches without filling fields from defaults", () => {
-    assert.deepEqual(parseSettingsPatch({ cursorTheme: "guild-wars-2" }), {
-      cursorTheme: "guild-wars-2",
+    assert.deepEqual(parseSettingsPatch({ nativeCursor: true }), {
+      nativeCursor: true,
     });
     assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
+    // A renderer that still names the retired key is a bug, not a migration.
+    assert.throws(() => parseSettingsPatch({ cursorTheme: "system" }), AppError);
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -77,8 +101,8 @@ describe("settings", () => {
     assert.equal(saved.showDiagnostics, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
-      "cursorTheme",
       "dataStrategy",
+      "nativeCursor",
       "renderScale",
       "showDiagnostics",
       "touchMode",

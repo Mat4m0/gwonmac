@@ -57,6 +57,11 @@ import type { GamePaths } from "./paths.js";
 
 export type { ActiveClient } from "./core/active-client.js";
 
+const transformFailureCode = (error: unknown): string =>
+  error instanceof Error && "code" in error
+    ? String(error.code)
+    : "transform_failed";
+
 interface ClientRuntimeOptions {
   paths: GamePaths;
   hostVersion: string;
@@ -148,6 +153,36 @@ export class ClientRuntime {
     });
   }
 
+  /**
+   * The template-save client is the floor every launch lands on. Opting out
+   * comes straight here, and an opted-in launch falls back here whenever the
+   * Toolbox module cannot be produced, so an uncertified build or a failed
+   * transform costs the cursor and nothing else.
+   */
+  private async templateSaveWasm(officialWasm: string): Promise<string> {
+    try {
+      const prepared = await prepareTemplateSaveClient(
+        officialWasm,
+        this.options.paths.compatibility,
+      );
+      gauge("wasm.templateSaveCompatible", prepared.compatible);
+      log(
+        "wasm",
+        prepared.compatible ? "info" : "warn",
+        prepared.compatible
+          ? "wasm.templateSavePrepared"
+          : "wasm.templateSaveUnsupported",
+      );
+      return prepared.wasmPath;
+    } catch (error) {
+      gauge("wasm.templateSaveCompatible", false);
+      log("wasm", "warn", "wasm.templateSavePrepareFailed", {
+        code: transformFailureCode(error),
+      });
+      return officialWasm;
+    }
+  }
+
   private async selectToolboxWasm(): Promise<{
     wasmPath: string;
     build: PreparedToolboxClient["build"];
@@ -156,62 +191,33 @@ export class ClientRuntime {
       this.options.paths.artifacts,
       "Gw.jspi.wasm",
     );
-    if (!this.options.toolboxEnabled) {
-      gauge("toolbox.supportedBuild", false);
+    // The two transforms are independent rewrites of the same official module,
+    // so the Toolbox one is layered on top of the template-save client rather
+    // than replacing it. Opting in must never cost template save/load.
+    const templateSaveWasm = await this.templateSaveWasm(officialWasm);
+    if (this.options.toolboxEnabled) {
       try {
-        const prepared = await prepareTemplateSaveClient(
-          officialWasm,
-          this.options.paths.compatibility,
+        const prepared = await prepareToolboxClient(
+          templateSaveWasm,
+          this.options.paths.toolbox,
         );
-        gauge("wasm.templateSaveCompatible", prepared.compatible);
-        log(
-          "wasm",
-          prepared.compatible ? "info" : "warn",
-          prepared.compatible
-            ? "wasm.templateSavePrepared"
-            : "wasm.templateSaveUnsupported",
-        );
-        return { wasmPath: prepared.wasmPath, build: null };
+        if (prepared.build) {
+          gauge("toolbox.supportedBuild", true);
+          log("wasm", "info", "toolbox.clientPrepared", {
+            buildId: prepared.build.buildId,
+            transformAbi: TOOLBOX_TRANSFORM_ABI,
+          });
+          return { wasmPath: prepared.wasmPath, build: prepared.build };
+        }
+        log("wasm", "info", "toolbox.unsupportedBuild");
       } catch (error) {
-        gauge("wasm.templateSaveCompatible", false);
-        log("wasm", "warn", "wasm.templateSavePrepareFailed", {
-          code:
-            error instanceof Error && "code" in error
-              ? String(error.code)
-              : "transform_failed",
+        log("wasm", "warn", "toolbox.prepareFailed", {
+          code: transformFailureCode(error),
         });
-        return { wasmPath: officialWasm, build: null };
       }
     }
-    try {
-      const prepared = await prepareToolboxClient(
-        officialWasm,
-        this.options.paths.toolbox,
-      );
-      gauge("toolbox.supportedBuild", prepared.build !== null);
-      gauge("wasm.templateSaveCompatible", prepared.build !== null);
-      log(
-        "wasm",
-        "info",
-        prepared.build ? "toolbox.clientPrepared" : "toolbox.unsupportedBuild",
-        prepared.build
-          ? {
-              buildId: prepared.build.buildId,
-              transformAbi: TOOLBOX_TRANSFORM_ABI,
-            }
-          : {},
-      );
-      return { wasmPath: prepared.wasmPath, build: prepared.build };
-    } catch (error) {
-      gauge("toolbox.supportedBuild", false);
-      log("wasm", "warn", "toolbox.prepareFailed", {
-        code:
-          error instanceof Error && "code" in error
-            ? String(error.code)
-            : "transform_failed",
-      });
-      return { wasmPath: officialWasm, build: null };
-    }
+    gauge("toolbox.supportedBuild", false);
+    return { wasmPath: templateSaveWasm, build: null };
   }
 
   private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {

@@ -77,11 +77,18 @@ export interface KnownToolboxBuild {
   layout: ToolboxLayout;
 }
 
-// Canonical support manifest. Every value is verified against the exact
-// official client hash before a derived module is selected.
+// Canonical support manifest. Every value is verified against the exact input
+// hash before a derived module is selected.
+//
+// The input is the template-save client, not the raw official module: that
+// transform is the floor every launch lands on, and the Toolbox transform is
+// layered on top so opting in never costs template save/load. It only appends
+// functions, so the main-loop index, the free table slot and every data address
+// below are the ones certified against official build 38771
+// (b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483).
 export const TOOLBOX_BUILDS: readonly KnownToolboxBuild[] = Object.freeze([
   Object.freeze({
-    sha256: "b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483",
+    sha256: "68c6e09cec0f6992058a44a5617ca9eac7fab4697be1421943bbf664e6d444f6",
     programId: 1,
     buildId: 38771,
     // ArenaNet's exported browser-driven client loop. The older GWCA

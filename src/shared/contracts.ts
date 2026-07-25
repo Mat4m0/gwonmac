@@ -99,7 +99,8 @@ export interface ClockSyncResponse {
 
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
-  cursorTheme: "system" | "guild-wars" | "guild-wars-2";
+  /** Opt in to the cursor the player's own installed client draws. */
+  nativeCursor: boolean;
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
@@ -109,7 +110,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
-  cursorTheme: "guild-wars",
+  nativeCursor: false,
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,

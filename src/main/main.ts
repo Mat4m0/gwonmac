@@ -37,7 +37,10 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { gamePaths } from "./paths.js";
-import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
+import {
+  TOOLBOX_AUTOMATION_ENABLED,
+  toolboxEnabledFor,
+} from "./toolbox-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,
@@ -45,6 +48,7 @@ import {
   flushWindowState,
   getMainWindow,
   prepareWindowState,
+  rendererUrl,
   resetGameInput,
   type WindowHost,
   updateLongRunningTaskFeedback,
@@ -64,6 +68,9 @@ wireLifecycle();
 
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 let settingsWrite: Promise<void> = Promise.resolve();
+// Read once at startup: it selects the WASM main this launch serves, so a later
+// settings change only takes effect the next time the game starts.
+let nativeCursorEnabled = false;
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   const operation = settingsWrite.then(async () => {
@@ -202,6 +209,7 @@ async function applyPendingGameStorageClear(): Promise<void> {
 function buildWindowHost(): WindowHost {
   return {
     sockets,
+    nativeCursor: nativeCursorEnabled,
     getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
@@ -214,7 +222,7 @@ function buildWindowHost(): WindowHost {
     stopCapture: stopDiagnosticCapture,
     reloadGame: (win) => {
       sockets.closeAll(win.webContents.id);
-      void win.loadURL("gw://app/");
+      void win.loadURL(rendererUrl({ nativeCursor: nativeCursorEnabled }));
     },
     prepareRendererRecovery: async () => {
       await clientRuntime.recoverRendererCrash();
@@ -245,7 +253,7 @@ app.whenReady().then(async () => {
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
   log("app", "info", "electron.ready");
-  await loadSettings(gamePaths().settings, async (backupPath) => {
+  const settings = await loadSettings(gamePaths().settings, async (backupPath) => {
     log("settings", "error", "settings.corruptRecovered", {
       backup: path.basename(backupPath),
     });
@@ -257,6 +265,7 @@ app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
+  nativeCursorEnabled = settings.nativeCursor;
   await prepareWindowState();
   const paths = gamePaths();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
@@ -268,7 +277,7 @@ app.whenReady().then(async () => {
     hostVersion: app.getVersion(),
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
-    toolboxEnabled: TOOLBOX_AUTOMATION_ENABLED,
+    toolboxEnabled: toolboxEnabledFor(settings),
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });

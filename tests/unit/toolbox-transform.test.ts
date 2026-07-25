@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   toolboxLayoutWords,
+  TOOLBOX_BUILDS,
   type KnownToolboxBuild,
 } from "../../src/main/core/toolbox-builds.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
 import {
   inspectToolboxCandidate,
   TOOLBOX_HOOK_EXPORT,
@@ -142,5 +144,22 @@ describe("targeted Toolbox WebAssembly transform", () => {
       () => transformToolboxWasm(input, { ...manifest(input), hookParams: ["i64"] }),
       /signature/,
     );
+  });
+});
+
+describe("Toolbox client chain", () => {
+  it("certifies the Toolbox transform against the template-save output", () => {
+    // The Toolbox transform is layered on the template-save client so opting
+    // into the game cursor never costs template save/load. If either manifest
+    // is recertified without the other, this pairing is what breaks first.
+    for (const build of TOOLBOX_BUILDS) {
+      const source = TEMPLATE_SAVE_BUILDS.find(
+        (candidate) => candidate.outputSha256 === build.sha256,
+      );
+      assert.ok(
+        source,
+        `Toolbox build ${build.buildId} does not consume any template-save output`,
+      );
+    }
   });
 });

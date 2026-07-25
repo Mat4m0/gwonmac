@@ -5,7 +5,7 @@ import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 test.describe("settings experience", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
-  test("explains render cost and switches cursor themes immediately", async () => {
+  test("explains render cost and records the game-cursor opt-in", async () => {
     const fixture = await launchOffline("gw-settings-e2e-");
     try {
       const { page } = fixture;
@@ -62,25 +62,25 @@ test.describe("settings experience", () => {
         )
         .toBe(true);
       await page.locator("#settings-tab-controls").click();
-      await page
-        .locator('select[name="cursorTheme"]')
-        .selectOption("guild-wars-2");
+      await page.locator('input[name="nativeCursor"]').check();
       await expect
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
           renderScale: 1.5,
-          cursorTheme: "guild-wars-2",
+          nativeCursor: true,
           showDiagnostics: true,
         });
-      await expect(page.locator("html")).toHaveAttribute(
-        "data-cursor-theme",
-        "guild-wars-2",
+      // The flag picks the WASM main at launch and Reload Game reuses it, so
+      // the confirmation must point at reopening the app, not at the game.
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "Saved. The cursor changes the next time you open this app.",
       );
+      // Nothing about the running session's cursor may change.
       expect(
-        await page.locator("#settings-cursor-preview").evaluate((preview) =>
-          globalThis.getComputedStyle(preview).cursor,
+        await page.locator("#canvas").evaluate((canvas) =>
+          globalThis.getComputedStyle(canvas).cursor,
         ),
-      ).toContain("guild-wars-2.png");
+      ).toBe("auto");
 
       await page.locator("#settings-done").click();
       await page.evaluate(() =>
@@ -95,30 +95,34 @@ test.describe("settings experience", () => {
     }
   });
 
-  test("labels the native cursor honestly and defaults to Guild Wars", async () => {
+  test("labels the game cursor honestly and leaves it off by default", async () => {
     const fixture = await launchOffline("gw-cursor-default-e2e-");
     try {
       const { page } = fixture;
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
-        cursorTheme: "guild-wars",
+        nativeCursor: false,
       });
       await page.evaluate(() =>
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
       await page.locator("#settings-tab-controls").click();
-      await expect(
-        page.locator('select[name="cursorTheme"] option[value="system"]'),
-      ).toHaveText("macOS Default");
-      await page.locator('select[name="cursorTheme"]').selectOption("system");
-      await expect(page.locator("html")).toHaveAttribute(
-        "data-cursor-theme",
-        "system",
-      );
+      await expect(page.locator('input[name="nativeCursor"]')).not.toBeChecked();
+
+      // The note has to say where the artwork comes from and when it applies;
+      // nothing is bundled, so an unchecked box is the plain macOS pointer.
+      const controls = page.locator("#settings-pane-controls");
+      await expect(controls).toContainText("your own installed Guild Wars");
+      await expect(controls).toContainText("no artwork ships with this app");
+      await expect(controls).toContainText("next time you open this app");
       expect(
         await page.locator("#canvas").evaluate((canvas) =>
           globalThis.getComputedStyle(canvas).cursor,
         ),
-      ).toBe("default");
+      ).toBe("auto");
+      // The Toolbox stays out of an opted-out renderer entirely.
+      expect(
+        await page.evaluate(() => globalThis.location.search),
+      ).not.toContain("native-cursor");
     } finally {
       await closeOffline(fixture);
     }
@@ -175,23 +179,17 @@ test.describe("settings experience", () => {
         });
       });
 
-      await page
-        .locator('select[name="cursorTheme"]')
-        .selectOption("guild-wars-2");
+      // Not check(): the rollback unticks the box, which check() reads as a
+      // failed click. Clicking is what a player does, and the tick is undone.
+      await page.locator('input[name="nativeCursor"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
         "Settings could not be saved.",
       );
-      await expect(
-        page.locator('select[name="cursorTheme"]'),
-      ).toHaveValue("guild-wars");
-      await expect(page.locator("#settings-cursor-preview")).toHaveAttribute(
-        "data-cursor-theme",
-        "guild-wars",
-      );
-      await expect(page.locator("html")).toHaveAttribute(
-        "data-cursor-theme",
-        "guild-wars",
-      );
+      // A failed write must not leave a tick the main process never accepted.
+      await expect(page.locator('input[name="nativeCursor"]')).not.toBeChecked();
+      expect(
+        await page.evaluate(() => window.gwNative.settings.get()),
+      ).toMatchObject({ nativeCursor: false });
     } finally {
       await closeOffline(fixture);
     }
