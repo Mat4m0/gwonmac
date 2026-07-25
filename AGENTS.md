@@ -62,6 +62,11 @@ not only happy paths.
 - `dataStrategy` is the only launcher-intent state. The renderer resolves it
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.
+- Progress `phase: "ready"` means the main process has an active client, and
+  only `ClientRuntime.clientReady` may publish it. `PatchClient` reports
+  download progress and nothing else — its `emit` signature excludes `"ready"`.
+  A premature ready lets the renderer read snapshot metadata before a client
+  exists, receive size 0, and silently stream the whole game over the network.
 - Concurrent chunk reads share one promise per content hash.
 - Renderer and native download schedulers cap ArenaNet concurrency at eight.
   Demand work outranks queued prefetch; do not raise the ceiling.
