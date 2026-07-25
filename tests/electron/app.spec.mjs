@@ -44,6 +44,9 @@ test.describe("Electron application", () => {
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
+      // The socket host arrives behind a dynamic import, so it is not present
+      // at domcontentloaded. Wait for the capability instead of racing it.
+      await page.waitForFunction(() => window.Module?.socket !== undefined);
       await page.evaluate(async () => {
         const sock = window.Module.socket.connect("127.0.0.1:6112");
         await new Promise((resolve, reject) => {

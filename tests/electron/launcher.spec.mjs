@@ -98,6 +98,12 @@ test.describe("launcher recovery", () => {
           );
         });
       }, size);
+      // The first boot may still be resolving its data strategy when the
+      // handler above is installed, and its call would otherwise be counted
+      // alongside the reload's. Only the reload is under test.
+      await app.evaluate(() => {
+        globalThis.__fullGameVerificationCalls = 0;
+      });
       await page.reload();
 
       await expect(page.locator("#data-download")).toBeVisible();
