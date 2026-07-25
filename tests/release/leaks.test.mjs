@@ -301,6 +301,7 @@ test("release workflow publishes one tested, attested package version", () => {
     workflow.indexOf("actions/dependency-review-action@") <
       workflow.indexOf("pnpm install --frozen-lockfile"),
   );
+  assert.match(workflow, /run: pnpm audit --audit-level=high/);
   const releaseBuild = workflow.slice(
     workflow.indexOf("  release-build:"),
     workflow.indexOf("\n  release:"),
@@ -325,6 +326,19 @@ test("release workflow publishes one tested, attested package version", () => {
     /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$SBOM"/,
   );
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+  const websitePkg = JSON.parse(
+    readFileSync(path.join(root, "apps/website/package.json"), "utf8"),
+  );
+  assert.equal(pkg.dependencies, undefined);
+  assert.equal(websitePkg.dependencies, undefined);
+  const workspace = readFileSync(
+    path.join(root, "pnpm-workspace.yaml"),
+    "utf8",
+  );
+  assert.match(
+    workspace,
+    /auditConfig:\n {2}ignoreGhsas:\n {4}- GHSA-mh99-v99m-4gvg\n$/,
+  );
   assert.match(pkg.scripts.make, /scripts\/clean-output\.mjs/);
   assert.match(pkg.scripts.package, /scripts\/clean-output\.mjs/);
   assert.match(

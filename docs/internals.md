@@ -381,3 +381,14 @@ Toolbox development uses the layered, cached-safe workflow in
 `docs/toolbox-development.md`. Unknown client hashes always use the official
 WASM unchanged, and a live Toolbox run cannot update the client unless update
 permission is explicit.
+
+The dependency audit has one explicit exception for
+`GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
+reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and
+upstream published the memory-bound fix only for the API-incompatible 5.x
+line. The compatible 5.x edge is pinned to 5.0.8. No game, renderer, preload,
+main-process runtime, or packaged dependency accepts these development glob
+patterns. A release invariant forbids production dependencies in either
+workspace package while the exception exists, preventing it from masking a
+shipped vulnerable edge. Remove the exception as soon as the upstream parents
+adopt patched compatible dependencies.
