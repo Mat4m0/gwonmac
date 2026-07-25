@@ -1,6 +1,34 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 
+// P0.2 — each boundary is one regular expression, so every spelling that
+// resolves across it is rejected rather than only the shortest one:
+// `../paths.js`, `../../main/paths.js` and `../../../src/main/paths.js` all
+// name the same file. `no-restricted-imports` sees static imports and
+// `export ... from`; `no-restricted-syntax` covers dynamic `import()` and
+// `require()`, which that rule does not see.
+
+// Leaving src/main/core: a bare upward file, two or more levels up unless the
+// target is src/shared, or any spelling that names src/main. src/main/core has
+// no subdirectories today; if one is added, `../sibling.js` inside it trips the
+// first alternative. Widen this deliberately then — never disable it.
+const OUT_OF_CORE = String.raw`^\.\./[^/]+$|^(?!(?:\.\./)+shared/)(?:\.\./){2,}|(?:^|/)(?:\.\.|src)/main/`;
+const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
+const INTO_APP = String.raw`(?:^|/)(?:\.\.|src)/(?:main|renderer|preload)/`;
+const ELECTRON = String.raw`^electron(/|$)`;
+
+/** esquery reads `/.../` inside an attribute value, so its slashes need escaping. */
+const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
+const dynamicImport = (pattern) => `ImportExpression[source.value=${selectorRegex(pattern)}]`;
+
+const NO_ELECTRON =
+  "src/main/core/** must stay Electron-free. Keep Electron behind src/main/*.ts.";
+const NO_UPWARD =
+  "src/main/core/** must not import upward out of src/main/core. Invert the dependency.";
+const NO_MAIN_FROM_RENDERER =
+  "src/renderer/** must not import from src/main/**. Cross the boundary through the preload bridge or src/shared/**.";
+const WEBSITE_SHARED_ONLY = "apps/website/** may only reach into src/shared/**.";
+
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
@@ -34,86 +62,55 @@ export default tseslint.config(
         "error",
         {
           patterns: [
-            {
-              group: ["electron", "electron/*"],
-              message:
-                "src/main/core/** must stay Electron-free. Keep Electron behind src/main/*.ts.",
-            },
-            {
-              group: ["../*.js"],
-              message:
-                "src/main/core/** must not import upward from src/main/*.ts. Invert the dependency.",
-            },
+            { regex: ELECTRON, message: NO_ELECTRON },
+            { regex: OUT_OF_CORE, message: NO_UPWARD },
           ],
         },
       ],
-      // no-restricted-imports does not see dynamic import().
       "no-restricted-syntax": [
         "error",
+        { selector: dynamicImport(ELECTRON), message: NO_ELECTRON },
         {
-          selector: "ImportExpression[source.value=/^electron(\\/|$)/]",
-          message:
-            "src/main/core/** must stay Electron-free. Keep Electron behind src/main/*.ts.",
+          selector: `CallExpression[callee.name="require"][arguments.0.value=${selectorRegex(ELECTRON)}]`,
+          message: NO_ELECTRON,
         },
         {
-          selector: "ImportExpression[source.value=/^\\.\\.\\/[^/]+\\.js$/]",
-          message:
-            "src/main/core/** must not import upward from src/main/*.ts. Invert the dependency.",
+          selector: `CallExpression[callee.callee.name="createRequire"][arguments.0.value=${selectorRegex(ELECTRON)}]`,
+          message: NO_ELECTRON,
         },
+        { selector: dynamicImport(OUT_OF_CORE), message: NO_UPWARD },
       ],
     },
   },
   {
     // P0.2 — the renderer owns presentation and the game host; it never reaches
-    // into the main process.
-    files: ["src/renderer/**/*.js"],
+    // into the main process. Every renderer source extension, not only .js:
+    // src/renderer/gw-native.d.ts is a real tracked file.
+    files: ["src/renderer/**/*.{js,mjs,cjs,ts}"],
     rules: {
       "no-restricted-imports": [
         "error",
-        {
-          patterns: [
-            {
-              group: ["../main/**", "**/src/main/**"],
-              message:
-                "src/renderer/** must not import from src/main/**. Cross the boundary through the preload bridge or src/shared/**.",
-            },
-          ],
-        },
+        { patterns: [{ regex: INTO_MAIN, message: NO_MAIN_FROM_RENDERER }] },
       ],
       "no-restricted-syntax": [
         "error",
-        {
-          selector:
-            "ImportExpression[source.value=/(^\\.\\.\\/main\\/|src\\/main\\/)/]",
-          message:
-            "src/renderer/** must not import from src/main/**. Cross the boundary through the preload bridge or src/shared/**.",
-        },
+        { selector: dynamicImport(INTO_MAIN), message: NO_MAIN_FROM_RENDERER },
       ],
     },
   },
   {
     // P0.2 — the website may read canonical contracts, never main-process code.
+    // The nine .vue SFCs are outside every ESLint config (P0.3 deferred the Vue
+    // parser); tests/policy/import-boundaries.test.mjs scans them instead.
     files: ["apps/website/**/*.{js,mjs,ts}"],
     rules: {
       "no-restricted-imports": [
         "error",
-        {
-          patterns: [
-            {
-              group: ["**/src/main/**", "**/src/renderer/**", "**/src/preload/**"],
-              message:
-                "apps/website/** may only reach into src/shared/**.",
-            },
-          ],
-        },
+        { patterns: [{ regex: INTO_APP, message: WEBSITE_SHARED_ONLY }] },
       ],
       "no-restricted-syntax": [
         "error",
-        {
-          selector:
-            "ImportExpression[source.value=/src\\/(main|renderer|preload)\\//]",
-          message: "apps/website/** may only reach into src/shared/**.",
-        },
+        { selector: dynamicImport(INTO_APP), message: WEBSITE_SHARED_ONLY },
       ],
     },
   },

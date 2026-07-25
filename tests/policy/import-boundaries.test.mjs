@@ -1,6 +1,13 @@
 // Architecture policy, executed rather than asserted about: run the
 // repository's real ESLint config over source that crosses each boundary
-// eslint.config.js pins, and check the crossing is actually rejected.
+// eslint.config.js pins, and check the crossing is actually rejected. Every
+// probe spells the crossing a different way, because one file has more than one
+// name: `../paths.js`, `../../main/paths.js` and `../../../src/main/paths.js`
+// all resolve to src/main/paths.ts.
+//
+// One boundary cannot be executed: the nine apps/website `.vue` SFCs match no
+// ESLint configuration (P0.3 deferred the Vue parser), so the last test scans
+// their text instead and says so in its name.
 //
 // The only override is turning off typescript-eslint's project service, which
 // otherwise refuses a path that has no file behind it. The boundary rules
@@ -8,6 +15,8 @@
 // nothing under test depends on type information — and this keeps the test from
 // writing throwaway files into src/.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,10 +58,34 @@ const REJECTED = [
     source: 'import { app } from "electron/main";\nexport const probe = app;\n',
   },
   {
+    what: "src/main/core requires electron through createRequire",
+    file: "src/main/core/probe.ts",
+    source:
+      'import { createRequire } from "node:module";\nexport const probe = createRequire(import.meta.url)("electron");\n',
+  },
+  {
     what: "src/main/core imports upward from src/main",
     file: "src/main/core/probe.ts",
     source:
       'import { userDataDir } from "../paths.js";\nexport const probe = userDataDir;\n',
+  },
+  {
+    what: "src/main/core imports upward from src/main, spelled through src/main",
+    file: "src/main/core/probe.ts",
+    source:
+      'import { userDataDir } from "../../main/paths.js";\nexport const probe = userDataDir;\n',
+  },
+  {
+    what: "src/main/core imports upward from src/main, spelled from the repository root",
+    file: "src/main/core/probe.ts",
+    source:
+      'import { userDataDir } from "../../../src/main/paths.js";\nexport const probe = userDataDir;\n',
+  },
+  {
+    what: "a subdirectory of src/main/core imports upward from src/main",
+    file: "src/main/core/sub/probe.ts",
+    source:
+      'import { userDataDir } from "../../paths.js";\nexport const probe = userDataDir;\n',
   },
   {
     what: "src/main/core dynamically imports upward from src/main",
@@ -60,8 +93,30 @@ const REJECTED = [
     source: 'export const probe = async () => import("../paths.js");\n',
   },
   {
+    what: "src/main/core dynamically imports upward, spelled through src/main",
+    file: "src/main/core/probe.ts",
+    source: 'export const probe = async () => import("../../main/paths.js");\n',
+  },
+  {
     what: "src/renderer imports src/main",
     file: "src/renderer/probe.js",
+    source:
+      'import { userDataDir } from "../main/paths.js";\nexport const probe = userDataDir;\n',
+  },
+  {
+    what: "a subdirectory of src/renderer imports src/main",
+    file: "src/renderer/sub/probe.js",
+    source:
+      'import { userDataDir } from "../../main/paths.js";\nexport const probe = userDataDir;\n',
+  },
+  {
+    what: "a src/renderer TypeScript declaration imports src/main",
+    file: "src/renderer/probe.d.ts",
+    source: 'import type { UserDataDir } from "../main/paths.js";\nexport type Probe = UserDataDir;\n',
+  },
+  {
+    what: "a src/renderer module imports src/main",
+    file: "src/renderer/probe.mjs",
     source:
       'import { userDataDir } from "../main/paths.js";\nexport const probe = userDataDir;\n',
   },
@@ -98,6 +153,17 @@ const ALLOWED = [
     what: "src/main/core dynamically imports a sibling",
     file: "src/main/core/probe.ts",
     source: 'export const probe = async () => import("./manifest.js");\n',
+  },
+  {
+    what: "a subdirectory of src/main/core imports src/shared",
+    file: "src/main/core/sub/probe.ts",
+    source: 'import { IPC } from "../../../shared/contracts.js";\nexport const probe = IPC;\n',
+  },
+  {
+    what: "src/main/core requires a node builtin through createRequire",
+    file: "src/main/core/probe.ts",
+    source:
+      'import { createRequire } from "node:module";\nexport const probe = createRequire(import.meta.url)("node:fs");\n',
   },
   {
     what: "src/main imports electron",
@@ -142,3 +208,25 @@ for (const probe of ALLOWED) {
     assert.deepEqual(await lint(probe), []);
   });
 }
+
+test("scanned, not linted: no apps/website .vue file names src/main, renderer or preload", () => {
+  // ESLint has no configuration that matches .vue, so this boundary is the one
+  // P0.2 rule a lint rule cannot hold. Reading the text is weaker than running
+  // the rule; it is here so the claim is checked by something rather than
+  // nothing until P0.3's Vue parser decision lands.
+  const sfcs = execFileSync("git", ["ls-files", "--", "apps/website/**/*.vue"], {
+    cwd: root,
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean);
+
+  assert.ok(sfcs.length > 0, "expected the website to still have .vue sources");
+
+  const crossings = sfcs.filter((file) =>
+    /(?:^|["'/])(?:\.\.|src)\/(?:main|renderer|preload)\//m.test(
+      readFileSync(path.join(root, file), "utf8"),
+    ),
+  );
+  assert.deepEqual(crossings, []);
+});
