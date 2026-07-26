@@ -202,9 +202,9 @@ Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 No federated provider is advertised, allowing the client’s username/password
 flow to own the UI. Properly guarded browser, analytics, age-signal, and
-federated-auth namespaces are absent. The two namespaces with defective absence guards
-(`adProvider` and `shop`) are narrow plain objects whose unavailable operations
-reject with the promise shapes expected by the client.
+federated-auth namespaces are absent. The two namespaces with defective
+absence guards (`adProvider` and `shop`) are narrow plain objects whose
+unavailable operations reject with the promise shapes expected by the client.
 
 The renderer owns one persistent game filesystem initialization before the
 official client enters `main()`. It mounts and restores Emscripten IDBFS at
