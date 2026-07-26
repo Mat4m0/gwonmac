@@ -93,21 +93,26 @@ on the first field-cleared transition state. It proves that no stale map,
 player, or target fields survive loading, then requires the exact destination
 map. Other maps fail closed; this is not a general navigation system.
 
-`performance` takes two Level 1 captures and exact animation-frame samples:
-60 seconds with the hook slot disabled, then 60 seconds with the hook enabled.
-It reports p50, p95, p99, maximum frame time, long-frame counts, renderer
-task/script/layout time, JavaScript heap use, and hook calls. It requires at
-least 2,500 frames per phase and fails when both p95 and p99 regress by more
-than 2%, when p95 moves by more than 1 ms, or on a torn snapshot. Requiring
-corroboration from both tail percentiles avoids treating normal outpost
-variance or a single 0.1 ms-quantized scheduling boundary as a Toolbox
-regression.
-The baseline isolates the incremental companion/snapshot-observer cost; it still
-uses the already transformed game module and its disabled dispatcher branch.
-The result also requires zero hook ticks in baseline and at least 2,500 hooked
-ticks, so a disconnected benchmark cannot pass. Task and heap values are
-diagnostic rather than gates because garbage collection and unrelated game
-work can move them between phases.
+`performance` takes two Level 1 captures and exact animation-frame samples: one
+phase with the hook slot disabled, then one with the hook enabled. It reports
+p50, p95, p99, maximum frame time, long-frame counts, renderer
+task/script/layout time, JavaScript heap use, and hook calls.
+
+Its numbers — phase duration, the sample floor per phase, the tail-percentile
+regression limit, and the absolute p95 movement — live with the benchmark that
+enforces them, in the `performance` entry of
+`scripts/toolbox-live/scenarios.mjs`. They are deliberately not repeated here:
+a budget written in two places ends up enforced by one and quoted from the
+other. What belongs here is why the rule has that shape. A regression must be
+corroborated by *both* tail percentiles, so normal outpost variance or a single
+0.1 ms-quantized scheduling boundary is not reported as a Toolbox regression,
+while the absolute p95 limit still catches a real shift that a percentage would
+flatter. The baseline isolates the incremental companion/snapshot-observer
+cost; it still uses the already transformed game module and its disabled
+dispatcher branch. The result also requires zero hook ticks in the baseline
+phase and a full run of hooked ticks, so a disconnected benchmark cannot pass.
+Task and heap values are diagnostic rather than gates, because garbage
+collection and unrelated game work can move them between phases.
 
 The renderer lifecycle surface derives from existing state:
 
@@ -307,7 +312,8 @@ A Toolbox feature is ready when:
 
 - the exact-build evidence is canonical and tested;
 - invalid/loading state cannot publish stale values;
-- the automation observer stays below its renderer-time budget;
+- the automation observer stays below the renderer-time budget in
+  `scripts/toolbox-live/acceptance.mjs`;
 - no raw pointer, packet, or memory slice crosses Electron IPC;
 - cached startup does no transformation or network work;
 - one bounded scenario proves the real semantic change;

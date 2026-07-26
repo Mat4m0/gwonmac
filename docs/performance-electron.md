@@ -5,6 +5,12 @@ application. It records measurements and the conclusions drawn from them.
 Level 2 traces locate causes but are profiler-contaminated. Only clean Level 1
 captures establish improvements.
 
+Every number below is something that was measured, not something that must
+hold. The thresholds a run passes or fails on belong to the code that enforces
+them — `scripts/toolbox-live/scenarios.mjs` for the paired live benchmark and
+`scripts/toolbox-live/acceptance.mjs` for the common gates — so read a figure
+here as history, and change a budget there.
+
 ## Baseline environment
 
 Recorded July 23, 2026:
