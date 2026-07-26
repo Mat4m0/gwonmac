@@ -63,9 +63,11 @@ mid-download with _Play Now Instead_.
   file. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
   encryption, so software running as your macOS user could recover it. Leave
   Remember Password off if that tradeoff isn't acceptable.
-- The app checks the GitHub releases feed once per launch and shows a link when
-  a newer version exists. It never downloads or installs anything by itself,
-  and development builds skip the check entirely.
+- **The app does not poll for updates.** It asks GitHub whether a newer release
+  exists when you press **Check for Updates**, and otherwise only if you switch
+  on the automatic check — which is off by default. Updating is manual: the app
+  never downloads or installs anything by itself. See
+  [Updates](docs/user-guide.md#updates).
 
 Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 

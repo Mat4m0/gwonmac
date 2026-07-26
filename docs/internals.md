@@ -111,6 +111,47 @@ Dock shows determinate or indeterminate progress and
 `prevent-app-suspension` remains active until the download completes, pauses,
 or fails. There is no renderer-owned download or power state.
 
+## This app's own release check
+
+Replacing the application is manual and always has been. What is new is that
+the app no longer asks GitHub anything on its own initiative.
+
+`src/main/release-notice.ts` is the only code that contacts
+`api.github.com/repos/<repo>/releases/latest`, and it has exactly three
+callers: the manual **Check for Updates** action, the **Check now** button on
+the client-compatibility notice, and one launch-time check that runs only while
+`AppSettings.autoCheckUpdates` is on. That setting defaults to `false` and
+governs every automatic request without exception, the compatibility path
+included, so a default launch reaches github.com zero times. There is no
+per-launch poll and no background timer.
+
+`checkForNewerRelease(currentVersion)` takes the running version as an argument
+instead of calling `app.getVersion()`, so main keeps the single Electron
+binding and the module is executable in a unit test. It aborts after five
+seconds, coalesces concurrent callers onto one request, and caches for ten
+minutes — answers and rate-limit refusals only, because the correct response to
+"you are offline" is to try again once you are not.
+
+The result is three states and never two: `update-available`, `up-to-date`, or
+`unknown` carrying a reason from a closed vocabulary (`rate-limited`,
+`offline`, `timeout`, `server`, `unreadable`, `unsupported-build`). Both a
+parse failure and a network failure are `unknown`; reporting either as
+"up to date" is the class of quiet lie this path exists to remove, so no
+boolean or tri-state "update status" is exported and each reason has its own
+sentence in `src/renderer/update-action.js`. Every result carries `checkedAt`,
+which the renderer persists as `lastUpdateCheckAt` and renders as
+"Last checked". The launcher and the settings dialog mount the same controller,
+so the two surfaces cannot come to disagree.
+
+No string from the API response crosses IPC: the renderer can only open the
+closed `ExternalLinkKind` vocabulary, so the releases page is opened by name
+and `latestVersion` is re-rendered from the parsed version rather than echoed.
+Parsing, comparison, and the channel policy — a prerelease is only ever offered
+to an install already running a prerelease — live in `src/shared/release.ts`,
+which the website's release resolver imports as well. `docs/user-guide.md`
+owns what the player is told; the numbering itself is
+[Release numbering](release-verification.md#release-numbering).
+
 ## WASM host
 
 `Module` must be declared with `var`; the generated glue redeclares it.
@@ -158,10 +199,8 @@ game prompts again. A later explicit save atomically replaces it.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 No federated provider is advertised, allowing the client’s username/password
-flow to own the UI. The app has no independent update feed;
-application replacements are manual, while the ArenaNet client updater remains
-automatic. Properly guarded browser, analytics, age-signal, and federated-auth
-namespaces are absent. The two namespaces with defective absence guards
+flow to own the UI. Properly guarded browser, analytics, age-signal, and
+federated-auth namespaces are absent. The two namespaces with defective absence guards
 (`adProvider` and `shop`) are narrow plain objects whose unavailable operations
 reject with the promise shapes expected by the client.
 

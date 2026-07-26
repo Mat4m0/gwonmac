@@ -91,8 +91,16 @@ not only happy paths.
 - Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
   and clear browser cookies at startup and quit. The switch prevents OS
   prompts but gives saved login weaker same-user protection than Keychain.
-- The host app has no update-feed client. Application replacement is manual;
-  ArenaNet client updates remain automatic.
+- The app makes no network request the user did not ask for. `autoCheckUpdates`
+  (default `false`) governs **every** automatic release check without
+  exception, including the one on an unrecognised client build; with it off, a
+  launch reaches github.com zero times. `src/main/release-notice.ts` is the
+  only caller of the releases API, its three callers are the manual action, the
+  compatibility notice's button, and that one opt-in launch check, and its
+  result is three states — never a boolean, never "unknown" collapsed into
+  "up to date". Application replacement is manual; ArenaNet client updates
+  remain automatic. `docs/internals.md` owns the mechanism and
+  `docs/user-guide.md` owns what the player is told.
 
 ## Diagnostics and privacy
 

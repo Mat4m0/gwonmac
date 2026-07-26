@@ -185,19 +185,70 @@ the bug form’s privacy notice as well.
 - The first unexpected renderer crash is recovered automatically. If it
   repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
 
-## Updates and local data
+## Updates
 
-The host app has no update-feed client. Replace it manually with a newer source
-or release build. ArenaNet client files still update automatically.
+Updating this app is manual. Download a newer release, replace
+`Guild Wars.app`, and your settings, saved login, and downloaded game data stay
+where they are. The app never downloads or installs anything by itself.
+ArenaNet's own client files still update automatically; that is the game
+updating, not the app.
+
+The app does not poll for releases. It asks GitHub whether a newer version
+exists only when one of three things happens:
+
+1. You choose **Check for Updates**, on the loading screen or under
+   **Settings → Advanced**.
+2. You choose **Check now** on the notice that appears when the app does not
+   recognize the game client build ArenaNet is currently serving.
+3. The app starts while **Check for app updates automatically** is on. That
+   box is off unless you turn it on; the first-launch screen offers it beside
+   the download-mode question, and **Settings → Advanced** owns it afterwards.
+   It performs one check per launch, and nothing else checks in the background.
+
+While the box is off, the app contacts GitHub only when you press one of those
+two buttons — including on a client build it does not recognize.
+
+A check has three possible answers, and "we could not tell" is never reported
+as good news:
+
+- a newer version exists, with a link to the releases page;
+- you are on the latest version;
+- the check could not be completed, and the message says why — GitHub could not
+  be reached, did not answer within five seconds, refused further requests from
+  your network, returned an error or an unreadable answer, or this build's
+  version is not on the release line.
+
+**Last checked** beside the button records when GitHub was last asked and
+survives a restart, so a failed check cannot be mistaken for a fresh success.
+Repeated presses reuse the last answer for ten minutes instead of sending more
+requests.
+
+## When the client build is not certified
+
+Each ArenaNet client build is certified separately for two things: the repair
+that makes build templates, screenshots, and chat logs work, and Guild Wars'
+own cursors. When ArenaNet ships a build this app has not certified yet, the
+loading screen says so once for that build, names what is affected, and offers
+**Play Guild Wars** as the primary action — the notice explains, it does not
+block you.
+
+Gameplay is unaffected either way: no stat, no timing, and no input path
+changes. Recovery needs a new release of this app; retrying, reinstalling, or
+clearing downloaded game data cannot certify a build. The same status is always
+visible under **Settings → Controls**. An uncertified client build does not mean
+the app is out of date — whether a newer release exists is the separate question
+above, answered by the same **Check now** button on the notice.
 
 The app reads game memory only for **Use the game's own cursor**, which is on
 by default. Clear that box and no Toolbox hook is installed, no companion
 kernel loads, and nothing observes game memory. There is no Toolbox UI either
-way, and nothing the app does sends game input or acts on your behalf. For
-certified ArenaNet build 38,771, the app derives one narrowly patched module
-that connects the client's missing template-directory operation to its
-sandboxed persistent filesystem; the downloaded official artifact is unchanged
-whichever way the box is set.
+way, and nothing the app does sends game input or acts on your behalf. On a
+certified build the app derives one narrowly patched module that connects the
+client's missing file operations to its sandboxed persistent filesystem, which
+is what makes build templates, screenshots, and chat logs work; the downloaded
+official artifact is unchanged whichever way the box is set.
+
+## Local data
 
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually
