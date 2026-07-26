@@ -111,8 +111,6 @@ function buildSocketManager(clientRuntime: ClientRuntime): SocketManager {
     (ownerId, event) => {
       if (event.type === "open") {
         clientRuntime.noteSocketOpen();
-      }
-      if (event.type === "open") {
         logEvent({ k: "socket.open", socketId: event.socketId });
       } else if (event.type === "close") {
         logEvent({
