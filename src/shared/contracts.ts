@@ -162,6 +162,10 @@ export interface AppSettings {
    * Draw the cursor the player's own installed client draws. On by default,
    * so the setting is how a player turns it off; an uncertified build turns
    * it off for them, which is what the compatibility notice explains.
+   *
+   * The first Toolbox tool. `TOOLBOX_TOOLS` in `src/main/toolbox-policy.ts`
+   * lists them and derives "is the Toolbox active" from them; there is no
+   * master switch here for that answer to disagree with.
    */
   nativeCursor: boolean;
   touchMode: "dbltap" | "translate" | "augment" | "off";

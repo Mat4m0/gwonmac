@@ -337,6 +337,11 @@ Module = {
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
     const init = native().init;
+    // Off means off: with every tool off and automation off, this import never
+    // happens, so no toolbox module enters the graph and nothing fetches the
+    // kernel. Each tool arrives as its own init field — there is no master
+    // flag here to disagree with the registry in src/main/toolbox-policy.ts,
+    // which is what chose this launch's module in the first place.
     if (
       (init.toolboxAutomation || init.nativeCursor)
       && gameWasmInstance

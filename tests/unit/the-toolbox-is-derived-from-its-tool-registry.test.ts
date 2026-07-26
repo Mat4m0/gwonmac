@@ -1,0 +1,124 @@
+// P7.4 replaced the single `settings.nativeCursor` read with a tool registry,
+// and the thing worth proving is what was deliberately *not* added: there is no
+// stored `toolboxEnabled` master switch. "Is the Toolbox active" is derived
+// from the tools, so the two cannot disagree — and P7.6's restart is decided by
+// the same registry, so a tool the session cannot honour cannot be saved
+// quietly.
+//
+// This executes the real module. `toolbox-policy.ts` reads `app.isPackaged` at
+// import time, which `node --test` has no Electron to answer, so the loader
+// hook below resolves `electron` to a stub. It reports a *packaged* app, which
+// is the posture that matters: automation is unreachable there, so every answer
+// below comes from the registry and from nothing else.
+import assert from "node:assert/strict";
+import { register } from "node:module";
+import test from "node:test";
+import type {
+  AppSettings,
+  AppSettingsPatch,
+} from "../../src/shared/contracts.ts";
+import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
+
+register(
+  `data:text/javascript,${encodeURIComponent(
+    `export function resolve(specifier, context, next) {
+       if (specifier === "electron") {
+         return {
+           url: "data:text/javascript,export const app = { isPackaged: true };",
+           format: "module",
+           shortCircuit: true,
+         };
+       }
+       return next(specifier, context);
+     }`,
+  )}`,
+);
+
+const {
+  TOOLBOX_AUTOMATION_ENABLED,
+  TOOLBOX_TOOLS,
+  toolboxEnabledFor,
+  toolboxSelectionChanged,
+} = await import("../../src/main/toolbox-policy.ts");
+
+/** The shipped defaults with every registered tool switched off. */
+const allToolsOff = (): AppSettings => {
+  const settings: AppSettings = { ...DEFAULT_SETTINGS };
+  for (const tool of TOOLBOX_TOOLS) settings[tool] = false;
+  return settings;
+};
+
+test("a packaged build cannot reach automation, so the tools decide alone", () => {
+  assert.equal(TOOLBOX_AUTOMATION_ENABLED, false);
+});
+
+test("every tool off means the Toolbox is off, and any tool on turns it on", () => {
+  const off = allToolsOff();
+  assert.equal(toolboxEnabledFor(off), false);
+
+  // Written as a loop over the registry on purpose: a tool added later is
+  // covered by this test the moment it is declared, and a tool that stops
+  // reaching the derivation fails it.
+  for (const tool of TOOLBOX_TOOLS) {
+    assert.equal(toolboxEnabledFor({ ...off, [tool]: true }), true, tool);
+  }
+});
+
+test("no non-tool setting can switch the Toolbox on", () => {
+  // The derivation reads the registry and the registry only. Every other
+  // boolean in AppSettings is somebody else's answer.
+  const off = allToolsOff();
+  const tools = new Set<string>(TOOLBOX_TOOLS);
+  for (const [key, value] of Object.entries(off)) {
+    if (typeof value !== "boolean" || tools.has(key)) continue;
+    assert.equal(toolboxEnabledFor({ ...off, [key]: true }), false, key);
+  }
+  // Including a key that looks like the master switch this design refuses.
+  assert.equal(
+    toolboxEnabledFor({ ...off, toolboxEnabled: true } as AppSettings),
+    false,
+  );
+});
+
+test("the shipped defaults run the Toolbox, and only the cursor does it", () => {
+  assert.equal(toolboxEnabledFor(DEFAULT_SETTINGS), true);
+  assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
+  // Every tool but the cursor defaults off, so a build that adds one does not
+  // silently start doing more on a fresh profile.
+  for (const tool of TOOLBOX_TOOLS) {
+    if (tool === "nativeCursor") continue;
+    assert.equal(DEFAULT_SETTINGS[tool], false, tool);
+  }
+  assert.equal(
+    toolboxEnabledFor({ ...DEFAULT_SETTINGS, nativeCursor: false }),
+    false,
+  );
+});
+
+test("only a write that changes a tool asks the session to restart", () => {
+  const on = DEFAULT_SETTINGS;
+  const patches: [AppSettingsPatch, boolean][] = [
+    [{}, false],
+    // A write that repeats what is already saved is not a change: re-opening
+    // Settings and re-saving must not offer to close the player's game.
+    [{ nativeCursor: true }, false],
+    [{ renderScale: 1 }, false],
+    [{ dataStrategy: "full", autoCheckUpdates: true }, false],
+    [{ nativeCursor: false }, true],
+    [{ renderScale: 1, nativeCursor: false }, true],
+  ];
+  for (const [patch, expected] of patches) {
+    assert.equal(
+      toolboxSelectionChanged(on, patch),
+      expected,
+      JSON.stringify(patch),
+    );
+  }
+
+  // Symmetric: turning a tool back on is just as unreachable for this session.
+  for (const tool of TOOLBOX_TOOLS) {
+    const off = allToolsOff();
+    assert.equal(toolboxSelectionChanged(off, { [tool]: true }), true, tool);
+    assert.equal(toolboxSelectionChanged(off, { [tool]: false }), false, tool);
+  }
+});
