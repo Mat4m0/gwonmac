@@ -20,6 +20,7 @@ import type {
   RendererFrameBatch,
 } from "../shared/diagnostics.js";
 import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
+import { diagnosticFramesPath } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 
 const MAX_FILES = 5;
@@ -304,7 +305,7 @@ export class FlightRecorder {
   async beginCapture(): Promise<void> {
     await this.flush();
     await rm(
-      path.join(gamePaths().diagnostics, `frames-${this.sessionId}.bin`),
+      diagnosticFramesPath(gamePaths().diagnostics, this.sessionId),
       { force: true },
     );
     this.framesReady = false;
@@ -493,9 +494,9 @@ export class FlightRecorder {
     }
     this.writes = this.writes.then(async () => {
       await this.ensureFile();
-      const file = path.join(
+      const file = diagnosticFramesPath(
         gamePaths().diagnostics,
-        `frames-${this.sessionId}.bin`,
+        this.sessionId,
       );
       if (!this.framesReady) {
         const header = Buffer.alloc(16);
@@ -517,10 +518,7 @@ export class FlightRecorder {
 
   framePath(): string | null {
     return this.framesReady
-      ? path.join(
-          gamePaths().diagnostics,
-          `frames-${this.sessionId}.bin`,
-        )
+      ? diagnosticFramesPath(gamePaths().diagnostics, this.sessionId)
       : null;
   }
 

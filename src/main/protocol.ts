@@ -4,6 +4,7 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import type { SnapshotMetadata } from "../shared/contracts.js";
+import { CLIENT_ARTIFACTS } from "./core/access-key.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
   isProxyFetchDestination,
@@ -11,6 +12,7 @@ import {
   resolveProxyHost,
   rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
+import { clientArtifactPath } from "./core/paths.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
 import { count, log, span } from "./diagnostics.js";
@@ -367,16 +369,18 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     });
   }
 
-  const artifactName = ["Gw.jspi.js", "Gw.jspi.wasm", "version.json"].includes(base)
-    ? base
+  const artifactName = CLIENT_ARTIFACTS.includes(
+    base as (typeof CLIENT_ARTIFACTS)[number],
+  )
+    ? (base as (typeof CLIENT_ARTIFACTS)[number])
     : null;
   if (artifactName) {
     const active = deps.getActiveClient();
     const file =
       artifactName === "Gw.jspi.wasm"
         ? active?.wasmPath ??
-          path.join(gamePaths().artifacts, "Gw.jspi.wasm")
-        : path.join(
+          clientArtifactPath(gamePaths().artifacts, "Gw.jspi.wasm")
+        : clientArtifactPath(
             active?.artifactsDir ?? gamePaths().artifacts,
             artifactName,
           );

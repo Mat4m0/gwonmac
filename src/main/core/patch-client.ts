@@ -50,6 +50,11 @@ import {
   type PatchFetch,
 } from "./patch-transport.js";
 import {
+  clientArtifactPath,
+  clientManifestPath,
+  snapshotMetadataPath,
+} from "./paths.js";
+import {
   parsePublishedClientManifest,
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -309,11 +314,11 @@ export class PatchClient {
   ): Promise<boolean> {
     try {
       const metadata = JSON.parse(
-        await readFile(join(this.artifactsDir, "snapshot-metadata.json"), "utf8"),
+        await readFile(snapshotMetadataPath(this.artifactsDir), "utf8"),
       ) as Record<string, unknown>;
       const current = parsePublishedClientManifest(
         JSON.parse(
-          await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+          await readFile(clientManifestPath(this.artifactsDir), "utf8"),
         ),
       );
       const hashes = JSON.stringify(entry.chunkHashes);
@@ -359,7 +364,7 @@ export class PatchClient {
     try {
       const manifest = parsePublishedClientManifest(
         JSON.parse(
-          await readFile(join(this.artifactsDir, "manifest.json"), "utf8"),
+          await readFile(clientManifestPath(this.artifactsDir), "utf8"),
         ),
       );
       return {
@@ -456,12 +461,12 @@ export class PatchClient {
         throw new AppError("manifest_missing", `manifest is missing ${name}`);
       }
       const entry = mf.files[path]!;
-      const current = join(this.artifactsDir, name);
+      const current = clientArtifactPath(this.artifactsDir, name);
       artifacts.push({
         name,
         entry,
         current,
-        staged: join(stage, name),
+        staged: clientArtifactPath(stage, name),
         needsBuild: !(await this.artifactMatches(current, entry, mf.chunkSize)),
       });
     }
@@ -533,12 +538,12 @@ export class PatchClient {
           await this.stageExisting(artifact.current, artifact.staged);
         }
       }
-      await publishSnapshotIndex(join(stage, "snapshot-metadata.json"), {
+      await publishSnapshotIndex(snapshotMetadataPath(stage), {
         size: snapshotEntry.size,
         chunkSize: mf.chunkSize,
         chunkHashes: snapshotEntry.chunkHashes,
       });
-      const stagedManifest = join(stage, "manifest.json");
+      const stagedManifest = clientManifestPath(stage);
       await writeAtomicJson(
         stagedManifest,
         parsePublishedClientManifest({

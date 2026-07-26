@@ -1,5 +1,4 @@
 import { net } from "electron";
-import path from "node:path";
 import type {
   DownloadProgress,
   PrefetchProgress,
@@ -34,6 +33,7 @@ import {
   readBoundedResponse,
   type PatchFetch,
 } from "./core/patch-transport.js";
+import { clientArtifactPath, clientManifestPath } from "./core/paths.js";
 import {
   migrateLegacyPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -196,7 +196,7 @@ export class ClientRuntime {
     wasmPath: string;
     build: PreparedToolboxClient["build"];
   }> {
-    const officialWasm = path.join(
+    const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
       "Gw.jspi.wasm",
     );
@@ -328,13 +328,9 @@ export class ClientRuntime {
     try {
       const removed = await pruneUnreferencedChunks({
         chunksDir: this.options.paths.chunks,
-        currentManifest: path.join(
-          this.options.paths.artifacts,
-          "manifest.json",
-        ),
-        previousManifest: path.join(
+        currentManifest: clientManifestPath(this.options.paths.artifacts),
+        previousManifest: clientManifestPath(
           this.options.paths.previousArtifacts,
-          "manifest.json",
         ),
       });
       if (removed.files > 0) {

@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
-import path from "node:path";
 import { AppError } from "../../shared/errors.js";
 import { CLIENT_ARTIFACTS, HASH_ALGOS, SNAPSHOT } from "./access-key.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { parseContentHash, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
+import { clientArtifactPath, clientManifestPath } from "./paths.js";
 
 export interface PublishedClientArtifact {
   name: (typeof CLIENT_ARTIFACTS)[number];
@@ -198,7 +198,7 @@ async function describeArtifact(
   chunkSize: number,
   hashAlgorithm: "md5" | "sha1" | "sha256",
 ): Promise<PublishedClientArtifact> {
-  const file = await open(path.join(artifactsDir, name), "r");
+  const file = await open(clientArtifactPath(artifactsDir, name), "r");
   try {
     const metadata = await file.stat();
     if (!metadata.isFile() || metadata.size <= 0) {
@@ -228,7 +228,7 @@ async function describeArtifact(
 export async function migrateLegacyPublishedClientManifest(
   artifactsDir: string,
 ): Promise<PublishedClientManifest | null> {
-  const manifestPath = path.join(artifactsDir, "manifest.json");
+  const manifestPath = clientManifestPath(artifactsDir);
   let manifest: PublishedClientManifest;
   try {
     manifest = await readPublishedClientManifest(manifestPath);
@@ -275,7 +275,7 @@ export async function verifyPublishedClientArtifacts(
   for (const artifact of manifest.artifacts) {
     let file;
     try {
-      file = await open(path.join(artifactsDir, artifact.name), "r");
+      file = await open(clientArtifactPath(artifactsDir, artifact.name), "r");
       const metadata = await file.stat();
       if (!metadata.isFile() || metadata.size !== artifact.size) return false;
       for (let index = 0; index < artifact.chunkHashes.length; index++) {
