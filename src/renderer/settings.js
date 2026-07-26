@@ -1017,18 +1017,21 @@
     try {
       const reset = await window.gwNative.settings.reset();
       if (!reset) return;
-      // The reset unticks the cursor box, but this launch keeps the client
-      // module it already chose, so say so rather than let the box and the
-      // screen disagree.
-      const cursorCleared = currentSettings?.nativeCursor === true;
+      // The reset can move the cursor box in either direction — the cursor is
+      // on by default, so resetting restores it as often as it clears it — but
+      // this launch keeps the client module it already chose, so say so rather
+      // than let the box and the screen disagree.
+      const cursorChanged =
+        currentSettings !== null &&
+        currentSettings.nativeCursor !== reset.nativeCursor;
       currentSettings = reset;
       fillForm(reset);
       updateAction?.restore(reset.lastUpdateCheckAt);
       renderSettingsData();
       window.gwApplySettings?.(reset);
-      feedback.textContent = cursorCleared
-        ? 'Launcher settings reset. The download choice and the plain cursor '
-          + 'apply the next time you open this app.'
+      feedback.textContent = cursorChanged
+        ? 'Launcher settings reset. The download choice and the cursor apply '
+          + 'the next time you open this app.'
         : 'Launcher settings reset. The download choice will appear next launch.';
     } catch {
       feedback.textContent = 'Launcher settings could not be reset.';

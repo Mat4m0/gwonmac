@@ -87,15 +87,19 @@ Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
-on release. **Controls** owns **Use the game's own cursor**, which is off by
-default. When it is on, the host reads the cursor Guild Wars itself draws out
-of your own installed client and shows it over the game view; no cursor artwork
-ships with this app and none is downloaded. Turning it on or off takes effect
-the next time you open the application, because it changes which client module
-the launch serves; **Reload Game** reuses the module the launch already chose.
+on release. **Controls** owns **Use the game's own cursor**, which is on by
+default. The host reads the cursor Guild Wars itself draws out of your own
+installed client and shows it over the game view; no cursor artwork ships with
+this app and none is downloaded. To turn it off, open **Settings → Controls**
+and clear that box; **Reset Launcher Settings…** under **Advanced** turns it
+back on along with everything else. Turning it on or off takes effect the next time
+you open the application, because it changes which client module the launch
+serves; **Reload Game** reuses the module the launch already chose.
 When it is off — and whenever the cursor cannot be read, or
 your client build is not one this host has certified — you get the normal macOS
-pointer. The rest of the window always keeps the macOS pointer.
+pointer. That is a cosmetic difference only: nothing about how the game plays
+changes with the box either way. The rest of the window always keeps the macOS
+pointer.
 Touch compatibility and the local performance overlay stay under
 **Advanced**, outside the normal setup path. Settings reopens to the pane most
 recently used during the current session.
@@ -186,13 +190,14 @@ the bug form’s privacy notice as well.
 The host app has no update-feed client. Replace it manually with a newer source
 or release build. ArenaNet client files still update automatically.
 
-The app reads game memory only for **Use the game's own cursor**, and only when
-you turn it on. With it off — the default — no Toolbox hook is installed, no
-companion kernel loads, and nothing observes game memory. There is no Toolbox
-UI either way. For certified ArenaNet build 38,771, the app derives one
-narrowly patched module that connects the client's missing template-directory
-operation to its sandboxed persistent filesystem; the downloaded official
-artifact is unchanged.
+The app reads game memory only for **Use the game's own cursor**, which is on
+by default. Clear that box and no Toolbox hook is installed, no companion
+kernel loads, and nothing observes game memory. There is no Toolbox UI either
+way, and nothing the app does sends game input or acts on your behalf. For
+certified ArenaNet build 38,771, the app derives one narrowly patched module
+that connects the client's missing template-directory operation to its
+sandboxed persistent filesystem; the downloaded official artifact is unchanged
+whichever way the box is set.
 
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually

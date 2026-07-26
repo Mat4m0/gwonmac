@@ -21,7 +21,9 @@ test.describe("sandbox boundary", () => {
       }));
       expect(boundary).toEqual({
         protocol: "gw:",
-        search: "",
+        // The game cursor ships on, so a default launch carries the parameter
+        // renderer-trust allow-lists for it — and nothing else.
+        search: "?native-cursor=1",
         toolboxPresent: false,
         keys: [
           "app",
@@ -98,7 +100,9 @@ test.describe("sandbox boundary", () => {
       GW_TOOLBOX_AUTOMATION: "1",
     });
     try {
-      expect(new URL(fixture.page.url()).search).toBe("?toolbox-automation=1");
+      expect(new URL(fixture.page.url()).search).toBe(
+        "?toolbox-automation=1&native-cursor=1",
+      );
       await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);
@@ -110,7 +114,9 @@ test.describe("sandbox boundary", () => {
       GW_TEMPLATE_FS_TRACE: "1",
     });
     try {
-      expect(new URL(fixture.page.url()).search).toBe("?template-fs-trace=1");
+      expect(new URL(fixture.page.url()).search).toBe(
+        "?native-cursor=1&template-fs-trace=1",
+      );
       await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);

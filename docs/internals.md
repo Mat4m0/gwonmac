@@ -22,7 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
-  opt-in exact-build Toolbox foundation
+  default-on exact-build Toolbox foundation
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -259,17 +259,22 @@ arbitrary-file bridge.
 
 ### Toolbox instrumentation
 
-The official `Gw.jspi.wasm` remains canonical. By default a session applies
-only the certified template-save compatibility transform described above: it
-does no Toolbox transform, fetches no kernel, installs no Toolbox hook, starts
-no snapshot observer, and contains no Toolbox UI. There is no Toolbox UI in any
-session.
+The official `Gw.jspi.wasm` remains canonical. A session with the Toolbox
+switched off applies only the certified template-save compatibility transform
+described above: it does no Toolbox transform, fetches no kernel, installs no
+Toolbox hook, starts no snapshot observer, and contains no Toolbox UI. There is
+no Toolbox UI in any session.
 
 Two gates, and only these two, enable the Toolbox path. `toolbox-policy.ts`
 holds both: `TOOLBOX_AUTOMATION_ENABLED` stays non-packaged and
 `GW_TOOLBOX_AUTOMATION`-gated, and `toolboxEnabledFor(settings)` adds the
-player-facing `nativeCursor` opt-in, which defaults to false. Main reads the
-setting once at startup and passes the result as `ClientRuntime.toolboxEnabled`,
+player-facing `nativeCursor` setting, which defaults to **true** — every
+shipped install runs the derived module, and the setting is how a player turns
+it off. Automation did not move with it: no packaged build can reach that tier
+whatever the environment says, which is what makes "does not send game input or
+act on the player's behalf" a testable claim rather than a promise. Main reads
+the setting once at startup and passes the result as
+`ClientRuntime.toolboxEnabled`,
 because the choice selects which WASM main the launch serves; a change takes
 effect at the next game start. The same value writes the renderer's
 `native-cursor=1` parameter — `toolbox-automation=1` for automation — and

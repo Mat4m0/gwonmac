@@ -124,7 +124,11 @@ export interface ClockSyncResponse {
 
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
-  /** Opt in to the cursor the player's own installed client draws. */
+  /**
+   * Draw the cursor the player's own installed client draws. On by default,
+   * so the setting is how a player turns it off; an uncertified build turns
+   * it off for them, which is what the compatibility notice explains.
+   */
   nativeCursor: boolean;
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
@@ -157,7 +161,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
-  nativeCursor: false,
+  nativeCursor: true,
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,

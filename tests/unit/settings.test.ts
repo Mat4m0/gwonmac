@@ -16,7 +16,9 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
-      nativeCursor: false,
+      // On since P3.34: the game's own cursor is what a Guild Wars player
+      // expects to see, so the setting is how it is switched off.
+      nativeCursor: true,
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
@@ -29,10 +31,14 @@ describe("settings", () => {
     });
   });
 
-  it("keeps the game cursor opt-in and drops the retired theme key", () => {
+  it("gives an alpha profile the game cursor and drops the retired theme key", () => {
     // A profile written before the cursor became a boolean carries
     // `cursorTheme`. It is an unknown field, so it is ignored rather than
     // rejected: nothing else the player chose may be lost with it.
+    //
+    // Such a profile also predates the default flip. It gets the new default
+    // rather than the old one — an alpha install that never expressed a
+    // preference is not an install that said no.
     const got = parseSettings({
       cursorTheme: "guild-wars-2",
       renderScale: 1,
@@ -41,10 +47,10 @@ describe("settings", () => {
       dataStrategy: "full",
     });
     assert.equal("cursorTheme" in got, false);
-    assert.equal(got.nativeCursor, false);
+    assert.equal(got.nativeCursor, true);
     assert.deepEqual(got, {
       renderScale: 1,
-      nativeCursor: false,
+      nativeCursor: true,
       touchMode: "off",
       showDiagnostics: true,
       dataStrategy: "full",
