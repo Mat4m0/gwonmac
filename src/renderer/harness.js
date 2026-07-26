@@ -72,302 +72,39 @@ window.gwApplySettings = (next) => {
   if (inputHost) log('settings applied');
 };
 
-// fileSize() is synchronous, so the size must be known before the glue loads.
-/** @type {number | null} */
-let snapshotSize = null;
-let snapshotChunkSize = 262144;
-/** @type {string[]} */
-let snapshotChunkHashes = [];
-
-// Renderer memory is disposable; native chunk residency lives in the main process.
-const CHUNK_CACHE_MAX = 256 * 1024 * 1024;
-/** @type {Map<number, Uint8Array>} */
-const chunkCache = new Map();
-let chunkCacheBytes = 0;
-
-// Derived from snapshot-metadata residentBits — isCached must stay synchronous.
-/** @type {Set<string>} */
-const residentHashes = new Set();
-/** @param {number} i */
-const hashOf = (i) => snapshotChunkHashes[i] || '';
-
-const stats = {
-  reads: 0,
-  bytes: 0,
-  fromMemory: 0,
-  fromNative: 0,
-  coalesced: 0,
-  evictions: 0,
-  promotions: 0,
-};
-let burstBytes = 0;
-/** @type {number | null} */
-let burstTimer = null;
-let lastSnapshotError = '';
+// image.fileSize() is synchronous, so the snapshot metadata is read over IPC
+// before the glue loads and the source is constructed from it in boot().
+/** @type {import('./image-source.js').ImageSource | null} */
+let imageSource = null;
 let gamepadImportsAvailable = false;
 
-window.gwEvictMemory = () => {
-  const n = chunkCache.size;
-  chunkCache.clear();
-  chunkCacheBytes = 0;
-  return n;
-};
-
-window.gwStats = () => {
-  const s = {
-    reads: stats.reads,
-    readMB: +(stats.bytes / 1048576).toFixed(1),
-    chunksFromMemory: stats.fromMemory,
-    chunksFromNative: stats.fromNative,
-    chunksCoalesced: stats.coalesced,
-    memoryCacheMB: +(chunkCacheBytes / 1048576).toFixed(1),
-    memoryCacheChunks: chunkCache.size,
-    residentHashes: residentHashes.size,
-    gamepadImports: gamepadImportsAvailable,
-  };
-  if (console.table) console.table(s);
-  else console.log(s);
-  return s;
-};
-
-/** @param {number} i */
-function markResident(i) {
-  const h = hashOf(i);
-  if (h) residentHashes.add(h);
-}
-
-/** @param {Uint8Array} bits */
-function applyResidentBits(bits) {
-  if (!bits || !bits.length) return;
-  for (let i = 0; i < snapshotChunkHashes.length; i++) {
-    const byte = bits[i >> 3];
-    if (byte !== undefined && (byte & (1 << (i & 7)))) markResident(i);
-  }
-}
-
 /**
- * @param {number} offset
- * @param {number} size
- * @returns {[number, number]}
- */
-const chunkRange = (offset, size) => [
-  Math.floor(offset / snapshotChunkSize),
-  Math.floor((offset + size - 1) / snapshotChunkSize),
-];
-
-// Re-insert on hit to move the entry to the LRU tail.
-/** @param {number} i */
-function cacheTouch(i) {
-  const buf = chunkCache.get(i);
-  if (buf !== undefined) { chunkCache.delete(i); chunkCache.set(i, buf); }
-  return buf;
-}
-
-/** @param {number} i @param {Uint8Array} buf */
-function cachePut(i, buf) {
-  if (chunkCache.has(i)) return;
-  chunkCache.set(i, buf);
-  chunkCacheBytes += buf.length;
-  while (chunkCacheBytes > CHUNK_CACHE_MAX && chunkCache.size > 1) {
-    const oldest = chunkCache.keys().next().value;
-    if (oldest === undefined) break;
-    const oldestBuffer = chunkCache.get(oldest);
-    if (!oldestBuffer) break;
-    chunkCacheBytes -= oldestBuffer.length;
-    chunkCache.delete(oldest);
-    stats.evictions++;
-    window.gwDiagnostics?.scheduler('eviction');
-  }
-}
-
-const MAX_CHUNK_REQUESTS = 8;
-/**
- * @typedef {{
- *   index: number,
- *   priority: 'demand' | 'prefetch',
- *   state: 'queued' | 'active',
- *   promise: Promise<Uint8Array>,
- *   resolve: (value: Uint8Array) => void,
- *   reject: (reason?: unknown) => void
- * }} ChunkTask
- */
-/** @type {Map<number, ChunkTask>} */
-const inflight = new Map();
-/** @type {ChunkTask[]} */
-const demandQueue = [];
-/** @type {ChunkTask[]} */
-const prefetchQueue = [];
-let activeDemand = 0;
-let activePrefetch = 0;
-let schedulerStopped = false;
-
-window.gwSnapshotState = () => ({
-  memoryCacheBytes: chunkCacheBytes,
-  memoryCacheChunks: chunkCache.size,
-  pendingChunks: inflight.size,
-  activeDemand,
-  activePrefetch,
-  queuedDemand: demandQueue.length,
-  queuedPrefetch: prefetchQueue.length,
-});
-
-/** @param {ChunkTask} task */
-function promote(task) {
-  if (task.priority !== 'prefetch' || task.state !== 'queued') return;
-  const index = prefetchQueue.indexOf(task);
-  if (index < 0) return;
-  prefetchQueue.splice(index, 1);
-  task.priority = 'demand';
-  demandQueue.push(task);
-  stats.promotions++;
-  window.gwDiagnostics?.scheduler('promotion');
-}
-
-function drainChunkQueue() {
-  while (activeDemand + activePrefetch < MAX_CHUNK_REQUESTS) {
-    const task = demandQueue.shift() || prefetchQueue.shift();
-    if (!task) return;
-    if (snapshotSize === null) {
-      task.reject(new Error('snapshot metadata is unavailable'));
-      inflight.delete(task.index);
-      continue;
-    }
-    if (schedulerStopped && task.priority === 'prefetch') {
-      task.reject(new Error('background download stopped'));
-      inflight.delete(task.index);
-      continue;
-    }
-    task.state = 'active';
-    if (task.priority === 'demand') activeDemand++;
-    else activePrefetch++;
-    const start = task.index * snapshotChunkSize;
-    const end = Math.min(start + snapshotChunkSize, snapshotSize) - 1;
-    void fetch(SNAPSHOT_URL, {
-      headers: {
-        Range: `bytes=${start}-${end}`,
-        'X-GW-Priority': task.priority,
-      },
-    }).then(async (res) => {
-      if (!res.ok && res.status !== 206) {
-        const detail = await res.text();
-        throw new Error(detail || `Game data download failed (HTTP ${res.status}).`);
-      }
-      const buf = new Uint8Array(await res.arrayBuffer());
-      cachePut(task.index, buf);
-      markResident(task.index);
-      stats.fromNative++;
-      window.gwDiagnostics?.cache('native');
-      task.resolve(buf);
-    }).catch((error) => {
-      lastSnapshotError = error instanceof Error ? error.message : String(error);
-      task.reject(error);
-    }).finally(() => {
-      inflight.delete(task.index);
-      if (task.priority === 'demand') activeDemand--;
-      else activePrefetch--;
-      drainChunkQueue();
-    });
-  }
-}
-
-addEventListener('beforeunload', () => {
-  schedulerStopped = true;
-  disposeSocketHost();
-  for (const task of prefetchQueue.splice(0)) {
-    inflight.delete(task.index);
-    task.reject(new Error('background download stopped'));
-  }
-});
-
-/**
- * @param {number} i
+ * The one HTTP shape the image source is given: a ranged read of the snapshot,
+ * carrying the priority the main-process scheduler reads.
+ *
+ * @param {number} start
+ * @param {number} length
  * @param {'demand' | 'prefetch'} priority
  * @returns {Promise<Uint8Array>}
  */
-function chunkBytes(i, priority) {
-  const hit = cacheTouch(i);
-  if (hit !== undefined) {
-    stats.fromMemory++;
-    window.gwDiagnostics?.cache('memory');
-    return Promise.resolve(hit);
+async function fetchSnapshotRange(start, length, priority) {
+  const res = await fetch(SNAPSHOT_URL, {
+    headers: {
+      Range: `bytes=${start}-${start + length - 1}`,
+      'X-GW-Priority': priority,
+    },
+  });
+  if (!res.ok && res.status !== 206) {
+    const detail = await res.text();
+    throw new Error(detail || `Game data download failed (HTTP ${res.status}).`);
   }
-
-  const pending = inflight.get(i);
-  if (pending) {
-    stats.coalesced++;
-    window.gwDiagnostics?.cache('coalesced');
-    if (priority === 'demand') promote(pending);
-    return pending.promise;
-  }
-
-  /** @type {(value: Uint8Array) => void} */
-  let resolve = () => {};
-  /** @type {(reason?: unknown) => void} */
-  let reject = () => {};
-  /** @type {Promise<Uint8Array>} */
-  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-  /** @type {ChunkTask} */
-  const task = { index: i, priority, state: 'queued', promise, resolve, reject };
-  inflight.set(i, task);
-  (priority === 'demand' ? demandQueue : prefetchQueue).push(task);
-  drainChunkQueue();
-  return promise;
+  return new Uint8Array(await res.arrayBuffer());
 }
 
-/** @param {number} first @param {number} last */
-async function fetchDemandChunks(first, last) {
-  return Promise.all(
-    Array.from({ length: last - first + 1 }, (_, n) =>
-      chunkBytes(first + n, 'demand')),
-  );
-}
-
-/**
- * @param {number} first
- * @param {number} last
- * @param {((bytes: number) => void) | undefined} progress
- */
-async function fetchPrefetchChunks(first, last, progress) {
-  for (let i = first; i <= last; i++) {
-    const buf = await chunkBytes(i, 'prefetch');
-    if (progress) progress(buf.length);
-  }
-}
-
-/**
- * @param {number} offset
- * @param {number} size
- * @param {(index: number) => Uint8Array | undefined} chunk
- */
-function assembleRange(offset, size, chunk) {
-  const [first, last] = chunkRange(offset, size);
-  if (first === last) {
-    const buf = chunk(first);
-    if (buf === undefined) return null;
-    const start = offset - first * snapshotChunkSize;
-    return buf.subarray(start, start + size);
-  }
-  const out = new Uint8Array(size);
-  let pos = offset, written = 0;
-  while (written < size) {
-    const i = Math.floor(pos / snapshotChunkSize);
-    const buf = chunk(i);
-    if (buf === undefined) return null;
-    const off = pos - i * snapshotChunkSize;
-    const take = Math.min(size - written, buf.length - off);
-    if (take <= 0) return null;
-    out.set(buf.subarray(off, off + take), written);
-    written += take;
-    pos += take;
-  }
-  return out;
-}
-
-// Assemble a byte range from cached chunks; null if any part is missing.
-/** @param {number} offset @param {number} size */
-function readFromCache(offset, size) {
-  return assembleRange(offset, size, cacheTouch);
-}
+addEventListener('beforeunload', () => {
+  imageSource?.stop();
+  disposeSocketHost();
+});
 
 Module = {
   canvas:
@@ -467,105 +204,8 @@ Module = {
   /** @param {string} path */
   locateFile: (path) => path === 'Gw.wasm' ? 'Gw.jspi.wasm' : path,
 
-  image: {
-    _handles: new Map(),
-    _next: 1,
-
-    // Only the snapshot is backed. image is a filesystem over the whole
-    // manifest, so the module asks for other files (ChatFilter.ini among
-    // them); handing back a handle makes fileSize answer 4.2GB for a small ini
-    // and the module aborts allocating for it.
-    /** @param {string} path */
-    open(path) {
-      if (!/(^|[/\\])Gw\.snapshot$/i.test(path)) {
-        log(`image.open ${path} -> 0 (not in the image)`);
-        return 0;
-      }
-      const h = this._next++;
-      this._handles.set(h, { path, url: SNAPSHOT_URL });
-      log('image.open', path, '-> handle', h);
-      return h;
-    },
-
-    // Synchronous by contract, hence the size read at boot.
-    /** @param {number} handle */
-    fileSize(handle) {
-      if (!this._handles.has(handle)) return log('[warn] image.fileSize on unknown handle', handle), 0;
-      if (snapshotSize === null) return log('[warn] image.fileSize but no snapshot size known'), 0;
-      return snapshotSize;
-    },
-
-    /** @param {number} handle */
-    close(handle) {
-      log('image.close', handle);
-      this._handles.delete(handle);
-    },
-
-    /**
-     * @param {number} imageId
-     * @param {number} offset
-     * @param {unknown} _unused
-     * @param {number} buffer
-     * @param {number} bytes
-     */
-    async readAsync(imageId, offset, _unused, buffer, bytes) {
-      if (!this._handles.has(imageId)) throw new Error('bad image handle ' + imageId);
-      const started = performance.now();
-      let data = readFromCache(offset, bytes);
-      const source = data === null ? 'native' : 'memory';
-      if (data === null) {
-        const [first, last] = chunkRange(offset, bytes);
-        const fetched = await fetchDemandChunks(first, last);
-        data = assembleRange(offset, bytes, (index) => fetched[index - first]);
-      }
-      if (data === null || data.length !== bytes) {
-        throw new Error(`image read ${offset}+${bytes}: assembled ${data && data.length}`);
-      }
-      stats.reads++;
-      stats.bytes += bytes;
-
-      // Summarise a burst once it goes quiet for the optional game console.
-      burstBytes += bytes;
-      if (burstTimer !== null) clearTimeout(burstTimer);
-      burstTimer = setTimeout(() => {
-        if (burstBytes > 4 * 1024 * 1024) {
-          log(`image: read ${(burstBytes / 1048576).toFixed(1)}MB (mem ${stats.fromMemory}, ` +
-              `native ${stats.fromNative} chunks)`);
-        }
-        burstBytes = 0;
-      }, 400);
-
-      Module.HEAPU8.set(data, buffer);
-      window.gwDiagnostics?.snapshot((performance.now() - started) * 1000, bytes, source);
-    },
-
-    // Memory plus native residency both count; eviction must not erase native.
-    /**
-     * @param {number} handle
-     * @param {number} offset
-     * @param {number} size
-     */
-    isCached(handle, offset, size) {
-      const [first, last] = chunkRange(offset, size);
-      for (let i = first; i <= last; i++) {
-        if (!chunkCache.has(i) && !residentHashes.has(hashOf(i))) return 0;
-      }
-      return 1;
-    },
-
-    /**
-     * @param {number} handle
-     * @param {number} offset
-     * @param {number} size
-     * @param {(bytes: number) => void} progress
-     */
-    async cacheAsync(handle, offset, size, progress) {
-      const [first, last] = chunkRange(offset, size);
-      await fetchPrefetchChunks(first, last, (n) => {
-        try { progress(n); } catch (e) { log('[cache progress]', e); }
-      });
-    },
-  },
+  // Module.image is assigned in boot(), once the snapshot metadata that
+  // makes fileSize() answerable synchronously has arrived.
 
   dns: {
     /** @param {string} name */
@@ -655,7 +295,7 @@ Module = {
     milestone('snapshot.fatalRead');
     log('[err] module reported a fatal read error');
     window.gwLoading?.fail(
-      lastSnapshotError || 'No cached copy of the required game data is available.',
+      imageSource?.lastError() || 'No cached copy of the required game data is available.',
     );
   },
   /** @param {import('../shared/diagnostics.js').RendererMilestoneFields} info */
@@ -900,14 +540,39 @@ function loadGlue() {
   }
 
   try {
-    const meta = await native().snapshot.metadata();
-    snapshotSize = meta.size;
-    snapshotChunkSize = meta.chunkSize || 262144;
-    snapshotChunkHashes = meta.chunkHashes || [];
-    applyResidentBits(meta.residentBits);
-    log('snapshot:', snapshotSize, 'bytes,', snapshotChunkHashes.length,
-        'chunks of', snapshotChunkSize, `(${residentHashes.size} resident)`);
-    await window.gwResolveDataStrategy(snapshotSize);
+    const [{ createImageSource }, meta] = await Promise.all([
+      import('./image-source.js'),
+      native().snapshot.metadata(),
+    ]);
+    const source = createImageSource({
+      metadata: meta,
+      fetchRange: fetchSnapshotRange,
+      writeBytes: (data, address) => Module.HEAPU8.set(data, address),
+      diagnostics: window.gwDiagnostics,
+      log,
+    });
+    imageSource = source;
+    Module.image = source.image;
+    window.gwEvictMemory = source.evictMemory;
+    window.gwSnapshotState = source.state;
+    window.gwStats = () => {
+      const image = source.stats();
+      const s = {
+        reads: image.reads,
+        readMB: +(image.bytes / 1048576).toFixed(1),
+        chunksFromMemory: image.fromMemory,
+        chunksFromNative: image.fromNative,
+        chunksCoalesced: image.coalesced,
+        memoryCacheMB: +(image.cacheBytes / 1048576).toFixed(1),
+        memoryCacheChunks: image.cacheChunks,
+        residentHashes: image.residentHashes,
+        gamepadImports: gamepadImportsAvailable,
+      };
+      if (console.table) console.table(s);
+      else console.log(s);
+      return s;
+    };
+    await window.gwResolveDataStrategy(meta.size);
   } catch (e) {
     window.gwLoading?.fail('Game data could not be prepared.');
     return log(
