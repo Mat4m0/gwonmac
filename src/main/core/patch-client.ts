@@ -343,6 +343,15 @@ export class PatchClient {
     }
   }
 
+  /**
+   * The installed generation, read now. `valid` is not made redundant by the
+   * pre-swap verification in `update()`: that proves a generation was intact
+   * when it was promoted, while this is what is on disk today. It can differ
+   * because the generation was promoted by an alpha build that had no such
+   * gate, or because the bytes decayed since — the same reason `ChunkStore`
+   * verifies on read. An unverifiable generation must not become a rollback
+   * target, so `update()` keys `candidate` on this.
+   */
   private async publishedGeneration(): Promise<{
     fingerprint: string | null;
     valid: boolean;
