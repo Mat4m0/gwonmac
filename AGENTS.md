@@ -1,9 +1,20 @@
 # AGENTS.md
 
-Context for humans and agents working on this repository. `README.md` is the
-user-facing overview, `docs/user-guide.md` covers operation, and
-`docs/internals.md` is the technical source of truth. `PRODUCT.md` records the
-product register, users, personality, anti-references, and design principles.
+Context for humans and agents working on this repository. Each document owns
+one thing, and the others link to it rather than restating it:
+
+| Document                 | Owns                                                  |
+| ------------------------ | ----------------------------------------------------- |
+| `docs/internals.md`      | current technical behaviour                           |
+| `docs/user-guide.md`     | current user-facing behaviour                         |
+| `internal/upstream/`     | the investigation record, wrong hypotheses included   |
+| `PRODUCT.md`             | who this is for, the first feature, and the non-goals |
+| `README.md`, `AGENTS.md` | the way in; they link, they do not restate            |
+
+This file adds what an agent needs before touching the code: the constraints
+that are load-bearing, the invariants that must not drift, and how to verify a
+change. When it disagrees with the code, the code is right and this file is a
+bug.
 
 ## What this is
 
@@ -190,11 +201,14 @@ focus opt out and say why. The production-network smoke is explicitly opt-in:
 pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
-When an ArenaNet client update lands and build templates stop working, the
-`wasm.templateSaveCompatible` gauge in a `.gwdiag` says so, and
-`pnpm template:recertify` re-derives the certified build entry by shape rather
-than by remembered index. It recovers indices, not semantics —
-`internal/upstream/recertify.md` owns the rest.
+When an ArenaNet client update lands, a build is in one of three states and
+`src/main/client-certification.ts` is the only thing that decides which. The
+`client.buildCertification` gauge in a `.gwdiag` names it —
+`certified`, `template-only` (templates save, the game's cursors do not load),
+or `uncertified` — and `wasm.templateSaveCompatible` is the older boolean
+derived from that same answer. `pnpm template:recertify` re-derives the
+certified build entry by shape rather than by remembered index. It recovers
+indices, not semantics — `internal/upstream/recertify.md` owns the rest.
 
 For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in
 `docs/toolbox-development.md`, and finish with one scoped `toolbox:live`

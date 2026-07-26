@@ -296,6 +296,30 @@ renderer can mount IDBFS, then removes the request. It cannot clear the
 separate native chunk cache or encrypted credential file. There is no native
 arbitrary-file bridge.
 
+### Which of three states a client build is in
+
+The two transforms are chained but keyed by **different** hashes: template-save
+by the official build's hash, Toolbox by the hash of what the template-save
+transform produces. Certification can therefore succeed at step one and fail at
+step two — templates saved, cursors gone — which is the normal intermediate
+during a recertification, because the transform that breaks saving is fixed
+before the one that draws a pointer.
+
+`src/main/client-certification.ts` composes the two lookups into one answer:
+`uncertified`, `template-only`, or `certified`. It is the single owner, and
+every consumer asks it rather than composing the chain again — the launcher
+notice, the settings status, the diagnostics gauges, the weekly canary, and
+`pnpm toolbox:doctor`. A certified build whose template-save transform throws
+is published as `uncertified`, because it is degraded exactly that far.
+
+`ClientRuntime` publishes the state once per activated client as
+`client.buildCertification` in a `.gwdiag`, and the older
+`wasm.templateSaveCompatible` boolean is derived from the same object rather
+than computed separately, so the two cannot disagree. The renderer reads the
+state over `gw:client:session` together with the client hash and whether the
+player asked for the game's cursors; `src/renderer/client-compatibility-notice.js`
+turns it into the sentences both surfaces show.
+
 ### Toolbox instrumentation
 
 The official `Gw.jspi.wasm` remains canonical. A session with the Toolbox
@@ -732,14 +756,29 @@ clock/metrics availability, and capture lifecycle.
 
 The opt-in live smoke exercises the current production client from a fresh
 profile: JSPI must initialize, hardware acceleration must be active, snapshot
-reads must complete, render scaling must change the real drawing buffer, and a
-frame must be submitted. A weekly macOS GitHub Actions canary runs this same
-test and records the client fingerprint and renderer in the workflow summary.
-Failures do not rewrite or hook ArenaNet binaries; they identify a host/client
-compatibility change for investigation. The canary does not prove:
+reads must complete, the host filesystem must serve the client's template
+operations across a relaunch, render scaling must change the real drawing
+buffer, and a frame must be submitted. Each block is a named step, so a red
+canary names the claim that broke. It also requires that the build ArenaNet is
+currently serving is one this app has **certified**: `template-only` fails too,
+because templates still saving with the cursors gone is a shipped regression,
+not a pass. The module's sha256 is printed above every assertion, since a red
+canary is exactly when someone needs that hash to recertify.
+
+A weekly macOS GitHub Actions canary runs this same test and records the client
+fingerprint and renderer in the workflow summary. GitHub disables scheduled
+workflows in quiet repositories, so a release build refuses to start when the
+canary last ran more than fourteen days ago or has never run: a green release
+gate behind a canary that stopped running proves nothing. Failures do not
+rewrite or hook ArenaNet binaries; they identify a host/client compatibility
+change for investigation. The canary does not prove:
 
 - a real account completes login;
 - ANGLE/Metal renders the real client correctly on every advertised Mac;
+- that the Toolbox transform still applies cleanly to today's client. The
+  profile it seeds sets `nativeCursor: false`, so the live run exercises the
+  template-save transform and the certification tables but never the Toolbox
+  one — a non-default path since the setting started defaulting to `true`;
 
 Those are explicit live release gates, not assumptions hidden behind unit
 tests.

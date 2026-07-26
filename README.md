@@ -109,7 +109,7 @@ under `apps/`.
 
 | Path            | Contents                                                          |
 | --------------- | ----------------------------------------------------------------- |
-| `src/main/`     | Main process: updater, cache, sockets, IPC, windows, diagnostics  |
+| `src/main/`     | Main process: client updater, cache, sockets, IPC, windows, diagnostics |
 | `src/preload/`  | Sandboxed CommonJS preload — the entire native bridge surface     |
 | `src/renderer/` | Launcher chrome, settings, and the game host harness              |
 | `src/shared/`   | Contracts shared by main, preload, renderer, and the website      |
@@ -127,18 +127,13 @@ SBOM, attests that exact ZIP, and publishes those same tested files.
 
 ## Diagnostics
 
-The app keeps a bounded, local-only Level 0 flight recorder: synchronized
-process → renderer → WASM → runtime → first-frame timings and the official
-client build id, rAF and submitted-frame aggregates, presentation cost,
-snapshot/cache/network/disk timing, input-to-next-submit latency, CPU and
-memory, event-loop delay, GPU/JSPI/power/thermal/suspend/crash state, and
-socket lifetimes.
-
-Use **View → Start Performance Capture** for per-frame Level 1 data or **View →
-Start Chromium Trace** for a short Level 2 trace; both stop after 120 seconds
-and offer export. Press **Cmd+Shift+M** when a visible problem occurs — the
-marker records only its timestamp. **Help → Report a Problem…** produces one
-redacted `.gwdiag` file and opens the bug form.
+The app keeps a bounded, local-only flight recorder — startup and frame
+timings, cache/network/disk cost, memory, GPU and power state, socket
+lifetimes — and **Help → Report a Problem…** turns it into one redacted
+`.gwdiag` file that only leaves your machine if you attach it yourself.
+[Report a problem](docs/user-guide.md#report-a-problem) covers which capture to
+record for which symptom; [Internals](docs/internals.md#diagnostics) covers the
+format and exactly what the redaction does and does not guarantee.
 
 Inspect captures without launching the app:
 
@@ -170,12 +165,19 @@ downloaded data.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md) — first launch, download modes, settings,
-  local data, bug reports
-- [Internals](docs/internals.md) — process model, security boundaries,
-  updater/cache design, renderer host surface, diagnostics format
-- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) ·
-  [Product brief](PRODUCT.md)
+Each document owns one thing; this page links rather than repeating them.
+
+- [User guide](docs/user-guide.md) — everything the app does from a player's
+  seat: first launch, download modes, settings, updates, local data, bug
+  reports
+- [Internals](docs/internals.md) — how it does it: process model, security
+  boundaries, client update and cache design, renderer host surface,
+  diagnostics format, and which claims are proved by which test
+- [Verify a release](docs/release-verification.md) — checksums, attestations,
+  and what a version number means
+- [Product brief](PRODUCT.md) — who this is for, what ships next, and what this
+  project will not do
+- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
 
 ## Credits
 
@@ -220,9 +222,9 @@ Loading-screen photography is by
 is QT Friz Quad, © 1992 QualiType, distributed under the SIL Open Font License
 1.1; its license ships with the font.
 
-No cursor artwork ships with this application. The optional game cursor reads
-the bitmap the player's own installed client has already decoded, and never
-redistributes it.
+No cursor artwork ships with this application. The game cursor — on by default,
+switchable off under Settings → Controls — reads the bitmap the player's own
+installed client has already decoded, and never redistributes it.
 
 Source code is GPL-3.0-only — see [LICENSE](LICENSE). Unless an asset carries
 its own license, Guild Wars imagery, screenshots, loading artwork, the
