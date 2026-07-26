@@ -59,7 +59,10 @@ import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./published-client.js";
-import { publishSnapshotIndex } from "./snapshot.js";
+import {
+  publishSnapshotIndex,
+  snapshotIndexFormatReadable,
+} from "./snapshot.js";
 
 export type FetchLike = PatchFetch;
 
@@ -332,6 +335,7 @@ export class PatchClient {
         };
       });
       return (
+        snapshotIndexFormatReadable(metadata.formatVersion) &&
         metadata.size === entry.size &&
         metadata.chunkSize === manifest.chunkSize &&
         JSON.stringify(metadata.chunkHashes) === hashes &&

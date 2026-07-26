@@ -189,6 +189,57 @@ describe("patch-client update", () => {
     assert.equal(existsSync(`${target.artifacts}.previous`), false);
   });
 
+  it("leaves an alpha-published generation installed instead of re-staging it", async () => {
+    const target = await install();
+    const source = fixture(1);
+    await target.client(source).update();
+
+    // Strip both markers, leaving the two documents exactly as v0.0.1-alpha.1
+    // published them. This is the case that matters: the alpha's installed
+    // client must keep running, not be re-staged behind a candidate flag.
+    for (const name of ["manifest.json", "snapshot-metadata.json"]) {
+      const file = join(target.artifacts, name);
+      const { formatVersion, ...bare } = JSON.parse(
+        await readFile(file, "utf8"),
+      ) as Record<string, unknown>;
+      assert.equal(formatVersion, 1, `${name} was published without a marker`);
+      await writeFile(file, JSON.stringify(bare));
+    }
+    const installed = await readFile(join(target.artifacts, "Gw.jspi.js"));
+
+    const result = await target.client(source).update();
+
+    assert.equal(result.published, false, "an alpha generation was re-published");
+    assert.equal(result.candidate, false);
+    assert.equal(existsSync(`${target.artifacts}.previous`), false);
+    assert.deepEqual(await readFile(join(target.artifacts, "Gw.jspi.js")), installed);
+    // Nothing rewrote the bare documents either: read old, write new, and the
+    // write only happens when there is something to publish.
+    assert.equal(
+      "formatVersion" in
+        (JSON.parse(
+          await readFile(join(target.artifacts, "manifest.json"), "utf8"),
+        ) as Record<string, unknown>),
+      false,
+    );
+  });
+
+  it("republishes a snapshot index whose format it cannot read", async () => {
+    const target = await install();
+    const source = fixture(1);
+    await target.client(source).update();
+
+    const file = join(target.artifacts, "snapshot-metadata.json");
+    const index = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+    await writeFile(file, JSON.stringify({ ...index, formatVersion: 2 }));
+
+    const result = await target.client(source).update();
+
+    assert.equal(result.published, true, "an unreadable index was trusted");
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), index);
+    assert.equal(await installedVerifies(target.artifacts), true);
+  });
+
   it("promotes nothing when assembly silently truncates an artifact", async () => {
     const target = await install();
     const source = fixture(1);
