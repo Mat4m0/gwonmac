@@ -146,6 +146,124 @@ export interface RendererMetrics {
   socketSendEvents: number[];
 }
 
+/** Every `RendererMetrics` member that is a plain number, as a type. */
+type NumericMetric = {
+  [K in keyof RendererMetrics]: RendererMetrics[K] extends number ? K : never;
+}[keyof RendererMetrics];
+
+/** Every member that is a latency histogram, as a type. */
+type HistogramMetric = Extract<keyof RendererMetrics, `${string}Histogram`>;
+
+/**
+ * `true` when `Listed` covers `Declared`, and otherwise the names it misses —
+ * so assigning `true` to it fails the build and the error says which member
+ * would have been accepted unchecked.
+ */
+type Covers<Declared extends string, Listed extends string> = [
+  Exclude<Declared, Listed>,
+] extends [never]
+  ? true
+  : Exclude<Declared, Listed>;
+
+/**
+ * The numbers `isRendererMetrics` bounds, listed once. `satisfies` rejects a
+ * name that is not a numeric metric; the assertion below rejects a numeric
+ * metric that is not named here. Before that pair existed, adding a member to
+ * `RendererMetrics` and forgetting this list left it validated by nothing at
+ * all — the predicate still returned `value is RendererMetrics`.
+ */
+const RENDERER_METRIC_NUMBERS = [
+  "intervalMs",
+  "rafCount",
+  "rafTotalUs",
+  "rafMinUs",
+  "rafMaxUs",
+  "rafOver33",
+  "rafOver50",
+  "swapCount",
+  "presentationFailures",
+  "swapTotalUs",
+  "swapMinUs",
+  "swapMaxUs",
+  "submitIntervalCount",
+  "submitIntervalTotalUs",
+  "submitIntervalMinUs",
+  "submitIntervalMaxUs",
+  "visibleSubmitIntervalCount",
+  "visibleSubmitIntervalTotalUs",
+  "visibleSubmitIntervalMinUs",
+  "visibleSubmitIntervalMaxUs",
+  "hiddenSubmitIntervalCount",
+  "hiddenSubmitIntervalTotalUs",
+  "hiddenSubmitIntervalMinUs",
+  "hiddenSubmitIntervalMaxUs",
+  "bitmapOutTotalUs",
+  "bitmapOutMinUs",
+  "bitmapOutMaxUs",
+  "bitmapPresentTotalUs",
+  "bitmapPresentMinUs",
+  "bitmapPresentMaxUs",
+  "snapshotReads",
+  "snapshotBytes",
+  "snapshotTotalUs",
+  "snapshotMinUs",
+  "snapshotMaxUs",
+  "memoryHits",
+  "nativeHits",
+  "coalesced",
+  "glProgramQueryHits",
+  "glProgramQueryMisses",
+  "memoryCacheBytes",
+  "memoryCacheChunks",
+  "pendingChunks",
+  "activeDemand",
+  "activePrefetch",
+  "queuedDemand",
+  "queuedPrefetch",
+  "cacheEvictions",
+  "queuePromotions",
+  "socketSendCalls",
+  "socketPayloadBytes",
+  "socketSourceBackingMaxBytes",
+  "socketCompactBytes",
+  "socketSyncTotalUs",
+  "socketSyncMinUs",
+  "socketSyncMaxUs",
+  "socketSettles",
+  "socketSettleTotalUs",
+  "socketSettleMinUs",
+  "socketSettleMaxUs",
+  "inputToSubmitCount",
+  "inputToSubmitTotalUs",
+  "inputToSubmitMinUs",
+  "inputToSubmitMaxUs",
+  "droppedRecords",
+] as const satisfies readonly NumericMetric[];
+
+/** The histograms it bounds, under the same pair of checks. */
+const RENDERER_METRIC_HISTOGRAMS = [
+  "rafHistogram",
+  "swapHistogram",
+  "submitIntervalHistogram",
+  "visibleSubmitIntervalHistogram",
+  "hiddenSubmitIntervalHistogram",
+  "bitmapOutHistogram",
+  "bitmapPresentHistogram",
+  "snapshotHistogram",
+  "socketSyncHistogram",
+  "socketSettleHistogram",
+  "inputToSubmitHistogram",
+] as const satisfies readonly HistogramMetric[];
+
+const _everyNumberIsBounded: Covers<
+  NumericMetric,
+  (typeof RENDERER_METRIC_NUMBERS)[number]
+> = true;
+const _everyHistogramIsBounded: Covers<
+  HistogramMetric,
+  (typeof RENDERER_METRIC_HISTOGRAMS)[number]
+> = true;
+
 export interface RendererFrameBatch {
   stride: 7;
   data: number[];
@@ -230,97 +348,18 @@ export interface DiagnosticReport {
 export function isRendererMetrics(value: unknown): value is RendererMetrics {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  const numeric = [
-    "intervalMs",
-    "rafCount",
-    "rafTotalUs",
-    "rafMinUs",
-    "rafMaxUs",
-    "rafOver33",
-    "rafOver50",
-    "swapCount",
-    "presentationFailures",
-    "swapTotalUs",
-    "swapMinUs",
-    "swapMaxUs",
-    "submitIntervalCount",
-    "submitIntervalTotalUs",
-    "submitIntervalMinUs",
-    "submitIntervalMaxUs",
-    "visibleSubmitIntervalCount",
-    "visibleSubmitIntervalTotalUs",
-    "visibleSubmitIntervalMinUs",
-    "visibleSubmitIntervalMaxUs",
-    "hiddenSubmitIntervalCount",
-    "hiddenSubmitIntervalTotalUs",
-    "hiddenSubmitIntervalMinUs",
-    "hiddenSubmitIntervalMaxUs",
-    "bitmapOutTotalUs",
-    "bitmapOutMinUs",
-    "bitmapOutMaxUs",
-    "bitmapPresentTotalUs",
-    "bitmapPresentMinUs",
-    "bitmapPresentMaxUs",
-    "snapshotReads",
-    "snapshotBytes",
-    "snapshotTotalUs",
-    "snapshotMinUs",
-    "snapshotMaxUs",
-    "memoryHits",
-    "nativeHits",
-    "coalesced",
-    "glProgramQueryHits",
-    "glProgramQueryMisses",
-    "memoryCacheBytes",
-    "memoryCacheChunks",
-    "pendingChunks",
-    "activeDemand",
-    "activePrefetch",
-    "queuedDemand",
-    "queuedPrefetch",
-    "cacheEvictions",
-    "queuePromotions",
-    "socketSendCalls",
-    "socketPayloadBytes",
-    "socketSourceBackingMaxBytes",
-    "socketCompactBytes",
-    "socketSyncTotalUs",
-    "socketSyncMinUs",
-    "socketSyncMaxUs",
-    "socketSettles",
-    "socketSettleTotalUs",
-    "socketSettleMinUs",
-    "socketSettleMaxUs",
-    "inputToSubmitCount",
-    "inputToSubmitTotalUs",
-    "inputToSubmitMinUs",
-    "inputToSubmitMaxUs",
-    "droppedRecords",
-  ];
   if (
     !(
       typeof record.visible === "boolean" &&
       typeof record.focused === "boolean" &&
-      numeric.every(
+      RENDERER_METRIC_NUMBERS.every(
         (key) =>
           typeof record[key] === "number" &&
           Number.isFinite(record[key]) &&
           (record[key] as number) >= 0 &&
           (record[key] as number) <= Number.MAX_SAFE_INTEGER,
       ) &&
-      [
-        record.rafHistogram,
-        record.swapHistogram,
-        record.submitIntervalHistogram,
-        record.visibleSubmitIntervalHistogram,
-        record.hiddenSubmitIntervalHistogram,
-        record.bitmapOutHistogram,
-        record.bitmapPresentHistogram,
-        record.snapshotHistogram,
-        record.socketSyncHistogram,
-        record.socketSettleHistogram,
-        record.inputToSubmitHistogram,
-      ].every(
+      RENDERER_METRIC_HISTOGRAMS.map((key) => record[key]).every(
         (histogram) =>
           Array.isArray(histogram) &&
           histogram.length === DIAGNOSTIC_BUCKETS_US.length &&
