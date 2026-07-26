@@ -103,7 +103,21 @@ The recorder normalizes every event name to a dot-separated identifier.
 
 Never record or export credentials, account identifiers, packet contents,
 request/response bodies, headers, cookies, crash dumps, or filesystem paths.
-Exports are local, bounded, redacted, mode `0600`, and fail closed.
+Exports are local, bounded, mode `0600`, and fail closed: an event the schema
+cannot account for stops the export instead of being scrubbed on the way out.
+
+The protection is three tiers and only the first is a proof, so say which one
+you mean. `events.jsonl` is **certified**: every recorded event is a member of
+the closed union in `src/main/diagnostics/schema.ts`, a `string` field there
+fails `tsc`, producers record an `ErrorCode` rather than a message, and
+`src/main/diagnostics/detector.ts` matches every declared record field by
+field before anything is written — it imports neither the recorder nor the
+scanner, which is what makes it evidence rather than agreement. What the
+schema has not absorbed yet is **counted**, not hidden: `redaction.openFields`
+in the manifest, which is not zero. The Chromium trace and the documents whose
+leaves come from OS and Chromium APIs are **pattern-scanned** by
+`src/main/diagnostics/text-scan.ts`, which catches a vocabulary and cannot
+promise more. `docs/internals.md` states which tier covers which file.
 
 Level 1 captures prove performance. Level 2 Chromium traces locate causes but
 are profiler-contaminated and do not establish gains.

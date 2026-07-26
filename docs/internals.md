@@ -46,6 +46,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
+| `src/main/diagnostics/`   | closed event schema, export detector, pattern scanner             |
 | `src/preload/preload.cjs` | self-contained sandbox-compatible bridge                          |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
 | `src/toolbox-kernel/`     | freestanding read-only game-state companion WASM                  |
@@ -499,7 +500,6 @@ capture-summary.json         optional, selected Level 1/2 window only
 events.jsonl
 previous-events.jsonl        optional, latest abnormally ended session
 frames.bin                   optional
-histograms.json
 environment.json
 settings-redacted.json
 chromium-trace.json        optional
@@ -531,13 +531,82 @@ promise, so it reports *renderer* stalls, not network latency: a frozen renderer
 cannot run the continuation. `socket.writeCallback` is the main-side write, and
 subtracting the two is what separates TCP backpressure from a renderer stall.
 
-Exports fail closed on credential-shaped content. Trace redaction is a single
-streaming pass with a 64 KB boundary overlap that asserts each chunk is a fixed
-point before writing it; a second read-back would re-run an idempotent
-redaction with a smaller overlap over a file that can reach a quarter of a
-gigabyte, and could not detect anything the first pass missed. Chromium net
-bodies, HTTP headers, account request bodies, TCP payloads, and crash dumps are
-never included. Crashpad is local-only and retains at most three dumps.
+### What the export actually guarantees
+
+The export is `formatVersion` 2 and its protection has three tiers, one per
+kind of text in it. The manifest's `redaction` object states which tier
+covered what, as counts rather than as a verdict; the earlier literal
+`redaction: "passed"` claimed a check that could not fail, because it asked an
+idempotent redactor whether its own output was a fixed point.
+
+**`events.jsonl` is certified against a closed schema.** Every event the main
+process records is a member of the discriminated union in
+`src/main/diagnostics/schema.ts`, and every field of every member is a number,
+a boolean, a member of a declared string enum, or a branded 64-hex digest.
+A field typed `string` fails `tsc` inside the schema file itself, so free text
+is not redacted out of recorded events — it cannot be written in the first
+place. Producers pass a `DiagnosticEvent` to `logEvent`, so a failure records
+an `ErrorCode` from the closed catalogue in `src/shared/errors.ts` where it
+used to record `error.message`; a foreign error's own `code` is an open set we
+do not control and collapses to `unknown` rather than widening ours.
+Before anything is written, `inspectEventLog` in
+`src/main/diagnostics/detector.ts` walks the assembled log and matches each
+declared record against that schema field by field — exactly the declared
+fields, each accepted by the guard for its declared type. A record that does
+not match throws and no export is produced at all. `redaction.records` counts
+every record walked and `redaction.schemaChecked` the subset the schema
+declares and the detector matched. The detector imports neither the recorder
+nor the pattern scanner, which is what makes it evidence: a checker built from
+the redactor's own patterns can only ever agree with the redactor.
+
+**What the schema has not absorbed yet is counted, not hidden.** Spans still
+take open `DiagnosticFields`, and milestones and counters still call `log()`,
+so some records carry strings. `redaction.openFields` is how many string
+values the export contains outside the closed schema, and **it is not zero**
+in a real export. The largest single contributor is
+`security.navigationBlocked` / `security.redirectBlocked` in `window.ts`,
+which publish a full `url`. Those values get the recorder's key-name drop and
+the pattern scan, which is weaker than the schema. The number reaches zero
+when the schema covers those producers; until then it is in the manifest so a
+reader can see the residue instead of being told it does not exist.
+
+**The trace and the un-schema'd documents are pattern-scanned.**
+`chromium-trace.json`, `environment.json`, `summary.json`, `report.json`,
+`settings-redacted.json`, `capture-summary.json` and `manifest.json` carry
+leaves from OS and Chromium APIs, and `previous-events.jsonl` was written by
+whichever build ran last — for anyone upgrading from the alpha, a build whose
+events still had `message` fields, which is why the previous session is
+scanned and never certified. `src/main/diagnostics/text-scan.ts` is the only
+tool that applies to text we did not author: it replaces the home directory,
+bearer tokens, quoted and unquoted values under a sensitive-key vocabulary,
+`file:` URLs, query-string values, email addresses, and absolute paths —
+including a path at index 0, which the previous positive lookbehind required a
+delimiter to see. A Level 2 trace reaches a quarter of a gigabyte, so it is
+scanned in chunks cut immediately after a comma: no rule can match across one,
+and the carry is raw input rather than the scanner's own output, so a value
+straddling a cut is scanned whole rather than half-redacted and half copied.
+`redaction.traceBytesScanned` records how much went through it. This tier is a
+vocabulary, not a proof: it misses anything it has no pattern for, and it
+over-redacts benign keys that contain a sensitive word — the safe direction.
+Numeric values under those keys are left alone so the trace stays valid JSON
+for `pnpm diagnostics:attribute-stalls`.
+
+Some things are excluded by construction rather than by any of the three
+tiers. Renderer console text and exception text never cross IPC; only
+allow-listed failure names and non-text fingerprints do. Chromium net bodies,
+HTTP headers, account request bodies, and TCP payloads are never recorded, so
+they are not in the export to be removed. Crash dumps are never included;
+Crashpad is local-only and retains at most three dumps.
+
+`pnpm diagnostics:validate` re-runs the detector over the `events.jsonl` it
+extracted and refuses to agree with a manifest whose counts it cannot
+reproduce, so a forged or stale manifest fails rather than being read back at
+face value. Format 1 exports — what the public alpha produced — keep one
+explicit legacy read path: they require `histograms.json`, and `"passed"` is
+still the only verdict they can offer, because nothing inside one of them can
+reproduce more.
+
+### Reading a capture
 
 The comparison tool warns about architecture, OS, app version, GPU renderer,
 render scale, canvas size, capture level, visibility, same-session and

@@ -149,10 +149,20 @@ After **Cmd+Shift+M**, it confirms that the problem marker was registered.
 
 The app creates one `.gwdiag` file and can reveal it in Finder. GitHub does not
 accept that extension directly: Control-click the file, choose **Compress**,
-and attach the resulting `.zip`. The export is redacted and excludes
-credentials, account identifiers, packet contents, request/response bodies,
-headers, cookies, filesystem paths, and crash dumps. GitHub issues are public,
-so review the bug form’s privacy notice before attaching it.
+and attach the resulting `.zip`.
+
+Your password, saved login, account name, game traffic, and crash dumps are
+never recorded, so they are not in the export to begin with. The event log the
+report is built from is a closed list: each event carries numbers, flags, and
+short codes, so a failure is recorded as a code rather than as its text, and
+an export that cannot account for one of its own events fails instead of being
+written. Everything else in the file — Chromium's trace, the graphics and
+environment report, your launcher settings — is scanned for passwords, tokens,
+email addresses, and file paths, and those are replaced. That scan recognizes
+known patterns, so treat it as strong rather than absolute; a small number of
+events also still record a blocked web address. The export is an ordinary ZIP
+you can open and read before attaching it. GitHub issues are public, so review
+the bug form’s privacy notice as well.
 
 ## Recovery behavior
 
