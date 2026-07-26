@@ -104,6 +104,75 @@ test.describe("sandbox boundary", () => {
     }
   });
 
+  // P5.18. This was fourteen regular expressions over src/main/window.ts,
+  // src/main/ipc.ts and src/main/protocol.ts in the release suite — a test that
+  // proved those files contained certain characters. Eleven of them are asked
+  // of the running application here instead: the preferences Chromium actually
+  // applied, the guard actually attached, the policy actually served, and a
+  // permission actually refused.
+  //
+  // The three that are not here have no honest form at this boundary and are
+  // named in tests/policy/source-main-process-security-guards.test.mjs.
+  test("the security posture holds on the real window, not only in the source", async () => {
+    const fixture = await launchOffline("gw-security-posture-e2e-");
+    try {
+      const applied = await fixture.app.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        const preferences = win.webContents.getLastWebPreferences();
+        return {
+          nodeIntegration: preferences.nodeIntegration,
+          contextIsolation: preferences.contextIsolation,
+          sandbox: preferences.sandbox,
+          webSecurity: preferences.webSecurity,
+          webviewTag: preferences.webviewTag,
+          allowRunningInsecureContent: preferences.allowRunningInsecureContent,
+          experimentalFeatures: preferences.experimentalFeatures,
+          // Defence in depth behind `webviewTag: false`: even a build that
+          // turned the tag back on would not get a guest attached.
+          webviewGuards: win.webContents.listenerCount("will-attach-webview"),
+        };
+      });
+      expect(applied).toEqual({
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webSecurity: true,
+        webviewTag: false,
+        allowRunningInsecureContent: false,
+        experimentalFeatures: false,
+        webviewGuards: 1,
+      });
+
+      // The policy the renderer is actually served, read out of the response
+      // its own protocol handler produced.
+      const csp = await fixture.page.evaluate(async () => {
+        const response = await window.fetch(globalThis.location.href);
+        return response.headers.get("content-security-policy");
+      });
+      for (const directive of [
+        "frame-src 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'none'",
+        "object-src 'none'",
+        "base-uri 'none'",
+      ]) {
+        expect(csp).toContain(directive);
+      }
+
+      // The permission handler answers `false` to everything that is not
+      // pointer lock for this window's own canonical document. The granting
+      // half is executed against a real lock in tests/electron/input.spec.mjs,
+      // *allows pointer lock only for the owned game canvas*; what a launcher
+      // page can show is the refusal.
+      const notifications = await fixture.page.evaluate(() =>
+        window.Notification.requestPermission(),
+      );
+      expect(notifications).toBe("denied");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("accepts explicit automation without adding production Toolbox UI", async () => {
     const fixture = await launchOffline("gw-toolbox-developer-e2e-", {
       GW_TOOLBOX_AUTOMATION: "1",
