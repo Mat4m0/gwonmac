@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Enhancement developer fixture</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="enhancement" aria-label="Enhancement game state">
+    <header><i aria-hidden="true"></i><span>Enhancement</span></header>
+    <section>
+      <div class="row"><strong>Map 133</strong><em>Outpost</em></div>
+      <small>Agent 12</small>
+      <dl><div><dt>X</dt><dd>−10101.0</dd></div><div><dt>Y</dt><dd>32600.0</dd></div></dl>
+    </section>
+    <section id="target">
+      <div class="row"><b>Agent 1</b><small>Living</small></div>
+      <div class="row distance"><strong>2826</strong><em>Compass</em></div>
+      <dl><div><dt>X</dt><dd>−9595.0</dd></div><div><dt>Y</dt><dd>35380.0</dd></div></dl>
+    </section>
+  </aside>
+  <script>
+    const target = new URL(location.href).searchParams.get("fixture") === "target";
+    document.querySelector("#target").hidden = !target;
+    document.body.dataset.ready = "true";
+  </script>
+</body>
+</html>

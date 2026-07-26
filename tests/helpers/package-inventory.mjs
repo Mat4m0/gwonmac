@@ -5,15 +5,15 @@ import ts from "typescript";
 export const PRELOAD_ENTRY = "/build/preload/preload.cjs";
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
-  "/build/renderer/toolbox-kernel.wasm",
-  "/build/renderer/toolbox.js",
-  "/build/renderer/toolbox-snapshot.js",
-  "/build/renderer/toolbox-cursor.js",
-  "/build/renderer/toolbox-readout.js",
-  "/build/main/core/toolbox-transform.js",
+  "/build/renderer/companion-kernel.wasm",
+  "/build/renderer/enhancements.js",
+  "/build/renderer/companion-snapshot.js",
+  "/build/renderer/enhancement-cursor.js",
+  "/build/renderer/enhancement-readout.js",
+  "/build/main/core/enhancement-transform.js",
   "/build/main/core/client-module.js",
-  "/build/main/core/toolbox-builds.js",
-  "/build/main/toolbox-policy.js",
+  "/build/main/core/enhancement-builds.js",
+  "/build/main/enhancement-policy.js",
   "/build/main/main.js",
   PRELOAD_ENTRY,
   "/build/renderer/index.html",
@@ -24,14 +24,14 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
 export const DEVELOPER_PACKAGE_FILES = Object.freeze([
   "/build/tools/template-save-recert.js",
   "/build/tools/template-save-recertify.js",
-  "/build/tools/toolbox-recertify.js",
-  "/build/tools/toolbox-doctor.js",
-  "/build/tools/toolbox-observations.js",
-  "/build/tools/toolbox-transform.js",
-  "/scripts/toolbox-live.mjs",
-  "/scripts/toolbox-live/scenarios.mjs",
-  "/scripts/toolbox-live/performance.mjs",
-  "/scripts/toolbox-visual.mjs",
+  "/build/tools/enhancement-recertify.js",
+  "/build/tools/enhancement-doctor.js",
+  "/build/tools/enhancement-observations.js",
+  "/build/tools/enhancement-transform.js",
+  "/scripts/enhancements-live.mjs",
+  "/scripts/enhancements-live/scenarios.mjs",
+  "/scripts/enhancements-live/performance.mjs",
+  "/scripts/enhancements-visual.mjs",
 ]);
 
 export function assertRequiredPackageFiles(inventory) {

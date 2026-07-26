@@ -72,8 +72,8 @@ const packagedClosure = relativeEsmClosure({
   inventory: actualPackageFiles,
   readText: asarText,
 });
-assert.ok(packagedClosure.has("/build/main/core/toolbox-builds.js"));
-assert.ok(packagedClosure.has("/build/renderer/toolbox-readout.js"));
+assert.ok(packagedClosure.has("/build/main/core/enhancement-builds.js"));
+assert.ok(packagedClosure.has("/build/renderer/enhancement-readout.js"));
 
 const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",

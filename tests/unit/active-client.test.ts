@@ -24,7 +24,7 @@ function generation(
     store: { size } as ClientGeneration["store"],
     snapshotMeta: snapshot(size),
     wasmPath,
-    toolboxBuild: null,
+    enhancementBuild: null,
   };
 }
 

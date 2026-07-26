@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import {
-  inspectToolboxCache,
+  inspectEnhancementCache,
   prepareClientModule,
   type ClientCertification,
 } from "../../src/main/core/client-module.js";
@@ -21,11 +21,11 @@ import {
   TEMPLATE_SAVE_TRANSFORM_ABI,
   type KnownTemplateSaveBuild,
 } from "../../src/main/core/template-save-compat.js";
-import type { KnownToolboxBuild } from "../../src/main/core/toolbox-builds.js";
+import type { KnownEnhancementBuild } from "../../src/main/core/enhancement-builds.js";
 import {
-  TOOLBOX_HOOK_EXPORT,
-  TOOLBOX_MANIFEST_SECTION,
-} from "../../src/main/core/toolbox-transform.js";
+  ENHANCEMENT_HOOK_EXPORT,
+  ENHANCEMENT_MANIFEST_SECTION,
+} from "../../src/main/core/enhancement-transform.js";
 
 const scratchDirs: string[] = [];
 after(async () => {
@@ -65,7 +65,7 @@ const CALL_OFFSET = 5;
 
 /**
  * One real module that both production transforms accept: a template-save
- * stub/caller plus the exported typed loop and empty table slot Toolbox needs.
+ * stub/caller plus the exported typed loop and empty table slot Enhancement needs.
  */
 function officialFixture(): Uint8Array {
   const types = section(1, [
@@ -140,7 +140,7 @@ function certifyTemplate(input: Uint8Array): KnownTemplateSaveBuild {
   return assert.fail("fixture did not produce a template-save output hash");
 }
 
-function toolboxBuild(inputSha256: string): KnownToolboxBuild {
+function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
   return {
     sha256: inputSha256,
     programId: 1,
@@ -190,16 +190,16 @@ async function fixture() {
   const officialWasmPath = join(root, "official.wasm");
   await writeFile(officialWasmPath, official);
   const templateSaveBuild = certifyTemplate(official);
-  const toolbox = toolboxBuild(templateSaveBuild.outputSha256);
+  const enhancement = enhancementBuild(templateSaveBuild.outputSha256);
   return {
     root,
     official,
     officialWasmPath,
     officialSha256: sha256(official),
     templateSaveBuild,
-    toolboxBuild: toolbox,
+    enhancementBuild: enhancement,
     compatibilityCacheRoot: join(root, "compatibility"),
-    toolboxCacheRoot: join(root, "toolbox"),
+    enhancementCacheRoot: join(root, "enhancement"),
   };
 }
 
@@ -208,15 +208,15 @@ type ModuleFixture = Awaited<ReturnType<typeof fixture>>;
 function options(
   value: ModuleFixture,
   certification: ClientCertification,
-  toolboxRequested: boolean,
+  enhancementRequested: boolean,
 ) {
   return {
     officialWasmPath: value.officialWasmPath,
     officialSha256: value.officialSha256,
     certification,
-    toolboxRequested,
+    enhancementRequested,
     compatibilityCacheRoot: value.compatibilityCacheRoot,
-    toolboxCacheRoot: value.toolboxCacheRoot,
+    enhancementCacheRoot: value.enhancementCacheRoot,
   };
 }
 
@@ -236,7 +236,7 @@ describe("client module preparation", () => {
     const certification: ClientCertification = {
       state: "certified",
       templateSaveBuild: value.templateSaveBuild,
-      toolboxBuild: value.toolboxBuild,
+      enhancementBuild: value.enhancementBuild,
     };
 
     const prepared = await prepareClientModule(
@@ -244,13 +244,13 @@ describe("client module preparation", () => {
     );
 
     assert.equal(prepared.state, "certified");
-    assert.equal(prepared.toolboxBuild, value.toolboxBuild);
+    assert.equal(prepared.enhancementBuild, value.enhancementBuild);
     assert.equal(prepared.failure, null);
     assert.notEqual(prepared.wasmPath, value.officialWasmPath);
     assert.equal(
-      await inspectToolboxCache(
-        value.toolboxBuild,
-        value.toolboxCacheRoot,
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        value.enhancementCacheRoot,
       ),
       "valid",
     );
@@ -259,11 +259,11 @@ describe("client module preparation", () => {
     const module = new WebAssembly.Module(output);
     assert.ok(
       WebAssembly.Module.exports(module).some(
-        (entry) => entry.name === TOOLBOX_HOOK_EXPORT,
+        (entry) => entry.name === ENHANCEMENT_HOOK_EXPORT,
       ),
     );
     assert.equal(
-      WebAssembly.Module.customSections(module, TOOLBOX_MANIFEST_SECTION).length,
+      WebAssembly.Module.customSections(module, ENHANCEMENT_MANIFEST_SECTION).length,
       1,
     );
 
@@ -286,7 +286,7 @@ describe("client module preparation", () => {
 
   it("prepares only templates for a template-only certification", async () => {
     const value = await fixture();
-    await seedCache(value.toolboxCacheRoot);
+    await seedCache(value.enhancementCacheRoot);
 
     const prepared = await prepareClientModule(
       options(
@@ -300,20 +300,20 @@ describe("client module preparation", () => {
     );
 
     assert.equal(prepared.state, "template-only");
-    assert.equal(prepared.toolboxBuild, null);
+    assert.equal(prepared.enhancementBuild, null);
     assert.equal(prepared.failure, null);
     assert.equal(
       sha256(await readFile(prepared.wasmPath)),
       value.templateSaveBuild.outputSha256,
     );
-    await assertMissing(value.toolboxCacheRoot);
+    await assertMissing(value.enhancementCacheRoot);
   });
 
   it("serves official bytes and drops both caches when uncertified", async () => {
     const value = await fixture();
     await Promise.all([
       seedCache(value.compatibilityCacheRoot),
-      seedCache(value.toolboxCacheRoot),
+      seedCache(value.enhancementCacheRoot),
     ]);
 
     const prepared = await prepareClientModule(
@@ -323,18 +323,18 @@ describe("client module preparation", () => {
     assert.deepEqual(prepared, {
       wasmPath: value.officialWasmPath,
       state: "uncertified",
-      toolboxBuild: null,
+      enhancementBuild: null,
       failure: null,
     });
     await Promise.all([
       assertMissing(value.compatibilityCacheRoot),
-      assertMissing(value.toolboxCacheRoot),
+      assertMissing(value.enhancementCacheRoot),
     ]);
   });
 
-  it("drops the Toolbox cache when the certified tool is disabled", async () => {
+  it("drops the Enhancement cache when the certified tool is disabled", async () => {
     const value = await fixture();
-    await seedCache(value.toolboxCacheRoot);
+    await seedCache(value.enhancementCacheRoot);
 
     const prepared = await prepareClientModule(
       options(
@@ -342,25 +342,25 @@ describe("client module preparation", () => {
         {
           state: "certified",
           templateSaveBuild: value.templateSaveBuild,
-          toolboxBuild: value.toolboxBuild,
+          enhancementBuild: value.enhancementBuild,
         },
         false,
       ),
     );
 
     assert.equal(prepared.state, "certified");
-    assert.equal(prepared.toolboxBuild, null);
+    assert.equal(prepared.enhancementBuild, null);
     assert.equal(prepared.failure, null);
     assert.equal(
       sha256(await readFile(prepared.wasmPath)),
       value.templateSaveBuild.outputSha256,
     );
-    await assertMissing(value.toolboxCacheRoot);
+    await assertMissing(value.enhancementCacheRoot);
   });
 
   it("falls back at the failed stage without serving an invalid module", async () => {
     const templateFailure = await fixture();
-    await seedCache(templateFailure.toolboxCacheRoot);
+    await seedCache(templateFailure.enhancementCacheRoot);
     const brokenTemplate = {
       ...templateFailure.templateSaveBuild,
       outputSha256: "0".repeat(64),
@@ -375,39 +375,39 @@ describe("client module preparation", () => {
     assert.equal(afterTemplateFailure.wasmPath, templateFailure.officialWasmPath);
     assert.equal(afterTemplateFailure.state, "uncertified");
     assert.equal(afterTemplateFailure.failure?.stage, "template-save");
-    await assertMissing(templateFailure.toolboxCacheRoot);
+    await assertMissing(templateFailure.enhancementCacheRoot);
 
-    const toolboxFailure = await fixture();
-    const brokenToolbox = {
-      ...toolboxFailure.toolboxBuild,
+    const enhancementFailure = await fixture();
+    const brokenEnhancement = {
+      ...enhancementFailure.enhancementBuild,
       hookFunction: 999,
     };
-    const afterToolboxFailure = await prepareClientModule(
+    const afterEnhancementFailure = await prepareClientModule(
       options(
-        toolboxFailure,
+        enhancementFailure,
         {
           state: "certified",
-          templateSaveBuild: toolboxFailure.templateSaveBuild,
-          toolboxBuild: brokenToolbox,
+          templateSaveBuild: enhancementFailure.templateSaveBuild,
+          enhancementBuild: brokenEnhancement,
         },
         true,
       ),
     );
-    assert.equal(afterToolboxFailure.state, "certified");
-    assert.equal(afterToolboxFailure.toolboxBuild, null);
-    assert.equal(afterToolboxFailure.failure?.stage, "toolbox");
+    assert.equal(afterEnhancementFailure.state, "certified");
+    assert.equal(afterEnhancementFailure.enhancementBuild, null);
+    assert.equal(afterEnhancementFailure.failure?.stage, "enhancement");
     assert.equal(
-      sha256(await readFile(afterToolboxFailure.wasmPath)),
-      toolboxFailure.templateSaveBuild.outputSha256,
+      sha256(await readFile(afterEnhancementFailure.wasmPath)),
+      enhancementFailure.templateSaveBuild.outputSha256,
     );
   });
 
-  it("rebuilds stale compatibility and Toolbox cache entries", async () => {
+  it("rebuilds stale compatibility and Enhancement cache entries", async () => {
     const value = await fixture();
     const certification: ClientCertification = {
       state: "certified",
       templateSaveBuild: value.templateSaveBuild,
-      toolboxBuild: value.toolboxBuild,
+      enhancementBuild: value.enhancementBuild,
     };
     const first = await prepareClientModule(
       options(value, certification, true),
@@ -434,9 +434,9 @@ describe("client module preparation", () => {
     );
     assert.equal(WebAssembly.validate(await readFile(rebuilt.wasmPath)), true);
     assert.equal(
-      await inspectToolboxCache(
-        value.toolboxBuild,
-        value.toolboxCacheRoot,
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        value.enhancementCacheRoot,
       ),
       "valid",
     );

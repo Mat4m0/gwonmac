@@ -10,7 +10,7 @@
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
 // binding the preload may read. The four spliced constants are declared for the
 // type checker in scripts/preload-injected-constants.d.mts.
-/* global IPC, RENDERER_INIT_ARGUMENT, TOOLBOX_TOOLS, WASM_BRIDGE_MARKERS, process */
+/* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -33,7 +33,7 @@ function rendererInit() {
   // `process` is injected into the sandboxed preload's own scope; it is not a
   // property of `globalThis`. Reading it off `globalThis` found nothing, so
   // every launch silently took the production defaults — no game cursor, no
-  // Toolbox automation, no template trace — and only tests/electron could see
+  // Enhancement automation, no template trace — and only tests/electron could see
   // it, because a `vm` fixture's `process` global answers to either spelling.
   const argv = typeof process === "undefined" ? undefined : process.argv;
   const raw = Array.isArray(argv)
@@ -49,23 +49,23 @@ function rendererInit() {
   } catch {
     parsed = {};
   }
-  // The loop below writes every member of `TOOLBOX_TOOLS`, which is exactly the
-  // key set of `ToolboxSelection`; the checker cannot see that a `for…of` over
+  // The loop below writes every member of `ENHANCEMENTS`, which is exactly the
+  // key set of `EnhancementSelection`; the checker cannot see that a `for…of` over
   // the canonical tuple is exhaustive, and listing the tools here to satisfy it
   // would be the second copy the tuple exists to prevent.
-  const toolboxSelection =
-    /** @type {import("../shared/contracts.js").ToolboxSelection} */ ({});
+  const enhancementSelection =
+    /** @type {import("../shared/contracts.js").EnhancementSelection} */ ({});
   /** @type {Record<string, unknown>} */
-  const selected = isRecord(parsed.toolboxSelection)
-    ? parsed.toolboxSelection
+  const selected = isRecord(parsed.enhancementSelection)
+    ? parsed.enhancementSelection
     : {};
-  for (const tool of TOOLBOX_TOOLS) {
-    toolboxSelection[tool] = selected[tool] === true;
+  for (const tool of ENHANCEMENTS) {
+    enhancementSelection[tool] = selected[tool] === true;
   }
-  Object.freeze(toolboxSelection);
+  Object.freeze(enhancementSelection);
   return {
-    toolboxAutomation: parsed.toolboxAutomation === true,
-    toolboxSelection,
+    enhancementAutomation: parsed.enhancementAutomation === true,
+    enhancementSelection,
     templateFsTrace: parsed.templateFsTrace === true,
   };
 }

@@ -9,7 +9,7 @@ import {
   formatBuildEntry,
   inspectTemplateSaveCandidate,
 } from "../../src/tools/template-save-recert.js";
-import { defaultGuildWarsProfile } from "../../src/tools/toolbox-doctor.js";
+import { defaultGuildWarsProfile } from "../../src/tools/enhancement-doctor.js";
 
 function uleb(value: number): number[] {
   const out: number[] = [];

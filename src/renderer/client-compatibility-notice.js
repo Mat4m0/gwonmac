@@ -7,7 +7,7 @@
 
 /** @typedef {import('../shared/contracts.js').ClientCompatibility} ClientCompatibility */
 /** @typedef {import('../shared/contracts.js').ClientSession} ClientSession */
-/** @typedef {import('../shared/contracts.js').ToolboxSelection} ToolboxSelection */
+/** @typedef {import('../shared/contracts.js').EnhancementSelection} EnhancementSelection */
 
 /**
  * The compatibility transform repairs three call-site families, not one.
@@ -38,14 +38,15 @@ const SEPARATION =
  * @property {import('../shared/contracts.js').ClientCompatibilityState} state
  * @property {boolean} degraded Something works worse than in a fully prepared
  *   certified session.
- * @property {boolean} toolboxDegraded The player selected at least one Toolbox
+ * @property {boolean} enhancementDegraded The player selected at least one
+ * GWonMac Tool that is unavailable.
  *   tool and this build cannot provide it.
  * @property {string} summary One line, shown on both surfaces.
  * @property {string[]} details The contract: what is affected, what is not,
  *   and what recovery actually requires.
  */
 
-/** @param {ToolboxSelection} selection */
+/** @param {EnhancementSelection} selection */
 function selectedToolNames(selection) {
   return [
     selection.nativeCursor ? 'game cursor' : '',
@@ -60,33 +61,33 @@ function toolList(names) {
 
 /**
  * @param {ClientCompatibility} compatibility
- * @param {ToolboxSelection} selection
+ * @param {EnhancementSelection} selection
  * @returns {CompatibilityReport}
  */
 export function compatibilityReport(compatibility, selection) {
   const { state } = compatibility;
   const selectedTools = selectedToolNames(selection);
   const requestedTools = toolList(selectedTools);
-  const toolboxAvailable =
-    state === 'certified' && compatibility.toolboxActive;
-  const toolboxDegraded = selectedTools.length > 0 && !toolboxAvailable;
+  const enhancementAvailable =
+    state === 'certified' && compatibility.enhancementActive;
+  const enhancementDegraded = selectedTools.length > 0 && !enhancementAvailable;
 
   if (state === 'uncertified') {
     return {
       state,
       degraded: true,
-      toolboxDegraded,
+      enhancementDegraded,
       summary:
         'This ArenaNet client build has not been certified with this version '
         + 'of the app.',
       details: [
         `The app is using ArenaNet’s untouched module, so ${FEATURES} may not `
           + 'work correctly.',
-        toolboxDegraded
-          ? `Toolbox does not load on an uncertified build, so your ${
+        enhancementDegraded
+          ? `GWonMac Tools do not load on an uncertified build, so your ${
               requestedTools
             } ${selectedTools.length === 1 ? 'is' : 'are'} unavailable for this session.`
-          : 'Toolbox does not load on an uncertified build. The game cursor '
+          : 'GWonMac Tools do not load on an uncertified build. The game cursor '
             + 'and target readout remain available once this build is certified.',
         GAMEPLAY,
         RECOVERY,
@@ -98,12 +99,12 @@ export function compatibilityReport(compatibility, selection) {
   if (state === 'template-only') {
     return {
       state,
-      degraded: toolboxDegraded,
-      toolboxDegraded,
+      degraded: enhancementDegraded,
+      enhancementDegraded,
       summary:
         `This client build is certified for ${FEATURES}, but not yet for `
-        + 'the Toolbox tools.',
-      details: toolboxDegraded
+        + 'GWonMac Tools.',
+      details: enhancementDegraded
         ? [
             `${capitalise(FEATURES)} work normally.`,
             `Your ${requestedTools} ${
@@ -122,13 +123,13 @@ export function compatibilityReport(compatibility, selection) {
     };
   }
 
-  if (toolboxDegraded) {
+  if (enhancementDegraded) {
     return {
       state,
       degraded: true,
-      toolboxDegraded: true,
+      enhancementDegraded: true,
       summary:
-        'This client build is certified, but Toolbox could not be prepared '
+        'This client build is certified, but GWonMac Tools could not be prepared '
         + 'for this session.',
       details: [
         `${capitalise(FEATURES)} work normally.`,
@@ -136,7 +137,7 @@ export function compatibilityReport(compatibility, selection) {
           selectedTools.length === 1 ? 'is' : 'are'
         } unavailable for this session.`,
         GAMEPLAY,
-        'Restart the app to try preparing Toolbox again. If it keeps failing, '
+        'Restart the app to try preparing GWonMac Tools again. If it keeps failing, '
           + 'export diagnostics and report the problem.',
         SEPARATION,
       ],
@@ -146,7 +147,7 @@ export function compatibilityReport(compatibility, selection) {
   return {
     state,
     degraded: false,
-    toolboxDegraded: false,
+    enhancementDegraded: false,
     summary: 'This game client build is certified.',
     details: [
       `${capitalise(FEATURES)} work normally.`,
@@ -179,7 +180,7 @@ function requiredElement(root, id) {
  *
  * @param {Document} root
  * @param {ClientSession} session
- * @param {ToolboxSelection} selection
+ * @param {EnhancementSelection} selection
  * @returns {CompatibilityReport | null}
  */
 export function renderClientCompatibility(root, session, selection) {

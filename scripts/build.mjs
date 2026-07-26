@@ -28,7 +28,7 @@ export const BUILD_STEPS = [
   [
     "rustc",
     [
-      "src/toolbox-kernel/lib.rs",
+      "src/companion-kernel/lib.rs",
       "--edition=2021",
       "--target",
       "wasm32-unknown-unknown",
@@ -43,7 +43,7 @@ export const BUILD_STEPS = [
       "-C",
       "link-arg=--strip-all",
       "-o",
-      "build/renderer/toolbox-kernel.wasm",
+      "build/renderer/companion-kernel.wasm",
     ],
   ],
 ];

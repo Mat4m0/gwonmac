@@ -2,7 +2,7 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
-  TOOLBOX_TOOLS,
+  ENHANCEMENTS,
   type AppSettings,
   type AppSettingsPatch,
 } from "../../shared/contracts.js";
@@ -56,7 +56,7 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
-  for (const tool of TOOLBOX_TOOLS) {
+  for (const tool of ENHANCEMENTS) {
     if (tool in src) {
       out[tool] = asBool(src[tool], tool);
     }

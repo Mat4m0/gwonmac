@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { basename } from "node:path";
 import { describe, it } from "node:test";
 import {
   clientArtifactPath,
   clientManifestPath,
   diagnosticFramesPath,
+  discardObsoleteEnhancementCache,
   documentDirectories,
   gamePaths,
+  obsoleteEnhancementCachePath,
   snapshotMetadataPath,
 } from "../../src/main/core/paths.ts";
 
@@ -30,7 +33,7 @@ describe("resolved profile paths", () => {
       previousArtifacts: `${root}/game/artifacts.previous`,
       rejectedClient: `${root}/game/rejected-client.json`,
       compatibility: `${root}/game/compatibility`,
-      toolbox: `${root}/game/toolbox`,
+      enhancements: `${root}/game/enhancements`,
       chunks: `${root}/game/chunks`,
       bootChunks: `${root}/game/boot-chunks.json`,
       cacheClearRequest: `${root}/clear-cache-on-start`,
@@ -52,8 +55,38 @@ describe("resolved profile paths", () => {
       `${root}/game/artifacts`,
       `${root}/game/artifacts.previous`,
       `${root}/game/compatibility`,
-      `${root}/game/toolbox`,
+      `${root}/game/enhancements`,
     ]);
+  });
+
+  it("pins the obsolete beta cache selected for one-release cleanup", () => {
+    assert.equal(
+      basename(obsoleteEnhancementCachePath(gamePaths(root))),
+      ["tool", "box"].join(""),
+    );
+  });
+
+  it("discards the obsolete cache without making cleanup failure fatal", async () => {
+    const paths = gamePaths(root);
+    const calls: unknown[][] = [];
+    assert.equal(
+      await discardObsoleteEnhancementCache(paths, async (...args) => {
+        calls.push(args);
+      }),
+      null,
+    );
+    assert.deepEqual(calls, [[
+      obsoleteEnhancementCachePath(paths),
+      { recursive: true, force: true },
+    ]]);
+
+    const failure = new Error("injected");
+    assert.equal(
+      await discardObsoleteEnhancementCache(paths, async () => {
+        throw failure;
+      }),
+      failure,
+    );
   });
 
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {

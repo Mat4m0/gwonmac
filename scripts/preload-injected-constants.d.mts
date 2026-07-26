@@ -16,7 +16,7 @@ declare global {
   const IPC: typeof import("../src/shared/contracts.js").IPC;
   const RENDERER_INIT_ARGUMENT:
     typeof import("../src/shared/contracts.js").RENDERER_INIT_ARGUMENT;
-  const TOOLBOX_TOOLS: typeof import("../src/shared/contracts.js").TOOLBOX_TOOLS;
+  const ENHANCEMENTS: typeof import("../src/shared/contracts.js").ENHANCEMENTS;
   const WASM_BRIDGE_MARKERS:
     typeof import("../src/shared/contracts.js").WASM_BRIDGE_MARKERS;
 }

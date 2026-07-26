@@ -1,4 +1,4 @@
-// Copies the renderer sources into build/. It does not compile the Toolbox
+// Copies the renderer sources into build/. It does not compile the companion
 // kernel: scripts/build.mjs owns that, because this script used to run twice
 // per package build and so compiled it twice. It does not produce the preload
 // either: that is generated from the canonical contracts, so

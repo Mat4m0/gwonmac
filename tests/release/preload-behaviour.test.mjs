@@ -340,15 +340,15 @@ test("the renderer command transport accepts exactly one handler", () => {
 });
 
 test("the launch configuration is read from argv, and defaults to production", () => {
-  // A renderer that cannot read its argument gets no Toolbox and no trace,
+  // A renderer that cannot read its argument gets no Enhancement and no trace,
   // rather than a developer posture nobody asked for.
   const plainInit = (value) => ({
     ...value,
-    toolboxSelection: { ...value.toolboxSelection },
+    enhancementSelection: { ...value.enhancementSelection },
   });
   assert.deepEqual(plainInit(load().api.init), {
-    toolboxAutomation: false,
-    toolboxSelection: { nativeCursor: false, targetReadout: false },
+    enhancementAutomation: false,
+    enhancementSelection: { nativeCursor: false, targetReadout: false },
     templateFsTrace: false,
   });
   assert.deepEqual(
@@ -357,7 +357,7 @@ test("the launch configuration is read from argv, and defaults to production", (
         "--irrelevant",
         RENDERER_INIT_ARGUMENT +
           JSON.stringify({
-            toolboxSelection: {
+            enhancementSelection: {
               nativeCursor: true,
               targetReadout: false,
             },
@@ -366,22 +366,22 @@ test("the launch configuration is read from argv, and defaults to production", (
       ]).api.init,
     ),
     {
-      toolboxAutomation: false,
-      toolboxSelection: { nativeCursor: true, targetReadout: false },
+      enhancementAutomation: false,
+      enhancementSelection: { nativeCursor: true, targetReadout: false },
       templateFsTrace: true,
     },
   );
   // Anything that is not the exact boolean `true`, and anything unparseable,
   // is off.
   for (const malformed of [
-    '{"toolboxSelection":{"nativeCursor":"yes"}',
-    '{"toolboxSelection":{"nativeCursor":1}}',
+    '{"enhancementSelection":{"nativeCursor":"yes"}',
+    '{"enhancementSelection":{"nativeCursor":1}}',
   ]) {
     assert.deepEqual(
       plainInit(load([RENDERER_INIT_ARGUMENT + malformed]).api.init),
       {
-        toolboxAutomation: false,
-        toolboxSelection: { nativeCursor: false, targetReadout: false },
+        enhancementAutomation: false,
+        enhancementSelection: { nativeCursor: false, targetReadout: false },
         templateFsTrace: false,
       },
       malformed,

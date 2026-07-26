@@ -16,13 +16,13 @@ window.gwAutomation = (function () {
       if (history.length > 32) history.shift();
     },
     read() {
-      const toolbox = window.gwToolboxState;
+      const enhancement = window.gwCompanionState;
       return Object.freeze({
         stage,
         sequence,
         transitions: history.slice(),
-        toolboxStatus: toolbox?.status ?? 'not-installed',
-        tickCount: toolbox?.tickCount ?? 0,
+        enhancementStatus: enhancement?.status ?? 'not-installed',
+        tickCount: enhancement?.tickCount ?? 0,
       });
     },
   });

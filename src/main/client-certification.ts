@@ -4,15 +4,15 @@ import {
   type KnownTemplateSaveBuild,
 } from "./core/template-save-compat.js";
 import {
-  findToolboxBuild,
-  type KnownToolboxBuild,
-} from "./core/toolbox-builds.js";
+  findEnhancementBuild,
+  type KnownEnhancementBuild,
+} from "./core/enhancement-builds.js";
 
 /**
  * Which of the three certification states an ArenaNet client build is in.
  *
  * The two transforms are chained but keyed by **different** hashes:
- * template-save by the official build's hash, Toolbox by the hash of what the
+ * template-save by the official build's hash, Enhancement by the hash of what the
  * template-save transform *produces*. Certification can therefore succeed at
  * step one and fail at step two — templates saved, cursor gone — and that is
  * the normal intermediate during a recertification, because the transform that
@@ -21,7 +21,7 @@ import {
  * Before this module the two answers were two independent gauges that nothing
  * composed, so the intermediate state had no name and no user-facing sentence.
  * This is the single owner: every consumer (the launcher notice, the settings
- * status, the diagnostics gauges, and `toolbox:doctor`) asks here.
+ * status, the diagnostics gauges, and `enhancements:doctor`) asks here.
  */
 export type { ClientCertification } from "./core/client-module.js";
 
@@ -33,12 +33,12 @@ export type { ClientCertification } from "./core/client-module.js";
  */
 export interface CertifiedBuildTables {
   templateSave: (sha256: string) => KnownTemplateSaveBuild | null;
-  toolbox: (sha256: string) => KnownToolboxBuild | null;
+  enhancement: (sha256: string) => KnownEnhancementBuild | null;
 }
 
 const SHIPPED_TABLES: CertifiedBuildTables = {
   templateSave: findTemplateSaveBuild,
-  toolbox: findToolboxBuild,
+  enhancement: findEnhancementBuild,
 };
 
 export function certifyClientBuild(
@@ -47,12 +47,12 @@ export function certifyClientBuild(
 ): ClientCertification {
   const templateSave = tables.templateSave(officialSha256);
   if (!templateSave) return { state: "uncertified" };
-  const toolboxBuild = tables.toolbox(templateSave.outputSha256);
-  return toolboxBuild
+  const enhancementBuild = tables.enhancement(templateSave.outputSha256);
+  return enhancementBuild
     ? {
         state: "certified",
         templateSaveBuild: templateSave,
-        toolboxBuild,
+        enhancementBuild,
       }
     : {
         state: "template-only",
