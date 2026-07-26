@@ -220,8 +220,10 @@ as good news:
 
 **Last checked** beside the button records when GitHub was last asked and
 survives a restart, so a failed check cannot be mistaken for a fresh success.
-Repeated presses reuse the last answer for ten minutes instead of sending more
-requests.
+Repeated presses reuse an answer — or a refusal to answer further — for ten
+minutes instead of sending more requests. A check that failed for another
+reason is not reused: if you were offline, pressing the button once you are
+back online asks again straight away.
 
 ## When the client build is not certified
 
