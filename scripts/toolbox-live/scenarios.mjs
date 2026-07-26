@@ -16,6 +16,8 @@
 // an IPC channel, so the observation surface could not be exercised without the
 // automation surface being present. That is the property P4.7 asks for.
 
+import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.mjs";
+
 // GWToolbox++ portal_connections.json records this bidirectional connection.
 // Keep live navigation scoped to the one route used by release acceptance.
 const CERTIFIED_PORTAL_ROUTES = Object.freeze({
@@ -423,18 +425,33 @@ export const SCENARIOS = Object.freeze({
         cdp,
         sendAutomationCommand,
       ),
+    // The budget lives here, with the benchmark it gates. The order does too:
+    // a run that measured each arm once, in a fixed sequence, is refused here
+    // rather than trusted to have said so in a field.
     validate(result) {
       const evidence = result.evidence;
+      const off = evidence?.arms?.[BENCHMARK_ARMS.dispatcherOff];
+      const on = evidence?.arms?.[BENCHMARK_ARMS.observerOn];
+      if (!off || !on) {
+        throw new Error("performance scenario recorded no comparable arms");
+      }
+      if (!isBalancedOrder(evidence.order)) {
+        throw new Error(
+          `performance scenario measured in a biased order: ${
+            JSON.stringify(evidence.order)
+          }`,
+        );
+      }
       if (
-        evidence?.baseline?.count < 2_500
-        || evidence.baseline.ticks !== 0
-        || evidence.hooked.count < 2_500
-        || evidence.hooked.ticks < 2_500
+        off.frames.count < 2_500
+        || off.ticks !== 0
+        || on.frames.count < 2_500
+        || on.ticks < 2_500
         || (
-          evidence.p95RegressionPercent > 2
-          && evidence.p99RegressionPercent > 2
+          evidence.comparison.p95RegressionPercent > 2
+          && evidence.comparison.p99RegressionPercent > 2
         )
-        || evidence.hooked.p95Ms - evidence.baseline.p95Ms > 1
+        || evidence.comparison.p95DeltaMs > 1
       ) {
         throw new Error("performance scenario exceeded its acceptance budget");
       }

@@ -1,29 +1,23 @@
 import { AUTOMATION_COMMAND } from "../../build/shared/automation.js";
+import {
+  BENCHMARK_ARMS,
+  compareArms,
+  runBalancedBenchmark,
+} from "./benchmark.mjs";
 
-function summarizeFrames(samples) {
-  const sorted = [...samples].sort((left, right) => left - right);
-  const at = (percentile) =>
-    sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] ?? 0;
-  const over = (milliseconds) =>
-    samples.filter((sample) => sample > milliseconds).length;
-  return {
-    count: sorted.length,
-    p50Ms: Number(at(0.5).toFixed(3)),
-    p95Ms: Number(at(0.95).toFixed(3)),
-    p99Ms: Number(at(0.99).toFixed(3)),
-    maxMs: Number((sorted.at(-1) ?? 0).toFixed(3)),
-    over20Ms: over(20),
-    over33Ms: over(100 / 3),
-    over50Ms: over(50),
-  };
-}
+// Every phase is warmed for the same time and measured for the same time; the
+// schedule that uses them is in benchmark.mjs. Two phases per arm at 30 s keep
+// the per-arm sample floor the acceptance budget in scenarios.mjs asks for.
+const WARMUP_MS = 5_000;
+const MEASURE_MS = 30_000;
 
 async function readMetrics(cdp) {
   const { metrics } = await cdp.send("Performance.getMetrics");
   return Object.fromEntries(metrics.map(({ name, value }) => [name, value]));
 }
 
-function summarizeMetrics(before, after) {
+/** What moved during one phase. Deltas only, so the arm totals are sums. */
+function metricDeltas(before, after) {
   const durationMs = (name) =>
     Number((((after[name] ?? 0) - (before[name] ?? 0)) * 1_000).toFixed(3));
   return {
@@ -31,13 +25,15 @@ function summarizeMetrics(before, after) {
     scriptMs: durationMs("ScriptDuration"),
     layoutMs: durationMs("LayoutDuration"),
     styleMs: durationMs("RecalcStyleDuration"),
-    jsHeapUsedMiB: Number(((after.JSHeapUsedSize ?? 0) / (1024 ** 2)).toFixed(3)),
     jsHeapDeltaKiB: Number(
       (((after.JSHeapUsedSize ?? 0) - (before.JSHeapUsedSize ?? 0)) / 1_024)
         .toFixed(3),
     ),
   };
 }
+
+const heapUsedMiB = (metrics) =>
+  Number(((metrics.JSHeapUsedSize ?? 0) / (1024 ** 2)).toFixed(3));
 
 async function setCapture(page, sendAutomationCommand, enabled) {
   await sendAutomationCommand(
@@ -53,23 +49,9 @@ async function setCapture(page, sendAutomationCommand, enabled) {
   );
 }
 
-async function captureFrames(page, cdp, hookEnabled, sendAutomationCommand) {
-  await page.evaluate((enabled) => {
-    window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
-  }, hookEnabled);
-  if (hookEnabled) {
-    const tick = await page.evaluate(() => window.gwToolboxState.tickCount);
-    await page.waitForFunction(
-      (previous) => window.gwToolboxState?.tickCount > previous,
-      tick,
-      { timeout: 2_000, polling: 25 },
-    );
-  } else {
-    await page.waitForTimeout(1_000);
-  }
-  const tickBefore = await page.evaluate(
-    () => window.gwToolboxState.tickCount,
-  );
+/** One measured window: the same work whichever arm the session is in. */
+async function measurePhase(page, cdp, sendAutomationCommand) {
+  const tickBefore = await page.evaluate(() => window.gwToolboxState.tickCount);
   const metricsBefore = await readMetrics(cdp);
   await setCapture(page, sendAutomationCommand, true);
   let samples;
@@ -87,50 +69,52 @@ async function captureFrames(page, cdp, hookEnabled, sendAutomationCommand) {
         };
         window.requestAnimationFrame(frame);
       }),
-      60_000,
+      MEASURE_MS,
     );
   } finally {
     await setCapture(page, sendAutomationCommand, false);
   }
-  const tickAfter = await page.evaluate(
-    () => window.gwToolboxState.tickCount,
-  );
   const metricsAfter = await readMetrics(cdp);
+  const tickAfter = await page.evaluate(() => window.gwToolboxState.tickCount);
   return {
-    ...summarizeFrames(samples),
-    ...summarizeMetrics(metricsBefore, metricsAfter),
+    samples,
     ticks: tickAfter >= tickBefore
       ? tickAfter - tickBefore
       : tickAfter + (2 ** 32 - tickBefore),
+    metrics: metricDeltas(metricsBefore, metricsAfter),
+    heapUsedMiB: heapUsedMiB(metricsAfter),
   };
 }
 
 export async function runPerformanceScenario(page, cdp, sendAutomationCommand) {
   try {
-    const baseline = await captureFrames(
-      page,
-      cdp,
-      false,
-      sendAutomationCommand,
+    const benchmark = await runBalancedBenchmark(
+      [BENCHMARK_ARMS.dispatcherOff, BENCHMARK_ARMS.observerOn],
+      {
+        select: async (arm, phase, phases) => {
+          console.log(JSON.stringify({
+            checkpoint: "benchmark-phase",
+            phase,
+            of: phases,
+            arm,
+          }));
+          await page.evaluate((enabled) => {
+            window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
+          }, arm === BENCHMARK_ARMS.observerOn);
+        },
+        warmUp: () => page.waitForTimeout(WARMUP_MS),
+        measure: () => measurePhase(page, cdp, sendAutomationCommand),
+      },
     );
-    const hooked = await captureFrames(
-      page,
-      cdp,
-      true,
-      sendAutomationCommand,
-    );
-    const regressionPercent = baseline.p95Ms > 0
-      ? ((hooked.p95Ms / baseline.p95Ms) - 1) * 100
-      : Number.POSITIVE_INFINITY;
-    const p99RegressionPercent = baseline.p99Ms > 0
-      ? ((hooked.p99Ms / baseline.p99Ms) - 1) * 100
-      : Number.POSITIVE_INFINITY;
     return {
-      durationSecondsPerPhase: 60,
-      baseline,
-      hooked,
-      p95RegressionPercent: Number(regressionPercent.toFixed(2)),
-      p99RegressionPercent: Number(p99RegressionPercent.toFixed(2)),
+      warmupSecondsPerPhase: WARMUP_MS / 1_000,
+      measuredSecondsPerPhase: MEASURE_MS / 1_000,
+      ...benchmark,
+      comparison: compareArms(
+        benchmark.arms,
+        BENCHMARK_ARMS.dispatcherOff,
+        BENCHMARK_ARMS.observerOn,
+      ),
     };
   } finally {
     await page.evaluate(() => {
