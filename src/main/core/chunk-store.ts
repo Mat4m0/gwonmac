@@ -459,19 +459,57 @@ export class ChunkStore {
     return this.touched;
   }
 
+  /**
+   * The boot list records chunk INDICES, so it means something only against
+   * the chunking it was written for. It has always recorded `chunkSize` and
+   * `count`; it never checked them, so a change to remote chunking silently
+   * reinterpreted every stored index against a different byte range. A
+   * mismatch is a cache miss: we lose one warm start, not correctness.
+   *
+   * Geometry, not content, is the key. The indices stay meaningful across an
+   * ArenaNet client update — they are still the same byte ranges the game
+   * touches at boot — so hashing the manifest here would throw the hint away
+   * on every update for nothing.
+   *
+   * A boot list with no `formatVersion` is the shape the public alpha wrote.
+   * It carried the same fields, so it is read as written.
+   */
+  private async readBootChunks(): Promise<number[] | null> {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await readFile(this.bootListPath, "utf8"));
+    } catch {
+      return null;
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const record = raw as Record<string, unknown>;
+    if (record.formatVersion !== undefined && record.formatVersion !== 1) {
+      return null;
+    }
+    if (
+      record.chunkSize !== this.chunkSize ||
+      record.count !== this.hashes.length ||
+      !Array.isArray(record.chunks)
+    ) {
+      return null;
+    }
+    const chunks = record.chunks.filter(
+      (index): index is number =>
+        Number.isSafeInteger(index) &&
+        (index as number) >= 0 &&
+        (index as number) < this.hashes.length,
+    );
+    if (chunks.length !== record.chunks.length) return null;
+    return [...new Set(chunks)].sort((a, b) => a - b);
+  }
+
   async saveTouched(): Promise<void> {
     if (!this.touchedDirty) return;
-    let known = new Set<number>();
-    try {
-      const raw = JSON.parse(await readFile(this.bootListPath, "utf8")) as { chunks?: number[] };
-      known = new Set(raw.chunks ?? []);
-    } catch {
-      // first write
-    }
+    const known = (await this.readBootChunks()) ?? [];
     const merged = [...new Set([...known, ...this.touched])].sort((a, b) => a - b);
-    const prev = [...known].sort((a, b) => a - b);
-    if (JSON.stringify(merged) !== JSON.stringify(prev)) {
+    if (JSON.stringify(merged) !== JSON.stringify(known)) {
       await writeAtomicJson(this.bootListPath, {
+        formatVersion: 1,
         chunkSize: this.chunkSize,
         count: this.hashes.length,
         chunks: merged,
@@ -485,16 +523,11 @@ export class ChunkStore {
     jobs = PREFETCH_JOBS,
   ): Promise<void> {
     if (!this.fetchFn) return;
-    let want: number[];
-    try {
-      const raw = JSON.parse(await readFile(this.bootListPath, "utf8")) as { chunks?: number[] };
-      want = raw.chunks ?? [];
-    } catch {
-      return;
-    }
+    const want = await this.readBootChunks();
+    if (!want) return;
     const todo: number[] = [];
     for (const i of want) {
-      if (i < this.hashes.length && !(await this.isResident(i))) todo.push(i);
+      if (!(await this.isResident(i))) todo.push(i);
     }
     if (!todo.length) return;
 
