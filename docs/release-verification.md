@@ -15,10 +15,11 @@ refuses to read it rather than guessing what was meant.
 
 Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
 `-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
-An install running a stable release is never offered a prerelease, and the
-download button on the website offers stable releases only; to try a
-prerelease, take it from the
-[releases page](https://github.com/Mat4m0/gwonmac/releases) deliberately.
+An install running a stable release is never offered a prerelease. During the
+initial launch phase, the website download button offers the newest release,
+including previews; `WEBSITE_RELEASE_CHANNEL` in
+`apps/website/app/composables/useLatestRelease.ts` is the single switch back to
+stable-only downloads once the first stable release is available.
 
 **What the number does not mean.** It is not a compatibility promise, and in
 particular it says nothing about which Guild Wars client build the release

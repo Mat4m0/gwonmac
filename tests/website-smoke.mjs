@@ -5,8 +5,9 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { EXTERNAL_URLS } from "../src/shared/contracts.ts";
 import {
-  loadStableDownload,
-  selectStableDownload,
+  loadWebsiteDownload,
+  selectWebsiteDownload,
+  WEBSITE_RELEASE_CHANNEL,
 } from "../apps/website/app/composables/useLatestRelease.ts";
 
 // P3.25 — the download button, executed rather than described. The composable's
@@ -49,24 +50,35 @@ const PRERELEASE = {
 const DRAFT = { ...STABLE, tag_name: "v0.0.5", draft: true };
 
 // The resolved download is the arm64 ZIP of the release, not its checksums.
-assert.deepEqual(selectStableDownload([STABLE]), {
+assert.equal(WEBSITE_RELEASE_CHANNEL, "preview");
+assert.deepEqual(selectWebsiteDownload([STABLE]), {
   url: ARM64_ZIP.browser_download_url,
   version: "0.0.3",
 });
 
-// A prerelease published on top of a stable release does not become the
-// download; the stable one behind it does.
-assert.deepEqual(selectStableDownload([PRERELEASE, STABLE]), {
-  url: ARM64_ZIP.browser_download_url,
-  version: "0.0.3",
+// During the launch phase, a newer prerelease becomes the direct download.
+assert.deepEqual(selectWebsiteDownload([PRERELEASE, STABLE]), {
+  url: PRERELEASE.assets[0].browser_download_url,
+  version: "0.0.4-alpha.1",
 });
 
-// Prerelease-only — the repository's state today. Nothing stable exists, so the
-// button must keep the releases page rather than hand over an alpha build.
-assert.equal(selectStableDownload([PRERELEASE]), null);
+assert.deepEqual(selectWebsiteDownload([PRERELEASE]), {
+  url: PRERELEASE.assets[0].browser_download_url,
+  version: "0.0.4-alpha.1",
+});
 
 // Drafts are invisible to a logged-out visitor and are not offered either.
-assert.equal(selectStableDownload([DRAFT, PRERELEASE]), null);
+assert.deepEqual(selectWebsiteDownload([DRAFT, PRERELEASE]), {
+  url: PRERELEASE.assets[0].browser_download_url,
+  version: "0.0.4-alpha.1",
+});
+
+// Reverting the one channel constant to stable restores the long-term policy.
+assert.deepEqual(selectWebsiteDownload([PRERELEASE, STABLE], "stable"), {
+  url: ARM64_ZIP.browser_download_url,
+  version: "0.0.3",
+});
+assert.equal(selectWebsiteDownload([PRERELEASE], "stable"), null);
 
 // Network ordering and network text are not version policy. A malformed stable
 // tag is ignored, and the greatest canonical stable version wins even when
@@ -83,11 +95,11 @@ const NEWER_STABLE = {
   assets: [NEWER_ARM64_ZIP],
 };
 assert.equal(
-  selectStableDownload([{ ...STABLE, tag_name: "banana" }]),
+  selectWebsiteDownload([{ ...STABLE, tag_name: "banana" }]),
   null,
 );
 assert.deepEqual(
-  selectStableDownload([STABLE, NEWER_STABLE]),
+  selectWebsiteDownload([STABLE, NEWER_STABLE]),
   {
     url: NEWER_ARM64_ZIP.browser_download_url,
     version: "2026.8.0",
@@ -97,15 +109,15 @@ assert.deepEqual(
 // A stable release whose macOS build has not finished uploading is skipped
 // rather than announced with a releases-page link under its version number.
 assert.equal(
-  selectStableDownload([{ ...STABLE, assets: [CHECKSUMS, SBOM] }]),
+  selectWebsiteDownload([{ ...STABLE, assets: [CHECKSUMS, SBOM] }]),
   null,
 );
 
 // Offline, rate-limited, or unreadable: `fetch` rejecting, a non-OK response
 // (`null`), and GitHub's error object all reach the selector as something that
 // is not an array of releases.
-assert.equal(selectStableDownload(null), null);
-assert.equal(selectStableDownload({ message: "API rate limit exceeded" }), null);
+assert.equal(selectWebsiteDownload(null), null);
+assert.equal(selectWebsiteDownload({ message: "API rate limit exceeded" }), null);
 
 // Four buttons are mounted across the two pages (navigation, hero, final CTA,
 // install guide) and each one calls this on mount. They share one request.
@@ -120,16 +132,16 @@ assert.equal(selectStableDownload({ message: "API rate limit exceeded" }), null)
   };
   try {
     const answers = await Promise.all([
-      loadStableDownload(),
-      loadStableDownload(),
-      loadStableDownload(),
-      loadStableDownload(),
+      loadWebsiteDownload(),
+      loadWebsiteDownload(),
+      loadWebsiteDownload(),
+      loadWebsiteDownload(),
     ]);
     assert.equal(calls, 1);
     for (const answer of answers) {
       assert.deepEqual(answer, {
-        url: ARM64_ZIP.browser_download_url,
-        version: "0.0.3",
+        url: PRERELEASE.assets[0].browser_download_url,
+        version: "0.0.4-alpha.1",
       });
     }
   } finally {

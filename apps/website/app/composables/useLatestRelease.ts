@@ -15,6 +15,12 @@ const FALLBACK_URL = EXTERNAL_URLS.releases;
 // newest release of any channel, which is regularly a prerelease.
 const API_URL = `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=20`;
 
+type WebsiteReleaseChannel = "stable" | "preview";
+
+// The launch phase offers preview builds. Change this one value to "stable"
+// after the first stable release; selection tests cover both channel rules.
+export const WEBSITE_RELEASE_CHANNEL: WebsiteReleaseChannel = "preview";
+
 export interface ReleaseDownload {
   url: string;
   version: string;
@@ -42,30 +48,36 @@ function appleSiliconZip(release: Record<string, unknown>): string | null {
 }
 
 /**
- * Channel policy: **the website offers stable releases only.**
+ * Channel policy: the website currently offers preview releases.
  *
- * The release workflow publishes prereleases with `--prerelease --latest=false`
- * (`.github/workflows/release.yml`), so the newest release in the repository is
- * regularly one a first-time visitor must not be handed. Drafts and prereleases
- * are filtered here rather than trusted to GitHub's "latest" pointer. A
- * prerelease stays one click away on the releases page, where choosing it is
- * deliberate — the same policy the app applies to update notices
- * (`src/shared/release.ts`, `isOfferedUpgrade`).
+ * During the launch phase, the newest valid release may be a prerelease. Once
+ * the first stable release exists, changing `WEBSITE_RELEASE_CHANNEL` to
+ * `"stable"` restores the long-term policy without changing this selector.
+ * Drafts are never offered.
  *
- * `null` is not an error. It means there is nothing stable to offer yet, and
- * the caller keeps the releases-page link.
+ * `null` is not an error. It means there is nothing eligible to offer, and the
+ * caller keeps the releases-page link.
  */
-export function selectStableDownload(payload: unknown): ReleaseDownload | null {
+export function selectWebsiteDownload(
+  payload: unknown,
+  channel: WebsiteReleaseChannel = WEBSITE_RELEASE_CHANNEL,
+): ReleaseDownload | null {
   if (!Array.isArray(payload)) return null;
   let selected:
     | { parsed: ReleaseVersion; url: string }
     | null = null;
   for (const release of payload) {
     if (!isRecord(release)) continue;
-    if (release.draft === true || release.prerelease === true) continue;
+    if (release.draft === true) continue;
     const tag = release.tag_name;
     const parsed = typeof tag === "string" ? parseReleaseVersion(tag) : null;
-    if (!parsed || isPrerelease(parsed)) continue;
+    if (!parsed) continue;
+    if (
+      channel === "stable"
+      && (release.prerelease === true || isPrerelease(parsed))
+    ) {
+      continue;
+    }
     const url = appleSiliconZip(release);
     if (!url) continue;
     if (
@@ -95,10 +107,10 @@ export function selectStableDownload(payload: unknown): ReleaseDownload | null {
  */
 let pending: Promise<ReleaseDownload | null> | null = null;
 
-export function loadStableDownload(): Promise<ReleaseDownload | null> {
+export function loadWebsiteDownload(): Promise<ReleaseDownload | null> {
   pending ??= fetch(API_URL)
     .then((response) => (response.ok ? response.json() : null))
-    .then(selectStableDownload)
+    .then((payload) => selectWebsiteDownload(payload))
     // Offline, rate-limited, or unreadable: keep the releases-page fallback.
     .catch(() => null);
   return pending;
@@ -109,7 +121,7 @@ export function useLatestRelease() {
   const version = useState<string | null>("release-version", () => null);
 
   onMounted(async () => {
-    const download = await loadStableDownload();
+    const download = await loadWebsiteDownload();
     if (!download) return;
     url.value = download.url;
     version.value = download.version;
