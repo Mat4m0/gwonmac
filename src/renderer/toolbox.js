@@ -1,4 +1,5 @@
 import { createCursorConsumer } from "./toolbox-cursor.js";
+import { createTargetReadout } from "./toolbox-readout.js";
 import {
   readToolboxSnapshot,
   TOOLBOX_CURSOR_ABI,
@@ -58,8 +59,9 @@ function recordLifecycle(state) {
 /**
  * @param {any} runtime
  * @param {{ poll: () => void }} cursor
+ * @param {{ update: (state: any) => void }} readout
  */
-function observeSnapshots(runtime, cursor) {
+function observeSnapshots(runtime, cursor, readout) {
   let frame = 0;
   let cadenceAt = performance.now();
   let cadenceTick = 0;
@@ -90,6 +92,7 @@ function observeSnapshots(runtime, cursor) {
     if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
     cursor.poll();
+    readout.update(state);
     frame = requestAnimationFrame(observe);
   };
   frame = requestAnimationFrame(observe);
@@ -131,6 +134,7 @@ export async function installToolbox(instance, module) {
   let cursorPointer = 0;
   let stopObserver = () => {};
   let disposeCursor = () => {};
+  let disposeReadout = () => {};
   try {
     snapshotPointer = Number(exports.malloc(TOOLBOX_SNAPSHOT_BYTES));
     configPointer = Number(exports.malloc(manifest.configBytes));
@@ -175,6 +179,8 @@ export async function installToolbox(instance, module) {
       fallback: "",
     });
     disposeCursor = cursor.dispose;
+    const readout = createTargetReadout(document.body);
+    disposeReadout = readout.dispose;
 
     table.set(manifest.tableSlot, kernel.instance.exports.toolbox_tick);
     const runtime = {
@@ -194,6 +200,11 @@ export async function installToolbox(instance, module) {
       get cursor() {
         return cursor.state;
       },
+      // The rendered line, so a live run can read the feature without a
+      // screenshot. Text only: the readout owns its own element.
+      get readout() {
+        return readout.state;
+      },
       installation: (window.gwToolboxInstallations ?? 0) + 1,
       /** @param {boolean} enabled */
       setHookEnabledForBenchmark(enabled) {
@@ -204,13 +215,14 @@ export async function installToolbox(instance, module) {
     };
     window.gwToolboxInstallations = runtime.installation;
     window.gwToolboxRuntime = runtime;
-    stopObserver = observeSnapshots(runtime, cursor);
+    stopObserver = observeSnapshots(runtime, cursor, readout);
     hookSlot.value = manifest.tableSlot + 1;
 
     const teardown = () => {
       hookSlot.value = 0;
       stopObserver();
       disposeCursor();
+      disposeReadout();
       if (table.get(manifest.tableSlot) === kernel.instance.exports.toolbox_tick) {
         table.set(manifest.tableSlot, null);
       }
@@ -226,6 +238,7 @@ export async function installToolbox(instance, module) {
     hookSlot.value = 0;
     stopObserver();
     disposeCursor();
+    disposeReadout();
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
