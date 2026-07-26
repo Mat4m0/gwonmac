@@ -20,6 +20,10 @@ describe("settings", () => {
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
+      // Off until the user says otherwise: this is the one flag that decides
+      // whether the app ever makes a network request nobody asked for.
+      autoCheckUpdates: false,
+      lastUpdateCheckAt: null,
     });
   });
 
@@ -42,6 +46,8 @@ describe("settings", () => {
       touchMode: "off",
       showDiagnostics: true,
       dataStrategy: "full",
+      autoCheckUpdates: false,
+      lastUpdateCheckAt: null,
     });
   });
 
@@ -64,9 +70,30 @@ describe("settings", () => {
     assert.throws(() => parseSettings([]), AppError);
   });
 
+  it("takes the update fields only in the shapes the renderer can produce", () => {
+    assert.equal(parseSettings({ autoCheckUpdates: true }).autoCheckUpdates, true);
+    assert.throws(() => parseSettings({ autoCheckUpdates: "yes" }), AppError);
+
+    assert.equal(parseSettings({ lastUpdateCheckAt: null }).lastUpdateCheckAt, null);
+    assert.equal(parseSettings({ lastUpdateCheckAt: 0 }).lastUpdateCheckAt, 0);
+    assert.equal(
+      parseSettings({ lastUpdateCheckAt: 1_800_000_000_000 }).lastUpdateCheckAt,
+      1_800_000_000_000,
+    );
+    // Epoch milliseconds, not a date, not a duration, not a negative.
+    assert.throws(() => parseSettings({ lastUpdateCheckAt: -1 }), AppError);
+    assert.throws(() => parseSettings({ lastUpdateCheckAt: 1.5 }), AppError);
+    assert.throws(() => parseSettings({ lastUpdateCheckAt: Number.NaN }), AppError);
+    assert.throws(() => parseSettings({ lastUpdateCheckAt: 1e300 }), AppError);
+    assert.throws(() => parseSettings({ lastUpdateCheckAt: "2026-07-26" }), AppError);
+  });
+
   it("validates patches without filling fields from defaults", () => {
     assert.deepEqual(parseSettingsPatch({ nativeCursor: true }), {
       nativeCursor: true,
+    });
+    assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
+      lastUpdateCheckAt: 1_000,
     });
     assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
     // A renderer that still names the retired key is a bug, not a migration.
@@ -101,8 +128,10 @@ describe("settings", () => {
     assert.equal(saved.showDiagnostics, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
+      "autoCheckUpdates",
       "dataStrategy",
       "formatVersion",
+      "lastUpdateCheckAt",
       "nativeCursor",
       "renderScale",
       "showDiagnostics",
@@ -137,6 +166,11 @@ describe("settings", () => {
       touchMode: "translate",
       showDiagnostics: true,
       dataStrategy: "full",
+      // Fields that alpha never wrote arrive at their defaults, and the
+      // default for the update check is off — an upgrade must not switch on a
+      // network request the user never agreed to.
+      autoCheckUpdates: false,
+      lastUpdateCheckAt: null,
     });
     // Nothing was moved aside, so the file the player had is still the file.
     assert.deepEqual(await readdir(dir), ["settings.json"]);

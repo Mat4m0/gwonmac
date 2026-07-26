@@ -129,6 +129,18 @@ export interface AppSettings {
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
+  /**
+   * Opt in to automatic release checks. `false` means this app makes no
+   * network request to GitHub unless the user asks for one — with no
+   * exceptions, including the check on an uncertified client build.
+   */
+  autoCheckUpdates: boolean;
+  /**
+   * When the last release check actually reached GitHub, in epoch
+   * milliseconds, or `null` if one has never run. Persisted because without it
+   * "we could not tell" is indistinguishable from "we never asked".
+   */
+  lastUpdateCheckAt: number | null;
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
@@ -139,6 +151,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,
+  autoCheckUpdates: false,
+  lastUpdateCheckAt: null,
 };
 
 export interface StoredCredentials {

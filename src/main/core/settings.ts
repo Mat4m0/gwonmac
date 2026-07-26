@@ -79,6 +79,22 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.dataStrategy = src.dataStrategy;
   }
+  if ("autoCheckUpdates" in src) {
+    out.autoCheckUpdates = asBool(src.autoCheckUpdates, "autoCheckUpdates");
+  }
+  if ("lastUpdateCheckAt" in src) {
+    const at = src.lastUpdateCheckAt;
+    if (
+      at !== null &&
+      !(typeof at === "number" && Number.isSafeInteger(at) && at >= 0)
+    ) {
+      throw new AppError(
+        "bad_settings",
+        "settings.lastUpdateCheckAt must be null or epoch milliseconds",
+      );
+    }
+    out.lastUpdateCheckAt = at;
+  }
   return out;
 }
 
