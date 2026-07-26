@@ -1,9 +1,10 @@
 {
   // The third project. `tsconfig.json` owns `src` and `tsconfig.renderer.json`
   // owns the renderer, which between them left the tests, the build scripts,
-  // and the preload body outside every project: `tests/unit/*.ts` is
-  // type-stripped by Node at runtime and never checked, and `tsconfig.json`
-  // does not set `allowJs`, so no `.mjs` or `.cjs` file was ever an input.
+  // the root tool configuration, and the preload body outside every project:
+  // `tests/unit/*.ts` is type-stripped by Node at runtime and never checked,
+  // and `tsconfig.json` does not set `allowJs`, so no `.mjs` or `.cjs` file
+  // was ever an input.
   //
   // This project checks that remainder against the real production contracts:
   // the `src/**/*.ts` the tests import are pulled in by module resolution
@@ -44,14 +45,28 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
 
+    // Third-party declarations do not compile under this strictness — the
+    // ESLint parsers `eslint.config.js` pulls in fail on their own. The flag
+    // is indiscriminate, so it skips this repository's own declaration files
+    // just as readily: nothing here may be a `.d.*` file and expect to be
+    // checked. `scripts/preload-injected-constants.mts` says why it is not
+    // one, and tests/policy/typecheck-coverage.test.mjs enforces the rule.
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": [
+    // The two root tool configurations belong with the build scripts they sit
+    // beside, not in `tsconfig.json`: that project's `include: ["src"]` and
+    // `rootDir: "src"` are what make `src` mean one thing, and widening it to
+    // reach a sibling file would emit into `build/` alongside the application.
+    // `forge.config.ts` looked checked because it is TypeScript, yet nothing
+    // read it while it drove `pnpm make`, the fuses, and the bundle version.
+    "forge.config.ts",
+    "eslint.config.js",
     "tests/**/*.ts",
     "scripts/**/*.mjs",
-    "scripts/**/*.d.mts",
+    "scripts/**/*.mts",
     "src/preload/preload.body.cjs",
 
     // Ambient declarations are reached by no `import`, so the renderer sources

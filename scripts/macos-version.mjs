@@ -24,8 +24,36 @@
 const RELEASE_PATTERN =
   /^(\d{4})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$/;
 
-const STAGES = { alpha: 0, beta: 30, rc: 60 };
+/**
+ * Where a channel begins inside the two digits Apple allows for the last
+ * component: 30 sequence numbers each, and the release itself at the top.
+ *
+ * RELEASE_PATTERN and this function have to name the same channels. A channel
+ * only one of them knew would reach `stage + sequence` as `undefined`, and a
+ * signed release would ship with `NaN` in its CFBundleVersion, so that drift
+ * throws here rather than at the notary.
+ *
+ * @param {string | undefined} channel The prerelease channel, or `undefined`
+ *   for the release the prereleases lead to.
+ */
+function stageOf(channel) {
+  switch (channel) {
+    case "alpha":
+      return 0;
+    case "beta":
+      return 30;
+    case "rc":
+      return 60;
+    case undefined:
+      return 99;
+    default:
+      throw new Error(
+        `release channel ${JSON.stringify(channel)} has no build number stage`,
+      );
+  }
+}
 
+/** @param {string} version */
 export function macOSBundleVersions(version) {
   const match = RELEASE_PATTERN.exec(version);
   if (!match) {
@@ -52,7 +80,7 @@ export function macOSBundleVersions(version) {
     throw new Error(`prerelease sequence must be 0-29, not ${sequence}`);
   }
   const releaseLine = (year - 2000) * 100 + month;
-  const stage = channel === undefined ? 99 : STAGES[channel];
+  const stage = stageOf(channel);
   return {
     appVersion: `${year}.${month}.${patch}`,
     buildVersion: `${releaseLine}.${patch}.${stage + sequence}`,

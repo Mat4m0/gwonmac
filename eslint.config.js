@@ -33,7 +33,10 @@ const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
 const INTO_APP = String.raw`^(?:\.\./)+src/(?!shared/)|(?:^|/)(?:\.\.|src)/(?:main|renderer|preload)/`;
 const ELECTRON = String.raw`^electron(/|$)`;
 
-/** esquery reads `/.../` inside an attribute value, so its slashes need escaping. */
+/**
+ * esquery reads `/.../` inside an attribute value, so its slashes need escaping.
+ * @param {string} pattern
+ */
 const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
 
 // Every non-static way to name a module, keyed on the specifier rather than on
@@ -43,6 +46,10 @@ const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
 // `source.value` missed the template-literal spelling of `import()` entirely —
 // one quote character defeated the boundary. An argument value cannot be
 // renamed. Applied to every boundary, so the four are provably symmetric.
+/**
+ * @param {string} pattern
+ * @param {string} message
+ */
 const crossings = (pattern, message) => {
   const regex = selectorRegex(pattern);
   return [

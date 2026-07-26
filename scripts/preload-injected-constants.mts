@@ -12,6 +12,14 @@
 // This lives beside the generator rather than beside the body because
 // tsconfig.json includes all of `src`, and a global `IPC` visible to the main
 // process would let a file there use the name without importing it.
+//
+// It is a `.mts` and not a `.d.mts` because tsconfig.tests.json sets
+// `skipLibCheck` — third-party declarations do not compile under this
+// project's strictness — and that flag skips this repository's own
+// declaration files too. As a `.d.mts` a stale reference here resolved to
+// `any` in silence, which turned every checked use of `IPC` in
+// src/preload/preload.body.cjs into no check at all. Nothing imports this
+// file and nothing emits it; `declare global` works the same in either.
 declare global {
   const IPC: typeof import("../src/shared/contracts.js").IPC;
   const RENDERER_INIT_ARGUMENT:

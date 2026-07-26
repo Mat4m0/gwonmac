@@ -9,7 +9,7 @@
 // `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
 // binding the preload may read. The four spliced constants are declared for the
-// type checker in scripts/preload-injected-constants.d.mts.
+// type checker in scripts/preload-injected-constants.mts.
 /* global IPC, RENDERER_INIT_ARGUMENT, TOOLBOX_TOOLS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;

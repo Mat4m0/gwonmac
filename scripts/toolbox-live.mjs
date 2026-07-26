@@ -3,13 +3,18 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+// The sources, not `build/`. Importing the compiled copy made the contract a
+// second source of truth: a stale `build/` typechecked against a
+// `ToolboxDoctorReport` that no longer existed. `pnpm toolbox:live` loads this
+// file under `tests/ts-hook.mjs`, which is what lets a `.js` specifier reach
+// the `.ts` beside it.
 import {
   defaultGuildWarsProfile,
   inspectToolboxWorkspace,
-} from "../build/tools/toolbox-doctor.js";
+} from "../src/tools/toolbox-doctor.js";
 import {
   parseToolboxObservations,
-} from "../build/tools/toolbox-observations.js";
+} from "../src/tools/toolbox-observations.js";
 import {
   liveRunPlan,
   liveRunRefusal,
@@ -23,7 +28,7 @@ import { projectLiveResult } from "./toolbox-live/result.mjs";
 
 /** @typedef {import("playwright").Browser} Browser */
 /** @typedef {import("playwright").Page} Page */
-/** @typedef {import("../build/shared/automation.js").AutomationCommand} AutomationCommand */
+/** @typedef {import("../src/shared/automation.js").AutomationCommand} AutomationCommand */
 /**
  * @typedef {import("./toolbox-live/scenarios.mjs").ObservationSample}
  *   ObservationSample

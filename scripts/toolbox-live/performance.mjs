@@ -1,4 +1,4 @@
-import { AUTOMATION_COMMAND } from "../../build/shared/automation.js";
+import { AUTOMATION_COMMAND } from "../../src/shared/automation.js";
 import {
   BENCHMARK_ARMS,
   compareArms,
@@ -14,7 +14,7 @@ import {
  * @typedef {import("playwright").Page} Page
  * @typedef {import("playwright").CDPSession} CDPSession
  * @typedef {(
- *   command: import("../../build/shared/automation.js").AutomationCommand,
+ *   command: import("../../src/shared/automation.js").AutomationCommand,
  * ) => Promise<void>} SendAutomationCommand
  */
 

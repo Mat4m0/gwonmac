@@ -16,7 +16,7 @@
   },
   "main": "build/main/main.js",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22.6"
   },
   "scripts": {
     "postinstall": "install-electron",
@@ -31,7 +31,7 @@
     "test:packaged": "node tests/packaged-smoke.mjs && node tests/packaged-toolbox-runtime.mjs",
     "test:policy": "node --test tests/policy/*.mjs",
     "test:release": "node --test tests/release/*.mjs",
-    "toolbox:live": "pnpm build && node scripts/toolbox-live.mjs",
+    "toolbox:live": "pnpm build && node --import ./tests/ts-hook.mjs --experimental-strip-types scripts/toolbox-live.mjs",
     "toolbox:doctor": "pnpm build && node build/tools/toolbox-doctor.js",
     "toolbox:recertify": "pnpm build && node build/tools/toolbox-recertify.js",
     "toolbox:visual": "pnpm build && node scripts/toolbox-visual.mjs",
@@ -47,7 +47,7 @@
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
-    "verify": "pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
+    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

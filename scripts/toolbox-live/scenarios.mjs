@@ -20,10 +20,10 @@ import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.mjs";
 
 /** @typedef {import("playwright").Page} Page */
 /** @typedef {import("playwright").CDPSession} CDPSession */
-/** @typedef {import("../../build/shared/automation.js").AutomationCommand} AutomationCommand */
-/** @typedef {import("../../build/tools/toolbox-doctor.js").ToolboxDoctorReport} ToolboxDoctorReport */
+/** @typedef {import("../../src/shared/automation.js").AutomationCommand} AutomationCommand */
+/** @typedef {import("../../src/tools/toolbox-doctor.js").ToolboxDoctorReport} ToolboxDoctorReport */
 /**
- * @typedef {import("../../build/tools/toolbox-observations.js").ToolboxObservationType}
+ * @typedef {import("../../src/tools/toolbox-observations.js").ToolboxObservationType}
  *   ToolboxObservationType
  */
 

@@ -173,6 +173,7 @@ The full gate needs a build first. Entry points (`dev`, `package`, `make`,
 run them against that output:
 
 ```bash
+pnpm typecheck
 pnpm build
 pnpm lint
 pnpm check:links
