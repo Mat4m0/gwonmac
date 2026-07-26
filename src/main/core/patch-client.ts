@@ -51,6 +51,7 @@ import {
 } from "./patch-transport.js";
 import {
   parsePublishedClientManifest,
+  readPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./published-client.js";
 import { publishSnapshotIndex } from "./snapshot.js";
@@ -528,8 +529,9 @@ export class PatchClient {
         chunkSize: mf.chunkSize,
         chunkHashes: snapshotEntry.chunkHashes,
       });
+      const stagedManifest = join(stage, "manifest.json");
       await writeAtomicJson(
-        join(stage, "manifest.json"),
+        stagedManifest,
         parsePublishedClientManifest({
           clientFingerprint: fingerprint,
           artifacts: artifacts.map(({ name, entry }) => ({
@@ -544,6 +546,23 @@ export class PatchClient {
           chunkHashes: snapshotEntry.chunkHashes,
         }),
       );
+      // Check the stage exactly as a later boot will read it: parse the manifest
+      // back off disk and verify the artifacts against that. Assembly, hard
+      // linking and rename each trust their own inputs, so this is the only step
+      // that proves the bytes about to be promoted are the bytes the manifest
+      // shipping beside them describes. The `finally` below removes the stage,
+      // so failing here leaves the installed generation exactly as it was.
+      if (
+        (await verifyPublishedClientArtifacts(
+          stage,
+          await readPublishedClientManifest(stagedManifest),
+        )) !== true
+      ) {
+        throw new AppError(
+          "artifact_unverified",
+          "staged client artifacts do not match the manifest that describes them",
+        );
+      }
       try {
         await stat(this.artifactsDir);
         hadCurrent = true;
