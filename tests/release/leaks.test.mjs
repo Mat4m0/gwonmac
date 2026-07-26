@@ -7,7 +7,6 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { macOSBundleVersions } from "../../scripts/macos-version.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
@@ -143,19 +142,16 @@ test("packaged releases carry the project and third-party license notices", () =
   assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
 });
 
-test("macOS derives numeric bundle versions from the package prerelease", () => {
+// What the mapping produces is proved by executing it, in
+// tests/unit/every-release-raises-the-macos-build-number.test.ts. This is the
+// wiring: the packaged bundle takes its two numbers from that one function and
+// not from a literal somebody edits by hand.
+test("the packaged bundle takes its version numbers from the package version", () => {
   const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
   assert.match(forge, /const packageVersion =/);
   assert.match(forge, /macOSBundleVersions\(packageVersion\)/);
-  const alpha1 = macOSBundleVersions("1.2.3-alpha.1");
-  const alpha2 = macOSBundleVersions("1.2.3-alpha.2");
-  const stable = macOSBundleVersions("1.2.3");
-  assert.equal(alpha1.appVersion, "1.2.3");
-  assert.notEqual(alpha1.buildVersion, alpha2.buildVersion);
-  assert.ok(
-    Number(alpha2.buildVersion.split(".").at(-1)) <
-      Number(stable.buildVersion.split(".").at(-1)),
-  );
+  assert.match(forge, /appVersion: macOSVersion\.appVersion/);
+  assert.match(forge, /buildVersion: macOSVersion\.buildVersion/);
 });
 
 test("renderer permissions and embedded webviews fail closed", () => {
