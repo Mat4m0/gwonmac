@@ -253,10 +253,12 @@ test("the WASM section codec has exactly one home", async () => {
 test("saved-file recovery defers IndexedDB deletion until before renderer startup", async () => {
   const ipc = await readFile(path.join(root, "src/main/ipc.ts"), "utf8");
   const main = await readFile(path.join(root, "src/main/main.ts"), "utf8");
+  // P5.9 moved the handlers into a registry keyed by channel name.
   const resetHandler = ipc.slice(
-    ipc.indexOf("ipcMain.handle(IPC.gameStorageReset"),
-    ipc.indexOf("ipcMain.handle(IPC.diagnosticsGraphics"),
+    ipc.indexOf("gameStorageReset: channel("),
+    ipc.indexOf("diagnosticsGraphics: channel("),
   );
+  assert.ok(resetHandler.length > 0, "the gameStorageReset handler was not found");
 
   assert.match(resetHandler, /resetGameInput\(win\)/);
   assert.match(resetHandler, /paths\.gameStorageClearRequest/);

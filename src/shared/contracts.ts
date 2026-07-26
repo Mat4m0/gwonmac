@@ -379,6 +379,29 @@ export const IPC = {
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
+/**
+ * The channels that are not request/response and so have no `ipcMain.handle`
+ * handler: three main→renderer events, the main→renderer command, and the
+ * renderer's acknowledgement of it, which is an `ipcRenderer.send`.
+ *
+ * Named here so `InvokeChannel` below can be derived rather than listed. The
+ * handler registry in `src/main/ipc.ts` is checked against it, which is what
+ * makes a channel with no handler — and a handler with no channel — a build
+ * failure instead of a runtime "no handler registered".
+ */
+export const EVENT_CHANNELS = [
+  "progressEvent",
+  "prefetchEvent",
+  "socketEvent",
+  "rendererCommand",
+  "rendererCommandDone",
+] as const;
+
+export type EventChannel = (typeof EVENT_CHANNELS)[number];
+
+/** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
+export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
+
 export interface GwNativeApi {
   /** Launch-time configuration, available before the first renderer script. */
   init: RendererInit;

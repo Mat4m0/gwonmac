@@ -26,19 +26,23 @@ test("macOS identity uses the Guild Wars name and configured application icon", 
   assert.ok(icon.length > 100_000, "application icon is unexpectedly small");
 });
 
-test("every canonical IPC channel is wired through main", async () => {
-  // The preload half of this loop is gone: P5.6 made the preload's channel
-  // constants generated from this same object, so a channel cannot be missing
-  // from it. tests/unit/the-preload-is-generated-from-the-canonical-channels
-  // executes that instead of asserting about source text.
-  const { IPC } = await import(
+test("every main→renderer event channel is named somewhere in main", async () => {
+  // What used to be a 35-channel × 2 source scan. Both halves it policed are
+  // now compile-time facts and neither needs a regex:
+  //  - the preload's constants are generated from `IPC` (P5.6), so a channel
+  //    cannot be missing from it;
+  //  - the handler registry is `satisfies Record<InvokeChannel, …>` (P5.9), so
+  //    an `invoke` channel with no handler fails `tsc`.
+  // The five event channels have no registry, so they keep this assertion.
+  const { EVENT_CHANNELS } = await import(
     new URL("../../build/shared/contracts.js", import.meta.url)
   );
   const main = tracked
     .filter((file) => file.startsWith("src/main/"))
     .map((file) => readFileSync(path.join(root, file), "utf8"))
     .join("\n");
-  for (const [key] of Object.entries(IPC)) {
+  assert.equal(EVENT_CHANNELS.length, 5);
+  for (const key of EVENT_CHANNELS) {
     assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
   }
 });
