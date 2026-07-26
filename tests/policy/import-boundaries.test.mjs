@@ -63,6 +63,20 @@ const REJECTED = [
       'import { createRequire } from "node:module";\nexport const probe = createRequire(import.meta.url)("electron");\n',
   },
   {
+    what: "src/main/core requires electron through an aliased createRequire binding",
+    // The rule used to key on the callee, so `createRequire(url)("electron")`
+    // and the binding literally named `require` were rejected while any other
+    // name for the same function was not.
+    file: "src/main/core/probe.ts",
+    source:
+      'import { createRequire } from "node:module";\nconst load = createRequire(import.meta.url);\nexport const probe = load("electron");\n',
+  },
+  {
+    what: "src/main/core dynamically imports electron, spelled with a template literal",
+    file: "src/main/core/probe.ts",
+    source: "export const probe = async () => import(`electron`);\n",
+  },
+  {
     what: "src/main/core imports upward from src/main",
     file: "src/main/core/probe.ts",
     source:
@@ -111,6 +125,26 @@ const REJECTED = [
     source: 'export const probe = async () => import("../../main/paths.js");\n',
   },
   {
+    what: "src/main/core dynamically imports upward, spelled with a template literal",
+    file: "src/main/core/probe.ts",
+    source: "export const probe = async () => import(`../paths.js`);\n",
+  },
+  {
+    what: "src/main/core requires upward through createRequire",
+    // The require-flavoured selectors were wired to the Electron pattern only,
+    // so this crossing was reported by nothing but an unrelated stylistic rule.
+    file: "src/main/core/probe.ts",
+    source:
+      'import { createRequire } from "node:module";\nexport const probe = createRequire(import.meta.url)("../paths.js");\n',
+  },
+  {
+    what: "src/main/core imports one level up into a sibling of src/main/core named shared",
+    // src/shared is `../../shared/` from core and deeper from its
+    // subdirectories. A single `../shared/` is src/main/shared — upward.
+    file: "src/main/core/probe.ts",
+    source: 'import { log } from "../shared/log.js";\nexport const probe = log;\n',
+  },
+  {
     what: "src/renderer imports src/main",
     file: "src/renderer/probe.js",
     source:
@@ -139,6 +173,17 @@ const REJECTED = [
     source: 'export const probe = async () => import("../main/paths.js");\n',
   },
   {
+    what: "src/renderer dynamically imports src/main, spelled with a template literal",
+    file: "src/renderer/probe.js",
+    source: "export const probe = async () => import(`../main/paths.js`);\n",
+  },
+  {
+    what: "src/renderer requires src/main through createRequire",
+    file: "src/renderer/probe.js",
+    source:
+      'import { createRequire } from "node:module";\nexport const probe = createRequire(import.meta.url)("../main/paths.js");\n',
+  },
+  {
     what: "an apps/website .vue SFC imports src/main",
     file: "apps/website/app/pages/probe.vue",
     source:
@@ -160,6 +205,17 @@ const REJECTED = [
     what: "apps/website dynamically imports src/main",
     file: "apps/website/app/probe.ts",
     source: 'export const probe = async () => import("../../../../src/main/paths");\n',
+  },
+  {
+    what: "apps/website dynamically imports src/main, spelled with a template literal",
+    file: "apps/website/app/probe.ts",
+    source: "export const probe = async () => import(`../../../../src/main/paths`);\n",
+  },
+  {
+    what: "apps/website requires src/main through createRequire",
+    file: "apps/website/app/probe.ts",
+    source:
+      'import { createRequire } from "node:module";\nexport const probe = createRequire(import.meta.url)("../../../../src/main/paths");\n',
   },
   {
     what: "apps/website imports developer tooling under src/tools",

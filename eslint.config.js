@@ -7,15 +7,23 @@ import vueParser from "vue-eslint-parser";
 // resolves across it is rejected rather than only the shortest one:
 // `../paths.js`, `../../main/paths.js` and `../../../src/main/paths.js` all
 // name the same file. `no-restricted-imports` sees static imports and
-// `export ... from`; `no-restricted-syntax` covers dynamic `import()` and
-// `require()`, which that rule does not see.
+// `export ... from`; `no-restricted-syntax` covers every other way to name a
+// module, and it keys on the specifier rather than on the call shape.
 
 // Leaving src/main/core: anything that climbs out of it, unless the leading
 // `../` run lands in src/shared — plus any spelling that names src/main from
 // further away. Enumerating the shapes of an upward specifier (a bare file, two
 // levels up) missed `../services/registry.js`, which leaves core just as surely;
 // "climbs out and is not src/shared" is the property, and it is shorter.
-const OUT_OF_CORE = String.raw`^(?!(?:\.\./)+shared/)\.\./|(?:^|/)(?:\.\.|src)/main/`;
+// The exemption is `../../shared/` and deeper: from anywhere in src/main/core
+// the real src/shared is at least two levels up, so a single-level `../shared/`
+// is src/main/shared — upward, and rejected. Two is the minimum true depth, not
+// the exact one: a pattern sees the specifier and not the importing file, so
+// from a hypothetical src/main/core/sub/ the same `../../shared/` would name
+// src/main/shared and pass. src/main/core has no subdirectory today; expressing
+// the exact depth needs a second config block per level, which is more
+// structure than the hole is worth until one exists.
+const OUT_OF_CORE = String.raw`^(?!(?:\.\./){2,}shared/)\.\./|(?:^|/)(?:\.\.|src)/main/`;
 const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
 // Leaving apps/website: any escape into the host application's src/ other than
 // src/shared. Naming main/renderer/preload alone let src/tools/** through while
@@ -27,7 +35,23 @@ const ELECTRON = String.raw`^electron(/|$)`;
 
 /** esquery reads `/.../` inside an attribute value, so its slashes need escaping. */
 const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
-const dynamicImport = (pattern) => `ImportExpression[source.value=${selectorRegex(pattern)}]`;
+
+// Every non-static way to name a module, keyed on the specifier rather than on
+// the shape of the expression around it. Keying on the callee caught
+// `require("electron")` and `createRequire(url)("electron")` but not
+// `const load = createRequire(url); load("electron")`, and keying on
+// `source.value` missed the template-literal spelling of `import()` entirely —
+// one quote character defeated the boundary. An argument value cannot be
+// renamed. Applied to every boundary, so the four are provably symmetric.
+const crossings = (pattern, message) => {
+  const regex = selectorRegex(pattern);
+  return [
+    `ImportExpression[source.value=${regex}]`,
+    `ImportExpression[source.type="TemplateLiteral"][source.quasis.0.value.raw=${regex}]`,
+    `CallExpression[arguments.0.value=${regex}]`,
+    `CallExpression[arguments.0.type="TemplateLiteral"][arguments.0.quasis.0.value.raw=${regex}]`,
+  ].map((selector) => ({ selector, message }));
+};
 
 const NO_ELECTRON =
   "src/main/core/** must stay Electron-free. Keep Electron behind src/main/*.ts.";
@@ -77,16 +101,8 @@ export default tseslint.config(
       ],
       "no-restricted-syntax": [
         "error",
-        { selector: dynamicImport(ELECTRON), message: NO_ELECTRON },
-        {
-          selector: `CallExpression[callee.name="require"][arguments.0.value=${selectorRegex(ELECTRON)}]`,
-          message: NO_ELECTRON,
-        },
-        {
-          selector: `CallExpression[callee.callee.name="createRequire"][arguments.0.value=${selectorRegex(ELECTRON)}]`,
-          message: NO_ELECTRON,
-        },
-        { selector: dynamicImport(OUT_OF_CORE), message: NO_UPWARD },
+        ...crossings(ELECTRON, NO_ELECTRON),
+        ...crossings(OUT_OF_CORE, NO_UPWARD),
       ],
     },
   },
@@ -100,10 +116,7 @@ export default tseslint.config(
         "error",
         { patterns: [{ regex: INTO_MAIN, message: NO_MAIN_FROM_RENDERER }] },
       ],
-      "no-restricted-syntax": [
-        "error",
-        { selector: dynamicImport(INTO_MAIN), message: NO_MAIN_FROM_RENDERER },
-      ],
+      "no-restricted-syntax": ["error", ...crossings(INTO_MAIN, NO_MAIN_FROM_RENDERER)],
     },
   },
   // P0.3 — `flat/essential` only: the rules that catch errors. `flat/recommended`
@@ -139,10 +152,7 @@ export default tseslint.config(
         "error",
         { patterns: [{ regex: INTO_APP, message: WEBSITE_SHARED_ONLY }] },
       ],
-      "no-restricted-syntax": [
-        "error",
-        { selector: dynamicImport(INTO_APP), message: WEBSITE_SHARED_ONLY },
-      ],
+      "no-restricted-syntax": ["error", ...crossings(INTO_APP, WEBSITE_SHARED_ONLY)],
     },
   },
   {
