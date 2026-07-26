@@ -129,8 +129,8 @@ function harness(argv: string[]) {
 }
 
 const INIT: RendererInit = {
-  toolboxAutomation: true,
-  toolboxSelection: {
+  enhancementAutomation: true,
+  enhancementSelection: {
     nativeCursor: false,
     targetReadout: true,
   },
@@ -139,7 +139,7 @@ const INIT: RendererInit = {
 const ARGV = ["electron", `${RENDERER_INIT_ARGUMENT}${JSON.stringify(INIT)}`];
 const plainInit = (value: RendererInit): RendererInit => ({
   ...value,
-  toolboxSelection: { ...value.toolboxSelection },
+  enhancementSelection: { ...value.enhancementSelection },
 });
 
 test("launch configuration arrives as a preload argument, not as a URL", () => {
@@ -148,8 +148,8 @@ test("launch configuration arrives as a preload argument, not as a URL", () => {
 
 test("a renderer with no readable init argument gets the production posture", () => {
   const missing: RendererInit = {
-    toolboxAutomation: false,
-    toolboxSelection: {
+    enhancementAutomation: false,
+    enhancementSelection: {
       nativeCursor: false,
       targetReadout: false,
     },
@@ -164,7 +164,7 @@ test("a renderer with no readable init argument gets the production posture", ()
   assert.deepEqual(
     plainInit(
       harness([
-        `${RENDERER_INIT_ARGUMENT}{"toolboxAutomation":"1","toolboxSelection":{"nativeCursor":"yes","targetReadout":1}}`,
+        `${RENDERER_INIT_ARGUMENT}{"enhancementAutomation":"1","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
       ]).api.init,
     ),
     missing,

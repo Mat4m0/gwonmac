@@ -5,7 +5,7 @@ import {
   formatBuildEntry,
   inspectTemplateSaveCandidate,
 } from "./template-save-recert.js";
-import { defaultGuildWarsProfile } from "./toolbox-doctor.js";
+import { defaultGuildWarsProfile } from "./enhancement-doctor.js";
 
 const USAGE =
   "usage: template:recertify [path/to/Gw.jspi.wasm]"

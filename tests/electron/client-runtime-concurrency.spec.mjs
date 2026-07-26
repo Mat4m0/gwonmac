@@ -39,7 +39,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
-            toolboxEnabled: false,
+            enhancementsEnabled: false,
             onProgress: (value) => progress.push(value),
             onPrefetch: () => undefined,
           });
@@ -132,7 +132,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
-            toolboxEnabled: false,
+            enhancementsEnabled: false,
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -222,7 +222,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
-            toolboxEnabled: false,
+            enhancementsEnabled: false,
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -306,7 +306,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: true,
-            toolboxEnabled: false,
+            enhancementsEnabled: false,
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -319,7 +319,7 @@ test.describe("client generation coordination", () => {
             store,
             snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
-            toolboxBuild: null,
+            enhancementBuild: null,
           });
           const token = Object.freeze({
             generation: generation.generation,
@@ -347,7 +347,7 @@ test.describe("client generation coordination", () => {
             store,
             snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
-            toolboxBuild: null,
+            enhancementBuild: null,
           });
           await fs.writeFile(
             path.join(paths.artifacts, ".candidate.json"),
@@ -439,7 +439,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: true,
-            toolboxEnabled: false,
+            enhancementsEnabled: false,
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -452,7 +452,7 @@ test.describe("client generation coordination", () => {
             store,
             snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
-            toolboxBuild: null,
+            enhancementBuild: null,
           });
           const token = Object.freeze({
             generation: generation.generation,

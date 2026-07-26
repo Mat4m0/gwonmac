@@ -246,7 +246,7 @@ test("the WASM section codec has exactly one home", async () => {
   // The recertifier is developer tooling and lives in src/tools/, so it names
   // the same codec one directory further away (P4.4).
   for (const [file, specifier] of [
-    ["src/main/core/toolbox-transform.ts", './wasm-binary.js'],
+    ["src/main/core/enhancement-transform.ts", './wasm-binary.js'],
     ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
     ["src/tools/template-save-recert.ts", '../main/core/wasm-binary.js'],
   ]) {
@@ -296,7 +296,7 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
   );
 });
 
-test("the served module, not requested settings, decides whether Toolbox imports", async () => {
+test("the served module, not requested settings, decides whether Enhancement imports", async () => {
   const harness = await readFile(
     path.join(root, "src/renderer/harness.js"),
     "utf8",
@@ -308,19 +308,19 @@ test("the served module, not requested settings, decides whether Toolbox imports
   assert.ok(initialized.length > 0, "runtime initialization was not found");
   assert.match(
     initialized,
-    /Object\.values\(init\.toolboxSelection\)\.some\(Boolean\)/u,
+    /Object\.values\(init\.enhancementSelection\)\.some\(Boolean\)/u,
   );
   assert.match(
     initialized,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'toolbox_manifest',\s*\)\.length === 1/u,
+    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length === 1/u,
   );
   assert.match(
     initialized,
-    /installToolbox\(\s*toolboxInstance,\s*toolboxModule,\s*init\.toolboxSelection,\s*init\.toolboxAutomation,/u,
+    /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementSelection,\s*init\.enhancementAutomation,/u,
   );
   assert.ok(
-    initialized.indexOf("customSections") < initialized.indexOf("import('./toolbox.js')"),
-    "Toolbox was imported before the served module proved its manifest",
+    initialized.indexOf("customSections") < initialized.indexOf("import('./enhancements.js')"),
+    "Enhancement was imported before the served module proved its manifest",
   );
   assert.doesNotMatch(initialized, /init\.nativeCursor/u);
 });

@@ -1,13 +1,13 @@
 // P7.3. The snapshot's target type word used to be turned into `Item`,
 // `Gadget` or `Living` by the decoder, while the readiness register in
-// `docs/toolbox-development.md` still lists hostile/item/gadget as the next
+// `docs/enhancement-development.md` still lists hostile/item/gadget as the next
 // proof — three names, one of them certified. These tests execute the decoder
 // against real snapshot bytes: the certified pattern keeps its name, every
 // other accepted word publishes its raw bits under `Unknown`, and a word the
 // kernel would never publish is still rejected.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readToolboxSnapshot } from "../../src/renderer/toolbox-snapshot.js";
+import { readCompanionSnapshot } from "../../src/renderer/companion-snapshot.js";
 
 const MAGIC = 0x42545747;
 const LIVING = 0xdb;
@@ -39,7 +39,7 @@ function snapshot(agentTypeBits: number): ArrayBuffer {
 }
 
 function decode(agentTypeBits: number) {
-  return readToolboxSnapshot(snapshot(agentTypeBits), 0) as {
+  return readCompanionSnapshot(snapshot(agentTypeBits), 0) as {
     status: string;
     reason?: string;
     targetKind?: string;
@@ -89,7 +89,7 @@ test("no target means no bits and no kind", () => {
   view.setFloat32(52, 0, true);
   view.setFloat32(56, 0, true);
   view.setUint32(60, 0, true);
-  const state = readToolboxSnapshot(buffer, 0) as {
+  const state = readCompanionSnapshot(buffer, 0) as {
     status: string;
     targetValid: boolean;
     targetKind: string;

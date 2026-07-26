@@ -56,7 +56,7 @@ function run(source: string, argv: string[] = []) {
 
 const plainInit = (value: GwNativeApi["init"]): GwNativeApi["init"] => ({
   ...value,
-  toolboxSelection: { ...value.toolboxSelection },
+  enhancementSelection: { ...value.enhancementSelection },
 });
 
 test("the exposed method invokes the channel the contracts name", async () => {
@@ -151,13 +151,13 @@ test("the launch argument prefix comes from the contracts too", () => {
       load([
         contracts.RENDERER_INIT_ARGUMENT +
           JSON.stringify({
-            toolboxSelection: { nativeCursor: true, targetReadout: true },
+            enhancementSelection: { nativeCursor: true, targetReadout: true },
           }),
       ]).init,
     ),
     {
-      toolboxAutomation: false,
-      toolboxSelection: { nativeCursor: false, targetReadout: false },
+      enhancementAutomation: false,
+      enhancementSelection: { nativeCursor: false, targetReadout: false },
       templateFsTrace: false,
     },
   );
@@ -166,27 +166,27 @@ test("the launch argument prefix comes from the contracts too", () => {
       ...load([
         prefix +
           JSON.stringify({
-            toolboxSelection: { nativeCursor: true, targetReadout: true },
+            enhancementSelection: { nativeCursor: true, targetReadout: true },
           }),
-      ]).init.toolboxSelection,
+      ]).init.enhancementSelection,
     },
     { nativeCursor: true, targetReadout: true },
   );
 });
 
-test("every canonical Toolbox tool crosses without another field list", () => {
+test("every canonical Enhancement tool crosses without another field list", () => {
   const futureTool = "futureTool";
   const source = preloadSource(
     {
       ...contracts,
-      TOOLBOX_TOOLS: [...contracts.TOOLBOX_TOOLS, futureTool],
+      ENHANCEMENTS: [...contracts.ENHANCEMENTS, futureTool],
     },
     root,
   );
   const { api } = run(source, [
     contracts.RENDERER_INIT_ARGUMENT +
       JSON.stringify({
-        toolboxSelection: {
+        enhancementSelection: {
           nativeCursor: false,
           targetReadout: false,
           [futureTool]: true,
@@ -194,7 +194,7 @@ test("every canonical Toolbox tool crosses without another field list", () => {
       }),
   ]);
   assert.equal(
-    (api.init.toolboxSelection as Record<string, boolean>)[futureTool],
+    (api.init.enhancementSelection as Record<string, boolean>)[futureTool],
     true,
   );
 });
@@ -207,7 +207,7 @@ test("a contracts export the body needs but does not have fails the build", () =
   assert.deepEqual(PRELOAD_CONSTANTS, [
     "IPC",
     "RENDERER_INIT_ARGUMENT",
-    "TOOLBOX_TOOLS",
+    "ENHANCEMENTS",
     "WASM_BRIDGE_MARKERS",
   ]);
 });

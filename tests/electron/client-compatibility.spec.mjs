@@ -177,7 +177,7 @@ test.describe("client compatibility", () => {
         const report = compatibilityReport(
           {
             state: "uncertified",
-            toolboxActive: false,
+            enhancementActive: false,
             clientSha256: "a".repeat(64),
           },
           { nativeCursor: true, targetReadout: false },

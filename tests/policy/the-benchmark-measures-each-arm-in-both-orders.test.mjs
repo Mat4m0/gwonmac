@@ -2,11 +2,11 @@
 //
 // The old schedule measured the disabled arm first and the enabled arm second,
 // every time. This drives the real scheduler from
-// `scripts/toolbox-live/benchmark.mjs` against a session double whose two arms
+// `scripts/enhancements-live/benchmark.mjs` against a session double whose two arms
 // cost exactly the same and whose frame time drifts upward over the run, and
-// shows the two things that matter: the old shape reports that drift as Toolbox
+// shows the two things that matter: the old shape reports that drift as Enhancement
 // overhead, and the mirrored one does not. It also drives the acceptance gate
-// in `scripts/toolbox-live/scenarios.mjs` over the record the scheduler
+// in `scripts/enhancements-live/scenarios.mjs` over the record the scheduler
 // produces, so the gate and the benchmark cannot drift apart in shape.
 //
 // Nothing here needs a build, a game, or a page.
@@ -20,8 +20,8 @@ import {
   mergeFrames,
   runBalancedBenchmark,
   summarizeFrames,
-} from "../../scripts/toolbox-live/benchmark.mjs";
-import { SCENARIOS } from "../../scripts/toolbox-live/scenarios.mjs";
+} from "../../scripts/enhancements-live/benchmark.mjs";
+import { SCENARIOS } from "../../scripts/enhancements-live/scenarios.mjs";
 
 const OFF = BENCHMARK_ARMS.dispatcherOff;
 const ON = BENCHMARK_ARMS.observerOn;
@@ -157,14 +157,14 @@ describe("the benchmark measures each arm in both orders", () => {
     );
   });
 
-  it("reports no regression for a drift the old order would have blamed on the Toolbox", async () => {
+  it("reports no regression for a drift the old order would have blamed on the Enhancement", async () => {
     // 1 ms per phase of pure drift, and two arms that cost exactly the same.
     const session = driftingSession({ driftMsPerPhase: 1 });
     const result = await runBalancedBenchmark([OFF, ON], session.effects);
     const balanced = compareArms(result.arms, OFF, ON);
 
     // The old schedule: one phase of each, disabled first. Same arithmetic,
-    // same session, no Toolbox cost anywhere in it.
+    // same session, no Enhancement cost anywhere in it.
     const biased = compareArms(
       {
         [OFF]: { frames: mergeFrames([summarizeFrames(session.samplesFor(OFF, 0))]) },

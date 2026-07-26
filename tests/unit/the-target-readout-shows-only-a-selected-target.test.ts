@@ -1,4 +1,4 @@
-// P7.2. The first Toolbox feature. The states here come out of the real
+// P7.2. The first Enhancement feature. The states here come out of the real
 // decoder, driven by real snapshot bytes, so this executes the last two stages
 // of the pipeline together — snapshot → decoder → UI — and reads back what
 // landed in the elements the readout owns. Nothing here inspects source text.
@@ -7,8 +7,8 @@ import test from "node:test";
 import {
   createTargetReadout,
   targetReadout,
-} from "../../src/renderer/toolbox-readout.js";
-import { readToolboxSnapshot } from "../../src/renderer/toolbox-snapshot.js";
+} from "../../src/renderer/enhancement-readout.js";
+import { readCompanionSnapshot } from "../../src/renderer/companion-snapshot.js";
 
 const MAGIC = 0x42545747;
 const LIVING = 0xdb;
@@ -52,7 +52,7 @@ function bytes(options: {
 }
 
 const decode = (options?: Parameters<typeof bytes>[0]) =>
-  readToolboxSnapshot(bytes(options), 0);
+  readCompanionSnapshot(bytes(options), 0);
 
 /** The DOM surface the readout uses, and nothing else. */
 class FakeElement {

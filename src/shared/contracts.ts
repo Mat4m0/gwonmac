@@ -157,21 +157,21 @@ export interface ClockSyncResponse {
 }
 
 /**
- * The complete set of independently selectable Toolbox features.
+ * The complete set of independently selectable Enhancement features.
  *
  * Canonical here because settings, main-process policy, and the generated
  * preload transport all need the same names. A new tool is declared once;
  * its implementation still has to decide what enabling it does.
  */
-export const TOOLBOX_TOOLS = [
+export const ENHANCEMENTS = [
   "nativeCursor",
   "targetReadout",
 ] as const;
 
-export type ToolboxTool = (typeof TOOLBOX_TOOLS)[number];
-export type ToolboxSelection = Record<ToolboxTool, boolean>;
+export type Enhancement = (typeof ENHANCEMENTS)[number];
+export type EnhancementSelection = Record<Enhancement, boolean>;
 
-export interface AppSettings extends ToolboxSelection {
+export interface AppSettings extends EnhancementSelection {
   renderScale: 1 | 1.5 | 2;
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
@@ -283,10 +283,10 @@ export type ReleaseNotice =
 /**
  * Which of the three client-certification states this session is in. The two
  * WASM transforms are keyed by different hashes, so certification can succeed
- * for template save/load and fail for the Toolbox tools:
+ * for template save/load and fail for the Enhancement tools:
  *
- * - `certified`      templates, screenshots and chat logs work; Toolbox may load
- * - `template-only`  those three work; Toolbox may not load
+ * - `certified`      templates, screenshots and chat logs work; Enhancement may load
+ * - `template-only`  those three work; Enhancement may not load
  * - `uncertified`    ArenaNet's untouched module is served; nothing is repaired
  *
  * `src/main/client-certification.ts` is the only producer.
@@ -305,9 +305,9 @@ export interface ClientCompatibility {
   clientSha256: string;
   /**
    * Whether the module selected for this session contains the certified
-   * Toolbox transform. This is effective runtime state, not build support.
+   * Enhancement transform. This is effective runtime state, not build support.
    */
-  toolboxActive: boolean;
+  enhancementActive: boolean;
 }
 
 /**
@@ -341,10 +341,10 @@ export interface ClientSession {
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {
-  /** Toolbox automation tier. Unpackaged builds only. */
-  toolboxAutomation: boolean;
-  /** The independently selected Toolbox tools for this launch. */
-  toolboxSelection: ToolboxSelection;
+  /** Enhancement automation tier. Unpackaged builds only. */
+  enhancementAutomation: boolean;
+  /** The independently selected Enhancement tools for this launch. */
+  enhancementSelection: EnhancementSelection;
   /** Template filesystem syscall trace. Unpackaged builds only. */
   templateFsTrace: boolean;
 }

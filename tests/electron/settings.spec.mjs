@@ -173,7 +173,7 @@ test.describe("settings experience", () => {
       // say the change waits quietly for the next launch.
       await expect(controls).toContainText("restarts the app");
       await expect(controls).not.toContainText("next time you open this app");
-      // Loading the Toolbox does not paint a cursor by itself: the game must
+      // Loading the Enhancement does not paint a cursor by itself: the game must
       // publish one first, and this launcher has no game.
       expect(
         await page.locator("#canvas").evaluate((canvas) =>
@@ -184,20 +184,20 @@ test.describe("settings experience", () => {
       // explicit opt-in does, not around it.
       expect(
         await page.evaluate(
-          () => globalThis.gwNative.init.toolboxSelection.nativeCursor,
+          () => globalThis.gwNative.init.enhancementSelection.nativeCursor,
         ),
       ).toBe(true);
       expect(
         await page.evaluate(
-          () => globalThis.gwNative.init.toolboxSelection.targetReadout,
+          () => globalThis.gwNative.init.enhancementSelection.targetReadout,
         ),
       ).toBe(false);
-      // The generated launch selection carries the canonical Toolbox registry
+      // The generated launch selection carries the canonical Enhancement registry
       // into the renderer. Every member must bind both settings surfaces; a
       // future tool cannot silently stop at main/preload.
       expect(
         await page.evaluate(() =>
-          Object.keys(globalThis.gwNative.init.toolboxSelection).map((name) => {
+          Object.keys(globalThis.gwNative.init.enhancementSelection).map((name) => {
             const id = name.replace(/[A-Z]/gu, (letter) =>
               `-${letter.toLowerCase()}`);
             return {
@@ -220,7 +220,7 @@ test.describe("settings experience", () => {
     }
   });
 
-  test("reset and a changed Toolbox posture restart as one action", async () => {
+  test("reset and a changed Enhancement posture restart as one action", async () => {
     const fixture = await launchOffline(
       "gw-settings-reset-restart-e2e-",
       {},

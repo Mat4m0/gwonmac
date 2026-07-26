@@ -1,6 +1,6 @@
 import type { SnapshotMetadata } from "../../shared/contracts.js";
 import type { ChunkStore } from "./chunk-store.js";
-import type { KnownToolboxBuild } from "./toolbox-builds.js";
+import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
 export interface ActiveClient {
   readonly generation: number;
@@ -8,7 +8,7 @@ export interface ActiveClient {
   readonly store: ChunkStore;
   readonly snapshotMeta: SnapshotMetadata;
   readonly wasmPath: string;
-  readonly toolboxBuild: KnownToolboxBuild | null;
+  readonly enhancementBuild: KnownEnhancementBuild | null;
 }
 
 export type ClientGeneration = Omit<ActiveClient, "generation">;

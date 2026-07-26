@@ -45,7 +45,7 @@ import {
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
-import { TOOLBOX_TRANSFORM_ABI } from "./core/toolbox-transform.js";
+import { ENHANCEMENT_TRANSFORM_ABI } from "./core/enhancement-transform.js";
 import {
   count,
   gauge,
@@ -72,7 +72,7 @@ interface ClientRuntimeOptions {
   hostVersion: string;
   cachedOnly: boolean;
   offlineShell: boolean;
-  toolboxEnabled: boolean;
+  enhancementsEnabled: boolean;
   onProgress: (progress: DownloadProgress) => void;
   onPrefetch: (progress: PrefetchProgress) => void;
 }
@@ -173,7 +173,7 @@ export class ClientRuntime {
 
   private async selectClientWasm(): Promise<{
     wasmPath: string;
-    build: ActiveClient["toolboxBuild"];
+    build: ActiveClient["enhancementBuild"];
   }> {
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
@@ -186,7 +186,7 @@ export class ClientRuntime {
       // Nothing can be certified without the hash, so nothing is transformed.
       this.compatibilityValue = null;
       gauge("wasm.templateSaveCompatible", false);
-      gauge("toolbox.supportedBuild", false);
+      gauge("enhancement.supportedBuild", false);
       logEvent({ k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
@@ -198,15 +198,15 @@ export class ClientRuntime {
       officialWasmPath: officialWasm,
       officialSha256,
       certification,
-      toolboxRequested: this.options.toolboxEnabled,
+      enhancementRequested: this.options.enhancementsEnabled,
       compatibilityCacheRoot: this.options.paths.compatibility,
-      toolboxCacheRoot: this.options.paths.toolbox,
+      enhancementCacheRoot: this.options.paths.enhancements,
     });
     const state = prepared.state;
     this.compatibilityValue = {
       state,
       clientSha256: officialSha256,
-      toolboxActive: prepared.toolboxBuild !== null,
+      enhancementActive: prepared.enhancementBuild !== null,
     };
     gauge("client.buildCertification", state);
     gauge("wasm.templateSaveCompatible", state !== "uncertified");
@@ -223,21 +223,21 @@ export class ClientRuntime {
       });
     }
 
-    if (prepared.failure?.stage === "toolbox") {
-      logEvent({ k: "toolbox.prepareFailed",
+    if (prepared.failure?.stage === "enhancement") {
+      logEvent({ k: "enhancement.prepareFailed",
         code: errorCode(prepared.failure.error),
       });
     }
-    if (prepared.toolboxBuild) {
-      logEvent({ k: "toolbox.clientPrepared",
-        buildId: prepared.toolboxBuild.buildId,
-        transformAbi: TOOLBOX_TRANSFORM_ABI,
+    if (prepared.enhancementBuild) {
+      logEvent({ k: "enhancement.clientPrepared",
+        buildId: prepared.enhancementBuild.buildId,
+        transformAbi: ENHANCEMENT_TRANSFORM_ABI,
       });
-    } else if (this.options.toolboxEnabled && state !== "certified") {
-      logEvent({ k: "toolbox.uncertifiedClientBlocked" });
+    } else if (this.options.enhancementsEnabled && state !== "certified") {
+      logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
-    gauge("toolbox.supportedBuild", prepared.toolboxBuild !== null);
-    return { wasmPath: prepared.wasmPath, build: prepared.toolboxBuild };
+    gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);
+    return { wasmPath: prepared.wasmPath, build: prepared.enhancementBuild };
   }
 
   private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {
@@ -269,7 +269,7 @@ export class ClientRuntime {
     candidateFingerprint: string | null = null,
   ): Promise<ActiveClient> {
     this.initialResidencyRecorded = false;
-    const [snapshotMeta, toolbox] = await Promise.all([
+    const [snapshotMeta, enhancement] = await Promise.all([
       this.snapshotFor(store),
       this.selectClientWasm(),
     ]);
@@ -278,8 +278,8 @@ export class ClientRuntime {
       artifactsDir: this.options.paths.artifacts,
       store,
       snapshotMeta,
-      wasmPath: toolbox.wasmPath,
-      toolboxBuild: toolbox.build,
+      wasmPath: enhancement.wasmPath,
+      enhancementBuild: enhancement.build,
     });
     this.candidateHealthToken = candidateFingerprint
       ? Object.freeze({

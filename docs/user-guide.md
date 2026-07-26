@@ -87,8 +87,8 @@ Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
-on release. **Controls** owns two independent Toolbox choices. **Use the game's
-own cursor** is on by default: the host reads the cursor Guild Wars itself draws
+on release. **Controls** owns two independent GWonMac Tools choices. **Use the
+game's own cursor** is on by default: the host reads the cursor Guild Wars itself draws
 out of your installed client and shows it over the game view; no cursor artwork
 ships with this app and none is downloaded. **Show target distance and range**
 is off by default and adds the selected target's distance and range band at the
@@ -231,9 +231,9 @@ requests. After that bounded pause, pressing the button asks GitHub again.
 
 Each ArenaNet client build is certified separately for two things: the repair
 that makes build templates, screenshots, and chat logs work, and the read-only
-Toolbox transform used by the cursor and target readout. When ArenaNet ships a
-build this app has not certified — or has certified for saving files but not
-yet for the Toolbox tools you selected — the loading screen says so once for
+enhancement transform used by the cursor and target readout. When ArenaNet ships
+a build this app has not certified — or has certified for saving files but not
+yet for the GWonMac Tools you selected — the loading screen says so once for
 that build, names exactly what is affected, and offers **Play Guild Wars** as
 the primary action. The notice explains; it does not block you.
 
@@ -244,12 +244,12 @@ visible under **Settings → Controls**. An uncertified client build does not me
 the app is out of date — whether a newer release exists is the separate question
 above, which the notice's own **Check for Updates** button answers.
 
-The two Toolbox choices control their observations independently. The cursor
+The two GWonMac Tools choices control their observations independently. The cursor
 choice reads only the cursor Guild Wars is drawing. The target-readout choice
 reads map, player, and selected-target state and shows a small line at the top
 of the game view; it disappears with no target, cannot be clicked, and never
 covers anything interactive. A disabled tool performs no per-tick collection.
-With both choices off, no Toolbox hook is installed, no companion kernel loads,
+With both choices off, no enhancement hook is installed, no companion kernel loads,
 and nothing observes game memory. Either way nothing the app does sends game
 input or acts on your behalf. On a certified build the app derives one narrowly
 patched module that connects the client's missing file operations to its

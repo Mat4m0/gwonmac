@@ -14,13 +14,13 @@ describe("canonical renderer URL", () => {
     // root no longer allow-lists anything. A parameter it once accepted is now
     // exactly as untrusted as one it never did.
     for (const url of [
-      "gw://app/?toolbox-automation=1",
+      "gw://app/?enhancement-automation=1",
       "gw://app/?native-cursor=1",
       "gw://app/?template-fs-trace=1",
-      "gw://app/?toolbox-automation=1&native-cursor=1",
+      "gw://app/?enhancement-automation=1&native-cursor=1",
       "gw://app/index.html?native-cursor=1",
       "gw://app/?unknown=1",
-      "gw://app/?toolbox-fixture=map",
+      "gw://app/?enhancement-fixture=map",
     ]) {
       assert.equal(isCanonicalRendererUrl(url), false, url);
     }

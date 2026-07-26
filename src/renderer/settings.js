@@ -200,7 +200,7 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      toolSettings.render(saved);
+      enhancementSettings.render(saved);
       window.gwApplySettings?.(saved);
       return saved;
     });
@@ -211,10 +211,10 @@
   // Both tool surfaces are rendered from the settings main returned, never
   // from requested state. Declining the required restart therefore restores
   // what is actually running.
-  const toolSettings = window.gwToolSettings.create({
+  const enhancementSettings = window.gwEnhancementSettings.create({
     form,
     byId,
-    selection: window.gwNative.init.toolboxSelection,
+    selection: window.gwNative.init.enhancementSelection,
     persist: persistSettings,
     current: () => currentSettings,
   });
@@ -280,7 +280,7 @@
     renderClientCompatibility(
       document,
       session,
-      window.gwNative.init.toolboxSelection,
+      window.gwNative.init.enhancementSelection,
     );
     return session;
   }
@@ -307,7 +307,7 @@
       await import('./client-compatibility-notice.js');
     if (!compatibilityNotice.compatibilityReport(
       compatibility,
-      window.gwNative.init.toolboxSelection,
+      window.gwNative.init.enhancementSelection,
     ).degraded) return;
     const settings = await loadSettings().catch(() => null);
     if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;
@@ -350,7 +350,7 @@
    * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
    */
   function patchForControl(control) {
-    const toolPatch = toolSettings.patchFor(control);
+    const toolPatch = enhancementSettings.patchFor(control);
     if (toolPatch) return toolPatch;
     switch (control.name) {
       case 'renderScale': {
@@ -386,7 +386,7 @@
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
     renderScale.value = String(settings.renderScale);
-    toolSettings.render(settings);
+    enhancementSettings.render(settings);
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
@@ -605,7 +605,7 @@
     choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? false;
     // The gate runs after the settings load, so the tool boxes show the saved
     // answer rather than a default written a second time in the renderer.
-    if (currentSettings) toolSettings.render(currentSettings);
+    if (currentSettings) enhancementSettings.render(currentSettings);
     dataChoiceFullSize.textContent = remaining > 0
       ? `Download ${size(remaining)} before starting.`
       : 'The full game is already downloaded.';
@@ -791,7 +791,7 @@
         // choice is made before the renderer exists, so saving it restarts the
         // app. A player who declined the restart saved nothing, and the box has
         // already gone back to what is true; the sentence explains why.
-        const toolResult = toolSettings.resultFor(control, patch, saved);
+        const toolResult = enhancementSettings.resultFor(control, patch, saved);
         if (toolResult) {
           if (toolResult.applied) flashSaved();
           feedback.textContent = toolResult.text;
