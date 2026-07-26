@@ -5,9 +5,9 @@
 // name: `../paths.js`, `../../main/paths.js` and `../../../src/main/paths.js`
 // all resolve to src/main/paths.ts.
 //
-// One boundary cannot be executed: the nine apps/website `.vue` SFCs match no
-// ESLint configuration (P0.3 deferred the Vue parser), so the last test scans
-// their text instead and says so in its name.
+// Every boundary is executed, including the nine apps/website `.vue` SFCs:
+// P0.3 added vue-eslint-parser, so the rule runs on them rather than a weaker
+// text scan standing in for it.
 //
 // The only override is turning off typescript-eslint's project service, which
 // otherwise refuses a path that has no file behind it. The boundary rules
@@ -16,7 +16,6 @@
 // writing throwaway files into src/.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -126,6 +125,18 @@ const REJECTED = [
     source: 'export const probe = async () => import("../main/paths.js");\n',
   },
   {
+    what: "an apps/website .vue SFC imports src/main",
+    file: "apps/website/app/pages/probe.vue",
+    source:
+      '<script setup lang="ts">\nimport { userDataDir } from "../../../../src/main/paths";\nconst probe = userDataDir;\n</script>\n<template><div>{{ probe }}</div></template>\n',
+  },
+  {
+    what: "an apps/website .vue SFC dynamically imports src/renderer",
+    file: "apps/website/app/pages/probe.vue",
+    source:
+      '<script setup lang="ts">\nconst probe = () => import("../../../../src/renderer/harness.js");\n</script>\n<template><div @click="probe" /></template>\n',
+  },
+  {
     what: "apps/website imports src/main",
     file: "apps/website/app/probe.ts",
     source:
@@ -176,6 +187,12 @@ const ALLOWED = [
     source: 'import { IPC } from "../shared/contracts.js";\nexport const probe = IPC;\n',
   },
   {
+    what: "an apps/website .vue SFC imports src/shared",
+    file: "apps/website/app/pages/probe.vue",
+    source:
+      '<script setup lang="ts">\nimport { EXTERNAL_URLS } from "../../../../src/shared/contracts";\nconst probe = EXTERNAL_URLS;\n</script>\n<template><div>{{ probe }}</div></template>\n',
+  },
+  {
     what: "apps/website imports src/shared",
     file: "apps/website/app/probe.ts",
     source:
@@ -209,11 +226,9 @@ for (const probe of ALLOWED) {
   });
 }
 
-test("scanned, not linted: no apps/website .vue file names src/main, renderer or preload", () => {
-  // ESLint has no configuration that matches .vue, so this boundary is the one
-  // P0.2 rule a lint rule cannot hold. Reading the text is weaker than running
-  // the rule; it is here so the claim is checked by something rather than
-  // nothing until P0.3's Vue parser decision lands.
+test("the .vue sources this boundary covers still exist", () => {
+  // If the website ever stops using SFCs, the probes above would pass while
+  // proving nothing about any real file.
   const sfcs = execFileSync("git", ["ls-files", "--", "apps/website/**/*.vue"], {
     cwd: root,
     encoding: "utf8",
@@ -222,11 +237,4 @@ test("scanned, not linted: no apps/website .vue file names src/main, renderer or
     .filter(Boolean);
 
   assert.ok(sfcs.length > 0, "expected the website to still have .vue sources");
-
-  const crossings = sfcs.filter((file) =>
-    /(?:^|["'/])(?:\.\.|src)\/(?:main|renderer|preload)\//m.test(
-      readFileSync(path.join(root, file), "utf8"),
-    ),
-  );
-  assert.deepEqual(crossings, []);
 });

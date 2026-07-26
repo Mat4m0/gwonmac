@@ -10,11 +10,12 @@ import { ESLint } from "eslint";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const eslint = new ESLint({ cwd: root });
 
-test("ESLint covers the packaging config and the website TypeScript sources", async () => {
+test("ESLint covers the packaging config and every website source", async () => {
   for (const file of [
     "forge.config.ts",
     "apps/website/nuxt.config.ts",
     "apps/website/app/composables/useTracking.ts",
+    "apps/website/app/pages/index.vue",
   ]) {
     assert.equal(
       await eslint.isPathIgnored(path.join(root, file)),
@@ -24,11 +25,11 @@ test("ESLint covers the packaging config and the website TypeScript sources", as
   }
 });
 
-test("the website .vue sources are still unlinted, which P0.3 deferred", async () => {
-  // Not an approval: a green suite must not read as coverage the repository
-  // does not have. `vue-eslint-parser` and `eslint-plugin-vue` are absent, and
-  // the TypeScript parser fails on every SFC. When that decision is taken this
-  // test goes red and forces the claim above to be widened.
+test("every website .vue source is linted, not just the one named above", async () => {
+  // P0.3 resolved: vue-eslint-parser and eslint-plugin-vue are installed, so the
+  // SFCs are parsed. This enumerates them from git rather than a literal list,
+  // because a new page added outside the config's glob would otherwise be
+  // unlinted and invisible in a green `pnpm lint`.
   const sfcs = execFileSync("git", ["ls-files", "--", "apps/website/**/*.vue"], {
     cwd: root,
     encoding: "utf8",
@@ -40,8 +41,8 @@ test("the website .vue sources are still unlinted, which P0.3 deferred", async (
   for (const file of sfcs) {
     assert.equal(
       await eslint.isPathIgnored(path.join(root, file)),
-      true,
-      `${file} is linted now — widen the coverage assertion above`,
+      false,
+      `${file} is excluded from linting`,
     );
   }
 });

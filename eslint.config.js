@@ -1,5 +1,7 @@
 import eslint from "@eslint/js";
+import pluginVue from "eslint-plugin-vue";
 import tseslint from "typescript-eslint";
+import vueParser from "vue-eslint-parser";
 
 // P0.2 — each boundary is one regular expression, so every spelling that
 // resolves across it is rejected rather than only the shortest one:
@@ -98,11 +100,34 @@ export default tseslint.config(
       ],
     },
   },
+  // P0.3 — `flat/essential` only: the rules that catch errors. `flat/recommended`
+  // adds 96 attribute-line-break opinions, and nothing else in this repository
+  // enforces formatting, so adopting them would be churn rather than coverage.
+  ...pluginVue.configs["flat/essential"],
+  {
+    // P0.3 — the .vue SFCs are most of the website (9 files against 4 .ts), so
+    // leaving them unparsed left the P0.2 boundary below unenforced exactly
+    // where the code is. vue-eslint-parser reads the SFC; its inner parser
+    // reads `<script setup lang="ts">`.
+    files: ["**/*.vue"],
+    languageOptions: {
+      parser: vueParser,
+      parserOptions: { parser: tseslint.parser, ecmaVersion: "latest", sourceType: "module" },
+    },
+    rules: {
+      // Nuxt auto-imports (`useSeoMeta`, `useHead`, …) have no import statement,
+      // so ESLint sees every one as undefined. `pnpm test:website` runs
+      // `nuxt typecheck`, which resolves them properly and is the real oracle —
+      // this would be a second, worse one. Same reasoning typescript-eslint
+      // gives for disabling no-undef on TypeScript sources.
+      "no-undef": "off",
+      // Pages and layouts are named by their route, which is a Nuxt convention.
+      "vue/multi-word-component-names": "off",
+    },
+  },
   {
     // P0.2 — the website may read canonical contracts, never main-process code.
-    // The nine .vue SFCs are outside every ESLint config (P0.3 deferred the Vue
-    // parser); tests/policy/import-boundaries.test.mjs scans them instead.
-    files: ["apps/website/**/*.{js,mjs,ts}"],
+    files: ["apps/website/**/*.{js,mjs,ts,vue}"],
     rules: {
       "no-restricted-imports": [
         "error",

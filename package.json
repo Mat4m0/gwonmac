@@ -59,8 +59,10 @@
     "@typescript-eslint/parser": "^8.43.0",
     "electron": "^43.2.0",
     "eslint": "^10.7.0",
+    "eslint-plugin-vue": "^10.10.0",
     "playwright": "^1.55.0",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.43.0"
+    "typescript-eslint": "^8.43.0",
+    "vue-eslint-parser": "^10.4.1"
   }
 }
