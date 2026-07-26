@@ -143,10 +143,11 @@ const SCREENSHOTS = [
         </FaqItem>
         <FaqItem question="Will this get me banned?">
           <p>
-            Probably not, but we cannot make promises on ArenaNet's behalf. The app runs the
-            official, unmodified Guild Wars client and downloads it directly from ArenaNet. It does
-            not alter gameplay, automate play, inject code into the game, or give any in-game
-            advantage, it is an interoperability layer that lets the client run on macOS.
+            Probably not, but we cannot make promises on ArenaNet's behalf. The app downloads and
+            preserves ArenaNet's official client artifact, and derives a local copy that repairs
+            features the web build left unfinished: saving build templates, and drawing the cursor
+            the client already contains. It does not send game input or act on the player's behalf.
+            It is an interoperability layer that lets the client run on macOS.
           </p>
           <p>
             Still, use it at your own discretion:
