@@ -113,6 +113,51 @@
   launcherUpdateGet.dataset.external = 'releases';
   launcherUpdateGet.hidden = true;
 
+  // ----------------------------------------------------- client compatibility
+  // One main-process module owns which of the three certification states this
+  // session is in; these are its two surfaces. The dock notice appears once per
+  // ArenaNet build and only while something is actually degraded; the Settings
+  // status is always there, so a player who dismissed the notice weeks ago can
+  // still find out why a build template will not save.
+  const compatTitle = element('h2', { id: 'client-compat-title' });
+  const compatDetail = element('p', { id: 'client-compat-detail' });
+  const compatVersion = element('span', { id: 'client-compat-version' });
+  const compatUpdateStatus = element('span', { id: 'client-compat-update' });
+  compatUpdateStatus.hidden = true;
+  const compatCheck = element('button', {
+    className: 'launcher-link',
+    text: 'Check for Updates',
+  });
+  compatCheck.type = 'button';
+  const compatReleases = element('button', {
+    className: 'launcher-link',
+    text: 'Open Releases…',
+  });
+  compatReleases.type = 'button';
+  const compatPlay = element('button', {
+    id: 'client-compat-play',
+    className: 'launcher-primary',
+    text: 'Play Guild Wars',
+  });
+  compatPlay.type = 'button';
+  const compatNotice = element('section', { id: 'client-compat' });
+  compatNotice.hidden = true;
+  compatNotice.setAttribute('aria-labelledby', 'client-compat-title');
+
+  const settingsCompatStatus = element('p', {
+    id: 'settings-compat-status',
+    className: 'settings-status',
+  });
+  settingsCompatStatus.setAttribute('role', 'status');
+  const settingsCompatDetail = element('p', {
+    id: 'settings-compat-detail',
+    className: 'settings-note',
+  });
+  const settingsCompatVersion = element('p', {
+    id: 'settings-compat-version',
+    className: 'settings-note',
+  });
+
   // The first-run gate asks the update question next to the data question:
   // switching it on silently would contradict the no-phone-home posture, and
   // leaving it off silently means nobody ever discovers it exists.
@@ -121,6 +166,9 @@
 
   /** @type {import('./update-action.js').UpdateAction | null} */
   let updateAction = null;
+
+  /** @type {import('../shared/contracts.js').ClientSession | null} */
+  let currentSession = null;
 
   /** @type {import('../shared/contracts.js').AppSettings | null} */
   let currentSettings = null;
@@ -286,6 +334,14 @@
     updateWhen.textContent = view.lastChecked;
     updateWhen.hidden = view.lastChecked === '';
     updateReleases.hidden = !view.updateAvailable;
+
+    // The mismatch notice asks the same question through the same state: three
+    // triggers, one answer. With automatic checks off it makes no request
+    // until this button is pressed.
+    compatCheck.textContent = view.actionLabel;
+    compatCheck.disabled = view.busy;
+    compatUpdateStatus.textContent = view.message;
+    compatUpdateStatus.hidden = view.message === '';
   }
 
   function mountUpdateAction() {
@@ -325,6 +381,24 @@
     byId('data-choice').querySelector('.dock-info')?.append(question);
   }
 
+  function mountCompatibility() {
+    const info = element('div', { className: 'dock-info' });
+    // The version answer sits with the notice, and is a separate sentence
+    // from it: an uncertified client build is not evidence of a stale app.
+    const update = element('p', { className: 'client-compat-version' });
+    update.append(compatVersion, ' ', compatUpdateStatus);
+    info.append(compatTitle, compatDetail, update);
+    const actions = element('div', { className: 'client-compat-actions' });
+    // Running is the default: the notice explains, it does not gate. "Play
+    // Guild Wars" is the primary action and one press is all it costs.
+    actions.append(compatCheck, compatReleases, compatPlay);
+    compatNotice.append(info, actions);
+    byId('loading-dock').append(compatNotice);
+
+    const pane = byId('settings-pane-controls');
+    pane.append(settingsCompatStatus, settingsCompatDetail, settingsCompatVersion);
+  }
+
   function requestUpdateCheck() {
     void updateAction?.check();
   }
@@ -350,6 +424,7 @@
     })
     .catch(() => {
       updateCheck.disabled = true;
+      compatCheck.disabled = true;
       launcherUpdateCheck.hidden = true;
       updateStatus.textContent = 'Update checking is unavailable in this build.';
       updateStatus.hidden = false;
@@ -363,6 +438,86 @@
   updateReleases.addEventListener('click', () => {
     void window.gwNative.app.openExternal('releases');
   });
+  compatCheck.addEventListener('click', requestUpdateCheck);
+  compatReleases.addEventListener('click', () => {
+    void window.gwNative.app.openExternal('releases');
+  });
+
+  mountCompatibility();
+
+  /**
+   * Read the session once and render both surfaces. Neither the running app
+   * version nor the client's certification can change without a relaunch, so
+   * this asks the main process once and remembers the answer.
+   */
+  async function readSession() {
+    // The version is known from the first launch, the certification only once
+    // a client has been activated, so an early answer is not cached as final.
+    if (currentSession?.compatibility) return currentSession;
+    const session = await window.gwNative.client.session();
+    currentSession = session;
+    settingsCompatVersion.textContent = `App version ${session.appVersion}`;
+    compatVersion.textContent = `App version ${session.appVersion}.`;
+    if (!session.compatibility) {
+      settingsCompatStatus.hidden = true;
+      settingsCompatDetail.hidden = true;
+      return session;
+    }
+    const { compatibilityReport } = await import('./client-compatibility-notice.js');
+    const report = compatibilityReport(session.compatibility);
+    settingsCompatStatus.hidden = false;
+    settingsCompatDetail.hidden = false;
+    settingsCompatStatus.textContent = report.summary;
+    settingsCompatDetail.textContent = report.details.join(' ');
+    compatTitle.textContent = report.summary;
+    compatDetail.textContent = report.details.join(' ');
+    return session;
+  }
+
+  /**
+   * The launcher half. It runs after the data-strategy gate and only while
+   * something is actually degraded, and it warns once per ArenaNet build:
+   * a boolean would either nag every launch or stay silent through the next
+   * client update, and both are wrong.
+   *
+   * @returns {Promise<void>}
+   */
+  async function resolveClientCompatibility() {
+    /** @type {import('../shared/contracts.js').ClientSession} */
+    let session;
+    try {
+      session = await readSession();
+    } catch {
+      return;
+    }
+    const compatibility = session.compatibility;
+    if (!compatibility) return;
+    const { compatibilityReport } = await import('./client-compatibility-notice.js');
+    if (!compatibilityReport(compatibility).degraded) return;
+    const settings = await loadSettings().catch(() => null);
+    if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;
+
+    return new Promise((resolve) => {
+      compatNotice.hidden = false;
+      compatPlay.addEventListener(
+        'click',
+        () => {
+          compatPlay.disabled = true;
+          // Acknowledged for this build only: the next ArenaNet update warns
+          // again. A failed write must not keep the player out of the game.
+          void persistSettings({
+            compatibilityNoticeSeenFor: compatibility.clientSha256,
+          })
+            .catch(() => undefined)
+            .finally(() => {
+              compatNotice.hidden = true;
+              resolve();
+            });
+        },
+        { once: true },
+      );
+    });
+  }
 
   function cacheComplete(cache = currentCache) {
     return !!cache?.totalBytes && cache.bytes >= cache.totalBytes;
@@ -657,7 +812,11 @@
     }
   }
 
-  window.gwResolveDataStrategy = async (snapshotBytes) => {
+  /**
+   * @param {number} snapshotBytes
+   * @returns {Promise<void>}
+   */
+  async function resolveDataChoice(snapshotBytes) {
     try {
       const [settings, cache] = await Promise.all([
         loadSettings(),
@@ -694,6 +853,13 @@
       );
       return new Promise(() => {});
     }
+  }
+
+  // The dock shows one thing at a time: the data question is answered first,
+  // then the client build gets its say, then the game starts.
+  window.gwResolveDataStrategy = async (snapshotBytes) => {
+    await resolveDataChoice(snapshotBytes);
+    await resolveClientCompatibility();
   };
 
   /**
@@ -780,6 +946,9 @@
       fillForm(currentSettings);
       // "Last checked 4 minutes ago" goes stale while a window sits open.
       updateAction?.restore(currentSettings.lastUpdateCheckAt);
+      // The client build's status is the answer to "why is my cursor plain?",
+      // so it is in Settings whether or not the launcher notice was ever seen.
+      await readSession().catch(() => undefined);
       await refreshCache();
     } catch {
       feedback.textContent = 'Settings could not be loaded. Try reopening this window.';

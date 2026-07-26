@@ -113,6 +113,7 @@
 #loading-retry:focus-visible { outline:2px solid #e0bd73; outline-offset:2px; }
 #loading-retry[hidden] { display:none; }
 #loading-dock:has(#data-choice:not([hidden])) #loading-boot,
+#loading-dock:has(#client-compat:not([hidden])) #loading-boot,
 #loading-dock:has(#data-download:not([hidden])) #loading-boot { display:none; }
 #loading-dock:has(#data-download:not([hidden])) #loading-bar { display:none; }
 
@@ -124,10 +125,20 @@
 
 /* --------------------------------------------------- dock decision panels */
 #data-choice,
+#client-compat,
 #data-download { flex:1; min-width:0; display:flex; align-items:center;
                  justify-content:space-between; gap:20px; color:#eee3c9; }
 #data-choice[hidden],
+#client-compat[hidden],
 #data-download[hidden] { display:none; }
+/* The compatibility notice: a heading, the contract, and the version answer
+   beneath it, which is a separate sentence and not a conclusion drawn from
+   the heading. */
+#client-compat-title { margin:0 0 2px; font-size:17px; font-weight:400;
+                       letter-spacing:.02em; color:#f2e8d2; }
+#client-compat-detail { margin:0; font-size:13px; color:#d8caaaad;
+                        max-width:104ch; }
+.client-compat-version { margin:3px 0 0; font-size:12.5px; color:#e8dcc08c; }
 
 .dock-info { min-width:0; }
 #data-choice-title { margin:0 0 2px; font-size:17px; font-weight:400;
@@ -198,8 +209,12 @@
 #data-download-status { font-size:15px; color:#f0dfb7; }
 #data-download-detail { font-size:12.5px; color:#d8caaa8f; }
 
-.data-download-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.data-download-actions button {
+/* Dock panel controls, shared by the download panel and the compatibility
+   notice so two dock panels cannot look like two applications. */
+.data-download-actions,
+.client-compat-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.data-download-actions button,
+.client-compat-actions button {
   min-height:38px;
   padding:8px 16px;
   border:1px solid #79613c;
@@ -209,29 +224,36 @@
   font:inherit;
   cursor:default;
 }
-.data-download-actions button:hover:not(:disabled) {
+.data-download-actions button:hover:not(:disabled),
+.client-compat-actions button:hover:not(:disabled) {
   border-color:#d1aa5e;
   background:#2b2117f2;
 }
-.data-download-actions button:focus-visible {
+.data-download-actions button:focus-visible,
+.client-compat-actions button:focus-visible {
   outline:2px solid #e0bd73;
   outline-offset:2px;
 }
-.data-download-actions button:disabled { opacity:.5; }
-.data-download-actions .launcher-primary {
+.data-download-actions button:disabled,
+.client-compat-actions button:disabled { opacity:.5; }
+.data-download-actions .launcher-primary,
+.client-compat-actions .launcher-primary {
   border-color:#a98338;
   color:#fff8e7;
   background:#6d5222;
 }
-.data-download-actions .launcher-primary:hover:not(:disabled) { background:#806329; }
-.data-download-actions .launcher-link {
+.data-download-actions .launcher-primary:hover:not(:disabled),
+.client-compat-actions .launcher-primary:hover:not(:disabled) { background:#806329; }
+.data-download-actions .launcher-link,
+.client-compat-actions .launcher-link {
   border-color:transparent;
   color:#d8caaaad;
   background:transparent;
   text-decoration:underline;
   text-underline-offset:3px;
 }
-.data-download-actions .launcher-link:hover:not(:disabled) {
+.data-download-actions .launcher-link:hover:not(:disabled),
+.client-compat-actions .launcher-link:hover:not(:disabled) {
   color:#f3dd9d;
   border-color:transparent;
   background:transparent;
@@ -251,17 +273,19 @@
 #loading-legal { max-width:52ch; text-align:right; font-size:10px;
                  line-height:1.45; color:#e8dcc07a; text-shadow:0 1px 5px #000e; }
 #loading-legal p { margin:0; }
-#loading-legal p.strong { color:#e8dcc0a6; margin-bottom:3px; }
+#loading-legal p.strong, #loading-version { color:#e8dcc0a6; margin-bottom:3px; }
 
 /* Narrow windows: stack the dock's info above its actions, shrink chrome. */
 @media (max-width:860px) {
   #loading { --dock-h: 168px; }
   #loading-dock { flex-wrap:wrap; align-content:center; padding:12px 18px; }
-  #data-choice, #data-download { flex-direction:column; align-items:stretch;
-                                 justify-content:center; gap:10px; text-align:center; }
+  #data-choice, #client-compat, #data-download {
+    flex-direction:column; align-items:stretch;
+    justify-content:center; gap:10px; text-align:center; }
   .data-choice-actions { justify-content:center; }
   .data-choice-option { width:auto; flex:1; max-width:260px; }
-  .data-download-actions { justify-content:center; flex-wrap:wrap; }
+  .data-download-actions,
+  .client-compat-actions { justify-content:center; flex-wrap:wrap; }
   #loading-boot { width:100%; text-align:center; }
   #loading-footer { flex-direction:column; align-items:center; gap:4px; }
   #loading-legal { text-align:center; max-width:100%; }

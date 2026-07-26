@@ -131,6 +131,16 @@ window.gwLoading = (function () {
     img.src = pick;
   }).catch(() => {});
 
+  // The running version, in the footer, on every launch. It used to live only
+  // in the macOS About panel, which means a bug report had to go hunting for
+  // it — and under CalVer the number doubles as a staleness signal.
+  window.gwNative?.client.session().then((session) => {
+    const version = document.createElement('p');
+    version.id = 'loading-version';
+    version.textContent = `Guild Wars for macOS ${session.appVersion}`;
+    el('loading-legal').prepend(version);
+  }).catch(() => {});
+
   // A failed boot gets a one-click retry, same as View → Reload Game.
   retry?.addEventListener('click', async () => {
     const requestedRecovery = recovery;
