@@ -329,7 +329,10 @@ app.whenReady().then(async () => {
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: () => clientRuntime.noteFramePresented(),
-    retryClient: () => clientRuntime.retryUpdate(),
+    // A retry is a request to run the update again, nothing more. Whether it
+    // worked is already on the progress channel, which is where the renderer
+    // reads it — a second, thrown answer would have been a second owner.
+    retryClient: () => clientRuntime.requestUpdate(),
     checkReleaseNotice: () => checkForNewerRelease(app.getVersion()),
     getClientSession: () => ({
       appVersion: app.getVersion(),
@@ -387,13 +390,7 @@ app.whenReady().then(async () => {
     void clientRuntime.requestUpdate();
   } else {
     log("app", "error", "app.unexpectedUserData");
-    setProgress({
-      ...INITIAL_PROGRESS,
-      phase: "error",
-      label: "Live probe blocked",
-      error:
-        "The live probe selected an unexpected profile. No update was started.",
-    });
+    setProgress({ phase: "error", errorCode: "wrong_profile" });
   }
 
   app.on("activate", () => {

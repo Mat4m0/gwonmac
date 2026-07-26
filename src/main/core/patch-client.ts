@@ -9,7 +9,10 @@ import {
   stat,
 } from "node:fs/promises";
 import { join } from "node:path";
-import type { DownloadProgress } from "../../shared/contracts.js";
+import type {
+  DownloadActivity,
+  DownloadProgress,
+} from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import {
   DownloadRateAverage,
@@ -134,8 +137,8 @@ export class PatchClient {
    * get size 0, and silently stream the whole game over the network instead.
    */
   private emit(
-    p: DownloadProgress & {
-      phase: Exclude<DownloadProgress["phase"], "ready">;
+    p: DownloadActivity & {
+      phase: Exclude<DownloadActivity["phase"], "ready">;
     },
   ): void {
     this.onProgress?.(p);
@@ -164,7 +167,6 @@ export class PatchClient {
       total: 0,
       bytesPerSecond: 0,
       secondsRemaining: null,
-      error: null,
     });
     const body = await this.getBytes(`${this.patchRoot}/manifest.json`, {
       maxBytes: MAX_PATCH_MANIFEST_BYTES,
@@ -256,7 +258,6 @@ export class PatchClient {
         total: progress.total,
         bytesPerSecond: rate,
         secondsRemaining: secondsRemaining(progress.got, progress.total, rate),
-        error: null,
       });
     });
 
@@ -267,7 +268,6 @@ export class PatchClient {
       total: progress.total,
       bytesPerSecond: 0,
       secondsRemaining: null,
-      error: null,
     });
 
     const part = `${outPath}.part`;
@@ -518,7 +518,6 @@ export class PatchClient {
         total,
         bytesPerSecond: 0,
         secondsRemaining: null,
-        error: null,
       });
     }
 

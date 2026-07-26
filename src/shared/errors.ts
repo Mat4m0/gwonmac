@@ -66,6 +66,9 @@ export const ERROR_CODES = [
   "unknown",
   "unknown_proxy_route",
   "validation",
+  /** A live probe was pointed at a user-data directory that is not the one it
+   * asked for, so no client update was started. */
+  "wrong_profile",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

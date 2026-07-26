@@ -41,7 +41,6 @@ describe("download progress", () => {
       label: "fixture",
       bytesPerSecond: 0,
       secondsRemaining: null,
-      error: null,
     };
     assert.deepEqual(
       longRunningTaskFeedback({

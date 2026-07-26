@@ -190,7 +190,9 @@
   let fullDownloadPromise = null;
   /** @type {'idle' | 'running' | 'stopping'} */
   let downloadPhase = 'idle';
-  /** @type {import('../shared/contracts.js').DownloadProgress | null} */
+  // Only ever the "image" phase: the dock renders a running download, and a
+  // failure arrives as the download's own outcome, not as a progress event.
+  /** @type {import('../shared/contracts.js').DownloadActivity | null} */
   let currentDownloadProgress = null;
   let downloadError = '';
   /** @type {(() => void) | null} */

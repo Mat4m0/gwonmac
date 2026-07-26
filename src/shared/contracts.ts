@@ -5,6 +5,7 @@ import type {
   RendererMilestoneFields,
   RendererMetrics,
 } from "./diagnostics.js";
+import type { ErrorCode } from "./errors.js";
 
 export type BuildKind = "jspi";
 
@@ -15,22 +16,43 @@ export interface SnapshotMetadata {
   residentBits: Uint8Array;
 }
 
-export interface DownloadProgress {
+/**
+ * A client preparation that is still running. `label` and `notice` are the
+ * last English the main process writes into this channel, and the renderer
+ * already substitutes its own text for every phase but `image`.
+ */
+export interface DownloadActivity {
   phase:
     | "starting"
     | "checking"
     | "client"
     | "image"
-    | "ready"
-    | "error";
+    | "ready";
   label: string;
   received: number;
   total: number;
   bytesPerSecond: number;
   secondsRemaining: number | null;
-  error: string | null;
   notice?: string;
 }
+
+/**
+ * A client preparation that failed. The code is the entire payload: this used
+ * to be a finished English sentence built in the main process, which put the
+ * wording of a user-facing failure in the one place that cannot see the UI and
+ * cannot be tested against it. `src/renderer/failure-messages.js` is now the
+ * only place that sentence is chosen, and a code is also the only thing the
+ * diagnostics export is allowed to carry.
+ *
+ * A separate member rather than a nullable field on the one above, so that a
+ * failure without a code and a code without a failure are both build errors.
+ */
+export interface DownloadFailure {
+  phase: "error";
+  errorCode: ErrorCode;
+}
+
+export type DownloadProgress = DownloadActivity | DownloadFailure;
 
 export interface PrefetchProgress {
   completedChunks: number;

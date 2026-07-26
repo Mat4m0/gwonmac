@@ -53,7 +53,7 @@ test.describe("live client", () => {
           () =>
             page.evaluate(async () => {
               const progress = await window.gwNative.progress.current();
-              if (progress.error) throw new Error(progress.error);
+              if (progress.phase === "error") throw new Error(progress.errorCode);
               return progress.phase;
             }),
           { timeout: 5 * 60_000, intervals: [500, 1_000, 2_000] },

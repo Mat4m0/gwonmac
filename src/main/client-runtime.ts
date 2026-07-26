@@ -6,7 +6,7 @@ import type {
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
-import { errorCode } from "../shared/errors.js";
+import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   certifyClientBuild,
@@ -362,14 +362,20 @@ export class ClientRuntime {
     const value = await migrateLegacyPublishedClientManifest(
       this.options.paths.artifacts,
     );
-    if (!value) throw new Error("no published client is available");
+    // Both failures are shown to a user, so both carry a code: the renderer
+    // has a sentence for each, and "unknown" would have collapsed them into
+    // the generic one.
+    if (!value) throw new NotReadyError("no published client is available");
     if (
       (await verifyPublishedClientArtifacts(
         this.options.paths.artifacts,
         value,
       )) !== true
     ) {
-      throw new Error("last published client failed integrity verification");
+      throw new AppError(
+        "artifact_unverified",
+        "last published client failed integrity verification",
+      );
     }
     return this.activateStore(
       this.createStore(
@@ -451,14 +457,8 @@ export class ClientRuntime {
           "Live probe is using the existing cached client.",
         );
         gauge("update.usingCachedClient", true);
-      } catch {
-        this.publishProgress({
-          ...INITIAL_PROGRESS,
-          phase: "error",
-          label: "Cached live probe blocked",
-          error:
-            "The cached client is incomplete. No ArenaNet update was started.",
-        });
+      } catch (error) {
+        this.publishProgress({ phase: "error", errorCode: errorCode(error) });
       }
       return;
     }
@@ -543,13 +543,7 @@ export class ClientRuntime {
         });
       }
       updateSpan.end({ status: "error", code }, "error");
-      this.publishProgress({
-        ...INITIAL_PROGRESS,
-        phase: "error",
-        label: "Update failed",
-        error:
-          "ArenaNet is unavailable and no previous game client could be restored.",
-      });
+      this.publishProgress({ phase: "error", errorCode: code });
     }
   }
 
@@ -567,15 +561,6 @@ export class ClientRuntime {
       });
     this.gameUpdate = operation;
     return operation;
-  }
-
-  async retryUpdate(): Promise<void> {
-    await this.requestUpdate();
-    if (this.progressValue.phase === "error") {
-      throw new Error(
-        this.progressValue.error ?? "The game client could not be prepared.",
-      );
-    }
   }
 
   downloadAll(): Promise<boolean> {
@@ -605,7 +590,6 @@ export class ClientRuntime {
             total: value.total,
             bytesPerSecond: value.bytesPerSecond,
             secondsRemaining: value.secondsRemaining,
-            error: null,
           });
           const now = Date.now();
           if (now - lastProgressLogAt >= 5_000) {

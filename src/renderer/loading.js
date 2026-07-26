@@ -154,16 +154,21 @@ window.gwLoading = (function () {
       }
       api.set('Retrying the game client', null);
       await window.gwNative.client.retry();
+      // A retry answers on the progress channel, the same one the first
+      // attempt used. Reading it here is what replaced a rejected promise
+      // carrying a sentence the main process had written.
+      const progress = await window.gwNative.progress.current();
+      if (progress.phase === 'error') {
+        const { describeLaunchFailure } = await import('./failure-messages.js');
+        api.fail(describeLaunchFailure(progress.errorCode));
+        return;
+      }
       window.location.reload();
-    } catch (error) {
+    } catch {
       if (requestedRecovery === 'filesystem') {
         api.failFilesystem();
       } else {
-        api.fail(
-          error instanceof Error
-            ? error.message
-            : 'The game client still could not be prepared.',
-        );
+        api.fail('The game client still could not be prepared.');
       }
     } finally {
       retry.disabled = false;
@@ -204,6 +209,9 @@ window.gwLoading = (function () {
       return false;
     }
     api.set('Checking the game client', null);
+    // Resolved before the first progress event can arrive, so the failure
+    // path below stays synchronous.
+    const { describeLaunchFailure } = await import('./failure-messages.js');
 
     return new Promise((resolve) => {
       let settled = false;
@@ -217,7 +225,11 @@ window.gwLoading = (function () {
 
       /** @param {import('../shared/contracts.js').DownloadProgress} p */
       const apply = (p) => {
-        if (p.error) { api.fail(p.error); finish(false); return; }
+        if (p.phase === 'error') {
+          api.fail(describeLaunchFailure(p.errorCode));
+          finish(false);
+          return;
+        }
         window.gwAutomation.set(`launcher.${p.phase}`);
         if (p.phase === 'ready') {
           api.set('Starting Guild Wars', null, p.notice || '');
