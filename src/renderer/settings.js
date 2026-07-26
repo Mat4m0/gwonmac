@@ -166,6 +166,22 @@
     className: 'settings-note',
   });
 
+  // ------------------------------------------------------------ Toolbox tools
+  // One tool, one setting, two surfaces: the first-run gate is where a player
+  // meets it, the Settings pane is where they find it again. Both write the
+  // same key through the same writer, and the main process turns a tool change
+  // into a restart, so neither surface can show a tool the session is not
+  // running. The tools themselves are declared in src/main/toolbox-policy.ts.
+  const choiceNativeCursor = element('input', {
+    id: 'data-choice-native-cursor',
+  });
+  choiceNativeCursor.type = 'checkbox';
+  const choiceNativeCursorNote = element('span', {
+    id: 'data-choice-native-cursor-note',
+  });
+  choiceNativeCursorNote.setAttribute('role', 'status');
+  choiceNativeCursorNote.hidden = true;
+
   // The first-run gate asks the update question next to the data question:
   // switching it on silently would contradict the no-phone-home posture, and
   // leaving it off silently means nobody ever discovers it exists.
@@ -321,6 +337,7 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
+      renderToolControls(saved);
       window.gwApplySettings?.(saved);
       return saved;
     });
@@ -391,6 +408,49 @@
     byId('data-choice').querySelector('.dock-info')?.append(question);
   }
 
+  // The tools are offered where they are discovered, and the note says what
+  // switching one costs: the module is picked at startup, so the app restarts.
+  function mountToolChoice() {
+    const question = element('p');
+    const questionLabel = element('label');
+    questionLabel.append(
+      choiceNativeCursor,
+      " Use the game's own cursor — changing this restarts the app",
+    );
+    question.append(questionLabel, ' ', choiceNativeCursorNote);
+    byId('data-choice').querySelector('.dock-info')?.append(question);
+  }
+
+  /**
+   * Both tool surfaces, rendered from the settings the main process returned.
+   * They are never rendered from what was asked for: a change that needs a
+   * restart the player declined must leave the boxes showing what is true.
+   *
+   * @param {import('../shared/contracts.js').AppSettings} settings
+   */
+  function renderToolControls(settings) {
+    nativeCursor.checked = settings.nativeCursor;
+    choiceNativeCursor.checked = settings.nativeCursor;
+  }
+
+  choiceNativeCursor.addEventListener('change', () => {
+    const wanted = choiceNativeCursor.checked;
+    choiceNativeCursorNote.hidden = true;
+    void persistSettings({ nativeCursor: wanted })
+      .then((saved) => {
+        // Applied means the app is already relaunching, so the only sentence
+        // worth writing here is the one for a restart that was declined.
+        if (saved.nativeCursor === wanted) return;
+        choiceNativeCursorNote.textContent = 'The cursor was not changed.';
+        choiceNativeCursorNote.hidden = false;
+      })
+      .catch(() => {
+        if (currentSettings) renderToolControls(currentSettings);
+        choiceNativeCursorNote.textContent = 'The cursor could not be changed.';
+        choiceNativeCursorNote.hidden = false;
+      });
+  });
+
   function mountCompatibility() {
     const info = element('div', { className: 'dock-info' });
     // The version answer sits with the notice, and is a separate sentence
@@ -414,6 +474,7 @@
   }
 
   mountUpdateAction();
+  mountToolChoice();
   void import('./update-action.js')
     .then((module) => {
       const action = module.createUpdateAction({
@@ -595,7 +656,7 @@
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
     renderScale.value = String(settings.renderScale);
-    nativeCursor.checked = settings.nativeCursor;
+    renderToolControls(settings);
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
@@ -812,6 +873,9 @@
     launcherTotalBytes = total;
     const remaining = Math.max(0, total - (cache.bytes || 0));
     choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? false;
+    // The gate runs after the settings load, so the tool boxes show the saved
+    // answer rather than a default written a second time in the renderer.
+    if (currentSettings) renderToolControls(currentSettings);
     dataChoiceFullSize.textContent = remaining > 0
       ? `Download ${size(remaining)} before starting.`
       : 'The full game is already downloaded.';
@@ -992,15 +1056,22 @@
     const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
     void persistSettings(patch)
-      .then(async () => {
+      .then(async (saved) => {
+        // A tool selects which client module this launch serves, and that
+        // choice is made before the renderer exists, so saving it restarts the
+        // app. A player who declined the restart saved nothing, and the box has
+        // already gone back to what is true; the sentence explains why.
+        if (control.name === 'nativeCursor') {
+          const applied = saved.nativeCursor === patch.nativeCursor;
+          if (applied) flashSaved();
+          feedback.textContent = applied
+            ? 'Saved. Restarting to apply the cursor…'
+            : 'The cursor was not changed.';
+          return;
+        }
         flashSaved();
         if (!strategyChanged) {
-          // The cursor setting selects which client module this launch serves,
-          // and that choice is read once at startup. Reload Game reuses it, so
-          // only reopening the application applies a change.
-          feedback.textContent = control.name === 'nativeCursor'
-            ? 'Saved. The cursor changes the next time you open this app.'
-            : 'Settings saved.';
+          feedback.textContent = 'Settings saved.';
           return;
         }
         if (nextStrategy === 'quick' && downloadActive()) {

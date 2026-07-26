@@ -55,6 +55,7 @@ import {
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import { toolboxSelectionChanged } from "./toolbox-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
@@ -289,6 +290,26 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
   };
 };
 
+/**
+ * Ask before restarting to change which Toolbox tools this launch serves. The
+ * module is chosen once, before the renderer exists, so a relaunch is the only
+ * way a tool change can reach the session — and a relaunch closes any game in
+ * progress, which is why it is gated exactly like the other two restarts here.
+ */
+async function confirmToolboxRestart(win: BrowserWindow): Promise<boolean> {
+  await resetGameInput(win);
+  const { response } = await dialog.showMessageBox(win, {
+    type: "warning",
+    buttons: ["Restart Now", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: "Restart to apply this setting?",
+    detail:
+      "This setting is chosen once when the app starts, so it takes effect after a restart. Any game in progress closes. Downloaded game data and your saved login stay untouched.",
+  });
+  return response === 0;
+}
+
 async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
   if (!store) return { bytes: 0, chunks: 0, totalBytes: 0, totalChunks: 0 };
   const resident = await store.residentIndices();
@@ -376,14 +397,24 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       }
     }),
 
-    settingsSet: channel(one(parseSettingsPatch), async (_win, patch) => {
+    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
       try {
         const previous = await ctx.getSettings();
+        // Changing a Toolbox tool and restarting are one action, so the two
+        // surfaces that offer the tools cannot leave a checkbox claiming
+        // something the running session is not doing. Cancelling saves
+        // nothing: the answer the player sees is the answer on disk.
+        const restart = toolboxSelectionChanged(previous, patch);
+        if (restart && !(await confirmToolboxRestart(win))) return previous;
         const saved = await ctx.updateSettings(patch);
         if (previous.dataStrategy !== saved.dataStrategy) {
           log("settings", "info", "launcher.strategyChanged", {
             strategy: saved.dataStrategy ?? "unselected",
           });
+        }
+        if (restart) {
+          app.relaunch();
+          app.quit();
         }
         return saved;
       } catch (error) {

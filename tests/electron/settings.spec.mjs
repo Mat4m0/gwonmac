@@ -33,7 +33,7 @@ test.describe("settings experience", () => {
     }
   });
 
-  test("explains render cost and records switching the game cursor off", async () => {
+  test("explains render cost and will not change the cursor without a restart", async () => {
     const fixture = await launchOffline("gw-settings-e2e-");
     try {
       const { page } = fixture;
@@ -91,20 +91,29 @@ test.describe("settings experience", () => {
         .toBe(true);
       await page.locator("#settings-tab-controls").click();
       // The cursor ships on, so the change a player makes here is turning it
-      // off; that is the direction this test drives.
-      await page.locator('input[name="nativeCursor"]').uncheck();
+      // off. It picks the WASM main at launch, so main asks to restart before
+      // it saves anything (P7.6); this drives the declined answer, where the
+      // rule is that nothing is written and nothing on screen claims it was.
+      await fixture.app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+      // Not uncheck(): the box is re-rendered from the settings main returned,
+      // which uncheck() would read as a failed click.
+      await page.locator('input[name="nativeCursor"]').click();
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "The cursor was not changed.",
+      );
+      await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
       await expect
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
           renderScale: 1.5,
-          nativeCursor: false,
+          nativeCursor: true,
           showDiagnostics: true,
         });
-      // The flag picks the WASM main at launch and Reload Game reuses it, so
-      // the confirmation must point at reopening the app, not at the game.
-      await expect(page.locator("#settings-feedback")).toHaveText(
-        "Saved. The cursor changes the next time you open this app.",
-      );
       // Nothing about the running session's cursor may change.
       expect(
         await page.locator("#canvas").evaluate((canvas) =>
