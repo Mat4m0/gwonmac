@@ -73,13 +73,19 @@ Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 
 ## Development
 
-**Requirements:** macOS on Apple Silicon · Node.js 20.19+ · pnpm 11
+**Requirements:** macOS on Apple Silicon · Node.js 20.19+ · pnpm 11 ·
+[Rust](https://rustup.rs) (via rustup)
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
 pnpm dev
 ```
+
+Rust is a build prerequisite, not an optional extra: every entry point runs
+`pnpm build`, which compiles `src/toolbox-kernel/lib.rs` to WebAssembly with
+`rustc`. `rust-toolchain.toml` pins the compiler version and the
+`wasm32-unknown-unknown` target, so rustup installs both on the first build.
 
 The first online run fetches the small JSPI client artifacts.
 
