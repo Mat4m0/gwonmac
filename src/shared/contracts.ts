@@ -141,6 +141,16 @@ export interface AppSettings {
    * "we could not tell" is indistinguishable from "we never asked".
    */
   lastUpdateCheckAt: number | null;
+  /**
+   * The ArenaNet client build (its official module's sha256) whose
+   * compatibility notice the player has already seen, or `null` for none.
+   *
+   * Keyed by build rather than by a boolean on purpose: a new ArenaNet build
+   * has to warn again, and the same one must not nag every launch. It is not
+   * nested with the two update fields above because it is not about updating
+   * this app — it records what the player was told about *their game client*.
+   */
+  compatibilityNoticeSeenFor: string | null;
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
@@ -153,6 +163,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dataStrategy: null,
   autoCheckUpdates: false,
   lastUpdateCheckAt: null,
+  compatibilityNoticeSeenFor: null,
 };
 
 export interface StoredCredentials {
@@ -221,6 +232,43 @@ export type ReleaseNotice =
       checkedAt: number;
     };
 
+/**
+ * Which of the three client-certification states this session is in. The two
+ * WASM transforms are keyed by different hashes, so certification can succeed
+ * for template save/load and fail for the Toolbox cursor:
+ *
+ * - `certified`      templates, screenshots and chat logs work; Toolbox may load
+ * - `template-only`  those three work; Toolbox may not load
+ * - `uncertified`    ArenaNet's untouched module is served; nothing is repaired
+ *
+ * `src/main/client-certification.ts` is the only producer.
+ */
+export type ClientCompatibilityState =
+  | "certified"
+  | "template-only"
+  | "uncertified";
+
+export interface ClientCompatibility {
+  state: ClientCompatibilityState;
+  /**
+   * sha256 of ArenaNet's official module for this session. It names the build,
+   * so a notice can be acknowledged per build instead of per launch.
+   */
+  clientSha256: string;
+  /** Whether this session asked for the Toolbox cursor at all. */
+  toolboxRequested: boolean;
+}
+
+/**
+ * What this session is running. `compatibility` is `null` only before a client
+ * has been activated; `appVersion` is always known, because a user filing a bug
+ * should not have to hunt through the menu bar for it.
+ */
+export interface ClientSession {
+  appVersion: string;
+  compatibility: ClientCompatibility | null;
+}
+
 export const IPC = {
   progressCurrent: "gw:progress:current",
   progressEvent: "gw:progress:event",
@@ -253,6 +301,7 @@ export const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
+  clientSession: "gw:client:session",
   // Named for its trigger: the renderer asks for a check, it does not read a
   // status the main process was already keeping.
   releaseNoticeCheck: "gw:releaseNotice:check",
@@ -317,6 +366,7 @@ export interface GwNativeApi {
   client: {
     retry(): Promise<void>;
     healthy(): Promise<void>;
+    session(): Promise<ClientSession>;
   };
   releaseNotice: {
     check(): Promise<ReleaseNotice>;

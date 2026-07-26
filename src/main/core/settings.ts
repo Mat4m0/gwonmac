@@ -95,6 +95,16 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.lastUpdateCheckAt = at;
   }
+  if ("compatibilityNoticeSeenFor" in src) {
+    const seen = src.compatibilityNoticeSeenFor;
+    if (seen !== null && !(typeof seen === "string" && /^[a-f0-9]{64}$/.test(seen))) {
+      throw new AppError(
+        "bad_settings",
+        "settings.compatibilityNoticeSeenFor must be null or a client sha256",
+      );
+    }
+    out.compatibilityNoticeSeenFor = seen;
+  }
   return out;
 }
 

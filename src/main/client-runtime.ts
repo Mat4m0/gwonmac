@@ -1,11 +1,17 @@
 import { net } from "electron";
 import type {
+  ClientCompatibility,
+  ClientCompatibilityState,
   DownloadProgress,
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
+import {
+  certifyClientBuild,
+  toolboxMayLoad,
+} from "./client-certification.js";
 import {
   ACCESS_KEY,
   PATCH_REQUEST_TIMEOUT_MS,
@@ -25,6 +31,7 @@ import {
   readRejectedClient,
   restoreUnconfirmedClient,
 } from "./core/client-compatibility.js";
+import { sha256File } from "./core/derived-wasm.js";
 import type { Manifest } from "./core/manifest.js";
 import { Mutex } from "./core/mutex.js";
 import { PatchClient } from "./core/patch-client.js";
@@ -94,6 +101,12 @@ export class ClientRuntime {
   private fullDownload: { store: ChunkStore; promise: Promise<boolean> } | null =
     null;
   private gameUpdate: Promise<void> | null = null;
+  /**
+   * Which of the three certification states this session is in. Set once per
+   * generation, where the module it describes is chosen; `null` until a client
+   * has been activated.
+   */
+  private compatibilityValue: ClientCompatibility | null = null;
   private candidateFrameReady = false;
   private candidateSocketReady = false;
   private candidateConfirmation: Promise<void> | null = null;
@@ -102,6 +115,10 @@ export class ClientRuntime {
 
   get active(): ActiveClient | null {
     return this.activeSlot.current;
+  }
+
+  get compatibility(): ClientCompatibility | null {
+    return this.compatibilityValue;
   }
 
   get progress(): DownloadProgress {
@@ -173,32 +190,38 @@ export class ClientRuntime {
    * comes straight here, and an opted-in launch falls back here whenever the
    * Toolbox module cannot be produced, so an uncertified build or a failed
    * transform costs the cursor and nothing else.
+   *
+   * `null` means no derived module exists — the build is uncertified, or the
+   * transform could not run — so this launch serves ArenaNet's own.
    */
-  private async templateSaveWasm(officialWasm: string): Promise<string> {
+  private async templateSaveWasm(
+    officialWasm: string,
+    officialSha256: string,
+    certified: boolean,
+  ): Promise<string | null> {
     try {
-      const prepared = await prepareTemplateSaveClient(
+      const wasmPath = await prepareTemplateSaveClient(
         officialWasm,
+        officialSha256,
         this.options.paths.compatibility,
       );
-      gauge("wasm.templateSaveCompatible", prepared.compatible);
       log(
         "wasm",
-        prepared.compatible ? "info" : "warn",
-        prepared.compatible
+        certified ? "info" : "warn",
+        certified
           ? "wasm.templateSavePrepared"
           : "wasm.templateSaveUnsupported",
       );
-      return prepared.wasmPath;
+      return certified ? wasmPath : null;
     } catch (error) {
-      gauge("wasm.templateSaveCompatible", false);
       log("wasm", "warn", "wasm.templateSavePrepareFailed", {
         code: errorCode(error),
       });
-      return officialWasm;
+      return null;
     }
   }
 
-  private async selectToolboxWasm(): Promise<{
+  private async selectClientWasm(): Promise<{
     wasmPath: string;
     build: PreparedToolboxClient["build"];
   }> {
@@ -206,14 +229,45 @@ export class ClientRuntime {
       this.options.paths.artifacts,
       "Gw.jspi.wasm",
     );
+    let officialSha256: string;
+    try {
+      officialSha256 = await sha256File(officialWasm);
+    } catch (error) {
+      // Nothing can be certified without the hash, so nothing is transformed.
+      this.compatibilityValue = null;
+      gauge("wasm.templateSaveCompatible", false);
+      gauge("toolbox.supportedBuild", false);
+      log("wasm", "warn", "wasm.clientHashUnavailable", {
+        code: errorCode(error),
+      });
+      return { wasmPath: officialWasm, build: null };
+    }
+
+    const certification = certifyClientBuild(officialSha256);
     // The two transforms are independent rewrites of the same official module,
     // so the Toolbox one is layered on top of the template-save client rather
     // than replacing it. Opting in must never cost template save/load.
-    const templateSaveWasm = await this.templateSaveWasm(officialWasm);
-    if (this.options.toolboxEnabled) {
+    const templateSaveWasm = await this.templateSaveWasm(
+      officialWasm,
+      officialSha256,
+      certification.state !== "uncertified",
+    );
+    // A certified build whose transform failed to run is degraded exactly as
+    // far as an uncertified one, and says so rather than claiming its label.
+    const state: ClientCompatibilityState =
+      templateSaveWasm === null ? "uncertified" : certification.state;
+    this.compatibilityValue = {
+      state,
+      clientSha256: officialSha256,
+      toolboxRequested: this.options.toolboxEnabled,
+    };
+    gauge("client.buildCertification", state);
+    gauge("wasm.templateSaveCompatible", state !== "uncertified");
+
+    if (this.options.toolboxEnabled && toolboxMayLoad(state)) {
       try {
         const prepared = await prepareToolboxClient(
-          templateSaveWasm,
+          templateSaveWasm ?? officialWasm,
           this.options.paths.toolbox,
         );
         if (prepared.build) {
@@ -230,9 +284,13 @@ export class ClientRuntime {
           code: errorCode(error),
         });
       }
+    } else if (this.options.toolboxEnabled) {
+      // The hard rule: an uncertified module never reaches the transform, so
+      // the setting is not consulted a second time further down.
+      log("wasm", "info", "toolbox.uncertifiedClientBlocked");
     }
     gauge("toolbox.supportedBuild", false);
-    return { wasmPath: templateSaveWasm, build: null };
+    return { wasmPath: templateSaveWasm ?? officialWasm, build: null };
   }
 
   private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {
@@ -263,7 +321,7 @@ export class ClientRuntime {
     this.initialResidencyRecorded = false;
     const [snapshotMeta, toolbox] = await Promise.all([
       this.snapshotFor(store),
-      this.selectToolboxWasm(),
+      this.selectClientWasm(),
     ]);
     const previous = this.activeSlot.current;
     const active: ActiveClient = this.activeSlot.publish({

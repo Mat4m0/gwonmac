@@ -331,6 +331,10 @@ app.whenReady().then(async () => {
     confirmClientHealthy: () => clientRuntime.noteFramePresented(),
     retryClient: () => clientRuntime.retryUpdate(),
     checkReleaseNotice: () => checkForNewerRelease(app.getVersion()),
+    getClientSession: () => ({
+      appVersion: app.getVersion(),
+      compatibility: clientRuntime.compatibility,
+    }),
   });
 
   onAppQuit(async () => {

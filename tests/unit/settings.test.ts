@@ -24,6 +24,8 @@ describe("settings", () => {
       // whether the app ever makes a network request nobody asked for.
       autoCheckUpdates: false,
       lastUpdateCheckAt: null,
+      // No client build has been warned about yet, so every build warns once.
+      compatibilityNoticeSeenFor: null,
     });
   });
 
@@ -48,6 +50,7 @@ describe("settings", () => {
       dataStrategy: "full",
       autoCheckUpdates: false,
       lastUpdateCheckAt: null,
+      compatibilityNoticeSeenFor: null,
     });
   });
 
@@ -86,6 +89,28 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ lastUpdateCheckAt: Number.NaN }), AppError);
     assert.throws(() => parseSettings({ lastUpdateCheckAt: 1e300 }), AppError);
     assert.throws(() => parseSettings({ lastUpdateCheckAt: "2026-07-26" }), AppError);
+  });
+
+  it("takes the acknowledged client build only as a client hash", () => {
+    const hash = "b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483";
+    assert.equal(
+      parseSettings({ compatibilityNoticeSeenFor: hash })
+        .compatibilityNoticeSeenFor,
+      hash,
+    );
+    assert.equal(
+      parseSettings({ compatibilityNoticeSeenFor: null })
+        .compatibilityNoticeSeenFor,
+      null,
+    );
+    // It names a build, so a boolean, a truncated hash or upper case — the
+    // shapes a "notice shown" flag would arrive as — are all refused.
+    assert.throws(() => parseSettings({ compatibilityNoticeSeenFor: true }), AppError);
+    assert.throws(() => parseSettings({ compatibilityNoticeSeenFor: "b031" }), AppError);
+    assert.throws(
+      () => parseSettings({ compatibilityNoticeSeenFor: hash.toUpperCase() }),
+      AppError,
+    );
   });
 
   it("validates patches without filling fields from defaults", () => {
@@ -129,6 +154,7 @@ describe("settings", () => {
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
       "autoCheckUpdates",
+      "compatibilityNoticeSeenFor",
       "dataStrategy",
       "formatVersion",
       "lastUpdateCheckAt",
@@ -171,6 +197,7 @@ describe("settings", () => {
       // network request the user never agreed to.
       autoCheckUpdates: false,
       lastUpdateCheckAt: null,
+      compatibilityNoticeSeenFor: null,
     });
     // Nothing was moved aside, so the file the player had is still the file.
     assert.deepEqual(await readdir(dir), ["settings.json"]);

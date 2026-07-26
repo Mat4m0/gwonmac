@@ -35,6 +35,7 @@ const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
+  clientSession: "gw:client:session",
   releaseNoticeCheck: "gw:releaseNotice:check",
 };
 
@@ -122,6 +123,7 @@ const api = {
   client: {
     retry: () => ipcRenderer.invoke(IPC.clientRetry),
     healthy: () => ipcRenderer.invoke(IPC.clientHealthy),
+    session: () => ipcRenderer.invoke(IPC.clientSession),
   },
   releaseNotice: {
     check: () => ipcRenderer.invoke(IPC.releaseNoticeCheck),

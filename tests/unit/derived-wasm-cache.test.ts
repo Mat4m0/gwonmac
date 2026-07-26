@@ -279,9 +279,13 @@ describe("derived wasm clients on an uncertified build", () => {
     await mkdir(join(cacheRoot, "stale-input", "2"), { recursive: true });
     await writeFile(join(cacheRoot, "stale-input", "2", "Gw.jspi.wasm"), "old");
 
-    const prepared = await prepareTemplateSaveClient(base.path, cacheRoot);
+    const prepared = await prepareTemplateSaveClient(
+      base.path,
+      base.sha256,
+      cacheRoot,
+    );
 
-    assert.deepEqual(prepared, { wasmPath: base.path, compatible: false });
+    assert.equal(prepared, base.path);
     await assert.rejects(readdir(cacheRoot), { code: "ENOENT" });
   });
 });

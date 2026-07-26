@@ -11,6 +11,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   CacheInfo,
+  ClientSession,
   DownloadProgress,
   ExternalLinkKind,
   GraphicsDiagnostics,
@@ -60,6 +61,7 @@ export interface IpcContext {
   confirmClientHealthy: () => Promise<void>;
   retryClient: () => Promise<void>;
   checkReleaseNotice: () => Promise<ReleaseNotice>;
+  getClientSession: () => ClientSession;
 }
 
 function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -480,6 +482,11 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC.clientHealthy, async (event) => {
     assertSender(event);
     await ctx.confirmClientHealthy();
+  });
+
+  ipcMain.handle(IPC.clientSession, async (event) => {
+    assertSender(event);
+    return ctx.getClientSession();
   });
 
   ipcMain.handle(IPC.releaseNoticeCheck, async (event) => {

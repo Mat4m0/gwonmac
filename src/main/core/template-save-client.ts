@@ -2,7 +2,6 @@ import {
   buildFingerprint,
   discardDerivedWasm,
   prepareDerivedWasm,
-  sha256File,
 } from "./derived-wasm.js";
 import {
   findTemplateSaveBuild,
@@ -10,18 +9,25 @@ import {
   TEMPLATE_SAVE_TRANSFORM_ABI,
 } from "./template-save-compat.js";
 
+/**
+ * Produce the module this launch serves. The caller passes the official
+ * module's hash because it has already certified the build with it: whether
+ * this build is certified is `client-certification.ts`'s answer, not a second
+ * boolean returned from here. An uncertified build drops any derived module
+ * left behind by the previous one and gets ArenaNet's own.
+ */
 export async function prepareTemplateSaveClient(
   officialWasmPath: string,
+  inputSha256: string,
   cacheRoot: string,
-): Promise<{ wasmPath: string; compatible: boolean }> {
-  const inputSha256 = await sha256File(officialWasmPath);
+): Promise<string> {
   const build = findTemplateSaveBuild(inputSha256);
   if (!build) {
     await discardDerivedWasm(cacheRoot);
-    return { wasmPath: officialWasmPath, compatible: false };
+    return officialWasmPath;
   }
 
-  const wasmPath = await prepareDerivedWasm(
+  return prepareDerivedWasm(
     officialWasmPath,
     {
       inputSha256,
@@ -34,5 +40,4 @@ export async function prepareTemplateSaveClient(
     },
     (base) => rewriteTemplateSaveWasm(base, build),
   );
-  return { wasmPath, compatible: true };
 }
