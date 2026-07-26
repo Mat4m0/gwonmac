@@ -16,12 +16,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  sweepOrphanDirectories,
   sweepOrphans,
   writeAll,
   writeAtomic,
   writeAtomicInDir,
   writeAtomicJson,
 } from "../../src/main/core/atomic-file.js";
+import { documentDirectories, gamePaths } from "../../src/main/core/paths.js";
 
 async function scratch(): Promise<string> {
   return mkdtemp(join(tmpdir(), "gw-atomic-"));
@@ -262,5 +264,30 @@ describe("atomic-file orphan sweep", () => {
 
   it("reports zero for a directory that does not exist", async () => {
     assert.equal(await sweepOrphans(join(await scratch(), "absent")), 0);
+  });
+
+  it("reaches every directory the profile publishes documents into", async () => {
+    // The sweep used to run in one place, on the chunk directory, during an
+    // update. settings.json, window-state.json, the generation directories and
+    // the diagnostics log all publish through the same `writeAtomic` and so
+    // leak the same temp files — they were collected by nothing at all.
+    const root = await scratch();
+    const dirs = documentDirectories(gamePaths(root));
+    for (const dir of dirs) {
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, `doc.json.${process.pid + 1}.0badcafe.tmp`), "abandoned");
+      await writeFile(join(dir, `doc.json.${process.pid}.0badcafe.tmp`), "still ours");
+    }
+
+    assert.equal(await sweepOrphanDirectories(dirs), dirs.length);
+
+    for (const dir of dirs) {
+      const left = await readdir(dir);
+      assert.deepEqual(
+        left.filter((name) => name.endsWith(".tmp")),
+        [`doc.json.${process.pid}.0badcafe.tmp`],
+        `${dir} kept the wrong files`,
+      );
+    }
   });
 });

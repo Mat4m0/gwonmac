@@ -55,6 +55,28 @@ export function gamePaths(userData: string): GamePaths {
   };
 }
 
+/**
+ * Every directory this application publishes documents into through
+ * `writeAtomic`, so one boot-time sweep can reach all of them.
+ *
+ * Derived from the path table rather than listed separately: a new owned
+ * directory added to `GamePaths` and forgotten here would leak abandoned temp
+ * files forever, and nothing else collects them — `pruneUnreferencedChunks`
+ * deliberately ignores non-hash filenames.
+ */
+export function documentDirectories(paths: GamePaths): string[] {
+  return [
+    paths.userData,
+    paths.game,
+    paths.diagnostics,
+    paths.chunks,
+    paths.artifacts,
+    paths.previousArtifacts,
+    paths.compatibility,
+    paths.toolbox,
+  ];
+}
+
 /** The published manifest of one client generation (installed, previous or stage). */
 export function clientManifestPath(generationDir: string): string {
   return path.join(generationDir, "manifest.json");

@@ -36,6 +36,8 @@ import {
   runQuitCleanup,
   wireLifecycle,
 } from "./lifecycle.js";
+import { sweepOrphanDirectories } from "./core/atomic-file.js";
+import { documentDirectories } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   TOOLBOX_AUTOMATION_ENABLED,
@@ -156,6 +158,11 @@ async function ensureDirs(): Promise<void> {
   await mkdir(paths.game, { recursive: true });
   await mkdir(paths.chunks, { recursive: true });
   await mkdir(paths.diagnostics, { recursive: true });
+  // P1.2 — first open of the directories we own. A process killed between
+  // write and rename leaves `<name>.<pid>.<hex>.tmp` behind, and boot is the
+  // only moment at which every one of those directories is known to be idle.
+  const removed = await sweepOrphanDirectories(documentDirectories(paths));
+  if (removed > 0) log("app", "info", "orphanTemps.swept", { removed });
 }
 
 async function clearBrowserCookies(phase: "startup" | "quit"): Promise<void> {

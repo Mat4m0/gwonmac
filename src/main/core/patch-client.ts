@@ -27,7 +27,6 @@ import {
   UA,
 } from "./access-key.js";
 import {
-  sweepOrphans,
   writeAll,
   writeAtomicInDir,
   writeAtomicJson,
@@ -432,9 +431,6 @@ export class PatchClient {
     const backup = generations.previous;
     await this.recoverArtifactSwap(stage, backup);
     await mkdir(this.chunksDir, { recursive: true });
-    // First open of the chunk directory this run: collect temp files a previous
-    // process abandoned between write and rename. Nothing else removes them.
-    await sweepOrphans(this.chunksDir);
 
     const mf = await this.fetchManifest();
     const fingerprint = clientFingerprint(mf);

@@ -4,6 +4,7 @@ import {
   clientArtifactPath,
   clientManifestPath,
   diagnosticFramesPath,
+  documentDirectories,
   gamePaths,
   snapshotMetadataPath,
 } from "../../src/main/core/paths.ts";
@@ -35,6 +36,24 @@ describe("resolved profile paths", () => {
       cacheClearRequest: `${root}/clear-cache-on-start`,
       gameStorageClearRequest: `${root}/clear-game-storage-on-start`,
     });
+  });
+
+  it("sweeps every directory the profile publishes documents into", () => {
+    // Pinned as literals beside the layout above on purpose: adding a directory
+    // to `gamePaths` already breaks that assertion, so whoever updates it lands
+    // here and has to decide whether the new directory receives `writeAtomic`
+    // writes. A directory left off this list leaks abandoned temp files forever
+    // — nothing else collects them.
+    assert.deepEqual(documentDirectories(gamePaths(root)), [
+      root,
+      `${root}/game`,
+      `${root}/diagnostics`,
+      `${root}/game/chunks`,
+      `${root}/game/artifacts`,
+      `${root}/game/artifacts.previous`,
+      `${root}/game/compatibility`,
+      `${root}/game/toolbox`,
+    ]);
   });
 
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {

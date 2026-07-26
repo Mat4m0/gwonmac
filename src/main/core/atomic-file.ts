@@ -118,6 +118,14 @@ export async function writeAtomicInDir(
  * Temp files carrying this process's pid are left alone — an in-flight write in
  * this process owns its temp file and removes it itself on failure.
  */
+export async function sweepOrphanDirectories(
+  dirs: readonly string[],
+): Promise<number> {
+  let removed = 0;
+  for (const dir of dirs) removed += await sweepOrphans(dir);
+  return removed;
+}
+
 export async function sweepOrphans(dir: string): Promise<number> {
   const entries = await readdir(dir).catch((): string[] => []);
   let removed = 0;
