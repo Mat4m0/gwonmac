@@ -1,8 +1,24 @@
-import type { GwNativeApi } from "../shared/contracts.js";
+import type { AppSettings, GwNativeApi } from "../shared/contracts.js";
 import type {
   RendererEventName,
   RendererMetrics,
 } from "../shared/diagnostics.js";
+
+/**
+ * Negative type test, run by every `tsc -p tsconfig.renderer.json`.
+ *
+ * `AppSettings` was used below without being imported, and `skipLibCheck: true`
+ * hid the unresolved name, so the three renderer entry points that take
+ * settings were typed against nothing. This declaration must stay an error: if
+ * `AppSettings` ever stops constraining again, `renderScale: 3` becomes legal,
+ * the directive goes unused, and `tsc` fails on that instead. It is exported
+ * only because a type nothing references is not checked for use — it is not a
+ * type to build on.
+ */
+// @ts-expect-error `renderScale` is the closed union 1 | 1.5 | 2; 3 is not a member.
+export interface AppSettingsNegativeTypeTest extends AppSettings {
+  renderScale: 3;
+}
 
 declare global {
   // Keyboard Map API: Chromium ships it, TypeScript's DOM library does not.
