@@ -1,9 +1,53 @@
 import { MakerZIP } from "@electron-forge/maker-zip";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { macOSBundleVersions } from "./scripts/macos-version.mjs";
+
+// scripts/build.mjs is the only producer of build/. This hook used to run
+// scripts/copy-renderer.mjs a second time, which compiled the Toolbox kernel
+// twice per clean `pnpm package`; it now only asserts that the producer ran.
+const PACKAGE_INPUTS = [
+  "build/main/main.js",
+  "build/shared/release.js",
+  "build/preload/preload.cjs",
+  "build/renderer/index.html",
+  "build/renderer/toolbox-kernel.wasm",
+];
+
+/** The first source under `dir` modified after `mtimeMs`, or undefined. */
+function sourceNewerThan(dir: string, mtimeMs: number): string | undefined {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const child = path.join(dir, entry.name);
+    const found = entry.isDirectory()
+      ? sourceNewerThan(child, mtimeMs)
+      : statSync(child).mtimeMs > mtimeMs
+        ? child
+        : undefined;
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * Throws unless `pnpm build` has run over the current sources. Packaging a
+ * missing or stale build/ otherwise produces a plausible-looking broken .app.
+ */
+export function assertBuildIsFresh(root: string = process.cwd()): void {
+  let builtAt = Infinity;
+  for (const input of PACKAGE_INPUTS) {
+    const stat = statSync(path.join(root, input), { throwIfNoEntry: false });
+    if (!stat) throw new Error(`${input} is missing; run \`pnpm build\` first`);
+    builtAt = Math.min(builtAt, stat.mtimeMs);
+  }
+  const stale = sourceNewerThan(path.join(root, "src"), builtAt);
+  if (stale) {
+    throw new Error(
+      `${path.relative(root, stale)} is newer than build/; run \`pnpm build\` first`,
+    );
+  }
+}
 
 const packageVersion = (
   JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
@@ -53,11 +97,7 @@ const config: ForgeConfig = {
   makers: [new MakerZIP({}, ["darwin"])],
   hooks: {
     generateAssets: async () => {
-      const { spawnSync } = await import("node:child_process");
-      const r = spawnSync(process.execPath, ["scripts/copy-renderer.mjs"], {
-        stdio: "inherit",
-      });
-      if (r.status !== 0) throw new Error("copy-renderer failed");
+      assertBuildIsFresh();
     },
     packageAfterCopy: async (_config, resourcesPath, _version, platform, arch) => {
       if (platform !== "darwin") return;
