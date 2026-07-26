@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 import { pathToFileURL } from "node:url";
-import forgeConfig from "../../forge.config.ts";
+import forgeConfig, { assertBuildIsFresh } from "../../forge.config.ts";
 
 // What the packaged app is allowed to contain, asserted against the artifact
 // rather than against the sources that produce it. The Toolbox is not
@@ -24,6 +24,11 @@ import forgeConfig from "../../forge.config.ts";
 // unreachable from a packaged build whatever the environment says.
 
 const root = path.resolve(import.meta.dirname, "../..");
+
+// Everything below asserts against build/, so a stale build/ would certify
+// yesterday's output as today's artifact. `pnpm test` builds first; run
+// standalone it might not have.
+assertBuildIsFresh(root);
 
 // @electron/packager applies `packagerConfig.ignore` as an fs-extra copy
 // filter — `filter = (file) => !ignore(name)`, where `name` is the path

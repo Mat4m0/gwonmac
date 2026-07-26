@@ -203,7 +203,7 @@ effect absent -> present -> removed
 The cursor is the first shipped Toolbox feature, so the Toolbox path is no
 longer developer-only. `toolbox-policy.ts` has two gates and nothing else:
 `TOOLBOX_AUTOMATION_ENABLED` (non-packaged, `GW_TOOLBOX_AUTOMATION=1`) and the
-player's `nativeCursor` setting, which is off by default. Either one enables
+player's `nativeCursor` setting, which is on by default. Either one enables
 the transform in main and adds the matching renderer parameter
 (`toolbox-automation=1` or `native-cursor=1`) that lets `harness.js` import
 `toolbox.js`. Both are read once per launch, because the choice decides which
