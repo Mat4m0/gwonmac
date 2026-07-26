@@ -205,8 +205,8 @@ exists only when one of three things happens:
    the download-mode question, and **Settings → Advanced** owns it afterwards.
    It performs one check per launch, and nothing else checks in the background.
 
-While the box is off, the app contacts GitHub only when you press one of those
-two buttons — including on a client build it does not recognize.
+While the box is off, the app contacts GitHub only when you press **Check for
+Updates** yourself — including on a client build it does not recognize.
 
 A check has three possible answers, and "we could not tell" is never reported
 as good news:
@@ -227,10 +227,11 @@ requests.
 
 Each ArenaNet client build is certified separately for two things: the repair
 that makes build templates, screenshots, and chat logs work, and Guild Wars'
-own cursors. When ArenaNet ships a build this app has not certified yet, the
-loading screen says so once for that build, names what is affected, and offers
-**Play Guild Wars** as the primary action — the notice explains, it does not
-block you.
+own cursors. When ArenaNet ships a build this app has not certified — or has
+certified for saving files but not yet for the cursors you asked for — the
+loading screen says so once for that build, names exactly what is affected, and
+offers **Play Guild Wars** as the primary action. The notice explains; it does
+not block you.
 
 Gameplay is unaffected either way: no stat, no timing, and no input path
 changes. Recovery needs a new release of this app; retrying, reinstalling, or
