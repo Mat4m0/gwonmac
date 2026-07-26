@@ -518,7 +518,18 @@ pointer lock. `input.js` owns the canvas input listeners and accepts validated
 touch settings from the settings owner; it does not persist settings itself. One
 held-input registry releases keys, buttons, and touches when focus or native UI
 consumes an input release. Pointer lock uses a virtual cursor and recycles a
-held drag at canvas edges so camera rotation does not stall.
+held drag so camera rotation does not stall.
+
+That recycle is rare by construction. The client keeps integrating mouse moves
+whose coordinates fall outside the canvas, so a held right-drag is free to roam
+sixteen canvases before the host releases the button, re-anchors at center, and
+presses again — several camera revolutions apart at any window size. Stopping at
+the canvas edge instead, as the host first did, made the recycle rate inversely
+proportional to the window: a 941px canvas recycled on about every third mouse
+move against every twenty-fifth on an 1866px one. Both halves of that cost the
+smaller window: the released button interrupts the client's drag, and until the
+leftover delta was spent in the same task rather than the next animation frame,
+each recycle also froze the camera for a frame.
 
 The client identifies a key by `KeyboardEvent.key`, so its held-key state is
 character state, not physical state. macOS makes Option a text modifier, which
