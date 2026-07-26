@@ -21,15 +21,16 @@ import type {
 import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
 import { diagnosticFramesPath } from "./core/paths.js";
 import { parseLogRecords } from "./diagnostic-report.js";
-import { redactDiagnosticText } from "./diagnostics/text-scan.js";
+import {
+  isSensitiveKey,
+  redactDiagnosticText,
+} from "./diagnostics/text-scan.js";
 import { gamePaths } from "./paths.js";
 
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_EVENTS = 2_048;
 const MAX_FRAME_BYTES = 128 * 1024 * 1024;
-const SENSITIVE_KEY =
-  /pass|auth|cookie|token|secret|credential|username|email|account/i;
 
 export interface LogRecord {
   seq: number;
@@ -117,6 +118,10 @@ class Histogram {
  * so the pattern scanner stays here for them. Events the schema does declare
  * carry no string a redactor could change, and `./diagnostics/detector.ts`
  * — which shares no code with the scanner — is what proves it.
+ *
+ * The name test and the text scan read one vocabulary, owned by
+ * `./diagnostics/text-scan.ts`. This file used to spell out a second regex and
+ * the two had already drifted apart.
  */
 function redactFields(
   fields: DiagnosticFields | undefined,
@@ -124,7 +129,7 @@ function redactFields(
   if (!fields) return undefined;
   return Object.fromEntries(
     Object.entries(fields).flatMap(([key, value]) =>
-      SENSITIVE_KEY.test(key)
+      isSensitiveKey(key)
         ? []
         : [
             [

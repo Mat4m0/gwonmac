@@ -563,12 +563,21 @@ the redactor's own patterns can only ever agree with the redactor.
 take open `DiagnosticFields`, and milestones and counters still call `log()`,
 so some records carry strings. `redaction.openFields` is how many string
 values the export contains outside the closed schema, and **it is not zero**
-in a real export. The largest single contributor is
+in a real export. It is a raw count of undeclared string values, not a count
+of leaks: what dominates it is span fields, because `Span.end` still takes
+open `DiagnosticFields` — `status` on `dns.resolve` and `update.clientUpdate`,
+`route` and `method` on `proxy.request`, `priority` on `snapshot.read`, which
+is unsuppressed for the whole of a Level 1 capture — plus the `status` on each
+renderer socket-send record. Those are closed vocabularies that simply have no
+schema entry yet, so a four-figure `openFields` in a capture is mostly the
+literal `"ok"` repeated. The privacy-relevant contributor is
 `security.navigationBlocked` / `security.redirectBlocked` in `window.ts`,
-which publish a full `url`. Those values get the recorder's key-name drop and
-the pattern scan, which is weaker than the schema. The number reaches zero
-when the schema covers those producers; until then it is in the manifest so a
-reader can see the residue instead of being told it does not exist.
+which publish a full `url`; they fire only when a navigation is actually
+blocked, so an ordinary session contributes none. Every one of these values
+gets the recorder's key-name drop and the pattern scan, which is weaker than
+the schema. The number reaches zero when the schema covers spans and those two
+events; until then it is in the manifest so a reader can see the residue
+instead of being told it does not exist.
 
 **The trace and the un-schema'd documents are pattern-scanned.**
 `chromium-trace.json`, `environment.json`, `summary.json`, `report.json`,
@@ -582,14 +591,22 @@ bearer tokens, quoted and unquoted values under a sensitive-key vocabulary,
 `file:` URLs, query-string values, email addresses, and absolute paths —
 including a path at index 0, which the previous positive lookbehind required a
 delimiter to see. A Level 2 trace reaches a quarter of a gigabyte, so it is
-scanned in chunks cut immediately after a comma: no rule can match across one,
-and the carry is raw input rather than the scanner's own output, so a value
-straddling a cut is scanned whole rather than half-redacted and half copied.
+scanned in chunks cut immediately after a comma: no rule can match across one
+— every value class excludes it, which the unit test proves by scanning each
+corpus document at every split point — and the carry is raw input rather than
+the scanner's own output, so a value straddling a cut is scanned whole rather
+than half-redacted and half copied. There is one exception, and it is the
+price of that comma: after a megabyte with no comma in it the scanner flushes
+anyway rather than buffer without bound, and a value straddling *that* cut is
+half-redacted with its remainder written out verbatim. A comma is the only
+character no rule can match across, so there is nothing safer to fall back to.
 `redaction.traceBytesScanned` records how much went through it. This tier is a
-vocabulary, not a proof: it misses anything it has no pattern for, and it
-over-redacts benign keys that contain a sensitive word — the safe direction.
-Numeric values under those keys are left alone so the trace stays valid JSON
-for `pnpm diagnostics:attribute-stalls`.
+vocabulary, not a proof: it misses anything it has no pattern for, it does not
+match a sensitive value that contains a comma itself (a serialized JSON blob
+under an `accountInfo` key stays as it is), and it over-redacts benign keys
+that contain a sensitive word — the safe direction. Numeric values under those
+keys are left alone so the trace stays valid JSON for
+`pnpm diagnostics:attribute-stalls`.
 
 Some things are excluded by construction rather than by any of the three
 tiers. Renderer console text and exception text never cross IPC; only
