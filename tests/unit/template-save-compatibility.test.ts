@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { WASM_BRIDGE_MARKERS } from "../../src/shared/contracts.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const source = await readFile(
@@ -11,11 +12,15 @@ const source = await readFile(
   "utf8",
 );
 
-const ENSURE_DIRECTORY = -70001;
-const FIND_FILES = -70002;
-const FILE_BASE_NAME = -70003;
-const DELETE_FILE = -70004;
-const FILE_EXISTS = -70005;
+// The canonical values, not a fourth copy of them: this is what proves the
+// numbers the transform writes into the module route to the right operation.
+const {
+  ensureDirectory: ENSURE_DIRECTORY,
+  findFiles: FIND_FILES,
+  fileBaseName: FILE_BASE_NAME,
+  deleteFile: DELETE_FILE,
+  fileExists: FILE_EXISTS,
+} = WASM_BRIDGE_MARKERS;
 const RECORD_BYTES = 544;
 const WANT_FILES = 17;
 const WANT_DIRECTORIES = 18;
@@ -74,9 +79,12 @@ function fixture(tree: Record<string, string[]> = {}, templateFsTrace = false) {
     },
   };
   const window = {
-    gwNative: { init: { templateFsTrace } },
+    gwNative: { init: { templateFsTrace }, wasmBridgeMarkers: WASM_BRIDGE_MARKERS },
   } as {
-    gwNative: { init: { templateFsTrace: boolean } };
+    gwNative: {
+      init: { templateFsTrace: boolean };
+      wasmBridgeMarkers: typeof WASM_BRIDGE_MARKERS;
+    };
     gwInstallTemplateSaveCompatibility?: (options: {
       imports: typeof imports;
       module: { HEAPU8: Uint8Array };

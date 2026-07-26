@@ -70,9 +70,12 @@ untouched.
 | `-70004` | delete file |
 | `-70005` | does this file exist |
 
-The two halves hold these by hand. `tests/release/wasm-host.test.mjs` asserts
-both files list the same five, because drift would silently turn every bridged
-call into a real `stat`.
+Neither half holds them by hand any more. `WASM_BRIDGE_MARKERS` in
+`src/shared/contracts.ts` is the one source: the transform imports it, and the
+renderer — a sandboxed classic script that can import nothing — receives it
+through the preload that `scripts/generate-preload.mjs` produces. They used to
+be two copies, and drift would have silently turned every bridged call into a
+real `stat`.
 
 Renaming needs no marker of its own: the client implements it as
 write-the-new-name followed by delete-the-old, gated by the existence probe.

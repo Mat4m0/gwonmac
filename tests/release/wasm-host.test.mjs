@@ -162,12 +162,12 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   assert.match(transform, /call site signature mismatch/);
   assert.match(runtime, /prepareTemplateSaveClient/);
 
-  // The derived module and the host agree on the dirfd markers by hand. If the
-  // two copies ever drift, every bridged call silently becomes a real stat.
-  const markers = (source) =>
-    [...source.matchAll(/-70_?00(\d)/g)].map((found) => found[1]);
-  assert.deepEqual(markers(transform), ["1", "2", "3", "4", "5"]);
-  assert.deepEqual(markers(bridge), ["1", "2", "3", "4", "5"]);
+  // P5.7 deleted the hand-mirrored dirfd markers, and with them the assertion
+  // that used to hold the two copies together. Both halves now read
+  // WASM_BRIDGE_MARKERS: the transform imports it, the renderer receives it
+  // through the generated preload, and neither declares a number of its own.
+  assert.doesNotMatch(transform, /-70_?00\d/u);
+  assert.doesNotMatch(bridge, /-70_?00\d/u);
 
   assert.match(bridge, /__syscall_newfstatat/);
   assert.match(bridge, /mkdirTree\(directory\)/);
@@ -175,6 +175,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   assert.match(bridge, /exports\(\)\?\.malloc/);
   assert.doesNotMatch(bridge, /ipc|fetch\s*\(/i);
   assert.deepEqual(bridge.match(/gwNative[.\w]*/gu), [
+    "gwNative.wasmBridgeMarkers",
     "gwNative.init.templateFsTrace",
   ]);
 });

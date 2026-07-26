@@ -19,7 +19,11 @@ export const OUTPUT = "build/preload/preload.cjs";
  * The canonical exports spliced into the preload. Every one of them was a copy
  * in the preload before; a name added here must be used by the body.
  */
-export const PRELOAD_CONSTANTS = ["IPC", "RENDERER_INIT_ARGUMENT"];
+export const PRELOAD_CONSTANTS = [
+  "IPC",
+  "RENDERER_INIT_ARGUMENT",
+  "WASM_BRIDGE_MARKERS",
+];
 
 const literal = (value) =>
   value !== null && typeof value === "object"

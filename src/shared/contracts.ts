@@ -296,6 +296,29 @@ export interface RendererInit {
 export const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
 
 /**
+ * dirfd markers by which ArenaNet's derived client reaches the renderer.
+ * `src/main/core/template-save-compat.ts` appends forwarders that hand the
+ * stub's arguments to `__syscall_newfstatat` behind one of these, and
+ * `src/renderer/template-save-compatibility.js` answers them against the
+ * mounted IDBFS. No real call can produce a negative dirfd.
+ *
+ * Canonical here rather than beside the transform because both halves need the
+ * values and neither can import the other: the renderer is a sandboxed classic
+ * script, so its copy travels through the generated preload. When the two were
+ * hand-mirrored, drift silently turned every bridged call into an ordinary
+ * `stat` — no error, no log, just templates that stopped saving.
+ */
+export const WASM_BRIDGE_MARKERS = {
+  ensureDirectory: -70_001,
+  findFiles: -70_002,
+  fileBaseName: -70_003,
+  deleteFile: -70_004,
+  fileExists: -70_005,
+} as const;
+
+export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
+
+/**
  * The closed set of things the main process asks the renderer to do. These
  * arrived as JavaScript source built by string interpolation and run with
  * `executeJavaScript` — one of them spliced a capture level into the source.
@@ -359,6 +382,11 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 export interface GwNativeApi {
   /** Launch-time configuration, available before the first renderer script. */
   init: RendererInit;
+  /**
+   * The derived client's dirfd markers. Not a capability — a constant the
+   * sandboxed renderer cannot import, carried by the one bridge that can.
+   */
+  wasmBridgeMarkers: WasmBridgeMarkers;
   commands: {
     /**
      * Register the renderer's single command handler. The acknowledgement main

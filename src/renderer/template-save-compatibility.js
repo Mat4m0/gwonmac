@@ -10,12 +10,16 @@
 (() => {
   'use strict';
 
-  // Mirrors src/main/core/template-save-compat.ts.
-  const ENSURE_DIRECTORY = -70001;
-  const FIND_FILES = -70002;
-  const FILE_BASE_NAME = -70003;
-  const DELETE_FILE = -70004;
-  const FILE_EXISTS = -70005;
+  // Not a mirror any more: the canonical values reach this sandboxed classic
+  // script through the generated preload, so the transform that writes the
+  // markers into the module and the code that answers them cannot disagree.
+  const {
+    ensureDirectory: ENSURE_DIRECTORY,
+    findFiles: FIND_FILES,
+    fileBaseName: FILE_BASE_NAME,
+    deleteFile: DELETE_FILE,
+    fileExists: FILE_EXISTS,
+  } = window.gwNative.wasmBridgeMarkers;
 
   // The client's directory-entry record: a 24-byte header it never reads,
   // then WCHAR name[260]. Callers stride by the whole record and free the

@@ -6,7 +6,7 @@
 // build/preload/preload.cjs. Copying a channel name back into this file would
 // reintroduce the drift the generator exists to remove, so no string literal
 // here may start with the gw channel prefix — tests/policy asserts that.
-/* global IPC, RENDERER_INIT_ARGUMENT */
+/* global IPC, RENDERER_INIT_ARGUMENT, WASM_BRIDGE_MARKERS */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -46,6 +46,9 @@ function listen(eventChannel, callback) {
 
 const api = {
   init: rendererInit(),
+  // A constant, not a capability: the derived client's dirfd markers, which the
+  // sandboxed renderer cannot import from src/shared and must not re-type.
+  wasmBridgeMarkers: WASM_BRIDGE_MARKERS,
   commands: {
     // One handler, registered once. The correlation id stays in transport: the
     // renderer sees a command, and main sees the acknowledgement once whatever

@@ -12,6 +12,10 @@
 // forwarder hands the stub's arguments to `__syscall_newfstatat` behind a dirfd
 // that no real call can produce, where the renderer answers it.
 import { createHash } from "node:crypto";
+// The dirfd markers are canonical in src/shared because the renderer half needs
+// the same values and cannot import from here; the generated preload carries
+// them across. See WASM_BRIDGE_MARKERS.
+import { WASM_BRIDGE_MARKERS } from "../../shared/contracts.js";
 import {
   concat,
   encodeCode,
@@ -33,14 +37,6 @@ declare const WebAssembly: {
 };
 
 export const TEMPLATE_SAVE_TRANSFORM_ABI = 2;
-
-// dirfd markers. `src/renderer/template-save-compatibility.js` mirrors these;
-// tests/release/wasm-host.test.mjs holds the two copies together.
-export const BRIDGE_ENSURE_DIRECTORY = -70_001;
-export const BRIDGE_FIND_FILES = -70_002;
-export const BRIDGE_FILE_BASE_NAME = -70_003;
-export const BRIDGE_DELETE_FILE = -70_004;
-export const BRIDGE_FILE_EXISTS = -70_005;
 
 export type BridgeKind =
   | "ensureDirectory"
@@ -197,7 +193,7 @@ function forwarder(
     // (path, recursive) -> error
     return concat(
       noLocals,
-      marker(BRIDGE_ENSURE_DIRECTORY),
+      marker(WASM_BRIDGE_MARKERS.ensureDirectory),
       local(0),
       Uint8Array.of(0x41, 0x00),
       local(1),
@@ -210,7 +206,7 @@ function forwarder(
     // is really there, so the probe cannot create its own answer.
     return concat(
       noLocals,
-      marker(BRIDGE_FILE_EXISTS),
+      marker(WASM_BRIDGE_MARKERS.fileExists),
       local(0),
       Uint8Array.of(0x41, 0x00),
       Uint8Array.of(0x41, 0x00),
@@ -231,7 +227,7 @@ function forwarder(
     // (path) -> deleted
     return concat(
       noLocals,
-      marker(BRIDGE_DELETE_FILE),
+      marker(WASM_BRIDGE_MARKERS.deleteFile),
       local(0),
       Uint8Array.of(0x41, 0x00),
       Uint8Array.of(0x41, 0x00),
@@ -243,7 +239,7 @@ function forwarder(
     // (out, pattern, flags) -> void
     return concat(
       noLocals,
-      marker(BRIDGE_FIND_FILES),
+      marker(WASM_BRIDGE_MARKERS.findFiles),
       local(1),
       local(0),
       local(2),
@@ -255,7 +251,7 @@ function forwarder(
   // (dst, _, baseDir, _, path, dstChars) -> written
   return concat(
     noLocals,
-    marker(BRIDGE_FILE_BASE_NAME),
+    marker(WASM_BRIDGE_MARKERS.fileBaseName),
     local(4),
     local(0),
     local(5),

@@ -82,6 +82,30 @@ test("renaming a canonical channel moves the call, with no edit to the body", as
   ]);
 });
 
+test("the derived client's bridge markers cross unchanged, and follow an edit", () => {
+  const { api } = run(preloadSource(contracts, root));
+  assert.deepEqual(
+    { ...api.wasmBridgeMarkers },
+    { ...contracts.WASM_BRIDGE_MARKERS },
+  );
+
+  // Editing the canonical value moves the renderer's copy with it. The main
+  // half is held by `tsc`: template-save-compat.ts imports the same object.
+  const edited = run(
+    preloadSource(
+      {
+        ...contracts,
+        WASM_BRIDGE_MARKERS: {
+          ...contracts.WASM_BRIDGE_MARKERS,
+          findFiles: -80_002,
+        },
+      },
+      root,
+    ),
+  );
+  assert.equal(edited.api.wasmBridgeMarkers.findFiles, -80_002);
+});
+
 test("the launch argument prefix comes from the contracts too", () => {
   const prefix = "--renamed-by-this-test=";
   const source = preloadSource(
@@ -135,5 +159,9 @@ test("a contracts export the body needs but does not have fails the build", () =
     () => preloadSource({ IPC: contracts.IPC }, root),
     /exports no RENDERER_INIT_ARGUMENT/,
   );
-  assert.deepEqual(PRELOAD_CONSTANTS, ["IPC", "RENDERER_INIT_ARGUMENT"]);
+  assert.deepEqual(PRELOAD_CONSTANTS, [
+    "IPC",
+    "RENDERER_INIT_ARGUMENT",
+    "WASM_BRIDGE_MARKERS",
+  ]);
 });
