@@ -36,6 +36,10 @@ The project deliberately does not require a paid Apple Developer membership.
 Every release includes SHA-256 checksums, an SPDX SBOM, and GitHub build
 attestations; see [Verify a release](docs/release-verification.md).
 
+Releases are numbered by date — `2026.7.1` is a July 2026 build — which says
+how recent a release is and nothing about which game client build it certifies:
+[Release numbering](docs/release-verification.md#release-numbering).
+
 ## How it works
 
 On first launch the app asks how you want game data downloaded, and waits for your choice.
