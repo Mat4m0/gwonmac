@@ -102,10 +102,70 @@ describe("settings", () => {
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
       "dataStrategy",
+      "formatVersion",
       "nativeCursor",
       "renderScale",
       "showDiagnostics",
       "touchMode",
     ]);
+    assert.equal(disk.formatVersion, 1);
+  });
+
+  it("loads an alpha-written bare-JSON file with every value intact", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    const path = join(dir, "settings.json");
+    // Byte-for-byte what v0.0.1-alpha.1 wrote: no formatVersion, and a
+    // `cursorTheme` key that build had and this one does not.
+    const alpha = {
+      renderScale: 1.5,
+      nativeCursor: true,
+      touchMode: "translate",
+      showDiagnostics: true,
+      dataStrategy: "full",
+      cursorTheme: "guild-wars-2",
+    };
+    await writeFile(path, JSON.stringify(alpha));
+
+    let recovered = "";
+    const loaded = await loadSettings(path, (backup) => {
+      recovered = backup;
+    });
+    assert.equal(recovered, "", "an alpha profile must not be treated as corrupt");
+    assert.deepEqual(loaded, {
+      renderScale: 1.5,
+      nativeCursor: true,
+      touchMode: "translate",
+      showDiagnostics: true,
+      dataStrategy: "full",
+    });
+    // Nothing was moved aside, so the file the player had is still the file.
+    assert.deepEqual(await readdir(dir), ["settings.json"]);
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")), alpha);
+
+    // The next save is the only thing that rewrites it, and it keeps the values.
+    await saveSettings(path, loaded);
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+      formatVersion: 1,
+      ...loaded,
+    });
+    assert.deepEqual(await loadSettings(path), loaded);
+  });
+
+  it("moves aside a settings format this build cannot read", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    const path = join(dir, "settings.json");
+    const future = { formatVersion: 2, renderScale: 1, touchMode: "off" };
+    await writeFile(path, JSON.stringify(future));
+    assert.throws(() => parseSettings(future), AppError);
+
+    let backup = "";
+    assert.deepEqual(
+      await loadSettings(path, (value) => {
+        backup = value;
+      }),
+      DEFAULT_SETTINGS,
+    );
+    // Refused, not reinterpreted, and not destroyed: the bytes are still there.
+    assert.deepEqual(JSON.parse(await readFile(backup, "utf8")), future);
   });
 });

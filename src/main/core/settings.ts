@@ -15,6 +15,7 @@ const TOUCH_MODES = new Set<AppSettings["touchMode"]>([
   "off",
 ]);
 const SETTINGS_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
+const SETTINGS_FORMAT = 1;
 
 function asBool(v: unknown, field: string): boolean {
   if (typeof v !== "boolean") {
@@ -23,12 +24,26 @@ function asBool(v: unknown, field: string): boolean {
   return v;
 }
 
-/** Reject unknown types; ignore unknown fields; fill missing from defaults. */
+/**
+ * Reject unknown types; ignore unknown fields; fill missing from defaults.
+ *
+ * A file with no `formatVersion` is what the public alpha wrote. v0 and v1
+ * are the same shape — only the marker is new — so the legacy read is the
+ * ordinary read, and an alpha profile keeps every value it had. A version
+ * this build does not know is refused rather than reinterpreted; `loadSettings`
+ * then moves it aside intact instead of trusting a shape it cannot read.
+ */
 export function parseSettings(raw: unknown): AppSettings {
   if (raw === null || raw === undefined || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AppError("bad_settings", "settings must be an object");
   }
   const src = raw as Record<string, unknown>;
+  if (src.formatVersion !== undefined && src.formatVersion !== SETTINGS_FORMAT) {
+    throw new AppError(
+      "bad_settings",
+      `settings.formatVersion ${JSON.stringify(src.formatVersion)} is not readable`,
+    );
+  }
   const out: AppSettings = { ...DEFAULT_SETTINGS };
 
   if ("renderScale" in src) {
@@ -130,6 +145,6 @@ async function recoverCorruptSettings(
 
 export async function saveSettings(path: string, value: AppSettings): Promise<AppSettings> {
   const cleaned = parseSettings(value);
-  await writeAtomicJson(path, cleaned);
+  await writeAtomicJson(path, { formatVersion: SETTINGS_FORMAT, ...cleaned });
   return cleaned;
 }

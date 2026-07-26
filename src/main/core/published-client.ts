@@ -7,6 +7,8 @@ import { parseContentHash, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
 import { clientArtifactPath, clientManifestPath } from "./paths.js";
 
+const PUBLISHED_CLIENT_FORMAT = 1;
+
 export interface PublishedClientArtifact {
   name: (typeof CLIENT_ARTIFACTS)[number];
   size: number;
@@ -14,6 +16,7 @@ export interface PublishedClientArtifact {
 }
 
 export interface PublishedClientManifest {
+  formatVersion: typeof PUBLISHED_CLIENT_FORMAT;
   clientFingerprint?: string;
   artifacts?: PublishedClientArtifact[];
   compressionMode: CompressionMode;
@@ -23,6 +26,13 @@ export interface PublishedClientManifest {
   chunkHashes: string[];
 }
 
+/**
+ * A manifest with no `formatVersion` is what the public alpha published; v0
+ * and v1 are the same shape, so an installed generation stays installed and
+ * keeps its rollback value. A version this build cannot read is refused
+ * rather than reinterpreted — the alternative is verifying artifacts against
+ * fields that may not mean what they used to.
+ */
 export function parsePublishedClientManifest(
   raw: unknown,
 ): PublishedClientManifest {
@@ -30,6 +40,15 @@ export function parsePublishedClientManifest(
     throw new AppError("bad_manifest", "published client manifest must be an object");
   }
   const value = raw as Record<string, unknown>;
+  if (
+    value.formatVersion !== undefined &&
+    value.formatVersion !== PUBLISHED_CLIENT_FORMAT
+  ) {
+    throw new AppError(
+      "bad_manifest",
+      "published client manifest has an unreadable format version",
+    );
+  }
   if (
     value.compressionMode !== "none" &&
     value.compressionMode !== "gzip"
@@ -151,6 +170,7 @@ export function parsePublishedClientManifest(
     );
   }
   return {
+    formatVersion: PUBLISHED_CLIENT_FORMAT,
     ...(typeof value.clientFingerprint === "string" &&
     /^[a-f0-9]{64}$/.test(value.clientFingerprint)
       ? { clientFingerprint: value.clientFingerprint }
