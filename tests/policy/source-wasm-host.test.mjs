@@ -1,3 +1,10 @@
+// Reads repository text, and says so in its filename. It was
+// tests/release/wasm-host.test.mjs, where the directory implied it executed the
+// WASM host; it never has. Every assertion below reads a renderer or main
+// source file, it needs no build, and most of them are negative — the client's
+// own glue must not be patched, the bridge must not fetch, a trace must touch
+// no capability but its own opt-in. Absence has no executable form, which is
+// what makes these worth keeping and what makes the old directory a lie.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -123,9 +130,12 @@ test("the GL program cache memoizes only shader-completion state, and only once 
   assert.match(graphics, /'gw:graphics-context-reset'/);
   assert.match(harness, /gwInstallGlProgramCache/);
 
-  // Only a true completion is recorded. Freezing false would make the client
-  // poll a program that never finishes.
-  assert.match(cache, /=== GL_TRUE\) programs\.set\(program, true\)/);
+  // Deleted with P5.17: an assertion that the file contained the exact line
+  // `=== GL_TRUE) programs.set(program, true)`. Only a true completion may be
+  // memoized — freezing false makes the client poll a program that never
+  // finishes — and that is executed in tests/unit/gl-program-cache.test.ts,
+  // which drives a fake GL context through both answers. Matching the line
+  // proved the characters, and broke on reformatting.
 
   const code = cache.replace(/\/\/.*$/gm, "");
   // VALIDATE_STATUS depends on current GL state, so no invalidation set can
@@ -157,10 +167,14 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   assert.match(transform, /b0319704f3072d6948a66026a35af5eb/);
   assert.match(transform, /68c6e09cec0f6992058a44a5617ca9ea/);
   assert.match(transform, /WebAssembly\.validate\(output\)/);
-  assert.match(transform, /unsupported input/);
-  assert.match(transform, /is not the expected stub/);
-  assert.match(transform, /call site signature mismatch/);
   assert.match(runtime, /prepareTemplateSaveClient/);
+  // Deleted with P5.17: three assertions that the strings "unsupported input",
+  // "is not the expected stub" and "call site signature mismatch" appeared in
+  // the transform. All three are *triggered* in
+  // tests/unit/template-save-compat.test.ts, which feeds the transform a wrong
+  // build, a rewritten stub and a changed call site and matches the error it
+  // throws. Asserting them here proved only that the words were still spelled
+  // the same way, in a file the same test already covers.
 
   // P5.7 deleted the hand-mirrored dirfd markers, and with them the assertion
   // that used to hold the two copies together. Both halves now read
@@ -205,10 +219,11 @@ test("a new client build can be re-certified without hand-derivation", async () 
   // Derivation must stay shape-based. A remembered index would defeat the point.
   assert.match(recert, /caller-set intersection|callers\(/);
   assert.doesNotMatch(recert, /localFunction: \d+/);
-
-  // Every ambiguity is a finding, never a best guess.
-  assert.match(recert, /expected exactly one/);
-  assert.match(recert, /expected exactly 2 template scans/);
+  // Deleted with P5.17: two assertions that the recertifier's "expected exactly
+  // one" and "expected exactly 2 template scans" messages appeared in its
+  // source. tests/unit/template-save-recert.test.ts builds ambiguous modules and
+  // matches the errors it actually throws, which is the claim — every ambiguity
+  // is a finding, never a best guess.
 });
 
 test("the WASM section codec has exactly one home", async () => {
@@ -273,6 +288,44 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
   assert.ok(
     main.indexOf("await applyPendingGameStorageClear()") < firstWindow,
     "the pending IndexedDB clear must run before the first window exists",
+  );
+});
+
+// Moved out of tests/release/packaged-toolbox-surface.test.mjs with P5.17: that
+// file inspects the packaged app, and this reads src/main/client-runtime.ts. It
+// has no artifact form and no executed form yet, so it lives here rather than
+// being deleted, until client-runtime gets a behaviour test of its own.
+test("an uncertified client build still serves the template-save client", async () => {
+  const runtime = await readFile(
+    path.join(root, "src/main/client-runtime.ts"),
+    "utf8",
+  );
+  // Default-on must not cost template saving. The template-save client is
+  // prepared unconditionally and is what the Toolbox transform consumes, so an
+  // unknown build or a failed transform costs the cursor and nothing else. The
+  // untouched official module is the last resort of that one path.
+  //
+  // The rule itself — which of the three certification states may load the
+  // Toolbox — is executed in tests/unit/client-certification.test.ts. What is
+  // asserted here is that this composition asks it.
+  assert.match(
+    runtime,
+    /if \(this\.options\.toolboxEnabled && toolboxMayLoad\(state\)\)/u,
+  );
+  assert.equal(
+    runtime.match(/const templateSaveWasm = await this\.templateSaveWasm\(/gu)?.length,
+    1,
+  );
+  assert.match(
+    runtime,
+    /prepareToolboxClient\(\s*templateSaveWasm \?\? officialWasm,/u,
+  );
+  assert.doesNotMatch(runtime, /prepareToolboxClient\(\s*officialWasm,/u);
+  // The one fallback: no derived module means ArenaNet's own, and it is the
+  // only way a launch ends without the template-save client.
+  assert.equal(
+    runtime.match(/wasmPath: templateSaveWasm \?\? officialWasm/gu)?.length,
+    1,
   );
 });
 

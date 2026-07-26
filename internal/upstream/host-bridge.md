@@ -192,7 +192,7 @@ perfectly ordinary path. That cost us a round on delete and rename.
 - Function bodies are never modified, only call sites — so uncertified callers
   are untouched.
 - The bridge stays inside the renderer: no IPC, no `fetch`, no native bridge.
-  Asserted in `tests/release/wasm-host.test.mjs`.
+  Asserted in `tests/policy/source-wasm-host.test.mjs`.
 - The listing block comes from the client's allocator.
 - Bump `TEMPLATE_SAVE_TRANSFORM_ABI` whenever the derived bytes or the bridge
   contract change; it is part of the cache key.

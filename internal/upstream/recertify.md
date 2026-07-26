@@ -168,7 +168,7 @@ for at least:
 2. Run the transform; the thrown error reports the actual derived hash. Pin it.
 3. Bump `TEMPLATE_SAVE_TRANSFORM_ABI` if the derived bytes or the contract
    changed — it is part of the derived cache key.
-4. Update the hashes in `tests/release/wasm-host.test.mjs`.
+4. Update the hashes in `tests/policy/source-wasm-host.test.mjs`.
 5. `pnpm check && pnpm build && pnpm test:release`
 6. Run the live checklist below.
 
