@@ -92,18 +92,72 @@ test.describe("live client", () => {
         };
       });
 
-      await test.step("the host's platform services reach the running client", async () => {
-        expect(platform.jspi).toBe(true);
-        expect(platform.hardware).toBe(true);
-        expect(platform.browserGamepads).toBe(true);
-        expect(platform.wheelHandlers).toEqual([
-          { target: "canvas", capture: 0 },
-        ]);
-        expect(platform.stats.gamepadImports).toBe(true);
-        expect(String(platform.renderer)).not.toMatch(
-          /swiftshader|llvmpipe|software/i,
+      // The build's identity, read from the one owner of the three
+      // certification states and from the gauges a `.gwdiag` carries.
+      const identity = await page.evaluate(async () => {
+        const session = await window.gwNative.client.session();
+        const diagnostics = await window.gwNative.diagnostics.current();
+        return {
+          compatibility: session.compatibility,
+          certificationGauge: diagnostics.latest["client.buildCertification"],
+          templateSaveGauge: diagnostics.latest["wasm.templateSaveCompatible"],
+        };
+      });
+      const publishedClient = JSON.parse(
+        readFileSync(
+          path.join(userData, "game", "artifacts", "manifest.json"),
+          "utf8",
+        ),
+      );
+
+      // Reported before the assertions run: when ArenaNet ships a new build the
+      // canary goes red, and the two hashes below are exactly what
+      // recertification needs. A summary written after the failing assertion
+      // would be a summary nobody gets.
+      const clientSha256 = identity.compatibility?.clientSha256 ?? "unavailable";
+      console.log(
+        `ArenaNet client fingerprint: ${publishedClient.clientFingerprint}`,
+      );
+      console.log(
+        `ArenaNet client module sha256: ${clientSha256} (${identity.certificationGauge})`,
+      );
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        appendFileSync(
+          process.env.GITHUB_STEP_SUMMARY,
+          [
+            "## ArenaNet client canary",
+            "",
+            `- Client fingerprint: \`${publishedClient.clientFingerprint}\``,
+            `- Client module sha256: \`${clientSha256}\``,
+            `- Build certification: ${identity.certificationGauge}`,
+            `- Renderer: ${String(platform.renderer)}`,
+            `- JSPI initialized: ${platform.jspi ? "yes" : "no"}`,
+            "- Hardware frame submitted: yes",
+            `- Gamepad host imports: ${platform.stats.gamepadImports ? "available" : "missing"}`,
+            "",
+          ].join("\n"),
         );
-        expect(platform.stats.reads).toBeGreaterThan(0);
+      }
+
+      await test.step("the live client is a build this app has certified", async () => {
+        expect(publishedClient.clientFingerprint).toMatch(/^[a-f0-9]{64}$/);
+        expect(
+          identity.compatibility,
+          "the main process published no compatibility state for a ready client",
+        ).not.toBeNull();
+        expect(identity.compatibility.clientSha256).toMatch(/^[a-f0-9]{64}$/);
+        // Certification is keyed by hash, so a new ArenaNet build fails here
+        // even though every other assertion in this file still passes. That is
+        // the alert: run `pnpm template:recertify`, then recertify the Toolbox
+        // build. `template-only` means saving works and the cursor does not.
+        expect(
+          identity.compatibility.state,
+          `client module ${identity.compatibility.clientSha256} is not a certified build`,
+        ).toBe("certified");
+        expect(identity.certificationGauge).toBe("certified");
+        // Emitted into every `.gwdiag`; a false here means templates, build
+        // screenshots and chat logs are broken for every player on this build.
+        expect(identity.templateSaveGauge).toBe(true);
       });
 
       // Not the client's own template save path: this drives Emscripten's `FS`
@@ -158,31 +212,19 @@ test.describe("live client", () => {
         });
       });
 
-      const publishedClient = JSON.parse(
-        readFileSync(
-          path.join(userData, "game", "artifacts", "manifest.json"),
-          "utf8",
-        ),
-      );
-      expect(publishedClient.clientFingerprint).toMatch(/^[a-f0-9]{64}$/);
-      console.log(
-        `ArenaNet client fingerprint: ${publishedClient.clientFingerprint}`,
-      );
-      if (process.env.GITHUB_STEP_SUMMARY) {
-        appendFileSync(
-          process.env.GITHUB_STEP_SUMMARY,
-          [
-            "## ArenaNet client canary",
-            "",
-            `- Client fingerprint: \`${publishedClient.clientFingerprint}\``,
-            `- Renderer: ${String(platform.renderer)}`,
-            "- JSPI initialized: yes",
-            "- Hardware frame submitted: yes",
-            "- Gamepad host imports: available",
-            "",
-          ].join("\n"),
+      await test.step("the host's platform services reach the running client", async () => {
+        expect(platform.jspi).toBe(true);
+        expect(platform.hardware).toBe(true);
+        expect(platform.browserGamepads).toBe(true);
+        expect(platform.wheelHandlers).toEqual([
+          { target: "canvas", capture: 0 },
+        ]);
+        expect(platform.stats.gamepadImports).toBe(true);
+        expect(String(platform.renderer)).not.toMatch(
+          /swiftshader|llvmpipe|software/i,
         );
-      }
+        expect(platform.stats.reads).toBeGreaterThan(0);
+      });
 
       const applyScale = (renderScale) =>
         page.evaluate(async (scale) => {
