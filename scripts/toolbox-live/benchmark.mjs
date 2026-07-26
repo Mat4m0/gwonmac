@@ -127,6 +127,15 @@ function addMetrics(total, metrics) {
  * and the shape this replaces warmed the enabled arm by waiting for a tick and
  * the disabled arm by a flat timeout.
  *
+ * Everything an arm carries mirrors: the percentiles are meaned over its
+ * phases and the metric deltas are summed over them. `heapUsedMiB` is an
+ * **absolute** reading, so it cannot be either — summing two heap sizes is
+ * meaningless and taking one phase's reading hands each arm whichever position
+ * in the run its last phase happened to sit at, which is exactly the bias the
+ * mirror removes. It therefore stays on the phase that measured it, where the
+ * phase number says when it was read. The heap figure an arm can honestly
+ * publish is the delta, and `metrics.jsHeapDeltaKiB` already sums into one.
+ *
  * @param {string[]} arms
  * @param {{
  *   select: (arm: string, phase: number, phases: number) => Promise<void>,
@@ -142,7 +151,7 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
   const phases = [];
   const collected = new Map(arms.map((arm) => [arm, []]));
   const totals = new Map(
-    arms.map((arm) => [arm, { ticks: 0, metrics: {}, phases: [], heapUsedMiB: 0 }]),
+    arms.map((arm) => [arm, { ticks: 0, metrics: {}, phases: [] }]),
   );
   for (const [index, arm] of order.entries()) {
     await select(arm, index + 1, order.length);
@@ -155,7 +164,6 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
     const total = totals.get(arm);
     total.ticks += phase.ticks;
     total.metrics = addMetrics(total.metrics, phase.metrics);
-    total.heapUsedMiB = phase.heapUsedMiB;
     total.phases.push(index + 1);
     collected.get(arm).push(frames);
     phases.push({
@@ -177,7 +185,6 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
           frames: mergeFrames(collected.get(arm)),
           ticks: totals.get(arm).ticks,
           metrics: totals.get(arm).metrics,
-          heapUsedMiB: totals.get(arm).heapUsedMiB,
           phases: totals.get(arm).phases,
         },
       ]),

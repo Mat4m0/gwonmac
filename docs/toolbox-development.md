@@ -129,6 +129,13 @@ that percentile lands in, and the mirror would cancel nothing. The order that
 ran is part of the result, and the gate refuses a result whose order is not
 mirrored.
 
+Absolute heap size is the one reading that cannot mirror: it is neither a rate
+to mean nor a delta to sum, and an arm assigned one of its two phases' readings
+would be reporting the heap at that phase's position in the run. It is therefore
+reported **per phase**, beside the phase number that says when it was taken, and
+is not comparable between arms. The arm-level heap number is
+`metrics.jsHeapDeltaKiB`, which is a delta and does sum across both phases.
+
 Its numbers — phase duration, the sample floor per arm, the tail-percentile
 regression limit, and the absolute p95 movement — live with the benchmark that
 enforces them, in the `performance` entry of

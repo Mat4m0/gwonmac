@@ -122,7 +122,16 @@ test("the packaged app contains no developer tool", () => {
   }
 });
 
-test("the packaged launcher page exposes no Toolbox UI", () => {
+test("the packaged launcher page ships no static Toolbox markup", () => {
+  // Named for what it proves and nothing wider. The Toolbox's one UI surface —
+  // the target readout — is created in JS with an inline style, so it is
+  // *deliberately* out of this test's reach: no assertion over the shipped
+  // index.html or harness.css can see it, and one named "exposes no Toolbox UI"
+  // would be claiming a property it cannot check. What this does prove is that
+  // the launcher page itself carries no Toolbox element or script tag, so the
+  // only way into the Toolbox graph stays the gated dynamic import in
+  // `harness.js`. The runtime surface belongs to an Electron session.
+  //
   // Read out of the packaged set, not out of src/: this is the page a player's
   // renderer actually parses.
   assert.doesNotMatch(

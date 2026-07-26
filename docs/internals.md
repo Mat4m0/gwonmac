@@ -327,8 +327,21 @@ turns it into the sentences both surfaces show.
 The official `Gw.jspi.wasm` remains canonical. A session with the Toolbox
 switched off applies only the certified template-save compatibility transform
 described above: it does no Toolbox transform, fetches no kernel, installs no
-Toolbox hook, starts no snapshot observer, and contains no Toolbox UI. There is
-no Toolbox UI in any session.
+Toolbox hook, starts no snapshot observer, and contains no Toolbox UI.
+
+A session with the Toolbox on contains exactly one piece of Toolbox UI: the
+target readout, `src/renderer/toolbox-readout.js`. It is a fixed line at the top
+centre of the game view showing the selected target's distance in game units and
+the name of the range band that distance falls in, and it is the last stage of
+the read-only pipeline — manifest → transform/kernel → snapshot → decoder → here.
+It reads a decoded snapshot and writes nothing back: no game input, no game
+memory write, no state of its own beyond the line it last rendered. It renders
+nothing at all without a selected target, and nothing on a loading screen, a torn
+read, or a build the decoder does not support. It is `pointer-events: none`, so
+it can never take a click meant for the game, and `aria-live="off"`, so a value
+that changes every frame is never announced. It rides on the instrumentation
+tier rather than on a tool key of its own: a player with `nativeCursor` — or any
+future tool — on sees it, and a player with every tool off executes none of it.
 
 Two gates, and only these two, enable the Toolbox path. `toolbox-policy.ts`
 holds both: `TOOLBOX_AUTOMATION_ENABLED` stays non-packaged and
@@ -340,9 +353,15 @@ whatever the environment says, which is what makes "does not send game input or
 act on the player's behalf" a testable claim rather than a promise. Main reads
 the setting once at startup and passes the result as
 `ClientRuntime.toolboxEnabled`,
-because the choice selects which WASM main the launch serves; a change takes
-effect at the next game start. The same value writes `nativeCursor` in the
-renderer init payload — `toolboxAutomation` for automation. `harness.js`
+because the choice selects which WASM main the launch serves. A running session
+therefore cannot honour a change, so the write and the restart are one action:
+`settingsSet` asks `toolboxSelectionChanged` whether the patch alters a tool,
+and if it does it confirms the restart first, saves nothing when the player
+cancels, and relaunches immediately when they do not. Both tool surfaces
+re-render from the settings main returned, so a declined restart cannot leave a
+checkbox claiming something the session is not doing. The same value writes
+`nativeCursor` in the renderer init payload — `toolboxAutomation` for
+automation. `harness.js`
 dynamically imports `toolbox.js` only when one of them is set, so a renderer
 that was handed neither cannot reach the Toolbox at all.
 

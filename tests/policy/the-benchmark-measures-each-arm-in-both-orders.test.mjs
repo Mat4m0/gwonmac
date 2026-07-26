@@ -65,7 +65,9 @@ function driftingSession({ driftMsPerPhase = 0, armCostMs = {} } = {}) {
           samples,
           ticks: current === ON ? 2_000 : 0,
           metrics: { taskMs: 100, scriptMs: 10 },
-          heapUsedMiB: 42,
+          // Rises with the run, like a real renderer's heap does. A constant
+          // here would hide an aggregation that keeps one phase's reading.
+          heapUsedMiB: 50 + phase,
         };
       },
     },
@@ -135,6 +137,24 @@ describe("the benchmark measures each arm in both orders", () => {
     assert.equal(result.arms[OFF].ticks, 0);
     assert.equal(result.arms[ON].ticks, 4_000);
     assert.equal(result.arms[OFF].frames.count, 400);
+
+    // Everything an arm publishes mirrors — meaned or summed over both of its
+    // phases. An absolute heap reading can be neither, so no arm carries one:
+    // the shape this replaces assigned the arm its *last* phase's reading, so
+    // OFF (phases 1, 4) always reported more heap than ON (phases 2, 3) in any
+    // session whose heap grows, i.e. it read as though the observer saved
+    // memory. The reading stays on the phase, which says when it was taken.
+    for (const arm of [OFF, ON]) {
+      assert.equal(
+        Object.hasOwn(result.arms[arm], "heapUsedMiB"),
+        false,
+        arm,
+      );
+    }
+    assert.deepEqual(
+      result.phases.map((phase) => phase.heapUsedMiB),
+      [51, 52, 53, 54],
+    );
   });
 
   it("reports no regression for a drift the old order would have blamed on the Toolbox", async () => {

@@ -22,8 +22,10 @@ official exact-hash WASM
 
 Unknown hashes serve the official client unchanged and do not activate
 Toolbox. Official and transformed client binaries are never committed.
-In 0.0.2 this path is dormant in normal and packaged sessions and presents no
-Toolbox UI.
+A session with every tool off runs none of this path and presents no Toolbox UI.
+A session with a tool on presents one read-only surface, the target distance and
+range readout; `docs/internals.md` owns what it shows and `docs/user-guide.md`
+owns what the player is told about it.
 
 ## Certified build 38,771
 

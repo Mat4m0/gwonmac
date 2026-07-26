@@ -149,12 +149,17 @@ test.describe("settings experience", () => {
       // how a player turns the cursor off rather than how they find it.
       await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
 
-      // The note has to say where the artwork comes from and when it applies;
-      // nothing is bundled, so the box is the only thing the player toggles.
+      // The note has to say where the artwork comes from, what else the box
+      // puts on screen, and what changing it costs; nothing is bundled, so the
+      // box is the only thing the player toggles.
       const controls = page.locator("#settings-pane-controls");
       await expect(controls).toContainText("your own installed Guild Wars");
       await expect(controls).toContainText("no artwork ships with this app");
-      await expect(controls).toContainText("next time you open this app");
+      await expect(controls).toContainText("distance and range band");
+      // The write and the restart are one action (P7.6), so the note must not
+      // say the change waits quietly for the next launch.
+      await expect(controls).toContainText("restarts the app");
+      await expect(controls).not.toContainText("next time you open this app");
       // Loading the Toolbox does not paint a cursor by itself: the game must
       // publish one first, and this launcher has no game.
       expect(

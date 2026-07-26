@@ -5,11 +5,20 @@
 // the same registry, so a tool the session cannot honour cannot be saved
 // quietly.
 //
-// This executes the real module. `toolbox-policy.ts` reads `app.isPackaged` at
-// import time, which `node --test` has no Electron to answer, so the loader
-// hook below resolves `electron` to a stub. It reports a *packaged* app, which
-// is the posture that matters: automation is unreachable there, so every answer
-// below comes from the registry and from nothing else.
+// This executes the real module. `toolbox-policy.ts` resolves its automation
+// gate once at import time from `app.isPackaged` and `GW_TOOLBOX_AUTOMATION`,
+// which `node --test` has no Electron to answer, so the loader hook below
+// resolves `electron` to a stub reporting a *packaged* app — and the
+// environment variable is set to the value that would open the gate. That pair
+// is the posture that matters: it is the only one in which the packaged half of
+// the gate decides anything, so `TOOLBOX_AUTOMATION_ENABLED === false` below is
+// a statement about `!app.isPackaged` rather than about an unset variable, and
+// every other answer in this file comes from the tool registry alone.
+//
+// The gate across *all four* postures is executed by
+// `tests/release/packaged-toolbox-surface.test.mjs`, which re-evaluates the
+// built module in a child process per case. This file cannot: the gate is
+// resolved at import, and one process imports it once.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
@@ -34,6 +43,11 @@ register(
   )}`,
 );
 
+// Set before the import, because the gate is read once at module evaluation.
+// Without it the assertion below passes with the `!app.isPackaged` half of the
+// gate deleted, since the environment half is false either way.
+process.env.GW_TOOLBOX_AUTOMATION = "1";
+
 const {
   TOOLBOX_AUTOMATION_ENABLED,
   TOOLBOX_TOOLS,
@@ -48,7 +62,8 @@ const allToolsOff = (): AppSettings => {
   return settings;
 };
 
-test("a packaged build cannot reach automation, so the tools decide alone", () => {
+test("a packaged build refuses GW_TOOLBOX_AUTOMATION=1, so the tools decide alone", () => {
+  assert.equal(process.env.GW_TOOLBOX_AUTOMATION, "1");
   assert.equal(TOOLBOX_AUTOMATION_ENABLED, false);
 });
 

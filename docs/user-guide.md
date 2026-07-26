@@ -92,9 +92,10 @@ default. The host reads the cursor Guild Wars itself draws out of your own
 installed client and shows it over the game view; no cursor artwork ships with
 this app and none is downloaded. To turn it off, open **Settings → Controls**
 and clear that box; **Reset Launcher Settings…** under **Advanced** turns it
-back on along with everything else. Turning it on or off takes effect the next time
-you open the application, because it changes which client module the launch
-serves; **Reload Game** reuses the module the launch already chose.
+back on along with everything else. Turning it on or off changes which client
+module the launch serves, so the app has to restart to apply it: it asks first,
+and if you cancel, nothing is saved and the box goes back to what it was.
+**Reload Game** reuses the module the launch already chose.
 When it is off — and whenever the cursor cannot be read, or
 your client build is not one this host has certified — you get the normal macOS
 pointer. That is a cosmetic difference only: nothing about how the game plays
@@ -242,12 +243,18 @@ visible under **Settings → Controls**. An uncertified client build does not me
 the app is out of date — whether a newer release exists is the separate question
 above, which the notice's own **Check for Updates** button answers.
 
-The app reads game memory only for **Use the game's own cursor**, which is on
-by default. Clear that box and no Toolbox hook is installed, no companion
-kernel loads, and nothing observes game memory. There is no Toolbox UI either
-way, and nothing the app does sends game input or acts on your behalf. On a
-certified build the app derives one narrowly patched module that connects the
-client's missing file operations to its sandboxed persistent filesystem, which
+**Use the game's own cursor**, on by default, is what makes the app read game
+memory at all. While it is on the app reads two things: the cursor Guild Wars
+is drawing, and — when you have a target selected — that target's distance and
+which range band it falls in, which it shows in a small line at the top of the
+game view. That readout is the whole of the Toolbox's on-screen surface. It
+disappears when you have nothing targeted, it cannot be clicked, and it never
+covers anything you can interact with. Clear the box and there is no readout, no
+Toolbox hook is installed, no companion kernel loads, and nothing observes game
+memory at all. Either way nothing the app does sends game input or acts on your
+behalf. On a certified build the app derives one narrowly patched module that
+connects the client's missing file operations to its sandboxed persistent
+filesystem, which
 is what makes build templates, screenshots, and chat logs work; the downloaded
 official artifact is unchanged whichever way the box is set.
 
