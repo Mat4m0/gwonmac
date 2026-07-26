@@ -6,7 +6,10 @@
 // build/preload/preload.cjs. Copying a channel name back into this file would
 // reintroduce the drift the generator exists to remove, so no string literal
 // here may start with the gw channel prefix — tests/policy asserts that.
-/* global IPC, RENDERER_INIT_ARGUMENT, WASM_BRIDGE_MARKERS */
+// `process` is declared here for the same reason the three constants are: the
+// sandbox loader supplies it to this file's scope, and it is the only Node-ish
+// binding the preload may read.
+/* global IPC, RENDERER_INIT_ARGUMENT, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -16,7 +19,12 @@ const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
  * its argument gets the production posture rather than a developer one.
  */
 function rendererInit() {
-  const argv = globalThis.process?.argv;
+  // `process` is injected into the sandboxed preload's own scope; it is not a
+  // property of `globalThis`. Reading it off `globalThis` found nothing, so
+  // every launch silently took the production defaults — no game cursor, no
+  // Toolbox automation, no template trace — and only tests/electron could see
+  // it, because a `vm` fixture's `process` global answers to either spelling.
+  const argv = typeof process === "undefined" ? undefined : process.argv;
   const raw = Array.isArray(argv)
     ? argv.find((value) => value.startsWith(RENDERER_INIT_ARGUMENT))
     : undefined;
