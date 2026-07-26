@@ -32,6 +32,12 @@ test.describe("sandbox boundary", () => {
           templateFsTrace: false,
         },
         toolboxPresent: false,
+        // The whole exposed surface, as a human-reviewed list: adding a
+        // capability must be a deliberate edit here. What each one *does* is
+        // executed against the built preload in
+        // tests/release/preload-behaviour.test.mjs, whose coverage gate fails
+        // if a member is added there without a call — the two files change
+        // together.
         keys: [
           "app",
           "cache",
@@ -47,6 +53,7 @@ test.describe("sandbox boundary", () => {
           "settings",
           "snapshot",
           "sockets",
+          "wasmBridgeMarkers",
         ],
         nativeFrozen: true,
         namespacesFrozen: true,
