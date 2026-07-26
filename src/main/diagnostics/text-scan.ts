@@ -32,28 +32,41 @@ const ABSOLUTE_PATH =
   /(?<![^\s"'(=:])\/(?!\/)[^/\s"',;)}\]]+(?: +(?=[^\s"',;)}\]]*\/)[^/\s"',;)}\]]+)*(?:\/[^/\s"',;)}\]]+(?: +(?=[^\s"',;)}\]]*\/)[^/\s"',;)}\]]+)*)*/g;
 
 /**
- * `key = value` and `"key": "value"`, for the keys the recorder already drops
- * by name (`SENSITIVE_KEY` in `../diagnostic-recorder.ts`). Two holes the
- * adversarial corpus opened:
- *
- * - the vocabulary was five words and did not include the identifier keys
- *   (`account`, `username`, `email`), so `account=alice` in free text survived
- *   while a *field* named `account` was dropped outright;
- * - the separator was `[:=]` alone, so the JSON spelling a Chromium trace
- *   actually uses — `"token":"abc"` — never matched, because the value class
- *   excludes the opening quote.
- *
- * The quotes are captured and put back so the trace stays parseable: the
- * `attribute-stalls` tool reads chromium-trace.json as JSON.
+ * The keys the recorder already drops by name (`SENSITIVE_KEY` in
+ * `../diagnostic-recorder.ts`), spelled the same way: a substring match, so
+ * `accountName` and `authToken` are covered too. The vocabulary used to be
+ * five words and did not include the identifier keys, so `account=alice` in
+ * free text survived while a *field* named `account` was dropped outright.
  */
-const SENSITIVE_ASSIGNMENT =
-  /\b(\w*(?:password|passphrase|authorization|cookie|token|secret|credential|username|email|account|login)\w*)(["']?\s*[:=]\s*["']?)[^,\s}"']+/gi;
+const SENSITIVE_KEY = String.raw`\w*(?:password|passphrase|authorization|cookie|token|secret|credential|username|email|account|login)\w*`;
+
+/**
+ * `"key": "value"`, the spelling a Chromium trace actually uses. The old rule
+ * never matched it at all, because its value class excluded the opening
+ * quote. Both quotes are put back so the trace stays parseable — the
+ * `attribute-stalls` tool reads chromium-trace.json as JSON — and the value
+ * class stops at a comma so no match can contain one (see `flushBoundary`).
+ * A value that really does contain a comma is left to the rules below.
+ */
+const QUOTED_SECRET = new RegExp(`("${SENSITIVE_KEY}"\\s*:\\s*")[^",]*(")`, "gi");
+
+/**
+ * `key=value` and `key: value` where neither side is quoted. The negative
+ * lookahead keeps this off the JSON form: rewriting `"token":5` to
+ * `"token":[redacted]` would leave the trace unparseable, and a number is not
+ * the free text this is here to catch.
+ */
+const PLAIN_SECRET = new RegExp(
+  `\\b(${SENSITIVE_KEY})(\\s*[:=]\\s*)(?!")[^,\\s}"']+`,
+  "gi",
+);
 
 export function redactDiagnosticText(value: string): string {
   return value
     .replaceAll(homedir(), "[home]")
     .replace(/\bBearer\s+[^\s,;"']+/gi, "Bearer [redacted]")
-    .replace(SENSITIVE_ASSIGNMENT, "$1$2[redacted]")
+    .replace(QUOTED_SECRET, "$1[redacted]$2")
+    .replace(PLAIN_SECRET, "$1$2[redacted]")
     // A `file:` URL hides its path behind the empty authority: every `/` in
     // `file:///Users/x/…` is either followed or preceded by another, so the
     // absolute-path rule — which deliberately skips `//` so it does not eat
@@ -84,9 +97,9 @@ const MAX_CARRY_CHARS = 1024 * 1024;
 function flushBoundary(buffer: string): number {
   const cut = buffer.lastIndexOf(",");
   if (cut >= 0) return cut + 1;
-  // A megabyte of trace with neither a comma nor a quote in it is not the JSON
-  // Chromium writes. Bounding the carry costs the boundary guarantee for that
-  // one cut and keeps memory bounded, which is the safer trade at this size.
+  // A megabyte of trace with no comma in it is not the JSON Chromium writes.
+  // Bounding the carry costs the boundary guarantee for that one cut and keeps
+  // memory bounded, which is the safer trade at this size.
   return buffer.length > MAX_CARRY_CHARS ? buffer.length : 0;
 }
 

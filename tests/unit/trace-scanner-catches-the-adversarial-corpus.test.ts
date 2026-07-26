@@ -105,13 +105,27 @@ describe("Chromium trace scanner", () => {
   it("keeps the trace parseable as JSON", () => {
     const trace = JSON.stringify({
       traceEvents: [
-        { name: "Task", args: { token: "eyJhbGciOi", url: "/Users/x/g.js" } },
+        {
+          name: "Task",
+          args: {
+            token: "eyJhbGciOi",
+            url: "/Users/x/g.js",
+            // A numeric value under a sensitive key. Rewriting this to
+            // `"tokenCount":[redacted]` would leave the trace unparseable,
+            // and `attribute-stalls` reads it as JSON.
+            tokenCount: 5,
+          },
+        },
       ],
     });
     const redacted = redactDiagnosticText(trace);
     assert.equal(redacted.includes("eyJhbGciOi"), false);
     assert.equal(redacted.includes("/Users/x/g.js"), false);
-    assert.doesNotThrow(() => JSON.parse(redacted));
+    const parsed = JSON.parse(redacted) as {
+      traceEvents: { args: { token: string; tokenCount: number } }[];
+    };
+    assert.equal(parsed.traceEvents[0]!.args.token, "[redacted]");
+    assert.equal(parsed.traceEvents[0]!.args.tokenCount, 5);
   });
 
   it("redacts a value that straddles a streaming chunk boundary", async () => {
