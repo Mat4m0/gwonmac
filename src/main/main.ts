@@ -96,32 +96,39 @@ function resetAppSettings(): Promise<AppSettings> {
   return operation;
 }
 
-let clientRuntime: ClientRuntime;
-
-const sockets = new SocketManager(
-  (ownerId, event) => {
-    if (event.type === "open") {
-      clientRuntime.noteSocketOpen();
-    }
-    if (event.type !== "data") {
-      log("socket", "info", `socket.${event.type}`, {
-        socketId: event.socketId,
-        ...(event.type === "close" ? { reason: event.reason } : {}),
-        ...(event.type === "error" ? { message: event.message } : {}),
-      });
-    }
-    emitSocketEvent(ownerId, event);
-  },
-  { count, observe, gauge, peakGauge },
-  !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
-    ? (destination) => {
-        if (destination !== "127.0.0.1:6112") {
-          throw new Error("offline socket fixture permits only 127.0.0.1:6112");
-        }
-        return { host: "127.0.0.1", port: 6112, family: 4 };
+/**
+ * The socket manager reports an opened game socket straight into the runtime,
+ * so it cannot exist before the runtime does. Both are built inside
+ * `whenReady`, in that order, and passed to whatever needs them.
+ */
+function buildSocketManager(clientRuntime: ClientRuntime): SocketManager {
+  return new SocketManager(
+    (ownerId, event) => {
+      if (event.type === "open") {
+        clientRuntime.noteSocketOpen();
       }
-    : undefined,
-);
+      if (event.type !== "data") {
+        log("socket", "info", `socket.${event.type}`, {
+          socketId: event.socketId,
+          ...(event.type === "close" ? { reason: event.reason } : {}),
+          ...(event.type === "error" ? { message: event.message } : {}),
+        });
+      }
+      emitSocketEvent(ownerId, event);
+    },
+    { count, observe, gauge, peakGauge },
+    !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
+      ? (destination) => {
+          if (destination !== "127.0.0.1:6112") {
+            throw new Error(
+              "offline socket fixture permits only 127.0.0.1:6112",
+            );
+          }
+          return { host: "127.0.0.1", port: 6112, family: 4 };
+        }
+      : undefined,
+  );
+}
 
 function setProgress(next: DownloadProgress): void {
   updateLongRunningTaskFeedback(next);
@@ -206,7 +213,10 @@ async function applyPendingGameStorageClear(): Promise<void> {
   log("filesystem", "warn", "filesystem.resetCompleted");
 }
 
-function buildWindowHost(): WindowHost {
+function buildWindowHost(
+  clientRuntime: ClientRuntime,
+  sockets: SocketManager,
+): WindowHost {
   return {
     sockets,
     nativeCursor: nativeCursorEnabled,
@@ -245,11 +255,6 @@ app.whenReady().then(async () => {
   await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
-  powerMonitor.on("suspend", () => {
-    if (!clientRuntime?.isDownloading) return;
-    log("cache", "warn", "fullDownload.stoppedForSleep");
-    clientRuntime.stopDownload();
-  });
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
   log("app", "info", "electron.ready");
@@ -272,7 +277,7 @@ app.whenReady().then(async () => {
   const profileMatches =
     !expectedUserData ||
     path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
-  clientRuntime = new ClientRuntime({
+  const clientRuntime = new ClientRuntime({
     paths,
     hostVersion: app.getVersion(),
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
@@ -280,6 +285,12 @@ app.whenReady().then(async () => {
     toolboxEnabled: toolboxEnabledFor(settings),
     onProgress: setProgress,
     onPrefetch: setPrefetch,
+  });
+  const sockets = buildSocketManager(clientRuntime);
+  powerMonitor.on("suspend", () => {
+    if (!clientRuntime.isDownloading) return;
+    log("cache", "warn", "fullDownload.stoppedForSleep");
+    clientRuntime.stopDownload();
   });
   setProtocolDeps({
     getActiveClient: () => clientRuntime.active,
@@ -313,7 +324,7 @@ app.whenReady().then(async () => {
     await stopDiagnostics();
   });
 
-  createMainWindow(buildWindowHost());
+  createMainWindow(buildWindowHost(clientRuntime, sockets));
   if (TOOLBOX_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
@@ -359,7 +370,7 @@ app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (!getMainWindow()) createMainWindow(buildWindowHost());
+    if (!getMainWindow()) createMainWindow(buildWindowHost(clientRuntime, sockets));
   });
   app.on("child-process-gone", (_event, details) => {
     log("app", "error", "childProcess.gone", {
