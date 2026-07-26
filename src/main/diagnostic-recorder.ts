@@ -21,6 +21,7 @@ import type {
 } from "../shared/diagnostics.js";
 import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
 import { diagnosticFramesPath } from "./core/paths.js";
+import { parseLogRecords } from "./diagnostic-report.js";
 import { gamePaths } from "./paths.js";
 
 const MAX_FILES = 5;
@@ -463,12 +464,12 @@ export class FlightRecorder {
     const files = (await readdir(directory))
       .filter((name) => name.startsWith(prefix) && name.endsWith(".jsonl"))
       .map((name) => path.join(directory, name));
+    // Per file, not over the concatenation: only the file still being written
+    // can end mid-record, and gluing its torn tail to another file's first
+    // line would cost two records instead of one.
     const records: LogRecord[] = [];
     for (const file of files) {
-      const text = await readFile(file, "utf8");
-      for (const line of text.split("\n")) {
-        if (line) records.push(JSON.parse(line) as LogRecord);
-      }
+      records.push(...parseLogRecords(await readFile(file, "utf8")));
     }
     records.sort((left, right) => left.seq - right.seq);
     const first = records[0];

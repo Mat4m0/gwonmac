@@ -20,7 +20,14 @@ export interface PreviousSessionExport {
   warningCount: number;
 }
 
-function parseLogRecords(text: string): LogRecord[] {
+/**
+ * The one reader of a session's JSONL. A process killed between `write` and
+ * the newline leaves one incomplete final record, and that is normal: it must
+ * cost the reader that record and nothing else. Both the current session's
+ * export and the previous session's report come through here, so neither can
+ * be tolerant while the other throws.
+ */
+export function parseLogRecords(text: string): LogRecord[] {
   const records: LogRecord[] = [];
   for (const line of text.split("\n")) {
     if (!line) continue;
