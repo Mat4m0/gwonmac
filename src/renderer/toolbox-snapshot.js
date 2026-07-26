@@ -28,12 +28,23 @@ function validCoordinate(value) {
   return Number.isFinite(value) && Math.abs(value) <= 1_000_000;
 }
 
-/** @param {number} type */
-function agentKind(type) {
-  if ((type & 0x400) !== 0) return "Item";
-  if ((type & 0x200) !== 0) return "Gadget";
-  if ((type & 0xdb) !== 0) return "Living";
-  return null;
+/*
+ * The kernel publishes a target only when its type word carries one of these
+ * bits (`valid_agent_type`, lib.rs). The decoder distrusts shared memory and
+ * checks the same property independently rather than trusting the writer.
+ */
+const AGENT_TYPE_BITS = 0x400 | 0x200 | 0xdb;
+
+/**
+ * Only the Living pattern has been certified against a live target — the
+ * readiness register in `docs/toolbox-development.md` still lists
+ * hostile/item/gadget as the next proof — so every other accepted word is
+ * published as `agentTypeBits` under a kind that claims nothing. Naming a
+ * value the client has not certified is how a guess becomes a fact.
+ * @param {number} bits
+ */
+function agentKind(bits) {
+  return (bits & 0xdb) !== 0 ? "Living" : "Unknown";
 }
 
 /**
@@ -67,7 +78,7 @@ export function readToolboxSnapshot(buffer, pointer) {
     playerX: view.getFloat32(32, true),
     playerY: view.getFloat32(36, true),
     targetId: view.getUint32(40, true),
-    targetType: view.getUint32(44, true),
+    agentTypeBits: view.getUint32(44, true),
     targetX: view.getFloat32(48, true),
     targetY: view.getFloat32(52, true),
     distance: view.getFloat32(56, true),
@@ -114,11 +125,10 @@ export function readToolboxSnapshot(buffer, pointer) {
     return Object.freeze({ status: "waiting", reason: "corrupt" });
   }
   const targetValid = (flags & FLAGS.target) !== 0;
-  const targetKind = agentKind(state.targetType);
   if (
     targetValid
       ? state.targetId === 0
-        || targetKind === null
+        || (state.agentTypeBits & AGENT_TYPE_BITS) === 0
         || !validCoordinate(state.targetX)
         || !validCoordinate(state.targetY)
         || !Number.isFinite(state.distance)
@@ -126,7 +136,7 @@ export function readToolboxSnapshot(buffer, pointer) {
         || state.rangeBand < 1
         || state.rangeBand >= RANGE_NAMES.length
       : state.targetId !== 0
-        || state.targetType !== 0
+        || state.agentTypeBits !== 0
         || state.targetX !== 0
         || state.targetY !== 0
         || state.distance !== 0
@@ -139,7 +149,7 @@ export function readToolboxSnapshot(buffer, pointer) {
     ...state,
     instanceName: INSTANCE_NAMES[state.instanceType] ?? "Unknown",
     targetValid,
-    targetKind: targetValid ? (targetKind ?? "None") : "None",
+    targetKind: targetValid ? agentKind(state.agentTypeBits) : "None",
     rangeName: RANGE_NAMES[state.rangeBand] ?? "None",
   });
 }
