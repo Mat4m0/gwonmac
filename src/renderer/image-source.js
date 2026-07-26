@@ -143,7 +143,7 @@ export function createImageSource({
 
   const stats = { reads: 0, bytes: 0, fromMemory: 0, fromNative: 0, coalesced: 0 };
   let burstBytes = 0;
-  /** @type {number | null} */
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let burstTimer = null;
   let lastError = '';
 

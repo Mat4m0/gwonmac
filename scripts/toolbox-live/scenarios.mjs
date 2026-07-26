@@ -785,7 +785,10 @@ export function liveRunPlan(name, { baseEnv, userData, cachedOnly }) {
  * tier cannot quietly acquire a preflight the others do not have.
  *
  * @param {LiveRunPlan} plan
- * @param {ToolboxDoctorReport} preflight
+ * @param {Pick<
+ *   ToolboxDoctorReport,
+ *   "readyForCachedLive" | "credentials" | "targetReadout" | "nativeCursor"
+ * >} preflight
  * @param {{ cachedOnly: boolean }} options
  * @returns {
  *   | "cached-client-incomplete"

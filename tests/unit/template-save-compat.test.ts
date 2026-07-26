@@ -107,10 +107,11 @@ describe("template-save WASM compatibility transform", () => {
   it("routes the certified call site to the host behind a dirfd marker", () => {
     const input = fixture();
     const output = rewriteTemplateSaveWasm(input, certify(input));
-    assert.equal(WebAssembly.validate(output), true);
+    const moduleBytes = Uint8Array.from(output);
+    assert.equal(WebAssembly.validate(moduleBytes), true);
 
     const seen: number[][] = [];
-    const instance = new WebAssembly.Instance(new WebAssembly.Module(output), {
+    const instance = new WebAssembly.Instance(new WebAssembly.Module(moduleBytes), {
       m: {
         a: (...args: number[]) => {
           seen.push(args);
@@ -130,9 +131,12 @@ describe("template-save WASM compatibility transform", () => {
   it("keeps the stub itself intact so uncertified callers are unaffected", () => {
     const input = fixture();
     const output = rewriteTemplateSaveWasm(input, certify(input));
-    const stubbed = new WebAssembly.Instance(new WebAssembly.Module(output), {
-      m: { a: () => assert.fail("the stub must not reach the host") },
-    });
+    const stubbed = new WebAssembly.Instance(
+      new WebAssembly.Module(Uint8Array.from(output)),
+      {
+        m: { a: () => assert.fail("the stub must not reach the host") },
+      },
+    );
     // Nothing else calls it here, but the body must still be the original
     // `i32.const 2` so the model paths that use it keep today's behaviour.
     assert.ok(stubbed instanceof WebAssembly.Instance);

@@ -69,6 +69,11 @@ if (blocked) {
   console.error(JSON.stringify({ preflight, blocked }));
   process.exit(2);
 }
+const expectedBuildId = preflight.client.buildId;
+if (expectedBuildId === null) {
+  console.error(JSON.stringify({ preflight, blocked: "client-build-unknown" }));
+  process.exit(2);
+}
 const failureDir = path.join(root, "test-results", "toolbox-live");
 
 const child = spawn(
@@ -279,7 +284,7 @@ try {
     rendererErrors: [...rendererErrors],
   };
   failureResult = result;
-  validateCommonAcceptance(result, preflight.client.buildId, {
+  validateCommonAcceptance(result, expectedBuildId, {
     coreObservation: plan.tier === "automation",
   });
   selectedScenario.validate(result);

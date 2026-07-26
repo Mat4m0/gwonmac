@@ -38,10 +38,10 @@ export function projectLiveResult(page, cadence, scenario) {
     return {
       scenario: name,
       supported: runtime?.status === "installed",
-      buildId: runtime?.buildId ?? null,
-      hookCount: state?.tickCount ?? 0,
+      buildId: typeof runtime?.buildId === "number" ? runtime.buildId : null,
+      hookCount: numeric(state?.tickCount),
       hookHertz: Number(((ticks * 1_000) / elapsedMs).toFixed(2)),
-      sequence: state?.sequence ?? 0,
+      sequence: numeric(state?.sequence),
       map: state?.status === "ready"
         ? {
             id: state.mapId,
@@ -61,10 +61,10 @@ export function projectLiveResult(page, cadence, scenario) {
         : null,
       renderUs: Number(numeric(runtime?.lastRenderUs).toFixed(2)),
       renderP95Us: Number((renderSamples[p95Index] ?? 0).toFixed(2)),
-      snapshotReads: runtime?.snapshotReads ?? 0,
-      rejectedSnapshots: runtime?.rejectedSnapshots ?? 0,
+      snapshotReads: numeric(runtime?.snapshotReads),
+      rejectedSnapshots: numeric(runtime?.rejectedSnapshots),
       lifecycle: window.gwAutomation?.read() ?? null,
-      installation: runtime?.installation ?? 0,
+      installation: numeric(runtime?.installation),
       host: {
         renderScale: settings.renderScale,
         wasmMemoryMiB: mib(

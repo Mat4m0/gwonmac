@@ -44,7 +44,7 @@ export const installGameInput = ({
   const heldButtons = new Map();
   /** @type {Map<number, Touch>} */
   const syntheticTouches = new Map();
-  /** @type {Set<number>} */
+  /** @type {Set<ReturnType<typeof setTimeout>>} */
   const tapTimers = new Set();
   let touchMode = initialSettings.touchMode;
   /** @type {{ x: number, y: number } | null} */

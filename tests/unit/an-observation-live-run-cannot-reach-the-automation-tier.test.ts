@@ -7,6 +7,7 @@
 // here reads source text, and nothing needs a build or a game.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { CDPSession, Page } from "playwright";
 import {
   liveRunPlan,
   liveRunRefusal,
@@ -16,31 +17,24 @@ import {
 } from "../../scripts/toolbox-live/scenarios.mjs";
 import { validateCommonAcceptance } from "../../scripts/toolbox-live/acceptance.mjs";
 
-interface Scenario {
-  tier: "observation" | "automation";
-  run: (context: Record<string, unknown>) => Promise<unknown>;
-  validate: (result: unknown) => void;
-}
-
-interface LivePlan {
-  tier: "observation" | "automation";
-  env: Record<string, string | undefined>;
-  stdio: string[];
-  scenario: Scenario;
-}
-
 // The register itself, not a local restatement of it: the first case below
 // asserts that every entry declares one of the two tiers, and asserting that
 // against a hand-written `Record<string, Scenario>` would only be asserting
 // against this file.
 const scenarios = SCENARIOS;
 
-const planFor = (name: string, baseEnv: Record<string, string> = {}) =>
-  liveRunPlan(name, {
+const planFor = (name: string, baseEnv: Record<string, string> = {}) => {
+  const plan = liveRunPlan(name, {
     baseEnv,
     userData: "/tmp/profile",
     cachedOnly: true,
-  }) as LivePlan | null;
+  });
+  assert.ok(plan, `expected a registered scenario named ${name}`);
+  return plan;
+};
+
+const asPage = (page: unknown) => page as Page;
+const asCdp = (cdp: unknown) => cdp as CDPSession;
 
 /** A page that fails the test if anything asks it to synthesize input. */
 function recordingPage(ready: boolean) {
@@ -102,18 +96,18 @@ describe("an observation live run cannot reach the automation tier", () => {
     // The developer's own shell may export the variable; inheriting it would
     // silently turn an observation run back into an automation run.
     const observation = planFor("cursor-capture", { GW_TOOLBOX_AUTOMATION: "1" });
-    assert.equal(observation?.tier, "observation");
-    assert.equal("GW_TOOLBOX_AUTOMATION" in observation!.env, false);
+    assert.equal(observation.tier, "observation");
+    assert.equal("GW_TOOLBOX_AUTOMATION" in observation.env, false);
 
     const automation = planFor("movement");
-    assert.equal(automation?.env.GW_TOOLBOX_AUTOMATION, "1");
+    assert.equal(automation.env.GW_TOOLBOX_AUTOMATION, "1");
   });
 
   it("opens no parent-process command channel for an observation run", () => {
     // main.ts serves AUTOMATION_COMMAND over the Node IPC channel. Without the
     // channel there is nothing to send on: child.send does not exist.
-    assert.deepEqual(planFor("cursor-capture")?.stdio, ["ignore", "pipe", "pipe"]);
-    assert.deepEqual(planFor("movement")?.stdio, [
+    assert.deepEqual(planFor("cursor-capture").stdio, ["ignore", "pipe", "pipe"]);
+    assert.deepEqual(planFor("movement").stdio, [
       "ignore",
       "pipe",
       "pipe",
@@ -146,7 +140,7 @@ describe("an observation live run cannot reach the automation tier", () => {
       credentials: "saved",
       nativeCursor: false,
       targetReadout: false,
-    };
+    } as const;
     const options = { cachedOnly: true };
     assert.equal(
       liveRunRefusal(planFor("cursor-capture"), ready, options),
@@ -195,8 +189,11 @@ describe("an observation live run cannot reach the automation tier", () => {
 
   it("hands an observation scenario no handle that can act on the player", () => {
     const capabilities = {
-      page: { evaluate: async () => "read", waitForTimeout: async () => undefined },
-      cdp: { send: async () => undefined },
+      page: asPage({
+        evaluate: async () => "read",
+        waitForTimeout: async () => undefined,
+      }),
+      cdp: asCdp({ send: async () => undefined }),
       sendAutomationCommand: async () => undefined,
       sampleObservations: async () => [],
     };
@@ -222,13 +219,15 @@ describe("an observation live run cannot reach the automation tier", () => {
 
   it("still lets an observation scenario read", async () => {
     const context = scenarioContext("observation", {
-      page: {
+      page: asPage({
         evaluate: async (_body: unknown, argument: unknown) => argument ?? "read",
         waitForTimeout: async () => "waited",
-      },
-      cdp: null,
-      sendAutomationCommand: null,
-      sampleObservations: async () => [{ type: "u8", address: 0, value: 7 }],
+      }),
+      cdp: asCdp(null),
+      sendAutomationCommand: async () => undefined,
+      sampleObservations: async () => [
+        { type: "u8", address: 0, value: 7, valid: true },
+      ],
     }) as {
       evaluate: (body: unknown, argument?: unknown) => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
@@ -236,7 +235,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     };
     assert.equal(await context.evaluate(() => undefined), "read");
     assert.deepEqual(await context.sample(), [
-      { type: "u8", address: 0, value: 7 },
+      { type: "u8", address: 0, value: 7, valid: true },
     ]);
     assert.equal(await context.wait(1), "waited");
   });
@@ -245,17 +244,17 @@ describe("an observation live run cannot reach the automation tier", () => {
     // The pre-split runner pressed Enter up to three times to get an idle
     // client past its login screen, for every scenario.
     const page = recordingPage(false);
-    assert.equal(await waitForPlayable(page, "observation"), 0);
+    assert.equal(await waitForPlayable(asPage(page), "observation"), 0);
     assert.deepEqual(page.touched, []);
   });
 
   it("still nudges an automation run, so the double above would have caught it", async () => {
     const page = automatablePage(false);
-    assert.equal(await waitForPlayable(page, "automation"), 3);
+    assert.equal(await waitForPlayable(asPage(page), "automation"), 3);
     assert.equal(page.presses, 3);
 
     const playable = automatablePage(true);
-    assert.equal(await waitForPlayable(playable, "automation"), 0);
+    assert.equal(await waitForPlayable(asPage(playable), "automation"), 0);
     assert.equal(playable.presses, 0);
   });
 
