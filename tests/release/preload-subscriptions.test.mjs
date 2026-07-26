@@ -28,8 +28,10 @@ test("preload keeps progress listeners independent without subscription commands
       );
     },
   };
+  // The generated artifact, not the body: the channel constants only exist
+  // once scripts/generate-preload.mjs has spliced them in.
   const source = await readFile(
-    path.join(root, "src/preload/preload.cjs"),
+    path.join(root, "build/preload/preload.cjs"),
     "utf8",
   );
   vm.runInNewContext(source, {

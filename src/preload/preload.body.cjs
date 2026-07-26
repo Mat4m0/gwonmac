@@ -1,47 +1,14 @@
 // Sandboxed preload must be CommonJS — Electron's sandbox loader does not
-// execute ESM preload graphs, so this file stays self-contained.
+// execute ESM preload graphs, and it whitelists `electron`, `events`, `timers`
+// and `url` only, so this file cannot require the canonical contracts. It is
+// the *body* of the preload: scripts/generate-preload.mjs prepends the
+// constants below from src/shared/contracts.ts and writes the result to
+// build/preload/preload.cjs. Copying a channel name back into this file would
+// reintroduce the drift the generator exists to remove, so no string literal
+// here may start with the gw channel prefix — tests/policy asserts that.
+/* global IPC, RENDERER_INIT_ARGUMENT */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
-
-const IPC = {
-  progressCurrent: "gw:progress:current",
-  progressEvent: "gw:progress:event",
-  prefetchEvent: "gw:prefetch:event",
-  snapshotMetadata: "gw:snapshot:metadata",
-  dnsResolve: "gw:dns:resolve",
-  socketConnect: "gw:socket:connect",
-  socketSend: "gw:socket:send",
-  socketClose: "gw:socket:close",
-  socketEvent: "gw:socket:event",
-  settingsGet: "gw:settings:get",
-  settingsSet: "gw:settings:set",
-  settingsReset: "gw:settings:reset",
-  credentialsLoad: "gw:credentials:load",
-  credentialsSave: "gw:credentials:save",
-  credentialsClear: "gw:credentials:clear",
-  cacheInfo: "gw:cache:info",
-  cacheClear: "gw:cache:clear",
-  cacheDownloadAll: "gw:cache:downloadAll",
-  cacheStopDownload: "gw:cache:stopDownload",
-  gameStorageReset: "gw:gameStorage:reset",
-  diagnosticsGraphics: "gw:diagnostics:graphics",
-  diagnosticsClockSync: "gw:diagnostics:clockSync",
-  diagnosticsClockResult: "gw:diagnostics:clockResult",
-  diagnosticsRendererMetrics: "gw:diagnostics:rendererMetrics",
-  diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
-  diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
-  diagnosticsCurrent: "gw:diagnostics:current",
-  appOpenExternal: "gw:app:openExternal",
-  appRequestQuit: "gw:app:requestQuit",
-  clientRetry: "gw:client:retry",
-  clientHealthy: "gw:client:healthy",
-  clientSession: "gw:client:session",
-  releaseNoticeCheck: "gw:releaseNotice:check",
-  rendererCommand: "gw:renderer:command",
-  rendererCommandDone: "gw:renderer:commandDone",
-};
-
-const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
 
 /**
  * Launch configuration, read from the one `additionalArguments` entry the main

@@ -11,6 +11,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -43,7 +44,6 @@ function rendererCheckout(): string {
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/bg1.webp", "webp");
-  write("src/preload/preload.cjs", "// bridge\n");
   return root;
 }
 
@@ -67,7 +67,7 @@ describe("scripts/copy-renderer.mjs only copies", () => {
     assert.equal(result.status, 0, result.stderr);
   });
 
-  it("still produces the renderer tree, the image index and the preload", () => {
+  it("still produces the renderer tree and the image index", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
       "<!doctype html>\n",
@@ -83,10 +83,10 @@ describe("scripts/copy-renderer.mjs only copies", () => {
           'Screenshots by <a href="https://bloogum.net/guildwars/">Snapshot Henchman</a>',
       },
     );
-    assert.equal(
-      readFileSync(path.join(root, "build/preload/preload.cjs"), "utf8"),
-      "// bridge\n",
-    );
+    // Not the preload: P5.6 moved that to scripts/generate-preload.mjs, which
+    // splices the canonical channel constants in and is the only producer of
+    // build/preload/preload.cjs.
+    assert.equal(existsSync(path.join(root, "build/preload")), false);
   });
 
   it("emits no WebAssembly", () => {

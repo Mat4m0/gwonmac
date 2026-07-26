@@ -10,18 +10,20 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import * as contracts from "../../src/shared/contracts.ts";
 import {
   RENDERER_INIT_ARGUMENT,
   type GwNativeApi,
   type RendererCommand,
   type RendererInit,
 } from "../../src/shared/contracts.ts";
+// @ts-expect-error a build script, deliberately untyped.
+import { preloadSource as generatePreload } from "../../scripts/generate-preload.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const preloadSource = await readFile(
-  path.join(root, "src/preload/preload.cjs"),
-  "utf8",
-);
+// The preload as it ships: generated from the canonical contracts, not read
+// from a checked-in copy of them.
+const preloadSource: string = generatePreload(contracts, root);
 const routerSource = await readFile(
   path.join(root, "src/renderer/commands.js"),
   "utf8",

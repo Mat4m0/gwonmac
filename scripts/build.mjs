@@ -16,6 +16,8 @@ export const BUILD_STEPS = [
     process.execPath,
     ["node_modules/typescript/bin/tsc", "-p", "tsconfig.renderer.json"],
   ],
+  // Reads build/shared/contracts.js, so it has to run after tsc.
+  [process.execPath, ["scripts/generate-preload.mjs"]],
   // Recreates build/renderer, so the kernel has to be written after it.
   [process.execPath, ["scripts/copy-renderer.mjs"]],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.

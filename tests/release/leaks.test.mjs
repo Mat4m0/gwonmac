@@ -26,20 +26,19 @@ test("macOS identity uses the Guild Wars name and configured application icon", 
   assert.ok(icon.length > 100_000, "application icon is unexpectedly small");
 });
 
-test("every canonical IPC channel is wired through preload and main", async () => {
+test("every canonical IPC channel is wired through main", async () => {
+  // The preload half of this loop is gone: P5.6 made the preload's channel
+  // constants generated from this same object, so a channel cannot be missing
+  // from it. tests/unit/the-preload-is-generated-from-the-canonical-channels
+  // executes that instead of asserting about source text.
   const { IPC } = await import(
     new URL("../../build/shared/contracts.js", import.meta.url)
   );
-  const preload = readFileSync(path.join(root, "src/preload/preload.cjs"), "utf8");
   const main = tracked
     .filter((file) => file.startsWith("src/main/"))
     .map((file) => readFileSync(path.join(root, file), "utf8"))
     .join("\n");
-  for (const [key, channel] of Object.entries(IPC)) {
-    assert.ok(
-      preload.includes(JSON.stringify(channel)),
-      `${key} is missing from the preload`,
-    );
+  for (const [key] of Object.entries(IPC)) {
     assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
   }
 });
@@ -50,7 +49,7 @@ test("saved login has one encrypted owner-only persistence surface", () => {
     "src/main/core/credentials.ts",
     "src/main/paths.ts",
     "src/main/core/paths.ts",
-    "src/preload/preload.cjs",
+    "src/preload/preload.body.cjs",
     "src/shared/contracts.ts",
     "src/renderer/harness.js",
   ];
