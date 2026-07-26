@@ -369,6 +369,7 @@ describe("chunk-store", () => {
     const hashes = payloads.map(hashOf);
     const started: string[] = [];
     const releases = new Map<string, () => void>();
+    const gauges = new Map<string, number>();
     let active = 0;
     let peak = 0;
     const store = new ChunkStore({
@@ -376,6 +377,11 @@ describe("chunk-store", () => {
       size: CHUNK * payloads.length,
       chunkSize: CHUNK,
       chunkHashes: hashes,
+      metrics: {
+        count: () => undefined,
+        observe: () => undefined,
+        gauge: (name, value) => gauges.set(name, value),
+      },
       fetch: (hash) =>
         new Promise((resolve) => {
           started.push(hash);
@@ -390,7 +396,19 @@ describe("chunk-store", () => {
     const work = hashes.map((_hash, index) =>
       store.ensureChunk(index, "prefetch"),
     );
-    await waitFor(() => started.length === 8, "eight fetches did not start");
+    // Wait for the queue, not just for the eight in flight. A prefetch reaches
+    // the queue only after its cache stat() rejects, so "eight started" does
+    // not imply "the other two are queued". Demanding a hash that has not been
+    // queued yet cannot promote it past a prefetch that is already running, and
+    // the assertion below would then wait out its deadline for a slot the
+    // demand was never going to get. That is the whole of the one-in-N flake
+    // this test used to have; the scheduler was never wrong.
+    await waitFor(
+      () =>
+        started.length === 8 &&
+        gauges.get("snapshot.native.queuedPrefetch") === 2,
+      "eight fetches did not start with the last two queued",
+    );
     assert.equal(started.length, 8);
     const demand = store.ensureChunk(9, "demand");
     const activeHash = started[0]!;
