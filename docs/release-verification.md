@@ -9,8 +9,9 @@ is four months behind, where `0.4.2` would tell you nothing.
 
 The numbers are written in SemVer syntax because npm, the packaging tools, and
 the release workflow all parse them that way, and SemVer forbids leading zeroes
-in a number. July is `7`, never `07`: `2026.07.01` is not a valid version and is
-rejected before it can reach a release.
+in a number. July is `7`, never `07`: `2026.07.01` is not a valid version, and
+`src/shared/release.ts` — the one parser this app compares versions with —
+refuses to read it rather than guessing what was meant.
 
 Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
 `-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
@@ -25,8 +26,8 @@ works with. ArenaNet ships client builds on its own schedule, and this app
 certifies them one hash at a time; that is a set, not a scale, and no version
 number can encode it. The app tells you directly instead — see
 [When the client build is not certified](user-guide.md#when-the-client-build-is-not-certified).
-A newer app version is also not a fix for an uncertified client build unless
-that release actually certified it; the release notes say so.
+A newer app version fixes an uncertified client build only if that release is
+the one that certified it, so a higher number on its own is not the answer.
 
 Nothing about the number implies an automatic update. Updating is manual, and
 the app checks for a newer release only when asked — see
