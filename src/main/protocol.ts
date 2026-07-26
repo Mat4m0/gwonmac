@@ -9,13 +9,15 @@ import type { ChunkStore } from "./core/chunk-store.js";
 import {
   isProxyFetchDestination,
   isProxyRoute,
+  type ProxyRoute,
   resolveProxyHost,
   rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
 import { clientArtifactPath } from "./core/paths.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
-import { count, log, span } from "./diagnostics.js";
+import { errorCode } from "../shared/errors.js";
+import { count, log, logEvent, span } from "./diagnostics.js";
 import { gamePaths, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
@@ -189,16 +191,18 @@ async function handleSnapshot(request: Request): Promise<Response> {
       headers: headers({ "Cache-Control": "no-store" }),
     });
   }
+  // Resolved before the span is opened: the raw header is renderer-supplied
+  // text, and it used to be recorded verbatim as the span's `priority` field.
+  const priority =
+    request.headers.get("x-gw-priority") === "prefetch"
+      ? "prefetch"
+      : "demand";
   const requestSpan = span("snapshot", "read", {
     offsetBytes: range.start,
     bytes: length,
-    priority: request.headers.get("x-gw-priority") ?? "demand",
+    priority,
   });
   try {
-    const priority =
-      request.headers.get("x-gw-priority") === "prefetch"
-        ? "prefetch"
-        : "demand";
     const data = await store.readRange(range.start, length, priority);
     requestSpan.end({ bytes: data.byteLength, status: 206 });
     count("protocol.snapshotBytes", data.byteLength);
@@ -216,17 +220,16 @@ async function handleSnapshot(request: Request): Promise<Response> {
       },
     );
   } catch (err) {
-    requestSpan.end(
-      { message: err instanceof Error ? err.message : String(err), status: 503 },
-      "error",
-    );
-    log("snapshot", "error", "snapshot.rangeFailed", {
-      message: err instanceof Error ? err.message : String(err),
+    const code = errorCode(err);
+    requestSpan.end({ code, status: 503 }, "error");
+    logEvent({
+      k: "snapshot.rangeFailed",
+      offsetBytes: range.start,
+      bytes: length,
+      code,
     });
     const message =
-      err instanceof Error &&
-      "code" in err &&
-      err.code === "chunk_offline"
+      code === "chunk_offline"
         ? "No cached copy of this game data is available while offline."
         : "ArenaNet is unavailable. Guild Wars will retry this download.";
     return new Response(message, {
@@ -236,7 +239,11 @@ async function handleSnapshot(request: Request): Promise<Response> {
   }
 }
 
-async function handleProxy(request: Request, route: string, rest: string): Promise<Response> {
+async function handleProxy(
+  request: Request,
+  route: ProxyRoute,
+  rest: string,
+): Promise<Response> {
   const destination =
     request.destination || request.headers.get("sec-fetch-dest") || "";
   if (!isProxyFetchDestination(destination)) {
@@ -325,14 +332,9 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
     requestSpan.end({ status: res.status });
     return new Response(res.body, { status: res.status, headers: out });
   } catch (err) {
-    requestSpan.end(
-      { status: 502, message: err instanceof Error ? err.message : String(err) },
-      "error",
-    );
-    log("proxy", "error", "proxy.requestFailed", {
-      route,
-      message: err instanceof Error ? err.message : String(err),
-    });
+    const code = errorCode(err);
+    requestSpan.end({ status: 502, code }, "error");
+    logEvent({ k: "proxy.requestFailed", route, code });
     return new Response("proxy error", { status: 502, headers: headers() });
   }
 }
@@ -346,7 +348,10 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   if (pathname === "/") pathname = "/index.html";
 
   const base = pathname.replace(/^\/+/, "");
-  const first = base.split("/")[0] ?? "";
+  // Lower-cased here so `isProxyRoute` can narrow to `ProxyRoute` honestly.
+  // `resolveProxyHost` folded case anyway, so the routing is unchanged; the
+  // rewritten redirect now names the route in its canonical spelling.
+  const first = (base.split("/")[0] ?? "").toLowerCase();
 
   if (base === "Gw.snapshot") return handleSnapshot(request);
 

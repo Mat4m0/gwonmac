@@ -1,5 +1,6 @@
 import { app } from "electron";
-import { flushDiagnostics, log } from "./diagnostics.js";
+import { errorCode } from "../shared/errors.js";
+import { flushDiagnostics, log, logEvent } from "./diagnostics.js";
 
 export type CleanupTask = () => void | Promise<void>;
 
@@ -28,9 +29,8 @@ export async function runQuitCleanup(): Promise<void> {
     try {
       await task();
     } catch (err) {
-      log("app", "error", "quit.cleanupFailed", {
-        message: err instanceof Error ? err.message : String(err),
-      });
+      logEvent({ k: "quit.cleanupFailed", code: errorCode(err) });
+      // The prose stays on the developer console, which is not exported.
       console.error("quit cleanup failed", err);
     }
   }

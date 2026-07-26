@@ -91,7 +91,7 @@ export function createSocketHost({ native, diagnostics, log }) {
         } else if (event.type === 'data') {
           socket.onmessage?.(event.data);
         } else {
-          if (event.type === 'error') log('socket error', event.message);
+          if (event.type === 'error') log('socket error', event.code);
           // Clear native identity before the callback. Client close handlers
           // can synchronously call close() again.
           finish();

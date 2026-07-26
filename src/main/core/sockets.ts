@@ -1,6 +1,10 @@
 // Main-process TCP ownership: public unicast only, ports 6112/80/443.
 import net from "node:net";
-import type { SocketEvent } from "../../shared/contracts.js";
+import type {
+  SocketCloseReason,
+  SocketEvent,
+  SocketFailureCode,
+} from "../../shared/contracts.js";
 import { AllowlistError, ValidationError } from "../../shared/errors.js";
 import {
   assertPublicDestination,
@@ -11,6 +15,37 @@ export const CONNECT_TIMEOUT_MS = 10_000;
 export const MAX_SOCKETS_PER_OWNER = 64;
 export const MAX_QUEUED_BYTES_PER_SOCKET = 4 * 1024 * 1024;
 export const MAX_QUEUED_BYTES_PER_OWNER = 16 * 1024 * 1024;
+
+/**
+ * The one place a socket failure becomes a publishable value. `error.message`
+ * quotes the destination address and `error.code` is an open libuv set, so
+ * neither may leave this module; both collapse into the closed contract
+ * vocabulary, and anything unrecognised is "other".
+ */
+export function socketFailureCode(error: unknown): SocketFailureCode {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? (error as { code: unknown }).code
+      : undefined;
+  switch (code) {
+    case "ETIMEDOUT":
+      return "timeout";
+    case "ECONNREFUSED":
+      return "refused";
+    case "ECONNRESET":
+    case "EPIPE":
+      return "reset";
+    case "EHOSTUNREACH":
+    case "ENETUNREACH":
+    case "ENETDOWN":
+      return "unreachable";
+    case "ENOTFOUND":
+    case "EAI_AGAIN":
+      return "dns";
+    default:
+      return "other";
+  }
+}
 
 export function parseDestination(destination: string): {
   host: string;
@@ -147,7 +182,7 @@ export class SocketManager {
 
     const timer = setTimeout(() => {
       if (!entry.opened && !entry.closed) {
-        this.fail(entry, "connect timeout");
+        this.fail(entry, "timeout");
       }
     }, CONNECT_TIMEOUT_MS);
 
@@ -177,14 +212,14 @@ export class SocketManager {
       this.emit(ownerId, {
         type: "error",
         socketId: id,
-        message: err.message,
+        code: socketFailureCode(err),
       });
-      this.finish(entry, err.message);
+      this.finish(entry, "error");
     });
 
     socket.on("close", () => {
       clearTimeout(timer);
-      this.finish(entry, "closed");
+      this.finish(entry, "peer");
     });
 
     return id;
@@ -225,7 +260,7 @@ export class SocketManager {
     const entry = this.require(socketId, ownerId);
     if (entry.closed) return;
     entry.socket.destroy();
-    this.finish(entry, "closed by peer");
+    this.finish(entry, "requested");
   }
 
   closeAll(ownerId?: number): void {
@@ -237,7 +272,7 @@ export class SocketManager {
       const entry = this.sockets.get(id);
       if (!entry || entry.closed) continue;
       entry.socket.destroy();
-      this.finish(entry, "owner closed");
+      this.finish(entry, "owner");
     }
   }
 
@@ -313,17 +348,17 @@ export class SocketManager {
     return entry;
   }
 
-  private fail(entry: OwnedSocket, reason: string): void {
+  private fail(entry: OwnedSocket, code: SocketFailureCode): void {
     this.emit(entry.ownerId, {
       type: "error",
       socketId: entry.id,
-      message: reason,
+      code,
     });
     entry.socket.destroy();
-    this.finish(entry, reason);
+    this.finish(entry, code === "timeout" ? "timeout" : "error");
   }
 
-  private finish(entry: OwnedSocket, reason: string): void {
+  private finish(entry: OwnedSocket, reason: SocketCloseReason): void {
     if (entry.closed) return;
     entry.closed = true;
     // A destroyed socket may never fire the write callbacks it still owes, so

@@ -14,6 +14,7 @@ import type {
   DownloadProgress,
 } from "../shared/contracts.js";
 import { EXTERNAL_URLS } from "../shared/contracts.js";
+import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
 import {
@@ -24,7 +25,7 @@ import {
   type WindowBounds,
   type WindowState,
 } from "./core/window-state.js";
-import { log } from "./diagnostics.js";
+import { log, logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
@@ -361,8 +362,9 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
         void host
           .prepareRendererRecovery()
           .catch((error) => {
-            log("renderer", "error", "renderer.recoveryPreparationFailed", {
-              message: error instanceof Error ? error.message : String(error),
+            logEvent({
+              k: "renderer.recoveryPreparationFailed",
+              code: errorCode(error),
             });
           })
           .finally(() => {
@@ -427,9 +429,12 @@ export async function exportProblemReport(
     if (response === 0) await shell.openExternal(BUG_REPORT_URL);
     if (response === 1) shell.showItemInFolder(saved);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log("app", "error", "diagnostics.exportFailed", { message });
-    dialog.showErrorBox("Report export failed", message);
+    logEvent({ k: "diagnostics.exportFailed", code: errorCode(error) });
+    // The prose is for the person in front of the screen, not for the export.
+    dialog.showErrorBox(
+      "Report export failed",
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 

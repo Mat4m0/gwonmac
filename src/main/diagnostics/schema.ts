@@ -1,4 +1,8 @@
 import type {
+  SocketCloseReason,
+  SocketFailureCode,
+} from "../../shared/contracts.js";
+import type {
   DiagnosticFields,
   DiagnosticLevel,
   DiagnosticScalar,
@@ -6,6 +10,7 @@ import type {
 } from "../../shared/diagnostics.js";
 import type { ErrorCode } from "../../shared/errors.js";
 import { AppError } from "../../shared/errors.js";
+import type { ProxyRoute } from "../core/proxy-routes.js";
 
 /**
  * The closed schema for recorded diagnostic events.
@@ -56,7 +61,9 @@ export type DiagnosticEvent =
   | { k: "diagnostics.exportFailed"; code: ErrorCode }
   // Chromium storage clearing. `phase` is a field rather than part of the
   // event name: a templated name is an open string by another route.
+  | { k: "browserCache.cleared"; phase: AppPhase }
   | { k: "browserCache.clearFailed"; phase: AppPhase; code: ErrorCode }
+  | { k: "browserCookies.cleared"; phase: AppPhase }
   | { k: "browserCookies.clearFailed"; phase: AppPhase; code: ErrorCode }
   // Chunk cache
   | { k: "cache.infoFailed"; code: ErrorCode }
@@ -68,16 +75,29 @@ export type DiagnosticEvent =
   | { k: "patch.updateFallback"; code: ErrorCode }
   | { k: "patch.updateFailed"; code: ErrorCode; fallbackCode: ErrorCode }
   | { k: "client.candidatePromotionFailed"; code: ErrorCode }
-  | { k: "client.candidatePromoted"; fingerprint: Digest }
-  | { k: "client.candidateRolledBack"; fingerprint: Digest }
-  | { k: "client.candidateRolledBackAfterRendererCrash"; fingerprint: Digest }
+  // Every fingerprint is `Digest | null`. Its producers parse it as 64-hex at
+  // their own boundary, so null is unreachable in practice — but the crossing
+  // into this schema must fail closed rather than throw inside a log call.
+  | { k: "client.candidatePromoted"; fingerprint: Digest | null }
+  | { k: "client.candidateRolledBack"; fingerprint: Digest | null }
+  | {
+      k: "client.candidateRolledBackAfterRendererCrash";
+      fingerprint: Digest | null;
+    }
   | { k: "client.integrityMetadataReady"; fingerprint: Digest | null }
+  | { k: "client.integrityMigrationSkipped"; code: ErrorCode }
   // Renderer recovery
   | { k: "renderer.recoveryPreparationFailed"; code: ErrorCode }
   // Snapshot ranges over gw://app
   | { k: "snapshot.rangeFailed"; offsetBytes: number; bytes: number; code: ErrorCode }
-  // Proxy
-  | { k: "proxy.requestFailed"; code: ErrorCode }
+  // Proxy. `route` is back: `PROXY_ROUTES` is a five-key allowlist and is now
+  // `as const`, so `ProxyRoute` is a literal union rather than `string`.
+  | { k: "proxy.requestFailed"; route: ProxyRoute; code: ErrorCode }
+  // Managed TCP sockets. The event name used to be `socket.${event.type}` and
+  // the payload carried libuv's `error.message`, which quotes the destination.
+  | { k: "socket.open"; socketId: number }
+  | { k: "socket.close"; socketId: number; reason: SocketCloseReason }
+  | { k: "socket.error"; socketId: number; code: SocketFailureCode }
   // Settings and saved game files
   | { k: "settings.loadFailed"; code: ErrorCode }
   | { k: "settings.saveFailed"; code: ErrorCode }
@@ -103,7 +123,9 @@ const EVENT_SPECS = {
   "chromiumTrace.startFailed": { subsystem: "app", level: "error" },
   "chromiumTrace.stopFailed": { subsystem: "app", level: "error" },
   "diagnostics.exportFailed": { subsystem: "app", level: "error" },
+  "browserCache.cleared": { subsystem: "app", level: "info" },
   "browserCache.clearFailed": { subsystem: "app", level: "warn" },
+  "browserCookies.cleared": { subsystem: "app", level: "info" },
   "browserCookies.clearFailed": { subsystem: "app", level: "warn" },
   "cache.infoFailed": { subsystem: "cache", level: "error" },
   "cache.clearRequestFailed": { subsystem: "cache", level: "error" },
@@ -120,12 +142,16 @@ const EVENT_SPECS = {
     level: "warn",
   },
   "client.integrityMetadataReady": { subsystem: "update", level: "info" },
+  "client.integrityMigrationSkipped": { subsystem: "update", level: "warn" },
   "renderer.recoveryPreparationFailed": {
     subsystem: "renderer",
     level: "error",
   },
   "snapshot.rangeFailed": { subsystem: "snapshot", level: "error" },
   "proxy.requestFailed": { subsystem: "proxy", level: "error" },
+  "socket.open": { subsystem: "socket", level: "info" },
+  "socket.close": { subsystem: "socket", level: "info" },
+  "socket.error": { subsystem: "socket", level: "warn" },
   "settings.loadFailed": { subsystem: "settings", level: "error" },
   "settings.saveFailed": { subsystem: "settings", level: "error" },
   "settings.resetFailed": { subsystem: "settings", level: "error" },

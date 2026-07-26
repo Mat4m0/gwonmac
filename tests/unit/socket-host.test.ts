@@ -94,7 +94,7 @@ describe("renderer socket host", () => {
     native.connects[0]!(21);
     await turn();
     assert.deepEqual(native.closes, [21]);
-    native.emit({ type: "close", socketId: 21, reason: "closed" });
+    native.emit({ type: "close", socketId: 21, reason: "requested" });
     assert.equal(closed, 1);
     assert.deepEqual(native.closes, [21]);
   });

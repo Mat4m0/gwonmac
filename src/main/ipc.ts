@@ -22,7 +22,7 @@ import {
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
-import { AllowlistError, ValidationError } from "../shared/errors.js";
+import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
 import { checkForUpdate } from "./update-check.js";
@@ -35,6 +35,7 @@ import {
   diagnosticSummary,
   diagnosticTimestampUs,
   log,
+  logEvent,
   recordGraphics,
   recordRendererMetrics,
   recordRendererFrames,
@@ -88,16 +89,6 @@ function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolea
   if (win.isDestroyed() || win.webContents.isDestroyed()) return false;
   win.webContents.send(channel, value);
   return true;
-}
-
-function logOperationFailure(
-  subsystem: "cache" | "filesystem" | "settings",
-  name: string,
-  error: unknown,
-): void {
-  log(subsystem, "error", name, {
-    message: error instanceof Error ? error.message : String(error),
-  });
 }
 
 async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
@@ -158,10 +149,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       lookup.end({ status: "ok" });
       return address;
     } catch (err) {
-      lookup.end(
-        { status: "error", message: err instanceof Error ? err.message : String(err) },
-        "error",
-      );
+      lookup.end({ status: "error", code: errorCode(err) }, "error");
       throw err;
     }
   });
@@ -210,7 +198,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     try {
       return await ctx.getSettings();
     } catch (error) {
-      logOperationFailure("settings", "settings.loadFailed", error);
+      logEvent({ k: "settings.loadFailed", code: errorCode(error) });
       throw error;
     }
   });
@@ -227,7 +215,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       }
       return saved;
     } catch (error) {
-      logOperationFailure("settings", "settings.saveFailed", error);
+      logEvent({ k: "settings.saveFailed", code: errorCode(error) });
       throw error;
     }
   });
@@ -251,7 +239,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       log("settings", "info", "settings.reset");
       return settings;
     } catch (error) {
-      logOperationFailure("settings", "settings.resetFailed", error);
+      logEvent({ k: "settings.resetFailed", code: errorCode(error) });
       throw error;
     }
   });
@@ -291,7 +279,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     try {
       return await chunkStoreInfo(ctx.getChunkStore());
     } catch (error) {
-      logOperationFailure("cache", "cache.infoFailed", error);
+      logEvent({ k: "cache.infoFailed", code: errorCode(error) });
       throw error;
     }
   });
@@ -316,7 +304,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       app.quit();
       return true;
     } catch (error) {
-      logOperationFailure("cache", "cache.clearRequestFailed", error);
+      logEvent({ k: "cache.clearRequestFailed", code: errorCode(error) });
       throw error;
     }
   });
@@ -351,7 +339,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       app.quit();
       return true;
     } catch (error) {
-      logOperationFailure("filesystem", "filesystem.resetFailed", error);
+      logEvent({ k: "filesystem.resetFailed", code: errorCode(error) });
       throw error;
     }
   });

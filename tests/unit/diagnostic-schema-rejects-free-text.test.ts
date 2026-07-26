@@ -19,7 +19,7 @@ const schemaPath = path.join(root, "src/main/diagnostics/schema.ts");
 const schemaSource = readFileSync(schemaPath, "utf8");
 
 // One real event, used as the place to graft each rejected field onto.
-const ANCHOR = `| { k: "proxy.requestFailed"; code: ErrorCode }`;
+const ANCHOR = `| { k: "proxy.requestFailed"; route: ProxyRoute; code: ErrorCode }`;
 
 // What both guards in schema.ts report when they stop holding.
 const GUARD_FIRED = "not assignable to type 'never'";

@@ -10,6 +10,7 @@ import {
   type DownloadProgress,
   type PrefetchProgress,
 } from "../shared/contracts.js";
+import { errorCode } from "../shared/errors.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
@@ -20,6 +21,7 @@ import {
   exportDiagnosticsForWindow,
   gauge,
   log,
+  logEvent,
   markPerformanceProblem,
   observe,
   peakGauge,
@@ -29,6 +31,7 @@ import {
   stopDiagnosticCapture,
   stopDiagnostics,
 } from "./diagnostics.js";
+import type { AppPhase } from "./diagnostics/schema.js";
 import { emitSocketEvent, registerIpcHandlers } from "./ipc.js";
 import {
   enableSandboxBeforeReady,
@@ -109,11 +112,19 @@ function buildSocketManager(clientRuntime: ClientRuntime): SocketManager {
       if (event.type === "open") {
         clientRuntime.noteSocketOpen();
       }
-      if (event.type !== "data") {
-        log("socket", "info", `socket.${event.type}`, {
+      if (event.type === "open") {
+        logEvent({ k: "socket.open", socketId: event.socketId });
+      } else if (event.type === "close") {
+        logEvent({
+          k: "socket.close",
           socketId: event.socketId,
-          ...(event.type === "close" ? { reason: event.reason } : {}),
-          ...(event.type === "error" ? { message: event.message } : {}),
+          reason: event.reason,
+        });
+      } else if (event.type === "error") {
+        logEvent({
+          k: "socket.error",
+          socketId: event.socketId,
+          code: event.code,
         });
       }
       emitSocketEvent(ownerId, event);
@@ -165,13 +176,15 @@ async function ensureDirs(): Promise<void> {
   if (removed > 0) log("app", "info", "orphanTemps.swept", { removed });
 }
 
-async function clearBrowserCookies(phase: "startup" | "quit"): Promise<void> {
+async function clearBrowserCookies(phase: AppPhase): Promise<void> {
   try {
     await session.defaultSession.clearStorageData({ storages: ["cookies"] });
-    log("app", "info", `browserCookies.cleared.${phase}`);
+    logEvent({ k: "browserCookies.cleared", phase });
   } catch (error) {
-    log("app", "warn", `browserCookies.clearFailed.${phase}`, {
-      message: error instanceof Error ? error.message : String(error),
+    logEvent({
+      k: "browserCookies.clearFailed",
+      phase,
+      code: errorCode(error),
     });
   }
 }
@@ -182,10 +195,12 @@ async function clearBrowserNetworkCache(): Promise<void> {
     // Chromium's HTTP cache would only duplicate them and can retain stale
     // same-URL client artifacts between exact-hash updates.
     await session.defaultSession.clearCache();
-    log("app", "info", "browserCache.cleared.startup");
+    logEvent({ k: "browserCache.cleared", phase: "startup" });
   } catch (error) {
-    log("app", "warn", "browserCache.clearFailed.startup", {
-      message: error instanceof Error ? error.message : String(error),
+    logEvent({
+      k: "browserCache.clearFailed",
+      phase: "startup",
+      code: errorCode(error),
     });
   }
 }
@@ -336,8 +351,9 @@ app.whenReady().then(async () => {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
         void startDiagnosticCapture(1).catch((error) => {
-          log("app", "error", "capture.automationStartFailed", {
-            message: error instanceof Error ? error.message : String(error),
+          logEvent({
+            k: "capture.automationStartFailed",
+            code: errorCode(error),
           });
         });
       } else if (message === AUTOMATION_COMMAND.stopCapture) {
@@ -395,7 +411,7 @@ let fatalExitStarted = false;
 process.on("uncaughtException", (err) => {
   if (fatalExitStarted) return;
   fatalExitStarted = true;
-  log("app", "error", "app.uncaughtException", { message: err.message });
+  logEvent({ k: "app.uncaughtException", code: errorCode(err) });
   dialog.showErrorBox(
     "Guild Wars stopped unexpectedly",
     "A fatal application error occurred. After reopening, choose Help → Report a Problem.",
@@ -404,7 +420,5 @@ process.on("uncaughtException", (err) => {
 });
 
 process.on("unhandledRejection", (reason) => {
-  log("app", "error", "app.unhandledRejection", {
-    message: reason instanceof Error ? reason.message : String(reason),
-  });
+  logEvent({ k: "app.unhandledRejection", code: errorCode(reason) });
 });

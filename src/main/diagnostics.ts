@@ -26,6 +26,7 @@ import {
   screen,
 } from "electron";
 import type { AppSettings, GraphicsDiagnostics } from "../shared/contracts.js";
+import { errorCode } from "../shared/errors.js";
 import type {
   DiagnosticFields,
   DiagnosticLevel,
@@ -49,6 +50,10 @@ import {
   buildDiagnosticReport,
   previousAbnormalSession,
 } from "./diagnostic-report.js";
+import {
+  diagnosticEventRecord,
+  type DiagnosticEvent,
+} from "./diagnostics/schema.js";
 
 const execFileAsync = promisify(execFile);
 const SAMPLE_INTERVAL_MS = 1_000;
@@ -105,6 +110,21 @@ async function rendererCaptureCommand(command: RendererCaptureCommand): Promise<
     .catch(() => undefined);
 }
 
+/**
+ * The only way to record an event that carries information about a failure.
+ * The event owns its name, subsystem, level and fields, so two producers of
+ * one event cannot disagree, and no field of one can hold free text.
+ */
+export function logEvent(event: DiagnosticEvent): void {
+  const record = diagnosticEventRecord(event);
+  recorder.event(record.subsystem, record.level, record.name, record.fields);
+}
+
+/**
+ * Milestones and counters that carry no payload beyond values this process
+ * chose itself. Events join the closed schema above as they are converted;
+ * nothing that quotes an error, a path or a host may use this.
+ */
 export function log(
   subsystem: DiagnosticSubsystem,
   level: DiagnosticLevel,
@@ -447,9 +467,7 @@ async function stopTrace(): Promise<void> {
     recorder.setLatest("capture.traceBytes", bytes);
     recorder.event("app", "info", "chromiumTrace.stopped", { bytes });
   } catch (err) {
-    recorder.event("app", "error", "chromiumTrace.stopFailed", {
-      message: err instanceof Error ? err.message : String(err),
-    });
+    logEvent({ k: "chromiumTrace.stopFailed", code: errorCode(err) });
   }
 }
 
@@ -512,9 +530,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       tracePath = "";
       recordedCaptureLevel = 0;
       recorder.cancelCapture();
-      recorder.event("app", "error", "chromiumTrace.startFailed", {
-        message: error instanceof Error ? error.message : String(error),
-      });
+      logEvent({ k: "chromiumTrace.startFailed", code: errorCode(error) });
       throw error;
     }
   })();

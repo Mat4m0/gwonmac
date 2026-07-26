@@ -72,6 +72,46 @@ describe("diagnosticEventRecord", () => {
     assert.deepEqual(quit.fields, { phase: "quit", code: "unknown" });
   });
 
+  it("keeps the socket event name closed and the payload declared", () => {
+    // `socket.${event.type}` was a templated name whose error branch carried
+    // libuv's message; both parts are now fields of a fixed name.
+    assert.deepEqual(diagnosticEventRecord({ k: "socket.open", socketId: 4 }), {
+      subsystem: "socket",
+      level: "info",
+      name: "socket.open",
+      fields: { socketId: 4 },
+    });
+    assert.deepEqual(
+      diagnosticEventRecord({ k: "socket.close", socketId: 4, reason: "owner" }),
+      {
+        subsystem: "socket",
+        level: "info",
+        name: "socket.close",
+        fields: { socketId: 4, reason: "owner" },
+      },
+    );
+    assert.deepEqual(
+      diagnosticEventRecord({ k: "socket.error", socketId: 4, code: "refused" }),
+      {
+        subsystem: "socket",
+        level: "warn",
+        name: "socket.error",
+        fields: { socketId: 4, code: "refused" },
+      },
+    );
+  });
+
+  it("records which proxy route failed", () => {
+    assert.deepEqual(
+      diagnosticEventRecord({
+        k: "proxy.requestFailed",
+        route: "account",
+        code: "fetch_failed",
+      }).fields,
+      { route: "account", code: "fetch_failed" },
+    );
+  });
+
   it("passes a digest and an absent digest through unchanged", () => {
     assert.deepEqual(
       diagnosticEventRecord({
@@ -88,10 +128,17 @@ describe("diagnosticEventRecord", () => {
 
   it("produces only scalars, so no nested value can smuggle text out", () => {
     const events = [
-      diagnosticEventRecord({ k: "proxy.requestFailed", code: "allowlist" }),
+      diagnosticEventRecord({
+        k: "proxy.requestFailed",
+        route: "webgate",
+        code: "allowlist",
+      }),
       diagnosticEventRecord({ k: "settings.saveFailed", code: "bad_settings" }),
       diagnosticEventRecord({ k: "filesystem.resetFailed", code: "unknown" }),
-      diagnosticEventRecord({ k: "client.candidateRolledBack", fingerprint: asDigest(FINGERPRINT) }),
+      diagnosticEventRecord({
+        k: "client.candidateRolledBack",
+        fingerprint: asDigest(FINGERPRINT),
+      }),
     ];
     for (const { fields } of events) {
       for (const value of Object.values(fields)) {

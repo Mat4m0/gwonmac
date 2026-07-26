@@ -55,16 +55,41 @@ export interface SocketDataEvent {
   data: Uint8Array;
 }
 
+/**
+ * Why a socket closed. Closed vocabulary because this value crosses to the
+ * renderer *and* into the diagnostics export; it used to be free text, and one
+ * of its five producers passed `error.message` straight through.
+ */
+export type SocketCloseReason =
+  | "requested"
+  | "peer"
+  | "owner"
+  | "timeout"
+  | "error";
+
+/**
+ * Why a socket failed. Node's `errno` set is open and its messages quote the
+ * destination address, so failures are classified into this allowlist and
+ * anything unrecognised becomes "other".
+ */
+export type SocketFailureCode =
+  | "timeout"
+  | "refused"
+  | "reset"
+  | "unreachable"
+  | "dns"
+  | "other";
+
 export interface SocketClosedEvent {
   type: "close";
   socketId: number;
-  reason: string;
+  reason: SocketCloseReason;
 }
 
 export interface SocketErrorEvent {
   type: "error";
   socketId: number;
-  message: string;
+  code: SocketFailureCode;
 }
 
 export type SocketEvent =

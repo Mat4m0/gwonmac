@@ -4,7 +4,7 @@ import type {
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
-import { AppError } from "../shared/errors.js";
+import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   ACCESS_KEY,
@@ -50,18 +50,24 @@ import {
   count,
   gauge,
   log,
+  logEvent,
   observe,
   peakGauge,
   span,
 } from "./diagnostics.js";
+import { type Digest, isDigest } from "./diagnostics/schema.js";
 import type { GamePaths } from "./paths.js";
 
 export type { ActiveClient } from "./core/active-client.js";
 
-const transformFailureCode = (error: unknown): string =>
-  error instanceof Error && "code" in error
-    ? String(error.code)
-    : "transform_failed";
+/**
+ * Client fingerprints are parsed as 64-hex where they are read, so this only
+ * types the crossing into the diagnostics schema. It fails closed to `null`
+ * rather than throwing: a broken invariant must not take down an update.
+ */
+function digestOrNull(value: string | null | undefined): Digest | null {
+  return typeof value === "string" && isDigest(value) ? value : null;
+}
 
 interface ClientRuntimeOptions {
   paths: GamePaths;
@@ -186,7 +192,7 @@ export class ClientRuntime {
     } catch (error) {
       gauge("wasm.templateSaveCompatible", false);
       log("wasm", "warn", "wasm.templateSavePrepareFailed", {
-        code: transformFailureCode(error),
+        code: errorCode(error),
       });
       return officialWasm;
     }
@@ -221,7 +227,7 @@ export class ClientRuntime {
         log("wasm", "info", "toolbox.unsupportedBuild");
       } catch (error) {
         log("wasm", "warn", "toolbox.prepareFailed", {
-          code: transformFailureCode(error),
+          code: errorCode(error),
         });
       }
     }
@@ -340,8 +346,9 @@ export class ClientRuntime {
         });
       }
     } catch (error) {
-      log("cache", "warn", "cache.staleChunkCleanupSkipped", {
-        message: error instanceof Error ? error.message : String(error),
+      logEvent({
+        k: "cache.staleChunkCleanupSkipped",
+        code: errorCode(error),
       });
     }
   }
@@ -361,9 +368,7 @@ export class ClientRuntime {
       })
       .then(() => this.refreshSnapshot(active.generation))
       .catch((error) =>
-        log("cache", "warn", "prefetch.failed", {
-          message: error instanceof Error ? error.message : String(error),
-        }),
+        logEvent({ k: "prefetch.failed", code: errorCode(error) }),
       );
   }
 
@@ -413,8 +418,9 @@ export class ClientRuntime {
         hostVersion: this.options.hostVersion,
       });
       if (rollback) {
-        log("update", "warn", "client.candidateRolledBack", {
-          fingerprint: rollback.fingerprint,
+        logEvent({
+          k: "client.candidateRolledBack",
+          fingerprint: digestOrNull(rollback.fingerprint),
         });
       }
       try {
@@ -422,13 +428,15 @@ export class ClientRuntime {
           this.options.paths.artifacts,
         );
         if (migrated) {
-          log("update", "info", "client.integrityMetadataReady", {
-            fingerprint: migrated.clientFingerprint ?? null,
+          logEvent({
+            k: "client.integrityMetadataReady",
+            fingerprint: digestOrNull(migrated.clientFingerprint),
           });
         }
       } catch (error) {
-        log("update", "warn", "client.integrityMigrationSkipped", {
-          reason: error instanceof Error ? error.name : "UnknownError",
+        logEvent({
+          k: "client.integrityMigrationSkipped",
+          code: errorCode(error),
         });
       }
       const blockedFingerprint = await readRejectedClient(
@@ -458,28 +466,25 @@ export class ClientRuntime {
         fingerprint: result.fingerprint,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       // Identify the failure by code, so comparing sessions does not depend on
-      // matching English prose.
-      const code = error instanceof AppError ? error.code : null;
+      // matching English prose — and so no prose reaches the export.
+      const code = errorCode(error);
       try {
         await this.activatePublishedAndReady(
           "The game client update failed, so the previous client was restored.",
         );
-        log("update", "warn", "patch.updateFallback", { code, message });
+        logEvent({ k: "patch.updateFallback", code });
         gauge("update.usingCachedClient", true);
-        updateSpan.end({ status: "cachedFallback", code, message }, "warn");
+        updateSpan.end({ status: "cachedFallback", code }, "warn");
         return;
       } catch (fallbackError) {
-        log("update", "error", "patch.updateFailed", {
-          message,
-          fallback:
-            fallbackError instanceof Error
-              ? fallbackError.message
-              : String(fallbackError),
+        logEvent({
+          k: "patch.updateFailed",
+          code,
+          fallbackCode: errorCode(fallbackError),
         });
       }
-      updateSpan.end({ status: "error", message }, "error");
+      updateSpan.end({ status: "error", code }, "error");
       this.publishProgress({
         ...INITIAL_PROGRESS,
         phase: "error",
@@ -573,13 +578,7 @@ export class ClientRuntime {
         return complete;
       })
       .catch((error) => {
-        log("cache", "error", "fullDownload.failed", {
-          code:
-            error instanceof Error && "code" in error
-              ? String(error.code)
-              : "unknown",
-          message: error instanceof Error ? error.message : String(error),
-        });
+        logEvent({ k: "fullDownload.failed", code: errorCode(error) });
         if (this.activeSlot.current?.generation === active.generation) {
           this.publishProgress({
             ...INITIAL_PROGRESS,
@@ -606,8 +605,9 @@ export class ClientRuntime {
   noteSocketOpen(): void {
     this.candidateSocketReady = true;
     void this.confirmCandidateIfReady().catch((error) => {
-      log("update", "error", "client.candidatePromotionFailed", {
-        message: error instanceof Error ? error.message : String(error),
+      logEvent({
+        k: "client.candidatePromotionFailed",
+        code: errorCode(error),
       });
     });
   }
@@ -632,7 +632,10 @@ export class ClientRuntime {
         this.candidateSocketReady = false;
         if (fingerprint) {
           await this.pruneChunkCache();
-          log("update", "info", "client.candidatePromoted", { fingerprint });
+          logEvent({
+            k: "client.candidatePromoted",
+            fingerprint: digestOrNull(fingerprint),
+          });
         }
       })
       .finally(() => {
@@ -650,8 +653,9 @@ export class ClientRuntime {
       });
       if (!rollback) return;
       await this.activatePublishedAndReady();
-      log("update", "warn", "client.candidateRolledBackAfterRendererCrash", {
-        fingerprint: rollback.fingerprint,
+      logEvent({
+        k: "client.candidateRolledBackAfterRendererCrash",
+        fingerprint: digestOrNull(rollback.fingerprint),
       });
     });
   }
