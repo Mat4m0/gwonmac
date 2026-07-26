@@ -41,7 +41,6 @@ import { gamePaths } from "./paths.js";
 import { loadSettings } from "./core/settings.js";
 import {
   FlightRecorder,
-  redactDiagnosticText as redactText,
   runtimeVersions as versions,
   type CaptureMetadata,
   type Span,
@@ -54,6 +53,10 @@ import {
   diagnosticEventRecord,
   type DiagnosticEvent,
 } from "./diagnostics/schema.js";
+import {
+  redactDiagnosticText as redactText,
+  redactTraceStream,
+} from "./diagnostics/text-scan.js";
 
 const execFileAsync = promisify(execFile);
 const SAMPLE_INTERVAL_MS = 1_000;
@@ -822,29 +825,22 @@ function assertRedacted(text: string): void {
   }
 }
 
+/**
+ * The Chromium trace is the one document nobody here authored, so it is the
+ * one a pattern scanner is the right tool for. `redactTraceStream` owns the
+ * chunk boundary — the place a streaming redactor leaks — and this owns the
+ * files.
+ */
 async function sanitizeTraceFile(source: string, target: string): Promise<void> {
-  const input = createReadStream(source, {
+  const input: AsyncIterable<string> = createReadStream(source, {
     encoding: "utf8",
     highWaterMark: 1024 * 1024,
   });
   const output = await open(target, "w", 0o600);
-  let carry = "";
   try {
-    for await (const chunk of input) {
-      const text = redactText(carry + chunk);
-      const split = Math.max(0, text.length - 64 * 1024);
-      const ready = text.slice(0, split);
-      carry = text.slice(split);
-      // Fail closed in the same pass. A second read-back could only re-run an
-      // idempotent redaction with a smaller boundary overlap than this one,
-      // over a file that can reach a quarter of a gigabyte.
-      if (ready) {
-        assertRedacted(ready);
-        await output.write(ready);
-      }
+    for await (const text of redactTraceStream(input)) {
+      await output.write(text);
     }
-    assertRedacted(carry);
-    await output.write(carry);
   } finally {
     await output.close();
   }

@@ -9,7 +9,6 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import type {
   DiagnosticFields,
@@ -22,6 +21,7 @@ import type {
 import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
 import { diagnosticFramesPath } from "./core/paths.js";
 import { parseLogRecords } from "./diagnostic-report.js";
+import { redactDiagnosticText } from "./diagnostics/text-scan.js";
 import { gamePaths } from "./paths.js";
 
 const MAX_FILES = 5;
@@ -30,8 +30,6 @@ const MAX_EVENTS = 2_048;
 const MAX_FRAME_BYTES = 128 * 1024 * 1024;
 const SENSITIVE_KEY =
   /pass|auth|cookie|token|secret|credential|username|email|account/i;
-const ABSOLUTE_PATH =
-  /(?<=[\s"'(=:])\/(?!\/)[^/\s"',;)}\]]+(?:\/[^/\s"',;)}\]]+)*/g;
 
 export interface LogRecord {
   seq: number;
@@ -114,22 +112,12 @@ class Histogram {
   }
 }
 
-export function redactDiagnosticText(value: string): string {
-  return value
-    .replaceAll(homedir(), "[home]")
-    .replace(/\bBearer\s+[^\s,;"']+/gi, "Bearer [redacted]")
-    .replace(
-      /\b(password|authorization|cookie|token|secret)\b\s*[:=]\s*[^,\s}"']+/gi,
-      "$1=[redacted]",
-    )
-    .replace(/([?&][^=\s"'&]+)=([^&#\s"',}]+)/g, "$1=[redacted]")
-    .replace(
-      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-      "[redacted-email]",
-    )
-    .replace(ABSOLUTE_PATH, "[redacted-path]");
-}
-
+/**
+ * Fields of events the closed schema has not absorbed yet still carry strings,
+ * so the pattern scanner stays here for them. Events the schema does declare
+ * carry no string a redactor could change, and `./diagnostics/detector.ts`
+ * — which shares no code with the scanner — is what proves it.
+ */
 function redactFields(
   fields: DiagnosticFields | undefined,
 ): DiagnosticFields | undefined {
