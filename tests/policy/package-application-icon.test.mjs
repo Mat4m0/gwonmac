@@ -11,11 +11,40 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("the bundled application icon is a real icns with every size in it", () => {
+// The representations macOS asks for across Finder, Get Info, the Dock and
+// Launchpad. `ic10` is the 1024px one whose absence is invisible until someone
+// opens Get Info on the shipped application.
+const REQUIRED = ["ic07", "ic08", "ic09", "ic10", "ic11", "ic12", "ic13", "ic14"];
+
+/** The icon types the file actually carries, with each one's payload size. */
+function iconEntries(icon) {
+  const entries = new Map();
+  let offset = 8;
+  while (offset + 8 <= icon.length) {
+    const type = icon.subarray(offset, offset + 4).toString("ascii");
+    const length = icon.readUInt32BE(offset + 4);
+    assert.ok(
+      length >= 8 && offset + length <= icon.length,
+      `icns entry ${type} declares a length the file cannot hold`,
+    );
+    entries.set(type, length - 8);
+    offset += length;
+  }
+  assert.equal(offset, icon.length, "icns has trailing bytes after its last entry");
+  return entries;
+}
+
+test("the bundled application icon carries every representation macOS renders", () => {
   const icon = readFileSync(path.join(root, "assets/AppIcon.icns"));
   assert.equal(icon.subarray(0, 4).toString("ascii"), "icns");
   // The header carries the file's own length, so a truncated copy is caught
-  // rather than assumed from the size below.
+  // rather than assumed from the sizes below.
   assert.equal(icon.readUInt32BE(4), icon.length);
-  assert.ok(icon.length > 100_000, "application icon is unexpectedly small");
+  // Walked, not assumed: a well-formed icns holding one oversized small icon
+  // passes a magic-and-length check and still ships a blurry Get Info icon.
+  const entries = iconEntries(icon);
+  for (const type of REQUIRED) {
+    assert.ok(entries.has(type), `application icon has no ${type} representation`);
+    assert.ok(entries.get(type) > 0, `application icon's ${type} entry is empty`);
+  }
 });
