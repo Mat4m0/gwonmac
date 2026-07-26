@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -187,6 +187,25 @@ describe("patch-client update", () => {
     }
     assert.equal(existsSync(`${target.artifacts}.next`), false);
     assert.equal(existsSync(`${target.artifacts}.previous`), false);
+  });
+
+  it("sweeps chunk temp files a dead process abandoned, on the next update", async () => {
+    // P1.2 wired the orphan sweep into exactly one place: the first open of the
+    // chunks directory in `update()`. `sweepOrphans` itself is proven in
+    // tests/unit/atomic-file.test.ts; without this, deleting the call site
+    // leaves the whole unit suite green and nothing collects these files ever
+    // again — `pruneUnreferencedChunks` deliberately skips non-hash names.
+    const target = await install();
+    await mkdir(target.chunks, { recursive: true });
+    const abandoned = join(target.chunks, `deadhash.${process.pid + 1}.0badcafe.tmp`);
+    const inFlight = join(target.chunks, `deadhash.${process.pid}.0badcafe.tmp`);
+    await writeFile(abandoned, "half a chunk");
+    await writeFile(inFlight, "a write this process still owns");
+
+    await target.client(fixture(1)).update();
+
+    assert.equal(existsSync(abandoned), false, "a dead writer's temp file must be collected");
+    assert.equal(existsSync(inFlight), true, "our own in-flight write must survive");
   });
 
   it("leaves an alpha-published generation installed instead of re-staging it", async () => {

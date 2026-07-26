@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   mkdir,
@@ -13,6 +14,7 @@ import {
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   sweepOrphans,
   writeAll,
@@ -223,6 +225,39 @@ describe("atomic-file orphan sweep", () => {
     assert.equal(await sweepOrphans(dir), 1);
     assert.equal(existsSync(orphan), false);
     assert.equal(await readFile(target, "utf8"), "{}");
+  });
+
+  it("sweeps the orphan a SIGKILLed writer left, with the old document intact", async () => {
+    const dir = await scratch();
+    const target = join(dir, "doc.json");
+    await writeAtomic(target, '{"kept":true}');
+
+    // A real process, really killed between the temp write and the rename.
+    // Every other case here hand-writes the artefact of a crash and so pins
+    // the temp-file naming to itself; this one reads it off the disk a dead
+    // writer left, which is what couples `writeAtomic` to `sweepOrphans`.
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        fileURLToPath(new URL("../ts-hook.mjs", import.meta.url)),
+        "--experimental-strip-types",
+        fileURLToPath(new URL("../fixtures/kill-mid-atomic-write.mjs", import.meta.url)),
+        target,
+      ],
+      { stdio: "ignore" },
+    );
+    assert.equal(child.signal, "SIGKILL", "the child must die before the rename");
+
+    const abandoned = (await readdir(dir)).filter((name) => name !== "doc.json");
+    assert.equal(abandoned.length, 1, `expected one orphan, saw ${abandoned.join(", ")}`);
+    assert.match(abandoned[0]!, /^doc\.json\.\d+\.[0-9a-f]{8}\.tmp$/);
+    // The half-written replacement never became the document.
+    assert.equal(await readFile(target, "utf8"), '{"kept":true}');
+
+    assert.equal(await sweepOrphans(dir), 1);
+    assert.deepEqual(await readdir(dir), ["doc.json"]);
+    assert.equal(await readFile(target, "utf8"), '{"kept":true}');
   });
 
   it("reports zero for a directory that does not exist", async () => {
