@@ -20,10 +20,14 @@ describe("patch transport", () => {
     const controller = new AbortController();
     const reason = new AppError("download_stopped", "controlled request abort");
     let observedUrl = "";
-    let observedRequest: RequestInit | null = null;
+    // Collected rather than held in a `let`: TypeScript narrows a `let` seeded
+    // with `null` and cannot see the callback assign it, so every field read
+    // below would be a read off `never`. The list also says how many times the
+    // bounded fetch reached the underlying one, which was previously implicit.
+    const observedRequests: RequestInit[] = [];
     const fetch = createBoundedPatchFetch(async (url, request) => {
       observedUrl = url;
-      observedRequest = request;
+      observedRequests.push(request);
       return new Response(new Uint8Array([1, 2, 3, 4]));
     }, 30_000);
 
@@ -35,6 +39,8 @@ describe("patch transport", () => {
       }),
       { status: 200, body: new Uint8Array([1, 2, 3, 4]) },
     );
+    assert.equal(observedRequests.length, 1);
+    const [observedRequest] = observedRequests;
     assert.equal(observedUrl, "https://fixture.invalid/chunk");
     assert.equal(observedRequest?.redirect, "manual");
     assert.equal(observedRequest?.method, "GET");

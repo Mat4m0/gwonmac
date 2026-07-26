@@ -6,6 +6,13 @@ import { pathToFileURL } from "node:url";
 /**
  * Every command that produces a package input, in order. Exported so the step
  * list itself is assertable: the kernel is compiled by exactly one of them.
+ *
+ * Written as pairs rather than left to inference: an array literal of arrays
+ * widens to `(string | string[])[][]`, which loses the fact that the first
+ * element is the executable and the rest are its arguments, and makes the
+ * `spawnSync` call below unresolvable.
+ *
+ * @type {ReadonlyArray<readonly [command: string, args: readonly string[]]>}
  */
 export const BUILD_STEPS = [
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
@@ -46,7 +53,14 @@ function build() {
 
   for (const [command, args] of BUILD_STEPS) {
     const result = spawnSync(command, args, { stdio: "inherit" });
-    if (result.error?.code === "ENOENT") {
+    // `spawnSync` types its failure as a plain `Error`; the `code` that says the
+    // executable is missing is only on the Node runtime's `SystemError` shape,
+    // so ask whether it is there rather than assert that it is.
+    if (
+      result.error
+      && "code" in result.error
+      && result.error.code === "ENOENT"
+    ) {
       console.error(
         `${command} is not installed. See the Requirements in README.md.`,
       );

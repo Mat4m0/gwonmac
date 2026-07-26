@@ -28,7 +28,9 @@ interface Request {
  * A transport whose every range read is held until the test releases it, so
  * the eight-request ceiling and the queue order are observable.
  */
-function fakeTransport(bytesFor = snapshotBytes) {
+function fakeTransport(
+  bytesFor: (start: number, length: number) => Uint8Array = snapshotBytes,
+) {
   const requests: Request[] = [];
   let auto = false;
 

@@ -193,7 +193,10 @@ describe("no game traffic is uploaded: what the recorder may hear", () => {
 
     // The three events the diagnostics schema declares for a socket, built the
     // way the production path builds them.
-    const recorded: DiagnosticEvent[] = events.flatMap((event) => {
+    // Annotated on the callback rather than only on `recorded`: flatMap infers
+    // its element type from the first branch, so a socket event that stopped
+    // matching the schema would have been widened away instead of rejected.
+    const recorded: DiagnosticEvent[] = events.flatMap((event): DiagnosticEvent[] => {
       if (event.type === "open") return [{ k: "socket.open", socketId: event.socketId }];
       if (event.type === "close") {
         return [

@@ -18,18 +18,131 @@
 
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.mjs";
 
+/** @typedef {import("playwright").Page} Page */
+/** @typedef {import("playwright").CDPSession} CDPSession */
+/** @typedef {import("../../build/shared/automation.js").AutomationCommand} AutomationCommand */
+/** @typedef {import("../../build/tools/toolbox-doctor.js").ToolboxDoctorReport} ToolboxDoctorReport */
+/**
+ * @typedef {import("../../build/tools/toolbox-observations.js").ToolboxObservationType}
+ *   ToolboxObservationType
+ */
+
+/** @typedef {"automation" | "observation"} LiveTier */
+
+/**
+ * One `--observe` address read at the width it declared. `value` is null and
+ * `valid` false when the address falls outside the module's memory, so a
+ * capture records the refusal rather than a zero it did not read.
+ *
+ * @typedef {Readonly<{
+ *   type: ToolboxObservationType,
+ *   address: number,
+ *   value: number | null,
+ *   valid: boolean,
+ * }>} ObservationSample
+ */
+
+/**
+ * What every scenario gets: page evaluation, the typed `--observe` sampler, and
+ * a clock. `evaluate` is deliberately not `page.evaluate` itself — handing the
+ * page over would hand over its input as well.
+ *
+ * @typedef {Readonly<{
+ *   evaluate: <Result>(
+ *     body: (argument: unknown) => Result | Promise<Result>,
+ *     argument?: unknown,
+ *   ) => Promise<Result>,
+ *   wait: (milliseconds: number) => Promise<void>,
+ *   sample: (() => Promise<ObservationSample[]>) | null,
+ * }>} ObservationContext
+ */
+
+/**
+ * The reading context plus the two capabilities that act on the player's
+ * behalf. It is a superset, so a scenario written against the reading context
+ * can run in either tier while the reverse is a type error.
+ *
+ * @typedef {ObservationContext & Readonly<{
+ *   page: Page,
+ *   cdp: CDPSession,
+ *   sendAutomationCommand: (command: AutomationCommand) => Promise<void>,
+ * }>} AutomationContext
+ */
+
+/**
+ * Everything the runner can hand a scenario. `scenarioContext` decides which of
+ * it survives into the object the scenario actually holds.
+ *
+ * @typedef {Readonly<{
+ *   page: Page,
+ *   cdp: CDPSession,
+ *   sendAutomationCommand: (command: AutomationCommand) => Promise<void>,
+ *   sampleObservations: (() => Promise<ObservationSample[]>) | null,
+ * }>} LiveCapabilities
+ */
+
+/**
+ * The assembled live result a scenario validates. Only `evidence` differs
+ * between scenarios, so each `validate` below names the shape its own `run`
+ * returned rather than sharing one loose type.
+ *
+ * @typedef {{ evidence?: unknown }} LiveResult
+ */
+
+/**
+ * @typedef {{
+ *   tier: "automation",
+ *   run(context: AutomationContext): Promise<unknown>,
+ *   validate(result: LiveResult): void,
+ * }} AutomationScenario
+ *
+ * @typedef {{
+ *   tier: "observation",
+ *   run(context: ObservationContext): Promise<unknown>,
+ *   validate(result: LiveResult): void,
+ * }} ObservationScenario
+ *
+ * @typedef {AutomationScenario | ObservationScenario} LiveScenario
+ */
+
+/**
+ * Which scenario runs, how the app is launched for it, and which channels the
+ * parent opens to it.
+ *
+ * @typedef {{
+ *   name: string,
+ *   scenario: LiveScenario,
+ *   tier: LiveTier,
+ *   env: NodeJS.ProcessEnv,
+ *   stdio: import("node:child_process").StdioOptions,
+ * }} LiveRunPlan
+ */
+
+/** @typedef {Readonly<{ x: number, y: number, toMapId: number }>} PortalRoute */
+
 // GWToolbox++ portal_connections.json records this bidirectional connection.
 // Keep live navigation scoped to the one route used by release acceptance.
+/** @type {Readonly<Record<number, PortalRoute | undefined>>} */
 const CERTIFIED_PORTAL_ROUTES = Object.freeze({
   146: Object.freeze({ x: 7378, y: 5429, toMapId: 148 }),
   148: Object.freeze({ x: 7378, y: 5429, toMapId: 146 }),
 });
 
+/**
+ * @param {Page} page
+ * @param {LiveTier} tier
+ * @returns {Promise<number>} how many keypresses the bootstrap synthesized
+ */
 export async function waitForPlayable(page, tier) {
   await page.waitForFunction(
     async () => {
       const progress = await window.gwNative.progress.current();
-      if (progress.error) throw new Error(progress.error);
+      // A failed preparation is its own member of the progress union and
+      // carries a code, not a message. This read a `progress.error` field that
+      // the union has never had, so a client that failed to download looked
+      // exactly like one still working and the wait ran its full half hour
+      // before saying anything.
+      if (progress.phase === "error") throw new Error(progress.errorCode);
       return progress.phase === "ready";
     },
     null,
@@ -46,11 +159,18 @@ export async function waitForPlayable(page, tier) {
   let inputs = 0;
   const ready = () =>
     page.evaluate(
-      (mode) =>
-        mode === "automation"
+      (mode) => {
+        // `gwToolboxRuntime` is declared as an open record, so the cursor it
+        // publishes arrives untyped and is narrowed here rather than assumed.
+        const cursor = window.gwToolboxRuntime?.cursor;
+        const cursorValid = typeof cursor === "object"
+          && cursor !== null
+          && "valid" in cursor
+          && cursor.valid === true;
+        return mode === "automation"
           ? window.gwToolboxState?.status === "ready"
-          : window.gwToolboxRuntime?.status === "installed"
-            && window.gwToolboxRuntime?.cursor?.valid === true,
+          : window.gwToolboxRuntime?.status === "installed" && cursorValid;
+      },
       tier,
     );
   if (tier === "automation") {
@@ -72,35 +192,65 @@ export async function waitForPlayable(page, tier) {
     }));
   }
   await page.waitForFunction(
-    (mode) =>
-      mode === "automation"
-        ? window.gwToolboxState?.status === "ready"
-          && window.gwToolboxState.tickCount > 5
-        : window.gwToolboxRuntime?.status === "installed"
-          && window.gwToolboxRuntime?.cursor?.valid === true,
+    (mode) => {
+      const state = window.gwToolboxState;
+      const cursor = window.gwToolboxRuntime?.cursor;
+      const cursorValid = typeof cursor === "object"
+        && cursor !== null
+        && "valid" in cursor
+        && cursor.valid === true;
+      return mode === "automation"
+        ? state?.status === "ready" && (state.tickCount ?? 0) > 5
+        : window.gwToolboxRuntime?.status === "installed" && cursorValid;
+    },
     tier,
     { timeout: 30 * 60_000, polling: 250 },
   );
   return inputs;
 }
 
+/**
+ * The acquired target, or the absence of one.
+ *
+ * Every field below is read out of the Toolbox snapshot, which the renderer
+ * publishes through a global declared with an open index signature: the values
+ * cross into Node as `unknown`. They are converted once, here, so that the
+ * scenarios and their acceptance checks work in numbers and strings rather than
+ * re-deciding what a snapshot field is at every use.
+ *
+ * @typedef {{ valid: false } | {
+ *   valid: true,
+ *   id: number,
+ *   type: string,
+ *   x: number,
+ *   y: number,
+ *   distance: number,
+ *   range: string,
+ * }} TargetRead
+ */
+
+/**
+ * @param {Page} page
+ * @returns {Promise<TargetRead>}
+ */
 async function readTarget(page) {
   return page.evaluate(() => {
     const state = window.gwToolboxState;
     return state?.targetValid
       ? {
           valid: true,
-          id: state.targetId,
-          type: state.targetKind,
-          x: state.targetX,
-          y: state.targetY,
-          distance: state.distance,
-          range: state.rangeName,
+          id: Number(state.targetId),
+          type: String(state.targetKind),
+          x: Number(state.targetX),
+          y: Number(state.targetY),
+          distance: Number(state.distance),
+          range: String(state.rangeName),
         }
       : { valid: false };
   });
 }
 
+/** @param {{ page: Page }} context */
 async function runTarget({ page }) {
   const initial = await readTarget(page);
   const viewport = await page.evaluate(() => ({
@@ -118,6 +268,7 @@ async function runTarget({ page }) {
   if (acquired.valid && acquired.id !== excludedId) {
     return { method: "nearest-ally-key", initial, acquired };
   }
+  /** @type {ReadonlyArray<readonly [number, number]>} */
   const candidates = [
     [viewport.width * 0.90, viewport.height * 0.366],
     [viewport.width * 0.90, viewport.height * 0.42],
@@ -131,13 +282,17 @@ async function runTarget({ page }) {
   return { method: "bounded-party-row", initial, acquired };
 }
 
+/** @param {{ page: Page }} context */
 async function runTargetReadout({ page }) {
   const target = await runTarget({ page });
   await page.waitForFunction(
     () => {
-      const runtime = window.gwToolboxRuntime?.readout;
+      const readout = window.gwToolboxRuntime?.readout;
       const element = globalThis.document.getElementById("toolbox-target");
-      return runtime?.visible === true
+      return typeof readout === "object"
+        && readout !== null
+        && "visible" in readout
+        && readout.visible === true
         && element !== null
         && globalThis.getComputedStyle(element).display !== "none";
     },
@@ -149,21 +304,41 @@ async function runTargetReadout({ page }) {
       ...globalThis.document.querySelectorAll("#toolbox-target"),
     ];
     const element = elements[0] ?? null;
+    const readout = window.gwToolboxRuntime?.readout;
     return {
       count: elements.length,
       visible:
         element !== null
         && globalThis.getComputedStyle(element).display !== "none",
       text: element?.textContent ?? "",
-      runtime: window.gwToolboxRuntime?.readout ?? null,
+      // What the runtime says it published, projected to the two fields the
+      // acceptance check compares against the DOM above. An absent field is
+      // reported as not-visible and an empty line, which is what the check
+      // already treated it as.
+      runtime: typeof readout === "object" && readout !== null
+        ? {
+            visible: "visible" in readout && readout.visible === true,
+            line: "line" in readout ? String(readout.line) : "",
+          }
+        : null,
     };
   });
   return { ...target, presentation };
 }
 
+/**
+ * A scenario that produced no evidence at all is a scenario that acquired no
+ * target, so the absence is refused here rather than crashing the check.
+ *
+ * @param {{ initial: TargetRead, acquired: TargetRead } | undefined} evidence
+ * @returns {asserts evidence is {
+ *   initial: TargetRead,
+ *   acquired: Extract<TargetRead, { valid: true }>,
+ * }}
+ */
 function validateTargetAcquisition(evidence) {
   if (
-    !evidence?.acquired?.valid
+    !evidence?.acquired.valid
     || (
       evidence.initial.valid
       && evidence.initial.id === evidence.acquired.id
@@ -173,10 +348,11 @@ function validateTargetAcquisition(evidence) {
   }
 }
 
+/** @param {{ page: Page }} context */
 async function runMovement({ page }) {
   const before = await page.evaluate(() => ({
-    x: window.gwToolboxState.playerX,
-    y: window.gwToolboxState.playerY,
+    x: Number(window.gwToolboxState?.playerX),
+    y: Number(window.gwToolboxState?.playerY),
   }));
   const viewport = await page.evaluate(() => ({
     width: window.innerWidth,
@@ -193,31 +369,39 @@ async function runMovement({ page }) {
   }
   await page.waitForTimeout(500);
   const after = await page.evaluate(() => ({
-    x: window.gwToolboxState.playerX,
-    y: window.gwToolboxState.playerY,
+    x: Number(window.gwToolboxState?.playerX),
+    y: Number(window.gwToolboxState?.playerY),
   }));
   const distance = Math.hypot(after.x - before.x, after.y - before.y);
-  if (distance <= 5) {
+  // Negated rather than `distance <= 5`: a snapshot without player coordinates
+  // — the state the client is in while a map loads — makes this NaN, and NaN
+  // fails every ordered comparison, so the old spelling let the run report a
+  // movement it never measured.
+  if (!(distance > 5)) {
     throw new Error("bounded two-button movement did not change player coordinates");
   }
   return { gesture: "two-button-forward", before, after, distance };
 }
 
+/** @param {{ page: Page }} context */
 async function runMapTransition({ page }) {
   const readState = () => page.evaluate(() => {
     const state = window.gwToolboxState;
     return {
-      status: state.status,
-      reason: state.reason,
-      mapId: state.mapId,
-      instance: state.instanceName,
-      playerId: state.playerId,
-      x: state.playerX,
-      y: state.playerY,
-      targetValid: state.targetValid,
-      exposesMap: "mapId" in state,
-      exposesPlayer: "playerId" in state,
-      exposesTarget: "targetId" in state,
+      status: state?.status ?? null,
+      reason: state?.reason ?? null,
+      mapId: Number(state?.mapId),
+      instance: state?.instanceName ?? null,
+      playerId: Number(state?.playerId),
+      x: Number(state?.playerX),
+      y: Number(state?.playerY),
+      targetValid: state?.targetValid === true,
+      // The point of the scenario: a loading snapshot must carry no map,
+      // player, or target field at all. An absent state exposes nothing, which
+      // is the same answer.
+      exposesMap: state !== undefined && "mapId" in state,
+      exposesPlayer: state !== undefined && "playerId" in state,
+      exposesTarget: state !== undefined && "targetId" in state,
     };
   });
   const before = await readState();
@@ -226,6 +410,7 @@ async function runMapTransition({ page }) {
     throw new Error(`no certified portal route for map ${before.mapId}`);
   }
   const trace = [{ x: before.x, y: before.y }];
+  /** @param {number} milliseconds */
   const move = async (milliseconds) => {
     await page.keyboard.down("w");
     try {
@@ -246,6 +431,10 @@ async function runMapTransition({ page }) {
     }
     return state;
   };
+  /**
+   * @param {string} key
+   * @param {number} milliseconds
+   */
   const turn = async (key, milliseconds) => {
     await page.keyboard.down(key);
     try {
@@ -254,6 +443,10 @@ async function runMapTransition({ page }) {
       await page.keyboard.up(key);
     }
   };
+  /**
+   * @param {{ x: number, y: number }} from
+   * @param {{ x: number, y: number }} to
+   */
   const angleBetween = (from, to) =>
     Math.atan2(from.x * to.y - from.y * to.x, from.x * to.x + from.y * to.y);
   const startedAt = Date.now();
@@ -309,10 +502,10 @@ async function runMapTransition({ page }) {
     { timeout: 5 * 60_000, polling: 100 },
   );
   const after = await page.evaluate(() => ({
-    mapId: window.gwToolboxState.mapId,
-    instance: window.gwToolboxState.instanceName,
-    playerId: window.gwToolboxState.playerId,
-    targetValid: window.gwToolboxState.targetValid,
+    mapId: Number(window.gwToolboxState?.mapId),
+    instance: window.gwToolboxState?.instanceName ?? null,
+    playerId: Number(window.gwToolboxState?.playerId),
+    targetValid: window.gwToolboxState?.targetValid === true,
   }));
   return {
     route: {
@@ -345,10 +538,19 @@ const CURSOR_PHASES = Object.freeze([
 const CURSOR_SAMPLE_INTERVAL_MS = 50;
 const CURSOR_MAX_CHANGES = 192;
 
+/** @param {ObservationContext} context */
 async function runCursorCapture({ sample, evaluate, wait }) {
   if (!sample) {
     throw new Error("cursor-capture requires at least one --observe address");
   }
+  /**
+   * @type {{
+   *   atMs: number,
+   *   phase: number,
+   *   values: ObservationSample[],
+   *   applied: Record<string, unknown> | null,
+   * }[]}
+   */
   const changes = [];
   const startedAt = Date.now();
   let overflow = 0;
@@ -369,7 +571,7 @@ async function runCursorCapture({ sample, evaluate, wait }) {
       const applied = await evaluate(() => {
         const cursor = window.gwToolboxRuntime?.cursor;
         const canvas = globalThis.document.getElementById("canvas");
-        return cursor
+        return typeof cursor === "object" && cursor !== null
           ? { ...cursor, inline: canvas?.style.cursor.slice(0, 24) ?? "" }
           : null;
       });
@@ -406,6 +608,7 @@ async function runCursorCapture({ sample, evaluate, wait }) {
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
+/** @type {Readonly<Record<string, LiveScenario>>} */
 export const SCENARIOS = Object.freeze({
   // Reaching a playable character is itself a keypress, so the scenarios that
   // only need the client up are automation too. `tier` names what the run does,
@@ -414,6 +617,7 @@ export const SCENARIOS = Object.freeze({
   target: Object.freeze({
     tier: "automation",
     run: runTarget,
+    /** @param {{ evidence?: Awaited<ReturnType<typeof runTarget>> }} result */
     validate(result) {
       validateTargetAcquisition(result.evidence);
     },
@@ -421,13 +625,14 @@ export const SCENARIOS = Object.freeze({
   "target-readout": Object.freeze({
     tier: "automation",
     run: runTargetReadout,
+    /** @param {{ evidence?: Awaited<ReturnType<typeof runTargetReadout>> }} result */
     validate(result) {
       const evidence = result.evidence;
       validateTargetAcquisition(evidence);
       const expected =
         `${Math.round(evidence.acquired.distance)} ${evidence.acquired.range}`;
       if (
-        evidence.presentation?.count !== 1
+        evidence.presentation.count !== 1
         || evidence.presentation.visible !== true
         || evidence.presentation.runtime?.visible !== true
         || evidence.presentation.runtime.line !== expected
@@ -443,8 +648,9 @@ export const SCENARIOS = Object.freeze({
   movement: Object.freeze({
     tier: "automation",
     run: runMovement,
+    /** @param {{ evidence?: Awaited<ReturnType<typeof runMovement>> }} result */
     validate(result) {
-      if (!(result.evidence?.distance > 5)) {
+      if (!((result.evidence?.distance ?? 0) > 5)) {
         throw new Error("movement scenario did not move the player");
       }
     },
@@ -455,8 +661,9 @@ export const SCENARIOS = Object.freeze({
   "cursor-capture": Object.freeze({
     tier: "observation",
     run: runCursorCapture,
+    /** @param {{ evidence?: Awaited<ReturnType<typeof runCursorCapture>> }} result */
     validate(result) {
-      if (!(result.evidence?.changeCount > 1)) {
+      if (!((result.evidence?.changeCount ?? 0) > 1)) {
         throw new Error("cursor capture observed no state transition");
       }
     },
@@ -464,10 +671,12 @@ export const SCENARIOS = Object.freeze({
   "map-transition": Object.freeze({
     tier: "automation",
     run: runMapTransition,
+    /** @param {{ evidence?: Awaited<ReturnType<typeof runMapTransition>> }} result */
     validate(result) {
       const evidence = result.evidence;
       if (
-        evidence?.loading?.status !== "waiting"
+        evidence?.loading.status !== "waiting"
+        || evidence.loading.reason === null
         || !["loading", "game"].includes(evidence.loading.reason)
         || evidence.loading.exposesMap
         || evidence.loading.exposesPlayer
@@ -484,6 +693,7 @@ export const SCENARIOS = Object.freeze({
     // Imported here rather than at the top of this file: performance.mjs is the
     // benchmark harness and the only holder of AUTOMATION_COMMAND, so an
     // observation run never loads the command vocabulary at all.
+    /** @param {AutomationContext} context */
     run: async ({ page, cdp, sendAutomationCommand }) =>
       (await import("./performance.mjs")).runPerformanceScenario(
         page,
@@ -493,11 +703,18 @@ export const SCENARIOS = Object.freeze({
     // The budget lives here, with the benchmark it gates. The order does too:
     // a run that measured each arm once, in a fixed sequence, is refused here
     // rather than trusted to have said so in a field.
+    /**
+     * @param {{
+     *   evidence?: Awaited<ReturnType<
+     *     typeof import("./performance.mjs").runPerformanceScenario
+     *   >>,
+     * }} result
+     */
     validate(result) {
       const evidence = result.evidence;
       const off = evidence?.arms?.[BENCHMARK_ARMS.dispatcherOff];
       const on = evidence?.arms?.[BENCHMARK_ARMS.observerOn];
-      if (!off || !on) {
+      if (!evidence || !off || !on) {
         throw new Error("performance scenario recorded no comparable arms");
       }
       if (!isBalancedOrder(evidence.order)) {
@@ -533,11 +750,20 @@ export const SCENARIOS = Object.freeze({
  * `child.send` does not exist to be called.
  *
  * Returns null for an unknown scenario name.
+ *
+ * @param {string} name
+ * @param {{
+ *   baseEnv: NodeJS.ProcessEnv,
+ *   userData: string,
+ *   cachedOnly: boolean,
+ * }} options
+ * @returns {LiveRunPlan | null}
  */
 export function liveRunPlan(name, { baseEnv, userData, cachedOnly }) {
   const scenario = SCENARIOS[name];
   if (!scenario) return null;
   const automation = scenario.tier === "automation";
+  /** @type {NodeJS.ProcessEnv} */
   const env = { ...baseEnv, GW_EXPECT_USER_DATA: userData };
   delete env.ELECTRON_RUN_AS_NODE;
   if (automation) env.GW_TOOLBOX_AUTOMATION = "1";
@@ -557,6 +783,17 @@ export function liveRunPlan(name, { baseEnv, userData, cachedOnly }) {
 /**
  * Why this run may not start, or null. One owner for every refusal, so a new
  * tier cannot quietly acquire a preflight the others do not have.
+ *
+ * @param {LiveRunPlan} plan
+ * @param {ToolboxDoctorReport} preflight
+ * @param {{ cachedOnly: boolean }} options
+ * @returns {
+ *   | "cached-client-incomplete"
+ *   | "saved-login-missing"
+ *   | "target-readout-disabled"
+ *   | "native-cursor-disabled"
+ *   | null
+ * }
  */
 export function liveRunRefusal(plan, preflight, { cachedOnly }) {
   if (cachedOnly && !preflight.readyForCachedLive) {
@@ -580,9 +817,27 @@ export function liveRunRefusal(plan, preflight, { cachedOnly }) {
  * `--observe` sampler, and a clock. Automation additionally gets the page, the
  * CDP session and the command channel — the two capabilities that act on the
  * player's behalf are objects it holds, not flags it is asked to respect.
+ *
+ * Overloaded on the tier so that pairing is a compile error and not only a
+ * convention: an observation scenario cannot be handed the automation context.
+ *
+ * @overload
+ * @param {"automation"} tier
+ * @param {LiveCapabilities} capabilities
+ * @returns {AutomationContext}
+ *
+ * @overload
+ * @param {"observation"} tier
+ * @param {LiveCapabilities} capabilities
+ * @returns {ObservationContext}
+ *
+ * @param {LiveTier} tier
+ * @param {LiveCapabilities} capabilities
+ * @returns {AutomationContext | ObservationContext}
  */
 export function scenarioContext(tier, capabilities) {
   const { page, cdp, sendAutomationCommand, sampleObservations } = capabilities;
+  /** @type {ObservationContext} */
   const observation = {
     evaluate: (body, argument) => page.evaluate(body, argument),
     wait: (milliseconds) => page.waitForTimeout(milliseconds),

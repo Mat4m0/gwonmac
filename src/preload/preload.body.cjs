@@ -8,15 +8,26 @@
 // here may start with the gw channel prefix — tests/policy asserts that.
 // `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
-// binding the preload may read.
+// binding the preload may read. The four spliced constants are declared for the
+// type checker in scripts/preload-injected-constants.d.mts.
 /* global IPC, RENDERER_INIT_ARGUMENT, TOOLBOX_TOOLS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
 /**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
  * Launch configuration, read from the one `additionalArguments` entry the main
  * process appends. Booleans only, defaulted off: a renderer that cannot read
  * its argument gets the production posture rather than a developer one.
+ *
+ * @returns {import("../shared/contracts.js").RendererInit}
  */
 function rendererInit() {
   // `process` is injected into the sandboxed preload's own scope; it is not a
@@ -28,24 +39,26 @@ function rendererInit() {
   const raw = Array.isArray(argv)
     ? argv.find((value) => value.startsWith(RENDERER_INIT_ARGUMENT))
     : undefined;
+  /** @type {Record<string, unknown>} */
   let parsed = {};
   try {
     if (raw) {
       const value = JSON.parse(raw.slice(RENDERER_INIT_ARGUMENT.length));
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        parsed = value;
-      }
+      if (isRecord(value)) parsed = value;
     }
   } catch {
     parsed = {};
   }
-  const toolboxSelection = {};
-  const selected =
-    parsed.toolboxSelection
-    && typeof parsed.toolboxSelection === "object"
-    && !Array.isArray(parsed.toolboxSelection)
-      ? parsed.toolboxSelection
-      : {};
+  // The loop below writes every member of `TOOLBOX_TOOLS`, which is exactly the
+  // key set of `ToolboxSelection`; the checker cannot see that a `for…of` over
+  // the canonical tuple is exhaustive, and listing the tools here to satisfy it
+  // would be the second copy the tuple exists to prevent.
+  const toolboxSelection =
+    /** @type {import("../shared/contracts.js").ToolboxSelection} */ ({});
+  /** @type {Record<string, unknown>} */
+  const selected = isRecord(parsed.toolboxSelection)
+    ? parsed.toolboxSelection
+    : {};
   for (const tool of TOOLBOX_TOOLS) {
     toolboxSelection[tool] = selected[tool] === true;
   }
@@ -57,8 +70,15 @@ function rendererInit() {
   };
 }
 
+/**
+ * @template T
+ * @param {string} eventChannel
+ * @param {(value: T) => void} callback
+ * @returns {() => void}
+ */
 function listen(eventChannel, callback) {
-  const handler = (_event, value) => callback(value);
+  const handler = (/** @type {unknown} */ _event, /** @type {T} */ value) =>
+    callback(value);
   ipcRenderer.on(eventChannel, handler);
   let active = true;
   return () => {
@@ -68,6 +88,11 @@ function listen(eventChannel, callback) {
   };
 }
 
+/**
+ * @type {((
+ *   command: import("../shared/contracts.js").RendererCommand,
+ * ) => void | Promise<void>) | null}
+ */
 let rendererCommandHandler = null;
 ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
   const handler = rendererCommandHandler;
@@ -83,6 +108,7 @@ ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
     );
 });
 
+/** @type {import("../shared/contracts.js").GwNativeApi} */
 const api = {
   init: rendererInit(),
   // A constant, not a capability: the derived client's dirfd markers, which the

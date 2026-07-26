@@ -26,6 +26,13 @@ export const PRELOAD_CONSTANTS = [
   "WASM_BRIDGE_MARKERS",
 ];
 
+/**
+ * One contract export as the source text that reproduces it. The value is
+ * whatever `src/shared/contracts.ts` exports under that name, so it is read as
+ * `unknown` and narrowed here rather than assumed to be an object.
+ *
+ * @param {unknown} value
+ */
 const literal = (value) =>
   value !== null && typeof value === "object"
     ? `Object.freeze(${JSON.stringify(value, null, 2)})`

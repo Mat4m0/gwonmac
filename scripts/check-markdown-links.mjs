@@ -47,7 +47,10 @@ export function listRepositoryFiles(root = repoRoot) {
   return [...new Set(out.split("\0").filter(Boolean))].sort();
 }
 
-/** True for targets we do not resolve on disk: URLs, mailto:, bare anchors. */
+/**
+ * True for targets we do not resolve on disk: URLs, mailto:, bare anchors.
+ * @param {string} target
+ */
 function isExternal(target) {
   return (
     target === "" ||
@@ -57,6 +60,7 @@ function isExternal(target) {
   );
 }
 
+/** @param {string} line */
 function stripCodeSpans(line) {
   return line.replace(/`[^`]*`/g, (span) => " ".repeat(span.length));
 }
@@ -74,37 +78,52 @@ const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 
 /**
  * Every local link target in one Markdown document.
+ * @param {string} source
  * @returns {{ line: number, target: string }[]}
  */
 export function extractLocalTargets(source) {
+  /** @type {{ line: number, target: string }[]} */
   const found = [];
+  /** The fence character an open fence was opened with. @type {string | null} */
   let fence = null;
 
   source.split(/\r?\n/).forEach((rawLine, index) => {
-    const fenceMatch = FENCE.exec(rawLine);
-    if (fenceMatch) {
-      const marker = fenceMatch[1];
+    // The character this line opens or closes a fence with, when it is a fence
+    // line at all. Every capture group in the patterns here is mandatory, so a
+    // match always carries one; reading them through optional chaining states
+    // that as a check the reader can follow rather than as an assertion.
+    const marker = FENCE.exec(rawLine)?.[1]?.charAt(0);
+    if (marker !== undefined) {
       if (fence === null) {
-        fence = marker[0];
+        fence = marker;
         return;
       }
-      if (marker[0] === fence) fence = null;
+      if (marker === fence) fence = null;
       return;
     }
     if (fence !== null) return;
 
     const line = stripCodeSpans(rawLine);
+    /** @type {string[]} */
     const raw = [];
 
-    const definition = REFERENCE_DEFINITION.exec(line);
-    if (definition) raw.push(definition[1]);
+    const definition = REFERENCE_DEFINITION.exec(line)?.[1];
+    if (definition !== undefined) raw.push(definition);
 
-    for (const match of line.matchAll(INLINE_DESTINATION)) raw.push(match[1]);
-    for (const match of line.matchAll(HTML_ATTRIBUTE)) raw.push(match[1].slice(1, -1));
+    for (const match of line.matchAll(INLINE_DESTINATION)) {
+      if (match[1] !== undefined) raw.push(match[1]);
+    }
+    for (const match of line.matchAll(HTML_ATTRIBUTE)) {
+      if (match[1] !== undefined) raw.push(match[1].slice(1, -1));
+    }
 
     for (const candidate of raw) {
       const target = candidate.startsWith("<") ? candidate.slice(1, -1).trim() : candidate;
-      const path = target.split("#")[0].split("?")[0].trim();
+      // `split` always yields a first element; the defaults are what the index
+      // signature needs, and an empty destination is external either way.
+      const [beforeAnchor = ""] = target.split("#");
+      const [beforeQuery = ""] = beforeAnchor.split("?");
+      const path = beforeQuery.trim();
       if (isExternal(path)) continue;
       found.push({ line: index + 1, target: path });
     }
@@ -113,6 +132,7 @@ export function extractLocalTargets(source) {
   return found;
 }
 
+/** @param {string} target */
 function decode(target) {
   try {
     return decodeURIComponent(target);
@@ -122,9 +142,12 @@ function decode(target) {
 }
 
 /**
+ * @param {string} root
+ * @param {readonly string[]} files
  * @returns {{ file: string, line: number, target: string }[]} broken links
  */
 export function findBrokenLinks(root = repoRoot, files = listMarkdownFiles(root)) {
+  /** @type {{ file: string, line: number, target: string }[]} */
   const broken = [];
   let repositoryFiles = null;
   try {
@@ -136,6 +159,7 @@ export function findBrokenLinks(root = repoRoot, files = listMarkdownFiles(root)
   }
   const absoluteRoot = resolve(root);
   const canonicalRoot = realpathSync(absoluteRoot);
+  /** @param {string} owner @param {string} candidate */
   const containedBy = (owner, candidate) => {
     const path = relative(owner, candidate);
     return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`));

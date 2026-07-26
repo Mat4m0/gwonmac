@@ -10,25 +10,34 @@ const token: ClientHealthToken = {
 
 const turn = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+/**
+ * The controller's timer handle is whatever the host's `setTimeout` returns, so
+ * the fake hands back real handles instead of integer ids of its own. Standing
+ * in with a different handle type would let this test agree with a `schedule`
+ * and `cancel` pair the controller could never be given. The timers are
+ * cancelled the moment they are created — only the handle's identity is used,
+ * and nothing here may fire on its own.
+ */
+type RetryTimer = ReturnType<typeof setTimeout>;
+
 function fakeScheduler() {
-  let nextId = 1;
-  const pending = new Map<number, () => void>();
+  const pending = new Map<RetryTimer, () => void>();
   return {
     schedule(task: () => void, delayMs: number) {
       assert.equal(delayMs, 1_000);
-      const id = nextId;
-      nextId += 1;
-      pending.set(id, task);
-      return id;
+      const timer = setTimeout(() => {}, 1_000);
+      clearTimeout(timer);
+      pending.set(timer, task);
+      return timer;
     },
-    cancel(id: number) {
-      pending.delete(id);
+    cancel(timer: RetryTimer) {
+      pending.delete(timer);
     },
     runNext() {
       const entry = pending.entries().next().value;
       assert.ok(entry, "no retry was scheduled");
-      const [id, task] = entry;
-      pending.delete(id);
+      const [timer, task] = entry;
+      pending.delete(timer);
       task();
     },
     count: () => pending.size,

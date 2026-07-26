@@ -108,7 +108,10 @@ interface Options {
  * assigned in declaration order and referenced through `at`.
  */
 function build(options: Options = {}): {
-  bytes: Uint8Array;
+  // Backed by a plain ArrayBuffer, not the shared one a bare `Uint8Array`
+  // leaves open: `WebAssembly.validate` only accepts the unshared form, and
+  // these fixtures are handed to it directly.
+  bytes: Uint8Array<ArrayBuffer>;
   at: Record<string, number>;
 } {
   const locals: Local[] = [];

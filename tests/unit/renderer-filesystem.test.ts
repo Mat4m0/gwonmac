@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { installGameFilesystem } from "../../src/renderer/filesystem.js";
+import {
+  installGameFilesystem,
+  type EmscriptenModule,
+} from "../../src/renderer/filesystem.js";
 
 // The module is imported, not read and evaluated in a synthetic context. What
 // it still reaches for ambiently is the Emscripten runtime's `FS`/`IDBFS`,
@@ -63,8 +66,12 @@ function fixture(options: {
       calls.push(`chdir:${value}`);
     },
   };
-  const module = {
-    preRun: undefined as undefined | (() => void),
+  // Typed as the contract rather than inferred, because the fixture stands in
+  // for the module Emscripten hands the renderer. That module arrives with no
+  // preRun at all — installGameFilesystem is what puts one there — so a stand-in
+  // that declares the property up front, holding undefined, is a shape the real
+  // caller never passes and would hide an install that never assigned.
+  const module: EmscriptenModule = {
     addRunDependency(value: string) {
       calls.push(`add:${value}`);
     },
@@ -94,7 +101,13 @@ function fixture(options: {
         calls.push("ready");
       },
     });
-    assert.equal(typeof module.preRun, "function");
+    // assert.ok is the assertion of the two that narrows, so the call below is
+    // the one installGameFilesystem installed rather than an optional hook the
+    // checker has to be told about.
+    assert.ok(
+      typeof module.preRun === "function",
+      "installGameFilesystem must install a preRun hook",
+    );
     module.preRun();
   } finally {
     Object.assign(globalThis, {

@@ -7,7 +7,6 @@
 // here reads source text, and nothing needs a build or a game.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-// @ts-expect-error - the live runner is plain .mjs developer tooling.
 import {
   liveRunPlan,
   liveRunRefusal,
@@ -15,7 +14,6 @@ import {
   SCENARIOS,
   waitForPlayable,
 } from "../../scripts/toolbox-live/scenarios.mjs";
-// @ts-expect-error - the live acceptance helper is plain .mjs tooling.
 import { validateCommonAcceptance } from "../../scripts/toolbox-live/acceptance.mjs";
 
 interface Scenario {
@@ -31,7 +29,11 @@ interface LivePlan {
   scenario: Scenario;
 }
 
-const scenarios = SCENARIOS as Record<string, Scenario>;
+// The register itself, not a local restatement of it: the first case below
+// asserts that every entry declares one of the two tiers, and asserting that
+// against a hand-written `Record<string, Scenario>` would only be asserting
+// against this file.
+const scenarios = SCENARIOS;
 
 const planFor = (name: string, baseEnv: Record<string, string> = {}) =>
   liveRunPlan(name, {
@@ -209,6 +211,11 @@ describe("an observation live run cannot reach the automation tier", () => {
     }, TypeError);
 
     const automation = scenarioContext("automation", capabilities);
+    // The positive half of the same property: the automation tier is handed
+    // the two capabilities the loop above proved the observation tier is not.
+    // `in` is what narrows the returned union, so this is the assertion and
+    // the narrowing at once.
+    assert.ok("page" in automation && "sendAutomationCommand" in automation);
     assert.equal(automation.page, capabilities.page);
     assert.equal(automation.sendAutomationCommand, capabilities.sendAutomationCommand);
   });

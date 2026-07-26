@@ -46,7 +46,12 @@ interface Fixture {
 
 function fixture(options: { omit?: Array<keyof GlEnv> } = {}): Fixture {
   const omit = new Set(options.omit ?? []);
-  const module = { HEAPU8: new Uint8Array(new ArrayBuffer(2048)) };
+  // Annotated rather than inferred: the host declares `HEAPU8` as a plain
+  // `Uint8Array`, so inferring the fixture's heap as one over an `ArrayBuffer`
+  // would make `setHeap` unable to hand it the very thing a grown WASM heap is.
+  const module: { HEAPU8: Uint8Array } = {
+    HEAPU8: new Uint8Array(new ArrayBuffer(2048)),
+  };
   const calls: Array<[number, number]> = [];
   const answer = { value: GL_TRUE, writes: true };
   const warnings: string[] = [];

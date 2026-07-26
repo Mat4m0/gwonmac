@@ -25,6 +25,50 @@ export const BENCHMARK_ARMS = Object.freeze({
   observerOn: "transformed-observer-on",
 });
 
+/**
+ * The tail one phase or one arm reports.
+ * @typedef {{
+ *   count: number,
+ *   p50Ms: number,
+ *   p95Ms: number,
+ *   p99Ms: number,
+ *   maxMs: number,
+ *   over20Ms: number,
+ *   over33Ms: number,
+ *   over50Ms: number,
+ * }} FrameSummary
+ */
+
+/**
+ * What one arm accumulates while the run proceeds. `frames` holds one summary
+ * per phase rather than one merged summary, because the arm's percentiles are
+ * meaned over its phases — see `mergeFrames`.
+ * @typedef {{
+ *   ticks: number,
+ *   metrics: Record<string, number>,
+ *   phases: number[],
+ *   frames: FrameSummary[],
+ * }} ArmTotals
+ */
+
+/**
+ * One arm as the result publishes it.
+ * @typedef {{
+ *   frames: FrameSummary,
+ *   ticks: number,
+ *   metrics: Record<string, number>,
+ *   phases: number[],
+ * }} ArmResult
+ */
+
+/**
+ * The parameter is `unknown` rather than `number` on purpose: these figures
+ * arrive from a renderer over CDP, so a missing metric really can turn up here
+ * as `undefined` and rounding it silently would publish `NaN` as a result.
+ * @param {unknown} value
+ * @param {number} digits
+ * @returns {number}
+ */
 const roundTo = (value, digits) => {
   if (typeof value !== "number") {
     throw new TypeError(`benchmark value ${String(value)} is not a number`);
@@ -32,11 +76,17 @@ const roundTo = (value, digits) => {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : value;
 };
 
-/** Frame intervals in milliseconds → the tail summary one phase reports. */
+/**
+ * Frame intervals in milliseconds → the tail summary one phase reports.
+ * @param {readonly number[]} samples
+ * @returns {FrameSummary}
+ */
 export function summarizeFrames(samples) {
   const sorted = [...samples].sort((left, right) => left - right);
+  /** @param {number} percentile */
   const at = (percentile) =>
     sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] ?? 0;
+  /** @param {number} milliseconds */
   const over = (milliseconds) =>
     samples.filter((sample) => sample > milliseconds).length;
   return {
@@ -58,15 +108,19 @@ export function summarizeFrames(samples) {
  * percentile lands inside whichever phase's mode contains it, so two phases at
  * different levels give the arm whichever level that percentile happens to
  * fall in, and the mirror stops cancelling anything.
+ * @param {readonly FrameSummary[]} summaries
+ * @returns {FrameSummary}
  */
 export function mergeFrames(summaries) {
   if (summaries.length === 0) throw new Error("an arm measured no phase");
+  /** @param {(summary: FrameSummary) => number} pick */
   const mean = (pick) =>
     roundTo(
       summaries.reduce((total, summary) => total + pick(summary), 0)
         / summaries.length,
       3,
     );
+  /** @param {(summary: FrameSummary) => number} pick */
   const sum = (pick) => summaries.reduce((total, s) => total + pick(s), 0);
   return {
     count: sum((summary) => summary.count),
@@ -85,6 +139,8 @@ export function mergeFrames(summaries) {
  * again in reverse. Each arm's two phases are symmetric about the midpoint of
  * the run, so a drift that is monotone over the run contributes the same mean
  * offset to every arm.
+ * @param {readonly string[]} arms
+ * @returns {string[]}
  */
 export function balancedOrder(arms) {
   if (arms.length < 2) {
@@ -101,16 +157,31 @@ export function balancedOrder(arms) {
  * with every arm measured the same number of times. The acceptance gate asks
  * this of the result it validates, so a run that measured A then B once — the
  * order-biased shape — cannot be accepted by claiming it in a field.
+ *
+ * The parameter is `unknown` because the gate asks this of a field read back
+ * out of a result record, which may hold anything at all.
+ * @param {unknown} order
+ * @returns {boolean}
  */
 export function isBalancedOrder(order) {
   if (!Array.isArray(order) || order.length < 4 || order.length % 2 !== 0) {
     return false;
   }
-  return order.every((arm, index) => arm === order[order.length - 1 - index]);
+  /** @type {readonly unknown[]} */
+  const measured = order;
+  return measured.every(
+    (arm, index) => arm === measured[measured.length - 1 - index],
+  );
 }
 
-/** Per-phase metric deltas → the arm's totals. Deltas add; nothing else is here. */
+/**
+ * Per-phase metric deltas → the arm's totals. Deltas add; nothing else is here.
+ * @param {Record<string, number>} total
+ * @param {Record<string, number>} metrics
+ * @returns {Record<string, number>}
+ */
 function addMetrics(total, metrics) {
+  /** @type {Record<string, number>} */
   const sum = { ...total };
   for (const [key, value] of Object.entries(metrics)) {
     sum[key] = roundTo((sum[key] ?? 0) + value, 3);
@@ -136,7 +207,7 @@ function addMetrics(total, metrics) {
  * phase number says when it was read. The heap figure an arm can honestly
  * publish is the delta, and `metrics.jsHeapDeltaKiB` already sums into one.
  *
- * @param {string[]} arms
+ * @param {readonly string[]} arms
  * @param {{
  *   select: (arm: string, phase: number, phases: number) => Promise<void>,
  *   warmUp: () => Promise<unknown>,
@@ -149,9 +220,15 @@ function addMetrics(total, metrics) {
 export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
   const order = balancedOrder(arms);
   const phases = [];
-  const collected = new Map(arms.map((arm) => [arm, []]));
+  /**
+   * One accumulator per arm, holding everything that arm carries out of the
+   * run. Keeping the per-phase summaries here rather than in a second map is
+   * what makes each phase a single lookup, so the "the order only ever names
+   * an arm we set up" invariant is stated once, below, instead of twice.
+   * @type {Map<string, ArmTotals>}
+   */
   const totals = new Map(
-    arms.map((arm) => [arm, { ticks: 0, metrics: {}, phases: [] }]),
+    arms.map((arm) => [arm, { ticks: 0, metrics: {}, phases: [], frames: [] }]),
   );
   for (const [index, arm] of order.entries()) {
     await select(arm, index + 1, order.length);
@@ -162,10 +239,14 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
     }
     const frames = summarizeFrames(phase.samples);
     const total = totals.get(arm);
+    // `order` is `balancedOrder(arms)`, so every arm it names was set up above.
+    if (!total) {
+      throw new Error(`phase ${index + 1} measured an unknown arm ${arm}`);
+    }
     total.ticks += phase.ticks;
     total.metrics = addMetrics(total.metrics, phase.metrics);
     total.phases.push(index + 1);
-    collected.get(arm).push(frames);
+    total.frames.push(frames);
     phases.push({
       phase: index + 1,
       arm,
@@ -175,30 +256,32 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
       heapUsedMiB: phase.heapUsedMiB,
     });
   }
-  return {
-    order,
-    phases,
-    arms: Object.fromEntries(
-      arms.map((arm) => [
-        arm,
-        {
-          frames: mergeFrames(collected.get(arm)),
-          ticks: totals.get(arm).ticks,
-          metrics: totals.get(arm).metrics,
-          phases: totals.get(arm).phases,
-        },
-      ]),
-    ),
-  };
+  /** @type {Record<string, ArmResult>} */
+  const measured = {};
+  for (const [arm, total] of totals) {
+    measured[arm] = {
+      frames: mergeFrames(total.frames),
+      ticks: total.ticks,
+      metrics: total.metrics,
+      phases: total.phases,
+    };
+  }
+  return { order, phases, arms: measured };
 }
 
-/** The movement from one arm to another, in both tails. */
+/**
+ * The movement from one arm to another, in both tails.
+ * @param {Record<string, { frames: FrameSummary }>} arms
+ * @param {string} from
+ * @param {string} to
+ */
 export function compareArms(arms, from, to) {
   const before = arms[from]?.frames;
   const after = arms[to]?.frames;
   if (!before || !after) {
     throw new Error(`benchmark measured no arm ${from} → ${to}`);
   }
+  /** @param {number} start @param {number} end */
   const percent = (start, end) =>
     start > 0 ? roundTo(((end / start) - 1) * 100, 2) : Number.POSITIVE_INFINITY;
   return {

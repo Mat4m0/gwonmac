@@ -17,7 +17,6 @@ import {
   type RendererCommand,
   type RendererInit,
 } from "../../src/shared/contracts.ts";
-// @ts-expect-error a build script, deliberately untyped.
 import { preloadSource as generatePreload } from "../../scripts/generate-preload.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

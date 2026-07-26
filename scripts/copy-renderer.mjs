@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/** @param {string} src @param {string} dest */
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {

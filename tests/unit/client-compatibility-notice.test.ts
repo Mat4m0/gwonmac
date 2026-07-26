@@ -73,7 +73,10 @@ const COMPATIBILITY_ELEMENT_IDS = [
 ] as const;
 
 function compatibilityDom() {
-  const elements = new Map(
+  // Keyed by plain string, because the notice asks this stand-in for whatever
+  // id it likes and a miss has to come back null the way a document does. The
+  // accessor below is the one that holds callers to the declared set.
+  const elements = new Map<string, FakeElement>(
     COMPATIBILITY_ELEMENT_IDS.map((id) => [id, new FakeElement()]),
   );
   const root = {

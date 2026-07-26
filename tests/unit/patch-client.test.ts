@@ -279,7 +279,11 @@ describe("patch-client update", () => {
       if (corrupted) return;
       corrupted = true;
       const bytes = await readFile(wasm);
-      bytes[0] ^= 0xff;
+      // Read and write the byte rather than indexing in place: an empty file
+      // would make `bytes[0] ^= 0xff` a silent no-op, and this fault has to
+      // actually corrupt the staged copy for the assertions below to mean
+      // anything. `readUInt8` throws instead.
+      bytes.writeUInt8(bytes.readUInt8(0) ^ 0xff, 0);
       await writeFile(wasm, bytes);
     });
 

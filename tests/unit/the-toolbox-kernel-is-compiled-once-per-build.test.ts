@@ -90,6 +90,22 @@ describe("scripts/copy-renderer.mjs only copies", () => {
   });
 });
 
+/**
+ * One step's argument list. `scripts/build.mjs` is JavaScript, so its step list
+ * infers as arrays of `string | string[]` and cannot say that position 1 is
+ * always the arguments. Asserting the shape rather than assuming it means a
+ * step list that stopped being command-and-arguments pairs fails here, instead
+ * of every `includes` below quietly answering about a command string.
+ */
+function stepArgs(step: (typeof BUILD_STEPS)[number]): string[] {
+  const args = step[1];
+  assert.ok(
+    Array.isArray(args),
+    `build step ${String(step[0])} carries no argument list`,
+  );
+  return args;
+}
+
 describe("scripts/build.mjs is the one caller of rustc", () => {
   const rustc = BUILD_STEPS.filter(([command]) => command === "rustc");
 
@@ -98,17 +114,19 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
   });
 
   it("writes it into the renderer output, after that output is recreated", () => {
-    const args = rustc[0]![1];
+    const kernel = rustc[0];
+    assert.ok(kernel, "no rustc step to inspect");
+    const args = stepArgs(kernel);
     assert.deepEqual(args.slice(-2), [
       "-o",
       "build/renderer/toolbox-kernel.wasm",
     ]);
     assert.ok(args.includes("src/toolbox-kernel/lib.rs"));
-    const copy = BUILD_STEPS.findIndex(([, args]) =>
-      args.includes("scripts/copy-renderer.mjs"),
+    const copy = BUILD_STEPS.findIndex((step) =>
+      stepArgs(step).includes("scripts/copy-renderer.mjs"),
     );
     // copy-renderer.mjs deletes build/renderer, so a kernel written before it
     // would not survive to be packaged.
-    assert.ok(copy >= 0 && copy < BUILD_STEPS.indexOf(rustc[0]!));
+    assert.ok(copy >= 0 && copy < BUILD_STEPS.indexOf(kernel));
   });
 });

@@ -1,3 +1,11 @@
+/**
+ * The whole live-run readout, projected inside the page in one round trip.
+ *
+ * @param {import("playwright").Page} page
+ * @param {{ ticks: number, elapsedMs: number }} cadence hook ticks counted over
+ *   a measured window, which is the only figure the page cannot derive itself.
+ * @param {string} scenario the scenario that ran, echoed into the result.
+ */
 export function projectLiveResult(page, cadence, scenario) {
   return page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwToolboxState;
@@ -5,15 +13,28 @@ export function projectLiveResult(page, cadence, scenario) {
     const diagnostics = await window.gwNative.diagnostics.current();
     const settings = await window.gwNative.settings.get();
     const storage = await window.navigator.storage.estimate();
-    const p95 = (metric) => diagnostics.histograms[metric]?.p95Us ?? 0;
-    const renderSamples = [...(runtime?.renderSamples ?? [])]
+    const p95 = (/** @type {string} */ metric) =>
+      diagnostics.histograms[metric]?.p95Us ?? 0;
+    // `window.gwToolboxRuntime` is an open record: the renderer publishes it
+    // for observation and nothing constrains a field's type at this boundary
+    // (src/renderer/gw-native.d.ts). So every number below is narrowed where
+    // it is read. A field the renderer renames then reaches the report as the
+    // same 0 the rest of this projection already uses for "not measured",
+    // rather than as `undefined` or `NaN` in the JSON.
+    const numeric = (/** @type {unknown} */ value) =>
+      typeof value === "number" ? value : 0;
+    const samples = runtime?.renderSamples;
+    const renderSamples = (Array.isArray(samples) ? samples : [])
+      .map(numeric)
       .sort((left, right) => left - right);
     const p95Index = Math.max(0, Math.ceil(renderSamples.length * 0.95) - 1);
-    const mib = (bytes) => Number((bytes / (1024 ** 2)).toFixed(1));
-    const latestMib = (metric) =>
+    const mib = (/** @type {number} */ bytes) =>
+      Number((bytes / (1024 ** 2)).toFixed(1));
+    const latestMib = (/** @type {string} */ metric) =>
       mib(Number(diagnostics.latest[metric]) || 0);
-    const milestoneMs = (metric) =>
+    const milestoneMs = (/** @type {string} */ metric) =>
       Number(((Number(diagnostics.latest[metric]) || 0) / 1_000).toFixed(1));
+    const memory = runtime?.memory;
     return {
       scenario: name,
       supported: runtime?.status === "installed",
@@ -38,7 +59,7 @@ export function projectLiveResult(page, cadence, scenario) {
             range: state.rangeName,
           }
         : null,
-      renderUs: Number((runtime?.lastRenderUs ?? 0).toFixed(2)),
+      renderUs: Number(numeric(runtime?.lastRenderUs).toFixed(2)),
       renderP95Us: Number((renderSamples[p95Index] ?? 0).toFixed(2)),
       snapshotReads: runtime?.snapshotReads ?? 0,
       rejectedSnapshots: runtime?.rejectedSnapshots ?? 0,
@@ -46,7 +67,9 @@ export function projectLiveResult(page, cadence, scenario) {
       installation: runtime?.installation ?? 0,
       host: {
         renderScale: settings.renderScale,
-        wasmMemoryMiB: mib(runtime?.memory?.buffer?.byteLength ?? 0),
+        wasmMemoryMiB: mib(
+          memory instanceof WebAssembly.Memory ? memory.buffer.byteLength : 0,
+        ),
         browserStorageMiB: mib(storage.usage ?? 0),
         rendererCacheMiB: latestMib("renderer.memoryCacheBytes"),
         mainRssMiB: latestMib("main.rssBytes"),

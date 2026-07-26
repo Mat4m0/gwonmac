@@ -5,19 +5,42 @@ import {
   runBalancedBenchmark,
 } from "./benchmark.mjs";
 
+/**
+ * The session's three handles, named once. `page` and `cdp` are the live
+ * Playwright objects toolbox-live.mjs connected over CDP, and the command
+ * channel only accepts the automation commands the main process knows —
+ * a scenario cannot invent one here and discover that at run time.
+ *
+ * @typedef {import("playwright").Page} Page
+ * @typedef {import("playwright").CDPSession} CDPSession
+ * @typedef {(
+ *   command: import("../../build/shared/automation.js").AutomationCommand,
+ * ) => Promise<void>} SendAutomationCommand
+ */
+
 // Every phase is warmed for the same time and measured for the same time; the
 // schedule that uses them is in benchmark.mjs. Two phases per arm at 30 s keep
 // the per-arm sample floor the acceptance budget in scenarios.mjs asks for.
 const WARMUP_MS = 5_000;
 const MEASURE_MS = 30_000;
 
+/**
+ * @param {CDPSession} cdp
+ * @returns {Promise<Record<string, number>>}
+ */
 async function readMetrics(cdp) {
   const { metrics } = await cdp.send("Performance.getMetrics");
   return Object.fromEntries(metrics.map(({ name, value }) => [name, value]));
 }
 
-/** What moved during one phase. Deltas only, so the arm totals are sums. */
+/**
+ * What moved during one phase. Deltas only, so the arm totals are sums.
+ *
+ * @param {Record<string, number>} before
+ * @param {Record<string, number>} after
+ */
 function metricDeltas(before, after) {
+  /** @param {string} name */
   const durationMs = (name) =>
     Number((((after[name] ?? 0) - (before[name] ?? 0)) * 1_000).toFixed(3));
   return {
@@ -32,9 +55,15 @@ function metricDeltas(before, after) {
   };
 }
 
+/** @param {Record<string, number>} metrics */
 const heapUsedMiB = (metrics) =>
   Number(((metrics.JSHeapUsedSize ?? 0) / (1024 ** 2)).toFixed(3));
 
+/**
+ * @param {Page} page
+ * @param {SendAutomationCommand} sendAutomationCommand
+ * @param {boolean} enabled
+ */
 async function setCapture(page, sendAutomationCommand, enabled) {
   await sendAutomationCommand(
     enabled
@@ -49,18 +78,66 @@ async function setCapture(page, sendAutomationCommand, enabled) {
   );
 }
 
-/** One measured window: the same work whichever arm the session is in. */
-async function measurePhase(page, cdp, sendAutomationCommand) {
-  const tickBefore = await page.evaluate(() => window.gwToolboxState.tickCount);
-  const metricsBefore = await readMetrics(cdp);
-  await setCapture(page, sendAutomationCommand, true);
-  let samples;
-  try {
-    samples = await page.evaluate(
-      (durationMs) => new Promise((resolve) => {
+/**
+ * The client's tick counter, read as a number or not read at all. It is the
+ * only evidence a phase has that the game kept running while it measured, and
+ * the counter is optional in the published state — a Toolbox that failed to
+ * install still leaves a state object behind, with a reason and no counter.
+ * Differencing a missing counter would report NaN ticks for the phase, which
+ * no threshold rejects, so a missing counter stops the run right here.
+ *
+ * @param {Page} page
+ * @returns {Promise<number>}
+ */
+function readTickCount(page) {
+  return page.evaluate(() => {
+    const ticks = window.gwToolboxState?.tickCount;
+    if (typeof ticks !== "number") {
+      throw new Error("Toolbox state published no tick count");
+    }
+    return ticks;
+  });
+}
+
+/**
+ * The benchmark's one lever on the renderer: the enabled arm restores the
+ * kernel's table slot, the disabled arm writes slot 0 and the game calls its
+ * original tick. The runtime object is assembled in toolbox.js and declared as
+ * an open record, so the lever is narrowed here — and a session whose runtime
+ * never published one fails with that sentence rather than quietly measuring
+ * the same arm twice.
+ *
+ * @param {Page} page
+ * @param {boolean} enabled
+ * @returns {Promise<void>}
+ */
+function setHookEnabled(page, enabled) {
+  return page.evaluate((value) => {
+    const setForBenchmark = window.gwToolboxRuntime?.setHookEnabledForBenchmark;
+    if (typeof setForBenchmark !== "function") {
+      throw new Error("Toolbox runtime published no benchmark hook switch");
+    }
+    setForBenchmark(value);
+  }, enabled);
+}
+
+/**
+ * Frame intervals in milliseconds over one measured window, sampled in the
+ * page so the clock is the compositor's rather than the driver's.
+ *
+ * @param {Page} page
+ * @param {number} windowMs
+ * @returns {Promise<number[]>}
+ */
+function sampleFrameIntervals(page, windowMs) {
+  return page.evaluate(
+    (durationMs) =>
+      new Promise((resolve) => {
+        /** @type {number[]} */
         const values = [];
         const started = performance.now();
         let previous = 0;
+        /** @type {FrameRequestCallback} */
         const frame = (now) => {
           if (previous) values.push(now - previous);
           previous = now;
@@ -69,13 +146,29 @@ async function measurePhase(page, cdp, sendAutomationCommand) {
         };
         window.requestAnimationFrame(frame);
       }),
-      MEASURE_MS,
-    );
+    windowMs,
+  );
+}
+
+/**
+ * One measured window: the same work whichever arm the session is in.
+ *
+ * @param {Page} page
+ * @param {CDPSession} cdp
+ * @param {SendAutomationCommand} sendAutomationCommand
+ */
+async function measurePhase(page, cdp, sendAutomationCommand) {
+  const tickBefore = await readTickCount(page);
+  const metricsBefore = await readMetrics(cdp);
+  await setCapture(page, sendAutomationCommand, true);
+  let samples;
+  try {
+    samples = await sampleFrameIntervals(page, MEASURE_MS);
   } finally {
     await setCapture(page, sendAutomationCommand, false);
   }
   const metricsAfter = await readMetrics(cdp);
-  const tickAfter = await page.evaluate(() => window.gwToolboxState.tickCount);
+  const tickAfter = await readTickCount(page);
   return {
     samples,
     ticks: tickAfter >= tickBefore
@@ -86,6 +179,11 @@ async function measurePhase(page, cdp, sendAutomationCommand) {
   };
 }
 
+/**
+ * @param {Page} page
+ * @param {CDPSession} cdp
+ * @param {SendAutomationCommand} sendAutomationCommand
+ */
 export async function runPerformanceScenario(page, cdp, sendAutomationCommand) {
   try {
     const benchmark = await runBalancedBenchmark(
@@ -98,9 +196,7 @@ export async function runPerformanceScenario(page, cdp, sendAutomationCommand) {
             of: phases,
             arm,
           }));
-          await page.evaluate((enabled) => {
-            window.gwToolboxRuntime.setHookEnabledForBenchmark(enabled);
-          }, arm === BENCHMARK_ARMS.observerOn);
+          await setHookEnabled(page, arm === BENCHMARK_ARMS.observerOn);
         },
         warmUp: () => page.waitForTimeout(WARMUP_MS),
         measure: () => measurePhase(page, cdp, sendAutomationCommand),
@@ -117,8 +213,6 @@ export async function runPerformanceScenario(page, cdp, sendAutomationCommand) {
       ),
     };
   } finally {
-    await page.evaluate(() => {
-      window.gwToolboxRuntime.setHookEnabledForBenchmark(true);
-    });
+    await setHookEnabled(page, true);
   }
 }

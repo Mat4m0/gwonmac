@@ -13,7 +13,6 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import * as contracts from "../../src/shared/contracts.ts";
 import type { GwNativeApi } from "../../src/shared/contracts.ts";
-// @ts-expect-error a build script, deliberately untyped.
 import {
   PRELOAD_CONSTANTS,
   preloadSource,

@@ -21,7 +21,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && electron-forge start",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json && tsc -p tsconfig.tests.json",
     "lint": "eslint .",
     "check:links": "node scripts/check-markdown-links.mjs",
     "test:unit": "node --import ./tests/ts-hook.mjs --experimental-strip-types --test tests/unit/*.ts",

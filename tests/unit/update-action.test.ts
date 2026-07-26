@@ -49,7 +49,12 @@ const UPDATE_ELEMENT_IDS = [
 ] as const;
 
 function updateDom() {
-  const elements = new Map(
+  // Keyed by `string`, because that is what a document is: `getElementById`
+  // may be handed any id at all, and the answer for one this fake does not
+  // hold is the same `null` the real DOM gives. Only `element` below is
+  // restricted to the eleven ids, so a test still cannot ask for one the
+  // renderer never binds.
+  const elements = new Map<string, FakeElement>(
     UPDATE_ELEMENT_IDS.map((id) => [id, new FakeElement()]),
   );
   const root = {
