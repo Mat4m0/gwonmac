@@ -19,6 +19,7 @@
     "node": ">=20.19"
   },
   "scripts": {
+    "postinstall": "install-electron",
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && electron-forge start",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json && tsc -p tsconfig.tests.json",
