@@ -183,6 +183,84 @@ test.describe("diagnostics", () => {
     }
   });
 
+  // Stopping a capture on the quit path awaits a renderer acknowledgement, so a
+  // renderer that cannot answer must settle the wait rather than hold it. A
+  // renderer whose process is gone is exactly as unable to answer as a
+  // destroyed one, and after a second crash the window, its webContents and its
+  // URL are all still there — nothing else in the settle set fires.
+  test("a command to a renderer whose process is gone settles instead of waiting", async () => {
+    const fixture = await launchOffline("gw-renderer-command-crash-e2e-");
+    try {
+      const outcome = await fixture.app.evaluate(
+        async ({ BrowserWindow }, modulePath) => {
+          const load = process
+            .getBuiltinModule("node:module")
+            .createRequire(modulePath);
+          const { sendRendererCommand } = load(modulePath);
+          const settledWithin = (promise, ms) =>
+            Promise.race([
+              promise.then(() => "settled"),
+              new Promise((resolve) => setTimeout(() => resolve("waiting"), ms)),
+            ]);
+          const probe = async () => {
+            const win = new BrowserWindow({ show: false });
+            await win.loadURL("about:blank");
+            return win;
+          };
+          const crash = async (win) => {
+            const pid = win.webContents.getOSProcessId();
+            const gone = new Promise((resolve) =>
+              win.webContents.once("render-process-gone", resolve));
+            win.webContents.forcefullyCrashRenderer();
+            await gone;
+            return pid;
+          };
+
+          // A probe that shared the application's renderer process would crash
+          // the real window instead, and prove nothing about this one.
+          const mainPid = BrowserWindow.getAllWindows()[0]
+            .webContents.getOSProcessId();
+
+          // The process dies while a command is outstanding.
+          const during = await probe();
+          const outstanding = sendRendererCommand(during, { type: "input.reset" });
+          const duringPid = await crash(during);
+          const whileWaiting = await settledWithin(outstanding, 5_000);
+
+          // The process is already gone when the command is sent: the state a
+          // second crash leaves behind, and the one the quit path meets.
+          const after = await probe();
+          const afterPid = await crash(after);
+          const alreadyGone = await settledWithin(
+            sendRendererCommand(after, { type: "input.reset" }),
+            5_000,
+          );
+          const stillAlive = !after.isDestroyed() && !after.webContents.isDestroyed();
+          for (const win of [during, after]) win.destroy();
+          return {
+            whileWaiting,
+            alreadyGone,
+            stillAlive,
+            ownProcesses: duringPid !== mainPid && afterPid !== mainPid,
+          };
+        },
+        path.join(root, "build/main/renderer-commands.js"),
+      );
+      expect(outcome).toEqual({
+        whileWaiting: "settled",
+        alreadyGone: "settled",
+        // The window that could not answer is neither destroyed nor closed —
+        // that is what made this state unreachable for the other listeners.
+        stillAlive: true,
+        ownProcesses: true,
+      });
+      // The application's own renderer was never touched.
+      expect(await fixture.page.evaluate(() => 1 + 1)).toBe(2);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases game input before opening the diagnostics save panel", async () => {
     const fixture = await launchOffline("gw-diagnostic-dialog-input-e2e-");
     try {

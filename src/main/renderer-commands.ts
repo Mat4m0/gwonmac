@@ -45,14 +45,26 @@ export function canonicalRendererWindow(): BrowserWindow | null {
  *
  * A command sent while a page is still loading is dropped by Chromium — the
  * handler is not registered yet — so `did-finish-load` is a give-up signal, not
- * a deadline. Once a page is loaded, only its replacement or its destruction
- * settles a command the renderer has not answered.
+ * a deadline. Once a page is loaded, only its replacement, its destruction, or
+ * the loss of its renderer process settles a command it has not answered.
+ *
+ * A renderer whose process is gone cannot answer, and after a second crash the
+ * window and its `webContents` are both still alive with the canonical URL —
+ * `render-process-gone` has already fired and will not fire again, so the
+ * up-front check is the one that matters and the listener covers a process that
+ * dies while a command is outstanding. Without both, `stopDiagnosticCapture`
+ * waits for a flush that can never arrive and the quit path never completes.
  */
 export function sendRendererCommand(
   win: BrowserWindow | null,
   command: RendererCommand,
 ): Promise<void> {
-  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
+  if (
+    !win
+    || win.isDestroyed()
+    || win.webContents.isDestroyed()
+    || win.webContents.isCrashed()
+  ) {
     return Promise.resolve();
   }
   const contents = win.webContents;
@@ -61,6 +73,7 @@ export function sendRendererCommand(
     const settle = (): void => {
       pending.delete(id);
       contents.off("destroyed", settle);
+      contents.off("render-process-gone", settle);
       contents.off("did-finish-load", settle);
       contents.off("did-start-navigation", abandon);
       resolve();
@@ -72,6 +85,7 @@ export function sendRendererCommand(
     };
     pending.set(id, { webContentsId: contents.id, settle });
     contents.once("destroyed", settle);
+    contents.once("render-process-gone", settle);
     contents.once("did-finish-load", settle);
     contents.on("did-start-navigation", abandon);
     contents.send(IPC.rendererCommand, id, command);
