@@ -27,6 +27,7 @@ import {
   restoreUnconfirmedClient,
 } from "./core/client-compatibility.js";
 import type { Manifest } from "./core/manifest.js";
+import { Mutex } from "./core/mutex.js";
 import { PatchClient } from "./core/patch-client.js";
 import {
   fetchPatchBytes,
@@ -74,6 +75,8 @@ interface ClientRuntimeOptions {
 
 export class ClientRuntime {
   private readonly activeSlot = new ActiveClientSlot();
+  /** Held by every operation that moves a generation directory. */
+  private readonly generationLock = new Mutex();
   private progressValue: DownloadProgress = { ...INITIAL_PROGRESS };
   private saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
   private initialResidencyRecorded = false;
@@ -498,9 +501,11 @@ export class ClientRuntime {
       phase: "starting",
       label: "Checking the game client",
     });
-    const operation = this.runUpdate().finally(() => {
-      if (this.gameUpdate === operation) this.gameUpdate = null;
-    });
+    const operation = this.generationLock
+      .run(() => this.runUpdate())
+      .finally(() => {
+        if (this.gameUpdate === operation) this.gameUpdate = null;
+      });
     this.gameUpdate = operation;
     return operation;
   }
@@ -621,37 +626,38 @@ export class ClientRuntime {
       return Promise.resolve();
     }
     if (this.candidateConfirmation) return this.candidateConfirmation;
-    this.candidateConfirmation = (async () => {
-      const fingerprint = await confirmClientCandidate({
-        artifacts: this.options.paths.artifacts,
-        rejectedPath: this.options.paths.rejectedClient,
+    this.candidateConfirmation = this.generationLock
+      .run(async () => {
+        const fingerprint = await confirmClientCandidate({
+          artifacts: this.options.paths.artifacts,
+          rejectedPath: this.options.paths.rejectedClient,
+        });
+        this.candidateFrameReady = false;
+        this.candidateSocketReady = false;
+        if (fingerprint) {
+          await this.pruneChunkCache();
+          log("update", "info", "client.candidatePromoted", { fingerprint });
+        }
+      })
+      .finally(() => {
+        this.candidateConfirmation = null;
       });
-      this.candidateFrameReady = false;
-      this.candidateSocketReady = false;
-      if (fingerprint) {
-        await this.pruneChunkCache();
-        log("update", "info", "client.candidatePromoted", { fingerprint });
-      }
-    })().finally(() => {
-      this.candidateConfirmation = null;
-    });
     return this.candidateConfirmation;
   }
 
-  async recoverRendererCrash(): Promise<void> {
-    const rollback = await restoreUnconfirmedClient({
-      artifacts: this.options.paths.artifacts,
-      rejectedPath: this.options.paths.rejectedClient,
-      hostVersion: this.options.hostVersion,
+  recoverRendererCrash(): Promise<void> {
+    return this.generationLock.run(async () => {
+      const rollback = await restoreUnconfirmedClient({
+        artifacts: this.options.paths.artifacts,
+        rejectedPath: this.options.paths.rejectedClient,
+        hostVersion: this.options.hostVersion,
+      });
+      if (!rollback) return;
+      await this.activatePublishedAndReady();
+      log("update", "warn", "client.candidateRolledBackAfterRendererCrash", {
+        fingerprint: rollback.fingerprint,
+      });
     });
-    if (!rollback) return;
-    await this.activatePublishedAndReady();
-    log(
-      "update",
-      "warn",
-      "client.candidateRolledBackAfterRendererCrash",
-      { fingerprint: rollback.fingerprint },
-    );
   }
 
   async shutdown(): Promise<void> {
