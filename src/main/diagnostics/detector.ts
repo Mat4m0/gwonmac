@@ -1,7 +1,10 @@
 import type {
+  EventChannel,
+  InvokeChannel,
   SocketCloseReason,
   SocketFailureCode,
 } from "../../shared/contracts.js";
+import { EVENT_CHANNELS, IPC } from "../../shared/contracts.js";
 import type {
   DiagnosticLevel,
   DiagnosticSubsystem,
@@ -112,6 +115,16 @@ const _failureCodesCover: Covers<
 > = true;
 const isFailureCode = literal<SocketFailureCode>(FAILURE_CODES);
 
+// Derived from the canonical channel table rather than listed, so there is no
+// second copy for a `Covers<>` check to police: `InvokeChannel` is exactly the
+// keys of `IPC` that are not event channels.
+const isInvokeChannel = literal<InvokeChannel>(
+  Object.keys(IPC).filter(
+    (key): key is InvokeChannel =>
+      !(EVENT_CHANNELS as readonly string[]).includes(key as EventChannel),
+  ),
+);
+
 const isNumber: Guard<number> = (value): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
@@ -175,6 +188,7 @@ const EVENT_FIELDS: { [K in DiagnosticEventName]: FieldGuards<K> } = {
   "socket.open": { socketId: isNumber },
   "socket.close": { socketId: isNumber, reason: isCloseReason },
   "socket.error": { socketId: isNumber, code: isFailureCode },
+  "ipc.rejected": { channel: isInvokeChannel, code: isCode },
   "settings.loadFailed": { code: isCode },
   "settings.saveFailed": { code: isCode },
   "settings.resetFailed": { code: isCode },

@@ -562,15 +562,27 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   // channel's own parser, then its run. The cast is the erasure `satisfies`
   // left behind — `parse` produced exactly what `run` takes when `channel()`
   // typechecked the pair.
+  //
+  // A refused payload is recorded here rather than by the handler, because the
+  // handler is never entered. Two channels used to parse inside their own
+  // `try` and log `credentials.saveFailed` / `settings.saveFailed`; one event
+  // in the loop keeps that evidence for a bug report and extends it to all
+  // thirty, so a "saved login stopped working" export shows the rejection
+  // instead of nothing.
   for (const [key, definition] of Object.entries(handlers)) {
     const def = definition as ChannelDef<unknown, unknown>;
-    ipcMain.handle(
-      IPC[key as InvokeChannel],
-      async (event, ...args: unknown[]) => {
-        const win = assertSender(event);
-        return def.run(win, def.parse(args));
-      },
-    );
+    const name = key as InvokeChannel;
+    ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
+      const win = assertSender(event);
+      let input: unknown;
+      try {
+        input = def.parse(args);
+      } catch (error) {
+        logEvent({ k: "ipc.rejected", channel: name, code: errorCode(error) });
+        throw error;
+      }
+      return def.run(win, input);
+    });
   }
 }
 

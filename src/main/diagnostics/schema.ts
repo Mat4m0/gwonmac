@@ -1,4 +1,5 @@
 import type {
+  InvokeChannel,
   SocketCloseReason,
   SocketFailureCode,
 } from "../../shared/contracts.js";
@@ -98,6 +99,10 @@ export type DiagnosticEvent =
   | { k: "socket.open"; socketId: number }
   | { k: "socket.close"; socketId: number; reason: SocketCloseReason }
   | { k: "socket.error"; socketId: number; code: SocketFailureCode }
+  // A renderer payload the channel's parser refused, recorded once for all of
+  // them by the handler registry. `channel` is `InvokeChannel`, a literal union
+  // derived from `IPC`, so it is closed for the same reason `route` above is.
+  | { k: "ipc.rejected"; channel: InvokeChannel; code: ErrorCode }
   // Settings and saved game files
   | { k: "settings.loadFailed"; code: ErrorCode }
   | { k: "settings.saveFailed"; code: ErrorCode }
@@ -152,6 +157,7 @@ const EVENT_SPECS = {
   "socket.open": { subsystem: "socket", level: "info" },
   "socket.close": { subsystem: "socket", level: "info" },
   "socket.error": { subsystem: "socket", level: "warn" },
+  "ipc.rejected": { subsystem: "app", level: "warn" },
   "settings.loadFailed": { subsystem: "settings", level: "error" },
   "settings.saveFailed": { subsystem: "settings", level: "error" },
   "settings.resetFailed": { subsystem: "settings", level: "error" },

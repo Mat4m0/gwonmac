@@ -111,6 +111,78 @@ test.describe("diagnostics", () => {
     }
   });
 
+  // P5.9 moved every channel's parser into the handler registry, ahead of the
+  // handler's own try/catch. Two channels used to parse inside it and record
+  // `credentials.saveFailed` / `settings.saveFailed`, so until the registry
+  // recorded the rejection itself, "my saved login stopped working" produced an
+  // export with no evidence of the refusal in it. The claim under test is the
+  // recorder's, so it is asked of the file the recorder wrote.
+  test("records which channel refused a renderer payload", async () => {
+    const fixture = await launchOffline("gw-ipc-rejected-e2e-");
+    try {
+      const { page, userData } = fixture;
+      // Both cross the bridge unvalidated: the preload is transport, and these
+      // are exactly the shapes the game's own host calls can produce.
+      const refusals = await page.evaluate(async () => {
+        const refused = async (call) => {
+          try {
+            await call();
+            return "accepted";
+          } catch {
+            return "refused";
+          }
+        };
+        return [
+          await refused(() =>
+            window.gwNative.credentials.save({ username: "a", password: 1234 })),
+          await refused(() => window.gwNative.settings.set("not a patch")),
+        ];
+      });
+      expect(refusals).toEqual(["refused", "refused"]);
+
+      const rejections = async () => {
+        const directory = path.join(userData, "diagnostics");
+        const found = [];
+        for (const name of await readdir(directory)) {
+          if (!name.startsWith("session-") || !name.endsWith(".jsonl")) continue;
+          const text = await readFile(path.join(directory, name), "utf8");
+          for (const line of text.split("\n")) {
+            if (!line) continue;
+            let record;
+            try {
+              record = JSON.parse(line);
+            } catch {
+              continue; // The file being appended to can end mid-record.
+            }
+            if (record.name !== "ipc.rejected") continue;
+            found.push({
+              level: record.level,
+              subsystem: record.subsystem,
+              ...record.fields,
+            });
+          }
+        }
+        return found;
+      };
+      await expect.poll(rejections).toEqual([
+        {
+          level: "warn",
+          subsystem: "app",
+          channel: "credentialsSave",
+          code: "credentials_corrupt",
+        },
+        {
+          level: "warn",
+          subsystem: "app",
+          channel: "settingsSet",
+          code: "bad_settings",
+        },
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases game input before opening the diagnostics save panel", async () => {
     const fixture = await launchOffline("gw-diagnostic-dialog-input-e2e-");
     try {
