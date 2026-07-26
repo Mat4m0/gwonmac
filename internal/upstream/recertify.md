@@ -253,11 +253,15 @@ filesystem, then drive the forwarders directly. This catches contract mistakes
 that unit tests with hand-made fixtures miss:
 
 ```js
-const ctx = { ArrayBuffer, Math, RegExp, String,
-              Uint8Array, Uint16Array, Uint32Array, window: {}, FS: fakeFs };
-Object.assign(ctx, { globalThis: ctx });
-vm.runInNewContext(await readFile('src/renderer/template-save-compatibility.js', 'utf8'), ctx);
-ctx.window.gwInstallTemplateSaveCompatibility({
+// P6.5: the bridge is an ESM module. It reads the markers off the page as it
+// is imported, so the fake page has to exist before the import.
+Object.assign(globalThis, {
+  window: { gwNative: { init: {}, wasmBridgeMarkers: WASM_BRIDGE_MARKERS } },
+  FS: fakeFs,
+});
+const { installTemplateSaveCompatibility } =
+  await import('../src/renderer/template-save-compatibility.js');
+installTemplateSaveCompatibility({
   imports, module: Module, exports: () => instance?.exports ?? null,
 });
 ```

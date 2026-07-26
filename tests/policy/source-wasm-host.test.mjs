@@ -45,7 +45,10 @@ test("persistent game files are prepared through supported Emscripten startup ho
   assert.match(filesystem, /Templates\/Skills/);
   assert.match(filesystem, /Templates\/Equipment/);
   assert.match(filesystem, /chdir\(MOUNT\)/);
-  assert.match(harness, /gwInstallGameFilesystem/);
+  // P6.5 made the installer an export instead of a window global, so the
+  // harness has to name the module as well as the call.
+  assert.match(harness, /import\('\.\/filesystem\.js'\)/);
+  assert.match(harness, /host\.installGameFilesystem\(/);
   assert.doesNotMatch(filesystem, /WebAssembly\.(?:Module|Instance)\.prototype/);
   assert.doesNotMatch(filesystem, /\bfetch\s*\(/);
 });
@@ -95,7 +98,8 @@ test("template file tracing is explicit, bounded, and attached only at the impor
   const window = await readFile(path.join(root, "src/main/window.ts"), "utf8");
 
   assert.match(window, /process\.env\.GW_TEMPLATE_FS_TRACE === "1"/);
-  assert.match(harness, /gwInstallTemplateFilesystemTrace/);
+  assert.match(harness, /import\('\.\/template-filesystem-trace\.js'\)/);
+  assert.match(harness, /host\.installTemplateFilesystemTrace\(/);
   assert.match(trace, /EVENT_LIMIT = 128/);
   assert.match(trace, /__syscall_openat/);
   assert.match(trace, /__syscall_ftruncate64/);
@@ -128,7 +132,8 @@ test("the GL program cache memoizes only shader-completion state, and only once 
   assert.match(cache, /glDeleteProgram/);
   assert.match(cache, /'gw:graphics-context-reset'/);
   assert.match(graphics, /'gw:graphics-context-reset'/);
-  assert.match(harness, /gwInstallGlProgramCache/);
+  assert.match(harness, /import\('\.\/gl-program-cache\.js'\)/);
+  assert.match(harness, /host\.installGlProgramCache\(/);
 
   // Deleted with P5.17: an assertion that the file contained the exact line
   // `=== GL_TRUE) programs.set(program, true)`. Only a true completion may be

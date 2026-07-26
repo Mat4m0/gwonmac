@@ -58,7 +58,8 @@ test.describe("client compatibility", () => {
       );
       expect(await pathExists(previous)).toBe(true);
       expect(
-        await fixture.page.evaluate(() => {
+        await fixture.page.evaluate(async () => {
+          const { installGraphics } = await import("./graphics.js");
           const canvas = globalThis.document.createElement("canvas");
           canvas.width = 32;
           canvas.height = 32;
@@ -73,7 +74,7 @@ test.describe("client compatibility", () => {
             emscripten_get_device_pixel_ratio: () => 1,
             emscripten_set_canvas_element_size: () => 0,
           };
-          window.gwInstallGraphics({
+          installGraphics({
             env,
             module,
             renderScale: () => 2,
@@ -100,14 +101,17 @@ test.describe("client compatibility", () => {
         visibleRestored: true,
         offscreen: [64, 64],
       });
-      // The cache is a separate renderer script; prove index.html loads it,
-      // that an incomplete program is never frozen, and that a completed one
-      // stops costing a round trip.
+      // The cache is a separate renderer module; prove the live boot installed
+      // it — gwGlRecon exists only after an install — that an incomplete
+      // program is never frozen, and that a completed one stops costing a
+      // round trip.
       expect(
-        await fixture.page.evaluate(() => {
+        await fixture.page.evaluate(async () => {
+          const { installGlProgramCache } = await import("./gl-program-cache.js");
           // Installing a second cache into the live page would otherwise
           // overwrite gwGlRecon and bump the session's real query counters.
           const realRecon = window.gwGlRecon;
+          const bootInstalled = typeof realRecon === "function";
           const realDiagnostics = window.gwDiagnostics;
           window.gwDiagnostics = { ...realDiagnostics, glProgramQuery: () => {} };
           const module = { HEAPU8: new Uint8Array(new ArrayBuffer(1024)) };
@@ -122,7 +126,7 @@ test.describe("client compatibility", () => {
             glLinkProgram: () => undefined,
             glDeleteProgram: () => undefined,
           };
-          window.gwInstallGlProgramCache({
+          installGlProgramCache({
             imports: { env },
             module,
             log: () => undefined,
@@ -139,9 +143,10 @@ test.describe("client compatibility", () => {
           const held = read(0x91b1);
           window.gwGlRecon = realRecon;
           window.gwDiagnostics = realDiagnostics;
-          return { polling, completed, held, calls: calls.length };
+          return { bootInstalled, polling, completed, held, calls: calls.length };
         }),
       ).toEqual({
+        bootInstalled: true,
         polling: [0, 0],
         completed: 1,
         held: 1,

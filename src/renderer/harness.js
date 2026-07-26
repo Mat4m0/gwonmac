@@ -78,6 +78,21 @@ window.gwApplySettings = (next) => {
 let imageSource = null;
 let gamepadImportsAvailable = false;
 
+// The host's supporting modules. They are ESM; this bootstrap is not, because
+// the generated glue redeclares `var Module`. So boot() imports them and holds
+// them here: `instantiateWasm` and `loadGlue` are called synchronously by the
+// glue and cannot await. Reading `host` before boot() assigns it is a
+// TypeError, not a silently skipped installation.
+/**
+ * @type {typeof import('./graphics.js')
+ *   & typeof import('./gl-program-cache.js')
+ *   & typeof import('./filesystem.js')
+ *   & typeof import('./input.js')
+ *   & typeof import('./template-save-compatibility.js')
+ *   & typeof import('./template-filesystem-trace.js')}
+ */
+let host;
+
 /**
  * The one HTTP shape the image source is given: a ranged read of the snapshot,
  * carrying the priority the main-process scheduler reads.
@@ -120,7 +135,7 @@ Module = {
   * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
   */
   instantiateWasm(imports, success) {
-    window.gwInstallTemplateSaveCompatibility({
+    host.installTemplateSaveCompatibility({
       imports,
       module: Module,
       // The directory listing hands the client a block it frees itself, so it
@@ -131,11 +146,11 @@ Module = {
           gameWasmInstance?.exports ?? null
         ),
     });
-    window.gwInstallTemplateFilesystemTrace({
+    host.installTemplateFilesystemTrace({
       imports,
       module: Module,
     });
-    window.gwInstallGraphics({
+    host.installGraphics({
       env: imports.env,
       module: Module,
       renderScale: () => appSettings?.renderScale ?? 1,
@@ -152,7 +167,7 @@ Module = {
       },
       log,
     });
-    window.gwInstallGlProgramCache({ imports, module: Module, log });
+    host.installGlProgramCache({ imports, module: Module, log });
     const gamepadImports = [
       'emscripten_sample_gamepad_data',
       'emscripten_set_gamepadconnected_callback_on_thread',
@@ -360,20 +375,22 @@ Module = {
   },
 };
 
-window.gwInstallGameFilesystem({
-  module: Module,
-  log,
-  failed(error) {
-    window.gwDiagnostics?.event('filesystem.persistenceFailed', error);
-    log(
-      '[err] persistent filesystem unavailable:',
-      error && typeof error === 'object' && 'name' in error
-        ? String(error.name)
-        : 'unknown error',
-    );
-    window.gwLoading?.failFilesystem();
-  },
-});
+function mountGameFilesystem() {
+  host.installGameFilesystem({
+    module: Module,
+    log,
+    failed(error) {
+      window.gwDiagnostics?.event('filesystem.persistenceFailed', error);
+      log(
+        '[err] persistent filesystem unavailable:',
+        error && typeof error === 'object' && 'name' in error
+          ? String(error.name)
+          : 'unknown error',
+      );
+      window.gwLoading?.failFilesystem();
+    },
+  });
+}
 
 function appendGlue() {
   const src = 'Gw.jspi.js';
@@ -450,7 +467,7 @@ function loadGlue() {
     window.addEventListener(ev, resumeAudio, true);
   }
 
-  inputHost = window.gwInstallGameInput({
+  inputHost = host.installGameInput({
     canvas: c,
     initialSettings: appSettings,
     diagnostics: window.gwDiagnostics,
@@ -499,11 +516,33 @@ function loadGlue() {
   }
   milestone('renderer.loaded');
   try {
-    const [{ unavailablePlatformCapabilities }, { createSocketHost }] =
-      await Promise.all([
-        import('./platform-capabilities.js'),
-        import('./socket-host.js'),
-      ]);
+    const [
+      { unavailablePlatformCapabilities },
+      { createSocketHost },
+      graphics,
+      glProgramCache,
+      filesystem,
+      input,
+      templateSaveCompatibility,
+      templateFilesystemTrace,
+    ] = await Promise.all([
+      import('./platform-capabilities.js'),
+      import('./socket-host.js'),
+      import('./graphics.js'),
+      import('./gl-program-cache.js'),
+      import('./filesystem.js'),
+      import('./input.js'),
+      import('./template-save-compatibility.js'),
+      import('./template-filesystem-trace.js'),
+    ]);
+    host = {
+      ...graphics,
+      ...glProgramCache,
+      ...filesystem,
+      ...input,
+      ...templateSaveCompatibility,
+      ...templateFilesystemTrace,
+    };
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
       native: native().sockets,
@@ -519,6 +558,10 @@ function loadGlue() {
       error instanceof Error ? error.message : String(error),
     );
   }
+
+  // preRun, so it only has to precede the glue — which appendGlue() loads at
+  // the end of this function.
+  mountGameFilesystem();
 
   window.addEventListener('gw:diagnostics-toggle', async () => {
     appSettings = await native().settings.get();

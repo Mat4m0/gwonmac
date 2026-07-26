@@ -1,16 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import { installGameFilesystem } from "../../src/renderer/filesystem.js";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const source = await readFile(
-  path.join(root, "src/renderer/filesystem.js"),
-  "utf8",
-);
-
+// The module is imported, not read and evaluated in a synthetic context. What
+// it still reaches for ambiently is the Emscripten runtime's `FS`/`IDBFS`,
+// which only exist once the glue has loaded, so the fixture supplies them on
+// globalThis for the duration of the preRun it drives and takes them away
+// again — no test may observe another's runtime.
 type SyncCallback = (error?: unknown) => void;
 
 function fixture(options: {
@@ -76,37 +72,38 @@ function fixture(options: {
       calls.push(`remove:${value}`);
     },
   };
-  const context = {
-    FS: fileSystem,
-    IDBFS: {},
-    setTimeout: options.syncNever
-      ? (callback: () => void) => {
-          callback();
-          return 1;
-        }
-      : setTimeout,
-    clearTimeout: options.syncNever ? () => undefined : clearTimeout,
-    window: {} as {
-      gwInstallGameFilesystem?: (options: {
-        module: typeof module;
-        failed(error: unknown): void;
-        log(...values: unknown[]): void;
-      }) => void;
-    },
-  };
-  Object.assign(context, { globalThis: context });
-  vm.runInNewContext(source, context);
-  context.window.gwInstallGameFilesystem?.({
-    module,
-    failed(error) {
-      failures.push(error);
-    },
-    log() {
-      calls.push("ready");
-    },
-  });
-  assert.equal(typeof module.preRun, "function");
-  module.preRun();
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  Object.assign(globalThis, { FS: fileSystem, IDBFS: {} });
+  if (options.syncNever) {
+    Object.assign(globalThis, {
+      setTimeout: (callback: () => void) => {
+        callback();
+        return 1;
+      },
+      clearTimeout: () => undefined,
+    });
+  }
+  try {
+    installGameFilesystem({
+      module,
+      failed(error) {
+        failures.push(error);
+      },
+      log() {
+        calls.push("ready");
+      },
+    });
+    assert.equal(typeof module.preRun, "function");
+    module.preRun();
+  } finally {
+    Object.assign(globalThis, {
+      setTimeout: realSetTimeout,
+      clearTimeout: realClearTimeout,
+    });
+    Reflect.deleteProperty(globalThis, "FS");
+    Reflect.deleteProperty(globalThis, "IDBFS");
+  }
   return { calls, failures, fileSystem };
 }
 

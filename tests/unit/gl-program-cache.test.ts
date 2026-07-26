@@ -1,16 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import { installGlProgramCache } from "../../src/renderer/gl-program-cache.js";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const source = await readFile(
-  path.join(root, "src/renderer/gl-program-cache.js"),
-  "utf8",
-);
-
+// The module is imported, not read and evaluated in a synthetic context. Its
+// cache lives entirely inside each install call, so a fresh fixture is a fresh
+// cache; what it still reaches for ambiently is the page — `gwDiagnostics` to
+// count a query and `gwGlRecon` to publish the console helper — so each
+// fixture installs its own window and its own listener sink over the last.
 const COMPLETION_STATUS = 0x91b1;
 const LINK_STATUS = 0x8b82;
 const ACTIVE_UNIFORMS = 0x8b86;
@@ -75,35 +71,21 @@ function fixture(options: { omit?: Array<keyof GlEnv> } = {}): Fixture {
   }
 
   const window = {
-    gwInstallGlProgramCache: undefined as
-      | ((options: {
-          imports: { env?: Partial<GlEnv> };
-          module: { HEAPU8: Uint8Array };
-          log(...values: unknown[]): void;
-        }) => void)
-      | undefined,
     gwGlRecon: undefined as
       | (() => { livePrograms: number; passThrough: Record<string, number> })
       | undefined,
     gwDiagnostics: undefined,
     dispatchEvent: () => true,
   };
-  const context = {
-    ArrayBuffer,
-    Int32Array,
-    Map,
-    Object,
-    Uint8Array,
+  Object.assign(globalThis, {
     window,
     addEventListener(name: string, listener: () => void) {
       const bucket = listeners.get(name) ?? [];
       bucket.push(listener);
       listeners.set(name, bucket);
     },
-  };
-  Object.assign(context, { globalThis: context });
-  vm.runInNewContext(source, context);
-  window.gwInstallGlProgramCache?.({
+  });
+  installGlProgramCache({
     imports: { env },
     module,
     log: (...values: unknown[]) => warnings.push(values.join(" ")),

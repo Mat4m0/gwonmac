@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
 import { WASM_BRIDGE_MARKERS } from "../../src/shared/contracts.ts";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const source = await readFile(
-  path.join(root, "src/renderer/template-save-compatibility.js"),
-  "utf8",
+// The module is imported, not read and evaluated in a synthetic context. It
+// reads the marker values off the bridge as it is imported, so the page has to
+// exist before the import; the mounted `FS`, the opt-in trace flag and
+// `console.info` are per-fixture and are installed over the last.
+const window = {
+  gwNative: {
+    init: { templateFsTrace: false },
+    wasmBridgeMarkers: WASM_BRIDGE_MARKERS,
+  },
+};
+Object.assign(globalThis, { window });
+const { installTemplateSaveCompatibility } = await import(
+  "../../src/renderer/template-save-compatibility.js"
 );
 
 // The canonical values, not a fourth copy of them: this is what proves the
@@ -78,40 +83,13 @@ function fixture(tree: Record<string, string[]> = {}, templateFsTrace = false) {
       removed.push(value);
     },
   };
-  const window = {
-    gwNative: { init: { templateFsTrace }, wasmBridgeMarkers: WASM_BRIDGE_MARKERS },
-  } as {
-    gwNative: {
-      init: { templateFsTrace: boolean };
-      wasmBridgeMarkers: typeof WASM_BRIDGE_MARKERS;
-    };
-    gwInstallTemplateSaveCompatibility?: (options: {
-      imports: typeof imports;
-      module: { HEAPU8: Uint8Array };
-      exports: () => { malloc(bytes: number): number };
-    }) => void;
-  };
   const logs: string[] = [];
-  const context = {
-    ArrayBuffer,
-    Math,
-    RegExp,
-    String,
-    Uint16Array,
-    Uint32Array,
-    Uint8Array,
-    console: {
-      info(...values: unknown[]) {
-        logs.push(values.map(String).join(" "));
-      },
-    },
-    setTimeout,
-    window,
-    FS,
+  window.gwNative.init.templateFsTrace = templateFsTrace;
+  Object.assign(globalThis, { FS });
+  console.info = (...values: unknown[]) => {
+    logs.push(values.map(String).join(" "));
   };
-  Object.assign(context, { globalThis: context });
-  vm.runInNewContext(source, context);
-  window.gwInstallTemplateSaveCompatibility?.({
+  installTemplateSaveCompatibility({
     imports,
     module: { HEAPU8 },
     exports: () => ({

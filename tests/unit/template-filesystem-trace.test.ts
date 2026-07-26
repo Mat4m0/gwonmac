@@ -1,16 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import { installTemplateFilesystemTrace } from "../../src/renderer/template-filesystem-trace.js";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const source = await readFile(
-  path.join(root, "src/renderer/template-filesystem-trace.js"),
-  "utf8",
-);
-
+// The module is imported, not read and evaluated in a synthetic context. It
+// holds no state outside an install call; what it still reaches for ambiently
+// is the page — the opt-in flag on `gwNative.init`, the `gwTemplateFilesystemTrace`
+// console helper, and `console.info` — so each fixture installs its own window
+// and its own log sink over the last.
 function fixture(templateFsTrace = true, openResult = 17) {
   const memory = new ArrayBuffer(4096);
   const HEAPU8 = new Uint8Array(memory);
@@ -48,28 +44,16 @@ function fixture(templateFsTrace = true, openResult = 17) {
     gwNative: { init: { templateFsTrace } },
   } as {
     gwNative: { init: { templateFsTrace: boolean } };
-    gwInstallTemplateFilesystemTrace?: (options: {
-      imports: typeof imports;
-      module: { HEAPU8: Uint8Array };
-    }) => void;
     gwTemplateFilesystemTrace?: () => ReadonlyArray<Record<string, unknown>>;
   };
-  const context = {
-    ArrayBuffer,
-    Map,
-    Number,
-    TextDecoder,
-    Uint8Array,
-    Uint32Array,
-    console: {
-      info(...values: unknown[]) {
-        logs.push(values.map(String).join(" "));
-      },
-    },
-    window,
+  Object.assign(globalThis, { window });
+  console.info = (...values: unknown[]) => {
+    logs.push(values.map(String).join(" "));
   };
-  Object.assign(context, { globalThis: context });
-  vm.runInNewContext(source, context);
+
+  // The generated glue publishes only `Module.HEAPU8`; the trace has to
+  // derive anything wider itself, so the fixture must not hand it more.
+  const module = { HEAPU8 };
 
   return {
     calls,
@@ -77,12 +61,11 @@ function fixture(templateFsTrace = true, openResult = 17) {
     HEAPU32,
     imports,
     logs,
-    // The generated glue publishes only `Module.HEAPU8`; the trace has to
-    // derive anything wider itself, so the fixture must not hand it more.
-    module: { HEAPU8 },
+    module,
     openat,
     fdWrite,
     window,
+    install: () => installTemplateFilesystemTrace({ imports, module }),
   };
 }
 
@@ -94,10 +77,7 @@ function writeCString(heap: Uint8Array, pointer: number, value: string) {
 
 test("is dormant unless the renderer init payload asks for the trace", () => {
   const value = fixture(false);
-  value.window.gwInstallTemplateFilesystemTrace?.({
-    imports: value.imports,
-    module: value.module,
-  });
+  value.install();
   assert.equal(value.imports.env.__syscall_openat, value.openat);
   assert.equal(value.imports.wasi_snapshot_preview1.fd_write, value.fdWrite);
   assert.equal(value.window.gwTemplateFilesystemTrace, undefined);
@@ -106,10 +86,7 @@ test("is dormant unless the renderer init payload asks for the trace", () => {
 
 test("captures the real template open, write, and close result without a path", () => {
   const value = fixture();
-  value.window.gwInstallTemplateFilesystemTrace?.({
-    imports: value.imports,
-    module: value.module,
-  });
+  value.install();
 
   const pathPointer = 64;
   const modePointer = 192;
@@ -167,10 +144,7 @@ test("captures the real template open, write, and close result without a path", 
 
 test("records an open errno and ignores unrelated filesystem traffic", () => {
   const value = fixture(true, -44);
-  value.window.gwInstallTemplateFilesystemTrace?.({
-    imports: value.imports,
-    module: value.module,
-  });
+  value.install();
 
   writeCString(value.HEAPU8, 64, "preferences.dat");
   value.imports.env.__syscall_openat(-100, 64, 0, 0);

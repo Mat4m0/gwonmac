@@ -140,45 +140,6 @@ declare global {
     gwToolboxRuntime?: Record<string, unknown> | null;
     gwToolboxState?: ToolboxState;
     gwAutomation: ToolboxAutomation;
-    gwInstallGraphics(options: {
-      env: ArenaNetEglImports;
-      module: ArenaNetGraphicsModule;
-      renderScale(): 1 | 1.5 | 2;
-      firstFrame(): void;
-      log(...values: unknown[]): void;
-    }): void;
-    gwInstallGameFilesystem(options: {
-      module: {
-        addRunDependency(name: string): void;
-        removeRunDependency(name: string): void;
-        preRun?: () => void;
-      };
-      failed(error: unknown): void;
-      log(...values: unknown[]): void;
-    }): void;
-    gwInstallTemplateFilesystemTrace(options: {
-      imports: {
-        env?: Record<string, (...args: unknown[]) => unknown>;
-        wasi_snapshot_preview1?: Record<string, (...args: unknown[]) => unknown>;
-      };
-      module: {
-        HEAPU8?: Uint8Array;
-      };
-    }): void;
-    gwInstallTemplateSaveCompatibility(options: {
-      imports: {
-        env?: Record<string, (...args: unknown[]) => unknown>;
-      };
-      module: { HEAPU8?: Uint8Array };
-      exports(): { malloc?: (bytes: number) => number } | null;
-    }): void;
-    gwInstallGlProgramCache(options: {
-      imports: {
-        env?: Record<string, (...args: unknown[]) => unknown>;
-      };
-      module: { HEAPU8?: Uint8Array };
-      log(...values: unknown[]): void;
-    }): void;
     gwGlRecon?(): Readonly<{
       livePrograms: number;
       passThrough: Record<string, number>;
@@ -192,12 +153,6 @@ declare global {
       requested?: number;
       written?: number;
     }>>;
-    gwInstallGameInput(options: {
-      canvas: HTMLCanvasElement;
-      initialSettings: AppSettings;
-      diagnostics?: GameInputDiagnostics;
-      log(...values: unknown[]): void;
-    }): GameInputController;
   }
 }
 
