@@ -285,6 +285,10 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 .settings-data-actions .primary { width: 100%; }
 .settings-data-actions .primary[hidden] { display: none; }
 
+/* Check for updates, and the releases link that only exists when there is
+   something to get. Built by settings.js so the launcher mount stays identical. */
+.settings-update-actions { display: flex; gap: 10px; margin: 12px 0; }
+
 .settings-divider { height: 1px; margin: 16px 0 12px; background: #6e59332e; }
 
 #settings-form button.quiet-danger {

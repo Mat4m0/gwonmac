@@ -48,6 +48,80 @@
   const showDiagnostics =
     /** @type {HTMLInputElement} */ (form.elements.namedItem('showDiagnostics'));
 
+  /**
+   * @template {keyof HTMLElementTagNameMap} K
+   * @param {K} tag
+   * @param {{ className?: string, id?: string, text?: string }} [attributes]
+   * @returns {HTMLElementTagNameMap[K]}
+   */
+  function element(tag, attributes = {}) {
+    const node = document.createElement(tag);
+    if (attributes.className) node.className = attributes.className;
+    if (attributes.id) node.id = attributes.id;
+    if (attributes.text) node.textContent = attributes.text;
+    return node;
+  }
+
+  // ---------------------------------------------------------- update checks
+  // One action, one state, two mount points: the launcher's corner links and
+  // the Advanced pane. Both are built here rather than written twice in
+  // index.html, so the two surfaces cannot drift apart in what they claim.
+  const autoCheckUpdates = element('input');
+  autoCheckUpdates.type = 'checkbox';
+  autoCheckUpdates.name = 'autoCheckUpdates';
+  const updateCheck = element('button', {
+    id: 'settings-check-updates',
+    text: 'Check for Updates',
+  });
+  updateCheck.type = 'button';
+  const updateReleases = element('button', {
+    id: 'settings-open-releases',
+    text: 'Open Releases…',
+  });
+  updateReleases.type = 'button';
+  updateReleases.hidden = true;
+  const updateStatus = element('p', {
+    id: 'settings-update-status',
+    className: 'settings-status',
+  });
+  updateStatus.setAttribute('role', 'status');
+  updateStatus.setAttribute('aria-live', 'polite');
+  updateStatus.hidden = true;
+  const updateWhen = element('p', {
+    id: 'settings-update-when',
+    className: 'settings-note',
+  });
+  updateWhen.hidden = true;
+
+  const launcherUpdateCheck = element('a', {
+    id: 'loading-update-check',
+    text: 'Check for Updates',
+  });
+  launcherUpdateCheck.href = '#';
+  const launcherUpdateStatus = element('span', { id: 'loading-update-status' });
+  launcherUpdateStatus.hidden = true;
+  const launcherUpdateWhen = element('span', { id: 'loading-update-when' });
+  launcherUpdateWhen.hidden = true;
+  // `data-external` hands the click to the launcher's existing enum-selected
+  // link handler: the renderer opens a kind, never a URL it was told.
+  const launcherUpdateGet = element('a', {
+    id: 'loading-update-get',
+    className: 'update',
+    text: 'Get the update',
+  });
+  launcherUpdateGet.href = '#';
+  launcherUpdateGet.dataset.external = 'releases';
+  launcherUpdateGet.hidden = true;
+
+  // The first-run gate asks the update question next to the data question:
+  // switching it on silently would contradict the no-phone-home posture, and
+  // leaving it off silently means nobody ever discovers it exists.
+  const choiceAutoUpdates = element('input', { id: 'data-choice-auto-updates' });
+  choiceAutoUpdates.type = 'checkbox';
+
+  /** @type {import('./update-action.js').UpdateAction | null} */
+  let updateAction = null;
+
   /** @type {import('../shared/contracts.js').AppSettings | null} */
   let currentSettings = null;
   /** @type {Promise<import('../shared/contracts.js').AppSettings> | null} */
@@ -196,6 +270,100 @@
     return operation;
   }
 
+  /** @param {import('./update-action.js').UpdateActionView} view */
+  function renderUpdateAction(view) {
+    launcherUpdateCheck.textContent = view.actionLabel;
+    launcherUpdateStatus.textContent = view.message;
+    launcherUpdateStatus.hidden = view.message === '';
+    launcherUpdateWhen.textContent = view.lastChecked;
+    launcherUpdateWhen.hidden = view.lastChecked === '';
+    launcherUpdateGet.hidden = !view.updateAvailable;
+
+    updateCheck.textContent = view.actionLabel;
+    updateCheck.disabled = view.busy;
+    updateStatus.textContent = view.message;
+    updateStatus.hidden = view.message === '';
+    updateWhen.textContent = view.lastChecked;
+    updateWhen.hidden = view.lastChecked === '';
+    updateReleases.hidden = !view.updateAvailable;
+  }
+
+  function mountUpdateAction() {
+    const corner = element('span', { id: 'loading-update' });
+    corner.append(
+      launcherUpdateCheck, ' ', launcherUpdateStatus, ' ',
+      launcherUpdateWhen, ' ', launcherUpdateGet,
+    );
+    byId('loading-links').prepend(corner);
+
+    const label = element('label', { className: 'settings-check' });
+    label.append(
+      autoCheckUpdates,
+      element('span', { text: 'Check for app updates automatically' }),
+    );
+    const note = element('p', {
+      className: 'settings-note',
+      text: 'While this is off, the app contacts GitHub only when you ask it '
+        + 'to — including when it meets a game client build it does not '
+        + 'recognise. Updating the app itself is always manual.',
+    });
+    const actions = element('div', { className: 'settings-update-actions' });
+    actions.append(updateCheck, updateReleases);
+    const pane = byId('settings-pane-advanced');
+    const divider = pane.querySelector('.settings-divider');
+    const block = [label, note, actions, updateStatus, updateWhen];
+    if (divider) divider.before(...block);
+    else pane.append(...block);
+
+    const question = element('p');
+    const questionLabel = element('label');
+    questionLabel.append(
+      choiceAutoUpdates,
+      ' Also check for app updates automatically',
+    );
+    question.append(questionLabel);
+    byId('data-choice').querySelector('.dock-info')?.append(question);
+  }
+
+  function requestUpdateCheck() {
+    void updateAction?.check();
+  }
+
+  mountUpdateAction();
+  void import('./update-action.js')
+    .then((module) => {
+      const action = module.createUpdateAction({
+        check: () => window.gwNative.releaseNotice.check(),
+        remember: (checkedAt) => persistSettings({ lastUpdateCheckAt: checkedAt }),
+      });
+      updateAction = action;
+      action.subscribe(renderUpdateAction);
+      void loadSettings()
+        .then((settings) => {
+          action.restore(settings.lastUpdateCheckAt);
+          // The only automatic check the renderer makes, and it is off by
+          // default. Every other automatic trigger reads the same flag: one
+          // answer governs every request the user did not ask for.
+          if (settings.autoCheckUpdates) void action.check();
+        })
+        .catch(() => undefined);
+    })
+    .catch(() => {
+      updateCheck.disabled = true;
+      launcherUpdateCheck.hidden = true;
+      updateStatus.textContent = 'Update checking is unavailable in this build.';
+      updateStatus.hidden = false;
+    });
+
+  launcherUpdateCheck.addEventListener('click', (event) => {
+    event.preventDefault();
+    requestUpdateCheck();
+  });
+  updateCheck.addEventListener('click', requestUpdateCheck);
+  updateReleases.addEventListener('click', () => {
+    void window.gwNative.app.openExternal('releases');
+  });
+
   function cacheComplete(cache = currentCache) {
     return !!cache?.totalBytes && cache.bytes >= cache.totalBytes;
   }
@@ -248,6 +416,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
           : null;
+      case 'autoCheckUpdates':
+        return control instanceof globalThis.HTMLInputElement
+          ? { autoCheckUpdates: control.checked }
+          : null;
       case 'dataStrategy':
         return { dataStrategy: selectedStrategy() };
       default:
@@ -261,6 +433,7 @@
     nativeCursor.checked = settings.nativeCursor;
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
+    autoCheckUpdates.checked = settings.autoCheckUpdates;
     for (const radio of /** @type {NodeListOf<HTMLInputElement>} */ (
       form.querySelectorAll('input[name="dataStrategy"]')
     )) {
@@ -460,6 +633,7 @@
     currentCache = cache;
     launcherTotalBytes = total;
     const remaining = Math.max(0, total - (cache.bytes || 0));
+    choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? false;
     dataChoiceFullSize.textContent = remaining > 0
       ? `Download ${size(remaining)} before starting.`
       : 'The full game is already downloaded.';
@@ -522,11 +696,23 @@
     }
   };
 
+  /**
+   * The first-run gate answers two questions with one click. Both are written
+   * together so a saved data choice can never leave the update answer behind.
+   * @param {'quick' | 'full'} dataStrategy
+   * @returns {import('../shared/contracts.js').AppSettingsPatch}
+   */
+  const answeredChoice = (dataStrategy) => ({
+    dataStrategy,
+    autoCheckUpdates: choiceAutoUpdates.checked,
+  });
+
   dataChoiceQuick.addEventListener('click', async () => {
     dataChoiceQuick.disabled = true;
     dataChoiceFull.disabled = true;
     try {
-      await persistSettings({ dataStrategy: 'quick' });
+      await persistSettings(answeredChoice('quick'));
+      if (choiceAutoUpdates.checked) requestUpdateCheck();
       releaseGameBoot('launcher.quickSelected');
     } catch {
       dataChoiceFullSize.textContent =
@@ -541,7 +727,8 @@
     dataChoiceQuick.disabled = true;
     dataChoiceFull.disabled = true;
     try {
-      await persistSettings({ dataStrategy: 'full' });
+      await persistSettings(answeredChoice('full'));
+      if (choiceAutoUpdates.checked) requestUpdateCheck();
       if (!currentCache) {
         throw new Error("download status is not ready");
       }
@@ -591,6 +778,8 @@
       await settingsWrite;
       currentSettings = await window.gwNative.settings.get();
       fillForm(currentSettings);
+      // "Last checked 4 minutes ago" goes stale while a window sits open.
+      updateAction?.restore(currentSettings.lastUpdateCheckAt);
       await refreshCache();
     } catch {
       feedback.textContent = 'Settings could not be loaded. Try reopening this window.';
@@ -665,6 +854,7 @@
       const cursorCleared = currentSettings?.nativeCursor === true;
       currentSettings = reset;
       fillForm(reset);
+      updateAction?.restore(reset.lastUpdateCheckAt);
       renderSettingsData();
       window.gwApplySettings?.(reset);
       feedback.textContent = cursorCleared

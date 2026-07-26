@@ -61,6 +61,15 @@
 /* The update notice earns the gold the other links do not. */
 #loading-links a.update { color:#f3dd9d; border:1px solid #a9833880;
                           border-radius:2px; padding:2px 8px; }
+/* The check action with its answer beside it (mounted by settings.js, which
+   owns the same component in the Settings dialog). An answer is a whole
+   sentence, so this one group wraps where the link row does not, and it is
+   bounded so a failure sentence cannot push the row off the window. */
+#loading-update { display:flex; flex-wrap:wrap; align-items:center;
+                  justify-content:flex-end; gap:2px 8px;
+                  max-width:min(46ch,40vw); white-space:normal; }
+#loading-update-status { color:#e8dcc0bf; }
+#loading-update-when { color:#e8dcc08c; font-size:11.5px; }
 
 /* Art zone: the logo floats over the artwork, centered above the dock. */
 #loading-inner { position:absolute; inset:0 0 var(--dock-h) 0; display:flex;
