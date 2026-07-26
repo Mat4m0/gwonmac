@@ -106,12 +106,30 @@ on the first field-cleared transition state. It proves that no stale map,
 player, or target fields survive loading, then requires the exact destination
 map. Other maps fail closed; this is not a general navigation system.
 
-`performance` takes two Level 1 captures and exact animation-frame samples: one
-phase with the hook slot disabled, then one with the hook enabled. It reports
-p50, p95, p99, maximum frame time, long-frame counts, renderer
-task/script/layout time, JavaScript heap use, and hook calls.
+`performance` compares two arms with a Level 1 capture and exact
+animation-frame samples per phase. Both arms run the **already transformed**
+game module — `transformed-dispatcher-off` holds its hook slot at zero, so the
+game calls its original tick and the kernel never runs, and
+`transformed-observer-on` lets the kernel write snapshots for the renderer to
+read. So the delta is the incremental kernel/snapshot-observer cost, not the
+Toolbox's total cost against ArenaNet's untransformed module: that third arm is
+not reachable from a session that can measure these two, because automation
+forces the Toolbox on and the module is chosen in the main process before the
+renderer exists. The arms are named for what they run so the number is not read
+as something wider than it is. It reports p50, p95, p99, maximum frame time,
+long-frame counts, renderer task/script/layout time, JavaScript heap use, and
+hook calls.
 
-Its numbers — phase duration, the sample floor per phase, the tail-percentile
+Each arm is measured **twice, in a mirrored order** (off, on, on, off), with the
+same warm-up and the same measured window in every phase, so a drift over the
+run falls equally on both arms instead of on whichever went second. An arm's
+percentiles are the mean of its two phases' percentiles rather than a percentile
+over their pooled samples — pooling would put the arm at whichever phase's level
+that percentile lands in, and the mirror would cancel nothing. The order that
+ran is part of the result, and the gate refuses a result whose order is not
+mirrored.
+
+Its numbers — phase duration, the sample floor per arm, the tail-percentile
 regression limit, and the absolute p95 movement — live with the benchmark that
 enforces them, in the `performance` entry of
 `scripts/toolbox-live/scenarios.mjs`. They are deliberately not repeated here:
@@ -120,12 +138,15 @@ other. What belongs here is why the rule has that shape. A regression must be
 corroborated by *both* tail percentiles, so normal outpost variance or a single
 0.1 ms-quantized scheduling boundary is not reported as a Toolbox regression,
 while the absolute p95 limit still catches a real shift that a percentage would
-flatter. The baseline isolates the incremental companion/snapshot-observer
-cost; it still uses the already transformed game module and its disabled
-dispatcher branch. The result also requires zero hook ticks in the baseline
-phase and a full run of hooked ticks, so a disconnected benchmark cannot pass.
-Task and heap values are diagnostic rather than gates, because garbage
+flatter. The result also requires zero hook ticks in the dispatcher-off arm and
+a full run of hooked ticks in the other, so a disconnected benchmark cannot
+pass. Task and heap values are diagnostic rather than gates, because garbage
 collection and unrelated game work can move them between phases.
+
+The schedule and the arithmetic are in `scripts/toolbox-live/benchmark.mjs`,
+which imports nothing, so
+`tests/policy/the-benchmark-measures-each-arm-in-both-orders.test.mjs` executes
+them against a drifting session double without a build or a game.
 
 The renderer lifecycle surface derives from existing state:
 
@@ -299,12 +320,20 @@ failure results. Never expose `writeMemory`, `callFunction`, or `sendPacket`.
 
 ## Port readiness register
 
+`Observed` is not `Ready`. It means live evidence exists for the cases in the
+evidence column and for no others: the domain's remaining values — the rest of
+an agent-type union, a second instance type, a cursor the run never hovered —
+are accepted by the decoder without having been seen. A domain leaves
+`Observed` when its next proof lands, not when its foundation feels finished,
+and until then nothing published from it may carry a semantic name that live
+evidence has not certified.
+
 | Domain | Foundation | Live evidence | Next proof |
 | --- | --- | --- | --- |
-| Hook lifecycle | Ready | continuous tick, reload, clean shutdown | one live map transition |
-| Map/player | Ready | live identity, 201-unit movement delta | one live map transition |
-| Target identity/distance | Ready | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
-| Cursor | Ready | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
+| Hook lifecycle | Observed | continuous tick, reload, clean shutdown | one live map transition |
+| Map/player | Observed | live identity, 201-unit movement delta | one live map transition |
+| Target identity/distance | Observed | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
+| Cursor | Observed | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
 | Cursor presentation | Shipped, opt-in | offline Electron + `cursor-capture` | opted-in play on a fresh certified build |
 | Party | Not modeled | none | locate bounded roster |
 | Skills/recharge | Not modeled | none | locate skill context |
