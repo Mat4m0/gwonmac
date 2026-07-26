@@ -11,6 +11,7 @@ test.describe("sandbox boundary", () => {
       const boundary = await fixture.page.evaluate(() => ({
         protocol: globalThis.location.protocol,
         search: globalThis.location.search,
+        init: { ...window.gwNative.init },
         toolboxPresent: globalThis.document.getElementById("toolbox") !== null,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
@@ -21,18 +22,26 @@ test.describe("sandbox boundary", () => {
       }));
       expect(boundary).toEqual({
         protocol: "gw:",
-        // The game cursor ships on, so a default launch carries the parameter
-        // renderer-trust allow-lists for it — and nothing else.
-        search: "?native-cursor=1",
+        // Launch configuration is not in the URL any more; renderer-trust
+        // accepts no query string at all.
+        search: "",
+        // The game cursor ships on, so a default launch asks for it here.
+        init: {
+          toolboxAutomation: false,
+          nativeCursor: true,
+          templateFsTrace: false,
+        },
         toolboxPresent: false,
         keys: [
           "app",
           "cache",
           "client",
+          "commands",
           "credentials",
           "diagnostics",
           "dns",
           "gameStorage",
+          "init",
           "progress",
           "releaseNotice",
           "settings",
@@ -100,9 +109,14 @@ test.describe("sandbox boundary", () => {
       GW_TOOLBOX_AUTOMATION: "1",
     });
     try {
-      expect(new URL(fixture.page.url()).search).toBe(
-        "?toolbox-automation=1&native-cursor=1",
-      );
+      expect(new URL(fixture.page.url()).search).toBe("");
+      expect(
+        await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
+      ).toEqual({
+        toolboxAutomation: true,
+        nativeCursor: true,
+        templateFsTrace: false,
+      });
       await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);
@@ -114,9 +128,14 @@ test.describe("sandbox boundary", () => {
       GW_TEMPLATE_FS_TRACE: "1",
     });
     try {
-      expect(new URL(fixture.page.url()).search).toBe(
-        "?native-cursor=1&template-fs-trace=1",
-      );
+      expect(new URL(fixture.page.url()).search).toBe("");
+      expect(
+        await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
+      ).toEqual({
+        toolboxAutomation: false,
+        nativeCursor: true,
+        templateFsTrace: true,
+      });
       await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);

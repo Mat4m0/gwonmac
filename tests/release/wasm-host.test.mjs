@@ -95,7 +95,12 @@ test("template file tracing is explicit, bounded, and attached only at the impor
   assert.match(trace, /fd_read/);
   assert.match(trace, /fd_write/);
   assert.match(trace, /fd_close/);
-  assert.doesNotMatch(trace, /gwDiagnostics|gwNative|ipc|fetch\s*\(/i);
+  assert.doesNotMatch(trace, /gwDiagnostics|ipc|fetch\s*\(/i);
+  // The only capability it may touch is its own opt-in, which since P5.2 is a
+  // field of the renderer init payload rather than a renderer URL parameter.
+  assert.deepEqual(trace.match(/gwNative[.\w]*/gu), [
+    "gwNative.init.templateFsTrace",
+  ]);
   assert.doesNotMatch(trace, /WebAssembly\.(?:Module|Instance)\.prototype/);
 });
 
@@ -168,7 +173,10 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   assert.match(bridge, /mkdirTree\(directory\)/);
   // The listing block is freed by the client, so it must be its own allocation.
   assert.match(bridge, /exports\(\)\?\.malloc/);
-  assert.doesNotMatch(bridge, /gwNative|ipc|fetch\s*\(/i);
+  assert.doesNotMatch(bridge, /ipc|fetch\s*\(/i);
+  assert.deepEqual(bridge.match(/gwNative[.\w]*/gu), [
+    "gwNative.init.templateFsTrace",
+  ]);
 });
 
 test("a new client build can be re-certified without hand-derivation", async () => {

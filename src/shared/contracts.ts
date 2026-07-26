@@ -273,6 +273,44 @@ export interface ClientSession {
   compatibility: ClientCompatibility | null;
 }
 
+/**
+ * Everything the renderer must know before its first script runs. It used to
+ * ride on the renderer URL as query parameters, which forced the trust root to
+ * allow-list them — including `nativeCursor`, which is user product state and
+ * has no business in a navigation check. It travels as a preload argument
+ * instead, so `isCanonicalRendererUrl` accepts no query string at all.
+ */
+export interface RendererInit {
+  /** Toolbox automation tier. Unpackaged builds only. */
+  toolboxAutomation: boolean;
+  /** `AppSettings.nativeCursor` at launch: install the Toolbox cursor. */
+  nativeCursor: boolean;
+  /** Template filesystem syscall trace. Unpackaged builds only. */
+  templateFsTrace: boolean;
+}
+
+/**
+ * Prefix of the single `webPreferences.additionalArguments` entry that carries
+ * a JSON `RendererInit`. The preload is the only reader.
+ */
+export const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
+
+/**
+ * The closed set of things the main process asks the renderer to do. These
+ * arrived as JavaScript source built by string interpolation and run with
+ * `executeJavaScript` — one of them spliced a capture level into the source.
+ * They are events, so they travel as events and `level` travels as a number.
+ */
+export type RendererCommand =
+  | { type: "input.reset" }
+  | { type: "settings.open" }
+  | { type: "diagnostics.toggle" }
+  | {
+      type: "diagnostics.capture";
+      action: "reset" | "stopped" | "flush" | "problem-marked";
+    }
+  | { type: "diagnostics.capture"; action: "started"; level: 1 | 2 };
+
 export const IPC = {
   progressCurrent: "gw:progress:current",
   progressEvent: "gw:progress:event",
@@ -306,6 +344,11 @@ export const IPC = {
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
+  // Main→renderer, and the renderer's acknowledgement. Main waits on the
+  // acknowledgement because a capture flush has to finish inside the capture
+  // window, which `executeJavaScript`'s awaited result used to guarantee.
+  rendererCommand: "gw:renderer:command",
+  rendererCommandDone: "gw:renderer:commandDone",
   // Named for its trigger: the renderer asks for a check, it does not read a
   // status the main process was already keeping.
   releaseNoticeCheck: "gw:releaseNotice:check",
@@ -314,6 +357,16 @@ export const IPC = {
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
 export interface GwNativeApi {
+  /** Launch-time configuration, available before the first renderer script. */
+  init: RendererInit;
+  commands: {
+    /**
+     * Register the renderer's single command handler. The acknowledgement main
+     * waits on is sent when the returned promise settles, so an awaited
+     * capture flush still completes before main closes the capture window.
+     */
+    handle(handler: (command: RendererCommand) => void | Promise<void>): void;
+  };
   progress: {
     current(): Promise<DownloadProgress>;
     onChange(callback: (value: DownloadProgress) => void): () => void;

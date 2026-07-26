@@ -28,7 +28,7 @@ type Bridge = (
   flags: number,
 ) => number;
 
-function fixture(tree: Record<string, string[]> = {}, search = "") {
+function fixture(tree: Record<string, string[]> = {}, templateFsTrace = false) {
   const memory = new ArrayBuffer(65536);
   const HEAPU8 = new Uint8Array(memory);
   const made: string[] = [];
@@ -73,7 +73,10 @@ function fixture(tree: Record<string, string[]> = {}, search = "") {
       removed.push(value);
     },
   };
-  const window = {} as {
+  const window = {
+    gwNative: { init: { templateFsTrace } },
+  } as {
+    gwNative: { init: { templateFsTrace: boolean } };
     gwInstallTemplateSaveCompatibility?: (options: {
       imports: typeof imports;
       module: { HEAPU8: Uint8Array };
@@ -86,7 +89,6 @@ function fixture(tree: Record<string, string[]> = {}, search = "") {
     Math,
     RegExp,
     String,
-    URL,
     Uint16Array,
     Uint32Array,
     Uint8Array,
@@ -95,7 +97,6 @@ function fixture(tree: Record<string, string[]> = {}, search = "") {
         logs.push(values.map(String).join(" "));
       },
     },
-    location: { href: `gw://app/${search}` },
     setTimeout,
     window,
     FS,
@@ -252,10 +253,7 @@ test("stays silent unless the trace is explicitly requested", () => {
   quiet.bridge(FIND_FILES, 64, 1024, WANT_FILES);
   assert.deepEqual(quiet.logs, []);
 
-  const traced = fixture(
-    { "Templates/Skills": ["Test.txt"] },
-    "?template-fs-trace=1",
-  );
+  const traced = fixture({ "Templates/Skills": ["Test.txt"] }, true);
   writeWide(traced.HEAPU8, 64, "Templates/Skills/*.txt");
   traced.bridge(FIND_FILES, 64, 1024, WANT_FILES);
   assert.match(traced.logs[0]!, /"operation":"installed"/);

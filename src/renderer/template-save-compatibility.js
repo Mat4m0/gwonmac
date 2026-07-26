@@ -27,7 +27,6 @@
   const PATH_LIMIT = 260;
   const ERROR_NOT_FOUND = 2;
 
-  const TRACE_PARAMETER = 'template-fs-trace';
   const TRACE_PREFIX = '[template-fs-bridge]';
 
   /** @returns {{ (event: Record<string, unknown>): void; enabled: boolean }} */
@@ -45,13 +44,7 @@
    * @returns {{ (event: Record<string, unknown>): void; enabled: boolean }}
    */
   function tracer() {
-    let enabled;
-    try {
-      enabled = new URL(location.href).searchParams.get(TRACE_PARAMETER) === '1';
-    } catch {
-      return silent();
-    }
-    if (!enabled) return silent();
+    if (!window.gwNative.init.templateFsTrace) return silent();
     let sequence = 0;
     /** @param {Record<string, unknown>} event */
     const on = (event) => {

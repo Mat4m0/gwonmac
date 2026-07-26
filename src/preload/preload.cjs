@@ -37,7 +37,34 @@ const IPC = {
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
   releaseNoticeCheck: "gw:releaseNotice:check",
+  rendererCommand: "gw:renderer:command",
+  rendererCommandDone: "gw:renderer:commandDone",
 };
+
+const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
+
+/**
+ * Launch configuration, read from the one `additionalArguments` entry the main
+ * process appends. Booleans only, defaulted off: a renderer that cannot read
+ * its argument gets the production posture rather than a developer one.
+ */
+function rendererInit() {
+  const argv = globalThis.process?.argv;
+  const raw = Array.isArray(argv)
+    ? argv.find((value) => value.startsWith(RENDERER_INIT_ARGUMENT))
+    : undefined;
+  let parsed = {};
+  try {
+    if (raw) parsed = JSON.parse(raw.slice(RENDERER_INIT_ARGUMENT.length));
+  } catch {
+    parsed = {};
+  }
+  return {
+    toolboxAutomation: parsed.toolboxAutomation === true,
+    nativeCursor: parsed.nativeCursor === true,
+    templateFsTrace: parsed.templateFsTrace === true,
+  };
+}
 
 function listen(eventChannel, callback) {
   const handler = (_event, value) => callback(value);
@@ -51,6 +78,20 @@ function listen(eventChannel, callback) {
 }
 
 const api = {
+  init: rendererInit(),
+  commands: {
+    // One handler, registered once. The correlation id stays in transport: the
+    // renderer sees a command, and main sees the acknowledgement once whatever
+    // the handler returned has settled.
+    handle: (handler) => {
+      ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
+        void Promise.resolve()
+          .then(() => handler(command))
+          .catch(() => undefined)
+          .then(() => ipcRenderer.send(IPC.rendererCommandDone, id));
+      });
+    },
+  },
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
     onChange: (callback) => listen(IPC.progressEvent, callback),

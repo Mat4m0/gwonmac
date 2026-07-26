@@ -219,8 +219,8 @@ or delete logic sees them. Static inspection of the current official WASM
 shows that its template path builder normally inserts `/`; the normalization
 is a boundary invariant, not an explanation of template-save success.
 
-For template-save investigation only, launching the application with
-`GW_TEMPLATE_FS_TRACE=1` adds `template-fs-trace=1` to the trusted renderer URL.
+For template-save investigation only, launching an unpackaged build with
+`GW_TEMPLATE_FS_TRACE=1` sets `templateFsTrace` in the renderer init payload.
 Before instantiation, the renderer then wraps the official module's
 `__syscall_openat`, `__syscall_ftruncate64`, `fd_read`, `fd_write`,
 `fd_pwrite`, `fd_seek`, and `fd_close` imports.
@@ -341,11 +341,10 @@ act on the player's behalf" a testable claim rather than a promise. Main reads
 the setting once at startup and passes the result as
 `ClientRuntime.toolboxEnabled`,
 because the choice selects which WASM main the launch serves; a change takes
-effect at the next game start. The same value writes the renderer's
-`native-cursor=1` parameter — `toolbox-automation=1` for automation — and
-`renderer-trust.ts` allow-lists both. `harness.js` dynamically imports
-`toolbox.js` only when one of them is present, so a renderer URL without them
-cannot reach the Toolbox at all.
+effect at the next game start. The same value writes `nativeCursor` in the
+renderer init payload — `toolboxAutomation` for automation. `harness.js`
+dynamically imports `toolbox.js` only when one of them is set, so a renderer
+that was handed neither cannot reach the Toolbox at all.
 
 Enabled sessions hash the official module after publication and recognize only
 entries in the checked-in Toolbox build manifest. A known

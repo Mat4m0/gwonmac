@@ -681,10 +681,9 @@ Module = {
     milestone('runtime.initialized');
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
-    const parameters = new URL(window.location.href).searchParams;
+    const init = native().init;
     if (
-      (parameters.get('toolbox-automation') === '1'
-        || parameters.get('native-cursor') === '1')
+      (init.toolboxAutomation || init.nativeCursor)
       && gameWasmInstance
       && gameWasmModule
     ) {

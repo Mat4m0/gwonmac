@@ -12,8 +12,9 @@ import type {
   AppSettings,
   AppSettingsPatch,
   DownloadProgress,
+  RendererInit,
 } from "../shared/contracts.js";
-import { EXTERNAL_URLS } from "../shared/contracts.js";
+import { EXTERNAL_URLS, RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
@@ -27,6 +28,7 @@ import {
 } from "./core/window-state.js";
 import { log, logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import { sendRendererCommand } from "./renderer-commands.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
@@ -210,16 +212,25 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
-/** The only renderer URL. A reload that dropped these would drop the Toolbox. */
-export function rendererUrl(options: { nativeCursor: boolean }): string {
-  const parameters = new URLSearchParams();
-  if (TOOLBOX_AUTOMATION_ENABLED) parameters.set("toolbox-automation", "1");
-  if (options.nativeCursor) parameters.set("native-cursor", "1");
-  if (process.env.GW_TEMPLATE_FS_TRACE === "1") {
-    parameters.set("template-fs-trace", "1");
-  }
-  const query = parameters.toString();
-  return `gw://app/${query ? `?${query}` : ""}`;
+/** The only renderer URL, and it carries no configuration. */
+export const RENDERER_URL = "gw://app/";
+
+/**
+ * Launch configuration, delivered to the preload as one process argument
+ * instead of as query parameters the trust root had to allow-list. It is fixed
+ * for the life of a window, which is what a reload must not drop: reloading
+ * `RENDERER_URL` keeps the same `additionalArguments`, so the Toolbox survives.
+ */
+export function rendererInitArgument(options: {
+  nativeCursor: boolean;
+}): string {
+  const init: RendererInit = {
+    toolboxAutomation: TOOLBOX_AUTOMATION_ENABLED,
+    nativeCursor: options.nativeCursor,
+    templateFsTrace:
+      !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
+  };
+  return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }
 
 export function createMainWindow(host: WindowHost): BrowserWindow {
@@ -239,6 +250,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     show: false,
     webPreferences: {
       preload: preloadPath(),
+      additionalArguments: [rendererInitArgument(host)],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -394,19 +406,12 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   installMenu(host, win);
-  void win.loadURL(rendererUrl(host));
+  void win.loadURL(RENDERER_URL);
   return win;
 }
 
 export async function resetGameInput(win: BrowserWindow): Promise<void> {
-  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-  try {
-    await win.webContents.executeJavaScript(
-      "window.dispatchEvent(new CustomEvent('gw:input-reset'))",
-    );
-  } catch {
-    // Reload/quit can destroy the renderer between the liveness check and send.
-  }
+  await sendRendererCommand(win, { type: "input.reset" });
 }
 
 export async function exportProblemReport(
@@ -483,11 +488,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
                 click: async () => {
-                  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
                   await resetGameInput(win);
-                  await win.webContents.executeJavaScript(
-                    "window.dispatchEvent(new CustomEvent('gw:settings'))",
-                  );
+                  await sendRendererCommand(win, { type: "settings.open" });
                 },
               },
               { type: "separator" as const },
@@ -530,10 +532,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
             await resetGameInput(win);
             const cur = await host.getSettings();
             await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
-            if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-            void win.webContents.executeJavaScript(
-              "window.dispatchEvent(new CustomEvent('gw:diagnostics-toggle'))",
-            );
+            await sendRendererCommand(win, { type: "diagnostics.toggle" });
           },
         },
         {

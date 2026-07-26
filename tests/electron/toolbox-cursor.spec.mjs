@@ -231,9 +231,9 @@ test.describe("toolbox cursor presentation", () => {
   });
 
   // The opt-in is only real if a saved `nativeCursor` survives the whole chain:
-  // settings file -> toolboxEnabledFor -> renderer URL -> trust check. Without
-  // the parameter, harness.js never imports toolbox.js and no cursor appears.
-  test("a saved opt-in reaches the renderer as native-cursor=1", async () => {
+  // settings file -> toolboxEnabledFor -> renderer init payload. Without it,
+  // harness.js never imports toolbox.js and no cursor appears.
+  test("a saved opt-in reaches the renderer init payload", async () => {
     const seed = (value) => async (userData) =>
       writeFile(
         path.join(userData, "settings.json"),
@@ -249,15 +249,18 @@ test.describe("toolbox cursor presentation", () => {
 
     const optedIn = await launchOffline("gw-cursor-opt-in-e2e-", {}, seed(true));
     try {
-      const search = await optedIn.page.evaluate(
-        () => globalThis.location.search,
-      );
-      expect(search).toContain("native-cursor=1");
-      // Automation is off in this launch, so it must be the only parameter.
-      expect(search).not.toContain("toolbox-automation");
-      // Main loads this URL programmatically, so rendering proves nothing about
-      // the allow-list. Every IPC call re-checks the sender frame's URL, so a
-      // `native-cursor` that renderer-trust rejected fails right here instead.
+      expect(
+        await optedIn.page.evaluate(() => ({
+          ...globalThis.gwNative.init,
+          search: globalThis.location.search,
+        })),
+      ).toEqual({
+        toolboxAutomation: false,
+        nativeCursor: true,
+        templateFsTrace: false,
+        // The configuration is no longer in the URL the trust root checks.
+        search: "",
+      });
       expect(
         await optedIn.page.evaluate(() => globalThis.gwNative.settings.get()),
       ).toMatchObject({ nativeCursor: true });
@@ -272,8 +275,8 @@ test.describe("toolbox cursor presentation", () => {
     );
     try {
       expect(
-        await optedOut.page.evaluate(() => globalThis.location.search),
-      ).toBe("");
+        await optedOut.page.evaluate(() => globalThis.gwNative.init.nativeCursor),
+      ).toBe(false);
     } finally {
       await closeOffline(optedOut);
     }

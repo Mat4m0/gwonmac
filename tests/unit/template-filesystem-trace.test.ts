@@ -11,7 +11,7 @@ const source = await readFile(
   "utf8",
 );
 
-function fixture(search = "?template-fs-trace=1", openResult = 17) {
+function fixture(templateFsTrace = true, openResult = 17) {
   const memory = new ArrayBuffer(4096);
   const HEAPU8 = new Uint8Array(memory);
   const HEAPU32 = new Uint32Array(memory);
@@ -44,7 +44,10 @@ function fixture(search = "?template-fs-trace=1", openResult = 17) {
       fd_close: fdClose,
     },
   };
-  const window = {} as {
+  const window = {
+    gwNative: { init: { templateFsTrace } },
+  } as {
+    gwNative: { init: { templateFsTrace: boolean } };
     gwInstallTemplateFilesystemTrace?: (options: {
       imports: typeof imports;
       module: { HEAPU8: Uint8Array };
@@ -58,13 +61,11 @@ function fixture(search = "?template-fs-trace=1", openResult = 17) {
     TextDecoder,
     Uint8Array,
     Uint32Array,
-    URL,
     console: {
       info(...values: unknown[]) {
         logs.push(values.map(String).join(" "));
       },
     },
-    location: { href: `gw://app/${search}` },
     window,
   };
   Object.assign(context, { globalThis: context });
@@ -91,8 +92,8 @@ function writeCString(heap: Uint8Array, pointer: number, value: string) {
   heap[pointer + encoded.length] = 0;
 }
 
-test("is dormant unless the packaged-app trace query is explicitly enabled", () => {
-  const value = fixture("");
+test("is dormant unless the renderer init payload asks for the trace", () => {
+  const value = fixture(false);
   value.window.gwInstallTemplateFilesystemTrace?.({
     imports: value.imports,
     module: value.module,
@@ -165,7 +166,7 @@ test("captures the real template open, write, and close result without a path", 
 });
 
 test("records an open errno and ignores unrelated filesystem traffic", () => {
-  const value = fixture("?template-fs-trace=1", -44);
+  const value = fixture(true, -44);
   value.window.gwInstallTemplateFilesystemTrace?.({
     imports: value.imports,
     module: value.module,

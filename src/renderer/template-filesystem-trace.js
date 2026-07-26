@@ -1,7 +1,6 @@
 (() => {
   'use strict';
 
-  const QUERY_PARAMETER = 'template-fs-trace';
   const EVENT_LIMIT = 128;
   const TRACE_PREFIX = '[template-fs-trace]';
 
@@ -126,9 +125,7 @@
    * }} options
    */
   window.gwInstallTemplateFilesystemTrace = ({ imports, module }) => {
-    if (new URL(location.href).searchParams.get(QUERY_PARAMETER) !== '1') {
-      return;
-    }
+    if (!window.gwNative.init.templateFsTrace) return;
 
     const env = imports.env;
     const wasi = imports.wasi_snapshot_preview1;

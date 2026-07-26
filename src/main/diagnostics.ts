@@ -18,14 +18,18 @@ import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { promisify } from "node:util";
 import {
   app,
-  BrowserWindow,
   contentTracing,
   crashReporter,
   dialog,
   powerMonitor,
   screen,
+  type BrowserWindow,
 } from "electron";
-import type { AppSettings, GraphicsDiagnostics } from "../shared/contracts.js";
+import type {
+  AppSettings,
+  GraphicsDiagnostics,
+  RendererCommand,
+} from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import type {
   DiagnosticFields,
@@ -39,6 +43,10 @@ import type {
 } from "../shared/diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { loadSettings } from "./core/settings.js";
+import {
+  canonicalRendererWindow,
+  sendRendererCommand,
+} from "./renderer-commands.js";
 import {
   FlightRecorder,
   runtimeVersions as versions,
@@ -89,33 +97,14 @@ let previousEventLoopUtilization = performance.eventLoopUtilization();
 let eventLoopWindowStartedUs = 0;
 let captureStoppedHandler: (() => void | Promise<void>) | null = null;
 
-type RendererCaptureCommand =
-  | { type: "reset" }
-  | { type: "started"; level: 1 | 2 }
-  | { type: "stopped" }
-  | { type: "flush" }
-  | { type: "problem-marked" };
-
-async function rendererCaptureCommand(command: RendererCaptureCommand): Promise<void> {
-  const win = BrowserWindow.getAllWindows().find(
-    (candidate) =>
-      !candidate.isDestroyed() &&
-      !candidate.webContents.isDestroyed() &&
-      candidate.webContents.getURL().startsWith("gw://app"),
-  );
-  if (!win) return;
-  const source = command.type === "started"
-    ? `window.gwDiagnostics?.captureStarted(${command.level})`
-    : {
-        reset: "window.gwDiagnostics?.resetForCapture()",
-        stopped: "window.gwDiagnostics?.captureStopped()",
-        flush: "window.gwDiagnostics?.flush()",
-        "problem-marked": "window.gwDiagnostics?.problemMarked()",
-      }[command.type];
-  await win.webContents
-    .executeJavaScript(source)
-    .catch(() => undefined);
-}
+/**
+ * The renderer half of a capture. `level` crosses as a number inside a typed
+ * event rather than spliced into a string of JavaScript, and the target window
+ * is chosen by the same trust test the inbound direction uses.
+ */
+const rendererCaptureCommand = (
+  command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
+): Promise<void> => sendRendererCommand(canonicalRendererWindow(), command);
 
 /**
  * The only way to record an event that carries information about a failure.
@@ -162,7 +151,10 @@ export function peakGauge(name: string, value: number): void {
 
 export function markPerformanceProblem(): void {
   recorder.event("renderer", "info", "performance.problemMarked");
-  void rendererCaptureCommand({ type: "problem-marked" });
+  void rendererCaptureCommand({
+    type: "diagnostics.capture",
+    action: "problem-marked",
+  });
 }
 
 export function setDiagnosticCaptureStoppedHandler(
@@ -483,14 +475,18 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
     return Promise.reject(new Error("a diagnostics capture is already active"));
   }
   const operation = (async () => {
-    await rendererCaptureCommand({ type: "reset" });
+    await rendererCaptureCommand({ type: "diagnostics.capture", action: "reset" });
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
     eventLoopWindowStartedUs = recorder.timestampUs();
     lastTracePath = "";
     captureLevel = level;
-    await rendererCaptureCommand({ type: "started", level });
+    await rendererCaptureCommand({
+      type: "diagnostics.capture",
+      action: "started",
+      level,
+    });
     captureTimer = setTimeout(() => {
       void stopDiagnosticCapture("automatic");
     }, 120_000);
@@ -533,7 +529,10 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       if (captureTimer) clearTimeout(captureTimer);
       captureTimer = null;
       captureLevel = 0;
-      await rendererCaptureCommand({ type: "stopped" });
+      await rendererCaptureCommand({
+        type: "diagnostics.capture",
+        action: "stopped",
+      });
       tracePath = "";
       recordedCaptureLevel = 0;
       recorder.cancelCapture();
@@ -562,7 +561,7 @@ export function stopDiagnosticCapture(
   captureStopPromise = (async () => {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
-    await rendererCaptureCommand({ type: "flush" });
+    await rendererCaptureCommand({ type: "diagnostics.capture", action: "flush" });
     await stopTrace();
     recorder.event("app", "info", "capture.stopped", {
       level: stoppedLevel,
@@ -570,7 +569,10 @@ export function stopDiagnosticCapture(
     });
     recorder.endCapture(stoppedLevel, reason);
     captureLevel = 0;
-    await rendererCaptureCommand({ type: "stopped" });
+    await rendererCaptureCommand({
+        type: "diagnostics.capture",
+        action: "stopped",
+      });
     if (
       captureStoppedHandler &&
       (reason === "manual" ||

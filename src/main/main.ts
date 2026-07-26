@@ -54,7 +54,7 @@ import {
   flushWindowState,
   getMainWindow,
   prepareWindowState,
-  rendererUrl,
+  RENDERER_URL,
   resetGameInput,
   type WindowHost,
   updateLongRunningTaskFeedback,
@@ -253,7 +253,7 @@ function buildWindowHost(
     stopCapture: stopDiagnosticCapture,
     reloadGame: (win) => {
       sockets.closeAll(win.webContents.id);
-      void win.loadURL(rendererUrl({ nativeCursor: nativeCursorEnabled }));
+      void win.loadURL(RENDERER_URL);
     },
     prepareRendererRecovery: async () => {
       await clientRuntime.recoverRendererCrash();

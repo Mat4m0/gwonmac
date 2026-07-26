@@ -196,8 +196,8 @@ perfectly ordinary path. That cost us a round on delete and rename.
 
 ## Diagnostics
 
-`GW_TEMPLATE_FS_TRACE=1` adds `template-fs-trace=1` to the trusted renderer URL
-and enables two console-only traces:
+`GW_TEMPLATE_FS_TRACE=1` on an unpackaged build sets `templateFsTrace` in the
+renderer init payload and enables two console-only traces:
 
 - `[template-fs-trace]` — the syscall wrappers, from
   [`template-filesystem-trace.js`](../../src/renderer/template-filesystem-trace.js)

@@ -5,6 +5,34 @@ import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 test.describe("settings experience", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
+  // P5.1: the menu item used to run a string of JavaScript in the renderer.
+  // It now sends a typed command, and this is the only caller of `settings.open`
+  // — every other spec dispatches the renderer event directly, which would keep
+  // passing if the main-process half were removed entirely.
+  test("the Settings menu item opens the dialog through the command channel", async () => {
+    const fixture = await launchOffline("gw-settings-menu-e2e-");
+    try {
+      const { app, page } = fixture;
+      await expect(page.locator("#settings-dialog")).not.toHaveAttribute(
+        "open",
+        "",
+      );
+      expect(
+        await app.evaluate(({ Menu }) => {
+          const item = Menu.getApplicationMenu()
+            ?.items[0]?.submenu?.items.find(
+              (candidate) => candidate.label === "Settings…",
+            );
+          item?.click();
+          return item?.accelerator;
+        }),
+      ).toBe("CmdOrCtrl+,");
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("explains render cost and records switching the game cursor off", async () => {
     const fixture = await launchOffline("gw-settings-e2e-");
     try {
@@ -125,11 +153,11 @@ test.describe("settings experience", () => {
           globalThis.getComputedStyle(canvas).cursor,
         ),
       ).toBe("auto");
-      // The default reaches the renderer through the same gated parameter an
-      // explicit opt-in used to, not around it.
-      expect(await page.evaluate(() => globalThis.location.search)).toContain(
-        "native-cursor=1",
-      );
+      // The default reaches the renderer through the same init payload an
+      // explicit opt-in does, not around it.
+      expect(
+        await page.evaluate(() => globalThis.gwNative.init.nativeCursor),
+      ).toBe(true);
     } finally {
       await closeOffline(fixture);
     }
