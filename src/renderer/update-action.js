@@ -145,9 +145,16 @@ export function createUpdateAction({ check, remember, now = () => Date.now() }) 
 
     check() {
       if (running) return running;
+      // `check()` is invoked synchronously — a second ask must not become a
+      // second request — but its outcome is normalised to a promise before
+      // anything awaits it. A synchronous throw (a missing bridge property,
+      // an `invoke` that raises before returning) would otherwise run the
+      // `finally` below *before* `running = operation` on the way out, and
+      // the action would stay "Checking…" and busy for the whole session.
+      const request = (async () => check())();
       const operation = (async () => {
         try {
-          const notice = await check();
+          const notice = await request;
           result = notice;
           // Every result carries `checkedAt`, including the failures: the
           // timestamp records that GitHub was asked, not that it answered

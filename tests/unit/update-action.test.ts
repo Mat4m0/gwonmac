@@ -229,6 +229,27 @@ describe("update action", () => {
     assert.equal(latest().lastChecked, "");
   });
 
+  it("recovers from a bridge that throws synchronously instead of rejecting", async () => {
+    // `window.gwNative.releaseNotice.check()` throws where it stands when the
+    // bridge property is missing. If that throw settles the operation before
+    // the action records it as running, the action latches busy: every surface
+    // reads "Checking…" and disabled for the rest of the session.
+    const { action, latest, calls } = harness([
+      () => {
+        throw new TypeError("cannot read properties of undefined");
+      },
+      async () => unknown("offline", 30_000),
+    ]);
+    await action.check();
+    assert.equal(latest().busy, false);
+    assert.equal(latest().actionLabel, "Check for Updates");
+    assert.match(latest().message, /^Couldn't check/);
+
+    await action.check();
+    assert.equal(calls(), 2, "the next ask must be a real ask again");
+    assert.equal(latest().message, describeReleaseNotice(unknown("offline")));
+  });
+
   it("still shows the answer when the settings write fails", async () => {
     const { action, latest } = harness(
       [
