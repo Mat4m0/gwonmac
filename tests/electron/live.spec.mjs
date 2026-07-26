@@ -70,47 +70,13 @@ test.describe("live client", () => {
         )
         .toBeGreaterThan(0);
 
-      const state = await page.evaluate(async () => {
+      const platform = await page.evaluate(async () => {
         const diagnostics = await window.gwNative.diagnostics.current();
-        const filesystemProbes = {};
-        for (const file of [
-          "Templates/Skills/CodexProbe.st",
-          "Templates\\Skills\\CodexProbe.st",
-          "\\CodexProbe.st",
-        ]) {
-          let step = "write";
-          try {
-            const temporary = `${file}.tmp`;
-            globalThis.FS.writeFile(temporary, new Uint8Array([1, 2, 3]));
-            step = "rename";
-            globalThis.FS.rename(temporary, file);
-            step = "read";
-            const bytes = globalThis.FS.readFile(file).byteLength;
-            step = "unlink";
-            globalThis.FS.unlink(file);
-            filesystemProbes[file] = { bytes, error: null };
-          } catch (error) {
-            filesystemProbes[file] = {
-              bytes: 0,
-              error: {
-                step,
-                name: error?.name ?? "UnknownError",
-                errno: error?.errno ?? null,
-              },
-            };
-          }
-        }
         return {
           jspi: "Suspending" in WebAssembly,
           renderer: diagnostics.latest["graphics.renderer"],
           hardware: diagnostics.latest["graphics.hardwareAcceleration"],
           browserGamepads: typeof globalThis.navigator.getGamepads === "function",
-          filesystem: {
-            cwd: globalThis.FS.cwd(),
-            skills: !globalThis.FS.analyzePath("Templates/Skills").error,
-            equipment: !globalThis.FS.analyzePath("Templates/Equipment").error,
-            probes: filesystemProbes,
-          },
           wheelHandlers: (globalThis.JSEvents?.eventHandlers ?? [])
             .filter((handler) => handler.eventTypeString === "wheel")
             .map((handler) => ({
@@ -125,25 +91,73 @@ test.describe("live client", () => {
           stats: window.gwStats(),
         };
       });
-      expect(state.jspi).toBe(true);
-      expect(state.hardware).toBe(true);
-      expect(state.browserGamepads).toBe(true);
-      expect(state.filesystem).toEqual({
-        cwd: "/app:",
-        skills: true,
-        equipment: true,
-        probes: {
-          "Templates/Skills/CodexProbe.st": { bytes: 3, error: null },
-          "Templates\\Skills\\CodexProbe.st": { bytes: 3, error: null },
-          "\\CodexProbe.st": { bytes: 3, error: null },
-        },
+
+      await test.step("the host's platform services reach the running client", async () => {
+        expect(platform.jspi).toBe(true);
+        expect(platform.hardware).toBe(true);
+        expect(platform.browserGamepads).toBe(true);
+        expect(platform.wheelHandlers).toEqual([
+          { target: "canvas", capture: 0 },
+        ]);
+        expect(platform.stats.gamepadImports).toBe(true);
+        expect(String(platform.renderer)).not.toMatch(
+          /swiftshader|llvmpipe|software/i,
+        );
+        expect(platform.stats.reads).toBeGreaterThan(0);
       });
-      expect(state.wheelHandlers).toEqual([
-        { target: "canvas", capture: 0 },
-      ]);
-      expect(state.stats.gamepadImports).toBe(true);
-      expect(String(state.renderer)).not.toMatch(/swiftshader|llvmpipe|software/i);
-      expect(state.stats.reads).toBeGreaterThan(0);
+
+      // Not the client's own template save path: this drives Emscripten's `FS`
+      // directly, and what it proves is that the host's IDBFS mount is where
+      // the client will look and that Windows-style separators resolve there.
+      await test.step("host-filesystem-smoke", async () => {
+        const filesystem = await page.evaluate(async () => {
+          const probes = {};
+          for (const file of [
+            "Templates/Skills/CodexProbe.st",
+            "Templates\\Skills\\CodexProbe.st",
+            "\\CodexProbe.st",
+          ]) {
+            let step = "write";
+            try {
+              const temporary = `${file}.tmp`;
+              globalThis.FS.writeFile(temporary, new Uint8Array([1, 2, 3]));
+              step = "rename";
+              globalThis.FS.rename(temporary, file);
+              step = "read";
+              const bytes = globalThis.FS.readFile(file).byteLength;
+              step = "unlink";
+              globalThis.FS.unlink(file);
+              probes[file] = { bytes, error: null };
+            } catch (error) {
+              probes[file] = {
+                bytes: 0,
+                error: {
+                  step,
+                  name: error?.name ?? "UnknownError",
+                  errno: error?.errno ?? null,
+                },
+              };
+            }
+          }
+          return {
+            cwd: globalThis.FS.cwd(),
+            skills: !globalThis.FS.analyzePath("Templates/Skills").error,
+            equipment: !globalThis.FS.analyzePath("Templates/Equipment").error,
+            probes,
+          };
+        });
+        expect(filesystem).toEqual({
+          cwd: "/app:",
+          skills: true,
+          equipment: true,
+          probes: {
+            "Templates/Skills/CodexProbe.st": { bytes: 3, error: null },
+            "Templates\\Skills\\CodexProbe.st": { bytes: 3, error: null },
+            "\\CodexProbe.st": { bytes: 3, error: null },
+          },
+        });
+      });
+
       const publishedClient = JSON.parse(
         readFileSync(
           path.join(userData, "game", "artifacts", "manifest.json"),
@@ -161,7 +175,7 @@ test.describe("live client", () => {
             "## ArenaNet client canary",
             "",
             `- Client fingerprint: \`${publishedClient.clientFingerprint}\``,
-            `- Renderer: ${String(state.renderer)}`,
+            `- Renderer: ${String(platform.renderer)}`,
             "- JSPI initialized: yes",
             "- Hardware frame submitted: yes",
             "- Gamepad host imports: available",
@@ -190,98 +204,102 @@ test.describe("live client", () => {
           };
         });
 
-      await applyScale(1);
-      await expect
-        .poll(async () => {
-          const value = await dimensions();
-          return value.width * value.height;
-        }, { timeout: 30_000 })
-        .toBeGreaterThan(0);
-      const oneX = await dimensions();
-      expect(oneX.width * oneX.height).toBeGreaterThan(0);
-      expect(oneX.offscreenWidth).toBe(oneX.width);
-      expect(oneX.offscreenHeight).toBe(oneX.height);
-      await applyScale(1.5);
-      await expect
-        .poll(async () => {
-          const oneAndHalfX = await dimensions();
-          return (
-            (oneAndHalfX.width * oneAndHalfX.height) /
-            (oneX.width * oneX.height)
-          );
-        }, { timeout: 30_000 })
-        .toBeGreaterThan(2);
-      const oneAndHalfX = await dimensions();
-      const oneAndHalfRatio =
-        (oneAndHalfX.width * oneAndHalfX.height) /
-        (oneX.width * oneX.height);
-      expect(oneAndHalfRatio).toBeLessThan(2.5);
-      expect(oneAndHalfX.offscreenWidth).toBe(oneAndHalfX.width);
-      expect(oneAndHalfX.offscreenHeight).toBe(oneAndHalfX.height);
-      await applyScale(2);
-      await expect
-        .poll(async () => {
-          const twoX = await dimensions();
-          return (twoX.width * twoX.height) / (oneX.width * oneX.height);
-        }, { timeout: 30_000 })
-        .toBeGreaterThan(3.5);
-      const twoX = await dimensions();
-      expect(
-        (twoX.width * twoX.height) / (oneX.width * oneX.height),
-      ).toBeLessThan(4.5);
-      expect(twoX.offscreenWidth).toBe(twoX.width);
-      expect(twoX.offscreenHeight).toBe(twoX.height);
-      await applyScale(1);
-
-      const persistenceProbe = "Templates/Skills/.gwonmac-persistence-check";
-      await page.evaluate(
-        ({ file, contents }) =>
-          new Promise((resolve, reject) => {
-            globalThis.FS.writeFile(file, contents);
-            globalThis.FS.syncfs(false, (error) =>
-              error ? reject(error) : resolve(),
+      await test.step("render scale changes the real drawing buffer", async () => {
+        await applyScale(1);
+        await expect
+          .poll(async () => {
+            const value = await dimensions();
+            return value.width * value.height;
+          }, { timeout: 30_000 })
+          .toBeGreaterThan(0);
+        const oneX = await dimensions();
+        expect(oneX.width * oneX.height).toBeGreaterThan(0);
+        expect(oneX.offscreenWidth).toBe(oneX.width);
+        expect(oneX.offscreenHeight).toBe(oneX.height);
+        await applyScale(1.5);
+        await expect
+          .poll(async () => {
+            const oneAndHalfX = await dimensions();
+            return (
+              (oneAndHalfX.width * oneAndHalfX.height) /
+              (oneX.width * oneX.height)
             );
-          }),
-        { file: persistenceProbe, contents: "persistent" },
-      );
-      await application.close();
-
-      application = await electron.launch({
-        cwd: root,
-        args: [".", `--user-data-dir=${userData}`],
-        env,
-        executablePath: electronBin,
+          }, { timeout: 30_000 })
+          .toBeGreaterThan(2);
+        const oneAndHalfX = await dimensions();
+        const oneAndHalfRatio =
+          (oneAndHalfX.width * oneAndHalfX.height) /
+          (oneX.width * oneX.height);
+        expect(oneAndHalfRatio).toBeLessThan(2.5);
+        expect(oneAndHalfX.offscreenWidth).toBe(oneAndHalfX.width);
+        expect(oneAndHalfX.offscreenHeight).toBe(oneAndHalfX.height);
+        await applyScale(2);
+        await expect
+          .poll(async () => {
+            const twoX = await dimensions();
+            return (twoX.width * twoX.height) / (oneX.width * oneX.height);
+          }, { timeout: 30_000 })
+          .toBeGreaterThan(3.5);
+        const twoX = await dimensions();
+        expect(
+          (twoX.width * twoX.height) / (oneX.width * oneX.height),
+        ).toBeLessThan(4.5);
+        expect(twoX.offscreenWidth).toBe(twoX.width);
+        expect(twoX.offscreenHeight).toBe(twoX.height);
+        await applyScale(1);
       });
-      const reopenedPage = await application.firstWindow({ timeout: 30_000 });
-      await reopenedPage.waitForLoadState("domcontentloaded");
-      await expect
-        .poll(
-          () =>
-            reopenedPage.evaluate(() =>
-              typeof globalThis.FS === "undefined"
-                ? ""
-                : globalThis.FS.cwd(),
-            ),
-          { timeout: 5 * 60_000, intervals: [500, 1_000] },
-        )
-        .toBe("/app:");
-      expect(
+
+      await test.step("host-filesystem-smoke: the mount survives a relaunch", async () => {
+        const persistenceProbe = "Templates/Skills/.gwonmac-persistence-check";
+        await page.evaluate(
+          ({ file, contents }) =>
+            new Promise((resolve, reject) => {
+              globalThis.FS.writeFile(file, contents);
+              globalThis.FS.syncfs(false, (error) =>
+                error ? reject(error) : resolve(),
+              );
+            }),
+          { file: persistenceProbe, contents: "persistent" },
+        );
+        await application.close();
+
+        application = await electron.launch({
+          cwd: root,
+          args: [".", `--user-data-dir=${userData}`],
+          env,
+          executablePath: electronBin,
+        });
+        const reopenedPage = await application.firstWindow({ timeout: 30_000 });
+        await reopenedPage.waitForLoadState("domcontentloaded");
+        await expect
+          .poll(
+            () =>
+              reopenedPage.evaluate(() =>
+                typeof globalThis.FS === "undefined"
+                  ? ""
+                  : globalThis.FS.cwd(),
+              ),
+            { timeout: 5 * 60_000, intervals: [500, 1_000] },
+          )
+          .toBe("/app:");
+        expect(
+          await reopenedPage.evaluate(
+            (file) =>
+              new globalThis.TextDecoder().decode(globalThis.FS.readFile(file)),
+            persistenceProbe,
+          ),
+        ).toBe("persistent");
         await reopenedPage.evaluate(
           (file) =>
-            new globalThis.TextDecoder().decode(globalThis.FS.readFile(file)),
+            new Promise((resolve, reject) => {
+              globalThis.FS.unlink(file);
+              globalThis.FS.syncfs(false, (error) =>
+                error ? reject(error) : resolve(),
+              );
+            }),
           persistenceProbe,
-        ),
-      ).toBe("persistent");
-      await reopenedPage.evaluate(
-        (file) =>
-          new Promise((resolve, reject) => {
-            globalThis.FS.unlink(file);
-            globalThis.FS.syncfs(false, (error) =>
-              error ? reject(error) : resolve(),
-            );
-          }),
-        persistenceProbe,
-      );
+        );
+      });
     } finally {
       await application.close();
     }
