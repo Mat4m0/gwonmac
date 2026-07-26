@@ -11,10 +11,11 @@
  * @param {{
  *   native: NativeSockets,
  *   diagnostics?: RendererDiagnostics,
+ *   socketOpened?: () => void,
  *   log(...values: unknown[]): void
  * }} options
  */
-export function createSocketHost({ native, diagnostics, log }) {
+export function createSocketHost({ native, diagnostics, socketOpened, log }) {
   /** @type {Map<number, ReturnType<typeof makeSocket>>} */
   const sockets = new Map();
   /** @type {Map<number, import('../shared/contracts.js').SocketEvent[]>} */
@@ -87,11 +88,16 @@ export function createSocketHost({ native, diagnostics, log }) {
         if (closed) return;
         if (event.type === 'open') {
           opened = true;
+          socketOpened?.();
           socket.onopen?.();
         } else if (event.type === 'data') {
           socket.onmessage?.(event.data);
+        } else if (event.type === 'error') {
+          // Main always follows an error with the socket's one final close.
+          // Keep the native identity until that close arrives; deleting it
+          // here would queue the close forever as an "early" event.
+          log('socket error', event.code);
         } else {
-          if (event.type === 'error') log('socket error', event.code);
           // Clear native identity before the callback. Client close handlers
           // can synchronously call close() again.
           finish();

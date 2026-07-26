@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
+import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { CLIENT_ARTIFACTS, HASH_ALGOS, SNAPSHOT } from "./access-key.js";
 import { writeAtomicJson } from "./atomic-file.js";
+import { fingerprintClientGeneration } from "./client-fingerprint.js";
 import { parseContentHash, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
 import { clientArtifactPath, clientManifestPath } from "./paths.js";
@@ -144,8 +146,7 @@ export function parsePublishedClientManifest(
   }
   if (
     value.clientFingerprint !== undefined &&
-    (typeof value.clientFingerprint !== "string" ||
-      !/^[a-f0-9]{64}$/.test(value.clientFingerprint))
+    !isDigest(value.clientFingerprint)
   ) {
     throw new AppError(
       "bad_manifest",
@@ -169,10 +170,9 @@ export function parsePublishedClientManifest(
       "published client manifest has invalid chunk count",
     );
   }
-  return {
+  const manifest: PublishedClientManifest = {
     formatVersion: PUBLISHED_CLIENT_FORMAT,
-    ...(typeof value.clientFingerprint === "string" &&
-    /^[a-f0-9]{64}$/.test(value.clientFingerprint)
+    ...(isDigest(value.clientFingerprint)
       ? { clientFingerprint: value.clientFingerprint }
       : {}),
     ...(artifacts ? { artifacts } : {}),
@@ -182,6 +182,20 @@ export function parsePublishedClientManifest(
     size,
     chunkHashes,
   };
+  if (
+    manifest.artifacts &&
+    manifest.clientFingerprint !==
+      publishedClientFingerprint({
+        ...manifest,
+        artifacts: manifest.artifacts,
+      })
+  ) {
+    throw new AppError(
+      "bad_manifest",
+      "published client fingerprint does not match its manifest",
+    );
+  }
+  return manifest;
 }
 
 function publishedClientFingerprint(
@@ -196,20 +210,12 @@ function publishedClientFingerprint(
       size: manifest.size,
       chunkHashes: manifest.chunkHashes,
     },
-  ]
-    .sort((left, right) =>
-      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
-    )
-    .map(({ name, size, chunkHashes }) => ({ name, size, chunkHashes }));
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        compression: manifest.compressionMode,
-        chunkSize: manifest.chunkSize,
-        files,
-      }),
-    )
-    .digest("hex");
+  ];
+  return fingerprintClientGeneration({
+    compression: manifest.compressionMode,
+    chunkSize: manifest.chunkSize,
+    files,
+  });
 }
 
 async function describeArtifact(

@@ -56,6 +56,15 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
     leaks: ["ublic-leak"],
   },
   {
+    what: "punctuation in a sensitive key and commas and escapes in its value",
+    input: JSON.stringify({
+      args: {
+        "x-auth.token/v2": 'comma-secret, quote-secret" slash-secret\\tail',
+      },
+    }),
+    leaks: ["comma-secret", "quote-secret", "slash-secret", "tail"],
+  },
+  {
     what: "a query string carrying credentials",
     input: "GET https://account.arena.net/login?user=alice&password=hunter2&next=/home",
     leaks: ["alice", "hunter2"],
@@ -93,10 +102,9 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
 
 /**
  * Documents that exist to exercise the streaming cut rather than to claim a
- * leak is caught. `flushBoundary` cuts immediately after a comma because no
- * rule can match across one; each of these puts a comma where a rule used to
- * reach past it, so the chunked-versus-whole test below is what proves that
- * premise instead of the comment asserting it.
+ * leak is caught. `flushBoundary` cuts immediately after a comma outside a JSON
+ * string; each of these puts a comma where a byte search would cut a redaction
+ * in half, so the chunked-versus-whole test below proves the structural rule.
  */
 const BOUNDARY_CORPUS: { what: string; input: string }[] = [
   {
@@ -180,16 +188,22 @@ describe("Chromium trace scanner", () => {
     assert.equal(parsed.traceEvents[0]!.args.next, 1);
   });
 
-  it("leaves a sensitive value containing a comma to the other rules", () => {
-    // The limit the comma boundary buys, stated rather than implied: a value
-    // with a bare comma in it — a serialized JSON blob under a sensitive key —
-    // is not matched by the quoted rule, and the rules below do not catch this
-    // one either. What the scan does guarantee here is that it leaves the
-    // document parseable rather than half-rewriting it.
-    const trace = '{"args":{"accountInfo":"{\\"id\\":\\"a\\",\\"m\\":\\"b\\"}"}}';
+  it("fully redacts a sensitive quoted value containing commas and escapes", () => {
+    const secret = '{"id":"comma,value","quote":"a\\"b","slash":"c\\\\d"}';
+    const trace = JSON.stringify({
+      args: { "account.info/v2": secret },
+      next: 1,
+    });
     const redacted = redactDiagnosticText(trace);
-    JSON.parse(redacted);
-    assert.equal(redacted, trace);
+    for (const leak of ["comma,value", 'a\\"b', "c\\\\d"]) {
+      assert.equal(redacted.includes(leak), false, redacted);
+    }
+    const parsed = JSON.parse(redacted) as {
+      args: { "account.info/v2": string };
+      next: number;
+    };
+    assert.equal(parsed.args["account.info/v2"], "[redacted]");
+    assert.equal(parsed.next, 1);
   });
 
   it("redacts a value that straddles a streaming chunk boundary", async () => {
@@ -230,28 +244,24 @@ describe("Chromium trace scanner", () => {
     }
   });
 
-  it("half-redacts a value straddling the carry ceiling, which is the trade", async () => {
-    // A megabyte with no comma in it is not the JSON Chromium writes, so the
-    // scanner flushes rather than buffering without bound — and a comma is the
-    // only character no rule can match across, so there is nothing safer to
-    // cut at. This is the one cut where a value is redacted up to the seam and
-    // its remainder written out verbatim. It is asserted rather than avoided
-    // so that nobody reads `docs/internals.md` as promising otherwise.
-    const seam = "a".repeat(1024 * 1024 + 10) + '"path":"/Users/x/very-sec';
-    const output = await collect([seam, 'ret-file.txt"}']);
-    assert.equal(output.includes("[redacted-path]ret-file.txt"), true, output.slice(-60));
-    assert.equal(
-      redactDiagnosticText(seam + 'ret-file.txt"}').includes("ret-file.txt"),
-      false,
+  it("fails closed when commas inside a JSON string cannot bound the carry", async () => {
+    // A byte search sees thousands of commas here; structurally there is no
+    // safe cut because every one is inside the still-open string.
+    const noBoundary = `{"account.info":"${"secret,".repeat(160_000)}`;
+    await assert.rejects(
+      collect(slice(noBoundary, 64 * 1024)),
+      /no safe structural comma/u,
     );
   });
 
-  it("survives a trace larger than the carry ceiling with no safe cut in it", async () => {
-    // The same ceiling, when the flush does not land inside a value: memory is
-    // bounded and what follows the seam is still scanned.
-    const filler = "a".repeat(2 * 1024 * 1024);
-    const output = await collect([filler, "/Users/x/secret.txt"]);
+  it("streams a large trace when structural commas keep the carry bounded", async () => {
+    const trace = JSON.stringify([
+      "a".repeat(600_000),
+      "b".repeat(600_000),
+      { path: "/Users/x/secret.txt" },
+    ]);
+    const output = await collect(slice(trace, 64 * 1024));
+    assert.equal(output, redactDiagnosticText(trace));
     assert.equal(output.includes("/Users/x/secret.txt"), false);
-    assert.equal(output.startsWith("aaaa"), true);
   });
 });

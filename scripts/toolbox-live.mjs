@@ -161,13 +161,14 @@ try {
   }
 
   const before = await page.evaluate(() => ({
-    tickCount: window.gwToolboxState.tickCount,
+    tickCount: window.gwToolboxState?.tickCount ?? null,
     at: performance.now(),
   }));
   await page.waitForTimeout(2_000);
   const cadence = await page.evaluate((start) => ({
-    ticks:
-      window.gwToolboxState.tickCount >= start.tickCount
+    ticks: start.tickCount === null
+      ? 0
+      : window.gwToolboxState.tickCount >= start.tickCount
         ? window.gwToolboxState.tickCount - start.tickCount
         : window.gwToolboxState.tickCount + (2 ** 32 - start.tickCount),
     elapsedMs: performance.now() - start.at,
@@ -198,9 +199,12 @@ try {
     cached: !allowUpdate,
     snapshotComplete: preflight.snapshot?.complete === true,
     transformedCache: preflight.client.transformedCache,
+    targetReadout: preflight.targetReadout,
   };
   result.rendererErrors = [...rendererErrors];
-  validateCommonAcceptance(result, preflight.client.buildId);
+  validateCommonAcceptance(result, preflight.client.buildId, {
+    coreObservation: plan.tier === "automation",
+  });
   selectedScenario.validate(result);
   console.log(JSON.stringify(result));
 

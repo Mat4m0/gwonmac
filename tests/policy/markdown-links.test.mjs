@@ -145,6 +145,50 @@ test("a tracked file deleted from the working tree is skipped, not fatal", () =>
   assert.match(stderr, /^README\.md:1: missing link target docs\/gone\.md$/m);
 });
 
+test("an existing target outside the repository is broken", () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "gw-md-parent-"));
+  fixtures.push(parent);
+  const dir = path.join(parent, "repo");
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(parent, "outside.md"), "");
+  fs.writeFileSync(path.join(dir, "README.md"), "[outside](../outside.md)\n");
+  spawnSync("git", ["init", "-q"], { cwd: dir });
+
+  assert.deepEqual(findBrokenLinks(dir), [
+    { file: "README.md", line: 1, target: "../outside.md" },
+  ]);
+});
+
+test("an ignored target is broken even while it exists locally", () => {
+  const dir = fixture(
+    {
+      ".gitignore": "private/\n",
+      "README.md": "[private](private/note.md)\n",
+      "private/note.md": "",
+    },
+    { git: true },
+  );
+
+  assert.deepEqual(findBrokenLinks(dir), [
+    { file: "README.md", line: 1, target: "private/note.md" },
+  ]);
+});
+
+test("a repository directory target has at least one durable child", () => {
+  const dir = fixture(
+    {
+      "README.md": "[docs](docs)\n[empty](empty)\n",
+      "docs/guide.md": "",
+      "empty/.gitignore": "*\n",
+    },
+    { git: true },
+  );
+
+  assert.deepEqual(findBrokenLinks(dir), [
+    { file: "README.md", line: 2, target: "empty" },
+  ]);
+});
+
 test("code blocks, code spans, URLs and bare anchors are not treated as links", () => {
   const targets = extractLocalTargets(
     [

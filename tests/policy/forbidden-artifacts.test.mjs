@@ -31,6 +31,14 @@ test("no downloaded game artifacts or generated output are tracked", () => {
   assert.deepEqual(hits, []);
 });
 
+test("the application does not collect process-memory crash dumps", () => {
+  const diagnostics = readFileSync(
+    path.join(root, "src/main/diagnostics.ts"),
+    "utf8",
+  );
+  assert.doesNotMatch(diagnostics, /crashReporter|crashDumps|\.dmp/u);
+});
+
 test("no second production runtime remains", () => {
   for (const file of [
     "gw.py",

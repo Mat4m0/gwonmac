@@ -12,6 +12,9 @@ test.describe("sandbox boundary", () => {
         protocol: globalThis.location.protocol,
         search: globalThis.location.search,
         init: { ...window.gwNative.init },
+        toolboxSelectionFrozen: Object.isFrozen(
+          window.gwNative.init.toolboxSelection,
+        ),
         toolboxPresent: globalThis.document.getElementById("toolbox") !== null,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
@@ -28,9 +31,13 @@ test.describe("sandbox boundary", () => {
         // The game cursor ships on, so a default launch asks for it here.
         init: {
           toolboxAutomation: false,
-          nativeCursor: true,
+          toolboxSelection: {
+            nativeCursor: true,
+            targetReadout: false,
+          },
           templateFsTrace: false,
         },
+        toolboxSelectionFrozen: true,
         toolboxPresent: false,
         // The whole exposed surface, as a human-reviewed list: adding a
         // capability must be a deliberate edit here. What each one *does* is
@@ -190,7 +197,10 @@ test.describe("sandbox boundary", () => {
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
         toolboxAutomation: true,
-        nativeCursor: true,
+        toolboxSelection: {
+          nativeCursor: true,
+          targetReadout: false,
+        },
         templateFsTrace: false,
       });
       await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
@@ -209,7 +219,10 @@ test.describe("sandbox boundary", () => {
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
         toolboxAutomation: false,
-        nativeCursor: true,
+        toolboxSelection: {
+          nativeCursor: true,
+          targetReadout: false,
+        },
         templateFsTrace: true,
       });
       await expect(fixture.page.locator("#toolbox")).toHaveCount(0);

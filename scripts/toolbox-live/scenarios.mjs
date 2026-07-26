@@ -9,8 +9,8 @@
 // **Observation** reads. It runs against the configuration a player has —
 // automation off, the Toolbox installed because `settings.nativeCursor` is on —
 // and is handed no input and no command channel to hold, not merely told not to
-// use them. `liveRunPlan` and `scenarioContext` below are the two places that
-// decide, and each scenario names its tier once.
+// use them. A cursor-only run deliberately has no target-state tick stream;
+// readiness comes from the independently installed cursor consumer.
 //
 // Before this split every live run exported `GW_TOOLBOX_AUTOMATION=1` and got
 // an IPC channel, so the observation surface could not be exercised without the
@@ -45,7 +45,14 @@ export async function waitForPlayable(page, tier) {
   );
   let inputs = 0;
   const ready = () =>
-    page.evaluate(() => window.gwToolboxState?.status === "ready");
+    page.evaluate(
+      (mode) =>
+        mode === "automation"
+          ? window.gwToolboxState?.status === "ready"
+          : window.gwToolboxRuntime?.status === "installed"
+            && window.gwToolboxRuntime?.cursor?.valid === true,
+      tier,
+    );
   if (tier === "automation") {
     for (const delay of [3_000, 5_000, 20_000]) {
       if (await ready()) break;
@@ -65,11 +72,13 @@ export async function waitForPlayable(page, tier) {
     }));
   }
   await page.waitForFunction(
-    () => {
-      const state = window.gwToolboxState;
-      return state?.status === "ready" && state.tickCount > 5;
-    },
-    null,
+    (mode) =>
+      mode === "automation"
+        ? window.gwToolboxState?.status === "ready"
+          && window.gwToolboxState.tickCount > 5
+        : window.gwToolboxRuntime?.status === "installed"
+          && window.gwToolboxRuntime?.cursor?.valid === true,
+    tier,
     { timeout: 30 * 60_000, polling: 250 },
   );
   return inputs;
@@ -120,6 +129,48 @@ async function runTarget({ page }) {
     if (acquired.valid && acquired.id !== excludedId) break;
   }
   return { method: "bounded-party-row", initial, acquired };
+}
+
+async function runTargetReadout({ page }) {
+  const target = await runTarget({ page });
+  await page.waitForFunction(
+    () => {
+      const runtime = window.gwToolboxRuntime?.readout;
+      const element = globalThis.document.getElementById("toolbox-target");
+      return runtime?.visible === true
+        && element !== null
+        && globalThis.getComputedStyle(element).display !== "none";
+    },
+    null,
+    { timeout: 5_000, polling: 50 },
+  );
+  const presentation = await page.evaluate(() => {
+    const elements = [
+      ...globalThis.document.querySelectorAll("#toolbox-target"),
+    ];
+    const element = elements[0] ?? null;
+    return {
+      count: elements.length,
+      visible:
+        element !== null
+        && globalThis.getComputedStyle(element).display !== "none",
+      text: element?.textContent ?? "",
+      runtime: window.gwToolboxRuntime?.readout ?? null,
+    };
+  });
+  return { ...target, presentation };
+}
+
+function validateTargetAcquisition(evidence) {
+  if (
+    !evidence?.acquired?.valid
+    || (
+      evidence.initial.valid
+      && evidence.initial.id === evidence.acquired.id
+    )
+  ) {
+    throw new Error("target scenario did not acquire a different target");
+  }
 }
 
 async function runMovement({ page }) {
@@ -364,14 +415,28 @@ export const SCENARIOS = Object.freeze({
     tier: "automation",
     run: runTarget,
     validate(result) {
+      validateTargetAcquisition(result.evidence);
+    },
+  }),
+  "target-readout": Object.freeze({
+    tier: "automation",
+    run: runTargetReadout,
+    validate(result) {
+      const evidence = result.evidence;
+      validateTargetAcquisition(evidence);
+      const expected =
+        `${Math.round(evidence.acquired.distance)} ${evidence.acquired.range}`;
       if (
-        !result.evidence?.acquired?.valid
-        || (
-          result.evidence.initial.valid
-          && result.evidence.initial.id === result.evidence.acquired.id
+        evidence.presentation?.count !== 1
+        || evidence.presentation.visible !== true
+        || evidence.presentation.runtime?.visible !== true
+        || evidence.presentation.runtime.line !== expected
+        || !evidence.presentation.text.includes(
+          String(Math.round(evidence.acquired.distance)),
         )
+        || !evidence.presentation.text.includes(evidence.acquired.range)
       ) {
-        throw new Error("target scenario did not acquire a different target");
+        throw new Error("target readout did not render the acquired target");
       }
     },
   }),
@@ -462,9 +527,10 @@ export const SCENARIOS = Object.freeze({
 /**
  * The whole tier decision for one live run: which scenario, which environment
  * the app is launched in, and which channels the parent opens to it. An
- * observation run boots the app exactly as a player's does — `nativeCursor` on,
- * `GW_TOOLBOX_AUTOMATION` unset even when the caller's own environment exports
- * it — and gets no IPC channel, so `child.send` does not exist to be called.
+ * observation run boots the app exactly as a player's cursor-only session does
+ * — `nativeCursor` on, `targetReadout` off, `GW_TOOLBOX_AUTOMATION` unset even
+ * when the caller's own environment exports it — and gets no IPC channel, so
+ * `child.send` does not exist to be called.
  *
  * Returns null for an unknown scenario name.
  */
@@ -497,6 +563,9 @@ export function liveRunRefusal(plan, preflight, { cachedOnly }) {
     return "cached-client-incomplete";
   }
   if (preflight.credentials !== "saved") return "saved-login-missing";
+  if (plan.name === "target-readout" && !preflight.targetReadout) {
+    return "target-readout-disabled";
+  }
   // An observation run enables nothing: the Toolbox installs only because the
   // profile's own setting is on. Without it the run would wait half an hour for
   // a hook that is never installed, so refuse and say which setting.

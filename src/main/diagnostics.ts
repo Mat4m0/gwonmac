@@ -19,7 +19,6 @@ import { promisify } from "node:util";
 import {
   app,
   contentTracing,
-  crashReporter,
   dialog,
   powerMonitor,
   screen,
@@ -30,11 +29,8 @@ import type {
   GraphicsDiagnostics,
   RendererCommand,
 } from "../shared/contracts.js";
-import { errorCode } from "../shared/errors.js";
+import { errorCode, type ErrorCode } from "../shared/errors.js";
 import type {
-  DiagnosticFields,
-  DiagnosticLevel,
-  DiagnosticSubsystem,
   DiagnosticSummary,
   RendererFrameBatch,
   RendererMilestone,
@@ -43,6 +39,7 @@ import type {
 } from "../shared/diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { loadSettings } from "./core/settings.js";
+import type { ProxyRoute } from "./core/proxy-routes.js";
 import {
   canonicalRendererWindow,
   sendRendererCommand,
@@ -51,7 +48,6 @@ import {
   FlightRecorder,
   runtimeVersions as versions,
   type CaptureMetadata,
-  type Span,
 } from "./diagnostic-recorder.js";
 import {
   buildDiagnosticReport,
@@ -62,9 +58,11 @@ import {
   type RedactionResult,
 } from "./diagnostics/detector.js";
 import {
-  diagnosticEventRecord,
+  asAppVersion,
+  asRendererFingerprint,
   type DiagnosticEvent,
 } from "./diagnostics/schema.js";
+import type { Digest } from "../shared/digest.js";
 import {
   redactDiagnosticText as redactText,
   redactTraceStream,
@@ -104,30 +102,36 @@ let captureStoppedHandler: (() => void | Promise<void>) | null = null;
  */
 const rendererCaptureCommand = (
   command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
-): Promise<void> => sendRendererCommand(canonicalRendererWindow(), command);
+): Promise<void> =>
+  sendRendererCommand(canonicalRendererWindow(), command).then((outcome) => {
+    if (outcome !== "completed") {
+      logEvent({
+        k: "renderer.commandIncomplete",
+        action: command.action,
+        outcome,
+      });
+    }
+  });
 
 /**
  * The only way to record an event that carries information about a failure.
  * The event owns its name, subsystem, level and fields, so two producers of
  * one event cannot disagree, and no field of one can hold free text.
  */
-export function logEvent(event: DiagnosticEvent): void {
-  const record = diagnosticEventRecord(event);
-  recorder.event(record.subsystem, record.level, record.name, record.fields);
+interface EventDetail {
+  durationUs?: number;
+  traceId?: string;
+  spanId?: string;
+  timestampUs?: number;
 }
 
-/**
- * Milestones and counters that carry no payload beyond values this process
- * chose itself. Events join the closed schema above as they are converted;
- * nothing that quotes an error, a path or a host may use this.
- */
-export function log(
-  subsystem: DiagnosticSubsystem,
-  level: DiagnosticLevel,
-  message: string,
-  fields?: DiagnosticFields,
-): void {
-  recorder.event(subsystem, level, message, fields);
+function recordEvent(event: DiagnosticEvent, detail: EventDetail = {}): void {
+  recorder.record(event, detail);
+}
+
+/** The only public event-recording API. */
+export function logEvent(event: DiagnosticEvent): void {
+  recordEvent(event);
 }
 
 export function count(name: string, delta = 1): void {
@@ -150,7 +154,7 @@ export function peakGauge(name: string, value: number): void {
 }
 
 export function markPerformanceProblem(): void {
-  recorder.event("renderer", "info", "performance.problemMarked");
+  logEvent({ k: "performance.problemMarked" });
   void rendererCaptureCommand({
     type: "diagnostics.capture",
     action: "problem-marked",
@@ -163,20 +167,114 @@ export function setDiagnosticCaptureStoppedHandler(
   captureStoppedHandler = handler;
 }
 
-export function span(
-  subsystem: DiagnosticSubsystem,
-  name: string,
-  fields?: DiagnosticFields,
-  parentSpanId?: string,
-  traceId?: string,
-): Span {
-  return recorder.span(
-    subsystem,
-    name,
-    fields,
-    parentSpanId,
+export interface ClosedDiagnosticSpan<End> {
+  readonly traceId: string;
+  readonly spanId: string;
+  end(outcome: End): number;
+}
+
+function closedSpan<End>(
+  begin: DiagnosticEvent,
+  finish: (outcome: End) => DiagnosticEvent,
+  histogram: string,
+  recordEvents = true,
+): ClosedDiagnosticSpan<End> {
+  const started = recorder.timestampUs();
+  const traceId = randomUUID();
+  const spanId = randomUUID();
+  if (recordEvents) recordEvent(begin, { traceId, spanId });
+  let ended = false;
+  return {
     traceId,
-    subsystem !== "snapshot" || captureLevel > 0,
+    spanId,
+    end(outcome) {
+      if (ended) return 0;
+      ended = true;
+      const durationUs = recorder.timestampUs() - started;
+      recorder.observe(histogram, durationUs);
+      if (recordEvents || durationUs >= 50_000) {
+        recordEvent(finish(outcome), { durationUs, traceId, spanId });
+      }
+      return durationUs;
+    },
+  };
+}
+
+export function startDnsResolveSpan(): ClosedDiagnosticSpan<
+  | { status: "ok"; code: null }
+  | { status: "error"; code: ErrorCode }
+> {
+  return closedSpan(
+    { k: "dns.resolve.begin" },
+    (outcome) => ({ k: "dns.resolve.end", ...outcome }),
+    "dns.resolve",
+  );
+}
+
+export type ClientUpdateSpanOutcome =
+  | {
+      status: "rejectedCandidateSkipped" | "candidate" | "ready";
+      code: null;
+      fingerprint: Digest | null;
+    }
+  | {
+      status: "cachedFallback" | "error";
+      code: ErrorCode;
+      fingerprint: null;
+    }
+  | {
+      status: "cancelled";
+      code: null;
+      fingerprint: null;
+    };
+
+export function startClientUpdateSpan(): ClosedDiagnosticSpan<ClientUpdateSpanOutcome> {
+  return closedSpan(
+    { k: "update.clientUpdate.begin" },
+    (outcome) => ({ k: "update.clientUpdate.end", ...outcome }),
+    "update.clientUpdate",
+  );
+}
+
+export interface SnapshotReadSpanStart {
+  offsetBytes: number;
+  requestedBytes: number;
+  priority: "demand" | "prefetch";
+}
+
+export type SnapshotReadSpanOutcome =
+  | { returnedBytes: number; status: 206; code: null }
+  | { returnedBytes: 0; status: 503; code: ErrorCode };
+
+export function startSnapshotReadSpan(
+  start: SnapshotReadSpanStart,
+): ClosedDiagnosticSpan<SnapshotReadSpanOutcome> {
+  return closedSpan(
+    { k: "snapshot.read.begin", ...start },
+    (outcome) => ({ k: "snapshot.read.end", ...start, ...outcome }),
+    "snapshot.read",
+    captureLevel > 0,
+  );
+}
+
+export interface ProxyRequestSpanStart {
+  route: ProxyRoute;
+  method: "GET" | "POST" | "PUT";
+}
+
+export type ProxyRequestSpanOutcome =
+  | { status: number; reason: null; code: null }
+  | { status: 413; reason: "bodyTooLarge"; code: null }
+  | { status: 502; reason: "redirectEscape"; code: null }
+  | { status: 502; reason: null; code: ErrorCode };
+
+export function startProxyRequestSpan(
+  start: ProxyRequestSpanStart,
+): ClosedDiagnosticSpan<ProxyRequestSpanOutcome> {
+  return closedSpan(
+    { k: "proxy.request.begin", ...start },
+    (outcome) => ({ k: "proxy.request.end", ...start, ...outcome }),
+    "proxy.request",
   );
 }
 
@@ -192,10 +290,8 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
   recorder.setLatest("graphics.drawingBufferHeight", value.drawingBufferHeight);
   recorder.setLatest("graphics.antialias", value.antialias);
   recorder.setLatest("graphics.samples", value.samples);
-  recorder.event("graphics", "info", "graphics.detected", {
-    webglVersion: value.webglVersion,
-    renderer: value.renderer,
-    vendor: value.vendor,
+  logEvent({
+    k: "graphics.detected",
     jspi: value.jspi,
     hardwareAcceleration: value.hardwareAcceleration,
     canvasWidth: value.canvasWidth,
@@ -234,22 +330,26 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("socket.rendererSettles", value.socketSettles);
   recorder.count("diagnostics.rendererDropped", value.droppedRecords);
   for (const event of value.rendererEvents) {
-    const subsystem = event.name.startsWith("graphics.") ? "graphics" : "renderer";
-    const level =
-      event.name === "graphics.contextRestored"
-        ? "info"
-        : event.name === "audio.resumeFailed" ||
-            event.name === "pointerLock.failed"
-          ? "warn"
-          : "error";
     recorder.count(`renderer.event.${event.name}`);
-    recorder.event(
-      subsystem,
-      level,
-      event.name,
-      event.fingerprint ? { fingerprint: event.fingerprint } : undefined,
-      { timestampUs: Math.round(event.timestampUs) },
-    );
+    const fingerprint = event.fingerprint
+      ? asRendererFingerprint(event.fingerprint)
+      : null;
+    switch (event.name) {
+      case "renderer.windowError":
+      case "renderer.unhandledRejection":
+      case "graphics.contextLost":
+      case "graphics.contextRestored":
+      case "graphics.presentationFailed":
+      case "client.glueLoadFailed":
+      case "filesystem.persistenceFailed":
+      case "audio.resumeFailed":
+      case "pointerLock.failed":
+        recordEvent(
+          { k: event.name, fingerprint },
+          { timestampUs: Math.round(event.timestampUs) },
+        );
+        break;
+    }
   }
   recorder.mergeHistogram(
     "renderer.rafInterval",
@@ -358,11 +458,9 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   );
   if (captureLevel > 0) {
     for (let index = 0; index < value.socketSendEvents.length; index += 7) {
-      recorder.event(
-        "socket",
-        "debug",
-        "socket.rendererSend",
+      recordEvent(
         {
+          k: "socket.rendererSend",
           syncUs: Math.round(value.socketSendEvents[index + 1]!),
           settleUs: Math.round(value.socketSendEvents[index + 2]!),
           payloadBytes: value.socketSendEvents[index + 3]!,
@@ -373,7 +471,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
         { timestampUs: Math.round(value.socketSendEvents[index]!) },
       );
     }
-    recorder.event("renderer", "debug", "renderer.metrics", {
+    logEvent({ k: "renderer.metrics",
       visible: value.visible,
       intervalMs: Math.round(value.intervalMs),
       rafCount: value.rafCount,
@@ -424,7 +522,7 @@ export function recordClockOffset(offsetUs: number, rttUs: number): void {
   rendererClockSynchronized = true;
   recorder.setLatest("renderer.clockOffsetUs", Math.round(offsetUs));
   recorder.setLatest("renderer.clockRttUs", Math.round(rttUs));
-  recorder.event("renderer", "debug", "clock.synchronized", {
+  logEvent({ k: "clock.synchronized",
     offsetUs: Math.round(offsetUs),
     rttUs: Math.round(rttUs),
   });
@@ -443,30 +541,39 @@ export function recordRendererMilestone(
     recorder.setLatest("client.programId", fields.programId);
     recorder.setLatest("client.buildId", fields.buildId);
   }
-  recorder.event(
-    "renderer",
-    "info",
-    name,
-    { clockSynchronized: rendererClockSynchronized, ...fields },
+  recordEvent(
+    { k: name, clockSynchronized: rendererClockSynchronized },
     { timestampUs },
   );
 }
 
-async function stopTrace(): Promise<void> {
-  if (!tracePath) return;
+async function stopTrace(): Promise<boolean> {
+  if (!tracePath) return false;
   if (traceGuard) clearInterval(traceGuard);
   traceGuard = null;
   const target = tracePath;
-  tracePath = "";
   try {
     await contentTracing.stopRecording(target);
+    tracePath = "";
     lastTracePath = target;
     // Size is the first thing anyone asks after an export goes wrong.
     const bytes = await stat(target).then((info) => info.size, () => 0);
     recorder.setLatest("capture.traceBytes", bytes);
-    recorder.event("app", "info", "chromiumTrace.stopped", { bytes });
+    logEvent({ k: "chromiumTrace.stopped", bytes });
+    return true;
   } catch (err) {
     logEvent({ k: "chromiumTrace.stopFailed", code: errorCode(err) });
+    // A failed stop cannot produce a trustworthy Chromium trace. Delete the
+    // exact target now, but retain it in `tracePath` if deletion itself fails
+    // so quit or the next capture can retry instead of orphaning it.
+    try {
+      await rm(target, { force: true });
+      tracePath = "";
+    } catch {
+      // The target remains tracked. A new capture refuses to replace it until
+      // `discardTrace` can remove it.
+    }
+    return false;
   }
 }
 
@@ -475,12 +582,15 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
     return Promise.reject(new Error("a diagnostics capture is already active"));
   }
   const operation = (async () => {
+    // Beginning a capture replaces the previous capture result. Its raw trace
+    // must be deleted first; clearing only the pointer would orphan a file that
+    // can contain Chromium process data.
+    await discardTrace();
     await rendererCaptureCommand({ type: "diagnostics.capture", action: "reset" });
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
     eventLoopWindowStartedUs = recorder.timestampUs();
-    lastTracePath = "";
     captureLevel = level;
     await rendererCaptureCommand({
       type: "diagnostics.capture",
@@ -490,7 +600,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
     captureTimer = setTimeout(() => {
       void stopDiagnosticCapture("automatic");
     }, 120_000);
-    recorder.event("app", "info", "capture.started", { level });
+    logEvent({ k: "capture.started", level });
     recordedCaptureLevel = level;
     if (level !== 2) return;
 
@@ -533,7 +643,10 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
         type: "diagnostics.capture",
         action: "stopped",
       });
-      tracePath = "";
+      // `startRecording` may have created the target before rejecting. Remove
+      // it by the tracked exact path; if cleanup itself fails, keep the pointer
+      // so shutdown or the next capture can retry.
+      await discardTrace().catch(() => undefined);
       recordedCaptureLevel = 0;
       recorder.cancelCapture();
       logEvent({ k: "chromiumTrace.startFailed", code: errorCode(error) });
@@ -562,12 +675,15 @@ export function stopDiagnosticCapture(
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
     await rendererCaptureCommand({ type: "diagnostics.capture", action: "flush" });
-    await stopTrace();
-    recorder.event("app", "info", "capture.stopped", {
-      level: stoppedLevel,
+    const traceCompleted = await stopTrace();
+    const completedLevel =
+      stoppedLevel === 2 && !traceCompleted ? 1 : stoppedLevel;
+    recordedCaptureLevel = completedLevel;
+    logEvent({ k: "capture.stopped",
+      level: completedLevel,
       reason,
     });
-    recorder.endCapture(stoppedLevel, reason);
+    recorder.endCapture(completedLevel, reason);
     captureLevel = 0;
     await rendererCaptureCommand({
         type: "diagnostics.capture",
@@ -615,7 +731,7 @@ function sampleProcesses(): void {
   recorder.setPeak("main.peakExternalBytes", own.external);
   recorder.setPeak("main.peakArrayBuffersBytes", own.arrayBuffers);
   if (detailedSample) {
-    recorder.event("app", "debug", "process.main", {
+    logEvent({ k: "process.main",
       cpuPercentOneCore: mainCpuPercent,
       rssBytes: own.rss,
       heapUsedBytes: own.heapUsed,
@@ -634,8 +750,7 @@ function sampleProcesses(): void {
       metric.cpu.percentCPUUsage,
     );
     recorder.setLatest(`${prefix}.rssBytes`, metric.memory.workingSetSize * 1_024);
-    recorder.event("app", "debug", "process.chromium", {
-      type: metric.type,
+    logEvent({ k: "process.chromium",
       pid: metric.pid,
       cpuPercentElectron: metric.cpu.percentCPUUsage,
       idleWakeupsPerSecond: metric.cpu.idleWakeupsPerSecond,
@@ -684,7 +799,7 @@ function sampleEventLoop(): void {
   );
   previousEventLoopUtilization = currentUtilization;
   recorder.setLatest("main.eventLoopUtilization", utilization.utilization);
-  recorder.event("app", "debug", "eventLoop.sample", {
+  logEvent({ k: "eventLoop.sample",
     windowMs: Math.round((sampledAtUs - eventLoopWindowStartedUs) / 1_000),
     resolutionMs: 5,
     meanUs: Math.round(meanUs),
@@ -721,7 +836,6 @@ async function gpuEnvironment(): Promise<Record<string, unknown>> {
 }
 
 export async function startDiagnostics(): Promise<void> {
-  crashReporter.start({ uploadToServer: false, compress: true });
   const diagnosticsDir = gamePaths().diagnostics;
   const staleCaptures = staleDiagnosticEntries(
     await readdir(diagnosticsDir).catch(() => []),
@@ -729,15 +843,6 @@ export async function startDiagnostics(): Promise<void> {
   await Promise.all(
     staleCaptures.map((file) => rm(file, { recursive: true, force: true })),
   );
-  const crashDir = app.getPath("crashDumps");
-  const crashFiles = (await readdir(crashDir).catch(() => []))
-    .filter((name) => name.endsWith(".dmp"))
-    .map((name) => path.join(crashDir, name));
-  const datedCrashFiles = await Promise.all(
-    crashFiles.map(async (file) => ({ file, mtime: (await stat(file)).mtimeMs })),
-  );
-  datedCrashFiles.sort((a, b) => b.mtime - a.mtime);
-  await Promise.all(datedCrashFiles.slice(3).map(({ file }) => rm(file, { force: true })));
   eventLoop.enable();
   previousEventLoopUtilization = performance.eventLoopUtilization();
   eventLoopWindowStartedUs = recorder.timestampUs();
@@ -763,31 +868,35 @@ export async function startDiagnostics(): Promise<void> {
     versions: versions(),
     startedAt: recorder.startedWall,
   };
-  recorder.event("app", "info", "diagnostics.started", {
-    sessionId: recorder.sessionId,
-    appVersion: app.getVersion(),
-    platform: platform(),
-    architecture: arch(),
-  });
+  logEvent({ k: "diagnostics.started", appVersion: asAppVersion(app.getVersion()) });
   recorder.setLatest("system.thermalState", powerMonitor.getCurrentThermalState());
   recorder.setLatest("system.onBattery", powerMonitor.isOnBatteryPower());
   powerMonitor.on("on-battery", () => {
     recorder.setLatest("system.onBattery", true);
-    recorder.event("app", "warn", "power.onBattery");
+    logEvent({ k: "power.onBattery" });
   });
   powerMonitor.on("on-ac", () => {
     recorder.setLatest("system.onBattery", false);
-    recorder.event("app", "info", "power.onAc");
+    logEvent({ k: "power.onAc" });
   });
-  powerMonitor.on("suspend", () => recorder.event("app", "warn", "power.suspend"));
-  powerMonitor.on("resume", () => recorder.event("app", "info", "power.resume"));
+  powerMonitor.on("suspend", () => logEvent({ k: "power.suspend" }));
+  powerMonitor.on("resume", () => logEvent({ k: "power.resume" }));
   powerMonitor.on("thermal-state-change", ({ state }) => {
     recorder.setLatest("system.thermalState", state);
-    recorder.event("app", state === "serious" || state === "critical" ? "warn" : "info", "thermal.changed", { state });
+    logEvent({
+      k:
+        state === "serious" || state === "critical"
+          ? "thermal.pressure"
+          : "thermal.changed",
+      state,
+    });
   });
   powerMonitor.on("speed-limit-change", ({ limit }) => {
     recorder.setLatest("system.cpuSpeedLimitPercent", limit);
-    recorder.event("app", limit < 100 ? "warn" : "info", "cpuSpeedLimit.changed", { limit });
+    logEvent({
+      k: limit < 100 ? "cpuSpeedLimit.reduced" : "cpuSpeedLimit.restored",
+      limit,
+    });
   });
   sampler = setInterval(() => {
     sampleProcesses();
@@ -800,10 +909,15 @@ export async function startDiagnostics(): Promise<void> {
  * path we hold — never a glob, and never anything a session still needs.
  */
 async function discardTrace(): Promise<void> {
-  if (!lastTracePath) return;
-  const target = lastTracePath;
-  lastTracePath = "";
-  await rm(target, { force: true }).catch(() => undefined);
+  const targets = [...new Set([tracePath, lastTracePath].filter(Boolean))];
+  for (const target of targets) {
+    // Clear a pointer only after its exact target is gone. In particular,
+    // starting another Level 2 capture must not overwrite the only reference
+    // to a partial target left by a failed stop.
+    await rm(target, { force: true });
+    if (tracePath === target) tracePath = "";
+    if (lastTracePath === target) lastTracePath = "";
+  }
 }
 
 export async function stopDiagnostics(): Promise<void> {
@@ -914,9 +1028,8 @@ export async function exportDiagnosticsZip(
       exportedAt: new Date().toISOString(),
       droppedEventCount: summary.droppedEvents,
       includedFiles: files,
-      // What was checked, not a verdict about it. `openFields` is the residue
-      // the closed schema has not absorbed yet, and a reader can hold the
-      // export to these numbers by re-running the detector over events.jsonl.
+      // What was checked, not a self-awarded verdict. A reader can reproduce
+      // both counts by running the same closed schema over events.jsonl.
       redaction: { ...inspection, traceBytesScanned } satisfies RedactionResult,
       profilerContaminated: files.includes("chromium-trace.json"),
       eventLog: {

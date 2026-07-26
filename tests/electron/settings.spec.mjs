@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 
 test.describe("settings experience", () => {
@@ -112,8 +114,17 @@ test.describe("settings experience", () => {
         .toMatchObject({
           renderScale: 1.5,
           nativeCursor: true,
+          targetReadout: false,
           showDiagnostics: true,
         });
+      // The second tool is independent and defaults off. Declining its restart
+      // cannot change the cursor choice or leave the readout box ticked.
+      await page.locator('input[name="targetReadout"]').click();
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "The target readout was not changed.",
+      );
+      await expect(page.locator('input[name="targetReadout"]')).not.toBeChecked();
+      await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
       // Nothing about the running session's cursor may change.
       expect(
         await page.locator("#canvas").evaluate((canvas) =>
@@ -140,6 +151,7 @@ test.describe("settings experience", () => {
       const { page } = fixture;
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
         nativeCursor: true,
+        targetReadout: false,
       });
       await page.evaluate(() =>
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
@@ -148,14 +160,15 @@ test.describe("settings experience", () => {
       // A fresh profile arrives with the box already ticked, so the control is
       // how a player turns the cursor off rather than how they find it.
       await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
+      await expect(page.locator('input[name="targetReadout"]')).not.toBeChecked();
 
-      // The note has to say where the artwork comes from, what else the box
-      // puts on screen, and what changing it costs; nothing is bundled, so the
-      // box is the only thing the player toggles.
+      // Each tool has its own label and default; the cursor note has to say
+      // where its artwork comes from and what changing it costs.
       const controls = page.locator("#settings-pane-controls");
       await expect(controls).toContainText("your own installed Guild Wars");
       await expect(controls).toContainText("no artwork ships with this app");
-      await expect(controls).toContainText("distance and range band");
+      await expect(controls).toContainText("Show target distance and range");
+      await expect(controls).toContainText("Off by default");
       // The write and the restart are one action (P7.6), so the note must not
       // say the change waits quietly for the next launch.
       await expect(controls).toContainText("restarts the app");
@@ -170,8 +183,134 @@ test.describe("settings experience", () => {
       // The default reaches the renderer through the same init payload an
       // explicit opt-in does, not around it.
       expect(
-        await page.evaluate(() => globalThis.gwNative.init.nativeCursor),
+        await page.evaluate(
+          () => globalThis.gwNative.init.toolboxSelection.nativeCursor,
+        ),
       ).toBe(true);
+      expect(
+        await page.evaluate(
+          () => globalThis.gwNative.init.toolboxSelection.targetReadout,
+        ),
+      ).toBe(false);
+      // The generated launch selection carries the canonical Toolbox registry
+      // into the renderer. Every member must bind both settings surfaces; a
+      // future tool cannot silently stop at main/preload.
+      expect(
+        await page.evaluate(() =>
+          Object.keys(globalThis.gwNative.init.toolboxSelection).map((name) => {
+            const id = name.replace(/[A-Z]/gu, (letter) =>
+              `-${letter.toLowerCase()}`);
+            return {
+              name,
+              settings: !!globalThis.document.querySelector(
+                `input[name="${name}"]`,
+              ),
+              launcher: !!globalThis.document.getElementById(
+                `data-choice-${id}`,
+              ),
+            };
+          }),
+        ),
+      ).toEqual([
+        { name: "nativeCursor", settings: true, launcher: true },
+        { name: "targetReadout", settings: true, launcher: true },
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("reset and a changed Toolbox posture restart as one action", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-reset-restart-e2e-",
+      {},
+      (userData) =>
+        writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({ formatVersion: 1, nativeCursor: false }),
+        ),
+    );
+    try {
+      const { app, page } = fixture;
+      expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
+        nativeCursor: false,
+      });
+      await app.evaluate(({ app: electronApp, dialog }) => {
+        globalThis.__resetRestart = {
+          quit: false,
+          relaunch: false,
+          options: null,
+          originalQuit: electronApp.quit,
+          originalRelaunch: electronApp.relaunch,
+        };
+        dialog.showMessageBox = async (_win, options) => {
+          globalThis.__resetRestart.options = options;
+          return { response: 0, checkboxChecked: false };
+        };
+        electronApp.relaunch = () => {
+          globalThis.__resetRestart.relaunch = true;
+        };
+        electronApp.quit = () => {
+          globalThis.__resetRestart.quit = true;
+        };
+      });
+
+      const reset = await page.evaluate(() => window.gwNative.settings.reset());
+      expect(reset).toMatchObject({
+        nativeCursor: true,
+        targetReadout: false,
+      });
+      expect(
+        await app.evaluate(() => ({
+          quit: globalThis.__resetRestart.quit,
+          relaunch: globalThis.__resetRestart.relaunch,
+          buttons: globalThis.__resetRestart.options.buttons,
+        })),
+      ).toEqual({
+        quit: true,
+        relaunch: true,
+        buttons: ["Reset and Restart", "Cancel"],
+      });
+      expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
+        nativeCursor: true,
+      });
+      await app.evaluate(({ app: electronApp }) => {
+        electronApp.quit = globalThis.__resetRestart.originalQuit;
+        electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("keeps a committed settings reset when window-state reset fails", async () => {
+    const fixture = await launchOffline("gw-settings-reset-window-failure-e2e-");
+    try {
+      const { app, page, userData } = fixture;
+      await page.evaluate(() =>
+        window.gwNative.settings.set({ showDiagnostics: true }),
+      );
+      const windowState = path.join(userData, "window-state.json");
+      await rm(windowState, { recursive: true, force: true });
+      // Atomic rename cannot replace a directory with the window-state file,
+      // deterministically exercising the independent document's failure.
+      await mkdir(windowState);
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 0,
+          checkboxChecked: false,
+        });
+      });
+
+      const reset = await page.evaluate(() => window.gwNative.settings.reset());
+      expect(reset).toMatchObject({
+        showDiagnostics: false,
+        nativeCursor: true,
+      });
+      expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
+        showDiagnostics: false,
+        nativeCursor: true,
+      });
     } finally {
       await closeOffline(fixture);
     }

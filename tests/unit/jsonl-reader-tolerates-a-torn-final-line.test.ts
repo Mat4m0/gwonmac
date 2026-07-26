@@ -35,13 +35,33 @@ describe("the JSONL reader", () => {
     assert.deepEqual(parseLogRecords("\n\n"), []);
   });
 
-  it("survives a torn record that is still valid JSON", () => {
+  it("survives a final torn record that is still valid JSON", () => {
     // A partial write can land on a complete-looking prefix: `{"seq":1}` is
     // parseable and is not a record. Parsing alone is not the whole guard.
     assert.deepEqual(parseLogRecords([line(1), '{"seq":2}'].join("\n")), [
       JSON.parse(line(1)),
     ]);
-    assert.deepEqual(parseLogRecords([line(1), "null", "7"].join("\n")).length, 1);
+    assert.deepEqual(parseLogRecords([line(1), "null"].join("\n")).length, 1);
+  });
+
+  it("rejects malformed or incomplete records before the final line", () => {
+    for (const invalid of ['{"seq":2', '{"seq":2}', "null", "7", ""]) {
+      assert.throws(
+        () => parseLogRecords([line(1), invalid, line(3)].join("\n")),
+        /event log line 2 is invalid/,
+      );
+    }
+  });
+
+  it("allows trailing line endings but not blank records between events", () => {
+    assert.deepEqual(
+      parseLogRecords(`${line(1)}\n\n`).map((record) => record.seq),
+      [1],
+    );
+    assert.throws(
+      () => parseLogRecords(`${line(1)}\n\n${line(2)}\n`),
+      /event log line 2 is invalid/,
+    );
   });
 
   it("orders by sequence number, so rolled files may arrive in any order", () => {

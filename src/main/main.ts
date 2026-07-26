@@ -9,6 +9,7 @@ import {
   type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
+  type ToolboxSelection,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
@@ -20,7 +21,6 @@ import {
   count,
   exportDiagnosticsForWindow,
   gauge,
-  log,
   logEvent,
   markPerformanceProblem,
   observe,
@@ -46,6 +46,7 @@ import { gamePaths } from "./paths.js";
 import {
   TOOLBOX_AUTOMATION_ENABLED,
   toolboxEnabledFor,
+  toolboxSelectionFor,
 } from "./toolbox-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
@@ -68,15 +69,33 @@ if (process.platform === "darwin") {
   app.commandLine.appendSwitch("use-mock-keychain");
 }
 
-enableSandboxBeforeReady();
-registerGwScheme();
-wireLifecycle();
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) {
+  app.quit();
+} else {
+  enableSandboxBeforeReady();
+  registerGwScheme();
+  wireLifecycle();
+}
 
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 let settingsWrite: Promise<void> = Promise.resolve();
-// Read once at startup: it selects the WASM main this launch serves, so a later
-// settings change only takes effect the next time the game starts.
-let nativeCursorEnabled = false;
+let secondInstanceRequested = false;
+const INJECT_STARTUP_FAILURE =
+  !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
+
+function revealMainWindow(): void {
+  const win = getMainWindow();
+  if (!win || win.isDestroyed()) {
+    secondInstanceRequested = true;
+    return;
+  }
+  secondInstanceRequested = false;
+  app.dock?.show();
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+}
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   const operation = settingsWrite.then(async () => {
@@ -102,16 +121,10 @@ function resetAppSettings(): Promise<AppSettings> {
   return operation;
 }
 
-/**
- * The socket manager reports an opened game socket straight into the runtime,
- * so it cannot exist before the runtime does. Both are built inside
- * `whenReady`, in that order, and passed to whatever needs them.
- */
-function buildSocketManager(clientRuntime: ClientRuntime): SocketManager {
+function buildSocketManager(): SocketManager {
   return new SocketManager(
     (ownerId, event) => {
       if (event.type === "open") {
-        clientRuntime.noteSocketOpen();
         logEvent({ k: "socket.open", socketId: event.socketId });
       } else if (event.type === "close") {
         logEvent({
@@ -172,7 +185,7 @@ async function ensureDirs(): Promise<void> {
   // write and rename leaves `<name>.<pid>.<hex>.tmp` behind, and boot is the
   // only moment at which every one of those directories is known to be idle.
   const removed = await sweepOrphanDirectories(documentDirectories(paths));
-  if (removed > 0) log("app", "info", "orphanTemps.swept", { removed });
+  if (removed > 0) logEvent({ k: "orphanTemps.swept", removed });
 }
 
 async function clearBrowserCookies(phase: AppPhase): Promise<void> {
@@ -214,7 +227,7 @@ async function applyPendingCacheClear(): Promise<void> {
   await rm(paths.chunks, { recursive: true, force: true });
   await rm(paths.bootChunks, { force: true });
   await rm(paths.cacheClearRequest, { force: true });
-  log("cache", "info", "cache.clearedAtStartup");
+  logEvent({ k: "cache.clearedAtStartup" });
 }
 
 async function applyPendingGameStorageClear(): Promise<void> {
@@ -231,16 +244,17 @@ async function applyPendingGameStorageClear(): Promise<void> {
     storages: ["indexdb"],
   });
   await rm(paths.gameStorageClearRequest, { force: true });
-  log("filesystem", "warn", "filesystem.resetCompleted");
+  logEvent({ k: "filesystem.resetCompleted" });
 }
 
 function buildWindowHost(
   clientRuntime: ClientRuntime,
   sockets: SocketManager,
+  toolboxSelection: ToolboxSelection,
 ): WindowHost {
   return {
     sockets,
-    nativeCursor: nativeCursorEnabled,
+    toolboxSelection,
     getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
@@ -261,7 +275,12 @@ function buildWindowHost(
   };
 }
 
-app.whenReady().then(async () => {
+if (primaryInstance) app.on("second-instance", revealMainWindow);
+
+if (primaryInstance) void app.whenReady().then(async () => {
+  if (INJECT_STARTUP_FAILURE) {
+    throw new Error("injected startup failure");
+  }
   app.setAboutPanelOptions({
     applicationName: "Guild Wars",
     applicationVersion: app.getVersion(),
@@ -278,11 +297,9 @@ app.whenReady().then(async () => {
   await startDiagnostics();
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
-  log("app", "info", "electron.ready");
-  const settings = await loadSettings(gamePaths().settings, async (backupPath) => {
-    log("settings", "error", "settings.corruptRecovered", {
-      backup: path.basename(backupPath),
-    });
+  logEvent({ k: "electron.ready" });
+  const settings = await loadSettings(gamePaths().settings, async () => {
+    logEvent({ k: "settings.corruptRecovered" });
     await dialog.showMessageBox({
       type: "warning",
       buttons: ["Continue"],
@@ -291,7 +308,7 @@ app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
-  nativeCursorEnabled = settings.nativeCursor;
+  const toolboxSelection = toolboxSelectionFor(settings);
   await prepareWindowState();
   const paths = gamePaths();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
@@ -307,17 +324,17 @@ app.whenReady().then(async () => {
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
-  const sockets = buildSocketManager(clientRuntime);
+  const sockets = buildSocketManager();
   powerMonitor.on("suspend", () => {
     if (!clientRuntime.isDownloading) return;
-    log("cache", "warn", "fullDownload.stoppedForSleep");
+    logEvent({ k: "fullDownload.stoppedForSleep" });
     clientRuntime.stopDownload();
   });
   setProtocolDeps({
     getActiveClient: () => clientRuntime.active,
   });
   installGwProtocolHandler();
-  log("protocol", "info", "protocol.installed");
+  logEvent({ k: "protocol.installed" });
 
   registerIpcHandlers({
     sockets,
@@ -328,7 +345,8 @@ app.whenReady().then(async () => {
     resetSettings: resetAppSettings,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
-    confirmClientHealthy: () => clientRuntime.noteFramePresented(),
+    confirmClientHealthy: (token) =>
+      clientRuntime.confirmCandidateHealthy(token),
     // A retry is a request to run the update again, nothing more. Whether it
     // worked is already on the progress channel, which is where the renderer
     // reads it — a second, thrown answer would have been a second owner.
@@ -337,6 +355,7 @@ app.whenReady().then(async () => {
     getClientSession: () => ({
       appVersion: app.getVersion(),
       compatibility: clientRuntime.compatibility,
+      healthToken: clientRuntime.healthToken,
     }),
   });
 
@@ -353,7 +372,12 @@ app.whenReady().then(async () => {
     await stopDiagnostics();
   });
 
-  createMainWindow(buildWindowHost(clientRuntime, sockets));
+  const win = createMainWindow(buildWindowHost(
+    clientRuntime,
+    sockets,
+    toolboxSelection,
+  ));
+  if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
   if (TOOLBOX_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
@@ -385,41 +409,74 @@ app.whenReady().then(async () => {
       }
     });
   }
-  log("app", "info", "window.created");
+  logEvent({ k: "window.created" });
   if (profileMatches) {
     void clientRuntime.requestUpdate();
   } else {
-    log("app", "error", "app.unexpectedUserData");
+    logEvent({ k: "app.unexpectedUserData" });
     setProgress({ phase: "error", errorCode: "wrong_profile" });
   }
 
   app.on("activate", () => {
-    if (!getMainWindow()) createMainWindow(buildWindowHost(clientRuntime, sockets));
+    if (!getMainWindow()) {
+      createMainWindow(buildWindowHost(clientRuntime, sockets, toolboxSelection));
+    }
   });
   app.on("child-process-gone", (_event, details) => {
-    log("app", "error", "childProcess.gone", {
-      type: details.type,
-      reason: details.reason,
+    logEvent({ k: "childProcess.gone",
       exitCode: details.exitCode,
-      serviceName: details.serviceName ?? null,
-      name: details.name ?? null,
     });
   });
+}).catch((error) => {
+  startFatalExit(
+    "app.startupFailed",
+    error,
+    "Guild Wars could not start",
+    "Startup failed before the game window could open. Reopen the app and, if it repeats, report the problem.",
+  );
 });
 
 let fatalExitStarted = false;
 
-process.on("uncaughtException", (err) => {
+function startFatalExit(
+  event: "app.startupFailed" | "app.uncaughtException",
+  error: unknown,
+  title: string,
+  detail: string,
+): void {
   if (fatalExitStarted) return;
   fatalExitStarted = true;
-  logEvent({ k: "app.uncaughtException", code: errorCode(err) });
-  dialog.showErrorBox(
+  const code = errorCode(error);
+  if (event === "app.startupFailed") {
+    logEvent({ k: "app.startupFailed", code });
+  } else {
+    logEvent({ k: "app.uncaughtException", code });
+  }
+  // The injected failure is an unpackaged-only test seam. Production startup
+  // failures are always visible; the deterministic process-exit test must not
+  // wait on a native modal with no window available to dismiss it.
+  if (!INJECT_STARTUP_FAILURE) {
+    try {
+      dialog.showErrorBox(title, detail);
+    } catch {
+      // Cleanup and lock release are still mandatory if the OS dialog fails.
+    }
+  }
+  void runQuitCleanup().then(
+    () => app.exit(1),
+    () => app.exit(1),
+  );
+}
+
+if (primaryInstance) process.on("uncaughtException", (err) => {
+  startFatalExit(
+    "app.uncaughtException",
+    err,
     "Guild Wars stopped unexpectedly",
     "A fatal application error occurred. After reopening, choose Help → Report a Problem.",
   );
-  void runQuitCleanup().finally(() => app.exit(1));
 });
 
-process.on("unhandledRejection", (reason) => {
+if (primaryInstance) process.on("unhandledRejection", (reason) => {
   logEvent({ k: "app.unhandledRejection", code: errorCode(reason) });
 });

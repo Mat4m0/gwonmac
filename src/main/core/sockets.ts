@@ -70,6 +70,8 @@ export function parseDestination(destination: string): {
  */
 interface Reservation {
   readonly bytes: number;
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
   settled: boolean;
 }
 
@@ -233,26 +235,34 @@ export class SocketManager {
     if (!(data instanceof Uint8Array)) {
       throw new ValidationError("socket send requires Uint8Array");
     }
-    const reservation = this.reserve(entry, data.byteLength);
-    const started = process.hrtime.bigint();
-    this.metrics?.count("socket.sendCalls");
-    this.metrics?.count("socket.sendPayloadBytes", data.byteLength);
     await new Promise<void>((resolve, reject) => {
-      entry.socket.write(data, (err) => {
-        this.release(entry, reservation);
-        this.metrics?.observe(
-          "socket.writeCallback",
-          Number((process.hrtime.bigint() - started) / 1_000n),
+      const reservation = this.reserve(entry, data.byteLength, resolve, reject);
+      const started = process.hrtime.bigint();
+      this.metrics?.count("socket.sendCalls");
+      this.metrics?.count("socket.sendPayloadBytes", data.byteLength);
+      try {
+        entry.socket.write(data, (err) => {
+          if (!this.release(entry, reservation)) return;
+          this.metrics?.observe(
+            "socket.writeCallback",
+            Number((process.hrtime.bigint() - started) / 1_000n),
+          );
+          if (err) {
+            this.metrics?.count("socket.sendFailures");
+            reservation.reject(new ValidationError("socket send failed"));
+          } else {
+            entry.bytesSent += data.byteLength;
+            this.metrics?.count("socket.bytesSent", data.byteLength);
+            reservation.resolve();
+          }
+        });
+      } catch {
+        this.rejectReservation(
+          entry,
+          reservation,
+          new ValidationError("socket send failed"),
         );
-        if (err) {
-          this.metrics?.count("socket.sendFailures");
-          reject(err);
-        } else {
-          entry.bytesSent += data.byteLength;
-          this.metrics?.count("socket.bytesSent", data.byteLength);
-          resolve();
-        }
-      });
+      }
     });
   }
 
@@ -290,7 +300,12 @@ export class SocketManager {
   }
 
   /** Claim budget for one write, or refuse the write. Both ceilings apply. */
-  private reserve(entry: OwnedSocket, bytes: number): Reservation {
+  private reserve(
+    entry: OwnedSocket,
+    bytes: number,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): Reservation {
     const ownerQueued = this.queuedByOwner.get(entry.ownerId) ?? 0;
     if (entry.queuedBytes + bytes > MAX_QUEUED_BYTES_PER_SOCKET) {
       this.metrics?.count("socket.sendFailures");
@@ -304,7 +319,12 @@ export class SocketManager {
         `owner send queue exceeds ${MAX_QUEUED_BYTES_PER_OWNER} bytes`,
       );
     }
-    const reservation: Reservation = { bytes, settled: false };
+    const reservation: Reservation = {
+      bytes,
+      resolve,
+      reject,
+      settled: false,
+    };
     entry.reservations.add(reservation);
     entry.queuedBytes += bytes;
     this.queuedByOwner.set(entry.ownerId, ownerQueued + bytes);
@@ -316,8 +336,8 @@ export class SocketManager {
   }
 
   /** Give budget back exactly once, whether the write settled or the socket died. */
-  private release(entry: OwnedSocket, reservation: Reservation): void {
-    if (reservation.settled) return;
+  private release(entry: OwnedSocket, reservation: Reservation): boolean {
+    if (reservation.settled) return false;
     reservation.settled = true;
     entry.reservations.delete(reservation);
     entry.queuedBytes = Math.max(0, entry.queuedBytes - reservation.bytes);
@@ -327,6 +347,17 @@ export class SocketManager {
     else this.queuedByOwner.delete(entry.ownerId);
     this.activeWrites = Math.max(0, this.activeWrites - 1);
     this.publishQueueGauges();
+    return true;
+  }
+
+  private rejectReservation(
+    entry: OwnedSocket,
+    reservation: Reservation,
+    error: Error,
+  ): void {
+    if (!this.release(entry, reservation)) return;
+    this.metrics?.count("socket.sendFailures");
+    reservation.reject(error);
   }
 
   private publishQueueGauges(): number {
@@ -361,11 +392,15 @@ export class SocketManager {
   private finish(entry: OwnedSocket, reason: SocketCloseReason): void {
     if (entry.closed) return;
     entry.closed = true;
-    // A destroyed socket may never fire the write callbacks it still owes, so
-    // teardown reclaims whatever it holds. Each reservation settles once, so a
-    // callback arriving afterwards cannot charge a surviving socket for it.
+    // A destroyed socket may never fire the write callbacks it still owes.
+    // Reject every pending send while reclaiming its reservation; a callback
+    // arriving afterwards sees `settled` and changes neither state nor metrics.
     for (const reservation of [...entry.reservations]) {
-      this.release(entry, reservation);
+      this.rejectReservation(
+        entry,
+        reservation,
+        new ValidationError("socket closed before queued send completed"),
+      );
     }
     this.metrics?.count("socket.closed");
     this.metrics?.observe("socket.lifetime", (Date.now() - entry.openedAt) * 1_000);

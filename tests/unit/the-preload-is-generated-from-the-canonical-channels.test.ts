@@ -22,13 +22,13 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** Loads a generated preload and returns what it exposed, plus what it called. */
-function run(source: string) {
+function run(source: string, argv: string[] = []) {
   const invoked: { channel: string; args: unknown[] }[] = [];
   const listened: string[] = [];
   let api: GwNativeApi | undefined;
   vm.runInNewContext(source, {
     console,
-    process: { argv: [] },
+    process: { argv },
     require(name: string) {
       assert.equal(name, "electron");
       return {
@@ -55,6 +55,11 @@ function run(source: string) {
   return { api, invoked, listened };
 }
 
+const plainInit = (value: GwNativeApi["init"]): GwNativeApi["init"] => ({
+  ...value,
+  toolboxSelection: { ...value.toolboxSelection },
+});
+
 test("the exposed method invokes the channel the contracts name", async () => {
   const { api, invoked, listened } = run(preloadSource(contracts, root));
   await api.progress.current();
@@ -67,7 +72,10 @@ test("the exposed method invokes the channel the contracts name", async () => {
       args: [{ username: "u", password: "p" }],
     },
   ]);
-  assert.deepEqual(listened, [contracts.IPC.socketEvent]);
+  assert.deepEqual(listened, [
+    contracts.IPC.rendererCommand,
+    contracts.IPC.socketEvent,
+  ]);
 });
 
 test("renaming a canonical channel moves the call, with no edit to the body", async () => {
@@ -140,16 +148,54 @@ test("the launch argument prefix comes from the contracts too", () => {
   // `{ ...init }` because the object was constructed in the vm's realm, so it
   // does not share this one's Object.prototype.
   assert.deepEqual(
+    plainInit(
+      load([
+        contracts.RENDERER_INIT_ARGUMENT +
+          JSON.stringify({
+            toolboxSelection: { nativeCursor: true, targetReadout: true },
+          }),
+      ]).init,
+    ),
+    {
+      toolboxAutomation: false,
+      toolboxSelection: { nativeCursor: false, targetReadout: false },
+      templateFsTrace: false,
+    },
+  );
+  assert.deepEqual(
     {
       ...load([
-        contracts.RENDERER_INIT_ARGUMENT +
-          JSON.stringify({ nativeCursor: true }),
-      ]).init,
+        prefix +
+          JSON.stringify({
+            toolboxSelection: { nativeCursor: true, targetReadout: true },
+          }),
+      ]).init.toolboxSelection,
     },
-    { toolboxAutomation: false, nativeCursor: false, templateFsTrace: false },
+    { nativeCursor: true, targetReadout: true },
   );
+});
+
+test("every canonical Toolbox tool crosses without another field list", () => {
+  const futureTool = "futureTool";
+  const source = preloadSource(
+    {
+      ...contracts,
+      TOOLBOX_TOOLS: [...contracts.TOOLBOX_TOOLS, futureTool],
+    },
+    root,
+  );
+  const { api } = run(source, [
+    contracts.RENDERER_INIT_ARGUMENT +
+      JSON.stringify({
+        toolboxSelection: {
+          nativeCursor: false,
+          targetReadout: false,
+          [futureTool]: true,
+        },
+      }),
+  ]);
   assert.equal(
-    load([prefix + JSON.stringify({ nativeCursor: true })]).init.nativeCursor,
+    (api.init.toolboxSelection as Record<string, boolean>)[futureTool],
     true,
   );
 });
@@ -162,6 +208,7 @@ test("a contracts export the body needs but does not have fails the build", () =
   assert.deepEqual(PRELOAD_CONSTANTS, [
     "IPC",
     "RENDERER_INIT_ARGUMENT",
+    "TOOLBOX_TOOLS",
     "WASM_BRIDGE_MARKERS",
   ]);
 });

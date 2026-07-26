@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   certifyClientBuild,
-  toolboxMayLoad,
   type CertifiedBuildTables,
 } from "../../src/main/client-certification.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
@@ -27,9 +26,9 @@ describe("client certification", () => {
     assert.equal(certification.state, "certified");
     assert.equal(
       certification.state === "certified"
-        ? certification.templateSaveOutputSha256
+        ? certification.templateSaveBuild
         : null,
-      OFFICIAL.outputSha256,
+      OFFICIAL,
     );
     // Keyed by the template-save transform's OUTPUT, not by the official hash.
     assert.equal(
@@ -52,9 +51,9 @@ describe("client certification", () => {
     assert.equal(certification.state, "template-only");
     assert.equal(
       certification.state === "template-only"
-        ? certification.templateSaveOutputSha256
+        ? certification.templateSaveBuild
         : null,
-      OFFICIAL.outputSha256,
+      OFFICIAL,
     );
   });
 
@@ -66,11 +65,5 @@ describe("client certification", () => {
       toolbox: () => TOOLBOX_BUILDS[0]!,
     });
     assert.deepEqual(certification, { state: "uncertified" });
-  });
-
-  it("lets the Toolbox kernel load only against a fully certified build", () => {
-    assert.equal(toolboxMayLoad("certified"), true);
-    assert.equal(toolboxMayLoad("template-only"), false);
-    assert.equal(toolboxMayLoad("uncertified"), false);
   });
 });

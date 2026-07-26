@@ -227,7 +227,6 @@ describe("no game traffic is uploaded: what the recorder may hear", () => {
     const inspection = inspectEventLog(log);
     assert.equal(inspection.records, recorded.length);
     assert.equal(inspection.schemaChecked, recorded.length);
-    assert.equal(inspection.openFields, 0);
 
     // Not "the redactor removed it" — there is nowhere for it to have been.
     assert.equal(log.includes(secret), false);

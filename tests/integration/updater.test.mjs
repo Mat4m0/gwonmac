@@ -14,6 +14,7 @@ import { join } from "node:path";
 import http from "node:http";
 import { after, describe, it } from "node:test";
 import { PatchClient } from "../../build/main/core/patch-client.js";
+import { createBoundedPatchFetch } from "../../build/main/core/patch-transport.js";
 import {
   confirmClientCandidate,
   readRejectedClient,
@@ -186,6 +187,7 @@ describe("integration: patch updater", () => {
       await confirmClientCandidate({
         artifacts,
         rejectedPath,
+        expectedFingerprint: freshCandidate.fingerprint,
       }),
       freshCandidate.fingerprint,
     );
@@ -311,7 +313,7 @@ describe("integration: patch updater", () => {
       artifactsDir: join(root, "artifacts"),
       chunksDir: join(root, "chunks"),
       patchRoot: `http://127.0.0.1:${address.port}`,
-      requestTimeoutMs: 25,
+      fetch: createBoundedPatchFetch(globalThis.fetch, 25),
     });
 
     const started = Date.now();

@@ -18,7 +18,7 @@
    */
   async function capture(command) {
     const diagnostics = window.gwDiagnostics;
-    if (!diagnostics) return;
+    if (!diagnostics) throw new Error('renderer diagnostics are unavailable');
     switch (command.action) {
       case 'reset':
         await diagnostics.resetForCapture();

@@ -6,10 +6,10 @@
 // build/preload/preload.cjs. Copying a channel name back into this file would
 // reintroduce the drift the generator exists to remove, so no string literal
 // here may start with the gw channel prefix — tests/policy asserts that.
-// `process` is declared here for the same reason the three constants are: the
+// `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
 // binding the preload may read.
-/* global IPC, RENDERER_INIT_ARGUMENT, WASM_BRIDGE_MARKERS, process */
+/* global IPC, RENDERER_INIT_ARGUMENT, TOOLBOX_TOOLS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -30,13 +30,29 @@ function rendererInit() {
     : undefined;
   let parsed = {};
   try {
-    if (raw) parsed = JSON.parse(raw.slice(RENDERER_INIT_ARGUMENT.length));
+    if (raw) {
+      const value = JSON.parse(raw.slice(RENDERER_INIT_ARGUMENT.length));
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        parsed = value;
+      }
+    }
   } catch {
     parsed = {};
   }
+  const toolboxSelection = {};
+  const selected =
+    parsed.toolboxSelection
+    && typeof parsed.toolboxSelection === "object"
+    && !Array.isArray(parsed.toolboxSelection)
+      ? parsed.toolboxSelection
+      : {};
+  for (const tool of TOOLBOX_TOOLS) {
+    toolboxSelection[tool] = selected[tool] === true;
+  }
+  Object.freeze(toolboxSelection);
   return {
     toolboxAutomation: parsed.toolboxAutomation === true,
-    nativeCursor: parsed.nativeCursor === true,
+    toolboxSelection,
     templateFsTrace: parsed.templateFsTrace === true,
   };
 }
@@ -52,22 +68,35 @@ function listen(eventChannel, callback) {
   };
 }
 
+let rendererCommandHandler = null;
+ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
+  const handler = rendererCommandHandler;
+  if (!handler) {
+    ipcRenderer.send(IPC.rendererCommandDone, id, "failed");
+    return;
+  }
+  void Promise.resolve()
+    .then(() => handler(command))
+    .then(
+      () => ipcRenderer.send(IPC.rendererCommandDone, id, "completed"),
+      () => ipcRenderer.send(IPC.rendererCommandDone, id, "failed"),
+    );
+});
+
 const api = {
   init: rendererInit(),
   // A constant, not a capability: the derived client's dirfd markers, which the
   // sandboxed renderer cannot import from src/shared and must not re-type.
   wasmBridgeMarkers: WASM_BRIDGE_MARKERS,
   commands: {
-    // One handler, registered once. The correlation id stays in transport: the
-    // renderer sees a command, and main sees the acknowledgement once whatever
-    // the handler returned has settled.
+    // One handler, registered once. The transport listener above exists before
+    // renderer scripts run, so an early command fails explicitly instead of
+    // disappearing. The correlation id and completion stay in transport.
     handle: (handler) => {
-      ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
-        void Promise.resolve()
-          .then(() => handler(command))
-          .catch(() => undefined)
-          .then(() => ipcRenderer.send(IPC.rendererCommandDone, id));
-      });
+      if (rendererCommandHandler) {
+        throw new Error("renderer command handler is already registered");
+      }
+      rendererCommandHandler = handler;
     },
   },
   progress: {
@@ -141,7 +170,7 @@ const api = {
   },
   client: {
     retry: () => ipcRenderer.invoke(IPC.clientRetry),
-    healthy: () => ipcRenderer.invoke(IPC.clientHealthy),
+    healthy: (token) => ipcRenderer.invoke(IPC.clientHealthy, token),
     session: () => ipcRenderer.invoke(IPC.clientSession),
   },
   releaseNotice: {

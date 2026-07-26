@@ -2,6 +2,13 @@
 // The extension is explicit so this module also loads under plain `node`, which
 // is how tests/website-smoke.mjs executes the selection policy below.
 import { EXTERNAL_URLS, RELEASE_REPO } from "../../../../src/shared/contracts.ts";
+import {
+  compareReleaseVersions,
+  formatReleaseVersion,
+  isPrerelease,
+  parseReleaseVersion,
+  type ReleaseVersion,
+} from "../../../../src/shared/release.ts";
 
 const FALLBACK_URL = EXTERNAL_URLS.releases;
 // Enough entries to see past a run of prereleases. `per_page=1` returned the
@@ -50,16 +57,30 @@ function appleSiliconZip(release: Record<string, unknown>): string | null {
  */
 export function selectStableDownload(payload: unknown): ReleaseDownload | null {
   if (!Array.isArray(payload)) return null;
+  let selected:
+    | { parsed: ReleaseVersion; url: string }
+    | null = null;
   for (const release of payload) {
     if (!isRecord(release)) continue;
     if (release.draft === true || release.prerelease === true) continue;
-    const version = release.tag_name;
-    if (typeof version !== "string" || !version) continue;
+    const tag = release.tag_name;
+    const parsed = typeof tag === "string" ? parseReleaseVersion(tag) : null;
+    if (!parsed || isPrerelease(parsed)) continue;
     const url = appleSiliconZip(release);
     if (!url) continue;
-    return { url, version };
+    if (
+      !selected
+      || compareReleaseVersions(parsed, selected.parsed) > 0
+    ) {
+      selected = { parsed, url };
+    }
   }
-  return null;
+  return selected
+    ? {
+        url: selected.url,
+        version: formatReleaseVersion(selected.parsed),
+      }
+    : null;
 }
 
 /**

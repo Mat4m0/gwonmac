@@ -232,7 +232,6 @@ function currentCapture(events: DiagnosticEvent[]): Capture {
       redaction: {
         records: events.length,
         schemaChecked: events.length,
-        openFields: 0,
         traceBytesScanned: 0,
       },
       profilerContaminated: false,

@@ -15,6 +15,8 @@ import {
   SCENARIOS,
   waitForPlayable,
 } from "../../scripts/toolbox-live/scenarios.mjs";
+// @ts-expect-error - the live acceptance helper is plain .mjs tooling.
+import { validateCommonAcceptance } from "../../scripts/toolbox-live/acceptance.mjs";
 
 interface Scenario {
   tier: "observation" | "automation";
@@ -141,6 +143,7 @@ describe("an observation live run cannot reach the automation tier", () => {
       readyForCachedLive: true,
       credentials: "saved",
       nativeCursor: false,
+      targetReadout: false,
     };
     const options = { cachedOnly: true };
     assert.equal(
@@ -173,6 +176,18 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(
       liveRunRefusal(planFor("movement"), { ...ready, credentials: "missing" }, options),
       "saved-login-missing",
+    );
+    assert.equal(
+      liveRunRefusal(planFor("target-readout"), ready, options),
+      "target-readout-disabled",
+    );
+    assert.equal(
+      liveRunRefusal(
+        planFor("target-readout"),
+        { ...ready, targetReadout: true },
+        options,
+      ),
+      null,
     );
   });
 
@@ -235,5 +250,68 @@ describe("an observation live run cannot reach the automation tier", () => {
     const playable = automatablePage(true);
     assert.equal(await waitForPlayable(playable, "automation"), 0);
     assert.equal(playable.presses, 0);
+  });
+
+  it("does not require target-state evidence from a cursor-only observation", () => {
+    const result = {
+      supported: true,
+      buildId: 38_771,
+      installation: 1,
+      hookHertz: 0,
+      map: null,
+      renderP95Us: 0,
+      rejectedSnapshots: 0,
+      rendererErrors: [],
+    };
+    assert.doesNotThrow(() =>
+      validateCommonAcceptance(result, 38_771, { coreObservation: false }),
+    );
+    assert.throws(
+      () => validateCommonAcceptance(result, 38_771),
+      /hook cadence/,
+    );
+  });
+
+  it("accepts the target-readout run only when the real surface matches its snapshot", () => {
+    const evidence = {
+      initial: { valid: false },
+      acquired: {
+        valid: true,
+        id: 9,
+        distance: 1_248.4,
+        range: "Spellcast",
+      },
+      presentation: {
+        count: 1,
+        visible: true,
+        text: "Target1248Spellcast",
+        runtime: { visible: true, line: "1248 Spellcast" },
+      },
+    };
+    const scenario = scenarios["target-readout"]!;
+    assert.doesNotThrow(() => scenario.validate({ evidence }));
+    assert.throws(
+      () =>
+        scenario.validate({
+          evidence: {
+            ...evidence,
+            presentation: {
+              ...evidence.presentation,
+              runtime: { visible: true, line: "1249 Spellcast" },
+            },
+          },
+        }),
+      /did not render/,
+    );
+    assert.throws(
+      () =>
+        scenario.validate({
+          evidence: {
+            ...evidence,
+            presentation: { ...evidence.presentation, count: 0 },
+          },
+        }),
+      /did not render/,
+    );
   });
 });

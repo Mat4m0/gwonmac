@@ -111,6 +111,133 @@ test.describe("diagnostics", () => {
     }
   });
 
+  test("discards a completed Chromium trace before the next capture and at shutdown", async () => {
+    const fixture = await launchOffline("gw-trace-lifecycle-e2e-");
+    try {
+      const { app, page, userData } = fixture;
+      const diagnosticsDirectory = path.join(userData, "diagnostics");
+      const traceNames = async () =>
+        (await readdir(diagnosticsDirectory)).filter(
+          (name) => name.startsWith("chromium-") && name.endsWith(".json"),
+        );
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+
+      await clickMenu(app, "start-chromium-trace");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+      await expect.poll(traceNames).toHaveLength(1);
+
+      // Beginning Level 1 replaces the completed Level 2 result. The raw
+      // Chromium file has to be gone before that reset happens.
+      await clickMenu(app, "start-performance-capture");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await expect.poll(traceNames).toEqual([]);
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+
+      // The same ownership rule applies when no later capture replaces it:
+      // quit cleanup deletes an unexported completed trace.
+      await clickMenu(app, "start-chromium-trace");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+      await expect.poll(traceNames).toHaveLength(1);
+      await app.evaluate(async (_, modulePath) => {
+        const load = process
+          .getBuiltinModule("node:module")
+          .createRequire(modulePath);
+        await load(modulePath).stopDiagnostics();
+      }, path.join(root, "build/main/diagnostics.js"));
+      await expect.poll(traceNames).toEqual([]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("downgrades a failed Chromium stop to an exportable Level 1 capture", async () => {
+    const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
+    const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
+    try {
+      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const modulePath = path.join(root, "build/main/diagnostics.js");
+      const contractsPath = path.join(root, "build/shared/contracts.js");
+      const stopped = await fixture.app.evaluate(
+        async ({ app: electronApp, contentTracing }, args) => {
+          const load = process
+            .getBuiltinModule("node:module")
+            .createRequire(args.modulePath);
+          const diagnostics = load(args.modulePath);
+          const { DEFAULT_SETTINGS } = load(args.contractsPath);
+          await diagnostics.startDiagnosticCapture(2);
+
+          const originalStopRecording = contentTracing.stopRecording;
+          let attemptedTarget = "";
+          contentTracing.stopRecording = async (traceTarget) => {
+            attemptedTarget = traceTarget;
+            // Stop Chromium for real and create its target, then fail at the
+            // API boundary. This exercises the partial-target branch without
+            // leaving content tracing active in the Electron test process.
+            await originalStopRecording.call(contentTracing, traceTarget);
+            throw new Error("forced stopRecording failure");
+          };
+          try {
+            await diagnostics.stopDiagnosticCapture("manual");
+          } finally {
+            contentTracing.stopRecording = originalStopRecording;
+          }
+          await diagnostics.exportDiagnosticsZip(args.target, {
+            appVersion: electronApp.getVersion(),
+            electronVersions: { electron: process.versions.electron },
+            settings: DEFAULT_SETTINGS,
+          });
+          return {
+            attemptedTarget,
+            captureLevel: diagnostics.diagnosticSummary().captureLevel,
+          };
+        },
+        { modulePath, contractsPath, target },
+      );
+
+      expect(path.basename(stopped.attemptedTarget)).toMatch(/^chromium-.+\.json$/);
+      expect(stopped.captureLevel).toBe(0);
+      expect(
+        (await readdir(path.join(fixture.userData, "diagnostics"))).filter(
+          (name) => name.startsWith("chromium-"),
+        ),
+      ).toEqual([]);
+
+      const extracted = path.join(diagnosticRoot, "extracted");
+      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      const manifest = JSON.parse(
+        await readFile(path.join(extracted, "manifest.json"), "utf8"),
+      );
+      const capture = JSON.parse(
+        await readFile(path.join(extracted, "capture-summary.json"), "utf8"),
+      );
+      expect(manifest).toMatchObject({
+        captureLevel: 1,
+        profilerContaminated: false,
+      });
+      expect(manifest.includedFiles).not.toContain("chromium-trace.json");
+      expect(capture.captureLevel).toBe(1);
+
+      const validated = await execFileAsync(process.execPath, [
+        path.join(root, "build/tools/diagnostics/validate.js"),
+        target,
+      ]);
+      expect(validated.stdout).toContain("valid capture");
+    } finally {
+      await rm(diagnosticRoot, { recursive: true, force: true });
+      await closeOffline(fixture);
+    }
+  });
+
   // P5.9 moved every channel's parser into the handler registry, ahead of the
   // handler's own try/catch. Two channels used to parse inside it and record
   // `credentials.saveFailed` / `settings.saveFailed`, so until the registry
@@ -199,7 +326,7 @@ test.describe("diagnostics", () => {
           const { sendRendererCommand } = load(modulePath);
           const settledWithin = (promise, ms) =>
             Promise.race([
-              promise.then(() => "settled"),
+              promise,
               new Promise((resolve) => setTimeout(() => resolve("waiting"), ms)),
             ]);
           const probe = async () => {
@@ -235,11 +362,20 @@ test.describe("diagnostics", () => {
             sendRendererCommand(after, { type: "input.reset" }),
             5_000,
           );
+          // A live page with no preload handler is bounded too. Destruction
+          // would settle this for another reason, so leave it untouched until
+          // the command's own deadline answers.
+          const unresponsive = await probe();
+          const timedOut = await settledWithin(
+            sendRendererCommand(unresponsive, { type: "input.reset" }),
+            7_000,
+          );
           const stillAlive = !after.isDestroyed() && !after.webContents.isDestroyed();
-          for (const win of [during, after]) win.destroy();
+          for (const win of [during, after, unresponsive]) win.destroy();
           return {
             whileWaiting,
             alreadyGone,
+            timedOut,
             stillAlive,
             ownProcesses: duringPid !== mainPid && afterPid !== mainPid,
           };
@@ -247,8 +383,9 @@ test.describe("diagnostics", () => {
         path.join(root, "build/main/renderer-commands.js"),
       );
       expect(outcome).toEqual({
-        whileWaiting: "settled",
-        alreadyGone: "settled",
+        whileWaiting: "failed",
+        alreadyGone: "failed",
+        timedOut: "timed-out",
         // The window that could not answer is neither destroyed nor closed —
         // that is what made this state unreachable for the other listeners.
         stillAlive: true,
@@ -375,15 +512,18 @@ test.describe("diagnostics", () => {
             process.getBuiltinModule("node:module").createRequire;
           const require = createRequire(args.modulePath);
           const diagnostics = require(args.modulePath);
-          diagnostics.log("app", "info", "redaction fixture", {
-            password: "should-never-export",
-            url: "https://example.invalid/?token=also-secret",
-            message:
-              "open /private/var/folders/example/player.db for player@example.invalid",
-          });
           await diagnostics.exportDiagnosticsZip(args.target, {
             appVersion: electronApp.getVersion(),
-            electronVersions: { electron: process.versions.electron },
+            // OS/Chromium summary documents are pattern-scanned rather than
+            // certified. Plant the adversarial values there; app-authored
+            // events have no free-text recording API anymore.
+            electronVersions: {
+              electron: process.versions.electron,
+              password: "should-never-export",
+              url: "https://example.invalid/?token=also-secret",
+              message:
+                "open /private/var/folders/example/player.db for player@example.invalid",
+            },
             settings: {
               renderScale: 1,
               nativeCursor: false,
@@ -402,29 +542,27 @@ test.describe("diagnostics", () => {
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
       // P2.5 — `redaction` is the detector's result, not a literal the exporter
-      // writes about itself. `schemaChecked` counts records matched exactly
-      // against the closed schema; `openFields` counts string values carried by
-      // records the schema does not declare yet. Asserting both, rather than
-      // just "it is an object", is what makes the residue visible: a phase that
-      // closes more events must move these numbers.
+      // writes about itself. Every app-authored record is schema-certified,
+      // while traceBytesScanned states the separate pattern-scanner coverage.
       expect(manifest.redaction).toMatchObject({
         records: expect.any(Number),
         schemaChecked: expect.any(Number),
-        openFields: expect.any(Number),
         traceBytesScanned: expect.any(Number),
       });
       expect(manifest.redaction.records).toBeGreaterThan(0);
-      expect(manifest.redaction.schemaChecked).toBeGreaterThan(0);
+      expect(manifest.redaction.schemaChecked).toBe(
+        manifest.redaction.records,
+      );
 
-      // The fixture above plants three secrets through the free-text `log()`
-      // path on purpose. This test has always been named "redacted" and until
-      // now only checked a string the exporter wrote about itself, which is
-      // exactly the circular proof P2 exists to remove. Check the export.
+      // The fixture above plants three secrets in a pattern-scanned summary
+      // document. Check the bytes, not a verdict the exporter wrote itself.
       const exportedFiles = await readdir(extracted);
+      let exportedText = "";
       for (const name of exportedFiles) {
         const stats = await stat(path.join(extracted, name));
         if (!stats.isFile()) continue;
         const body = await readFile(path.join(extracted, name), "latin1");
+        exportedText += body.toLowerCase();
         for (const secret of [
           "should-never-export",
           "also-secret",
@@ -462,9 +600,9 @@ test.describe("diagnostics", () => {
       expect(events).not.toContain("also-secret");
       expect(events).not.toContain("/private/var/folders/example/player.db");
       expect(events).not.toContain("player@example.invalid");
-      expect(events).toContain("[redacted]");
-      expect(events).toContain("[redacted-path]");
-      expect(events).toContain("[redacted-email]");
+      expect(exportedText).toContain("[redacted]");
+      expect(exportedText).toContain("[redacted-path]");
+      expect(exportedText).toContain("[redacted-email]");
       expect(events).toContain("performance.problemmarked");
 
       const environment = JSON.parse(

@@ -149,7 +149,8 @@ test.describe("live client", () => {
         // Certification is keyed by hash, so a new ArenaNet build fails here
         // even though every other assertion in this file still passes. That is
         // the alert: run `pnpm template:recertify`, then recertify the Toolbox
-        // build. `template-only` means saving works and the cursor does not.
+        // build. `template-only` means saving works and selected Toolbox tools
+        // do not.
         expect(
           identity.compatibility.state,
           `client module ${identity.compatibility.clientSha256} is not a certified build`,

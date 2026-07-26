@@ -19,44 +19,17 @@ async function pathExists(target) {
 test.describe("client compatibility", () => {
   test.skip(!existsSync(main), "run the build before Electron tests");
 
-  test("promotes a candidate only after a frame and game socket open", async () => {
-    const fingerprint = "a".repeat(64);
+  test("reports one first frame and opens a game socket", async () => {
     const server = net.createServer();
     await new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(6112, "127.0.0.1", resolve);
     });
-    let artifacts;
-    let previous;
-    let rejected;
-    const fixture = await launchOffline(
-      "gw-client-promotion-e2e-",
-      {},
-      async (userData) => {
-        artifacts = path.join(userData, "game", "artifacts");
-        previous = path.join(userData, "game", "artifacts.previous");
-        rejected = path.join(userData, "game", "rejected-client.json");
-        await mkdir(artifacts, { recursive: true });
-        await mkdir(previous, { recursive: true });
-        await writeFile(
-          path.join(artifacts, ".candidate.json"),
-          JSON.stringify({ formatVersion: 1, fingerprint }),
-        );
-        await writeFile(
-          rejected,
-          JSON.stringify({
-            formatVersion: 1,
-            fingerprint: "b".repeat(64),
-            hostVersion: "older-host",
-          }),
-        );
-      },
-    );
+    const fixture = await launchOffline("gw-client-host-e2e-");
     try {
       await fixture.page.waitForFunction(
         () => typeof window.Module?.socket?.connect === "function",
       );
-      expect(await pathExists(previous)).toBe(true);
       expect(
         await fixture.page.evaluate(async () => {
           const { installGraphics } = await import("./graphics.js");
@@ -80,7 +53,6 @@ test.describe("client compatibility", () => {
             renderScale: () => 2,
             firstFrame: () => {
               frames += 1;
-              void window.gwNative.client.healthy();
             },
             log: () => undefined,
           });
@@ -153,7 +125,6 @@ test.describe("client compatibility", () => {
         held: 1,
         calls: 3,
       });
-      expect(await pathExists(path.join(artifacts, ".candidate.json"))).toBe(true);
       await fixture.page.evaluate(async () => {
         const socket = window.Module.socket.connect("127.0.0.1:6112");
         await new Promise((resolve, reject) => {
@@ -172,11 +143,6 @@ test.describe("client compatibility", () => {
         });
         socket.close();
       });
-      await expect
-        .poll(() => pathExists(path.join(artifacts, ".candidate.json")))
-        .toBe(false);
-      expect(await pathExists(previous)).toBe(false);
-      expect(await pathExists(rejected)).toBe(false);
     } finally {
       await closeOffline(fixture);
       await new Promise((resolve) => server.close(resolve));
@@ -208,11 +174,14 @@ test.describe("client compatibility", () => {
         const { compatibilityReport } = await import(
           "./client-compatibility-notice.js"
         );
-        const report = compatibilityReport({
-          state: "uncertified",
-          toolboxRequested: true,
-          clientSha256: "a".repeat(64),
-        });
+        const report = compatibilityReport(
+          {
+            state: "uncertified",
+            toolboxActive: false,
+            clientSha256: "a".repeat(64),
+          },
+          { nativeCursor: true, targetReadout: false },
+        );
         globalThis.document.getElementById("client-compat-title").textContent =
           report.summary;
         globalThis.document.getElementById("client-compat-detail").textContent =

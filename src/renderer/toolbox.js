@@ -8,6 +8,9 @@ import {
   TOOLBOX_SNAPSHOT_BYTES,
 } from "./toolbox-snapshot.js";
 
+const TOOLBOX_FEATURE_NATIVE_CURSOR = 1 << 0;
+const TOOLBOX_FEATURE_TARGET_READOUT = 1 << 1;
+
 /** @param {WebAssembly.Module} module */
 function decodeManifest(module) {
   const sections = WebAssembly.Module.customSections(module, "toolbox_manifest");
@@ -58,41 +61,44 @@ function recordLifecycle(state) {
 
 /**
  * @param {any} runtime
- * @param {{ poll: () => void }} cursor
- * @param {{ update: (state: any) => void }} readout
+ * @param {{ poll: () => void } | null} cursor
+ * @param {{ update: (state: any) => void } | null} readout
+ * @param {boolean} observeState
  */
-function observeSnapshots(runtime, cursor, readout) {
+function observeSnapshots(runtime, cursor, readout, observeState) {
   let frame = 0;
   let cadenceAt = performance.now();
   let cadenceTick = 0;
   const observe = () => {
-    const started = performance.now();
-    const state = readToolboxSnapshot(
-      runtime.memory.buffer,
-      runtime.snapshotPointer,
-    );
-    recordLifecycle(state);
-    runtime.snapshotReads += 1;
-    if (
-      ("reason" in state && state.reason === "writing")
-      || ("reason" in state && state.reason === "snapshot")
-    ) {
-      runtime.rejectedSnapshots += 1;
+    if (observeState) {
+      const started = performance.now();
+      const state = readToolboxSnapshot(
+        runtime.memory.buffer,
+        runtime.snapshotPointer,
+      );
+      recordLifecycle(state);
+      runtime.snapshotReads += 1;
+      if (
+        ("reason" in state && state.reason === "writing")
+        || ("reason" in state && state.reason === "snapshot")
+      ) {
+        runtime.rejectedSnapshots += 1;
+      }
+      window.gwToolboxState = state;
+      const now = performance.now();
+      if (state.status === "ready" && now - cadenceAt >= 1_000) {
+        runtime.hertz =
+          ((state.tickCount - cadenceTick) * 1_000) / (now - cadenceAt);
+        cadenceAt = now;
+        cadenceTick = state.tickCount;
+      }
+      runtime.lastRenderUs = (performance.now() - started) * 1_000;
+      runtime.renderSamples.push(runtime.lastRenderUs);
+      if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
+      readout?.update(state);
     }
-    window.gwToolboxState = state;
-    const now = performance.now();
-    if (state.status === "ready" && now - cadenceAt >= 1_000) {
-      runtime.hertz =
-        ((state.tickCount - cadenceTick) * 1_000) / (now - cadenceAt);
-      cadenceAt = now;
-      cadenceTick = state.tickCount;
-    }
-    runtime.lastRenderUs = (performance.now() - started) * 1_000;
-    runtime.renderSamples.push(runtime.lastRenderUs);
-    if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
-    cursor.poll();
-    readout.update(state);
+    cursor?.poll();
     frame = requestAnimationFrame(observe);
   };
   frame = requestAnimationFrame(observe);
@@ -102,8 +108,24 @@ function observeSnapshots(runtime, cursor, readout) {
 /**
  * @param {WebAssembly.Instance} instance
  * @param {WebAssembly.Module} module
+ * @param {import("../shared/contracts.js").ToolboxSelection} selection
+ * @param {boolean} automation Development-only observation override.
  */
-export async function installToolbox(instance, module) {
+export async function installToolbox(
+  instance,
+  module,
+  selection,
+  automation = false,
+) {
+  // Automation may force the core observation snapshot for live development
+  // scenarios. It does not turn on either player-facing surface, and packaged
+  // builds cannot set it. The two shipped tools remain independently selected.
+  const observeState = selection.targetReadout || automation;
+  const featureFlags =
+    (selection.nativeCursor ? TOOLBOX_FEATURE_NATIVE_CURSOR : 0)
+    | (observeState ? TOOLBOX_FEATURE_TARGET_READOUT : 0);
+  if (featureFlags === 0) return null;
+
   const manifest = decodeManifest(module);
   const exports = instance?.exports;
   if (
@@ -136,10 +158,18 @@ export async function installToolbox(instance, module) {
   let disposeCursor = () => {};
   let disposeReadout = () => {};
   try {
-    snapshotPointer = Number(exports.malloc(TOOLBOX_SNAPSHOT_BYTES));
+    if (observeState) {
+      snapshotPointer = Number(exports.malloc(TOOLBOX_SNAPSHOT_BYTES));
+    }
     configPointer = Number(exports.malloc(manifest.configBytes));
-    cursorPointer = Number(exports.malloc(TOOLBOX_CURSOR_BYTES));
-    if (!snapshotPointer || !configPointer || !cursorPointer) {
+    if (selection.nativeCursor) {
+      cursorPointer = Number(exports.malloc(TOOLBOX_CURSOR_BYTES));
+    }
+    if (
+      !configPointer
+      || (observeState && !snapshotPointer)
+      || (selection.nativeCursor && !cursorPointer)
+    ) {
       throw new Error("Toolbox allocation failed");
     }
     new Uint32Array(
@@ -154,33 +184,41 @@ export async function installToolbox(instance, module) {
       env: { memory: exports.memory },
       game: { toolbox_tick_original: exports.toolbox_tick_original },
     });
+    const kernelInit = kernel.instance.exports.toolbox_init;
     if (
-      typeof kernel.instance.exports.toolbox_init !== "function"
+      typeof kernelInit !== "function"
+      || kernelInit.length !== 7
       || typeof kernel.instance.exports.toolbox_tick !== "function"
-      || kernel.instance.exports.toolbox_init(
+      || kernelInit(
         snapshotPointer,
-        TOOLBOX_SNAPSHOT_BYTES,
+        observeState ? TOOLBOX_SNAPSHOT_BYTES : 0,
         configPointer,
         manifest.configBytes,
         cursorPointer,
-        TOOLBOX_CURSOR_BYTES,
+        selection.nativeCursor ? TOOLBOX_CURSOR_BYTES : 0,
+        featureFlags,
       ) !== 1
     ) {
       throw new Error("Toolbox kernel rejected its ABI");
     }
 
-    const element = document.getElementById("canvas");
-    if (!element) throw new Error("Toolbox cursor target is missing");
-    const cursor = createCursorConsumer({
-      element,
-      memory: exports.memory,
-      cursorPointer,
-      // The empty string hands the canvas back to the stylesheet theme.
-      fallback: "",
-    });
-    disposeCursor = cursor.dispose;
-    const readout = createTargetReadout(document.body);
-    disposeReadout = readout.dispose;
+    let cursor = null;
+    if (selection.nativeCursor) {
+      const element = document.getElementById("canvas");
+      if (!element) throw new Error("Toolbox cursor target is missing");
+      cursor = createCursorConsumer({
+        element,
+        memory: exports.memory,
+        cursorPointer,
+        // The empty string hands the canvas back to the stylesheet theme.
+        fallback: "",
+      });
+      disposeCursor = cursor.dispose;
+    }
+    const readout = selection.targetReadout
+      ? createTargetReadout(document.body)
+      : null;
+    if (readout) disposeReadout = readout.dispose;
 
     table.set(manifest.tableSlot, kernel.instance.exports.toolbox_tick);
     const runtime = {
@@ -198,12 +236,12 @@ export async function installToolbox(instance, module) {
       rejectedSnapshots: 0,
       // Presentation state only: no pixels and no pointer leave this module.
       get cursor() {
-        return cursor.state;
+        return cursor?.state ?? null;
       },
       // The rendered line, so a live run can read the feature without a
       // screenshot. Text only: the readout owns its own element.
       get readout() {
-        return readout.state;
+        return readout?.state ?? null;
       },
       installation: (window.gwToolboxInstallations ?? 0) + 1,
       /** @param {boolean} enabled */
@@ -215,7 +253,7 @@ export async function installToolbox(instance, module) {
     };
     window.gwToolboxInstallations = runtime.installation;
     window.gwToolboxRuntime = runtime;
-    stopObserver = observeSnapshots(runtime, cursor, readout);
+    stopObserver = observeSnapshots(runtime, cursor, readout, observeState);
     hookSlot.value = manifest.tableSlot + 1;
 
     const teardown = () => {
@@ -226,9 +264,9 @@ export async function installToolbox(instance, module) {
       if (table.get(manifest.tableSlot) === kernel.instance.exports.toolbox_tick) {
         table.set(manifest.tableSlot, null);
       }
-      free(cursorPointer);
+      if (cursorPointer) free(cursorPointer);
       free(configPointer);
-      free(snapshotPointer);
+      if (snapshotPointer) free(snapshotPointer);
       window.gwToolboxRuntime = null;
     };
     window.addEventListener("pagehide", teardown, { once: true });

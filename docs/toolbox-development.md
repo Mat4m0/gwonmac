@@ -39,7 +39,8 @@ navigation or packaged renderer assets.
 
 `toolbox:doctor` is local-only. It checks the existing profile, published
 client, exact WASM hash, transformed cache, saved-login presence, the profile's
-`nativeCursor` setting, and complete snapshot filename presence. It verifies executable artifacts, but labels
+`nativeCursor` and `targetReadout` settings, and complete snapshot filename
+presence. It verifies executable artifacts, but labels
 snapshot chunks as presence-only because it does not hash their contents. It
 never starts Electron or contacts ArenaNet.
 
@@ -50,6 +51,7 @@ Production-network work remains deliberate:
 ```bash
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario boot
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target
+GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target-readout
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario movement
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario reload
 GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario map-transition
@@ -61,6 +63,19 @@ GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario cursor-capture
 identify, drag, world map) and records only typed transitions at 20 Hz, bounded to
 192 changes. It pairs the observed scalars with the renderer's published cursor
 state, so one run shows both what the game committed and what reached Chromium.
+
+`target-readout` is the one deliberate production-client confirmation for the
+player-facing target feature. Enable **Target distance and range** in Settings,
+accept the restart, then run exactly:
+
+```bash
+GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target-readout
+```
+
+The doctor refuses the run with `target-readout-disabled` when the saved
+selection is off. The scenario acquires one bounded target, then requires one
+visible `#toolbox-target` element and the rendered line to match the target
+snapshot. Do not run another live scenario for that release decision.
 
 Each scenario declares a tier, and the tier decides how the app is launched.
 An **automation** scenario is one that acts on the player's behalf; it gets
@@ -228,15 +243,22 @@ effect absent -> present -> removed
 
 ## Cursor pipeline
 
-The cursor is the first shipped Toolbox feature, so the Toolbox path is no
-longer developer-only. `toolbox-policy.ts` has two gates and nothing else:
-`TOOLBOX_AUTOMATION_ENABLED` (non-packaged, `GW_TOOLBOX_AUTOMATION=1`) and the
-player's `nativeCursor` setting, which is on by default. Either one enables
-the transform in main and sets the matching field in the renderer init payload
-(`toolboxAutomation` or `nativeCursor`) that lets `harness.js` import
-`toolbox.js`. Both are read once per launch, because the choice decides which
-WASM main is served. When you develop against automation you are exercising the
-same code path a player gets, so treat a regression there as user-facing.
+The Toolbox path is no longer developer-only. Its canonical tools are
+`nativeCursor` (on by default) and `targetReadout` (off by default), carried to
+the renderer as one `ToolboxSelection`. `toolbox-policy.ts` derives module
+preparation from whether any tool is selected, plus
+`TOOLBOX_AUTOMATION_ENABLED` (non-packaged,
+`GW_TOOLBOX_AUTOMATION=1`). The harness does not trust that request as the
+answer: it imports `toolbox.js` only when the actual instantiated module also
+carries `toolbox_manifest`, so a requested but uncertified build executes no
+Toolbox renderer code.
+
+The kernel receives independent feature bits. A disabled cursor performs no
+cursor collection; a disabled target readout performs no map/player/target
+collection. Development automation may force the core observation snapshot for
+live scenarios, but it does not select either player-facing surface and cannot
+be reached by packaged builds. Settings are read once per launch because the
+kernel configuration cannot change while the game is running.
 
 The web client kept ArenaNet's Win32 cursor structure and stubbed only its final
 step: `GlDev` decodes the active cursor into fixed buffers, then calls
@@ -341,7 +363,8 @@ evidence has not certified.
 | Map/player | Observed | live identity, 201-unit movement delta | one live map transition |
 | Target identity/distance | Observed | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
 | Cursor | Observed | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
-| Cursor presentation | Shipped, opt-in | offline Electron + `cursor-capture` | opted-in play on a fresh certified build |
+| Cursor presentation | Shipped, default-on | offline Electron + `cursor-capture` | play on a fresh certified build |
+| Target readout | Shipped, opt-in | decoder/readout unit suite | one live selected-target run |
 | Party | Not modeled | none | locate bounded roster |
 | Skills/recharge | Not modeled | none | locate skill context |
 | Effects/conditions | Not modeled | none | locate bounded effect collection |

@@ -1,5 +1,10 @@
 import { BrowserWindow, ipcMain } from "electron";
-import { IPC, type RendererCommand } from "../shared/contracts.js";
+import {
+  IPC,
+  type RendererCommand,
+  type RendererCommandCompletion,
+  type RendererCommandOutcome,
+} from "../shared/contracts.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 
 /**
@@ -11,18 +16,24 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 
 interface Pending {
   webContentsId: number;
-  settle: () => void;
+  settle: (outcome: RendererCommandOutcome) => void;
 }
 
 const pending = new Map<number, Pending>();
 let lastCommandId = 0;
+export const RENDERER_COMMAND_TIMEOUT_MS = 5_000;
 
-ipcMain.on(IPC.rendererCommandDone, (event, id: unknown) => {
-  if (typeof id !== "number") return;
+ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
+  if (
+    typeof id !== "number"
+    || (outcome !== "completed" && outcome !== "failed")
+  ) {
+    return;
+  }
   const entry = pending.get(id);
   // Only the renderer the command was sent to may complete it.
   if (!entry || entry.webContentsId !== event.sender.id) return;
-  entry.settle();
+  entry.settle(outcome as RendererCommandCompletion);
 });
 
 export function canonicalRendererWindow(): BrowserWindow | null {
@@ -37,11 +48,10 @@ export function canonicalRendererWindow(): BrowserWindow | null {
 }
 
 /**
- * Resolves when the renderer has finished the command, when the page that would
- * answer it goes away, or immediately when there is no live renderer. It never
- * rejects and it never hangs: every caller is a menu action or a capture step
- * whose only failure mode is that the renderer was not there, and one of them
- * runs on the quit path.
+ * Resolves with the renderer's truthful completion, failure when the page that
+ * would answer goes away, or a bounded timeout. It never rejects and it never
+ * hangs: every caller is a menu action or a capture step, and capture stop runs
+ * on the quit path.
  *
  * A command sent while a page is still loading is dropped by Chromium — the
  * handler is not registered yet — so `did-finish-load` is a give-up signal, not
@@ -58,36 +68,49 @@ export function canonicalRendererWindow(): BrowserWindow | null {
 export function sendRendererCommand(
   win: BrowserWindow | null,
   command: RendererCommand,
-): Promise<void> {
+): Promise<RendererCommandOutcome> {
   if (
     !win
     || win.isDestroyed()
     || win.webContents.isDestroyed()
     || win.webContents.isCrashed()
   ) {
-    return Promise.resolve();
+    return Promise.resolve("failed");
   }
   const contents = win.webContents;
   const id = (lastCommandId += 1);
-  return new Promise<void>((resolve) => {
-    const settle = (): void => {
+  return new Promise<RendererCommandOutcome>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(
+      () => settle("timed-out"),
+      RENDERER_COMMAND_TIMEOUT_MS,
+    );
+    const settle = (outcome: RendererCommandOutcome): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       pending.delete(id);
-      contents.off("destroyed", settle);
-      contents.off("render-process-gone", settle);
-      contents.off("did-finish-load", settle);
+      contents.off("destroyed", failed);
+      contents.off("render-process-gone", failed);
+      contents.off("did-finish-load", failed);
       contents.off("did-start-navigation", abandon);
-      resolve();
+      resolve(outcome);
     };
+    const failed = (): void => settle("failed");
     const abandon = (
       details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
     ): void => {
-      if (details.isMainFrame && !details.isSameDocument) settle();
+      if (details.isMainFrame && !details.isSameDocument) failed();
     };
     pending.set(id, { webContentsId: contents.id, settle });
-    contents.once("destroyed", settle);
-    contents.once("render-process-gone", settle);
-    contents.once("did-finish-load", settle);
+    contents.once("destroyed", failed);
+    contents.once("render-process-gone", failed);
+    contents.once("did-finish-load", failed);
     contents.on("did-start-navigation", abandon);
-    contents.send(IPC.rendererCommand, id, command);
+    try {
+      contents.send(IPC.rendererCommand, id, command);
+    } catch {
+      failed();
+    }
   });
 }

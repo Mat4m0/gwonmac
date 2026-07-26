@@ -43,9 +43,9 @@ verified null table slot without growing the table:
 
 The former table-growth and all-functions detour experiments were removed.
 They rewrote far more of the client than the production hook requires.
-`src/main/core/toolbox-client.ts` separately owns official-file hashing,
-derived-cache validation, and atomic publication; neither the CLI nor main
-duplicates those policies.
+`src/main/core/client-module.ts` owns the production transform chain,
+derived-cache validation, and atomic publication. The CLI invokes the same
+pure byte transform directly for an explicit input and output.
 
 ### `gensyms.py` — symbol recovery
 The module is stripped, but naming information survives: 219 imports and 44

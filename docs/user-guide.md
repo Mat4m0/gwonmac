@@ -87,16 +87,18 @@ Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
-on release. **Controls** owns **Use the game's own cursor**, which is on by
-default. The host reads the cursor Guild Wars itself draws out of your own
-installed client and shows it over the game view; no cursor artwork ships with
-this app and none is downloaded. To turn it off, open **Settings → Controls**
-and clear that box; **Reset Launcher Settings…** under **Advanced** turns it
-back on along with everything else. Turning it on or off changes which client
-module the launch serves, so the app has to restart to apply it: it asks first,
-and if you cancel, nothing is saved and the box goes back to what it was.
+on release. **Controls** owns two independent Toolbox choices. **Use the game's
+own cursor** is on by default: the host reads the cursor Guild Wars itself draws
+out of your installed client and shows it over the game view; no cursor artwork
+ships with this app and none is downloaded. **Show target distance and range**
+is off by default and adds the selected target's distance and range band at the
+top of the game view. Either choice can be changed without enabling the other.
+Changing either one changes which observations the launch prepares, so the app
+has to restart to apply it: it asks first, and if you cancel, nothing is saved
+and the boxes return to what they were. **Reset Launcher Settings…** restores
+the cursor to on and the target readout to off.
 **Reload Game** reuses the module the launch already chose.
-When it is off — and whenever the cursor cannot be read, or
+When the cursor is off — and whenever it cannot be read, or
 your client build is not one this host has certified — you get the normal macOS
 pointer. That is a cosmetic difference only: nothing about how the game plays
 changes with the box either way. The rest of the window always keeps the macOS
@@ -164,10 +166,9 @@ an export that cannot account for one of its own events fails instead of being
 written. Everything else in the file — Chromium's trace, the graphics and
 environment report, your launcher settings — is scanned for passwords, tokens,
 email addresses, and file paths, and those are replaced. That scan recognizes
-known patterns, so treat it as strong rather than absolute; a small number of
-events also still record a blocked web address. The export is an ordinary ZIP
-you can open and read before attaching it. GitHub issues are public, so review
-the bug form’s privacy notice as well.
+known patterns, so treat it as strong rather than absolute. The export is an
+ordinary ZIP you can open and read before attaching it. GitHub issues are
+public, so review the bug form’s privacy notice as well.
 
 ## Recovery behavior
 
@@ -219,22 +220,22 @@ as good news:
   your network, returned an error or an unreadable answer, or this build's
   version is not on the release line.
 
-**Last checked** beside the button records when GitHub was last asked and
-survives a restart, so a failed check cannot be mistaken for a fresh success.
-Repeated presses reuse an answer — or a refusal to answer further — for ten
-minutes instead of sending more requests. A check that failed for another
-reason is not reused: if you were offline, pressing the button once you are
-back online asks again straight away.
+**Last checked** beside the button records when the last release-check attempt
+finished and survives a restart, so a failed check cannot be mistaken for a
+fresh success.
+Repeated presses reuse every answer for ten minutes, including an offline,
+timeout, server, rate-limit, or unreadable response, instead of sending more
+requests. After that bounded pause, pressing the button asks GitHub again.
 
 ## When the client build is not certified
 
 Each ArenaNet client build is certified separately for two things: the repair
-that makes build templates, screenshots, and chat logs work, and Guild Wars'
-own cursors. When ArenaNet ships a build this app has not certified — or has
-certified for saving files but not yet for the cursors you asked for — the
-loading screen says so once for that build, names exactly what is affected, and
-offers **Play Guild Wars** as the primary action. The notice explains; it does
-not block you.
+that makes build templates, screenshots, and chat logs work, and the read-only
+Toolbox transform used by the cursor and target readout. When ArenaNet ships a
+build this app has not certified — or has certified for saving files but not
+yet for the Toolbox tools you selected — the loading screen says so once for
+that build, names exactly what is affected, and offers **Play Guild Wars** as
+the primary action. The notice explains; it does not block you.
 
 Gameplay is unaffected either way: no stat, no timing, and no input path
 changes. Recovery needs a new release of this app; retrying, reinstalling, or
@@ -243,18 +244,16 @@ visible under **Settings → Controls**. An uncertified client build does not me
 the app is out of date — whether a newer release exists is the separate question
 above, which the notice's own **Check for Updates** button answers.
 
-**Use the game's own cursor**, on by default, is what makes the app read game
-memory at all. While it is on the app reads two things: the cursor Guild Wars
-is drawing, and — when you have a target selected — that target's distance and
-which range band it falls in, which it shows in a small line at the top of the
-game view. That readout is the whole of the Toolbox's on-screen surface. It
-disappears when you have nothing targeted, it cannot be clicked, and it never
-covers anything you can interact with. Clear the box and there is no readout, no
-Toolbox hook is installed, no companion kernel loads, and nothing observes game
-memory at all. Either way nothing the app does sends game input or acts on your
-behalf. On a certified build the app derives one narrowly patched module that
-connects the client's missing file operations to its sandboxed persistent
-filesystem, which
+The two Toolbox choices control their observations independently. The cursor
+choice reads only the cursor Guild Wars is drawing. The target-readout choice
+reads map, player, and selected-target state and shows a small line at the top
+of the game view; it disappears with no target, cannot be clicked, and never
+covers anything interactive. A disabled tool performs no per-tick collection.
+With both choices off, no Toolbox hook is installed, no companion kernel loads,
+and nothing observes game memory. Either way nothing the app does sends game
+input or acts on your behalf. On a certified build the app derives one narrowly
+patched module that connects the client's missing file operations to its
+sandboxed persistent filesystem, which
 is what makes build templates, screenshots, and chat logs work; the downloaded
 official artifact is unchanged whichever way the box is set.
 

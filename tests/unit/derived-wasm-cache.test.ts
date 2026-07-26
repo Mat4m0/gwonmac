@@ -9,8 +9,6 @@ import {
   inspectDerivedWasmCache,
   prepareDerivedWasm,
 } from "../../src/main/core/derived-wasm.js";
-import { prepareTemplateSaveClient } from "../../src/main/core/template-save-client.js";
-import { prepareToolboxClient } from "../../src/main/core/toolbox-client.js";
 
 const scratchDirs: string[] = [];
 
@@ -255,37 +253,5 @@ describe("derived wasm cache", () => {
       await inspectDerivedWasmCache(cacheFor(old.sha256, cacheRoot)),
       "valid",
     );
-  });
-});
-
-describe("derived wasm clients on an uncertified build", () => {
-  it("prepareToolboxClient returns the base module and drops its cache", async () => {
-    const root = await scratch();
-    const base = await baseModule(root, "base.wasm", "not-a-certified-client");
-    const cacheRoot = join(root, "toolbox");
-    await mkdir(join(cacheRoot, "stale-input", "3"), { recursive: true });
-    await writeFile(join(cacheRoot, "stale-input", "3", "Gw.jspi.wasm"), "old");
-
-    const prepared = await prepareToolboxClient(base.path, cacheRoot);
-
-    assert.deepEqual(prepared, { wasmPath: base.path, build: null });
-    await assert.rejects(readdir(cacheRoot), { code: "ENOENT" });
-  });
-
-  it("prepareTemplateSaveClient returns the official module and drops its cache", async () => {
-    const root = await scratch();
-    const base = await baseModule(root, "official.wasm", "not-a-certified-client");
-    const cacheRoot = join(root, "compatibility");
-    await mkdir(join(cacheRoot, "stale-input", "2"), { recursive: true });
-    await writeFile(join(cacheRoot, "stale-input", "2", "Gw.jspi.wasm"), "old");
-
-    const prepared = await prepareTemplateSaveClient(
-      base.path,
-      base.sha256,
-      cacheRoot,
-    );
-
-    assert.equal(prepared, base.path);
-    await assert.rejects(readdir(cacheRoot), { code: "ENOENT" });
   });
 });

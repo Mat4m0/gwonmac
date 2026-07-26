@@ -11,6 +11,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   CacheInfo,
+  ClientHealthToken,
   ClientSession,
   DownloadProgress,
   ExternalLinkKind,
@@ -32,7 +33,8 @@ import {
   isRendererMetrics,
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
-import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore, parseCredentials } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
@@ -44,14 +46,13 @@ import {
   count,
   diagnosticSummary,
   diagnosticTimestampUs,
-  log,
   logEvent,
   recordGraphics,
   recordRendererMetrics,
   recordRendererFrames,
   recordRendererMilestone,
   recordClockOffset,
-  span,
+  startDnsResolveSpan,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
@@ -68,7 +69,7 @@ export interface IpcContext {
   resetSettings: () => Promise<AppSettings>;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
-  confirmClientHealthy: () => Promise<void>;
+  confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
   retryClient: () => Promise<void>;
   checkReleaseNotice: () => Promise<ReleaseNotice>;
   getClientSession: () => ClientSession;
@@ -100,8 +101,15 @@ function toWireSocketEvent(event: SocketEvent): SocketEvent {
 
 function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolean {
   if (win.isDestroyed() || win.webContents.isDestroyed()) return false;
-  win.webContents.send(channel, value);
-  return true;
+  try {
+    win.webContents.send(channel, value);
+    return true;
+  } catch {
+    // Renderer destruction can race the checks above. Socket callbacks are
+    // native and synchronous, so that ordinary teardown must not escape into
+    // the process-wide fatal-error handler.
+    return false;
+  }
 }
 
 /**
@@ -137,26 +145,23 @@ function channel<In, Out>(
 }
 
 /** For the channels that carry nothing. Still a parser, still explicit. */
-const nothing: Parser<void> = () => undefined;
+const exact = (args: readonly unknown[], count: number): void => {
+  if (args.length !== count) {
+    throw new ValidationError(`expected ${count} IPC argument(s)`);
+  }
+};
 
-/**
- * The two properties the registry exists to give, asserted as type errors so
- * they run inside every `pnpm typecheck` — no new test file, runner or spawned
- * `tsc`. Both were executed in both directions: delete a directive and `tsc`
- * reports the error again; repair the defect it describes and `tsc` reports
- * `TS2578: Unused '@ts-expect-error' directive` instead.
- */
-// @ts-expect-error a set of handlers missing a channel is not a registry.
-const _channelWithNoHandlerFailsTheBuild: Record<InvokeChannel, AnyChannelDef> =
-  {} as Omit<Record<InvokeChannel, AnyChannelDef>, "clientSession">;
-// @ts-expect-error `channel()` takes a parser; there is no unvalidated overload.
-const _handlerWithNoParserFailsTheBuild = channel(() => undefined);
+const nothing: Parser<void> = (args) => {
+  exact(args, 0);
+};
 
 /** Lifts a single-value validator into a parser over the argument list. */
 const one =
   <In>(parse: (value: unknown) => In): Parser<In> =>
-  (args) =>
-    parse(args[0]);
+  (args) => {
+    exact(args, 1);
+    return parse(args[0]);
+  };
 
 const asString = (what: string) =>
   one((value: unknown): string => {
@@ -164,9 +169,31 @@ const asString = (what: string) =>
     return value;
   });
 
-const asSocketId = one((value: unknown): number => {
+const parseSocketId = (value: unknown): number => {
   if (!Number.isInteger(value)) throw new ValidationError("socketId must be an integer");
   return value as number;
+};
+const asSocketId = one(parseSocketId);
+
+const asClientHealthToken = one((value: unknown): ClientHealthToken => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("invalid client health token");
+  }
+  const token = value as Record<string, unknown>;
+  if (
+    !Number.isSafeInteger(token.generation) ||
+    (token.generation as number) <= 0 ||
+    !isDigest(token.fingerprint) ||
+    Object.keys(token).some(
+      (key) => key !== "generation" && key !== "fingerprint",
+    )
+  ) {
+    throw new ValidationError("invalid client health token");
+  }
+  return {
+    generation: token.generation as number,
+    fingerprint: token.fingerprint,
+  };
 });
 
 const asFiniteNumber = (what: string) =>
@@ -178,7 +205,8 @@ const asFiniteNumber = (what: string) =>
   });
 
 const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
-  const socketId = asSocketId(args);
+  exact(args, 2);
+  const socketId = parseSocketId(args[0]);
   const data = args[1];
   if (!(data instanceof Uint8Array) && !ArrayBuffer.isView(data)) {
     throw new ValidationError("data must be a Uint8Array");
@@ -198,6 +226,7 @@ const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) 
 };
 
 const asClockResult: Parser<{ offsetUs: number; rttUs: number }> = (args) => {
+  exact(args, 2);
   const [offsetUs, rttUs] = args;
   if (
     typeof offsetUs !== "number" ||
@@ -252,12 +281,22 @@ interface ParsedMilestone {
 }
 
 const asMilestone: Parser<ParsedMilestone> = (args) => {
+  exact(args, 3);
   const [name, rendererTimestampUs, fields] = args;
   const record = fields as Record<string, unknown> | undefined;
+  const recordIsObject =
+    record !== undefined
+    && record !== null
+    && typeof record === "object"
+    && !Array.isArray(record);
+  const exactBuildInfoFields =
+    recordIsObject
+    && Object.keys(record).length === 2
+    && Object.hasOwn(record, "programId")
+    && Object.hasOwn(record, "buildId");
   const milestoneFields =
-    record &&
-    typeof record === "object" &&
-    !Array.isArray(record) &&
+    recordIsObject &&
+    exactBuildInfoFields &&
     (typeof record.programId === "string" || typeof record.programId === "number") &&
     (typeof record.buildId === "string" || typeof record.buildId === "number")
       ? {
@@ -362,13 +401,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }),
 
     dnsResolve: channel(asString("dns name"), async (_win, name) => {
-      const lookup = span("dns", "resolve");
+      const lookup = startDnsResolveSpan();
       try {
         const address = await resolveDns(name);
-        lookup.end({ status: "ok" });
+        lookup.end({ status: "ok", code: null });
         return address;
       } catch (err) {
-        lookup.end({ status: "error", code: errorCode(err) }, "error");
+        lookup.end({ status: "error", code: errorCode(err) });
         throw err;
       }
     }),
@@ -408,7 +447,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         if (restart && !(await confirmToolboxRestart(win))) return previous;
         const saved = await ctx.updateSettings(patch);
         if (previous.dataStrategy !== saved.dataStrategy) {
-          log("settings", "info", "launcher.strategyChanged", {
+          logEvent({ k: "launcher.strategyChanged",
             strategy: saved.dataStrategy ?? "unselected",
           });
         }
@@ -425,20 +464,37 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     settingsReset: channel(nothing, async (win) => {
       await resetGameInput(win);
-      const { response } = await dialog.showMessageBox(win, {
-        type: "warning",
-        buttons: ["Reset Launcher Settings", "Cancel"],
-        defaultId: 1,
-        cancelId: 1,
-        message: "Reset launcher settings?",
-        detail:
-          "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
-      });
-      if (response !== 0) return null;
       try {
+        const previous = await ctx.getSettings();
+        const restart = toolboxSelectionChanged(previous, DEFAULT_SETTINGS);
+        const { response } = await dialog.showMessageBox(win, {
+          type: "warning",
+          buttons: [
+            restart ? "Reset and Restart" : "Reset Launcher Settings",
+            "Cancel",
+          ],
+          defaultId: 1,
+          cancelId: 1,
+          message: "Reset launcher settings?",
+          detail: restart
+            ? "Display, controls, window size and position, and advanced settings return to their defaults, then the app restarts to apply the Toolbox tools. Downloaded game data and your saved login stay untouched."
+            : "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
+        });
+        if (response !== 0) return null;
         const settings = await ctx.resetSettings();
-        await resetWindowState(win);
-        log("settings", "info", "settings.reset");
+        try {
+          await resetWindowState(win);
+        } catch {
+          // The settings file is already durably reset. Window geometry is a
+          // separate document, so its failure must not turn that committed
+          // result into a false "settings reset failed" answer.
+          logEvent({ k: "window.stateResetFailed" });
+        }
+        logEvent({ k: "settings.reset" });
+        if (restart) {
+          app.relaunch();
+          app.quit();
+        }
         return settings;
       } catch (error) {
         logEvent({ k: "settings.resetFailed", code: errorCode(error) });
@@ -450,7 +506,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       try {
         return await credentials.load();
       } catch (error) {
-        log("credentials", "error", "credentials.loadFailed");
+        logEvent({ k: "credentials.loadFailed" });
         throw error;
       }
     }),
@@ -463,7 +519,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         try {
           await credentials.save(value);
         } catch (error) {
-          log("credentials", "error", "credentials.saveFailed");
+          logEvent({ k: "credentials.saveFailed" });
           throw error;
         }
       },
@@ -473,7 +529,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       try {
         await credentials.clear();
       } catch (error) {
-        log("credentials", "error", "credentials.clearFailed");
+        logEvent({ k: "credentials.clearFailed" });
         throw error;
       }
     }),
@@ -501,7 +557,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       if (response !== 0) return false;
       try {
         await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
-        log("cache", "info", "cache.clearRequested");
+        logEvent({ k: "cache.clearRequested" });
         app.relaunch();
         app.quit();
         return true;
@@ -529,7 +585,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       if (response !== 0) return false;
       try {
         await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
-        log("filesystem", "warn", "filesystem.resetRequested");
+        logEvent({ k: "filesystem.resetRequested" });
         app.relaunch();
         app.quit();
         return true;
@@ -582,7 +638,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     clientRetry: channel(nothing, () => ctx.retryClient()),
 
-    clientHealthy: channel(nothing, () => ctx.confirmClientHealthy()),
+    clientHealthy: channel(asClientHealthToken, (_win, token) =>
+      ctx.confirmClientHealthy(token),
+    ),
 
     clientSession: channel(nothing, () => ctx.getClientSession()),
 

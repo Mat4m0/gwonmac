@@ -6,15 +6,12 @@ import {
 } from "../../src/main/diagnostics/text-scan.ts";
 
 /**
- * One invariant, one owner. The sensitive-key vocabulary was written out
- * twice — once in `src/main/diagnostic-recorder.ts` to drop a field by name,
- * once in `text-scan.ts` to scan text — and the two had drifted: `login` was
- * in the scanner and not in the recorder, so a field named `login` was written
- * to `events.jsonl` verbatim while `account` beside it was dropped. The
- * recorder now calls `isSensitiveKey`, and these are the words it must cover.
+ * One invariant, one owner. App-authored events are now closed by schema and
+ * never pass through this vocabulary. `text-scan.ts` owns these stems for the
+ * OS/Chromium documents and trace that still require pattern scanning.
  */
 describe("the sensitive-key vocabulary", () => {
-  // Every stem the recorder used to carry, so unifying cannot narrow it.
+  // The complete intentionally broad scanner vocabulary.
   const dropped = [
     "pass",
     "auth",
@@ -43,13 +40,13 @@ describe("the sensitive-key vocabulary", () => {
     }
   });
 
-  it("scans text for the same words it drops by name", () => {
+  it("scans text for every sensitive key stem", () => {
     for (const word of dropped) {
       const output = redactDiagnosticText(`${word}=alice.smith`);
       assert.equal(
         output.includes("alice.smith"),
         false,
-        `${word} is dropped by name but not scanned in text: ${output}`,
+        `${word} is recognized by key but not scanned in text: ${output}`,
       );
     }
   });

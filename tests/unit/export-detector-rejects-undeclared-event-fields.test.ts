@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { inspectEventLog } from "../../src/main/diagnostics/detector.ts";
 import {
-  asDigest,
+  DIAGNOSTIC_EVENT_SCHEMA,
   diagnosticEventRecord,
 } from "../../src/main/diagnostics/schema.ts";
 import type { DiagnosticEvent } from "../../src/main/diagnostics/schema.ts";
+import { asDigest } from "../../src/shared/digest.ts";
 
 /**
  * Behaviour only: every case here runs the detector over a real JSONL document
@@ -20,14 +21,21 @@ function line(
   fields?: Record<string, unknown>,
 ): string {
   seq += 1;
+  const requestedName =
+    typeof overrides.name === "string" ? overrides.name : "app.uncaughtException";
+  const owner = Object.hasOwn(DIAGNOSTIC_EVENT_SCHEMA, requestedName)
+    ? DIAGNOSTIC_EVENT_SCHEMA[
+        requestedName as keyof typeof DIAGNOSTIC_EVENT_SCHEMA
+      ]
+    : DIAGNOSTIC_EVENT_SCHEMA["app.uncaughtException"];
   return JSON.stringify({
     seq,
     tsUs: 1_000 * seq,
     wallTime: new Date(seq * 1_000).toISOString(),
-    level: "error",
-    subsystem: "app",
-    name: "diagnostics.unnamed",
-    ...(fields ? { fields } : {}),
+    level: owner.level,
+    subsystem: owner.subsystem,
+    name: "app.uncaughtException",
+    fields: fields ?? { code: "unknown" },
     ...overrides,
   });
 }
@@ -65,7 +73,6 @@ describe("export detector", () => {
     const result = inspectEventLog(events.map(recorded).join("\n"));
     assert.equal(result.records, events.length);
     assert.equal(result.schemaChecked, events.length);
-    assert.equal(result.openFields, 0);
   });
 
   it("rejects a declared event that carries a field the schema does not declare", () => {
@@ -115,38 +122,61 @@ describe("export detector", () => {
   });
 
   it("rejects a malformed envelope rather than trusting the record", () => {
-    rejects(line({ level: "fatal" }), /envelope field level/);
-    rejects(line({ subsystem: "kernel" }), /envelope field subsystem/);
-    rejects(line({ name: "/Users/x/secret.txt" }), /envelope field name/);
+    rejects(line({ level: 5 }), /envelope field level/);
+    rejects(line({ subsystem: 5 }), /envelope field subsystem/);
+    rejects(line({ name: "/Users/x/secret.txt" }), /undeclared event name/);
     rejects(line({ traceId: "trace-1" }), /record key traceId/);
     rejects(line({ hostname: "gw.example.com" }), /undeclared record key hostname/);
     rejects("not json at all", /line 1 is not JSON/);
     rejects(JSON.stringify([1, 2]), /line 1 is not an object/);
   });
 
-  it("counts the strings the schema has not absorbed instead of waving them through", () => {
-    // `security.navigationBlocked` is one of the producers P2.3 did not
-    // convert. Its string is visible in the manifest as a number, not hidden
-    // behind the word "passed".
-    const text = [
-      line({ name: "security.navigationBlocked", level: "warn" }, { url: "https://elsewhere" }),
-      line({ name: "childProcess.gone" }, { type: "GPU", reason: "crashed", exitCode: 5 }),
-      recorded({ k: "socket.open", socketId: 3 }),
-    ].join("\n");
-    const result = inspectEventLog(text);
-    assert.equal(result.records, 3);
-    assert.equal(result.schemaChecked, 1);
-    assert.equal(result.openFields, 3);
+  it("rejects a declared event under another subsystem or level", () => {
+    rejects(
+      line({ name: "socket.open", subsystem: "app" }, { socketId: 1 }),
+      /socket\.open has the wrong subsystem/,
+    );
+    rejects(
+      line({ name: "socket.open", level: "error" }, { socketId: 1 }),
+      /socket\.open has the wrong level/,
+    );
+  });
+
+  it("rejects every undeclared event and former free-text producer field", () => {
+    rejects(
+      line(
+        { name: "security.navigationBlocked", level: "warn" },
+        { url: "https://elsewhere" },
+      ),
+      /security\.navigationBlocked carries undeclared field url/,
+    );
+    rejects(
+      line(
+        { name: "childProcess.gone" },
+        { type: "GPU", reason: "crashed", exitCode: 5 },
+      ),
+      /childProcess\.gone carries undeclared field type/,
+    );
+    rejects(
+      line({ name: "diagnostics.unnamed" }, {}),
+      /undeclared event name/,
+    );
   });
 
   it("rejects a nested field on any record, declared or not", () => {
     rejects(
-      line({ name: "renderer.metrics", level: "debug" }, { detail: { message: "boom" } }),
-      /field detail is not a scalar/,
+      line(
+        { name: "electron.ready", level: "info" },
+        { detail: { message: "boom" } },
+      ),
+      /electron\.ready carries undeclared field detail/,
     );
     rejects(
-      line({ name: "renderer.metrics", level: "debug" }, { frames: [1, 2, 3] }),
-      /field frames is not a scalar/,
+      line(
+        { name: "electron.ready", level: "info" },
+        { frames: [1, 2, 3] },
+      ),
+      /electron\.ready carries undeclared field frames/,
     );
   });
 

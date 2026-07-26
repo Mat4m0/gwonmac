@@ -152,7 +152,11 @@ const INVOCATIONS = [
   { path: "app.openExternal", args: ["support"], channel: IPC.appOpenExternal },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   { path: "client.retry", args: [], channel: IPC.clientRetry },
-  { path: "client.healthy", args: [], channel: IPC.clientHealthy },
+  {
+    path: "client.healthy",
+    args: [{ generation: 7, fingerprint: "a".repeat(64) }],
+    channel: IPC.clientHealthy,
+  },
   { path: "client.session", args: [], channel: IPC.clientSession },
   { path: "releaseNotice.check", args: [], channel: IPC.releaseNoticeCheck },
 ];
@@ -308,43 +312,78 @@ test("a renderer command is acknowledged once its handler has settled", async ()
 
   release();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(sent, [{ channel: IPC.rendererCommandDone, args: [11] }]);
+  assert.deepEqual(sent, [
+    { channel: IPC.rendererCommandDone, args: [11, "completed"] },
+  ]);
 });
 
-test("a handler that throws still acknowledges, so main never waits forever", async () => {
+test("a handler that throws reports failure instead of false completion", async () => {
   const { api, sent, listeners } = load();
   api.commands.handle(() => {
     throw new Error("the renderer is having a bad day");
   });
   listeners.get(IPC.rendererCommand)[0]({}, 12, { name: "flushCapture" });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(sent, [{ channel: IPC.rendererCommandDone, args: [12] }]);
+  assert.deepEqual(sent, [
+    { channel: IPC.rendererCommandDone, args: [12, "failed"] },
+  ]);
+});
+
+test("the renderer command transport accepts exactly one handler", () => {
+  const { api, listeners } = load();
+  api.commands.handle(() => undefined);
+  assert.throws(
+    () => api.commands.handle(() => undefined),
+    /already registered/,
+  );
+  assert.equal(listeners.get(IPC.rendererCommand).length, 1);
 });
 
 test("the launch configuration is read from argv, and defaults to production", () => {
   // A renderer that cannot read its argument gets no Toolbox and no trace,
   // rather than a developer posture nobody asked for.
-  assert.deepEqual({ ...load().api.init }, {
+  const plainInit = (value) => ({
+    ...value,
+    toolboxSelection: { ...value.toolboxSelection },
+  });
+  assert.deepEqual(plainInit(load().api.init), {
     toolboxAutomation: false,
-    nativeCursor: false,
+    toolboxSelection: { nativeCursor: false, targetReadout: false },
     templateFsTrace: false,
   });
   assert.deepEqual(
-    {
-      ...load([
+    plainInit(
+      load([
         "--irrelevant",
         RENDERER_INIT_ARGUMENT +
-          JSON.stringify({ nativeCursor: true, templateFsTrace: true }),
+          JSON.stringify({
+            toolboxSelection: {
+              nativeCursor: true,
+              targetReadout: false,
+            },
+            templateFsTrace: true,
+          }),
       ]).api.init,
+    ),
+    {
+      toolboxAutomation: false,
+      toolboxSelection: { nativeCursor: true, targetReadout: false },
+      templateFsTrace: true,
     },
-    { toolboxAutomation: false, nativeCursor: true, templateFsTrace: true },
   );
   // Anything that is not the exact boolean `true`, and anything unparseable,
   // is off.
-  for (const malformed of ['{"nativeCursor":"yes"', '{"nativeCursor":1}']) {
+  for (const malformed of [
+    '{"toolboxSelection":{"nativeCursor":"yes"}',
+    '{"toolboxSelection":{"nativeCursor":1}}',
+  ]) {
     assert.deepEqual(
-      { ...load([RENDERER_INIT_ARGUMENT + malformed]).api.init },
-      { toolboxAutomation: false, nativeCursor: false, templateFsTrace: false },
+      plainInit(load([RENDERER_INIT_ARGUMENT + malformed]).api.init),
+      {
+        toolboxAutomation: false,
+        toolboxSelection: { nativeCursor: false, targetReadout: false },
+        templateFsTrace: false,
+      },
       malformed,
     );
   }

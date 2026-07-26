@@ -117,6 +117,18 @@ declare global {
     }>;
   }
 
+  interface ToolboxSettingsController {
+    patchFor(
+      control: HTMLInputElement | HTMLSelectElement,
+    ): import("../shared/contracts.js").AppSettingsPatch | null;
+    render(settings: AppSettings): void;
+    resultFor(
+      control: HTMLInputElement | HTMLSelectElement,
+      patch: import("../shared/contracts.js").AppSettingsPatch,
+      saved: AppSettings,
+    ): Readonly<{ applied: boolean; text: string }> | null;
+  }
+
   interface Window {
     readonly gwNative: GwNativeApi;
     Module?: {
@@ -139,6 +151,17 @@ declare global {
     gwToolboxInstallations?: number;
     gwToolboxRuntime?: Record<string, unknown> | null;
     gwToolboxState?: ToolboxState;
+    readonly gwToolSettings: Readonly<{
+      create(options: {
+        form: HTMLFormElement;
+        byId(id: string): HTMLElement;
+        selection: import("../shared/contracts.js").ToolboxSelection;
+        persist(
+          patch: import("../shared/contracts.js").AppSettingsPatch,
+        ): Promise<AppSettings>;
+        current(): AppSettings | null;
+      }): ToolboxSettingsController;
+    }>;
     gwAutomation: ToolboxAutomation;
     gwGlRecon?(): Readonly<{
       livePrograms: number;

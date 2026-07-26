@@ -1,24 +1,21 @@
 import { net } from "electron";
 import type {
   ClientCompatibility,
-  ClientCompatibilityState,
+  ClientHealthToken,
   DownloadProgress,
   FullDownloadOutcome,
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
+import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
+import { certifyClientBuild } from "./client-certification.js";
 import {
-  certifyClientBuild,
-  toolboxMayLoad,
-} from "./client-certification.js";
-import {
-  ACCESS_KEY,
+  PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
-  UA,
 } from "./core/access-key.js";
 import {
   ActiveClientSlot,
@@ -27,6 +24,7 @@ import {
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
+import { prepareClientModule } from "./core/client-module.js";
 import {
   confirmClientCandidate,
   readRejectedClient,
@@ -37,8 +35,8 @@ import type { Manifest } from "./core/manifest.js";
 import { Mutex } from "./core/mutex.js";
 import { PatchClient } from "./core/patch-client.js";
 import {
+  createBoundedPatchFetch,
   fetchPatchBytes,
-  readBoundedResponse,
   type PatchFetch,
 } from "./core/patch-transport.js";
 import { clientArtifactPath, clientManifestPath } from "./core/paths.js";
@@ -47,22 +45,15 @@ import {
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
-import { prepareTemplateSaveClient } from "./core/template-save-client.js";
-import {
-  prepareToolboxClient,
-  type PreparedToolboxClient,
-} from "./core/toolbox-client.js";
 import { TOOLBOX_TRANSFORM_ABI } from "./core/toolbox-transform.js";
 import {
   count,
   gauge,
-  log,
   logEvent,
   observe,
   peakGauge,
-  span,
+  startClientUpdateSpan,
 } from "./diagnostics.js";
-import { type Digest, isDigest } from "./diagnostics/schema.js";
 import type { GamePaths } from "./paths.js";
 
 export type { ActiveClient } from "./core/active-client.js";
@@ -103,17 +94,23 @@ export class ClientRuntime {
     promise: Promise<FullDownloadOutcome>;
   } | null = null;
   private gameUpdate: Promise<void> | null = null;
+  private gameUpdateAbort: AbortController | null = null;
   /**
    * Which of the three certification states this session is in. Set once per
    * generation, where the module it describes is chosen; `null` until a client
    * has been activated.
    */
   private compatibilityValue: ClientCompatibility | null = null;
-  private candidateFrameReady = false;
-  private candidateSocketReady = false;
-  private candidateConfirmation: Promise<void> | null = null;
+  /** Exact candidate identity captured by a renderer before it loads glue. */
+  private candidateHealthToken: ClientHealthToken | null = null;
+  private readonly patchFetch: PatchFetch;
 
-  constructor(private readonly options: ClientRuntimeOptions) {}
+  constructor(private readonly options: ClientRuntimeOptions) {
+    this.patchFetch = createBoundedPatchFetch(
+      (url, init) => net.fetch(url, init),
+      PATCH_REQUEST_TIMEOUT_MS,
+    );
+  }
 
   get active(): ActiveClient | null {
     return this.activeSlot.current;
@@ -121,6 +118,10 @@ export class ClientRuntime {
 
   get compatibility(): ClientCompatibility | null {
     return this.compatibilityValue;
+  }
+
+  get healthToken(): ClientHealthToken | null {
+    return this.candidateHealthToken;
   }
 
   get progress(): DownloadProgress {
@@ -137,28 +138,11 @@ export class ClientRuntime {
   }
 
   private cdnChunkFetcher(compression: "none" | "gzip") {
-    const headers = {
-      "X-Access-Key": ACCESS_KEY,
-      "User-Agent": UA,
-      "Accept-Encoding": "identity",
-    };
-    const patchFetch: PatchFetch = async (url, init) => {
-      const request: RequestInit = {
-        redirect: "manual",
-        signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
-      };
-      if (init?.headers) request.headers = init.headers;
-      const response = await net.fetch(url, request);
-      return {
-        status: response.status,
-        body: await readBoundedResponse(response, init?.maxBytes ?? 1),
-      };
-    };
     return async (hash: string, expectedLength: number) =>
       fetchPatchBytes({
-        fetch: patchFetch,
+        fetch: this.patchFetch,
         url: `${PATCH_ROOT}/${hash}.bin`,
-        headers,
+        headers: PATCH_REQUEST_HEADERS,
         maxBytes: encodedChunkLimit(expectedLength, compression),
         onAttempt: (durationMs) =>
           observe("cache.networkWire", durationMs * 1_000),
@@ -187,45 +171,9 @@ export class ClientRuntime {
     });
   }
 
-  /**
-   * The template-save client is the floor every launch lands on. Opting out
-   * comes straight here, and an opted-in launch falls back here whenever the
-   * Toolbox module cannot be produced, so an uncertified build or a failed
-   * transform costs the cursor and nothing else.
-   *
-   * `null` means no derived module exists — the build is uncertified, or the
-   * transform could not run — so this launch serves ArenaNet's own.
-   */
-  private async templateSaveWasm(
-    officialWasm: string,
-    officialSha256: string,
-    certified: boolean,
-  ): Promise<string | null> {
-    try {
-      const wasmPath = await prepareTemplateSaveClient(
-        officialWasm,
-        officialSha256,
-        this.options.paths.compatibility,
-      );
-      log(
-        "wasm",
-        certified ? "info" : "warn",
-        certified
-          ? "wasm.templateSavePrepared"
-          : "wasm.templateSaveUnsupported",
-      );
-      return certified ? wasmPath : null;
-    } catch (error) {
-      log("wasm", "warn", "wasm.templateSavePrepareFailed", {
-        code: errorCode(error),
-      });
-      return null;
-    }
-  }
-
   private async selectClientWasm(): Promise<{
     wasmPath: string;
-    build: PreparedToolboxClient["build"];
+    build: ActiveClient["toolboxBuild"];
   }> {
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
@@ -239,60 +187,57 @@ export class ClientRuntime {
       this.compatibilityValue = null;
       gauge("wasm.templateSaveCompatible", false);
       gauge("toolbox.supportedBuild", false);
-      log("wasm", "warn", "wasm.clientHashUnavailable", {
+      logEvent({ k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
       return { wasmPath: officialWasm, build: null };
     }
 
     const certification = certifyClientBuild(officialSha256);
-    // The two transforms are independent rewrites of the same official module,
-    // so the Toolbox one is layered on top of the template-save client rather
-    // than replacing it. Opting in must never cost template save/load.
-    const templateSaveWasm = await this.templateSaveWasm(
-      officialWasm,
+    const prepared = await prepareClientModule({
+      officialWasmPath: officialWasm,
       officialSha256,
-      certification.state !== "uncertified",
-    );
-    // A certified build whose transform failed to run is degraded exactly as
-    // far as an uncertified one, and says so rather than claiming its label.
-    const state: ClientCompatibilityState =
-      templateSaveWasm === null ? "uncertified" : certification.state;
+      certification,
+      toolboxRequested: this.options.toolboxEnabled,
+      compatibilityCacheRoot: this.options.paths.compatibility,
+      toolboxCacheRoot: this.options.paths.toolbox,
+    });
+    const state = prepared.state;
     this.compatibilityValue = {
       state,
       clientSha256: officialSha256,
-      toolboxRequested: this.options.toolboxEnabled,
+      toolboxActive: prepared.toolboxBuild !== null,
     };
     gauge("client.buildCertification", state);
     gauge("wasm.templateSaveCompatible", state !== "uncertified");
 
-    if (this.options.toolboxEnabled && toolboxMayLoad(state)) {
-      try {
-        const prepared = await prepareToolboxClient(
-          templateSaveWasm ?? officialWasm,
-          this.options.paths.toolbox,
-        );
-        if (prepared.build) {
-          gauge("toolbox.supportedBuild", true);
-          log("wasm", "info", "toolbox.clientPrepared", {
-            buildId: prepared.build.buildId,
-            transformAbi: TOOLBOX_TRANSFORM_ABI,
-          });
-          return { wasmPath: prepared.wasmPath, build: prepared.build };
-        }
-        log("wasm", "info", "toolbox.unsupportedBuild");
-      } catch (error) {
-        log("wasm", "warn", "toolbox.prepareFailed", {
-          code: errorCode(error),
-        });
-      }
-    } else if (this.options.toolboxEnabled) {
-      // The hard rule: an uncertified module never reaches the transform, so
-      // the setting is not consulted a second time further down.
-      log("wasm", "info", "toolbox.uncertifiedClientBlocked");
+    if (prepared.failure?.stage === "template-save") {
+      logEvent({ k: "wasm.templateSavePrepareFailed",
+        code: errorCode(prepared.failure.error),
+      });
+    } else {
+      logEvent({
+        k: state === "uncertified"
+          ? "wasm.templateSaveUnsupported"
+          : "wasm.templateSavePrepared",
+      });
     }
-    gauge("toolbox.supportedBuild", false);
-    return { wasmPath: templateSaveWasm ?? officialWasm, build: null };
+
+    if (prepared.failure?.stage === "toolbox") {
+      logEvent({ k: "toolbox.prepareFailed",
+        code: errorCode(prepared.failure.error),
+      });
+    }
+    if (prepared.toolboxBuild) {
+      logEvent({ k: "toolbox.clientPrepared",
+        buildId: prepared.toolboxBuild.buildId,
+        transformAbi: TOOLBOX_TRANSFORM_ABI,
+      });
+    } else if (this.options.toolboxEnabled && state !== "certified") {
+      logEvent({ k: "toolbox.uncertifiedClientBlocked" });
+    }
+    gauge("toolbox.supportedBuild", prepared.toolboxBuild !== null);
+    return { wasmPath: prepared.wasmPath, build: prepared.toolboxBuild };
   }
 
   private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {
@@ -319,7 +264,10 @@ export class ClientRuntime {
     return meta;
   }
 
-  private async activateStore(store: ChunkStore): Promise<ActiveClient> {
+  private async activateStore(
+    store: ChunkStore,
+    candidateFingerprint: string | null = null,
+  ): Promise<ActiveClient> {
     this.initialResidencyRecorded = false;
     const [snapshotMeta, toolbox] = await Promise.all([
       this.snapshotFor(store),
@@ -333,8 +281,12 @@ export class ClientRuntime {
       wasmPath: toolbox.wasmPath,
       toolboxBuild: toolbox.build,
     });
-    this.candidateFrameReady = false;
-    this.candidateSocketReady = false;
+    this.candidateHealthToken = candidateFingerprint
+      ? Object.freeze({
+          generation: active.generation,
+          fingerprint: candidateFingerprint,
+        })
+      : null;
     if (this.saveTouchedTimer) clearInterval(this.saveTouchedTimer);
     this.saveTouchedTimer = setInterval(() => {
       if (this.activeSlot.current?.generation !== active.generation) return;
@@ -347,7 +299,10 @@ export class ClientRuntime {
     return active;
   }
 
-  private async activateManifest(manifest: Manifest): Promise<ActiveClient> {
+  private async activateManifest(
+    manifest: Manifest,
+    candidateFingerprint: string | null = null,
+  ): Promise<ActiveClient> {
     const entry = manifest.entry(SNAPSHOT);
     if (!entry) throw new Error("client manifest has no snapshot");
     return this.activateStore(
@@ -357,6 +312,7 @@ export class ClientRuntime {
         entry.chunkHashes,
         manifest.compression,
       ),
+      candidateFingerprint,
     );
   }
 
@@ -406,7 +362,7 @@ export class ClientRuntime {
         ),
       });
       if (removed.files > 0) {
-        log("cache", "info", "cache.staleChunksRemoved", {
+        logEvent({ k: "cache.staleChunksRemoved",
           files: removed.files,
           bytes: removed.bytes,
         });
@@ -419,13 +375,17 @@ export class ClientRuntime {
     }
   }
 
-  private clientReady(active: ActiveClient, notice?: string): void {
+  private publishReadyProgress(notice?: string): void {
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "ready",
       label: "Starting Guild Wars",
       ...(notice ? { notice } : {}),
     });
+  }
+
+  private clientReady(active: ActiveClient, notice?: string): void {
+    this.publishReadyProgress(notice);
     void active.store
       .prefetch((progress) => {
         if (this.activeSlot.current?.generation === active.generation) {
@@ -444,7 +404,8 @@ export class ClientRuntime {
     this.clientReady(active, notice);
   }
 
-  private async runUpdate(): Promise<void> {
+  private async runUpdate(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
     if (this.options.offlineShell) {
       this.publishProgress({
         ...INITIAL_PROGRESS,
@@ -468,9 +429,10 @@ export class ClientRuntime {
     const patchClient = new PatchClient({
       artifactsDir: this.options.paths.artifacts,
       chunksDir: this.options.paths.chunks,
+      fetch: this.patchFetch,
       onProgress: (progress) => this.publishProgress(progress),
     });
-    const updateSpan = span("update", "clientUpdate");
+    const updateSpan = startClientUpdateSpan();
     try {
       const rollback = await restoreUnconfirmedClient({
         artifacts: this.options.paths.artifacts,
@@ -503,31 +465,42 @@ export class ClientRuntime {
         this.options.paths.rejectedClient,
         this.options.hostVersion,
       );
-      const result = await patchClient.update({ blockedFingerprint });
+      const result = await patchClient.update({ blockedFingerprint, signal });
+      signal.throwIfAborted();
       if (result.blocked) {
         await this.activatePublishedAndReady(
           "A newer game client did not start successfully, so the last working client is being used.",
         );
         gauge("update.usingCachedClient", true);
-        updateSpan.end(
-          {
-            status: "rejectedCandidateSkipped",
-            fingerprint: result.fingerprint,
-          },
-          "warn",
-        );
+        updateSpan.end({
+          status: "rejectedCandidateSkipped",
+          code: null,
+          fingerprint: digestOrNull(result.fingerprint),
+        });
         return;
       }
-      const active = await this.activateManifest(result.manifest);
+      const active = await this.activateManifest(
+        result.manifest,
+        result.candidate ? result.fingerprint : null,
+      );
       await this.pruneChunkCache();
       this.clientReady(active);
       updateSpan.end({
         status: result.candidate ? "candidate" : "ready",
-        fingerprint: result.fingerprint,
+        code: null,
+        fingerprint: digestOrNull(result.fingerprint),
       });
     } catch (error) {
       // Identify the failure by code, so comparing sessions does not depend on
       // matching English prose — and so no prose reaches the export.
+      if (signal.aborted) {
+        updateSpan.end({
+          status: "cancelled",
+          code: null,
+          fingerprint: null,
+        });
+        return;
+      }
       const code = errorCode(error);
       try {
         await this.activatePublishedAndReady(
@@ -535,7 +508,11 @@ export class ClientRuntime {
         );
         logEvent({ k: "patch.updateFallback", code });
         gauge("update.usingCachedClient", true);
-        updateSpan.end({ status: "cachedFallback", code }, "warn");
+        updateSpan.end({
+          status: "cachedFallback",
+          code,
+          fingerprint: null,
+        });
         return;
       } catch (fallbackError) {
         logEvent({
@@ -544,7 +521,7 @@ export class ClientRuntime {
           fallbackCode: errorCode(fallbackError),
         });
       }
-      updateSpan.end({ status: "error", code }, "error");
+      updateSpan.end({ status: "error", code, fingerprint: null });
       this.publishProgress({ phase: "error", errorCode: code });
     }
   }
@@ -556,10 +533,15 @@ export class ClientRuntime {
       phase: "starting",
       label: "Checking the game client",
     });
+    const controller = new AbortController();
+    this.gameUpdateAbort = controller;
     const operation = this.generationLock
-      .run(() => this.runUpdate())
+      .run(() => this.runUpdate(controller.signal))
       .finally(() => {
-        if (this.gameUpdate === operation) this.gameUpdate = null;
+        if (this.gameUpdate === operation) {
+          this.gameUpdate = null;
+          this.gameUpdateAbort = null;
+        }
       });
     this.gameUpdate = operation;
     return operation;
@@ -578,7 +560,7 @@ export class ClientRuntime {
       return Promise.resolve({ status: "failed", errorCode: "not_ready" });
     }
     active.store.resume();
-    log("cache", "info", "fullDownload.started");
+    logEvent({ k: "fullDownload.started" });
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "image",
@@ -600,7 +582,7 @@ export class ClientRuntime {
           const now = Date.now();
           if (now - lastProgressLogAt >= 5_000) {
             lastProgressLogAt = now;
-            log("cache", "info", "fullDownload.progress", {
+            logEvent({ k: "fullDownload.progress",
               received: value.received,
               total: value.total,
               bytesPerSecond: value.bytesPerSecond,
@@ -611,11 +593,9 @@ export class ClientRuntime {
       })
       .then(async (complete): Promise<FullDownloadOutcome> => {
         await this.refreshSnapshot(active.generation);
-        log(
-          "cache",
-          "info",
-          complete ? "fullDownload.completed" : "fullDownload.stopped",
-        );
+        logEvent({
+          k: complete ? "fullDownload.completed" : "fullDownload.stopped",
+        });
         if (this.activeSlot.current?.generation === active.generation) {
           this.publishProgress({
             ...INITIAL_PROGRESS,
@@ -647,60 +627,74 @@ export class ClientRuntime {
   stopDownload(): void {
     const download = this.fullDownload;
     if (!download) return;
-    log("cache", "info", "fullDownload.stopRequested");
+    logEvent({ k: "fullDownload.stopRequested" });
     download.store.stop();
   }
 
-  noteSocketOpen(): void {
-    this.candidateSocketReady = true;
-    void this.confirmCandidateIfReady().catch((error) => {
-      logEvent({
-        k: "client.candidatePromotionFailed",
-        code: errorCode(error),
+  confirmCandidateHealthy(token: ClientHealthToken): Promise<void> {
+    return this.generationLock.run(async () => {
+      const expected = this.candidateHealthToken;
+      if (
+        !expected ||
+        token.generation !== expected.generation ||
+        token.fingerprint !== expected.fingerprint ||
+        this.activeSlot.current?.generation !== expected.generation
+      ) {
+        return;
+      }
+      const fingerprint = await confirmClientCandidate({
+        artifacts: this.options.paths.artifacts,
+        rejectedPath: this.options.paths.rejectedClient,
+        expectedFingerprint: expected.fingerprint,
       });
+      if (this.candidateHealthToken === expected) {
+        this.candidateHealthToken = null;
+      }
+      if (fingerprint) {
+        await this.pruneChunkCache();
+        logEvent({
+          k: "client.candidatePromoted",
+          fingerprint: digestOrNull(fingerprint),
+        });
+      }
     });
   }
 
-  async noteFramePresented(): Promise<void> {
-    this.candidateFrameReady = true;
-    await this.confirmCandidateIfReady();
-  }
-
-  private confirmCandidateIfReady(): Promise<void> {
-    if (!this.candidateFrameReady || !this.candidateSocketReady) {
-      return Promise.resolve();
-    }
-    if (this.candidateConfirmation) return this.candidateConfirmation;
-    this.candidateConfirmation = this.generationLock
-      .run(async () => {
-        const fingerprint = await confirmClientCandidate({
-          artifacts: this.options.paths.artifacts,
-          rejectedPath: this.options.paths.rejectedClient,
-        });
-        this.candidateFrameReady = false;
-        this.candidateSocketReady = false;
-        if (fingerprint) {
-          await this.pruneChunkCache();
-          logEvent({
-            k: "client.candidatePromoted",
-            fingerprint: digestOrNull(fingerprint),
-          });
-        }
-      })
-      .finally(() => {
-        this.candidateConfirmation = null;
-      });
-    return this.candidateConfirmation;
-  }
-
   recoverRendererCrash(): Promise<void> {
+    const updateController = this.gameUpdateAbort;
+    const interruptedUpdate =
+      updateController !== null && !updateController.signal.aborted;
+    updateController?.abort(
+      new Error("game client update interrupted for renderer recovery"),
+    );
     return this.generationLock.run(async () => {
       const rollback = await restoreUnconfirmedClient({
         artifacts: this.options.paths.artifacts,
         rejectedPath: this.options.paths.rejectedClient,
         hostVersion: this.options.hostVersion,
       });
-      if (!rollback) return;
+      if (!rollback) {
+        if (interruptedUpdate) {
+          const active = this.activeSlot.current;
+          if (active) {
+            this.publishReadyProgress(
+              "The interrupted game client update can be retried.",
+            );
+            return;
+          }
+          try {
+            await this.activatePublishedAndReady(
+              "The interrupted game client update can be retried.",
+            );
+          } catch (error) {
+            this.publishProgress({
+              phase: "error",
+              errorCode: errorCode(error),
+            });
+          }
+        }
+        return;
+      }
       await this.activatePublishedAndReady();
       logEvent({
         k: "client.candidateRolledBackAfterRendererCrash",
@@ -710,6 +704,11 @@ export class ClientRuntime {
   }
 
   async shutdown(): Promise<void> {
+    const update = this.gameUpdate;
+    this.gameUpdateAbort?.abort(
+      new Error("game client update interrupted for application shutdown"),
+    );
+    await update?.catch(() => undefined);
     if (this.saveTouchedTimer) clearInterval(this.saveTouchedTimer);
     this.saveTouchedTimer = null;
     const active = this.activeSlot.current;

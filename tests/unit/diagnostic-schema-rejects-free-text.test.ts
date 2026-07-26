@@ -18,8 +18,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const schemaPath = path.join(root, "src/main/diagnostics/schema.ts");
 const schemaSource = readFileSync(schemaPath, "utf8");
 
-// One real event, used as the place to graft each rejected field onto.
-const ANCHOR = `| { k: "proxy.requestFailed"; route: ProxyRoute; code: ErrorCode }`;
+// Extend only the type passed to the two bottom-of-file guards. The production
+// event union and its recorder functions stay untouched by the probe.
+const ANCHOR = "const _noFreeText:";
 
 // What both guards in schema.ts report when they stop holding.
 const GUARD_FIRED = "not assignable to type 'never'";
@@ -55,8 +56,20 @@ function compile(source: string): string[] {
 }
 
 function withField(field: string): string {
-  assert.ok(schemaSource.includes(ANCHOR), "the anchor event moved; update this probe");
-  return schemaSource.replace(ANCHOR, ANCHOR.replace(" }", `; ${field} }`));
+  assert.ok(schemaSource.includes(ANCHOR), "the schema guards moved; update this probe");
+  return schemaSource
+    .replace(
+      ANCHOR,
+      `type ProbeDiagnosticEvent = DiagnosticEvent | { k: "probe"; ${field} };\n\n${ANCHOR}`,
+    )
+    .replace(
+      "FreeTextKeys<DiagnosticEvent>",
+      "FreeTextKeys<ProbeDiagnosticEvent>",
+    )
+    .replace(
+      "const _scalarsOnly: DiagnosticEvent extends",
+      "const _scalarsOnly: ProbeDiagnosticEvent extends",
+    );
 }
 
 function assertRejected(field: string): void {
@@ -102,8 +115,8 @@ describe("the closed diagnostics schema", () => {
 
   it("still accepts the field kinds the schema is built from", () => {
     // The guard has to admit what diagnostics legitimately carry, or producers
-    // would route around it. A closed union, a number, a boolean and a Digest
-    // must all survive.
+    // would route around it. A closed union, a number, a boolean and the
+    // neutral shared Digest type must all survive.
     assert.deepEqual(
       compile(withField("phase: AppPhase; count: number; retried: boolean; digest: Digest")),
       [],

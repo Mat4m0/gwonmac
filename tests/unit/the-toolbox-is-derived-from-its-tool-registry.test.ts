@@ -26,7 +26,10 @@ import type {
   AppSettings,
   AppSettingsPatch,
 } from "../../src/shared/contracts.ts";
-import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
+import {
+  DEFAULT_SETTINGS,
+  TOOLBOX_TOOLS,
+} from "../../src/shared/contracts.ts";
 
 register(
   `data:text/javascript,${encodeURIComponent(
@@ -50,8 +53,8 @@ process.env.GW_TOOLBOX_AUTOMATION = "1";
 
 const {
   TOOLBOX_AUTOMATION_ENABLED,
-  TOOLBOX_TOOLS,
   toolboxEnabledFor,
+  toolboxSelectionFor,
   toolboxSelectionChanged,
 } = await import("../../src/main/toolbox-policy.ts");
 
@@ -95,7 +98,7 @@ test("no non-tool setting can switch the Toolbox on", () => {
   );
 });
 
-test("the shipped defaults run the Toolbox, and only the cursor does it", () => {
+test("the shipped defaults run the Toolbox with only the cursor selected", () => {
   assert.equal(toolboxEnabledFor(DEFAULT_SETTINGS), true);
   assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
   // Every tool but the cursor defaults off, so a build that adds one does not
@@ -107,6 +110,17 @@ test("the shipped defaults run the Toolbox, and only the cursor does it", () => 
   assert.equal(
     toolboxEnabledFor({ ...DEFAULT_SETTINGS, nativeCursor: false }),
     false,
+  );
+});
+
+test("the launch selection carries every tool and no unrelated setting", () => {
+  assert.deepEqual(toolboxSelectionFor(DEFAULT_SETTINGS), {
+    nativeCursor: true,
+    targetReadout: false,
+  });
+  assert.deepEqual(
+    Object.keys(toolboxSelectionFor(DEFAULT_SETTINGS)).sort(),
+    [...TOOLBOX_TOOLS].sort(),
   );
 });
 

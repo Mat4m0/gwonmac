@@ -58,6 +58,10 @@ const STARTUP_LABELS = {
 const SNAPSHOT_URL = 'Gw.snapshot';
 /** @type {import('../shared/contracts.js').AppSettings | null} */
 let appSettings = null;
+/** @type {import('./client-health.js').ClientHealthConfirmation | null} */
+let clientHealthConfirmation = null;
+/** @type {typeof import('./client-health.js').createClientHealthConfirmation} */
+let createClientHealthConfirmation;
 /** @type {GameInputController | null} */
 let inputHost = null;
 window.gwApplySettings = (next) => {
@@ -117,6 +121,7 @@ async function fetchSnapshotRange(start, length, priority) {
 }
 
 addEventListener('beforeunload', () => {
+  clientHealthConfirmation?.dispose();
   imageSource?.stop();
   disposeSocketHost();
 });
@@ -157,12 +162,7 @@ Module = {
       firstFrame: () => {
         performance.mark('gw.frame.first-submit');
         milestone('frame.firstSubmit');
-        void native().client.healthy().catch((error) => {
-          log(
-            '[warn] client health confirmation failed:',
-            error instanceof Error ? error.message : String(error),
-          );
-        });
+        clientHealthConfirmation?.firstFramePresented();
         log('first frame presented');
       },
       log,
@@ -337,21 +337,33 @@ Module = {
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
     const init = native().init;
-    // Off means off: with every tool off and automation off, this import never
-    // happens, so no toolbox module enters the graph and nothing fetches the
-    // kernel. Each tool arrives as its own init field — there is no master
-    // flag here to disagree with the registry in src/main/toolbox-policy.ts,
-    // which is what chose this launch's module in the first place.
+    // The module is the effective truth. Main may have requested Toolbox for a
+    // selected tool, but an uncertified build is served without the manifest;
+    // that launch must not import Toolbox or fetch its kernel. Conversely, the
+    // selection is one generated record, so adding a canonical tool cannot
+    // leave this gate hand-copying an incomplete list.
+    const toolboxRequested =
+      init.toolboxAutomation ||
+      Object.values(init.toolboxSelection).some(Boolean);
     if (
-      (init.toolboxAutomation || init.nativeCursor)
+      toolboxRequested
       && gameWasmInstance
       && gameWasmModule
+      && WebAssembly.Module.customSections(
+        gameWasmModule,
+        'toolbox_manifest',
+      ).length === 1
     ) {
       const toolboxInstance = gameWasmInstance;
       const toolboxModule = gameWasmModule;
       void import('./toolbox.js')
         .then(({ installToolbox }) =>
-          installToolbox(toolboxInstance, toolboxModule))
+          installToolbox(
+            toolboxInstance,
+            toolboxModule,
+            init.toolboxSelection,
+            init.toolboxAutomation,
+          ))
         .catch((error) => log(
           '[toolbox]',
           error instanceof Error ? error.message : String(error),
@@ -530,6 +542,7 @@ function loadGlue() {
       input,
       templateSaveCompatibility,
       templateFilesystemTrace,
+      clientHealth,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -539,6 +552,7 @@ function loadGlue() {
       import('./input.js'),
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
+      import('./client-health.js'),
     ]);
     host = {
       ...graphics,
@@ -548,10 +562,15 @@ function loadGlue() {
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,
     };
+    createClientHealthConfirmation =
+      clientHealth.createClientHealthConfirmation;
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
       native: native().sockets,
       diagnostics: window.gwDiagnostics,
+      socketOpened: () => {
+        clientHealthConfirmation?.gameSocketOpened();
+      },
       log,
     });
     Module.socket = socketHost.socket;
@@ -577,7 +596,21 @@ function loadGlue() {
   window.gwLoading.set('Preparing…', null);
 
   try {
-    appSettings = await native().settings.get();
+    const [settings, session] = await Promise.all([
+      native().settings.get(),
+      native().client.session(),
+    ]);
+    appSettings = settings;
+    clientHealthConfirmation = createClientHealthConfirmation({
+      token: session.healthToken,
+      confirm: (token) => native().client.healthy(token),
+      onFailure: (error, attempt, willRetry) => {
+        log(
+          `[warn] client health confirmation failed (attempt ${attempt}${willRetry ? ', retrying' : ', giving up'}):`,
+          error instanceof Error ? error.message : String(error),
+        );
+      },
+    });
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   } catch (e) {
     window.gwLoading?.fail('Settings could not be loaded.');

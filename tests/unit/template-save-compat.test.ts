@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
-  applyTemplateSaveCompatibility,
   rewriteTemplateSaveWasm,
   type KnownTemplateSaveBuild,
 } from "../../src/main/core/template-save-compat.js";
@@ -193,10 +192,5 @@ describe("template-save WASM compatibility transform", () => {
     const arrayBefore = hash(asArray);
     rewriteTemplateSaveWasm(asArray, build);
     assert.equal(hash(asArray), arrayBefore);
-  });
-
-  it("leaves unknown future client builds canonical", () => {
-    const input = fixture();
-    assert.equal(applyTemplateSaveCompatibility(input), input);
   });
 });

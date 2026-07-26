@@ -1,4 +1,4 @@
-import type { ClientCompatibilityState } from "../shared/contracts.js";
+import type { ClientCertification } from "./core/client-module.js";
 import {
   findTemplateSaveBuild,
   type KnownTemplateSaveBuild,
@@ -23,14 +23,7 @@ import {
  * This is the single owner: every consumer (the launcher notice, the settings
  * status, the diagnostics gauges, and `toolbox:doctor`) asks here.
  */
-export type ClientCertification =
-  | { state: "uncertified" }
-  | { state: "template-only"; templateSaveOutputSha256: string }
-  | {
-      state: "certified";
-      templateSaveOutputSha256: string;
-      toolboxBuild: KnownToolboxBuild;
-    };
+export type { ClientCertification } from "./core/client-module.js";
 
 /**
  * The two lookups the chain composes. Injectable because the shipped tables
@@ -58,21 +51,11 @@ export function certifyClientBuild(
   return toolboxBuild
     ? {
         state: "certified",
-        templateSaveOutputSha256: templateSave.outputSha256,
+        templateSaveBuild: templateSave,
         toolboxBuild,
       }
     : {
         state: "template-only",
-        templateSaveOutputSha256: templateSave.outputSha256,
+        templateSaveBuild: templateSave,
       };
-}
-
-/**
- * The hard rule, with no override and no setting that can reach past it: the
- * Toolbox kernel patches `__indirect_function_table` at offsets derived from
- * one specific certified build. Against any other module that is not degraded
- * behaviour, it is unsafe behaviour, so it does not run at all.
- */
-export function toolboxMayLoad(state: ClientCompatibilityState): boolean {
-  return state === "certified";
 }

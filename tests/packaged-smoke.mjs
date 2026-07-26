@@ -15,7 +15,17 @@ import {
   FuseV1Options,
   getCurrentFuseWire,
 } from "@electron/fuses";
+import { extractFile, listPackage, statFile } from "@electron/asar";
+import forgeConfig from "../forge.config.ts";
 import { macOSBundleVersions } from "../scripts/macos-version.mjs";
+import {
+  assertNoDeveloperPackageFiles,
+  assertRequiredPackageFiles,
+  forgePackageFiles,
+  htmlScriptEntryPoints,
+  PRELOAD_ENTRY,
+  relativeEsmClosure,
+} from "./helpers/package-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const appBundle = path.join(
@@ -28,10 +38,43 @@ const executable = path.join(
 );
 const execFileAsync = promisify(execFile);
 const resources = path.join(appBundle, "Contents/Resources");
+const asarPath = path.join(resources, "app.asar");
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 ).version;
 const macOSVersion = macOSBundleVersions(packageVersion);
+
+const actualPackageFiles = new Set(
+  listPackage(asarPath).filter((file) => !("files" in statFile(asarPath, file.slice(1)))),
+);
+const ignore = forgeConfig.packagerConfig?.ignore;
+const expectedPackageFiles = new Set(forgePackageFiles(root, ignore));
+assert.deepEqual(
+  [...actualPackageFiles].sort(),
+  [...expectedPackageFiles].sort(),
+  "app.asar inventory differs from Forge's package model",
+);
+assertRequiredPackageFiles(actualPackageFiles);
+assertNoDeveloperPackageFiles(actualPackageFiles);
+
+const asarText = (file) => extractFile(asarPath, file.slice(1)).toString("utf8");
+const packagedManifest = JSON.parse(asarText("/package.json"));
+const packagedRendererIndex = "/build/renderer/index.html";
+const packagedClosure = relativeEsmClosure({
+  entryPoints: [
+    packagedManifest.main,
+    PRELOAD_ENTRY,
+    ...htmlScriptEntryPoints(
+      packagedRendererIndex,
+      asarText(packagedRendererIndex),
+    ),
+  ],
+  inventory: actualPackageFiles,
+  readText: asarText,
+});
+assert.ok(packagedClosure.has("/build/main/core/toolbox-builds.js"));
+assert.ok(packagedClosure.has("/build/renderer/toolbox-readout.js"));
+
 const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",
   path.join(appBundle, "Contents/Info.plist"),

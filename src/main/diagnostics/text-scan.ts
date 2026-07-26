@@ -46,7 +46,8 @@ const ABSOLUTE_PATH =
 const SENSITIVE_WORDS =
   "pass|auth|cookie|token|secret|credential|username|email|account|login";
 
-const SENSITIVE_KEY = String.raw`\w*(?:${SENSITIVE_WORDS})\w*`;
+const PLAIN_SENSITIVE_KEY =
+  String.raw`[\w./-]*(?:${SENSITIVE_WORDS})[\w./-]*`;
 
 const SENSITIVE_KEY_TEST = new RegExp(SENSITIVE_WORDS, "i");
 
@@ -68,15 +69,18 @@ export function isSensitiveKey(key: string): boolean {
  * document stopped parsing as JSON, the exact regression the quotes were put
  * back to prevent.
  *
- * A bare comma still ends the value, so no match can contain one (see
- * `flushBoundary`). A backslash before a comma cannot occur in JSON, so
- * excluding it too costs nothing and keeps that invariant true by
- * construction. A sensitive value that really does contain a bare comma — a
- * serialized JSON blob under an `accountInfo` key, say — is not matched here
- * at all; it is left to the rules below, which may well not catch it.
+ * A quoted JSON key may contain punctuation, so its spelling cannot be reduced
+ * to `\w`. The scanner keeps the key intact and finds the sensitive stem
+ * anywhere inside it. The value consumes every valid JSON string character,
+ * including commas, escaped quotes and escaped backslashes. `flushBoundary`
+ * therefore finds commas outside strings structurally rather than asking this
+ * expression to avoid them.
  */
+const JSON_STRING_CHARACTER = String.raw`(?:[^"\\]|\\.)`;
+const QUOTED_SENSITIVE_KEY =
+  String.raw`${JSON_STRING_CHARACTER}*(?:${SENSITIVE_WORDS})${JSON_STRING_CHARACTER}*`;
 const QUOTED_SECRET = new RegExp(
-  `("${SENSITIVE_KEY}"\\s*:\\s*")(?:[^"\\\\,]|\\\\[^,])*(")`,
+  `("${QUOTED_SENSITIVE_KEY}"\\s*:\\s*")${JSON_STRING_CHARACTER}*(")`,
   "gi",
 );
 
@@ -87,7 +91,7 @@ const QUOTED_SECRET = new RegExp(
  * the free text this is here to catch.
  */
 const PLAIN_SECRET = new RegExp(
-  `\\b(${SENSITIVE_KEY})(\\s*[:=]\\s*)(?!")[^,\\s}"']+`,
+  `(?<![\\w./-])(${PLAIN_SENSITIVE_KEY})(\\s*[:=]\\s*)(?!")[^,\\s}"']+`,
   "gi",
 );
 
@@ -124,11 +128,10 @@ export function redactDiagnosticText(value: string): string {
 
 /**
  * A Level 2 trace reaches a quarter of a gigabyte, so it is redacted in
- * chunks — and a chunk boundary is where a streaming redactor leaks. No match
- * above can contain a comma: every value class excludes it and no key or
- * separator admits it. Cutting immediately after one therefore cannot split a
- * match in half, and a comma is never far away in the JSON Chromium writes.
- * (A quote is not safe: `"token":"abc"` is one match, quotes included.)
+ * chunks — and a chunk boundary is where a streaming redactor leaks. A comma
+ * is safe only while it is outside a JSON string. A quoted sensitive value can
+ * itself contain commas, so `flushBoundary` walks quotes and escapes and cuts
+ * after the last structural comma rather than the last comma-shaped byte.
  *
  * The previous implementation cut at a fixed 64 KiB offset and, worse, carried
  * its own *redacted* tail forward — so a value straddling the cut was
@@ -136,18 +139,50 @@ export function redactDiagnosticText(value: string): string {
  */
 const MAX_CARRY_CHARS = 1024 * 1024;
 
+/**
+ * Returns the last comma outside a double-quoted JSON string.
+ *
+ * `redactTraceStream` always starts a carry immediately after such a comma (or
+ * at the beginning of the document), so each call starts outside a string.
+ * Tracking one escaped character is enough to distinguish `\"` from a closing
+ * quote and `\\` from an escape that reaches the following quote.
+ */
+function lastStructuralComma(buffer: string): number {
+  let inString = false;
+  let escaped = false;
+  let last = -1;
+  for (let index = 0; index < buffer.length; index += 1) {
+    const character = buffer[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+    } else if (character === '"') {
+      inString = true;
+    } else if (character === ",") {
+      last = index;
+    }
+  }
+  return last;
+}
+
 function flushBoundary(buffer: string): number {
-  const cut = buffer.lastIndexOf(",");
-  if (cut >= 0) return cut + 1;
-  // A megabyte of trace with no comma in it is not the JSON Chromium writes.
-  // This one cut is unsafe and the cost is not a seam artefact: a value
-  // straddling it is redacted up to the cut and its remainder written out
-  // verbatim, which is the failure the comma boundary exists to prevent. The
-  // comma is the only character no rule can match across, so there is nothing
-  // safer to fall back to; bounding memory wins at this size. Covered by
-  // `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`, which
-  // asserts this weaker behaviour rather than pretending it away.
-  return buffer.length > MAX_CARRY_CHARS ? buffer.length : 0;
+  const comma = lastStructuralComma(buffer);
+  const cut = comma + 1;
+  if (buffer.length - cut > MAX_CARRY_CHARS) {
+    // Bounded memory and privacy are both invariants. If the trace supplies no
+    // structural boundary within the carry ceiling, splitting is unsafe; the
+    // export must fail and let its staging cleanup run rather than write a
+    // half-scanned value.
+    throw new Error(
+      `diagnostic trace has no safe structural comma within ${MAX_CARRY_CHARS} characters`,
+    );
+  }
+  return cut;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { app } from "electron";
 import { errorCode } from "../shared/errors.js";
-import { flushDiagnostics, log, logEvent } from "./diagnostics.js";
+import { flushDiagnostics, logEvent } from "./diagnostics.js";
 
 export type CleanupTask = () => void | Promise<void>;
 
@@ -22,7 +22,7 @@ export function onAppQuit(task: CleanupTask): () => void {
 export async function runQuitCleanup(): Promise<void> {
   if (quitting) return;
   quitting = true;
-  log("app", "info", "quit.cleanupStarted");
+  logEvent({ k: "quit.cleanupStarted" });
   const tasks = [...cleanups].reverse();
   cleanups.length = 0;
   for (const task of tasks) {
@@ -34,7 +34,7 @@ export async function runQuitCleanup(): Promise<void> {
       console.error("quit cleanup failed", err);
     }
   }
-  log("app", "info", "quit.cleanupCompleted");
+  logEvent({ k: "quit.cleanupCompleted" });
   await flushDiagnostics();
 }
 
@@ -46,7 +46,7 @@ export function enableSandboxBeforeReady(): void {
 export function wireLifecycle(): void {
   app.on("before-quit", (event) => {
     if (quitting) return;
-    log("app", "info", "app.beforeQuit");
+    logEvent({ k: "app.beforeQuit" });
     event.preventDefault();
     void runQuitCleanup().finally(() => app.exit(0));
   });

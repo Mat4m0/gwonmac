@@ -283,11 +283,6 @@ function redactionErrors(capture: Capture): string[] {
       `manifest claims ${claimed.schemaChecked} schema-checked records, events.jsonl has ${observed.schemaChecked}`,
     );
   }
-  if (observed.openFields !== claimed.openFields) {
-    errors.push(
-      `manifest claims ${claimed.openFields} open string fields, events.jsonl has ${observed.openFields}`,
-    );
-  }
   if (
     claimed.traceBytesScanned > 0 !==
     capture.manifest.includedFiles.includes("chromium-trace.json")

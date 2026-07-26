@@ -22,9 +22,10 @@ import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
 import { diagnosticFramesPath } from "./core/paths.js";
 import { parseLogRecords } from "./diagnostic-report.js";
 import {
-  isSensitiveKey,
-  redactDiagnosticText,
-} from "./diagnostics/text-scan.js";
+  diagnosticEventRecord,
+  type CaptureStopReason,
+  type DiagnosticEvent,
+} from "./diagnostics/schema.js";
 import { gamePaths } from "./paths.js";
 
 const MAX_FILES = 5;
@@ -38,24 +39,19 @@ export interface LogRecord {
   wallTime: string;
   level: DiagnosticLevel;
   subsystem: DiagnosticSubsystem;
+  /** Current producers are closed by `DiagnosticEvent`; this reader
+   * type stays open because previous-session files may come from format 1. */
   name: string;
   durationUs?: number;
   traceId?: string;
   spanId?: string;
-  parentSpanId?: string;
-  fields?: DiagnosticFields;
-}
-
-export interface Span {
-  readonly traceId: string;
-  readonly spanId: string;
-  end(fields?: DiagnosticFields, level?: DiagnosticLevel): number;
+  fields: DiagnosticFields;
 }
 
 export interface CaptureMetadata {
   startedUs: number;
   endedUs: number;
-  stopReason: "manual" | "automatic" | "buffer-full" | "export" | "shutdown";
+  stopReason: CaptureStopReason;
   firstSequenceNumber: number;
   lastSequenceNumber: number;
 }
@@ -113,45 +109,6 @@ class Histogram {
   }
 }
 
-/**
- * Fields of events the closed schema has not absorbed yet still carry strings,
- * so the pattern scanner stays here for them. Events the schema does declare
- * carry no string a redactor could change, and `./diagnostics/detector.ts`
- * — which shares no code with the scanner — is what proves it.
- *
- * The name test and the text scan read one vocabulary, owned by
- * `./diagnostics/text-scan.ts`. This file used to spell out a second regex and
- * the two had already drifted apart.
- */
-function redactFields(
-  fields: DiagnosticFields | undefined,
-): DiagnosticFields | undefined {
-  if (!fields) return undefined;
-  return Object.fromEntries(
-    Object.entries(fields).flatMap(([key, value]) =>
-      isSensitiveKey(key)
-        ? []
-        : [
-            [
-              key,
-              typeof value === "string"
-                ? redactDiagnosticText(value)
-                : value,
-            ],
-          ],
-    ),
-  );
-}
-
-function canonicalEventName(value: string): string {
-  return (
-    redactDiagnosticText(value)
-      .trim()
-      .replace(/[^A-Za-z0-9]+/g, ".")
-      .replace(/^\.+|\.+$/g, "") || "diagnostics.unnamed"
-  );
-}
-
 export function runtimeVersions(): Record<string, string> {
   return Object.fromEntries(
     Object.entries(process.versions).filter(
@@ -194,16 +151,14 @@ export class FlightRecorder {
     return Number((process.hrtime.bigint() - this.started) / 1_000n);
   }
 
-  event(
-    subsystem: DiagnosticSubsystem,
-    level: DiagnosticLevel,
-    name: string,
-    fields?: DiagnosticFields,
+  record(
+    event: DiagnosticEvent,
     detail: Pick<
       LogRecord,
-      "durationUs" | "traceId" | "spanId" | "parentSpanId"
+      "durationUs" | "traceId" | "spanId"
     > & { timestampUs?: number } = {},
   ): void {
+    const mapped = diagnosticEventRecord(event);
     const timestampUs = detail.timestampUs ?? this.timestampUs();
     const record: LogRecord = {
       seq: ++this.seq,
@@ -212,18 +167,14 @@ export class FlightRecorder {
         new Date(
           Date.parse(this.startedWall) + timestampUs / 1_000,
         ).toISOString(),
-      level,
-      subsystem,
-      name: canonicalEventName(name),
+      level: mapped.level,
+      subsystem: mapped.subsystem,
+      name: mapped.name,
+      fields: mapped.fields,
     };
     if (detail.durationUs !== undefined) record.durationUs = detail.durationUs;
     if (detail.traceId !== undefined) record.traceId = detail.traceId;
     if (detail.spanId !== undefined) record.spanId = detail.spanId;
-    if (detail.parentSpanId !== undefined) {
-      record.parentSpanId = detail.parentSpanId;
-    }
-    const safeFields = redactFields(fields);
-    if (safeFields) record.fields = safeFields;
     if (this.events.length === MAX_EVENTS) {
       this.events.shift();
       this.count("diagnostics.evictedEvents");
@@ -361,47 +312,6 @@ export class FlightRecorder {
     this.captureStartedUs = 0;
     this.captureFirstSequenceNumber = 0;
     this.captureStartedDroppedEvents = 0;
-  }
-
-  span(
-    subsystem: DiagnosticSubsystem,
-    name: string,
-    fields?: DiagnosticFields,
-    parentSpanId?: string,
-    traceId: string = randomUUID(),
-    recordEvents = true,
-  ): Span {
-    const started = this.timestampUs();
-    const spanId = randomUUID();
-    if (recordEvents) {
-      this.event(subsystem, "debug", `${name}.begin`, fields, {
-        traceId,
-        spanId,
-        ...(parentSpanId ? { parentSpanId } : {}),
-      });
-    }
-    let ended = false;
-    return {
-      traceId,
-      spanId,
-      end: (endFields, level = "debug") => {
-        if (ended) return 0;
-        ended = true;
-        const durationUs = this.timestampUs() - started;
-        this.observe(`${subsystem}.${name}`, durationUs);
-        if (recordEvents || level !== "debug" || durationUs >= 50_000) {
-          const completeFields =
-            fields || endFields ? { ...fields, ...endFields } : undefined;
-          this.event(subsystem, level, `${name}.end`, completeFields, {
-            durationUs,
-            traceId,
-            spanId,
-            ...(parentSpanId ? { parentSpanId } : {}),
-          });
-        }
-        return durationUs;
-      },
-    };
   }
 
   summary(captureLevel: 0 | 1 | 2): DiagnosticSummary {

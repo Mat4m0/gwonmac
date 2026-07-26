@@ -230,7 +230,7 @@ test.describe("toolbox cursor presentation", () => {
     }
   });
 
-  // The opt-in is only real if a saved `nativeCursor` survives the whole chain:
+  // The choice is real only if a saved `nativeCursor` survives the whole chain:
   // settings file -> toolboxEnabledFor -> renderer init payload. Without it,
   // harness.js never imports toolbox.js and no cursor appears.
   test("a saved opt-in reaches the renderer init payload", async () => {
@@ -240,6 +240,7 @@ test.describe("toolbox cursor presentation", () => {
         JSON.stringify({
           renderScale: 2,
           nativeCursor: value,
+          targetReadout: false,
           touchMode: "dbltap",
           showDiagnostics: false,
           dataStrategy: "quick",
@@ -256,7 +257,10 @@ test.describe("toolbox cursor presentation", () => {
         })),
       ).toEqual({
         toolboxAutomation: false,
-        nativeCursor: true,
+        toolboxSelection: {
+          nativeCursor: true,
+          targetReadout: false,
+        },
         templateFsTrace: false,
         // The configuration is no longer in the URL the trust root checks.
         search: "",
@@ -275,7 +279,9 @@ test.describe("toolbox cursor presentation", () => {
     );
     try {
       expect(
-        await optedOut.page.evaluate(() => globalThis.gwNative.init.nativeCursor),
+        await optedOut.page.evaluate(
+          () => globalThis.gwNative.init.toolboxSelection.nativeCursor,
+        ),
       ).toBe(false);
     } finally {
       await closeOffline(optedOut);

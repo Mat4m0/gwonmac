@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  bindUpdateActionDom,
   createUpdateAction,
   describeReleaseNotice,
   formatLastChecked,
@@ -20,6 +21,49 @@ type View = {
   lastChecked: string;
   updateAvailable: boolean;
 };
+
+class FakeElement extends EventTarget {
+  textContent = "";
+  hidden = false;
+  disabled = false;
+
+  click() {
+    const event = new Event("click", { cancelable: true });
+    this.dispatchEvent(event);
+    return event;
+  }
+}
+
+const UPDATE_ELEMENT_IDS = [
+  "loading-update-check",
+  "loading-update-status",
+  "loading-update-when",
+  "loading-update-get",
+  "settings-check-updates",
+  "settings-open-releases",
+  "settings-update-status",
+  "settings-update-when",
+  "client-compat-check",
+  "client-compat-releases",
+  "client-compat-update",
+] as const;
+
+function updateDom() {
+  const elements = new Map(
+    UPDATE_ELEMENT_IDS.map((id) => [id, new FakeElement()]),
+  );
+  const root = {
+    getElementById: (id: string) => elements.get(id) ?? null,
+  } as unknown as Document;
+  return {
+    root,
+    element: (id: (typeof UPDATE_ELEMENT_IDS)[number]) => {
+      const result = elements.get(id);
+      assert.ok(result);
+      return result;
+    },
+  };
+}
 
 const REASONS: ReleaseCheckFailure[] = [
   "rate-limited",
@@ -161,7 +205,7 @@ describe("update action", () => {
     assert.equal(two.latest().message, "You're on the latest version.");
   });
 
-  it("persists the moment GitHub was asked, including when the answer was a failure", async () => {
+  it("persists the check attempt, including when its answer was a failure", async () => {
     const { action, remembered, latest } = harness([
       async () => unknown("offline", 30_000),
     ]);
@@ -173,7 +217,7 @@ describe("update action", () => {
 
   it("keeps a cached answer's own timestamp rather than claiming a fresh request", async () => {
     // Main answers a repeated click from its ten-minute cache, and the cached
-    // notice carries the time of the request that actually happened.
+    // notice carries the time of the check that produced it.
     const cached: ReleaseNotice = {
       state: "up-to-date",
       currentVersion: "2026.8.0",
@@ -224,7 +268,8 @@ describe("update action", () => {
     assert.doesNotMatch(latest().message, /latest version/i);
     assert.equal(latest().updateAvailable, false);
     assert.equal(latest().busy, false);
-    // Nothing reached GitHub, so nothing is recorded as having been checked.
+    // No release-check result crossed the broken bridge, so there is no
+    // trustworthy completion time to persist.
     assert.deepEqual(remembered, []);
     assert.equal(latest().lastChecked, "");
   });
@@ -276,5 +321,56 @@ describe("update action", () => {
     action.restore(0);
     assert.equal(latest().lastChecked, "Last checked 1 hour ago");
     assert.equal(latest().message, "");
+  });
+
+  it("binds one view and one action to all three fixed DOM surfaces", () => {
+    const dom = updateDom();
+    let listener: (view: View) => void = () => undefined;
+    let checks = 0;
+    let releases = 0;
+    const action = {
+      subscribe(next: (view: View) => void) {
+        listener = next;
+      },
+      restore() {},
+      async check() {
+        checks += 1;
+      },
+    };
+
+    bindUpdateActionDom(dom.root, action, async () => {
+      releases += 1;
+    });
+    listener({
+      actionLabel: "Checking…",
+      busy: true,
+      message: "Version 2026.8.0 is available.",
+      lastChecked: "Last checked just now",
+      updateAvailable: true,
+    });
+
+    for (const id of [
+      "loading-update-check",
+      "settings-check-updates",
+      "client-compat-check",
+    ] as const) {
+      assert.equal(dom.element(id).textContent, "Checking…");
+    }
+    assert.equal(dom.element("settings-check-updates").disabled, true);
+    assert.equal(dom.element("client-compat-check").disabled, true);
+    assert.equal(dom.element("loading-update-status").hidden, false);
+    assert.equal(dom.element("settings-update-status").hidden, false);
+    assert.equal(dom.element("client-compat-update").hidden, false);
+    assert.equal(dom.element("loading-update-get").hidden, false);
+    assert.equal(dom.element("settings-open-releases").hidden, false);
+
+    const launcherClick = dom.element("loading-update-check").click();
+    dom.element("settings-check-updates").click();
+    dom.element("client-compat-check").click();
+    dom.element("settings-open-releases").click();
+    dom.element("client-compat-releases").click();
+    assert.equal(launcherClick.defaultPrevented, true);
+    assert.equal(checks, 3);
+    assert.equal(releases, 2);
   });
 });

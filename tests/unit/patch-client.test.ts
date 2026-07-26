@@ -78,12 +78,15 @@ function fixture(revision: number): Fixture {
   };
 }
 
-function serve(source: Fixture, onChunk?: () => Promise<void>): FetchLike {
-  return async (url) => {
+function serve(
+  source: Fixture,
+  onChunk?: (signal: AbortSignal | undefined) => Promise<void>,
+): FetchLike {
+  return async (url, init) => {
     if (url === `${PATCH_ROOT}/manifest.json`) {
       return { status: 200, body: new TextEncoder().encode(source.manifest) };
     }
-    await onChunk?.();
+    await onChunk?.(init?.signal);
     const chunk = source.chunks.get(url.slice(PATCH_ROOT.length + 1, -".bin".length));
     return chunk
       ? { status: 200, body: new Uint8Array(chunk) }
@@ -94,7 +97,10 @@ function serve(source: Fixture, onChunk?: () => Promise<void>): FetchLike {
 interface Install {
   artifacts: string;
   chunks: string;
-  client(source: Fixture, onChunk?: () => Promise<void>): PatchClient;
+  client(
+    source: Fixture,
+    onChunk?: (signal: AbortSignal | undefined) => Promise<void>,
+  ): PatchClient;
 }
 
 async function install(): Promise<Install> {
@@ -287,6 +293,58 @@ describe("patch-client update", () => {
       await readFile(join(target.artifacts, "Gw.jspi.js")),
       first.contents["Gw.jspi.js"],
       "the installed generation was replaced by an unverified one",
+    );
+    assert.equal(existsSync(`${target.artifacts}.next`), false);
+    assert.equal(existsSync(`${target.artifacts}.previous`), false);
+  });
+
+  it("aborts a slow preparation without moving the installed generation", async () => {
+    const target = await install();
+    const first = fixture(1);
+    await target.client(first).update();
+    const installed = await readFile(join(target.artifacts, "Gw.jspi.js"));
+
+    let started!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const second = fixture(2);
+    const controller = new AbortController();
+    const client = target.client(second, async (signal) => {
+      started();
+      await new Promise<never>((_resolve, reject) => {
+        const rejectAborted = () => reject(signal?.reason);
+        if (signal?.aborted) {
+          rejectAborted();
+        } else {
+          signal?.addEventListener("abort", rejectAborted, { once: true });
+        }
+      });
+    });
+
+    const update = client.update({ signal: controller.signal });
+    await fetchStarted;
+    const reason = new AppError(
+      "download_stopped",
+      "controlled test interruption",
+    );
+    controller.abort(reason);
+    let deadline: ReturnType<typeof setTimeout>;
+    const outcome = await Promise.race([
+      update.then(
+        () => "resolved" as const,
+        (error: unknown) => error,
+      ),
+      new Promise<"timed-out">((resolve) => {
+        deadline = setTimeout(() => resolve("timed-out"), 1_000);
+      }),
+    ]);
+    clearTimeout(deadline!);
+
+    assert.equal(outcome, reason);
+    assert.deepEqual(
+      await readFile(join(target.artifacts, "Gw.jspi.js")),
+      installed,
     );
     assert.equal(existsSync(`${target.artifacts}.next`), false);
     assert.equal(existsSync(`${target.artifacts}.previous`), false);

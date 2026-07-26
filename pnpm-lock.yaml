@@ -19,6 +19,9 @@ importers:
       '@electron-forge/maker-zip':
         specifier: ^7.11.2
         version: 7.11.2
+      '@electron/asar':
+        specifier: ^3.4.1
+        version: 3.4.1
       '@electron/fuses':
         specifier: ^2.1.3
         version: 2.1.3

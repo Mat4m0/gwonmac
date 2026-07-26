@@ -13,7 +13,7 @@ Two halves, one contract:
 | Renderer | [`src/renderer/template-save-compatibility.js`](../../src/renderer/template-save-compatibility.js) | answer the derived module's calls against the mounted IDBFS |
 
 Selection and caching live in
-[`template-save-client.ts`](../../src/main/core/template-save-client.ts) and
+[`client-module.ts`](../../src/main/core/client-module.ts) and
 [`client-runtime.ts`](../../src/main/client-runtime.ts). Installation is
 [`harness.js`](../../src/renderer/harness.js) inside `Module.instantiateWasm`,
 before instantiation, so the import object can be wrapped.

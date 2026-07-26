@@ -19,15 +19,13 @@ import {
   secondsRemaining,
 } from "../../shared/progress.js";
 import {
-  ACCESS_KEY,
   CLIENT_ARTIFACTS,
   MAX_PATCH_MANIFEST_BYTES,
-  PATCH_REQUEST_TIMEOUT_MS,
+  PATCH_REQUEST_HEADERS,
   PATCH_ROOT,
   PREFETCH_JOBS,
   REQUIRED_PATCH_FILES,
   SNAPSHOT,
-  UA,
 } from "./access-key.js";
 import {
   writeAll,
@@ -48,7 +46,6 @@ import {
 import { Manifest, type CompressionMode, type ManifestFileEntry } from "./manifest.js";
 import {
   fetchPatchBytes,
-  readBoundedResponse,
   type PatchFetch,
 } from "./patch-transport.js";
 import {
@@ -72,12 +69,9 @@ export interface PatchClientOptions {
   artifactsDir: string;
   chunksDir: string;
   patchRoot?: string;
-  fetch?: FetchLike;
+  fetch: FetchLike;
   jobs?: number;
   onProgress?: (p: DownloadProgress) => void;
-  accessKey?: string;
-  userAgent?: string;
-  requestTimeoutMs?: number;
 }
 
 export interface PatchUpdateResult {
@@ -86,22 +80,6 @@ export interface PatchUpdateResult {
   published: boolean;
   candidate: boolean;
   blocked: boolean;
-}
-
-function defaultFetch(requestTimeoutMs: number): FetchLike {
-  return async (url, init) => {
-    const req: RequestInit = {
-      method: init?.method ?? "GET",
-      redirect: "manual",
-      signal: AbortSignal.timeout(requestTimeoutMs),
-    };
-    if (init?.headers) req.headers = init.headers;
-    const res = await fetch(url, req);
-    return {
-      status: res.status,
-      body: await readBoundedResponse(res, init?.maxBytes ?? MAX_PATCH_MANIFEST_BYTES),
-    };
-  };
 }
 
 export class PatchClient {
@@ -117,16 +95,10 @@ export class PatchClient {
     this.artifactsDir = opts.artifactsDir;
     this.chunksDir = opts.chunksDir;
     this.patchRoot = opts.patchRoot ?? PATCH_ROOT;
-    this.fetchFn =
-      opts.fetch ?? defaultFetch(opts.requestTimeoutMs ?? PATCH_REQUEST_TIMEOUT_MS);
+    this.fetchFn = opts.fetch;
     this.jobs = opts.jobs ?? PREFETCH_JOBS;
     this.onProgress = opts.onProgress;
-    this.headers = {
-      "X-Access-Key": opts.accessKey ?? ACCESS_KEY,
-      "User-Agent": opts.userAgent ?? UA,
-      "Accept-Encoding": "identity",
-      Connection: "keep-alive",
-    };
+    this.headers = { ...PATCH_REQUEST_HEADERS };
   }
 
   /**
@@ -146,20 +118,22 @@ export class PatchClient {
 
   async getBytes(
     url: string,
-    options: { maxBytes: number; tries?: number },
+    options: { maxBytes: number; tries?: number; signal?: AbortSignal },
   ): Promise<Uint8Array> {
     const request = {
       fetch: this.fetchFn,
       url,
       headers: this.headers,
       maxBytes: options.maxBytes,
+      ...(options.signal ? { signal: options.signal } : {}),
     };
     return fetchPatchBytes(
       options.tries === undefined ? request : { ...request, tries: options.tries },
     );
   }
 
-  async fetchManifest(): Promise<Manifest> {
+  async fetchManifest(signal?: AbortSignal): Promise<Manifest> {
+    signal?.throwIfAborted();
     this.emit({
       phase: "checking",
       label: "Checking the game client",
@@ -170,6 +144,7 @@ export class PatchClient {
     });
     const body = await this.getBytes(`${this.patchRoot}/manifest.json`, {
       maxBytes: MAX_PATCH_MANIFEST_BYTES,
+      ...(signal ? { signal } : {}),
     });
     let raw: unknown;
     try {
@@ -182,7 +157,12 @@ export class PatchClient {
     return manifest;
   }
 
-  private async chunkCached(hash: string, expectedLength: number): Promise<boolean> {
+  private async chunkCached(
+    hash: string,
+    expectedLength: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    signal?.throwIfAborted();
     const file = join(this.chunksDir, hash);
     try {
       const data = await readFile(file);
@@ -190,8 +170,10 @@ export class PatchClient {
         throw new AppError("chunk_length", `cached chunk ${hash} has invalid length`);
       }
       verifyChunkHash(hash, data);
+      signal?.throwIfAborted();
       return true;
     } catch {
+      signal?.throwIfAborted();
       await rm(file, { force: true }).catch(() => undefined);
       return false;
     }
@@ -201,14 +183,18 @@ export class PatchClient {
     hash: string,
     compression: CompressionMode,
     expectedLength: number,
+    signal?: AbortSignal,
   ): Promise<Uint8Array> {
+    signal?.throwIfAborted();
     const data = await decodeChunk(
       await this.getBytes(`${this.patchRoot}/${hash}.bin`, {
         maxBytes: encodedChunkLimit(expectedLength, compression),
+        ...(signal ? { signal } : {}),
       }),
       compression,
       expectedLength,
     );
+    signal?.throwIfAborted();
     verifyChunkHash(hash, data);
     await writeAtomicInDir(this.chunksDir, hash, data);
     return data;
@@ -228,7 +214,9 @@ export class PatchClient {
       rate: DownloadRateAverage;
       sizes: Map<string, number>;
     },
+    signal?: AbortSignal,
   ): Promise<void> {
+    signal?.throwIfAborted();
     const hashes = entry.chunkHashes;
     const missing: string[] = [];
     for (let i = 0; i < hashes.length; i++) {
@@ -237,18 +225,19 @@ export class PatchClient {
       if (expectedLength === undefined) {
         throw new AppError("chunk_length", `missing expected length for ${h}`);
       }
-      if (!(await this.chunkCached(h, expectedLength))) {
+      if (!(await this.chunkCached(h, expectedLength, signal))) {
         missing.push(h);
       }
     }
     const unique = [...new Set(missing)];
 
     await mapPool(unique, this.jobs, async (h) => {
+      signal?.throwIfAborted();
       const expectedLength = progress.sizes.get(h);
       if (expectedLength === undefined) {
         throw new AppError("chunk_length", `missing expected length for ${h}`);
       }
-      await this.storeChunk(h, compression, expectedLength);
+      await this.storeChunk(h, compression, expectedLength, signal);
       progress.got += expectedLength;
       const rate = progress.rate.update(progress.got);
       this.emit({
@@ -276,8 +265,10 @@ export class PatchClient {
       // writeAll, not write: a short write here truncates the artifact and the
       // sync() below then durably commits the truncation.
       for (const h of hashes) {
+        signal?.throwIfAborted();
         await writeAll(file, await readFile(join(this.chunksDir, h)));
       }
+      signal?.throwIfAborted();
       await file.sync();
     } finally {
       await file.close();
@@ -289,12 +280,15 @@ export class PatchClient {
     outPath: string,
     entry: ManifestFileEntry,
     chunkSize: number,
+    signal?: AbortSignal,
   ): Promise<boolean> {
+    signal?.throwIfAborted();
     let file;
     try {
       if ((await stat(outPath)).size !== entry.size) return false;
       file = await open(outPath, "r");
       for (let i = 0; i < entry.chunkHashes.length; i++) {
+        signal?.throwIfAborted();
         const size = this.chunkBytes(entry, chunkSize, i);
         const data = Buffer.allocUnsafe(size);
         const { bytesRead } = await file.read(data, 0, size, i * chunkSize);
@@ -304,6 +298,7 @@ export class PatchClient {
       }
       return true;
     } catch {
+      signal?.throwIfAborted();
       return false;
     } finally {
       await file?.close();
@@ -425,16 +420,22 @@ export class PatchClient {
   /** Fetch JSPI client artifacts and publish snapshot metadata; never assembles Gw.snapshot. */
   async update(options?: {
     blockedFingerprint?: string | null;
+    signal?: AbortSignal;
   }): Promise<PatchUpdateResult> {
+    const signal = options?.signal;
+    signal?.throwIfAborted();
     const generations = clientGenerationPaths(this.artifactsDir);
     const stage = generations.stage;
     const backup = generations.previous;
     await this.recoverArtifactSwap(stage, backup);
+    signal?.throwIfAborted();
     await mkdir(this.chunksDir, { recursive: true });
 
-    const mf = await this.fetchManifest();
+    const mf = await this.fetchManifest(signal);
+    signal?.throwIfAborted();
     const fingerprint = clientFingerprint(mf);
     const previousGeneration = await this.publishedGeneration();
+    signal?.throwIfAborted();
     if (
       fingerprint === options?.blockedFingerprint &&
       previousGeneration.valid
@@ -467,7 +468,9 @@ export class PatchClient {
         entry,
         current,
         staged: clientArtifactPath(stage, name),
-        needsBuild: !(await this.artifactMatches(current, entry, mf.chunkSize)),
+        needsBuild: !(
+          await this.artifactMatches(current, entry, mf.chunkSize, signal)
+        ),
       });
     }
     const snapPath = mf.find(SNAPSHOT);
@@ -493,11 +496,12 @@ export class PatchClient {
     const missing = new Set<string>();
     let total = 0;
     for (const { entry } of wanted) {
+      signal?.throwIfAborted();
       for (let i = 0; i < entry.chunkHashes.length; i++) {
         const h = entry.chunkHashes[i]!;
         const n = this.chunkBytes(entry, mf.chunkSize, i);
         sizes.set(h, n);
-        if (!missing.has(h) && !(await this.chunkCached(h, n))) {
+        if (!missing.has(h) && !(await this.chunkCached(h, n, signal))) {
           missing.add(h);
           total += n;
         }
@@ -526,12 +530,14 @@ export class PatchClient {
     await mkdir(stage, { recursive: true });
     try {
       for (const artifact of artifacts) {
+        signal?.throwIfAborted();
         if (artifact.needsBuild) {
           await this.assembleFile(
             artifact.staged,
             artifact.entry,
             mf.compression,
             progress,
+            signal,
           );
         } else {
           await this.stageExisting(artifact.current, artifact.staged);
@@ -576,6 +582,10 @@ export class PatchClient {
           "staged client artifacts do not match the manifest that describes them",
         );
       }
+      // From this point through the generation swap, finish the short atomic
+      // cutover even if recovery asks the preparation phase to stop. Recovery
+      // waits on the same lock and can then roll the candidate back safely.
+      signal?.throwIfAborted();
       try {
         await stat(this.artifactsDir);
         hadCurrent = true;

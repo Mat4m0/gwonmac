@@ -80,9 +80,17 @@ The published local manifest retains the executable artifacts' sizes and chunk
 hashes, so offline fallback is independently verifiable. A changed client is
 kept as a candidate beside one verified previous generation until it has both
 presented a frame and opened a game TCP connection. A login-screen frame alone
-cannot discard the rollback generation. Failure before both signals durably
-rejects that exact client fingerprint for the current host version and restores
-the previous generation.
+cannot discard the rollback generation. Before loading the game glue, the
+renderer captures the active candidate's generation and fingerprint. It returns
+that exact token only after observing both signals; main revalidates the active
+generation and marker under the generation lock before deleting rollback state.
+A stale renderer therefore cannot confirm a replacement generation. Failure
+before both signals durably rejects that exact client fingerprint for the
+current host version and restores the previous generation.
+Renderer-crash recovery aborts an in-flight manifest/chunk preparation before
+waiting for the generation lock. Retries and assembly observe that signal and
+discard the stage; once the short verified-directory swap begins, it finishes
+atomically and recovery rolls the published candidate back under the same lock.
 Invalid or legacy-unverifiable state is never promoted into the rollback slot.
 
 `Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
@@ -117,10 +125,14 @@ Replacing the application is manual and always has been. What is new is that
 the app no longer asks GitHub anything on its own initiative.
 
 `src/main/release-notice.ts` is the only code that contacts
-`api.github.com/repos/<repo>/releases/latest`, and it has exactly three
-callers: the manual **Check for Updates** action, the same action mounted on
-the client-compatibility notice, and one launch-time check that runs only while
-`AppSettings.autoCheckUpdates` is on. That setting defaults to `false` and
+`api.github.com/repos/<repo>/releases?per_page=100`, and it has exactly three
+callers: the manual **Check for Updates** action, the same action mounted on the
+client-compatibility notice, and one launch-time check that runs only while
+`AppSettings.autoCheckUpdates` is on. The bounded list is necessary because
+GitHub's `releases/latest` endpoint excludes prereleases; stable installs ignore
+prereleases, while an install already on a prerelease channel may see a newer
+one. Both GitHub's prerelease flag and SemVer prerelease syntax are honoured;
+drafts and malformed tags are ignored. The setting defaults to `false` and
 governs every automatic request without exception, the compatibility path
 included, so a default launch reaches github.com zero times. There is no
 per-launch poll and no background timer.
@@ -128,9 +140,10 @@ per-launch poll and no background timer.
 `checkForNewerRelease(currentVersion)` takes the running version as an argument
 instead of calling `app.getVersion()`, so main keeps the single Electron
 binding and the module is executable in a unit test. It aborts after five
-seconds, coalesces concurrent callers onto one request, and caches for ten
-minutes — answers and rate-limit refusals only, because the correct response to
-"you are offline" is to try again once you are not.
+seconds, coalesces concurrent callers onto one request, and caches every result
+for ten minutes. That includes offline, timeout, server, and unreadable
+responses: the manual button is a refresh action, not a way to spend an
+unbounded request budget by clicking repeatedly.
 
 The result is three states and never two: `update-available`, `up-to-date`, or
 `unknown` carrying a reason from a closed vocabulary (`rate-limited`,
@@ -139,9 +152,11 @@ parse failure and a network failure are `unknown`; reporting either as
 "up to date" is the class of quiet lie this path exists to remove, so no
 boolean or tri-state "update status" is exported and each reason has its own
 sentence in `src/renderer/update-action.js`. Every result carries `checkedAt`,
-which the renderer persists as `lastUpdateCheckAt` and renders as
-"Last checked". The launcher and the settings dialog mount the same controller,
-so the two surfaces cannot come to disagree.
+the completion time of the check attempt (including an unsupported local
+version that made no request). The renderer persists it as
+`lastUpdateCheckAt` and renders it as "Last checked". The launcher and the
+settings dialog mount the same controller, so the two surfaces cannot
+disagree.
 
 No attacker-controlled string crosses IPC. The response's URL is discarded
 rather than carried: the renderer can only open the closed `ExternalLinkKind`
@@ -318,9 +333,12 @@ is published as `uncertified`, because it is degraded exactly that far.
 `client.buildCertification` in a `.gwdiag`, and the older
 `wasm.templateSaveCompatible` boolean is derived from the same object rather
 than computed separately, so the two cannot disagree. The renderer reads the
-state over `gw:client:session` together with the client hash and whether the
-player asked for the game's cursors; `src/renderer/client-compatibility-notice.js`
-turns it into the sentences both surfaces show.
+state over `gw:client:session` together with the client hash and whether this
+session actually prepared the Toolbox module. The renderer combines those
+facts with the canonical per-tool selection; the effective bit keeps a
+certified build whose transform failed from being reported as available.
+`src/renderer/client-compatibility-notice.js` turns them into the sentences
+both surfaces show.
 
 ### Toolbox instrumentation
 
@@ -329,77 +347,79 @@ switched off applies only the certified template-save compatibility transform
 described above: it does no Toolbox transform, fetches no kernel, installs no
 Toolbox hook, starts no snapshot observer, and contains no Toolbox UI.
 
-A session with the Toolbox on contains exactly one piece of Toolbox UI: the
-target readout, `src/renderer/toolbox-readout.js`. It is a fixed line at the top
-centre of the game view showing the selected target's distance in game units and
-the name of the range band that distance falls in, and it is the last stage of
-the read-only pipeline — manifest → transform/kernel → snapshot → decoder → here.
-It reads a decoded snapshot and writes nothing back: no game input, no game
-memory write, no state of its own beyond the line it last rendered. It renders
-nothing at all without a selected target, and nothing on a loading screen, a torn
-read, or a build the decoder does not support. It is `pointer-events: none`, so
-it can never take a click meant for the game, and `aria-live="off"`, so a value
-that changes every frame is never announced. It rides on the instrumentation
-tier rather than on a tool key of its own: a player with `nativeCursor` — or any
-future tool — on sees it, and a player with every tool off executes none of it.
+The two shipped tools are independent. `nativeCursor` defaults to **true** and
+reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
+owns the only added overlay, `src/renderer/toolbox-readout.js`: a fixed line at
+the top centre of the game view showing the selected target's distance in game
+units and range band. It is the last stage of the read-only pipeline — manifest
+→ transform/kernel → snapshot → decoder → here — and writes nothing back. It
+renders nothing without a selected target, on a loading screen, after a torn
+read, or on an unsupported build. It is `pointer-events: none` and
+`aria-live="off"`.
 
-Two gates, and only these two, enable the Toolbox path. `toolbox-policy.ts`
-holds both: `TOOLBOX_AUTOMATION_ENABLED` stays non-packaged and
-`GW_TOOLBOX_AUTOMATION`-gated, and `toolboxEnabledFor(settings)` adds the
-player-facing `nativeCursor` setting, which defaults to **true** — every
-shipped install runs the derived module, and the setting is how a player turns
-it off. Automation did not move with it: no packaged build can reach that tier
-whatever the environment says, which is what makes "does not send game input or
-act on the player's behalf" a testable claim rather than a promise. Main reads
-the setting once at startup and passes the result as
-`ClientRuntime.toolboxEnabled`,
-because the choice selects which WASM main the launch serves. A running session
-therefore cannot honour a change, so the write and the restart are one action:
+`TOOLBOX_TOOLS` and `ToolboxSelection` live in the shared contracts. There is
+no stored or transported master switch: `toolbox-policy.ts` derives whether
+main should prepare the transformed module from whether any tool is selected,
+plus the development-only automation gate. Main snapshots the per-tool record
+once at startup and sends that one record in `RendererInit`; the generated
+preload iterates the canonical tool list rather than copying its names.
+Automation remains unreachable from a packaged build whatever the environment
+says, which keeps "does not send game input or act on the player's behalf" a
+mechanically testable claim.
+
+A running session cannot honour a tool change because the kernel feature flags
+are fixed at initialization, so the write and restart are one action:
 `settingsSet` asks `toolboxSelectionChanged` whether the patch alters a tool,
-and if it does it confirms the restart first, saves nothing when the player
-cancels, and relaunches immediately when they do not. Both tool surfaces
-re-render from the settings main returned, so a declined restart cannot leave a
-checkbox claiming something the session is not doing. The same value writes
-`nativeCursor` in the renderer init payload — `toolboxAutomation` for
-automation. `harness.js`
-dynamically imports `toolbox.js` only when one of them is set, so a renderer
-that was handed neither cannot reach the Toolbox at all.
+confirms before saving, and relaunches immediately. Both launcher and Settings
+re-render from main's returned settings, so a declined restart cannot leave a
+checkbox claiming something the session is not doing.
 
-Enabled sessions hash the official module after publication and recognize only
-entries in the checked-in Toolbox build manifest. A known
-hash is transformed deterministically into a separate cache entry keyed by
-official hash, transform ABI, and manifest fingerprint. The transform clones
-one typed function, installs one dispatcher, and embeds the verified layout as
-a custom section. Unknown hashes and transform failures serve the official
-module unchanged, so an uncertified build stays fully playable and the cursor
-falls back to the plain macOS pointer.
+The harness uses request and effective state without conflating them. A tool
+selection or development automation requests Toolbox, while the
+`toolbox_manifest` on the actual instantiated WebAssembly module proves that
+this launch received a certified transform. Only when both are true does it
+import `toolbox.js`. A requested but uncertified launch therefore imports no
+Toolbox module and fetches no kernel. The kernel receives one bit per tool;
+disabled tools perform no per-tick collection. Development automation may force
+the core observation snapshot for live scenarios, but it neither selects a
+player-facing surface nor couples the two tools in packaged builds.
 
-`toolbox-transform.ts` is the pure byte transform. `toolbox-client.ts` owns
-streaming hash validation, cache reuse, and atomic derived publication. The
-manifest's ordered layout fields generate the embedded `layoutWords`; the
-renderer does not maintain a second field-order list.
+After publication, certification matches the official hash to the exact
+template-save record and then matches that record's output hash to the exact
+Toolbox record. `client-module.ts` consumes those records directly and owns the
+official → template-save → optional Toolbox chain, cache reuse, stale-cache
+discard, and atomic publication. Disabled and unsupported stages delete their
+cache. A Toolbox transform failure serves the verified template-save module;
+an uncertified build serves the official module, so the game stays playable
+and the cursor falls back to the plain macOS pointer.
+
+`toolbox-transform.ts` is the pure byte transform. The manifest's ordered
+layout fields generate the embedded `layoutWords`; the renderer does not
+maintain a second field-order list.
 
 Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
 446. It uses the stock table's null slot 0; the mutable global stores
 `slot + 1`, preserving zero as disabled. No table growth or all-functions
 instrumentation remains.
 
-After runtime initialization in an enabled session, the renderer dynamically
-loads the Toolbox runtime, allocates a config and
-64-byte snapshot through the game's allocator, instantiates the dependency-free
+After runtime initialization in an enabled, manifested session, the renderer
+dynamically loads the Toolbox runtime, allocates its enabled bounded regions
+through the game's allocator, instantiates the dependency-free
 `wasm32-unknown-unknown` companion against the exported memory, installs its
 callback, and enables the dispatcher last. The callback calls the relocated
-original exactly once before collecting checked map/player/target state.
+original exactly once, then collects cursor state and map/player/target state
+only for their enabled feature bits.
 
 Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
-sequence lock. It contains no pointers. The snapshot observer reads at most
-once per animation frame and rejects unknown flags, invalid IDs/types/bands,
-and non-finite values. It publishes structured `gwToolboxState` without
-production DOM. The cursor consumer is the one part that reaches production
-DOM, and only as an inline `cursor` on the game canvas; losing the cursor
-clears that inline value and nothing else. No memory view or per-frame call
-crosses preload or IPC.
+sequence lock. It contains no pointers. When target observation is enabled, the
+snapshot observer reads at most once per animation frame and rejects unknown
+flags, invalid IDs/types/bands, and non-finite values. It publishes structured
+`gwToolboxState`; only the separately selected readout renders that state. The
+cursor consumer is installed and polled only when `nativeCursor` is selected,
+and reaches production DOM only as an inline `cursor` on the game canvas;
+losing the cursor clears that value and nothing else. No memory view or
+per-frame call crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on
@@ -458,6 +478,12 @@ and the process exits with status zero. Main-to-renderer events are dropped
 once either the window or its `webContents` is destroyed. Renderer recovery is
 reserved for unexpected loss while the application is not quitting.
 
+The process acquires Electron's single-instance lock before it reads or sweeps
+profile-owned files. A second launch exits and asks the primary process to
+restore, show, and focus its existing window. That lock is what makes startup
+cleanup of atomic-write temporary files safe: another live app process cannot
+still own a foreign-PID temporary file in the same profile.
+
 ## Rendering and input
 
 The client creates a WebGL context on an `OffscreenCanvas`. The EGL import
@@ -512,7 +538,7 @@ that stays handled by releasing every non-modifier key when Command comes up.
 
 Every event uses an integer monotonic microsecond timestamp, sequence number,
 process/subsystem name, level, typed scalar fields, and optional
-`traceId`/`spanId`/`parentSpanId`. Seven-sample renderer/main clock
+`traceId`/`spanId`. Seven-sample renderer/main clock
 synchronization chooses the lowest-round-trip sample and repeats after
 visibility changes and every five minutes.
 
@@ -608,8 +634,8 @@ Renderer console text remains renderer-local and bounded. Only allow-listed
 failure names and non-text eight-hex fingerprints cross IPC. This makes
 repeated failures correlatable without exporting exception text, account data,
 chat, paths, request contents, or packet contents.
-The recorder normalizes every event name to a dot-separated identifier, so all
-producers share one searchable vocabulary.
+The closed schema owns every dot-separated event name, so all producers share
+one searchable vocabulary and no generic string logging route exists.
 Event-loop delay uses reset five-second windows at 5 ms resolution. When
 `frames.bin` exists, the tools calculate exact visible-only frame percentiles,
 FPS, and stalls from its fixed-width records.
@@ -630,8 +656,9 @@ idempotent redactor whether its own output was a fixed point.
 **`events.jsonl` is certified against a closed schema.** Every event the main
 process records is a member of the discriminated union in
 `src/main/diagnostics/schema.ts`, and every field of every member is a number,
-a boolean, a member of a declared string enum, or a branded 64-hex digest.
-A field typed `string` fails `tsc` inside the schema file itself, so free text
+a boolean, a member of a declared string enum, or a branded fixed-format value
+such as a digest, renderer fingerprint, or application version. A field typed
+`string` fails `tsc` inside the schema file itself, so free text
 is not redacted out of recorded events — it cannot be written in the first
 place. Producers pass a `DiagnosticEvent` to `logEvent`, so a failure records
 an `ErrorCode` from the closed catalogue in `src/shared/errors.ts` where it
@@ -642,30 +669,16 @@ Before anything is written, `inspectEventLog` in
 declared record against that schema field by field — exactly the declared
 fields, each accepted by the guard for its declared type. A record that does
 not match throws and no export is produced at all. `redaction.records` counts
-every record walked and `redaction.schemaChecked` the subset the schema
-declares and the detector matched. The detector imports neither the recorder
-nor the pattern scanner, which is what makes it evidence: a checker built from
-the redactor's own patterns can only ever agree with the redactor.
-
-**What the schema has not absorbed yet is counted, not hidden.** Spans still
-take open `DiagnosticFields`, and milestones and counters still call `log()`,
-so some records carry strings. `redaction.openFields` is how many string
-values the export contains outside the closed schema, and **it is not zero**
-in a real export. It is a raw count of undeclared string values, not a count
-of leaks: what dominates it is span fields, because `Span.end` still takes
-open `DiagnosticFields` — `status` on `dns.resolve` and `update.clientUpdate`,
-`route` and `method` on `proxy.request`, `priority` on `snapshot.read`, which
-is unsuppressed for the whole of a Level 1 capture — plus the `status` on each
-renderer socket-send record. Those are closed vocabularies that simply have no
-schema entry yet, so a four-figure `openFields` in a capture is mostly the
-literal `"ok"` repeated. The privacy-relevant contributor is
-`security.navigationBlocked` / `security.redirectBlocked` in `window.ts`,
-which publish a full `url`; they fire only when a navigation is actually
-blocked, so an ordinary session contributes none. Every one of these values
-gets the recorder's key-name drop and the pattern scan, which is weaker than
-the schema. The number reaches zero when the schema covers spans and those two
-events; until then it is in the manifest so a reader can see the residue
-instead of being told it does not exist.
+every record walked and `redaction.schemaChecked` every record the schema
+matched; the two counts must be equal. Undeclared event names, wrong
+subsystem/level ownership, missing fields, extra fields, and out-of-vocabulary
+values all stop the export. DNS, update, snapshot, and proxy spans are four
+closed typed families with normalized start/end fields. Renderer milestones
+and renderer-originated failures are also schema members. Blocked-navigation
+events record the closed security decision but never copy the rejected URL.
+The detector imports neither the recorder nor the pattern scanner, which is
+what makes it evidence: a checker built from the redactor's own patterns can
+only ever agree with the redactor.
 
 **The trace and the un-schema'd documents are pattern-scanned.**
 `chromium-trace.json`, `environment.json`, `summary.json`, `report.json`,
@@ -678,30 +691,31 @@ tool that applies to text we did not author: it replaces the home directory,
 bearer tokens, quoted and unquoted values under a sensitive-key vocabulary,
 `file:` URLs, query-string values, email addresses, and absolute paths —
 including a path at index 0, which the previous positive lookbehind required a
-delimiter to see. A Level 2 trace reaches a quarter of a gigabyte, so it is
-scanned in chunks cut immediately after a comma: no rule can match across one
-— every value class excludes it, which the unit test proves by scanning each
-corpus document at every split point — and the carry is raw input rather than
-the scanner's own output, so a value straddling a cut is scanned whole rather
-than half-redacted and half copied. There is one exception, and it is the
-price of that comma: after a megabyte with no comma in it the scanner flushes
-anyway rather than buffer without bound, and a value straddling *that* cut is
-half-redacted with its remainder written out verbatim. A comma is the only
-character no rule can match across, so there is nothing safer to fall back to.
-`redaction.traceBytesScanned` records how much went through it. This tier is a
-vocabulary, not a proof: it misses anything it has no pattern for, it does not
-match a sensitive value that contains a comma itself (a serialized JSON blob
-under an `accountInfo` key stays as it is), and it over-redacts benign keys
-that contain a sensitive word — the safe direction. Numeric values under those
-keys are left alone so the trace stays valid JSON for
-`pnpm diagnostics:attribute-stalls`.
+delimiter to see. Quoted values under a sensitive key are consumed as complete
+JSON strings, including commas, escaped quotes and escaped backslashes, and are
+replaced without making the trace invalid.
+
+A Level 2 trace reaches a quarter of a gigabyte, so it is scanned as a stream.
+The scanner tracks JSON string and escape state and cuts only after a comma
+outside a string. Its carry is raw input rather than already-redacted output,
+so a value straddling an input chunk is scanned once and in full. If the trace
+provides no structural comma before the one-megabyte carry limit, export fails
+closed and its staging output is removed; it never flushes an unscannable
+suffix. The unit test compares streaming and whole-document results at every
+split point in the adversarial corpus and exercises that fail-closed bound.
+`redaction.traceBytesScanned` records how much went through the scanner.
+
+This tier is still a vocabulary, not a proof: it can miss a value for which it
+has no pattern, and it over-redacts benign keys containing a sensitive stem —
+the safe direction. Numeric values under those keys are left alone so the trace
+stays valid JSON for `pnpm diagnostics:attribute-stalls`.
 
 Some things are excluded by construction rather than by any of the three
 tiers. Renderer console text and exception text never cross IPC; only
 allow-listed failure names and non-text fingerprints do. Chromium net bodies,
 HTTP headers, account request bodies, and TCP payloads are never recorded, so
-they are not in the export to be removed. Crash dumps are never included;
-Crashpad is local-only and retains at most three dumps.
+they are not in the export to be removed. The application does not start
+Crashpad or collect crash dumps.
 
 `pnpm diagnostics:validate` re-runs the detector over the `events.jsonl` it
 extracted and refuses to agree with a manifest whose counts it cannot
@@ -751,7 +765,7 @@ two that read _none_ today are recorded rather than quietly kept.
 
 | Claim | Where it is made | What executes to prove it |
 | --- | --- | --- |
-| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-toolbox-surface.test.mjs` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/toolbox-policy.js` in a child process with `app.isPackaged` forced true and reads `TOOLBOX_AUTOMATION_ENABLED` as `false` for every value of `GW_TOOLBOX_AUTOMATION`, leaving `toolboxEnabledFor` and the player's cursor setting as the only way in |
+| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-toolbox-surface.test.mjs` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/toolbox-policy.js` in a child process with `app.isPackaged` forced true and reads `TOOLBOX_AUTOMATION_ENABLED` as `false` for every value of `GW_TOOLBOX_AUTOMATION`, leaving `toolboxEnabledFor` and the player's explicit per-tool selection as the only way in |
 | The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.mjs` for publication, corruption repair and rollback |
 | No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |

@@ -350,8 +350,3 @@ export function rewriteTemplateSaveWasm(
   }
   return output;
 }
-
-export function applyTemplateSaveCompatibility(input: Uint8Array): Uint8Array {
-  const build = findTemplateSaveBuild(sha256(input));
-  return build ? rewriteTemplateSaveWasm(input, build) : input;
-}

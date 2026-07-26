@@ -51,14 +51,14 @@ const DRAFT = { ...STABLE, tag_name: "v0.0.5", draft: true };
 // The resolved download is the arm64 ZIP of the release, not its checksums.
 assert.deepEqual(selectStableDownload([STABLE]), {
   url: ARM64_ZIP.browser_download_url,
-  version: STABLE.tag_name,
+  version: "0.0.3",
 });
 
 // A prerelease published on top of a stable release does not become the
 // download; the stable one behind it does.
 assert.deepEqual(selectStableDownload([PRERELEASE, STABLE]), {
   url: ARM64_ZIP.browser_download_url,
-  version: STABLE.tag_name,
+  version: "0.0.3",
 });
 
 // Prerelease-only — the repository's state today. Nothing stable exists, so the
@@ -67,6 +67,32 @@ assert.equal(selectStableDownload([PRERELEASE]), null);
 
 // Drafts are invisible to a logged-out visitor and are not offered either.
 assert.equal(selectStableDownload([DRAFT, PRERELEASE]), null);
+
+// Network ordering and network text are not version policy. A malformed stable
+// tag is ignored, and the greatest canonical stable version wins even when
+// GitHub returns it after an older release.
+const NEWER_ARM64_ZIP = {
+  name: "Guild Wars-darwin-arm64-2026.8.0.zip",
+  browser_download_url:
+    "https://github.com/Mat4m0/gwonmac/releases/download/v2026.8.0/Guild-Wars-darwin-arm64-2026.8.0.zip",
+};
+const NEWER_STABLE = {
+  tag_name: "v2026.8.0",
+  draft: false,
+  prerelease: false,
+  assets: [NEWER_ARM64_ZIP],
+};
+assert.equal(
+  selectStableDownload([{ ...STABLE, tag_name: "banana" }]),
+  null,
+);
+assert.deepEqual(
+  selectStableDownload([STABLE, NEWER_STABLE]),
+  {
+    url: NEWER_ARM64_ZIP.browser_download_url,
+    version: "2026.8.0",
+  },
+);
 
 // A stable release whose macOS build has not finished uploading is skipped
 // rather than announced with a releases-page link under its version number.
@@ -103,7 +129,7 @@ assert.equal(selectStableDownload({ message: "API rate limit exceeded" }), null)
     for (const answer of answers) {
       assert.deepEqual(answer, {
         url: ARM64_ZIP.browser_download_url,
-        version: STABLE.tag_name,
+        version: "0.0.3",
       });
     }
   } finally {

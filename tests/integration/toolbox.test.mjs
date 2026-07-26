@@ -10,6 +10,9 @@ import {
 } from "../../src/renderer/toolbox-snapshot.js";
 
 const MAGIC = 0x42545747;
+const FEATURE_NATIVE_CURSOR = 1 << 0;
+const FEATURE_TARGET_READOUT = 1 << 1;
+const ALL_FEATURES = FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT;
 
 function snapshot(overrides = {}) {
   const buffer = new ArrayBuffer(64);
@@ -167,15 +170,28 @@ async function createKernel() {
     view,
     config,
     calls,
-    init: (overrides = {}) =>
-      instance.exports.toolbox_init(
-        overrides.snapshotPointer ?? ADDRESSES.snapshot,
-        overrides.snapshotSize ?? 64,
+    init: (overrides = {}) => {
+      const features = overrides.features ?? ALL_FEATURES;
+      return instance.exports.toolbox_init(
+        overrides.snapshotPointer
+          ?? ((features & FEATURE_TARGET_READOUT) !== 0
+            ? ADDRESSES.snapshot
+            : 0),
+        overrides.snapshotSize
+          ?? ((features & FEATURE_TARGET_READOUT) !== 0 ? 64 : 0),
         overrides.configPointer ?? ADDRESSES.config,
         overrides.configSize ?? CONFIG_BYTES,
-        overrides.cursorPointer ?? ADDRESSES.cursor,
-        overrides.cursorSize ?? TOOLBOX_CURSOR_BYTES,
-      ),
+        overrides.cursorPointer
+          ?? ((features & FEATURE_NATIVE_CURSOR) !== 0
+            ? ADDRESSES.cursor
+            : 0),
+        overrides.cursorSize
+          ?? ((features & FEATURE_NATIVE_CURSOR) !== 0
+            ? TOOLBOX_CURSOR_BYTES
+            : 0),
+        features,
+      );
+    },
     tick: () => instance.exports.toolbox_tick(123),
     field: (offset) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readToolboxCursorHeader(memory.buffer, ADDRESSES.cursor),
@@ -454,6 +470,91 @@ describe("Toolbox companion kernel", () => {
     );
     assert.equal(kernel.calls.original, boundaries.length + 6);
     assert.equal(typeof instance.exports.toolbox_tick, "function");
+  });
+
+  it("collects only the explicitly enabled tools", async () => {
+    const cursorOnly = await createKernel();
+    installGameGraph(cursorOnly.view);
+    installCursorGraph(cursorOnly.view);
+    paintCursor(cursorOnly.view, 1);
+    assert.equal(
+      cursorOnly.init({ features: FEATURE_NATIVE_CURSOR }),
+      1,
+    );
+    assert.equal(
+      cursorOnly.view.getUint32(ADDRESSES.snapshot, true),
+      0,
+    );
+    cursorOnly.tick();
+    assert.equal(cursorOnly.published().status, "ready");
+    assert.equal(
+      cursorOnly.view.getUint32(ADDRESSES.snapshot, true),
+      0,
+    );
+
+    const readoutOnly = await createKernel();
+    installGameGraph(readoutOnly.view);
+    installCursorGraph(readoutOnly.view);
+    paintCursor(readoutOnly.view, 2);
+    assert.equal(
+      readoutOnly.init({ features: FEATURE_TARGET_READOUT }),
+      1,
+    );
+    assert.equal(readoutOnly.field(CURSOR.magic), 0);
+    readoutOnly.tick();
+    const state = readToolboxSnapshot(
+      readoutOnly.memory.buffer,
+      ADDRESSES.snapshot,
+    );
+    assert.equal(state.status, "ready");
+    assert.equal(state.tickCount, 1);
+    assert.equal(readoutOnly.field(CURSOR.magic), 0);
+
+    assert.equal(cursorOnly.calls.original, 1);
+    assert.equal(readoutOnly.calls.original, 1);
+  });
+
+  it("rejects empty, unknown, missing, or unselected feature regions", async () => {
+    const kernel = await createKernel();
+    assert.equal(kernel.init({ features: 0 }), 0);
+    assert.equal(kernel.init({ features: 1 << 2 }), 0);
+    assert.equal(
+      kernel.init({
+        features: FEATURE_NATIVE_CURSOR,
+        cursorPointer: 0,
+        cursorSize: 0,
+      }),
+      0,
+    );
+    assert.equal(
+      kernel.init({
+        features: FEATURE_TARGET_READOUT,
+        snapshotPointer: 0,
+        snapshotSize: 0,
+      }),
+      0,
+    );
+    assert.equal(
+      kernel.init({
+        features: FEATURE_NATIVE_CURSOR,
+        snapshotPointer: ADDRESSES.snapshot,
+        snapshotSize: 64,
+      }),
+      0,
+    );
+    assert.equal(
+      kernel.init({
+        features: FEATURE_TARGET_READOUT,
+        cursorPointer: ADDRESSES.cursor,
+        cursorSize: TOOLBOX_CURSOR_BYTES,
+      }),
+      0,
+    );
+
+    kernel.tick();
+    assert.equal(kernel.calls.original, 1);
+    assert.equal(kernel.view.getUint32(ADDRESSES.snapshot, true), 0);
+    assert.equal(kernel.field(CURSOR.magic), 0);
   });
 
   it("rejects a cursor region of the wrong size, alignment, or extent", async () => {

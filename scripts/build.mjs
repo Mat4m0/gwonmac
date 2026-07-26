@@ -1,7 +1,4 @@
-// The single producer of everything under build/. Forge's generateAssets hook
-// used to run scripts/copy-renderer.mjs a second time, so a clean `pnpm package`
-// compiled the Toolbox kernel twice; that hook now only asserts this script's
-// output (see assertBuildIsFresh in forge.config.ts).
+// The single producer of everything under build/.
 import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { pathToFileURL } from "node:url";

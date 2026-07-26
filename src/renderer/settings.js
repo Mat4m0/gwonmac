@@ -41,153 +41,16 @@
     /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
   const renderScale =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
-  const nativeCursor =
-    /** @type {HTMLInputElement} */ (form.elements.namedItem('nativeCursor'));
   const touchMode =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('touchMode'));
   const showDiagnostics =
     /** @type {HTMLInputElement} */ (form.elements.namedItem('showDiagnostics'));
-
-  /**
-   * @template {keyof HTMLElementTagNameMap} K
-   * @param {K} tag
-   * @param {{ className?: string, id?: string, text?: string }} [attributes]
-   * @returns {HTMLElementTagNameMap[K]}
-   */
-  function element(tag, attributes = {}) {
-    const node = document.createElement(tag);
-    if (attributes.className) node.className = attributes.className;
-    if (attributes.id) node.id = attributes.id;
-    if (attributes.text) node.textContent = attributes.text;
-    return node;
-  }
-
-  // ---------------------------------------------------------- update checks
-  // One action, one state, two mount points: the launcher's corner links and
-  // the Advanced pane. Both are built here rather than written twice in
-  // index.html, so the two surfaces cannot drift apart in what they claim.
-  const autoCheckUpdates = element('input');
-  autoCheckUpdates.type = 'checkbox';
-  autoCheckUpdates.name = 'autoCheckUpdates';
-  const updateCheck = element('button', {
-    id: 'settings-check-updates',
-    text: 'Check for Updates',
-  });
-  updateCheck.type = 'button';
-  const updateReleases = element('button', {
-    id: 'settings-open-releases',
-    text: 'Open Releases…',
-  });
-  updateReleases.type = 'button';
-  updateReleases.hidden = true;
-  const updateStatus = element('p', {
-    id: 'settings-update-status',
-    className: 'settings-status',
-  });
-  updateStatus.setAttribute('role', 'status');
-  updateStatus.setAttribute('aria-live', 'polite');
-  updateStatus.hidden = true;
-  const updateWhen = element('p', {
-    id: 'settings-update-when',
-    className: 'settings-note',
-  });
-  updateWhen.hidden = true;
-
-  const launcherUpdateCheck = element('a', {
-    id: 'loading-update-check',
-    text: 'Check for Updates',
-  });
-  launcherUpdateCheck.href = '#';
-  // The same sentence is written into all three surfaces, so all three
-  // announce it. The launcher is where the check is offered before Settings is
-  // reachable; a failure nobody is told about is the failure this whole path
-  // exists to stop.
-  const launcherUpdateStatus = element('span', { id: 'loading-update-status' });
-  launcherUpdateStatus.setAttribute('role', 'status');
-  launcherUpdateStatus.setAttribute('aria-live', 'polite');
-  launcherUpdateStatus.hidden = true;
-  const launcherUpdateWhen = element('span', { id: 'loading-update-when' });
-  launcherUpdateWhen.hidden = true;
-  // `data-external` hands the click to the launcher's existing enum-selected
-  // link handler: the renderer opens a kind, never a URL it was told.
-  const launcherUpdateGet = element('a', {
-    id: 'loading-update-get',
-    className: 'update',
-    text: 'Get the update',
-  });
-  launcherUpdateGet.href = '#';
-  launcherUpdateGet.dataset.external = 'releases';
-  launcherUpdateGet.hidden = true;
-
-  // ----------------------------------------------------- client compatibility
-  // One main-process module owns which of the three certification states this
-  // session is in; these are its two surfaces. The dock notice appears once per
-  // ArenaNet build and only while something is actually degraded; the Settings
-  // status is always there, so a player who dismissed the notice weeks ago can
-  // still find out why a build template will not save.
-  const compatTitle = element('h2', { id: 'client-compat-title' });
-  const compatDetail = element('p', { id: 'client-compat-detail' });
-  const compatVersion = element('span', { id: 'client-compat-version' });
-  const compatUpdateStatus = element('span', { id: 'client-compat-update' });
-  compatUpdateStatus.setAttribute('role', 'status');
-  compatUpdateStatus.setAttribute('aria-live', 'polite');
-  compatUpdateStatus.hidden = true;
-  const compatCheck = element('button', {
-    className: 'launcher-link',
-    text: 'Check for Updates',
-  });
-  compatCheck.type = 'button';
-  const compatReleases = element('button', {
-    className: 'launcher-link',
-    text: 'Open Releases…',
-  });
-  compatReleases.type = 'button';
-  const compatPlay = element('button', {
-    id: 'client-compat-play',
-    className: 'launcher-primary',
-    text: 'Play Guild Wars',
-  });
-  compatPlay.type = 'button';
-  const compatNotice = element('section', { id: 'client-compat' });
-  compatNotice.hidden = true;
-  compatNotice.setAttribute('aria-labelledby', 'client-compat-title');
-
-  const settingsCompatStatus = element('p', {
-    id: 'settings-compat-status',
-    className: 'settings-status',
-  });
-  settingsCompatStatus.setAttribute('role', 'status');
-  const settingsCompatDetail = element('p', {
-    id: 'settings-compat-detail',
-    className: 'settings-note',
-  });
-  const settingsCompatVersion = element('p', {
-    id: 'settings-compat-version',
-    className: 'settings-note',
-  });
-
-  // ------------------------------------------------------------ Toolbox tools
-  // One tool, one setting, two surfaces: the first-run gate is where a player
-  // meets it, the Settings pane is where they find it again. Both write the
-  // same key through the same writer, and the main process turns a tool change
-  // into a restart, so neither surface can show a tool the session is not
-  // running. The tools themselves are declared in src/main/toolbox-policy.ts.
-  const choiceNativeCursor = element('input', {
-    id: 'data-choice-native-cursor',
-  });
-  choiceNativeCursor.type = 'checkbox';
-  const choiceNativeCursorNote = element('span', {
-    id: 'data-choice-native-cursor-note',
-  });
-  choiceNativeCursorNote.setAttribute('role', 'status');
-  choiceNativeCursorNote.hidden = true;
-
-  // The first-run gate asks the update question next to the data question:
-  // switching it on silently would contradict the no-phone-home posture, and
-  // leaving it off silently means nobody ever discovers it exists.
-  const choiceAutoUpdates = element('input', { id: 'data-choice-auto-updates' });
-  choiceAutoUpdates.type = 'checkbox';
-
+  const autoCheckUpdates =
+    /** @type {HTMLInputElement} */ (
+      form.elements.namedItem('autoCheckUpdates')
+    );
+  const choiceAutoUpdates =
+    /** @type {HTMLInputElement} */ (byId('data-choice-auto-updates'));
   /** @type {import('./update-action.js').UpdateAction | null} */
   let updateAction = null;
 
@@ -337,7 +200,7 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      renderToolControls(saved);
+      toolSettings.render(saved);
       window.gwApplySettings?.(saved);
       return saved;
     });
@@ -345,136 +208,21 @@
     return operation;
   }
 
-  /** @param {import('./update-action.js').UpdateActionView} view */
-  function renderUpdateAction(view) {
-    launcherUpdateCheck.textContent = view.actionLabel;
-    launcherUpdateStatus.textContent = view.message;
-    launcherUpdateStatus.hidden = view.message === '';
-    launcherUpdateWhen.textContent = view.lastChecked;
-    launcherUpdateWhen.hidden = view.lastChecked === '';
-    launcherUpdateGet.hidden = !view.updateAvailable;
-
-    updateCheck.textContent = view.actionLabel;
-    updateCheck.disabled = view.busy;
-    updateStatus.textContent = view.message;
-    updateStatus.hidden = view.message === '';
-    updateWhen.textContent = view.lastChecked;
-    updateWhen.hidden = view.lastChecked === '';
-    updateReleases.hidden = !view.updateAvailable;
-
-    // The mismatch notice asks the same question through the same state: three
-    // triggers, one answer. With automatic checks off it makes no request
-    // until this button is pressed.
-    compatCheck.textContent = view.actionLabel;
-    compatCheck.disabled = view.busy;
-    compatUpdateStatus.textContent = view.message;
-    compatUpdateStatus.hidden = view.message === '';
-  }
-
-  function mountUpdateAction() {
-    const corner = element('span', { id: 'loading-update' });
-    corner.append(
-      launcherUpdateCheck, ' ', launcherUpdateStatus, ' ',
-      launcherUpdateWhen, ' ', launcherUpdateGet,
-    );
-    byId('loading-links').prepend(corner);
-
-    const label = element('label', { className: 'settings-check' });
-    label.append(
-      autoCheckUpdates,
-      element('span', { text: 'Check for app updates automatically' }),
-    );
-    const note = element('p', {
-      className: 'settings-note',
-      text: 'While this is off, the app contacts GitHub only when you ask it '
-        + 'to — including when it meets a game client build it does not '
-        + 'recognise. Updating the app itself is always manual.',
-    });
-    const actions = element('div', { className: 'settings-update-actions' });
-    actions.append(updateCheck, updateReleases);
-    const pane = byId('settings-pane-advanced');
-    const divider = pane.querySelector('.settings-divider');
-    const block = [label, note, actions, updateStatus, updateWhen];
-    if (divider) divider.before(...block);
-    else pane.append(...block);
-
-    const question = element('p');
-    const questionLabel = element('label');
-    questionLabel.append(
-      choiceAutoUpdates,
-      ' Also check for app updates automatically',
-    );
-    question.append(questionLabel);
-    byId('data-choice').querySelector('.dock-info')?.append(question);
-  }
-
-  // The tools are offered where they are discovered, and the note says what
-  // switching one costs: the module is picked at startup, so the app restarts.
-  function mountToolChoice() {
-    const question = element('p');
-    const questionLabel = element('label');
-    questionLabel.append(
-      choiceNativeCursor,
-      " Use the game's own cursor — changing this restarts the app",
-    );
-    question.append(questionLabel, ' ', choiceNativeCursorNote);
-    byId('data-choice').querySelector('.dock-info')?.append(question);
-  }
-
-  /**
-   * Both tool surfaces, rendered from the settings the main process returned.
-   * They are never rendered from what was asked for: a change that needs a
-   * restart the player declined must leave the boxes showing what is true.
-   *
-   * @param {import('../shared/contracts.js').AppSettings} settings
-   */
-  function renderToolControls(settings) {
-    nativeCursor.checked = settings.nativeCursor;
-    choiceNativeCursor.checked = settings.nativeCursor;
-  }
-
-  choiceNativeCursor.addEventListener('change', () => {
-    const wanted = choiceNativeCursor.checked;
-    choiceNativeCursorNote.hidden = true;
-    void persistSettings({ nativeCursor: wanted })
-      .then((saved) => {
-        // Applied means the app is already relaunching, so the only sentence
-        // worth writing here is the one for a restart that was declined.
-        if (saved.nativeCursor === wanted) return;
-        choiceNativeCursorNote.textContent = 'The cursor was not changed.';
-        choiceNativeCursorNote.hidden = false;
-      })
-      .catch(() => {
-        if (currentSettings) renderToolControls(currentSettings);
-        choiceNativeCursorNote.textContent = 'The cursor could not be changed.';
-        choiceNativeCursorNote.hidden = false;
-      });
+  // Both tool surfaces are rendered from the settings main returned, never
+  // from requested state. Declining the required restart therefore restores
+  // what is actually running.
+  const toolSettings = window.gwToolSettings.create({
+    form,
+    byId,
+    selection: window.gwNative.init.toolboxSelection,
+    persist: persistSettings,
+    current: () => currentSettings,
   });
-
-  function mountCompatibility() {
-    const info = element('div', { className: 'dock-info' });
-    // The version answer sits with the notice, and is a separate sentence
-    // from it: an uncertified client build is not evidence of a stale app.
-    const update = element('p', { className: 'client-compat-version' });
-    update.append(compatVersion, ' ', compatUpdateStatus);
-    info.append(compatTitle, compatDetail, update);
-    const actions = element('div', { className: 'client-compat-actions' });
-    // Running is the default: the notice explains, it does not gate. "Play
-    // Guild Wars" is the primary action and one press is all it costs.
-    actions.append(compatCheck, compatReleases, compatPlay);
-    compatNotice.append(info, actions);
-    byId('loading-dock').append(compatNotice);
-
-    const pane = byId('settings-pane-controls');
-    pane.append(settingsCompatStatus, settingsCompatDetail, settingsCompatVersion);
-  }
 
   function requestUpdateCheck() {
     void updateAction?.check();
   }
 
-  mountUpdateAction();
-  mountToolChoice();
   void import('./update-action.js')
     .then((module) => {
       const action = module.createUpdateAction({
@@ -482,7 +230,11 @@
         remember: (checkedAt) => persistSettings({ lastUpdateCheckAt: checkedAt }),
       });
       updateAction = action;
-      action.subscribe(renderUpdateAction);
+      module.bindUpdateActionDom(
+        document,
+        action,
+        () => window.gwNative.app.openExternal('releases'),
+      );
       void loadSettings()
         .then((settings) => {
           action.restore(settings.lastUpdateCheckAt);
@@ -494,27 +246,23 @@
         .catch(() => undefined);
     })
     .catch(() => {
+      const updateCheck =
+        /** @type {HTMLButtonElement} */ (byId('settings-check-updates'));
+      const compatibilityCheck =
+        /** @type {HTMLButtonElement} */ (byId('client-compat-check'));
+      const launcherCheck = byId('loading-update-check');
+      const updateStatus = byId('settings-update-status');
       updateCheck.disabled = true;
-      compatCheck.disabled = true;
-      launcherUpdateCheck.hidden = true;
+      compatibilityCheck.disabled = true;
+      launcherCheck.hidden = true;
       updateStatus.textContent = 'Update checking is unavailable in this build.';
       updateStatus.hidden = false;
+      for (const id of ['settings-open-releases', 'client-compat-releases']) {
+        byId(id).addEventListener('click', () => {
+          void window.gwNative.app.openExternal('releases');
+        });
+      }
     });
-
-  launcherUpdateCheck.addEventListener('click', (event) => {
-    event.preventDefault();
-    requestUpdateCheck();
-  });
-  updateCheck.addEventListener('click', requestUpdateCheck);
-  updateReleases.addEventListener('click', () => {
-    void window.gwNative.app.openExternal('releases');
-  });
-  compatCheck.addEventListener('click', requestUpdateCheck);
-  compatReleases.addEventListener('click', () => {
-    void window.gwNative.app.openExternal('releases');
-  });
-
-  mountCompatibility();
 
   /**
    * Read the session once and render both surfaces. Neither the running app
@@ -527,21 +275,13 @@
     if (currentSession?.compatibility) return currentSession;
     const session = await window.gwNative.client.session();
     currentSession = session;
-    settingsCompatVersion.textContent = `App version ${session.appVersion}`;
-    compatVersion.textContent = `App version ${session.appVersion}.`;
-    if (!session.compatibility) {
-      settingsCompatStatus.hidden = true;
-      settingsCompatDetail.hidden = true;
-      return session;
-    }
-    const { compatibilityReport } = await import('./client-compatibility-notice.js');
-    const report = compatibilityReport(session.compatibility);
-    settingsCompatStatus.hidden = false;
-    settingsCompatDetail.hidden = false;
-    settingsCompatStatus.textContent = report.summary;
-    settingsCompatDetail.textContent = report.details.join(' ');
-    compatTitle.textContent = report.summary;
-    compatDetail.textContent = report.details.join(' ');
+    const { renderClientCompatibility } =
+      await import('./client-compatibility-notice.js');
+    renderClientCompatibility(
+      document,
+      session,
+      window.gwNative.init.toolboxSelection,
+    );
     return session;
   }
 
@@ -563,31 +303,23 @@
     }
     const compatibility = session.compatibility;
     if (!compatibility) return;
-    const { compatibilityReport } = await import('./client-compatibility-notice.js');
-    if (!compatibilityReport(compatibility).degraded) return;
+    const compatibilityNotice =
+      await import('./client-compatibility-notice.js');
+    if (!compatibilityNotice.compatibilityReport(
+      compatibility,
+      window.gwNative.init.toolboxSelection,
+    ).degraded) return;
     const settings = await loadSettings().catch(() => null);
     if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;
 
-    return new Promise((resolve) => {
-      compatNotice.hidden = false;
-      compatPlay.addEventListener(
-        'click',
-        () => {
-          compatPlay.disabled = true;
-          // Acknowledged for this build only: the next ArenaNet update warns
-          // again. A failed write must not keep the player out of the game.
-          void persistSettings({
-            compatibilityNoticeSeenFor: compatibility.clientSha256,
-          })
-            .catch(() => undefined)
-            .finally(() => {
-              compatNotice.hidden = true;
-              resolve();
-            });
-        },
-        { once: true },
-      );
-    });
+    return compatibilityNotice.showCompatibilityNotice(
+      document,
+      () => persistSettings({
+        // Acknowledged for this build only: the next ArenaNet update warns
+        // again.
+        compatibilityNoticeSeenFor: compatibility.clientSha256,
+      }),
+    );
   }
 
   function cacheComplete(cache = currentCache) {
@@ -618,6 +350,8 @@
    * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
    */
   function patchForControl(control) {
+    const toolPatch = toolSettings.patchFor(control);
+    if (toolPatch) return toolPatch;
     switch (control.name) {
       case 'renderScale': {
         const value = Number(control.value);
@@ -625,10 +359,6 @@
           ? { renderScale: value }
           : null;
       }
-      case 'nativeCursor':
-        return control instanceof globalThis.HTMLInputElement
-          ? { nativeCursor: control.checked }
-          : null;
       case 'touchMode': {
         const value = control.value;
         return value === 'dbltap' ||
@@ -656,7 +386,7 @@
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
     renderScale.value = String(settings.renderScale);
-    renderToolControls(settings);
+    toolSettings.render(settings);
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
@@ -875,7 +605,7 @@
     choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? false;
     // The gate runs after the settings load, so the tool boxes show the saved
     // answer rather than a default written a second time in the renderer.
-    if (currentSettings) renderToolControls(currentSettings);
+    if (currentSettings) toolSettings.render(currentSettings);
     dataChoiceFullSize.textContent = remaining > 0
       ? `Download ${size(remaining)} before starting.`
       : 'The full game is already downloaded.';
@@ -1061,12 +791,10 @@
         // choice is made before the renderer exists, so saving it restarts the
         // app. A player who declined the restart saved nothing, and the box has
         // already gone back to what is true; the sentence explains why.
-        if (control.name === 'nativeCursor') {
-          const applied = saved.nativeCursor === patch.nativeCursor;
-          if (applied) flashSaved();
-          feedback.textContent = applied
-            ? 'Saved. Restarting to apply the cursor…'
-            : 'The cursor was not changed.';
+        const toolResult = toolSettings.resultFor(control, patch, saved);
+        if (toolResult) {
+          if (toolResult.applied) flashSaved();
+          feedback.textContent = toolResult.text;
           return;
         }
         flashSaved();
@@ -1111,22 +839,13 @@
     try {
       const reset = await window.gwNative.settings.reset();
       if (!reset) return;
-      // The reset can move the cursor box in either direction — the cursor is
-      // on by default, so resetting restores it as often as it clears it — but
-      // this launch keeps the client module it already chose, so say so rather
-      // than let the box and the screen disagree.
-      const cursorChanged =
-        currentSettings !== null &&
-        currentSettings.nativeCursor !== reset.nativeCursor;
       currentSettings = reset;
       fillForm(reset);
       updateAction?.restore(reset.lastUpdateCheckAt);
       renderSettingsData();
       window.gwApplySettings?.(reset);
-      feedback.textContent = cursorChanged
-        ? 'Launcher settings reset. The download choice and the cursor apply '
-          + 'the next time you open this app.'
-        : 'Launcher settings reset. The download choice will appear next launch.';
+      feedback.textContent =
+        'Launcher settings reset. The download choice will appear next launch.';
     } catch {
       feedback.textContent = 'Launcher settings could not be reset.';
     }

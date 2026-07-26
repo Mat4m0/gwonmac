@@ -162,8 +162,7 @@ Everything lives under `~/Library/Application Support/Guild Wars`:
   `window-state.json`; missing monitors fall back to a centered window.
 - Saved login, encrypted in an owner-only `credentials.bin`, reachable only
   through the narrow credential IPC methods.
-- At most five 5 MB diagnostics files and three crash dumps. Dumps are never
-  exported.
+- At most five 5 MB diagnostics files.
 
 Browser cookies are cleared at startup and quit. Clearing game data never
 touches your login or settings; resetting launcher settings never deletes

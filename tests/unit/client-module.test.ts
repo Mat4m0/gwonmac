@@ -1,0 +1,444 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, describe, it } from "node:test";
+import {
+  inspectToolboxCache,
+  prepareClientModule,
+  type ClientCertification,
+} from "../../src/main/core/client-module.js";
+import {
+  rewriteTemplateSaveWasm,
+  TEMPLATE_SAVE_TRANSFORM_ABI,
+  type KnownTemplateSaveBuild,
+} from "../../src/main/core/template-save-compat.js";
+import type { KnownToolboxBuild } from "../../src/main/core/toolbox-builds.js";
+import {
+  TOOLBOX_HOOK_EXPORT,
+  TOOLBOX_MANIFEST_SECTION,
+} from "../../src/main/core/toolbox-transform.js";
+
+const scratchDirs: string[] = [];
+after(async () => {
+  for (const dir of scratchDirs) await rm(dir, { recursive: true, force: true });
+});
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function uleb(value: number): number[] {
+  const output: number[] = [];
+  do {
+    let byte = value & 0x7f;
+    value >>>= 7;
+    if (value) byte |= 0x80;
+    output.push(byte);
+  } while (value);
+  return output;
+}
+
+function section(id: number, body: number[]): number[] {
+  return [id, ...uleb(body.length), ...body];
+}
+
+function paddedCall(index: number): number[] {
+  const bytes = [0x10];
+  for (let position = 0; position < 5; position += 1) {
+    bytes.push((index & 0x7f) | (position === 4 ? 0 : 0x80));
+    index >>>= 7;
+  }
+  return bytes;
+}
+
+const STUB_BODY = [0x00, 0x41, 0x02, 0x0b];
+const CALL_OFFSET = 5;
+
+/**
+ * One real module that both production transforms accept: a template-save
+ * stub/caller plus the exported typed loop and empty table slot Toolbox needs.
+ */
+function officialFixture(): Uint8Array {
+  const types = section(1, [
+    3,
+    0x60, 2, 0x7f, 0x7f, 1, 0x7f,
+    0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
+    0x60, 1, 0x7f, 0,
+  ]);
+  const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
+  const functions = section(3, [3, 0, 0, 2]);
+  const table = section(4, [1, 0x70, 1, 1, 1]);
+  const globals = section(6, [0]);
+  const callerName = [...new TextEncoder().encode("caller")];
+  const loopName = [
+    ...new TextEncoder().encode("EmscriptenExeThreadMainLoop"),
+  ];
+  const exports = section(7, [
+    3,
+    ...uleb(callerName.length), ...callerName, 0, 2,
+    ...uleb(loopName.length), ...loopName, 0, 3,
+    3, 116, 98, 108, 1, 0,
+  ]);
+  const elements = section(9, [0]);
+  const caller = [
+    0,
+    0x20, 0,
+    0x20, 1,
+    ...paddedCall(1),
+    0x0b,
+  ];
+  const loop = [0, 0x0b];
+  const code = section(10, [
+    3,
+    ...uleb(STUB_BODY.length), ...STUB_BODY,
+    ...uleb(caller.length), ...caller,
+    ...uleb(loop.length), ...loop,
+  ]);
+  return Uint8Array.from([
+    0, 97, 115, 109, 1, 0, 0, 0,
+    ...types,
+    ...imports,
+    ...functions,
+    ...table,
+    ...globals,
+    ...exports,
+    ...elements,
+    ...code,
+  ]);
+}
+
+function certifyTemplate(input: Uint8Array): KnownTemplateSaveBuild {
+  const draft: KnownTemplateSaveBuild = {
+    sha256: sha256(input),
+    outputSha256: "0".repeat(64),
+    importCount: 1,
+    carrierImport: 0,
+    bridges: [
+      {
+        kind: "ensureDirectory",
+        stubFunction: 0,
+        stubBody: STUB_BODY,
+        callSites: [{ localFunction: 1, bodyOffset: CALL_OFFSET }],
+      },
+    ],
+  };
+  try {
+    rewriteTemplateSaveWasm(input, draft);
+  } catch (error) {
+    const found = /unexpected output ([0-9a-f]{64})/.exec(String(error));
+    if (found) return { ...draft, outputSha256: found[1]! };
+  }
+  return assert.fail("fixture did not produce a template-save output hash");
+}
+
+function toolboxBuild(inputSha256: string): KnownToolboxBuild {
+  return {
+    sha256: inputSha256,
+    programId: 1,
+    buildId: 1,
+    hookFunction: 3,
+    hookParams: ["i32"],
+    hookResults: [],
+    tableSlot: 0,
+    layout: {
+      contextRoot: 1,
+      agentArray: 2,
+      manualTargetAgentId: 3,
+      automaticTargetAgentId: 4,
+      gameContextSlot: 6,
+      characterContext: 4,
+      mapId: 5,
+      isExplorable: 6,
+      currentMapId: 7,
+      currentInstanceType: 8,
+      playerNumber: 9,
+      agentId: 10,
+      agentX: 11,
+      agentY: 12,
+      agentType: 13,
+      agentPlayerNumber: 14,
+      agentModelType: 15,
+      cursorActiveArt: 16,
+      cursorSoftwareModel: 17,
+      cursorShowCount: 18,
+      cursorColorBuffer: 19,
+      cursorArtHotspot: 0,
+      cursorArtTexture: 12,
+      cursorHandleKey: 8,
+      cursorHandleObject: 0,
+      cursorViewTexture: 8,
+      cursorTextureType: 12,
+      cursorTextureWidth: 20,
+      cursorTextureHeight: 24,
+    },
+  };
+}
+
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), "gw-client-module-"));
+  scratchDirs.push(root);
+  const official = officialFixture();
+  const officialWasmPath = join(root, "official.wasm");
+  await writeFile(officialWasmPath, official);
+  const templateSaveBuild = certifyTemplate(official);
+  const toolbox = toolboxBuild(templateSaveBuild.outputSha256);
+  return {
+    root,
+    official,
+    officialWasmPath,
+    officialSha256: sha256(official),
+    templateSaveBuild,
+    toolboxBuild: toolbox,
+    compatibilityCacheRoot: join(root, "compatibility"),
+    toolboxCacheRoot: join(root, "toolbox"),
+  };
+}
+
+type ModuleFixture = Awaited<ReturnType<typeof fixture>>;
+
+function options(
+  value: ModuleFixture,
+  certification: ClientCertification,
+  toolboxRequested: boolean,
+) {
+  return {
+    officialWasmPath: value.officialWasmPath,
+    officialSha256: value.officialSha256,
+    certification,
+    toolboxRequested,
+    compatibilityCacheRoot: value.compatibilityCacheRoot,
+    toolboxCacheRoot: value.toolboxCacheRoot,
+  };
+}
+
+async function seedCache(cacheRoot: string): Promise<void> {
+  const dir = join(cacheRoot, "stale", "0");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "Gw.jspi.wasm"), "stale");
+}
+
+async function assertMissing(directory: string): Promise<void> {
+  await assert.rejects(readdir(directory), { code: "ENOENT" });
+}
+
+describe("client module preparation", () => {
+  it("composes both certified transforms in order", async () => {
+    const value = await fixture();
+    const certification: ClientCertification = {
+      state: "certified",
+      templateSaveBuild: value.templateSaveBuild,
+      toolboxBuild: value.toolboxBuild,
+    };
+
+    const prepared = await prepareClientModule(
+      options(value, certification, true),
+    );
+
+    assert.equal(prepared.state, "certified");
+    assert.equal(prepared.toolboxBuild, value.toolboxBuild);
+    assert.equal(prepared.failure, null);
+    assert.notEqual(prepared.wasmPath, value.officialWasmPath);
+    assert.equal(
+      await inspectToolboxCache(
+        value.toolboxBuild,
+        value.toolboxCacheRoot,
+      ),
+      "valid",
+    );
+
+    const output = await readFile(prepared.wasmPath);
+    const module = new WebAssembly.Module(output);
+    assert.ok(
+      WebAssembly.Module.exports(module).some(
+        (entry) => entry.name === TOOLBOX_HOOK_EXPORT,
+      ),
+    );
+    assert.equal(
+      WebAssembly.Module.customSections(module, TOOLBOX_MANIFEST_SECTION).length,
+      1,
+    );
+
+    const seen: number[][] = [];
+    const instance = new WebAssembly.Instance(module, {
+      m: {
+        a: (...args: number[]) => {
+          seen.push(args);
+          return 0;
+        },
+      },
+    });
+    const caller = instance.exports.caller as (
+      path: number,
+      recursive: number,
+    ) => number;
+    assert.equal(caller(0x1234, 1), 0);
+    assert.deepEqual(seen, [[-70001, 0x1234, 0, 1]]);
+  });
+
+  it("prepares only templates for a template-only certification", async () => {
+    const value = await fixture();
+    await seedCache(value.toolboxCacheRoot);
+
+    const prepared = await prepareClientModule(
+      options(
+        value,
+        {
+          state: "template-only",
+          templateSaveBuild: value.templateSaveBuild,
+        },
+        true,
+      ),
+    );
+
+    assert.equal(prepared.state, "template-only");
+    assert.equal(prepared.toolboxBuild, null);
+    assert.equal(prepared.failure, null);
+    assert.equal(
+      sha256(await readFile(prepared.wasmPath)),
+      value.templateSaveBuild.outputSha256,
+    );
+    await assertMissing(value.toolboxCacheRoot);
+  });
+
+  it("serves official bytes and drops both caches when uncertified", async () => {
+    const value = await fixture();
+    await Promise.all([
+      seedCache(value.compatibilityCacheRoot),
+      seedCache(value.toolboxCacheRoot),
+    ]);
+
+    const prepared = await prepareClientModule(
+      options(value, { state: "uncertified" }, true),
+    );
+
+    assert.deepEqual(prepared, {
+      wasmPath: value.officialWasmPath,
+      state: "uncertified",
+      toolboxBuild: null,
+      failure: null,
+    });
+    await Promise.all([
+      assertMissing(value.compatibilityCacheRoot),
+      assertMissing(value.toolboxCacheRoot),
+    ]);
+  });
+
+  it("drops the Toolbox cache when the certified tool is disabled", async () => {
+    const value = await fixture();
+    await seedCache(value.toolboxCacheRoot);
+
+    const prepared = await prepareClientModule(
+      options(
+        value,
+        {
+          state: "certified",
+          templateSaveBuild: value.templateSaveBuild,
+          toolboxBuild: value.toolboxBuild,
+        },
+        false,
+      ),
+    );
+
+    assert.equal(prepared.state, "certified");
+    assert.equal(prepared.toolboxBuild, null);
+    assert.equal(prepared.failure, null);
+    assert.equal(
+      sha256(await readFile(prepared.wasmPath)),
+      value.templateSaveBuild.outputSha256,
+    );
+    await assertMissing(value.toolboxCacheRoot);
+  });
+
+  it("falls back at the failed stage without serving an invalid module", async () => {
+    const templateFailure = await fixture();
+    await seedCache(templateFailure.toolboxCacheRoot);
+    const brokenTemplate = {
+      ...templateFailure.templateSaveBuild,
+      outputSha256: "0".repeat(64),
+    };
+    const afterTemplateFailure = await prepareClientModule(
+      options(
+        templateFailure,
+        { state: "template-only", templateSaveBuild: brokenTemplate },
+        true,
+      ),
+    );
+    assert.equal(afterTemplateFailure.wasmPath, templateFailure.officialWasmPath);
+    assert.equal(afterTemplateFailure.state, "uncertified");
+    assert.equal(afterTemplateFailure.failure?.stage, "template-save");
+    await assertMissing(templateFailure.toolboxCacheRoot);
+
+    const toolboxFailure = await fixture();
+    const brokenToolbox = {
+      ...toolboxFailure.toolboxBuild,
+      hookFunction: 999,
+    };
+    const afterToolboxFailure = await prepareClientModule(
+      options(
+        toolboxFailure,
+        {
+          state: "certified",
+          templateSaveBuild: toolboxFailure.templateSaveBuild,
+          toolboxBuild: brokenToolbox,
+        },
+        true,
+      ),
+    );
+    assert.equal(afterToolboxFailure.state, "certified");
+    assert.equal(afterToolboxFailure.toolboxBuild, null);
+    assert.equal(afterToolboxFailure.failure?.stage, "toolbox");
+    assert.equal(
+      sha256(await readFile(afterToolboxFailure.wasmPath)),
+      toolboxFailure.templateSaveBuild.outputSha256,
+    );
+  });
+
+  it("rebuilds stale compatibility and Toolbox cache entries", async () => {
+    const value = await fixture();
+    const certification: ClientCertification = {
+      state: "certified",
+      templateSaveBuild: value.templateSaveBuild,
+      toolboxBuild: value.toolboxBuild,
+    };
+    const first = await prepareClientModule(
+      options(value, certification, true),
+    );
+    const compatibilityWasm = join(
+      value.compatibilityCacheRoot,
+      value.officialSha256,
+      String(TEMPLATE_SAVE_TRANSFORM_ABI),
+      "Gw.jspi.wasm",
+    );
+    await Promise.all([
+      writeFile(compatibilityWasm, "tampered"),
+      writeFile(first.wasmPath, "tampered"),
+    ]);
+
+    const rebuilt = await prepareClientModule(
+      options(value, certification, true),
+    );
+
+    assert.equal(rebuilt.failure, null);
+    assert.equal(
+      sha256(await readFile(compatibilityWasm)),
+      value.templateSaveBuild.outputSha256,
+    );
+    assert.equal(WebAssembly.validate(await readFile(rebuilt.wasmPath)), true);
+    assert.equal(
+      await inspectToolboxCache(
+        value.toolboxBuild,
+        value.toolboxCacheRoot,
+      ),
+      "valid",
+    );
+  });
+});

@@ -172,7 +172,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   assert.match(transform, /b0319704f3072d6948a66026a35af5eb/);
   assert.match(transform, /68c6e09cec0f6992058a44a5617ca9ea/);
   assert.match(transform, /WebAssembly\.validate\(output\)/);
-  assert.match(runtime, /prepareTemplateSaveClient/);
+  assert.match(runtime, /prepareClientModule/);
   // Deleted with P5.17: three assertions that the strings "unsupported input",
   // "is not the expected stub" and "call site signature mismatch" appeared in
   // the transform. All three are *triggered* in
@@ -296,42 +296,33 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
   );
 });
 
-// Moved out of tests/release/packaged-toolbox-surface.test.mjs with P5.17: that
-// file inspects the packaged app, and this reads src/main/client-runtime.ts. It
-// has no artifact form and no executed form yet, so it lives here rather than
-// being deleted, until client-runtime gets a behaviour test of its own.
-test("an uncertified client build still serves the template-save client", async () => {
-  const runtime = await readFile(
-    path.join(root, "src/main/client-runtime.ts"),
+test("the served module, not requested settings, decides whether Toolbox imports", async () => {
+  const harness = await readFile(
+    path.join(root, "src/renderer/harness.js"),
     "utf8",
   );
-  // Default-on must not cost template saving. The template-save client is
-  // prepared unconditionally and is what the Toolbox transform consumes, so an
-  // unknown build or a failed transform costs the cursor and nothing else. The
-  // untouched official module is the last resort of that one path.
-  //
-  // The rule itself — which of the three certification states may load the
-  // Toolbox — is executed in tests/unit/client-certification.test.ts. What is
-  // asserted here is that this composition asks it.
-  assert.match(
-    runtime,
-    /if \(this\.options\.toolboxEnabled && toolboxMayLoad\(state\)\)/u,
+  const initialized = harness.slice(
+    harness.indexOf("onRuntimeInitialized()"),
+    harness.indexOf("onAbort(reason)"),
   );
-  assert.equal(
-    runtime.match(/const templateSaveWasm = await this\.templateSaveWasm\(/gu)?.length,
-    1,
+  assert.ok(initialized.length > 0, "runtime initialization was not found");
+  assert.match(
+    initialized,
+    /Object\.values\(init\.toolboxSelection\)\.some\(Boolean\)/u,
   );
   assert.match(
-    runtime,
-    /prepareToolboxClient\(\s*templateSaveWasm \?\? officialWasm,/u,
+    initialized,
+    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'toolbox_manifest',\s*\)\.length === 1/u,
   );
-  assert.doesNotMatch(runtime, /prepareToolboxClient\(\s*officialWasm,/u);
-  // The one fallback: no derived module means ArenaNet's own, and it is the
-  // only way a launch ends without the template-save client.
-  assert.equal(
-    runtime.match(/wasmPath: templateSaveWasm \?\? officialWasm/gu)?.length,
-    1,
+  assert.match(
+    initialized,
+    /installToolbox\(\s*toolboxInstance,\s*toolboxModule,\s*init\.toolboxSelection,\s*init\.toolboxAutomation,/u,
   );
+  assert.ok(
+    initialized.indexOf("customSections") < initialized.indexOf("import('./toolbox.js')"),
+    "Toolbox was imported before the served module proved its manifest",
+  );
+  assert.doesNotMatch(initialized, /init\.nativeCursor/u);
 });
 
 test("a clean WASM process exit closes the host application", async () => {

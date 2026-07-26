@@ -113,10 +113,10 @@ function harness(argv: string[]) {
       handler({}, id, command);
     }
   };
-  const acknowledgements = (): unknown[] =>
+  const acknowledgements = (): unknown[][] =>
     sent
       .filter((entry) => entry.channel === "gw:renderer:commandDone")
-      .map((entry) => entry.args[0]);
+      .map((entry) => entry.args);
 
   return {
     api,
@@ -131,29 +131,43 @@ function harness(argv: string[]) {
 
 const INIT: RendererInit = {
   toolboxAutomation: true,
-  nativeCursor: false,
+  toolboxSelection: {
+    nativeCursor: false,
+    targetReadout: true,
+  },
   templateFsTrace: true,
 };
 const ARGV = ["electron", `${RENDERER_INIT_ARGUMENT}${JSON.stringify(INIT)}`];
+const plainInit = (value: RendererInit): RendererInit => ({
+  ...value,
+  toolboxSelection: { ...value.toolboxSelection },
+});
 
 test("launch configuration arrives as a preload argument, not as a URL", () => {
-  assert.deepEqual({ ...harness(ARGV).api.init }, INIT);
+  assert.deepEqual(plainInit(harness(ARGV).api.init), INIT);
 });
 
 test("a renderer with no readable init argument gets the production posture", () => {
   const missing: RendererInit = {
     toolboxAutomation: false,
-    nativeCursor: false,
+    toolboxSelection: {
+      nativeCursor: false,
+      targetReadout: false,
+    },
     templateFsTrace: false,
   };
-  assert.deepEqual({ ...harness([]).api.init }, missing);
+  assert.deepEqual(plainInit(harness([]).api.init), missing);
   assert.deepEqual(
-    { ...harness([`${RENDERER_INIT_ARGUMENT}{not json`]).api.init },
+    plainInit(harness([`${RENDERER_INIT_ARGUMENT}{not json`]).api.init),
     missing,
   );
   // A parameter that is present but not a boolean is not an opt-in.
   assert.deepEqual(
-    { ...harness([`${RENDERER_INIT_ARGUMENT}{"toolboxAutomation":"1"}`]).api.init },
+    plainInit(
+      harness([
+        `${RENDERER_INIT_ARGUMENT}{"toolboxAutomation":"1","toolboxSelection":{"nativeCursor":"yes","targetReadout":1}}`,
+      ]).api.init,
+    ),
     missing,
   );
 });
@@ -169,7 +183,11 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     "gw:settings",
     "gw:diagnostics-toggle",
   ]);
-  assert.deepEqual(fixture.acknowledgements(), [1, 2, 3]);
+  assert.deepEqual(fixture.acknowledgements(), [
+    [1, "completed"],
+    [2, "completed"],
+    [3, "completed"],
+  ]);
 });
 
 test("a capture level crosses as a number, not as interpolated source", async () => {
@@ -188,7 +206,11 @@ test("a capture level crosses as a number, not as interpolated source", async ()
     { name: "captureStopped" },
   ]);
   assert.equal(typeof fixture.capture[0]!.argument, "number");
-  assert.deepEqual(fixture.acknowledgements(), [7, 8, 9]);
+  assert.deepEqual(fixture.acknowledgements(), [
+    [7, "completed"],
+    [8, "completed"],
+    [9, "completed"],
+  ]);
 });
 
 test("the acknowledgement waits for the renderer's own promise", async () => {
@@ -202,20 +224,21 @@ test("the acknowledgement waits for the renderer's own promise", async () => {
 
   fixture.releaseFlush();
   await new Promise(setImmediate);
-  assert.deepEqual(fixture.acknowledgements(), [11]);
+  assert.deepEqual(fixture.acknowledgements(), [[11, "completed"]]);
 });
 
-test("a renderer that cannot act still acknowledges", async () => {
-  // Whatever the renderer does with a command, main must not be left waiting:
-  // a capture that hangs on a rejected flush would take the quit path with it.
+test("a renderer that cannot act reports failure", async () => {
   const fixture = harness(ARGV);
   fixture.window.gwDiagnostics.flush = () => Promise.reject(new Error("gone"));
   fixture.deliver(13, { type: "diagnostics.capture", action: "flush" });
   await new Promise(setImmediate);
-  assert.deepEqual(fixture.acknowledgements(), [13]);
+  assert.deepEqual(fixture.acknowledgements(), [[13, "failed"]]);
 
   Reflect.deleteProperty(fixture.window, "gwDiagnostics");
   fixture.deliver(14, { type: "diagnostics.capture", action: "stopped" });
   await new Promise(setImmediate);
-  assert.deepEqual(fixture.acknowledgements(), [13, 14]);
+  assert.deepEqual(fixture.acknowledgements(), [
+    [13, "failed"],
+    [14, "failed"],
+  ]);
 });

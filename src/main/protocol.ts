@@ -17,7 +17,12 @@ import { clientArtifactPath } from "./core/paths.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
 import { errorCode } from "../shared/errors.js";
-import { count, log, logEvent, span } from "./diagnostics.js";
+import {
+  count,
+  logEvent,
+  startProxyRequestSpan,
+  startSnapshotReadSpan,
+} from "./diagnostics.js";
 import { gamePaths, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
@@ -197,14 +202,18 @@ async function handleSnapshot(request: Request): Promise<Response> {
     request.headers.get("x-gw-priority") === "prefetch"
       ? "prefetch"
       : "demand";
-  const requestSpan = span("snapshot", "read", {
+  const requestSpan = startSnapshotReadSpan({
     offsetBytes: range.start,
-    bytes: length,
+    requestedBytes: length,
     priority,
   });
   try {
     const data = await store.readRange(range.start, length, priority);
-    requestSpan.end({ bytes: data.byteLength, status: 206 });
+    requestSpan.end({
+      returnedBytes: data.byteLength,
+      status: 206,
+      code: null,
+    });
     count("protocol.snapshotBytes", data.byteLength);
     return new Response(
       Buffer.from(data.buffer, data.byteOffset, data.byteLength),
@@ -221,7 +230,7 @@ async function handleSnapshot(request: Request): Promise<Response> {
     );
   } catch (err) {
     const code = errorCode(err);
-    requestSpan.end({ code, status: 503 }, "error");
+    requestSpan.end({ returnedBytes: 0, code, status: 503 });
     logEvent({
       k: "snapshot.rangeFailed",
       offsetBytes: range.start,
@@ -267,7 +276,7 @@ async function handleProxy(
   }
   const url = new URL(request.url);
   const upstream = `https://${host}/${rest}${url.search}`;
-  const requestSpan = span("proxy", "request", { route, method });
+  const requestSpan = startProxyRequestSpan({ route, method });
   const fwd = new Headers();
   for (const [k, v] of request.headers) {
     const key = k.toLowerCase();
@@ -293,12 +302,20 @@ async function handleProxy(
     if (method !== "GET") {
       const declared = Number(request.headers.get("content-length") ?? 0);
       if (Number.isFinite(declared) && declared > MAX_PROXY_BODY_BYTES) {
-        requestSpan.end({ status: 413, reason: "bodyTooLarge" }, "warn");
+        requestSpan.end({
+          status: 413,
+          reason: "bodyTooLarge",
+          code: null,
+        });
         return new Response("request body too large", { status: 413, headers: headers() });
       }
       const body = await request.arrayBuffer();
       if (body.byteLength > MAX_PROXY_BODY_BYTES) {
-        requestSpan.end({ status: 413, reason: "bodyTooLarge" }, "warn");
+        requestSpan.end({
+          status: 413,
+          reason: "bodyTooLarge",
+          code: null,
+        });
         return new Response("request body too large", { status: 413, headers: headers() });
       }
       init.body = Buffer.from(body);
@@ -311,8 +328,12 @@ async function handleProxy(
         try {
           safeLocation = rewriteProxyRedirect(route, loc, upstream);
         } catch {
-          log("proxy", "warn", "proxy.redirectBlocked", { route });
-          requestSpan.end({ status: 502, reason: "redirectEscape" }, "warn");
+          logEvent({ k: "proxy.redirectBlocked", route });
+          requestSpan.end({
+            status: 502,
+            reason: "redirectEscape",
+            code: null,
+          });
           return new Response("redirect blocked", { status: 502, headers: headers() });
         }
       }
@@ -329,11 +350,11 @@ async function handleProxy(
       }
       out.set(k, key === "location" && safeLocation ? safeLocation : v);
     }
-    requestSpan.end({ status: res.status });
+    requestSpan.end({ status: res.status, reason: null, code: null });
     return new Response(res.body, { status: res.status, headers: out });
   } catch (err) {
     const code = errorCode(err);
-    requestSpan.end({ status: 502, code }, "error");
+    requestSpan.end({ status: 502, reason: null, code });
     logEvent({ k: "proxy.requestFailed", route, code });
     return new Response("proxy error", { status: 502, headers: headers() });
   }

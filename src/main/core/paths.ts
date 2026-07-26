@@ -56,13 +56,14 @@ export function gamePaths(userData: string): GamePaths {
 }
 
 /**
- * Every directory this application publishes documents into through
- * `writeAtomic`, so one boot-time sweep can reach all of them.
+ * Stable document roots whose direct atomic-write temporaries need the generic
+ * boot-time sweep.
  *
- * Derived from the path table rather than listed separately: a new owned
- * directory added to `GamePaths` and forgotten here would leak abandoned temp
- * files forever, and nothing else collects them — `pruneUnreferencedChunks`
- * deliberately ignores non-hash filenames.
+ * Generation staging and hashed derived-WASM entries have stronger owner
+ * recovery: their publishers discard an incomplete stage/cache before reuse.
+ * They are intentionally not walked recursively here. A recursive sweep would
+ * need to distinguish those state machines and could delete a file while its
+ * owner is validating it.
  */
 export function documentDirectories(paths: GamePaths): string[] {
   return [

@@ -14,6 +14,10 @@ const FLAG_PLAYER_VALID: u32 = 1 << 1;
 const FLAG_TARGET_VALID: u32 = 1 << 2;
 const FLAG_LOADING: u32 = 1 << 3;
 
+const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
+const FEATURE_TARGET_READOUT: u32 = 1 << 1;
+const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT;
+
 const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
 const CURSOR_MAGIC: u32 = 0x4354_5747;
 const CURSOR_ABI_AND_SIZE: u32 = (CURSOR_BYTES << 16) | 1;
@@ -143,6 +147,7 @@ const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 static mut SNAPSHOT_PTR: u32 = 0;
 static mut LAYOUT: Layout = Layout::EMPTY;
 static mut INITIALIZED: bool = false;
+static mut FEATURES: u32 = 0;
 static mut TICK_COUNT: u32 = 0;
 static mut SEQUENCE: u32 = 0;
 static mut CURSOR_PTR: u32 = 0;
@@ -185,6 +190,14 @@ fn indexed(base: u32, index: u32, stride: u32) -> Option<u32> {
 
 fn contains(address: u32, bytes: u32) -> bool {
     checked_add(address, bytes).is_some_and(|end| end <= memory_bytes())
+}
+
+fn valid_region(enabled: bool, address: u32, bytes: u32, expected: u32) -> bool {
+    if enabled {
+        address != 0 && bytes == expected && address & 3 == 0 && contains(address, bytes)
+    } else {
+        address == 0 && bytes == 0
+    }
 }
 
 unsafe fn read_u32(address: u32) -> Option<u32> {
@@ -666,16 +679,25 @@ pub unsafe extern "C" fn toolbox_init(
     config_size: u32,
     cursor_ptr: u32,
     cursor_size: u32,
+    features: u32,
 ) -> u32 {
-    if snapshot_size != SNAPSHOT_BYTES
+    if features == 0
+        || features & !KNOWN_FEATURES != 0
         || config_size != CONFIG_BYTES
-        || cursor_size != CURSOR_BYTES
-        || snapshot_ptr & 3 != 0
         || config_ptr & 3 != 0
-        || cursor_ptr & 3 != 0
-        || !contains(snapshot_ptr, snapshot_size)
         || !contains(config_ptr, config_size)
-        || !contains(cursor_ptr, cursor_size)
+        || !valid_region(
+            features & FEATURE_TARGET_READOUT != 0,
+            snapshot_ptr,
+            snapshot_size,
+            SNAPSHOT_BYTES,
+        )
+        || !valid_region(
+            features & FEATURE_NATIVE_CURSOR != 0,
+            cursor_ptr,
+            cursor_size,
+            CURSOR_BYTES,
+        )
     {
         return 0;
     }
@@ -683,15 +705,20 @@ pub unsafe extern "C" fn toolbox_init(
         SNAPSHOT_PTR = snapshot_ptr;
         CURSOR_PTR = cursor_ptr;
         LAYOUT = read_volatile(config_ptr as *const Layout);
+        FEATURES = features;
         INITIALIZED = true;
         TICK_COUNT = 0;
         SEQUENCE = 0;
         CURSOR_SEQUENCE = 0;
         CURSOR_GENERATION = 0;
         CURSOR_PUBLISHED = CursorPublished::EMPTY;
-        publish(State::empty());
-        clear_cursor();
-        publish_cursor(CursorPublished::EMPTY, None);
+        if features & FEATURE_TARGET_READOUT != 0 {
+            publish(State::empty());
+        }
+        if features & FEATURE_NATIVE_CURSOR != 0 {
+            clear_cursor();
+            publish_cursor(CursorPublished::EMPTY, None);
+        }
     }
     1
 }
@@ -703,8 +730,12 @@ pub unsafe extern "C" fn toolbox_tick(context: u32) {
         if !INITIALIZED {
             return;
         }
-        TICK_COUNT = TICK_COUNT.wrapping_add(1);
-        publish(collect(LAYOUT));
-        tick_cursor(LAYOUT);
+        if FEATURES & FEATURE_TARGET_READOUT != 0 {
+            TICK_COUNT = TICK_COUNT.wrapping_add(1);
+            publish(collect(LAYOUT));
+        }
+        if FEATURES & FEATURE_NATIVE_CURSOR != 0 {
+            tick_cursor(LAYOUT);
+        }
     }
 }

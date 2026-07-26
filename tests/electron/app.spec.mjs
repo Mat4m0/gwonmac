@@ -1,4 +1,5 @@
 import { test, expect, _electron as electron } from "@playwright/test";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -21,6 +22,128 @@ const electronBin = path.join(
 
 test.describe("Electron application", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
+
+  test("a second instance exits and reveals the primary window", async () => {
+    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
+    const env = {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    };
+    delete env.ELECTRON_RUN_AS_NODE;
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-single-instance-e2e-"));
+    const app = await electron.launch({
+      cwd: root,
+      args: [".", `--user-data-dir=${userData}`],
+      env,
+      executablePath: electronBin,
+    });
+    try {
+      await app.firstWindow({ timeout: 30_000 });
+      await app.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        win?.minimize();
+        win?.hide();
+      });
+
+      const second = spawn(
+        electronBin,
+        [".", `--user-data-dir=${userData}`],
+        { cwd: root, env, stdio: "ignore" },
+      );
+      const exit = await new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("second instance did not exit")),
+          10_000,
+        );
+        second.once("error", reject);
+        second.once("exit", (code, signal) => {
+          clearTimeout(timer);
+          resolve({ code, signal });
+        });
+      });
+
+      expect(exit).toEqual({ code: 0, signal: null });
+      await expect
+        .poll(() =>
+          app.evaluate(({ BrowserWindow }) => {
+            const windows = BrowserWindow.getAllWindows();
+            return {
+              count: windows.length,
+              minimized: windows[0]?.isMinimized() ?? true,
+              visible: windows[0]?.isVisible() ?? false,
+            };
+          }),
+        )
+        .toEqual({ count: 1, minimized: false, visible: true });
+    } finally {
+      await app.close().catch(() => undefined);
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
+  test("a startup failure exits nonzero and releases the instance lock", async () => {
+    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
+    const baseEnv = {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    };
+    delete baseEnv.ELECTRON_RUN_AS_NODE;
+    const failed = spawn(
+      electronBin,
+      [".", `--user-data-dir=${userData}`],
+      {
+        cwd: root,
+        env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
+        stdio: "ignore",
+      },
+    );
+    try {
+      const exit = await new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("failed startup did not exit")),
+          10_000,
+        );
+        failed.once("error", reject);
+        failed.once("exit", (code, signal) => {
+          clearTimeout(timer);
+          resolve({ code, signal });
+        });
+      });
+      expect(exit).toEqual({ code: 1, signal: null });
+
+      const diagnosticsDir = path.join(userData, "diagnostics");
+      const events = (
+        await Promise.all(
+          (await readdir(diagnosticsDir))
+            .filter((name) => name.endsWith(".jsonl"))
+            .map((name) => readFile(path.join(diagnosticsDir, name), "utf8")),
+        )
+      ).join("\n");
+      expect(events).toContain('"name":"app.startupFailed"');
+      expect(events).toContain('"name":"quit.cleanupStarted"');
+      expect(events).toContain('"name":"quit.cleanupCompleted"');
+
+      // A successful launch with the same profile proves the failed primary did
+      // not remain headless while holding Electron's singleton lock.
+      const restarted = await electron.launch({
+        cwd: root,
+        args: [".", `--user-data-dir=${userData}`],
+        env: baseEnv,
+        executablePath: electronBin,
+      });
+      try {
+        await restarted.firstWindow({ timeout: 30_000 });
+      } finally {
+        await restarted.close().catch(() => undefined);
+      }
+    } finally {
+      failed.kill();
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
 
   test("red X closes sockets and exits cleanly", async () => {
     const server = net.createServer();

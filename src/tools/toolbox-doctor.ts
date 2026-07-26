@@ -8,9 +8,9 @@ import {
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
 import { certifyClientBuild } from "../main/client-certification.js";
+import { inspectToolboxCache } from "../main/core/client-module.js";
 import { parseSettings } from "../main/core/settings.js";
 import { DEFAULT_SETTINGS } from "../shared/contracts.js";
-import { inspectToolboxCache } from "../main/core/toolbox-client.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -26,6 +26,12 @@ export interface ToolboxDoctorReport {
    * automation run forces it on through GW_TOOLBOX_AUTOMATION and ignores this.
    */
   nativeCursor: boolean;
+  /**
+   * The target-readout scenario exercises the player-facing surface, not only
+   * automation's forced core observer, so it refuses a profile where this
+   * player choice is off.
+   */
+  targetReadout: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -68,12 +74,21 @@ async function isFile(filename: string): Promise<boolean> {
  * backup; a doctor must not change the profile it is inspecting, and both of
  * its failure paths end at the defaults anyway.
  */
-async function readNativeCursorSetting(profile: string): Promise<boolean> {
+async function readToolboxSettings(
+  profile: string,
+): Promise<Pick<ToolboxDoctorReport, "nativeCursor" | "targetReadout">> {
   try {
     const text = await readFile(path.join(profile, "settings.json"), "utf8");
-    return parseSettings(JSON.parse(text)).nativeCursor;
+    const settings = parseSettings(JSON.parse(text));
+    return {
+      nativeCursor: settings.nativeCursor,
+      targetReadout: settings.targetReadout,
+    };
   } catch {
-    return DEFAULT_SETTINGS.nativeCursor;
+    return {
+      nativeCursor: DEFAULT_SETTINGS.nativeCursor,
+      targetReadout: DEFAULT_SETTINGS.targetReadout,
+    };
   }
 }
 
@@ -127,7 +142,7 @@ export async function inspectToolboxWorkspace(
     || (await isFile(path.join(profile, "credentials.bin")))
     || missing.length < required.length;
   const credentials = await isFile(path.join(profile, "credentials.bin"));
-  const nativeCursor = await readNativeCursorSetting(profile);
+  const { nativeCursor, targetReadout } = await readToolboxSettings(profile);
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: ToolboxDoctorReport["artifacts"]["integrity"] =
     "invalid";
@@ -158,7 +173,6 @@ export async function inspectToolboxWorkspace(
     if (certification.state === "certified") {
       build = certification.toolboxBuild;
       transformedCache = await inspectToolboxCache(
-        certification.templateSaveOutputSha256,
         build,
         path.join(game, "toolbox"),
       );
@@ -173,6 +187,7 @@ export async function inspectToolboxWorkspace(
     profile: profileReady ? "ready" : "missing",
     credentials: credentials ? "saved" : "missing",
     nativeCursor,
+    targetReadout,
     artifacts: {
       ready: artifactsReady,
       missing,

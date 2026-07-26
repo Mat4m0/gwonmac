@@ -19,6 +19,8 @@ describe("settings", () => {
       // On since P3.34: the game's own cursor is what a Guild Wars player
       // expects to see, so the setting is how it is switched off.
       nativeCursor: true,
+      // The first optional read-only feature stays opt-in.
+      targetReadout: false,
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
@@ -51,6 +53,7 @@ describe("settings", () => {
     assert.deepEqual(got, {
       renderScale: 1,
       nativeCursor: true,
+      targetReadout: false,
       touchMode: "off",
       showDiagnostics: true,
       dataStrategy: "full",
@@ -74,6 +77,7 @@ describe("settings", () => {
   it("rejects unknown types", () => {
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
     assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
+    assert.throws(() => parseSettings({ targetReadout: 1 }), AppError);
     assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
@@ -123,6 +127,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ nativeCursor: true }), {
       nativeCursor: true,
     });
+    assert.deepEqual(parseSettingsPatch({ targetReadout: true }), {
+      targetReadout: true,
+    });
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
       lastUpdateCheckAt: 1_000,
     });
@@ -167,6 +174,7 @@ describe("settings", () => {
       "nativeCursor",
       "renderScale",
       "showDiagnostics",
+      "targetReadout",
       "touchMode",
     ]);
     assert.equal(disk.formatVersion, 1);
@@ -195,6 +203,7 @@ describe("settings", () => {
     assert.deepEqual(loaded, {
       renderScale: 1.5,
       nativeCursor: true,
+      targetReadout: false,
       touchMode: "translate",
       showDiagnostics: true,
       dataStrategy: "full",

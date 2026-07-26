@@ -13,6 +13,7 @@ import type {
   AppSettingsPatch,
   DownloadProgress,
   RendererInit,
+  ToolboxSelection,
 } from "../shared/contracts.js";
 import { EXTERNAL_URLS, RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
@@ -26,7 +27,7 @@ import {
   type WindowBounds,
   type WindowState,
 } from "./core/window-state.js";
-import { log, logEvent } from "./diagnostics.js";
+import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { sendRendererCommand } from "./renderer-commands.js";
 import { isQuitting } from "./lifecycle.js";
@@ -45,8 +46,8 @@ const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface WindowHost {
   sockets: SocketManager;
-  /** Launch-time opt-in; the renderer only loads the Toolbox when it is set. */
-  nativeCursor: boolean;
+  /** Launch-time tool choices; the served module decides whether they can run. */
+  toolboxSelection: ToolboxSelection;
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
@@ -73,11 +74,11 @@ export function updateLongRunningTaskFeedback(
   const feedback = longRunningTaskFeedback(value);
   if (feedback.preventAppSuspension && downloadPowerBlockerId === null) {
     downloadPowerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
-    log("app", "info", "download.appSuspensionPrevented");
+    logEvent({ k: "download.appSuspensionPrevented" });
   } else if (!feedback.preventAppSuspension && downloadPowerBlockerId !== null) {
     powerSaveBlocker.stop(downloadPowerBlockerId);
     downloadPowerBlockerId = null;
-    log("app", "info", "download.appSuspensionRestored");
+    logEvent({ k: "download.appSuspensionRestored" });
   }
 
   const preventingAppSuspension =
@@ -98,14 +99,14 @@ function primaryWorkArea(): WindowBounds {
 
 export async function prepareWindowState(): Promise<void> {
   const loaded = await loadWindowState(gamePaths().windowState, () => {
-    log("app", "warn", "window.stateCorruptCleared");
+    logEvent({ k: "window.stateCorruptCleared" });
   });
   restoredWindowState = loaded
     ? fitWindowStateToDisplays(loaded, workAreas(), primaryWorkArea())
     : null;
   lastNormalBounds = restoredWindowState?.bounds ?? null;
   if (restoredWindowState) {
-    log("app", "info", "window.stateRestored", {
+    logEvent({ k: "window.stateRestored",
       mode: restoredWindowState.mode,
       width: restoredWindowState.bounds.width,
       height: restoredWindowState.bounds.height,
@@ -150,7 +151,7 @@ function scheduleWindowStateSave(win: BrowserWindow): void {
   windowStateTimer = setTimeout(() => {
     windowStateTimer = null;
     void persistWindowState(win).catch(() => {
-      log("app", "error", "window.stateSaveFailed");
+      logEvent({ k: "window.stateSaveFailed" });
     });
   }, 300);
 }
@@ -202,7 +203,7 @@ export async function resetWindowState(win = mainWindow): Promise<void> {
   );
   windowStateWrite = write.catch(() => undefined);
   await write;
-  log("app", "info", "window.stateReset", {
+  logEvent({ k: "window.stateReset",
     width: reset.bounds.width,
     height: reset.bounds.height,
   });
@@ -222,11 +223,11 @@ export const RENDERER_URL = "gw://app/";
  * `RENDERER_URL` keeps the same `additionalArguments`, so the Toolbox survives.
  */
 export function rendererInitArgument(options: {
-  nativeCursor: boolean;
+  toolboxSelection: ToolboxSelection;
 }): string {
   const init: RendererInit = {
     toolboxAutomation: TOOLBOX_AUTOMATION_ENABLED,
-    nativeCursor: options.nativeCursor,
+    toolboxSelection: options.toolboxSelection,
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
   };
@@ -282,7 +283,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   win.on("resize", rememberNormalBounds);
   const persistMode = (): void => {
     void persistWindowState(win).catch(() => {
-      log("app", "error", "window.stateSaveFailed");
+      logEvent({ k: "window.stateSaveFailed" });
     });
   };
   win.on("maximize", persistMode);
@@ -296,34 +297,34 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   // without these a stall of that kind is indistinguishable from a real one.
   // Main stays responsive while the renderer is frozen, so these timestamps
   // are the reliable ones to line up against frames.bin.
-  win.on("focus", () => log("app", "info", "window.focused"));
-  win.on("blur", () => log("app", "info", "window.blurred"));
-  win.on("minimize", () => log("app", "info", "window.minimized"));
-  win.on("restore", () => log("app", "info", "window.restored"));
-  win.on("hide", () => log("app", "info", "window.hidden"));
-  win.on("show", () => log("app", "info", "window.shown"));
+  win.on("focus", () => logEvent({ k: "window.focused" }));
+  win.on("blur", () => logEvent({ k: "window.blurred" }));
+  win.on("minimize", () => logEvent({ k: "window.minimized" }));
+  win.on("restore", () => logEvent({ k: "window.restored" }));
+  win.on("hide", () => logEvent({ k: "window.hidden" }));
+  win.on("show", () => logEvent({ k: "window.shown" }));
   // Only the settled events. Electron emits `will-resize` and `will-move` once
   // per step of a live drag, which would flood the bounded event ring and
   // evict the very evidence these listeners exist to keep.
-  win.on("resized", () => log("app", "info", "window.resized"));
-  win.on("moved", () => log("app", "info", "window.moved"));
+  win.on("resized", () => logEvent({ k: "window.resized" }));
+  win.on("moved", () => logEvent({ k: "window.moved" }));
 
   win.webContents.setWindowOpenHandler(() => {
-    log("app", "warn", "security.windowOpenBlocked");
+    logEvent({ k: "security.windowOpenBlocked" });
     return { action: "deny" };
   });
 
   win.webContents.on("will-navigate", (event, url) => {
     if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
-      log("app", "warn", "security.navigationBlocked", { url });
+      logEvent({ k: "security.navigationBlocked" });
     }
   });
 
   win.webContents.on("will-redirect", (event, url) => {
     if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
-      log("app", "warn", "security.redirectBlocked", { url });
+      logEvent({ k: "security.redirectBlocked" });
     }
   });
 
@@ -347,17 +348,19 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   );
   win.webContents.on("will-attach-webview", (event) => {
     event.preventDefault();
-    log("app", "warn", "security.webviewBlocked");
+    logEvent({ k: "security.webviewBlocked" });
   });
 
   win.webContents.on("destroyed", () => {
-    log("app", "info", "webContents.destroyed");
+    logEvent({ k: "webContents.destroyed" });
     host.sockets.closeAll(rendererId);
   });
 
   win.webContents.on("render-process-gone", (_event, details) => {
-    log("renderer", isQuitting() ? "info" : "error", "renderer.processGone", {
-      reason: details.reason,
+    logEvent({
+      k: isQuitting()
+        ? "renderer.processExitedDuringQuit"
+        : "renderer.processGone",
       exitCode: details.exitCode,
     });
     host.sockets.closeAll(rendererId);
@@ -368,7 +371,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
       !win.isDestroyed()
     ) {
       rendererRecoveryUsed = true;
-      log("renderer", "warn", "renderer.recoveryScheduled");
+      logEvent({ k: "renderer.recoveryScheduled" });
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
         void host
@@ -383,7 +386,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
             if (isQuitting() || win.isDestroyed()) return;
             createMainWindow(host);
             win.destroy();
-            log("renderer", "info", "renderer.recovered");
+            logEvent({ k: "renderer.recovered" });
           });
       }, 500);
     } else if (details.reason !== "clean-exit") {
@@ -397,7 +400,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   win.on("close", (event) => {
     if (isQuitting()) return;
     event.preventDefault();
-    log("app", "info", "window.closeRequested");
+    logEvent({ k: "window.closeRequested" });
     app.quit();
   });
 
@@ -421,7 +424,7 @@ export async function exportProblemReport(
   try {
     const saved = await exportDiagnostics();
     if (!saved) return;
-    log("app", "info", "diagnostics.exported");
+    logEvent({ k: "diagnostics.exported" });
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
       buttons: ["Open Bug Report", "Reveal in Finder", "Done"],
@@ -521,7 +524,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           click: async () => {
             await resetGameInput(win);
             void resetWindowState(win).catch(() => {
-              log("app", "error", "window.stateResetFailed");
+              logEvent({ k: "window.stateResetFailed" });
             });
           },
         },

@@ -6,14 +6,63 @@ import {
   encodedChunkLimit,
 } from "../../src/main/core/chunk-format.ts";
 import {
+  createBoundedPatchFetch,
   fetchPatchBytes,
   readBoundedResponse,
 } from "../../src/main/core/patch-transport.ts";
+import { PATCH_REQUEST_HEADERS } from "../../src/main/core/access-key.ts";
 import { AppError, HttpStatusError } from "../../src/shared/errors.ts";
 
 const headers = { "X-Test": "1" };
 
 describe("patch transport", () => {
+  it("owns patch identity, redirect policy, caller abort, and response bounds", async () => {
+    const controller = new AbortController();
+    const reason = new AppError("download_stopped", "controlled request abort");
+    let observedUrl = "";
+    let observedRequest: RequestInit | null = null;
+    const fetch = createBoundedPatchFetch(async (url, request) => {
+      observedUrl = url;
+      observedRequest = request;
+      return new Response(new Uint8Array([1, 2, 3, 4]));
+    }, 30_000);
+
+    assert.deepEqual(
+      await fetch("https://fixture.invalid/chunk", {
+        headers: PATCH_REQUEST_HEADERS,
+        maxBytes: 4,
+        signal: controller.signal,
+      }),
+      { status: 200, body: new Uint8Array([1, 2, 3, 4]) },
+    );
+    assert.equal(observedUrl, "https://fixture.invalid/chunk");
+    assert.equal(observedRequest?.redirect, "manual");
+    assert.equal(observedRequest?.method, "GET");
+    assert.deepEqual(observedRequest?.headers, PATCH_REQUEST_HEADERS);
+    assert.equal(
+      PATCH_REQUEST_HEADERS["User-Agent"],
+      "gwonmac (Guild Wars interoperability client)",
+    );
+    assert.equal(observedRequest?.signal?.aborted, false);
+    controller.abort(reason);
+    assert.equal(observedRequest?.signal?.aborted, true);
+    assert.equal(observedRequest?.signal?.reason, reason);
+
+    const oversized = createBoundedPatchFetch(
+      async () => new Response(new Uint8Array(5)),
+      30_000,
+    );
+    await assert.rejects(
+      () =>
+        oversized("https://fixture.invalid/chunk", {
+          headers: PATCH_REQUEST_HEADERS,
+          maxBytes: 4,
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "response_too_large",
+    );
+  });
+
   it("accepts only HTTP 200 and never follows redirects through retries", async () => {
     let calls = 0;
     await assert.rejects(
@@ -47,6 +96,33 @@ describe("patch transport", () => {
       (error: unknown) =>
         error instanceof AppError && error.code === "response_too_large",
     );
+  });
+
+  it("interrupts retry backoff without starting another request", async () => {
+    const controller = new AbortController();
+    const reason = new AppError(
+      "download_stopped",
+      "controlled retry interruption",
+    );
+    let calls = 0;
+    const pending = fetchPatchBytes({
+      fetch: async (_url, init) => {
+        calls += 1;
+        assert.equal(init?.signal, controller.signal);
+        return { status: 500, body: new Uint8Array() };
+      },
+      url: "https://fixture.invalid/chunk",
+      headers,
+      maxBytes: 4,
+      signal: controller.signal,
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const began = performance.now();
+    controller.abort(reason);
+
+    await assert.rejects(pending, (error: unknown) => error === reason);
+    assert.ok(performance.now() - began < 250);
+    assert.equal(calls, 1);
   });
 
   it("bounds streamed bodies with and without content-length", async () => {

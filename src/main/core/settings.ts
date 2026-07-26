@@ -2,9 +2,11 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
+  TOOLBOX_TOOLS,
   type AppSettings,
   type AppSettingsPatch,
 } from "../../shared/contracts.js";
+import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
@@ -54,8 +56,10 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
-  if ("nativeCursor" in src) {
-    out.nativeCursor = asBool(src.nativeCursor, "nativeCursor");
+  for (const tool of TOOLBOX_TOOLS) {
+    if (tool in src) {
+      out[tool] = asBool(src[tool], tool);
+    }
   }
   if ("touchMode" in src) {
     if (!TOUCH_MODES.has(src.touchMode as AppSettings["touchMode"])) {
@@ -97,7 +101,7 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   if ("compatibilityNoticeSeenFor" in src) {
     const seen = src.compatibilityNoticeSeenFor;
-    if (seen !== null && !(typeof seen === "string" && /^[a-f0-9]{64}$/.test(seen))) {
+    if (seen !== null && !isDigest(seen)) {
       throw new AppError(
         "bad_settings",
         "settings.compatibilityNoticeSeenFor must be null or a client sha256",

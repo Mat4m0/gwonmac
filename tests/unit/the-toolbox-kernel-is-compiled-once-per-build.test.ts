@@ -1,13 +1,6 @@
-// P4.2 — `pnpm package` compiled src/toolbox-kernel/lib.rs twice, because
-// scripts/copy-renderer.mjs shelled out to rustc and was invoked from both
-// scripts/build.mjs and forge.config.ts's generateAssets hook.
-//
-// Two facts keep it at once. The first is executed here: copy-renderer.mjs runs
-// to completion over a fixture checkout with no rustc reachable at all, and
-// emits no kernel. The second is the step list scripts/build.mjs actually
-// spawns, which holds exactly one rustc invocation. (The other former caller is
-// covered by packaging-refuses-a-missing-or-stale-build.test.ts, which executes
-// the hook and shows it produces nothing.)
+// P4.2 — scripts/build.mjs is the single build producer. copy-renderer.mjs runs
+// to completion without rustc and emits no kernel; the canonical build step
+// list holds exactly one rustc invocation.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {

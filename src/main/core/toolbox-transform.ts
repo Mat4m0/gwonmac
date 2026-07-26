@@ -4,7 +4,6 @@ import {
   toolboxLayoutWords,
   type KnownToolboxBuild,
 } from "./toolbox-builds.js";
-import { applyTemplateSaveCompatibility } from "./template-save-compat.js";
 import {
   concat,
   countFunctionImports,
@@ -253,8 +252,7 @@ export function transformToolboxWasm(
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
 
-  const compatibleInput = applyTemplateSaveCompatibility(input);
-  const sections = splitSections(compatibleInput);
+  const sections = splitSections(input);
   const types = parseTypes(sectionById(sections, 1));
   const importCount = countFunctionImports(sectionById(sections, 2));
   const functionTypes = parseIndexVector(sectionById(sections, 3));

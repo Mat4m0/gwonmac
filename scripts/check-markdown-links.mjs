@@ -6,8 +6,20 @@
 // without maintaining a second ignore list.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -19,14 +31,20 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * when a deletion has just broken links elsewhere.
  */
 export function listMarkdownFiles(root = repoRoot) {
-  const out = execFileSync(
-    "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
-    { cwd: root, encoding: "utf8" },
-  );
-  return [...new Set(out.split("\0").filter(Boolean))]
+  return listRepositoryFiles(root)
+    .filter((file) => file.endsWith(".md"))
     .filter((file) => existsSync(join(root, file)))
     .sort();
+}
+
+/** Every path that will exist after this working tree is committed. */
+export function listRepositoryFiles(root = repoRoot) {
+  const out = execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+  );
+  return [...new Set(out.split("\0").filter(Boolean))].sort();
 }
 
 /** True for targets we do not resolve on disk: URLs, mailto:, bare anchors. */
@@ -108,6 +126,20 @@ function decode(target) {
  */
 export function findBrokenLinks(root = repoRoot, files = listMarkdownFiles(root)) {
   const broken = [];
+  let repositoryFiles = null;
+  try {
+    repositoryFiles = new Set(listRepositoryFiles(root));
+  } catch {
+    // Parser-focused fixtures may not be Git repositories. The production
+    // entry point always is; those fixtures still get containment/existence
+    // checks, while repository-membership behavior has Git-backed tests below.
+  }
+  const absoluteRoot = resolve(root);
+  const canonicalRoot = realpathSync(absoluteRoot);
+  const containedBy = (owner, candidate) => {
+    const path = relative(owner, candidate);
+    return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`));
+  };
   for (const file of files) {
     const source = readFileSync(join(root, file), "utf8");
     for (const { line, target } of extractLocalTargets(source)) {
@@ -116,7 +148,21 @@ export function findBrokenLinks(root = repoRoot, files = listMarkdownFiles(root)
       const resolved = decoded.startsWith("/")
         ? join(root, decoded)
         : resolve(root, dirname(file), decoded);
-      if (!existsSync(resolved)) broken.push({ file, line, target });
+      let valid = containedBy(absoluteRoot, resolved) && existsSync(resolved);
+      if (valid) {
+        const canonicalTarget = realpathSync(resolved);
+        valid = containedBy(canonicalRoot, canonicalTarget);
+      }
+      if (valid && repositoryFiles) {
+        const repositoryPath = relative(root, resolved).split(sep).join("/");
+        const targetStat = statSync(resolved);
+        valid = targetStat.isDirectory()
+          ? repositoryPath === ""
+            || [...repositoryFiles].some((known) =>
+              known.startsWith(`${repositoryPath}/`))
+          : repositoryFiles.has(repositoryPath);
+      }
+      if (!valid) broken.push({ file, line, target });
     }
   }
   return broken;

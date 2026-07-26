@@ -5,10 +5,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AppError } from "../../src/shared/errors.ts";
 import {
-  asDigest,
+  asAppVersion,
   diagnosticEventRecord,
-  isDigest,
 } from "../../src/main/diagnostics/schema.ts";
+import {
+  asDigest,
+  isDigest,
+} from "../../src/shared/digest.ts";
 
 const FINGERPRINT = "a".repeat(64);
 
@@ -52,11 +55,24 @@ describe("diagnosticEventRecord", () => {
       }).fields,
       { code: "fetch_failed", fallbackCode: "bad_manifest" },
     );
+    assert.deepEqual(
+      diagnosticEventRecord({
+        k: "update.clientUpdate.end",
+        status: "cancelled",
+        code: null,
+        fingerprint: null,
+      }).fields,
+      {
+        status: "cancelled",
+        code: null,
+        fingerprint: null,
+      },
+    );
   });
 
   it("records a phase as a field rather than as part of the event name", () => {
-    // A templated name (`browserCookies.clearFailed.${phase}`) is an open
-    // string by another route, and the recorder would have to normalise it.
+    // A templated name (`browserCookies.clearFailed.${phase}`) would bypass
+    // the schema's closed event-name union.
     const startup = diagnosticEventRecord({
       k: "browserCookies.clearFailed",
       phase: "startup",
@@ -187,5 +203,30 @@ describe("asDigest", () => {
     assert.equal(isDigest("/Users/x/secret.txt"), false);
     assert.equal(isDigest(null), false);
     assert.equal(isDigest(64), false);
+  });
+});
+
+describe("asAppVersion", () => {
+  it("accepts the CalVer surface and its release stages", () => {
+    for (const version of [
+      "2026.7.0",
+      "2026.7.1",
+      "2026.8.0-alpha.1",
+      "2026.8.0-beta.2",
+      "2026.8.0-rc.3",
+    ]) {
+      assert.equal(asAppVersion(version), version);
+    }
+  });
+
+  it("rejects free text and invalid leading-zero variants", () => {
+    for (const version of [
+      "2026.07.01",
+      "0.0.1",
+      "latest",
+      "/Users/x/secret.txt",
+    ]) {
+      assert.throws(() => asAppVersion(version), AppError);
+    }
   });
 });

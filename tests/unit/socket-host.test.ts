@@ -8,6 +8,7 @@ import {
   SocketManager,
   type ManagedSocket,
   type SocketFactory,
+  type SocketMetrics,
 } from "../../src/main/core/sockets.js";
 import type { SocketEvent } from "../../src/shared/contracts.js";
 
@@ -54,8 +55,12 @@ function fakeNative() {
 describe("renderer socket host", () => {
   it("uses one subscription and demultiplexes sockets by native ID", async () => {
     const native = fakeNative();
+    let socketOpened = 0;
     const host = createSocketHost({
       native: native.api,
+      socketOpened: () => {
+        socketOpened += 1;
+      },
       log: () => undefined,
     });
     const first = host.socket.connect("one");
@@ -72,6 +77,7 @@ describe("renderer socket host", () => {
     native.emit({ type: "open", socketId: 11 });
     native.emit({ type: "data", socketId: 11, data: new Uint8Array([7]) });
     assert.deepEqual(opened, ["two", "one"]);
+    assert.equal(socketOpened, 2);
     assert.deepEqual(messages, [7]);
     assert.equal(native.counts().subscriptions, 1);
     host.dispose();
@@ -120,6 +126,43 @@ describe("renderer socket host", () => {
     assert.deepEqual([...native.sends[0]!.data], [2, 3, 4, 5]);
     assert.equal(native.sends[0]!.data.buffer.byteLength, 4);
   });
+
+  it("waits for close after an error instead of retaining the close forever", async () => {
+    const native = fakeNative();
+    const host = createSocketHost({
+      native: native.api,
+      log: () => undefined,
+    });
+    const first = host.socket.connect("one");
+    let firstClosed = 0;
+    first.onclose = () => {
+      firstClosed += 1;
+    };
+    native.connects[0]!(41);
+    await turn();
+    native.emit({ type: "error", socketId: 41, code: "reset" });
+    assert.equal(firstClosed, 0);
+    native.emit({ type: "close", socketId: 41, reason: "error" });
+    assert.equal(firstClosed, 1);
+
+    // Native IDs are monotonic in production. Reusing one here makes a leaked
+    // early close observable: it would close this second socket immediately.
+    const second = host.socket.connect("two");
+    let secondOpened = 0;
+    let secondClosed = 0;
+    second.onopen = () => {
+      secondOpened += 1;
+    };
+    second.onclose = () => {
+      secondClosed += 1;
+    };
+    native.connects[1]!(41);
+    await turn();
+    native.emit({ type: "open", socketId: 41 });
+    assert.equal(secondOpened, 1);
+    assert.equal(secondClosed, 0);
+    host.dispose();
+  });
 });
 
 /**
@@ -131,6 +174,7 @@ describe("renderer socket host", () => {
 class FakeSocket implements ManagedSocket {
   readonly writes: Array<(error?: Error | null) => void> = [];
   destroyed = false;
+  private nextWriteFailure: Error | null = null;
   private readonly onConnect: Array<() => void> = [];
   private readonly onError: Array<(error: Error) => void> = [];
   private readonly onClose: Array<() => void> = [];
@@ -138,6 +182,11 @@ class FakeSocket implements ManagedSocket {
   setNoDelay(): void {}
 
   write(_data: Uint8Array, callback: (error?: Error | null) => void): boolean {
+    if (this.nextWriteFailure) {
+      const error = this.nextWriteFailure;
+      this.nextWriteFailure = null;
+      throw error;
+    }
     this.writes.push(callback);
     return false;
   }
@@ -174,6 +223,11 @@ class FakeSocket implements ManagedSocket {
     for (const listener of [...this.onError]) listener(new Error(message));
   }
 
+  /** The next write throws before Node accepts its callback. */
+  failNextWrite(error: Error): void {
+    this.nextWriteFailure = error;
+  }
+
   /** Every write callback still owed fires now, as Node does on destroy. */
   flushPendingWrites(error?: Error): void {
     for (const callback of this.writes.splice(0)) callback(error ?? null);
@@ -182,15 +236,22 @@ class FakeSocket implements ManagedSocket {
 
 function socketFixture() {
   const created: FakeSocket[] = [];
+  const metricCounts = new Map<string, number>();
   const factory: SocketFactory = () => {
     const socket = new FakeSocket();
     created.push(socket);
     return socket;
   };
+  const metrics: SocketMetrics = {
+    count(name, delta = 1) {
+      metricCounts.set(name, (metricCounts.get(name) ?? 0) + delta);
+    },
+    observe() {},
+  };
   const events: Array<{ ownerId: number } & SocketEvent> = [];
   const manager = new SocketManager(
     (ownerId, event) => events.push({ ownerId, ...event }),
-    null,
+    metrics,
     () => ({ host: "127.0.0.1", port: 6112, family: 4 }),
     factory,
   );
@@ -198,6 +259,9 @@ function socketFixture() {
     manager,
     created,
     events,
+    metricCount(name: string): number {
+      return metricCounts.get(name) ?? 0;
+    },
     async connect(ownerId: number): Promise<{ id: number; socket: FakeSocket }> {
       const before = created.length;
       const id = await manager.connect(ownerId, "127.0.0.1:6112");
@@ -215,18 +279,22 @@ function socketFixture() {
  */
 function startSend(promise: Promise<void>): {
   settled: boolean;
+  settlements: number;
   error: unknown;
 } {
-  const state: { settled: boolean; error: unknown } = {
+  const state: { settled: boolean; settlements: number; error: unknown } = {
     settled: false,
+    settlements: 0,
     error: undefined,
   };
   promise.then(
     () => {
       state.settled = true;
+      state.settlements += 1;
     },
     (error: unknown) => {
       state.settled = true;
+      state.settlements += 1;
       state.error = error;
     },
   );
@@ -356,12 +424,24 @@ describe("main-process socket queue budget", () => {
     const owner = 20;
     const doomed = await fixture.connect(owner);
     const survivor = await fixture.connect(owner);
-    startSend(fixture.manager.send(doomed.id, FULL_SOCKET, owner));
-    startSend(fixture.manager.send(survivor.id, FULL_SOCKET, owner));
+    const doomedSend = startSend(
+      fixture.manager.send(doomed.id, FULL_SOCKET, owner),
+    );
+    const survivorSend = startSend(
+      fixture.manager.send(survivor.id, FULL_SOCKET, owner),
+    );
     await turn();
     assert.equal(totalQueued(fixture.manager), 2 * MAX_QUEUED_BYTES_PER_SOCKET);
 
     await fixture.manager.close(doomed.id, owner);
+    await turn();
+    assert.equal(doomedSend.settled, true);
+    assert.equal(doomedSend.settlements, 1);
+    assert.match(
+      String(doomedSend.error),
+      /socket closed before queued send completed/,
+    );
+    assert.equal(fixture.metricCount("socket.sendFailures"), 1);
     assert.equal(
       fixture.manager.queuedBytesByOwner().get(owner),
       MAX_QUEUED_BYTES_PER_SOCKET,
@@ -369,14 +449,71 @@ describe("main-process socket queue budget", () => {
 
     // Node fires a destroyed socket's owed callbacks afterwards. Charging them
     // a second time would take the surviving socket's reservation away.
-    doomed.socket.flushPendingWrites(new Error("ERR_STREAM_DESTROYED"));
+    const teardownError = doomedSend.error;
+    doomed.socket.flushPendingWrites(
+      new Error("ERR_STREAM_DESTROYED 203.0.113.9 /Users/private"),
+    );
+    await turn();
+    assert.equal(doomedSend.settlements, 1);
+    assert.equal(doomedSend.error, teardownError);
+    assert.doesNotMatch(
+      String(doomedSend.error),
+      /ERR_STREAM_DESTROYED|203\.0\.113\.9|\/Users\/private/,
+    );
+    assert.equal(fixture.metricCount("socket.sendFailures"), 1);
     assert.equal(
       fixture.manager.queuedBytesByOwner().get(owner),
       MAX_QUEUED_BYTES_PER_SOCKET,
     );
 
     survivor.socket.flushPendingWrites();
+    await turn();
+    assert.equal(survivorSend.settled, true);
+    assert.equal(survivorSend.settlements, 1);
+    assert.equal(survivorSend.error, undefined);
     assert.equal(fixture.manager.queuedBytesByOwner().size, 0);
+    fixture.manager.closeAll();
+  });
+
+  it("releases callback and synchronous write failures without exposing native details", async () => {
+    const fixture = socketFixture();
+    const owner = 21;
+    const opened = await fixture.connect(owner);
+
+    const callbackFailure = startSend(
+      fixture.manager.send(opened.id, ONE_BYTE, owner),
+    );
+    opened.socket.flushPendingWrites(
+      new Error("write EPIPE 203.0.113.9:6112 /Users/private"),
+    );
+    await turn();
+    assert.equal(callbackFailure.settled, true);
+    assert.equal(callbackFailure.settlements, 1);
+    assert.match(String(callbackFailure.error), /socket send failed/);
+    assert.doesNotMatch(
+      String(callbackFailure.error),
+      /EPIPE|203\.0\.113\.9|\/Users\/private/,
+    );
+    assert.equal(totalQueued(fixture.manager), 0);
+
+    opened.socket.failNextWrite(
+      new Error("write threw for 198.51.100.4:443 /Users/private"),
+    );
+    const synchronousFailure = startSend(
+      fixture.manager.send(opened.id, ONE_BYTE, owner),
+    );
+    await turn();
+    assert.equal(synchronousFailure.settled, true);
+    assert.equal(synchronousFailure.settlements, 1);
+    assert.match(String(synchronousFailure.error), /socket send failed/);
+    assert.doesNotMatch(
+      String(synchronousFailure.error),
+      /198\.51\.100\.4|\/Users\/private/,
+    );
+    assert.equal(opened.socket.writes.length, 0);
+    assert.equal(totalQueued(fixture.manager), 0);
+    assert.equal(fixture.metricCount("socket.sendFailures"), 2);
+
     fixture.manager.closeAll();
   });
 
@@ -385,30 +522,72 @@ describe("main-process socket queue budget", () => {
     const owner = 30;
 
     const closed = await fixture.connect(owner);
-    startSend(fixture.manager.send(closed.id, FULL_SOCKET, owner));
+    const closedSend = startSend(
+      fixture.manager.send(closed.id, FULL_SOCKET, owner),
+    );
     await fixture.manager.close(closed.id, owner);
     assert.equal(fixture.manager.queuedBytesByOwner().size, 0, "after close");
 
     const failed = await fixture.connect(owner);
-    startSend(fixture.manager.send(failed.id, FULL_SOCKET, owner));
-    failed.socket.fail("peer reset");
+    const failedSend = startSend(
+      fixture.manager.send(failed.id, FULL_SOCKET, owner),
+    );
+    failed.socket.fail("peer reset at 203.0.113.9:6112");
     assert.equal(fixture.manager.queuedBytesByOwner().size, 0, "after failure");
 
     const reloaded = await fixture.connect(owner);
-    startSend(fixture.manager.send(reloaded.id, FULL_SOCKET, owner));
+    const reloadedSend = startSend(
+      fixture.manager.send(reloaded.id, FULL_SOCKET, owner),
+    );
     fixture.manager.closeAll(owner);
     assert.equal(fixture.manager.queuedBytesByOwner().size, 0, "after reload");
 
     const quitting = await fixture.connect(owner);
-    startSend(fixture.manager.send(quitting.id, FULL_SOCKET, owner));
+    const quittingSend = startSend(
+      fixture.manager.send(quitting.id, FULL_SOCKET, owner),
+    );
     fixture.manager.closeAll();
     assert.equal(fixture.manager.queuedBytesByOwner().size, 0, "after quit");
 
+    const interrupted = [
+      ["requested close", closedSend],
+      ["socket error", failedSend],
+      ["owner teardown", reloadedSend],
+      ["application quit", quittingSend],
+    ] as const;
+    await turn();
+    for (const [label, send] of interrupted) {
+      assert.equal(send.settled, true, label);
+      assert.equal(send.settlements, 1, label);
+      assert.match(
+        String(send.error),
+        /socket closed before queued send completed/,
+        label,
+      );
+      assert.doesNotMatch(
+        String(send.error),
+        /203\.0\.113\.9|\/Users\/private/,
+        label,
+      );
+    }
+    assert.equal(fixture.metricCount("socket.sendFailures"), 4);
+
     // Every torn-down socket's write callbacks arrive after the fact.
     for (const socket of fixture.created) {
-      socket.flushPendingWrites(new Error("ERR_STREAM_DESTROYED"));
+      socket.flushPendingWrites(
+        new Error("ERR_STREAM_DESTROYED 203.0.113.9 /Users/private"),
+      );
     }
     await turn();
+    for (const [label, send] of interrupted) {
+      assert.equal(send.settlements, 1, `${label} after late callback`);
+      assert.doesNotMatch(
+        String(send.error),
+        /ERR_STREAM_DESTROYED|203\.0\.113\.9|\/Users\/private/,
+        label,
+      );
+    }
+    assert.equal(fixture.metricCount("socket.sendFailures"), 4);
     assert.equal(
       fixture.manager.queuedBytesByOwner().size,
       0,

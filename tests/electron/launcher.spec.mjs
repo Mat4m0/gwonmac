@@ -19,6 +19,16 @@ test.describe("launcher recovery", () => {
     try {
       const { app, page } = fixture;
       await expect(page.locator("#data-choice")).toBeVisible();
+      await expect(page.locator("#data-choice-native-cursor")).toBeChecked();
+      await expect(
+        page.locator("#data-choice-target-readout"),
+      ).not.toBeChecked();
+      await expect(page.locator("#data-choice")).toContainText(
+        "Use the game's own cursor",
+      );
+      await expect(page.locator("#data-choice")).toContainText(
+        "Show target distance and range",
+      );
       await expect(page.locator("#data-choice-full-size")).toHaveText(
         "Download 8.00 GB before starting.",
       );

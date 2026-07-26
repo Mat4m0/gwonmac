@@ -39,15 +39,38 @@ function stubFetch(impl: FetchImpl): { urls: string[] } {
   return state;
 }
 
-function releaseBody(tag: unknown, status = 200): Response {
-  return new Response(JSON.stringify({ tag_name: tag }), {
+function release(
+  tag: unknown,
+  options: { draft?: boolean; prerelease?: boolean } = {},
+) {
+  return {
+    tag_name: tag,
+    draft: options.draft ?? false,
+    prerelease: options.prerelease ?? false,
+  };
+}
+
+function releaseBody(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
+  return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
 }
 
-function answers(tag: unknown, status = 200): FetchImpl {
-  return () => Promise.resolve(releaseBody(tag, status));
+function answers(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+): FetchImpl {
+  return () => Promise.resolve(releaseBody(body, status, headers));
+}
+
+function answersTags(...tags: unknown[]): FetchImpl {
+  return answers(tags.map((tag) => release(tag)));
 }
 
 afterEach(() => {
@@ -56,29 +79,38 @@ afterEach(() => {
 });
 
 describe("release notice", () => {
-  it("asks GitHub for the latest release of this repository", async () => {
-    const calls = stubFetch(answers("2026.7.0"));
+  it("asks GitHub for a bounded release list from this repository", async () => {
+    const calls = stubFetch(answersTags("2026.7.0"));
     const { checkForNewerRelease } = await freshModule();
 
     await checkForNewerRelease("2026.7.0");
 
     assert.deepEqual(calls.urls, [
-      "https://api.github.com/repos/Mat4m0/gwonmac/releases/latest",
+      "https://api.github.com/repos/Mat4m0/gwonmac/releases?per_page=100",
     ]);
   });
 
-  it("offers a newer release and renders the version from the parse", async () => {
-    stubFetch(answers("v2026.8.0"));
+  it("chooses the greatest stable release rather than trusting API order", async () => {
+    stubFetch(
+      answers([
+        release("2026.8.0"),
+        release("v2026.10.0"),
+        release("2026.9.0"),
+      ]),
+    );
     const { checkForNewerRelease } = await freshModule();
 
     const notice = await checkForNewerRelease("2026.7.0");
 
     assert.equal(notice.state, "update-available");
-    assert.equal(notice.state === "update-available" && notice.latestVersion, "2026.8.0");
+    assert.equal(
+      notice.state === "update-available" && notice.latestVersion,
+      "2026.10.0",
+    );
   });
 
   it("reports up to date when the published release is the running one", async () => {
-    stubFetch(answers("2026.8.0"));
+    stubFetch(answersTags("2026.8.0"));
     const { checkForNewerRelease } = await freshModule();
 
     const notice = await checkForNewerRelease("2026.8.0");
@@ -87,7 +119,9 @@ describe("release notice", () => {
   });
 
   it("does not offer a prerelease to an install running a stable build", async () => {
-    stubFetch(answers("2026.9.0-rc.1"));
+    // Unlike /releases/latest, the list includes prereleases. The stable
+    // release is present too, so this fixture represents a real repository.
+    stubFetch(answersTags("2026.9.0-rc.1", "2026.8.0"));
     const { checkForNewerRelease } = await freshModule();
 
     const notice = await checkForNewerRelease("2026.8.0");
@@ -95,17 +129,55 @@ describe("release notice", () => {
     assert.equal(notice.state, "up-to-date");
   });
 
-  it("offers a prerelease to an install already running one", async () => {
-    stubFetch(answers("2026.9.0-rc.1"));
+  it("honours GitHub's prerelease flag even when a tag looks stable", async () => {
+    stubFetch(
+      answers([
+        release("2026.9.0", { prerelease: true }),
+        release("2026.8.0"),
+      ]),
+    );
     const { checkForNewerRelease } = await freshModule();
 
-    const notice = await checkForNewerRelease("2026.9.0-beta.2");
+    const notice = await checkForNewerRelease("2026.8.0");
+
+    assert.equal(notice.state, "up-to-date");
+  });
+
+  it("chooses the greatest prerelease channel for a prerelease install", async () => {
+    stubFetch(
+      answersTags(
+        "2026.9.0-beta.3",
+        "2026.9.0-alpha.9",
+        "2026.9.0-rc.1",
+        "2026.8.0",
+      ),
+    );
+    const { checkForNewerRelease } = await freshModule();
+
+    const notice = await checkForNewerRelease("2026.9.0-alpha.1");
 
     assert.equal(notice.state, "update-available");
+    assert.equal(
+      notice.state === "update-available" && notice.latestVersion,
+      "2026.9.0-rc.1",
+    );
+  });
+
+  it("lets a prerelease install advance onto the stable release", async () => {
+    stubFetch(answersTags("2026.9.0-rc.2", "2026.9.0"));
+    const { checkForNewerRelease } = await freshModule();
+
+    const notice = await checkForNewerRelease("2026.9.0-rc.1");
+
+    assert.equal(notice.state, "update-available");
+    assert.equal(
+      notice.state === "update-available" && notice.latestVersion,
+      "2026.9.0",
+    );
   });
 
   it("calls a build that is not on the release line unknown, and never asks", async () => {
-    const calls = stubFetch(answers("2026.9.0"));
+    const calls = stubFetch(answersTags("2026.9.0"));
     const { checkForNewerRelease } = await freshModule();
 
     const notice = await checkForNewerRelease("0.0.2-dev");
@@ -115,9 +187,13 @@ describe("release notice", () => {
     assert.equal(calls.urls.length, 0);
   });
 
-  it("gives rate limiting its own reason", async () => {
-    for (const status of [403, 429]) {
-      stubFetch(answers("2026.9.0", status));
+  it("gives real GitHub rate limits their own reason", async () => {
+    for (const [status, headers] of [
+      [429, {}],
+      [403, { "x-ratelimit-remaining": "0" }],
+      [403, { "retry-after": "60" }],
+    ] as const) {
+      stubFetch(answers([], status, headers));
       const { checkForNewerRelease } = await freshModule();
 
       const notice = await checkForNewerRelease("2026.8.0");
@@ -127,8 +203,19 @@ describe("release notice", () => {
     }
   });
 
+  it("does not mislabel an ordinary 403 as a rate limit", async () => {
+    for (const headers of [{}, { "x-ratelimit-remaining": "12" }]) {
+      stubFetch(answers([], 403, headers));
+      const { checkForNewerRelease } = await freshModule();
+
+      const notice = await checkForNewerRelease("2026.8.0");
+
+      assert.equal(notice.state === "unknown" && notice.reason, "server");
+    }
+  });
+
   it("separates a server error from a rate limit", async () => {
-    stubFetch(answers("2026.9.0", 500));
+    stubFetch(answers([], 500));
     const { checkForNewerRelease } = await freshModule();
 
     const notice = await checkForNewerRelease("2026.8.0");
@@ -146,9 +233,9 @@ describe("release notice", () => {
     assert.equal(notice.state === "unknown" && notice.reason, "offline");
   });
 
-  it("reports a tag it cannot parse as unknown rather than up to date", async () => {
+  it("reports a list with no readable release as unknown rather than up to date", async () => {
     for (const tag of ["banana", "2026.07.01", 20260701, undefined]) {
-      stubFetch(answers(tag));
+      stubFetch(answers([release(tag)]));
       const { checkForNewerRelease } = await freshModule();
 
       const notice = await checkForNewerRelease("2026.8.0");
@@ -156,6 +243,26 @@ describe("release notice", () => {
       assert.equal(notice.state, "unknown");
       assert.equal(notice.state === "unknown" && notice.reason, "unreadable");
     }
+  });
+
+  it("skips drafts and malformed entries while selecting a valid release", async () => {
+    stubFetch(
+      answers([
+        release("2027.1.0", { draft: true }),
+        { tag_name: "banana", draft: false },
+        null,
+        release("2026.9.0"),
+      ]),
+    );
+    const { checkForNewerRelease } = await freshModule();
+
+    const notice = await checkForNewerRelease("2026.8.0");
+
+    assert.equal(notice.state, "update-available");
+    assert.equal(
+      notice.state === "update-available" && notice.latestVersion,
+      "2026.9.0",
+    );
   });
 
   it("reports a body that is not JSON as unknown", async () => {
@@ -194,18 +301,18 @@ describe("release notice", () => {
   });
 
   it("shares one request between callers asking at the same time", async () => {
-    let release: (value: Response) => void = () => undefined;
+    let resolveFetch: (value: Response) => void = () => undefined;
     const calls = stubFetch(
       () =>
         new Promise<Response>((resolve) => {
-          release = resolve;
+          resolveFetch = resolve;
         }),
     );
     const { checkForNewerRelease } = await freshModule();
 
     const first = checkForNewerRelease("2026.8.0");
     const second = checkForNewerRelease("2026.8.0");
-    release(releaseBody("2026.9.0"));
+    resolveFetch(releaseBody([release("2026.9.0")]));
 
     assert.equal((await first).state, "update-available");
     assert.equal((await second).state, "update-available");
@@ -213,7 +320,7 @@ describe("release notice", () => {
   });
 
   it("answers a repeated ask from the cache instead of spending a request", async () => {
-    const calls = stubFetch(answers("2026.9.0"));
+    const calls = stubFetch(answersTags("2026.9.0"));
     const { checkForNewerRelease } = await freshModule();
 
     const first = await checkForNewerRelease("2026.8.0");
@@ -223,37 +330,49 @@ describe("release notice", () => {
     assert.equal(calls.urls.length, 1);
   });
 
-  it("keeps refusing while rate limited rather than asking again", async () => {
-    let status = 403;
-    const calls = stubFetch(() => Promise.resolve(releaseBody("2026.9.0", status)));
-    const { checkForNewerRelease } = await freshModule();
+  it("caches every network failure outcome for ten minutes", async () => {
+    const failures = [
+      {
+        reason: "offline",
+        answer: () => Promise.reject(new TypeError("fetch failed")),
+      },
+      {
+        reason: "server",
+        answer: () => Promise.resolve(releaseBody([], 500)),
+      },
+      {
+        reason: "unreadable",
+        answer: () => Promise.resolve(new Response("<html>not json</html>")),
+      },
+      {
+        reason: "rate-limited",
+        answer: () => Promise.resolve(releaseBody([], 429)),
+      },
+    ] as const;
 
-    await checkForNewerRelease("2026.8.0");
-    status = 200;
-    const second = await checkForNewerRelease("2026.8.0");
+    for (const failure of failures) {
+      let firstRequest = true;
+      const calls = stubFetch(() => {
+        if (!firstRequest) {
+          return Promise.resolve(releaseBody([release("2026.9.0")]));
+        }
+        firstRequest = false;
+        return failure.answer();
+      });
+      const { checkForNewerRelease } = await freshModule();
 
-    assert.equal(second.state === "unknown" && second.reason, "rate-limited");
-    assert.equal(calls.urls.length, 1);
-  });
+      const first = await checkForNewerRelease("2026.8.0");
+      const second = await checkForNewerRelease("2026.8.0");
 
-  it("retries after a transient failure instead of caching it", async () => {
-    let fail = true;
-    const calls = stubFetch(() =>
-      fail
-        ? Promise.reject(new TypeError("fetch failed"))
-        : Promise.resolve(releaseBody("2026.9.0")),
-    );
-    const { checkForNewerRelease } = await freshModule();
-
-    assert.equal((await checkForNewerRelease("2026.8.0")).state, "unknown");
-    fail = false;
-    assert.equal((await checkForNewerRelease("2026.8.0")).state, "update-available");
-    assert.equal(calls.urls.length, 2);
+      assert.equal(first.state === "unknown" && first.reason, failure.reason);
+      assert.deepEqual(second, first);
+      assert.equal(calls.urls.length, 1, failure.reason);
+    }
   });
 
   it("asks again once the ten-minute cache has expired", async () => {
     mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
-    const calls = stubFetch(answers("2026.9.0"));
+    const calls = stubFetch(answersTags("2026.9.0"));
     const { checkForNewerRelease } = await freshModule();
 
     await checkForNewerRelease("2026.8.0");

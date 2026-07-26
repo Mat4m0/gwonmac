@@ -1,12 +1,9 @@
 // The renderer half of "is there a newer release of this app?".
 //
-// DOM-free on purpose. Everything here is a part of the feature that can lie:
-// the three answers that must never collapse into two, the sentence chosen for
-// each failure reason, and the single-flight rule that stops a mashed button
-// from burning a 60-per-hour rate limit. Those live where a unit test can
-// execute them, and `settings.js` binds one instance to both mount points —
-// the launcher's corner links and the Settings dialog. A copy per surface is
-// how the two would come to disagree about what was asked and what came back.
+// The state and the concrete DOM binding live together here. The three answers
+// must never collapse into two, and every launcher/settings/compatibility
+// surface must show the same request and result. `settings.js` supplies the
+// native actions and persistence; this module owns how that one action appears.
 
 /** @typedef {import('../shared/contracts.js').ReleaseCheckFailure} ReleaseCheckFailure */
 /** @typedef {import('../shared/contracts.js').ReleaseNotice} ReleaseNotice */
@@ -52,10 +49,10 @@ export function describeReleaseNotice(notice) {
 const plural = (value, unit) => `${value} ${unit}${value === 1 ? '' : 's'}`;
 
 /**
- * When GitHub was last asked. Empty string means never, which is the state
- * that `unknown` would otherwise be indistinguishable from.
+ * When a release check was last attempted. Empty string means never, which is
+ * the state that `unknown` would otherwise be indistinguishable from.
  *
- * @param {number | null} checkedAt epoch milliseconds, or null if never asked
+ * @param {number | null} checkedAt epoch milliseconds, or null if never checked
  * @param {number} now epoch milliseconds
  * @returns {string}
  */
@@ -76,7 +73,7 @@ export function formatLastChecked(checkedAt, now) {
  * @property {string} actionLabel Label for the control that starts a check.
  * @property {boolean} busy A check is in flight; starting another does nothing.
  * @property {string} message The answer, or '' before the first one arrives.
- * @property {string} lastChecked '' until GitHub has been asked once.
+ * @property {string} lastChecked '' until a release check has completed once.
  * @property {boolean} updateAvailable Whether to offer the releases page.
  */
 
@@ -91,7 +88,7 @@ export function formatLastChecked(checkedAt, now) {
  * @param {object} options
  * @param {() => Promise<ReleaseNotice>} options.check Asks the main process.
  * @param {(checkedAt: number) => Promise<unknown>} options.remember Persists
- *   the timestamp, so "never asked" survives a relaunch.
+ *   the timestamp, so "never checked" survives a relaunch.
  * @param {() => number} [options.now]
  * @returns {UpdateAction}
  */
@@ -157,9 +154,9 @@ export function createUpdateAction({ check, remember, now = () => Date.now() }) 
           const notice = await request;
           result = notice;
           // Every result carries `checkedAt`, including the failures: the
-          // timestamp records that GitHub was asked, not that it answered
-          // usefully. A cached answer keeps its original time, so repeated
-          // clicks do not claim a request that was never made.
+          // timestamp records the check attempt, not a successful request.
+          // A cached answer keeps its original time, so repeated clicks do not
+          // claim that another check ran.
           lastCheckedAt = notice.checkedAt;
           try {
             await remember(notice.checkedAt);
@@ -178,4 +175,81 @@ export function createUpdateAction({ check, remember, now = () => Date.now() }) 
       return operation;
     },
   };
+}
+
+/**
+ * @param {Document} root
+ * @param {string} id
+ */
+function requiredElement(root, id) {
+  const node = root.getElementById(id);
+  if (!node) throw new Error(`missing update element: ${id}`);
+  return node;
+}
+
+/**
+ * Bind the one update action to its three fixed surfaces. Static structure
+ * belongs in index.html; the synchronized state and clicks belong here.
+ *
+ * @param {Document} root
+ * @param {UpdateAction} action
+ * @param {() => Promise<unknown>} openReleases
+ */
+export function bindUpdateActionDom(root, action, openReleases) {
+  const launcherCheck =
+    /** @type {HTMLAnchorElement} */ (requiredElement(root, 'loading-update-check'));
+  const launcherStatus = requiredElement(root, 'loading-update-status');
+  const launcherWhen = requiredElement(root, 'loading-update-when');
+  const launcherGet = requiredElement(root, 'loading-update-get');
+  const settingsCheck =
+    /** @type {HTMLButtonElement} */ (requiredElement(root, 'settings-check-updates'));
+  const settingsReleases =
+    /** @type {HTMLButtonElement} */ (requiredElement(root, 'settings-open-releases'));
+  const settingsStatus = requiredElement(root, 'settings-update-status');
+  const settingsWhen = requiredElement(root, 'settings-update-when');
+  const compatibilityCheck =
+    /** @type {HTMLButtonElement} */ (requiredElement(root, 'client-compat-check'));
+  const compatibilityReleases =
+    /** @type {HTMLButtonElement} */ (
+      requiredElement(root, 'client-compat-releases')
+    );
+  const compatibilityStatus = requiredElement(root, 'client-compat-update');
+
+  action.subscribe((view) => {
+    launcherCheck.textContent = view.actionLabel;
+    launcherStatus.textContent = view.message;
+    launcherStatus.hidden = view.message === '';
+    launcherWhen.textContent = view.lastChecked;
+    launcherWhen.hidden = view.lastChecked === '';
+    launcherGet.hidden = !view.updateAvailable;
+
+    settingsCheck.textContent = view.actionLabel;
+    settingsCheck.disabled = view.busy;
+    settingsStatus.textContent = view.message;
+    settingsStatus.hidden = view.message === '';
+    settingsWhen.textContent = view.lastChecked;
+    settingsWhen.hidden = view.lastChecked === '';
+    settingsReleases.hidden = !view.updateAvailable;
+
+    compatibilityCheck.textContent = view.actionLabel;
+    compatibilityCheck.disabled = view.busy;
+    compatibilityStatus.textContent = view.message;
+    compatibilityStatus.hidden = view.message === '';
+  });
+
+  const check = () => {
+    void action.check();
+  };
+  launcherCheck.addEventListener('click', (event) => {
+    event.preventDefault();
+    check();
+  });
+  settingsCheck.addEventListener('click', check);
+  compatibilityCheck.addEventListener('click', check);
+  settingsReleases.addEventListener('click', () => {
+    void openReleases();
+  });
+  compatibilityReleases.addEventListener('click', () => {
+    void openReleases();
+  });
 }

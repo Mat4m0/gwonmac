@@ -156,18 +156,23 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
-export interface AppSettings {
+/**
+ * The complete set of independently selectable Toolbox features.
+ *
+ * Canonical here because settings, main-process policy, and the generated
+ * preload transport all need the same names. A new tool is declared once;
+ * its implementation still has to decide what enabling it does.
+ */
+export const TOOLBOX_TOOLS = [
+  "nativeCursor",
+  "targetReadout",
+] as const;
+
+export type ToolboxTool = (typeof TOOLBOX_TOOLS)[number];
+export type ToolboxSelection = Record<ToolboxTool, boolean>;
+
+export interface AppSettings extends ToolboxSelection {
   renderScale: 1 | 1.5 | 2;
-  /**
-   * Draw the cursor the player's own installed client draws. On by default,
-   * so the setting is how a player turns it off; an uncertified build turns
-   * it off for them, which is what the compatibility notice explains.
-   *
-   * The first Toolbox tool. `TOOLBOX_TOOLS` in `src/main/toolbox-policy.ts`
-   * lists them and derives "is the Toolbox active" from them; there is no
-   * master switch here for that answer to disagree with.
-   */
-  nativeCursor: boolean;
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
@@ -178,9 +183,9 @@ export interface AppSettings {
    */
   autoCheckUpdates: boolean;
   /**
-   * When the last release check actually reached GitHub, in epoch
-   * milliseconds, or `null` if one has never run. Persisted because without it
-   * "we could not tell" is indistinguishable from "we never asked".
+   * When the last release-check attempt completed, in epoch milliseconds, or
+   * `null` if one has never run. An unsupported local build can finish without
+   * contacting GitHub; this records the attempt, not a network claim.
    */
   lastUpdateCheckAt: number | null;
   /**
@@ -200,6 +205,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   nativeCursor: true,
+  targetReadout: false,
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,
@@ -277,7 +283,7 @@ export type ReleaseNotice =
 /**
  * Which of the three client-certification states this session is in. The two
  * WASM transforms are keyed by different hashes, so certification can succeed
- * for template save/load and fail for the Toolbox cursor:
+ * for template save/load and fail for the Toolbox tools:
  *
  * - `certified`      templates, screenshots and chat logs work; Toolbox may load
  * - `template-only`  those three work; Toolbox may not load
@@ -297,18 +303,34 @@ export interface ClientCompatibility {
    * so a notice can be acknowledged per build instead of per launch.
    */
   clientSha256: string;
-  /** Whether this session asked for the Toolbox cursor at all. */
-  toolboxRequested: boolean;
+  /**
+   * Whether the module selected for this session contains the certified
+   * Toolbox transform. This is effective runtime state, not build support.
+   */
+  toolboxActive: boolean;
+}
+
+/**
+ * The candidate generation this renderer is serving. A renderer captures it
+ * before loading the game glue and returns that exact value only after its own
+ * first-frame and socket-open evidence. Main refuses a token for any other
+ * active generation or candidate marker.
+ */
+export interface ClientHealthToken {
+  readonly generation: number;
+  readonly fingerprint: string;
 }
 
 /**
  * What this session is running. `compatibility` is `null` only before a client
  * has been activated; `appVersion` is always known, because a user filing a bug
- * should not have to hunt through the menu bar for it.
+ * should not have to hunt through the menu bar for it. `healthToken` exists
+ * only while the active generation is awaiting renderer health evidence.
  */
 export interface ClientSession {
   appVersion: string;
   compatibility: ClientCompatibility | null;
+  healthToken: ClientHealthToken | null;
 }
 
 /**
@@ -321,8 +343,8 @@ export interface ClientSession {
 export interface RendererInit {
   /** Toolbox automation tier. Unpackaged builds only. */
   toolboxAutomation: boolean;
-  /** `AppSettings.nativeCursor` at launch: install the Toolbox cursor. */
-  nativeCursor: boolean;
+  /** The independently selected Toolbox tools for this launch. */
+  toolboxSelection: ToolboxSelection;
   /** Template filesystem syscall trace. Unpackaged builds only. */
   templateFsTrace: boolean;
 }
@@ -371,6 +393,14 @@ export type RendererCommand =
       action: "reset" | "stopped" | "flush" | "problem-marked";
     }
   | { type: "diagnostics.capture"; action: "started"; level: 1 | 2 };
+
+/** What the renderer can truthfully acknowledge over IPC. */
+export type RendererCommandCompletion = "completed" | "failed";
+
+/** Main adds its own bounded-wait result to the renderer's acknowledgement. */
+export type RendererCommandOutcome =
+  | RendererCommandCompletion
+  | "timed-out";
 
 export const IPC = {
   progressCurrent: "gw:progress:current",
@@ -450,9 +480,10 @@ export interface GwNativeApi {
   wasmBridgeMarkers: WasmBridgeMarkers;
   commands: {
     /**
-     * Register the renderer's single command handler. The acknowledgement main
-     * waits on is sent when the returned promise settles, so an awaited
-     * capture flush still completes before main closes the capture window.
+     * Register the renderer's single command handler. A second registration is
+     * an error. Main receives success or failure only after the returned
+     * promise settles, so an awaited capture flush cannot be acknowledged
+     * early or have a rejection disguised as success.
      */
     handle(handler: (command: RendererCommand) => void | Promise<void>): void;
   };
@@ -511,7 +542,7 @@ export interface GwNativeApi {
   };
   client: {
     retry(): Promise<void>;
-    healthy(): Promise<void>;
+    healthy(token: ClientHealthToken): Promise<void>;
     session(): Promise<ClientSession>;
   };
   releaseNotice: {

@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { fingerprintClientGeneration } from "../../src/main/core/client-fingerprint.js";
 import { inspectToolboxWorkspace } from "../../src/tools/toolbox-doctor.js";
 
 describe("Toolbox workspace doctor", () => {
@@ -34,6 +35,19 @@ describe("Toolbox workspace doctor", () => {
     }
     const firstHash = "a".repeat(32);
     const secondHash = "b".repeat(32);
+    const artifactEntries = Object.entries(artifactData).map(
+      ([name, contents]) => ({
+        name,
+        size: Buffer.byteLength(contents),
+        chunkHashes: Array.from(
+          { length: Math.ceil(Buffer.byteLength(contents) / 4) },
+          (_, index) =>
+            createHash("md5")
+              .update(Buffer.from(contents).subarray(index * 4, index * 4 + 4))
+              .digest("hex"),
+        ),
+      }),
+    );
     await writeFile(
       path.join(artifacts, "manifest.json"),
       JSON.stringify({
@@ -42,18 +56,19 @@ describe("Toolbox workspace doctor", () => {
         size: 6,
         chunkSize: 4,
         chunkHashes: [firstHash, secondHash],
-        clientFingerprint: "c".repeat(64),
-        artifacts: Object.entries(artifactData).map(([name, contents]) => ({
-          name,
-          size: Buffer.byteLength(contents),
-          chunkHashes: Array.from(
-            { length: Math.ceil(Buffer.byteLength(contents) / 4) },
-            (_, index) =>
-              createHash("md5")
-                .update(Buffer.from(contents).subarray(index * 4, index * 4 + 4))
-                .digest("hex"),
-          ),
-        })),
+        clientFingerprint: fingerprintClientGeneration({
+          compression: "none",
+          chunkSize: 4,
+          files: [
+            ...artifactEntries,
+            {
+              name: "Gw.snapshot",
+              size: 6,
+              chunkHashes: [firstHash, secondHash],
+            },
+          ],
+        }),
+        artifacts: artifactEntries,
       }),
     );
     await writeFile(path.join(chunks, firstHash), "data");
@@ -75,21 +90,35 @@ describe("Toolbox workspace doctor", () => {
     assert.equal(report.readyForCachedLive, false);
   });
 
-  it("reports the profile's own native cursor setting without writing to it", async () => {
+  it("reports the profile's own Toolbox settings without writing to them", async () => {
     // P4.7 — an observation-tier live run enables nothing, so this setting is
     // the only thing that installs the Toolbox for it.
     const profile = await mkdtemp(path.join(tmpdir(), "gw-doctor-cursor-"));
     const settings = path.join(profile, "settings.json");
 
-    assert.equal((await inspectToolboxWorkspace(profile)).nativeCursor, true);
+    const initial = await inspectToolboxWorkspace(profile);
+    assert.deepEqual(
+      {
+        nativeCursor: initial.nativeCursor,
+        targetReadout: initial.targetReadout,
+      },
+      { nativeCursor: true, targetReadout: false },
+    );
 
-    await writeFile(settings, JSON.stringify({ nativeCursor: false }));
-    assert.equal((await inspectToolboxWorkspace(profile)).nativeCursor, false);
+    await writeFile(
+      settings,
+      JSON.stringify({ nativeCursor: false, targetReadout: true }),
+    );
+    const selected = await inspectToolboxWorkspace(profile);
+    assert.equal(selected.nativeCursor, false);
+    assert.equal(selected.targetReadout, true);
 
     // loadSettings() renames a corrupt file aside and writes a backup. A doctor
     // reads the profile it is asked about and leaves it exactly as it found it.
     await writeFile(settings, "{ not json");
-    assert.equal((await inspectToolboxWorkspace(profile)).nativeCursor, true);
+    const defaults = await inspectToolboxWorkspace(profile);
+    assert.equal(defaults.nativeCursor, true);
+    assert.equal(defaults.targetReadout, false);
     assert.equal(await readFile(settings, "utf8"), "{ not json");
     assert.deepEqual(await readdir(profile), ["settings.json"]);
   });
