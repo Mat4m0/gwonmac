@@ -1,5 +1,9 @@
 import { app } from "electron";
-import type { AppSettings, AppSettingsPatch } from "../shared/contracts.js";
+import type {
+  AppSettings,
+  AppSettingsPatch,
+  RendererInit,
+} from "../shared/contracts.js";
 
 export const TOOLBOX_AUTOMATION_ENABLED =
   !app.isPackaged && process.env.GW_TOOLBOX_AUTOMATION === "1";
@@ -27,6 +31,21 @@ export const TOOLBOX_TOOLS = [
 ] as const satisfies readonly BooleanSetting[];
 
 export type ToolboxTool = (typeof TOOLBOX_TOOLS)[number];
+
+/**
+ * Every tool must reach the renderer as its own `RendererInit` field.
+ *
+ * `harness.js` decides whether to import `toolbox.js` at all by naming those
+ * fields one by one. A tool added to the registry above without a matching
+ * init field would still make main derive the transformed module — and the
+ * renderer would never install the tool, silently, in a packaged build only.
+ * This makes that a compile error instead.
+ */
+type ToolsReachTheRenderer = [ToolboxTool] extends [keyof RendererInit]
+  ? true
+  : never;
+const _toolsReachTheRenderer: ToolsReachTheRenderer = true;
+void _toolsReachTheRenderer;
 
 /**
  * The Toolbox serves a transformed WASM main, so it is chosen once per launch:
