@@ -4,12 +4,6 @@ import { EXTERNAL_URLS } from "../../../../src/shared/contracts";
 const BUG_REPORT_URL =
   `${EXTERNAL_URLS.github}/issues/new?template=bug-report.yml`;
 
-useSeoMeta({
-  title: "Install Guide — Guild Wars for macOS",
-  description:
-    "Install Guild Wars on your Mac in four short steps, including the one-time first-launch confirmation.",
-});
-
 const STEPS = [
   {
     title: "Download",
@@ -36,6 +30,13 @@ const STEPS = [
       "The warning appears one more time, now with an Open Anyway button — click it. The app opens, checks the official client, and downloads the files needed to begin. This is only required for the first launch.",
   },
 ] as const;
+
+// The step count is counted, not remembered: the description said "four short
+// steps" above five entries for as long as the fifth one has existed (P3.23).
+useSeoMeta({
+  title: "Install Guide — Guild Wars for macOS",
+  description: `Install Guild Wars on your Mac in ${STEPS.length} short steps, including the one-time first-launch confirmation.`,
+});
 </script>
 
 <template>

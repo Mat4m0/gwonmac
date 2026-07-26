@@ -7,7 +7,12 @@ const BUG_REPORT_URL =
 const FACTS = [
   { title: "Up to 4K", detail: "Sharp native resolution on Retina and external displays." },
   { title: "Up to 60 FPS", detail: "Smooth frame rates tuned for Apple Silicon." },
-  { title: "Full graphics settings", detail: "Every in-game quality option, fully available." },
+  // Narrowed (P3.22): the official WebGL client may offer only `None` for
+  // antialiasing, so "every in-game quality option" was not ours to promise.
+  {
+    title: "Graphics and render scale",
+    detail: "The client's available graphics settings, plus selectable render scale.",
+  },
   // { title: "Quick Start downloads", detail: "Start playing while areas download on demand." },
 ] as const;
 
