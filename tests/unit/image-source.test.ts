@@ -146,21 +146,93 @@ describe("renderer image source", () => {
     });
 
     const first = image.readAsync(handle, 0, null, 0, 32);
-    const second = image.readAsync(handle, 8, null, 128, 16);
+    // The byte-identical range, and an overlapping one: both wait on the fetch
+    // the first read started rather than starting one of their own.
+    const same = image.readAsync(handle, 0, null, 256, 32);
+    const overlapping = image.readAsync(handle, 8, null, 128, 16);
     await turn();
 
     assert.equal(transport.requests.length, 1);
     assert.deepEqual(transport.issued(), [{ start: 0, priority: "demand" }]);
 
     transport.serve(0);
-    await Promise.all([first, second]);
+    await Promise.all([first, same, overlapping]);
 
     assert.deepEqual(heap.subarray(0, 32), snapshotBytes(0, 32));
+    assert.deepEqual(heap.subarray(256, 288), snapshotBytes(0, 32));
     assert.deepEqual(heap.subarray(128, 144), snapshotBytes(8, 16));
-    assert.equal(diagnostics.count("cache:coalesced"), 1);
-    assert.equal(source.stats().coalesced, 1);
+    assert.equal(diagnostics.count("cache:coalesced"), 2);
+    assert.equal(source.stats().coalesced, 2);
     assert.equal(source.stats().fromNative, 1);
-    assert.equal(source.stats().reads, 2);
+    assert.equal(source.stats().reads, 3);
+    source.stop();
+  });
+
+  it("shares the eight-request ceiling between demand and prefetch work", async () => {
+    const { image, source, transport, handle } = makeSource({
+      size: 64 * 16,
+      chunkSize: 64,
+    });
+
+    // Four prefetches take four of the eight slots.
+    for (let chunk = 0; chunk < 4; chunk++) {
+      void image.cacheAsync(handle, chunk * 64, 1, () => {}).catch(() => {});
+    }
+    // Six demand reads compete for the four that are left.
+    const reads = Array.from({ length: 6 }, (_, n) =>
+      image.readAsync(handle, (4 + n) * 64, null, 0, 16));
+    await turn();
+
+    assert.equal(transport.requests.length, 8, "the ceiling counts both priorities");
+    assert.deepEqual(source.state(), {
+      memoryCacheBytes: 0,
+      memoryCacheChunks: 0,
+      pendingChunks: 10,
+      activeDemand: 4,
+      activePrefetch: 4,
+      queuedDemand: 2,
+      queuedPrefetch: 0,
+    });
+
+    // A prefetch finishing hands its slot to a queued demand read, not to more
+    // prefetch work.
+    transport.serve(0);
+    await turn();
+    assert.equal(transport.requests.length, 9);
+    assert.deepEqual(transport.issued()[8], { start: 8 * 64, priority: "demand" });
+    assert.equal(source.state().activeDemand, 5);
+    assert.equal(source.state().activePrefetch, 3);
+    assert.equal(source.state().queuedDemand, 1);
+
+    transport.serveImmediately();
+    await Promise.all(reads);
+    source.stop();
+  });
+
+  it("coalesces a demand read onto an already active prefetch instead of promoting it", async () => {
+    const { image, source, transport, diagnostics, heap, handle } = makeSource({
+      size: 64 * 4,
+      chunkSize: 64,
+    });
+
+    const prefetch = image.cacheAsync(handle, 0, 1, () => {});
+    await turn();
+    assert.deepEqual(transport.issued(), [{ start: 0, priority: "prefetch" }]);
+
+    // The request has already been issued at prefetch priority, so there is
+    // nothing left to promote: the read joins it rather than re-fetching.
+    const demand = image.readAsync(handle, 16, null, 0, 8);
+    await turn();
+
+    assert.equal(transport.requests.length, 1, "no second request for the same chunk");
+    assert.equal(diagnostics.count("scheduler:promotion"), 0);
+    assert.equal(diagnostics.count("cache:coalesced"), 1);
+    assert.equal(source.state().activePrefetch, 1);
+    assert.equal(source.state().activeDemand, 0);
+
+    transport.serve(0);
+    await Promise.all([prefetch, demand]);
+    assert.deepEqual(heap.subarray(0, 8), snapshotBytes(16, 8));
     source.stop();
   });
 
@@ -265,6 +337,38 @@ describe("renderer image source", () => {
     transport.serve(1);
     await retry;
     assert.deepEqual(heap.subarray(0, 16), snapshotBytes(0, 16));
+    source.stop();
+  });
+
+  it("does not dead-end after eight simultaneous failures", async () => {
+    const { image, source, transport, heap, handle } = makeSource({
+      size: 64 * 12,
+      chunkSize: 64,
+    });
+
+    // Twelve demand reads: eight in flight, four behind them.
+    const reads = Array.from({ length: 12 }, (_, chunk) =>
+      image.readAsync(handle, chunk * 64, null, 0, 16));
+    await turn();
+    assert.equal(transport.requests.length, 8);
+    assert.equal(source.state().queuedDemand, 4);
+
+    // Every slot fails. If a failure kept its slot the scheduler would be
+    // permanently full and the four queued chunks would never be requested.
+    for (let index = 0; index < 8; index++) {
+      transport.fail(index, `Game data download failed (HTTP 50${index}).`);
+      await assert.rejects(reads[index]!, new RegExp(`HTTP 50${index}`));
+    }
+    await turn();
+
+    assert.equal(transport.requests.length, 12, "the queued chunks got the freed slots");
+    assert.equal(source.state().activeDemand, 4);
+    assert.equal(source.state().queuedDemand, 0);
+    assert.equal(source.lastError(), "Game data download failed (HTTP 507).");
+
+    transport.serveImmediately();
+    await Promise.all(reads.slice(8));
+    assert.deepEqual(heap.subarray(0, 16), snapshotBytes(11 * 64, 16));
     source.stop();
   });
 
