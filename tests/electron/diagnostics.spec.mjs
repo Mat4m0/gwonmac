@@ -251,8 +251,40 @@ test.describe("diagnostics", () => {
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
+      // P2.5 — `redaction` is the detector's result, not a literal the exporter
+      // writes about itself. `schemaChecked` counts records matched exactly
+      // against the closed schema; `openFields` counts string values carried by
+      // records the schema does not declare yet. Asserting both, rather than
+      // just "it is an object", is what makes the residue visible: a phase that
+      // closes more events must move these numbers.
+      expect(manifest.redaction).toMatchObject({
+        records: expect.any(Number),
+        schemaChecked: expect.any(Number),
+        openFields: expect.any(Number),
+        traceBytesScanned: expect.any(Number),
+      });
+      expect(manifest.redaction.records).toBeGreaterThan(0);
+      expect(manifest.redaction.schemaChecked).toBeGreaterThan(0);
+
+      // The fixture above plants three secrets through the free-text `log()`
+      // path on purpose. This test has always been named "redacted" and until
+      // now only checked a string the exporter wrote about itself, which is
+      // exactly the circular proof P2 exists to remove. Check the export.
+      const exportedFiles = await readdir(extracted);
+      for (const name of exportedFiles) {
+        const stats = await stat(path.join(extracted, name));
+        if (!stats.isFile()) continue;
+        const body = await readFile(path.join(extracted, name), "latin1");
+        for (const secret of [
+          "should-never-export",
+          "also-secret",
+          "player@example.invalid",
+        ]) {
+          expect(body, `${name} leaked ${secret}`).not.toContain(secret);
+        }
+      }
+
       expect(manifest).toMatchObject({
-        redaction: "passed",
         captureLevel: 1,
         previousSession: {
           sessionId: previousSessionId,
