@@ -1,5 +1,17 @@
 // Renderer-owned game input. The Emscripten host installs this once before its
 // glue loads; native interruptions all converge on releaseAll().
+
+// Canvases a held drag may wander from the one it started on. The client keeps
+// integrating mouse moves whose coordinates fall outside the canvas, so a drag
+// need not stop at the edge — it only needs to stop somewhere, or the
+// coordinates of a long drag grow without limit. Sixteen of them put a
+// re-anchor several camera revolutions apart at any window size.
+const POINTER_ROAM = 16;
+
+// Re-anchors a single mouse move may spend before the leftover delta is
+// dropped. Four cross a drag's whole range; further is a teleport, not a drag.
+const MAX_POINTER_REGRABS = 4;
+
 /**
  * @param {{
  *   canvas: HTMLCanvasElement,
@@ -55,10 +67,6 @@ export const installGameInput = ({
   /** @type {{ x: number, y: number } | null} */
   let virtualCursor = null;
   let pointerWanted = false;
-  let resettingPointer = false;
-  let pendingPointerX = 0;
-  let pendingPointerY = 0;
-  let pointerResetFrame = 0;
   let releasing = false;
   let wheelRemainder = 0;
   let wheelDirection = 0;
@@ -264,10 +272,6 @@ export const installGameInput = ({
   function releasePointer() {
     pointerWanted = false;
     virtualCursor = null;
-    resettingPointer = false;
-    pendingPointerX = 0;
-    pendingPointerY = 0;
-    cancelAnimationFrame(pointerResetFrame);
     canvas.classList.remove('cursor-hidden');
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
@@ -521,49 +525,39 @@ export const installGameInput = ({
     finishTouch('touchcancel', touch);
   }, true);
 
+  // The client steers from absolute coordinates, so a held right-drag eventually
+  // runs out of the room a re-anchor gives it. Release and re-press at center
+  // while the physical button stays held, then spend the rest of the delta in
+  // the same tick — deferring the remainder to the next animation frame froze
+  // the camera for that frame.
   /** @param {number} movementX @param {number} movementY */
   const sendDelta = (movementX, movementY) => {
     if (!virtualCursor) return;
     const rect = canvas.getBoundingClientRect();
-    const nextX = virtualCursor.x + movementX;
-    const nextY = virtualCursor.y + movementY;
-    if (
-      nextX >= 0 &&
-      nextX <= rect.width &&
-      nextY >= 0 &&
-      nextY <= rect.height
-    ) {
-      virtualCursor.x = nextX;
-      virtualCursor.y = nextY;
-      sendMouse('mousemove', rect, currentButtons(), 0, movementX, movementY);
-      return;
+    const roamX = rect.width * POINTER_ROAM;
+    const roamY = rect.height * POINTER_ROAM;
+    let restX = movementX;
+    let restY = movementY;
+    // Each re-anchor buys another budget, so a bounded few consume any delta a
+    // hand can produce. The bound also ends the loop on a zero-area canvas.
+    for (let regrab = 0; ; regrab += 1) {
+      const stepX =
+        Math.max(-roamX, Math.min(rect.width + roamX, virtualCursor.x + restX)) -
+        virtualCursor.x;
+      const stepY =
+        Math.max(-roamY, Math.min(rect.height + roamY, virtualCursor.y + restY)) -
+        virtualCursor.y;
+      virtualCursor.x += stepX;
+      virtualCursor.y += stepY;
+      const buttons = currentButtons();
+      sendMouse('mousemove', rect, buttons, 0, stepX, stepY);
+      restX -= stepX;
+      restY -= stepY;
+      if ((!restX && !restY) || regrab === MAX_POINTER_REGRABS) return;
+      sendMouse('mouseup', rect, buttons & ~2, 2, 0, 0);
+      virtualCursor = { x: rect.width / 2, y: rect.height / 2 };
+      sendMouse('mousedown', rect, buttons, 2, 0, 0);
     }
-    const stepX =
-      Math.max(0, Math.min(rect.width, nextX)) - virtualCursor.x;
-    const stepY =
-      Math.max(0, Math.min(rect.height, nextY)) - virtualCursor.y;
-    virtualCursor.x += stepX;
-    virtualCursor.y += stepY;
-    const buttons = currentButtons();
-    sendMouse('mousemove', rect, buttons, 0, stepX, stepY);
-    pendingPointerX += movementX - stepX;
-    pendingPointerY += movementY - stepY;
-    if (resettingPointer) return;
-    resettingPointer = true;
-    // The client steers from absolute coordinates. Re-grab at center while
-    // the physical button remains held, then replay the unconsumed delta.
-    sendMouse('mouseup', rect, buttons & ~2, 2, 0, 0);
-    virtualCursor = { x: rect.width / 2, y: rect.height / 2 };
-    sendMouse('mousedown', rect, buttons, 2, 0, 0);
-    pointerResetFrame = requestAnimationFrame(() => {
-      resettingPointer = false;
-      if (document.pointerLockElement !== canvas || !virtualCursor) return;
-      const replayX = pendingPointerX;
-      const replayY = pendingPointerY;
-      pendingPointerX = 0;
-      pendingPointerY = 0;
-      if (replayX || replayY) sendDelta(replayX, replayY);
-    });
   };
 
   canvas.addEventListener('mousedown', (event) => {
@@ -574,9 +568,6 @@ export const installGameInput = ({
       y: event.clientY - rect.top,
     };
     pointerWanted = true;
-    resettingPointer = false;
-    pendingPointerX = 0;
-    pendingPointerY = 0;
     if (document.pointerLockElement === canvas) return;
     try {
       const request = canvas.requestPointerLock();
@@ -610,12 +601,7 @@ export const installGameInput = ({
     ) return;
     event.stopImmediatePropagation();
     event.preventDefault();
-    if (resettingPointer) {
-      pendingPointerX += event.movementX;
-      pendingPointerY += event.movementY;
-    } else {
-      sendDelta(event.movementX, event.movementY);
-    }
+    sendDelta(event.movementX, event.movementY);
   }, true);
 
   document.addEventListener('mouseup', (event) => {
