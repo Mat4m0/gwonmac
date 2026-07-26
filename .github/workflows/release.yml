@@ -265,7 +265,7 @@ jobs:
           TAG: ${{ needs.release-build.outputs.tag }}
         run: |
           notes=""
-          release_args=(--target "$GITHUB_SHA" --title "$TAG")
+          release_args=(--repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG")
           if [ "$PRERELEASE" = "true" ]; then
             release_args+=(--prerelease --latest=false)
             notes="> [!WARNING]
