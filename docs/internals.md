@@ -143,13 +143,15 @@ which the renderer persists as `lastUpdateCheckAt` and renders as
 "Last checked". The launcher and the settings dialog mount the same controller,
 so the two surfaces cannot come to disagree.
 
-No string from the API response crosses IPC: the renderer can only open the
-closed `ExternalLinkKind` vocabulary, so the releases page is opened by name
-and `latestVersion` is re-rendered from the parsed version rather than echoed.
-Parsing, comparison, and the channel policy — a prerelease is only ever offered
-to an install already running a prerelease — live in `src/shared/release.ts`,
-which the website's release resolver imports as well. `docs/user-guide.md`
-owns what the player is told; the numbering itself is
+No attacker-controlled string crosses IPC. The response's URL is discarded
+rather than carried: the renderer can only open the closed `ExternalLinkKind`
+vocabulary, so the releases page is opened by name, and `latestVersion` is
+re-rendered by `formatReleaseVersion` from the parsed version instead of
+echoing the tag. Parsing, comparison, and the channel policy — a prerelease is
+only ever offered to an install already running a prerelease — are
+`src/shared/release.ts`, which is also where the website's resolver points for
+the rule it implements against GitHub's own `prerelease` flag.
+`docs/user-guide.md` owns what the player is told; the numbering itself is
 [Release numbering](release-verification.md#release-numbering).
 
 ## WASM host
