@@ -77,7 +77,13 @@ export class ClientRuntime {
   private progressValue: DownloadProgress = { ...INITIAL_PROGRESS };
   private saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
   private initialResidencyRecorded = false;
-  private fullDownload: Promise<boolean> | null = null;
+  /**
+   * The store the download is actually driving, kept beside its promise. After
+   * a generation swap it is no longer `activeSlot.current.store`, and stopping
+   * the current one would stop the new client's prefetch instead.
+   */
+  private fullDownload: { store: ChunkStore; promise: Promise<boolean> } | null =
+    null;
   private gameUpdate: Promise<void> | null = null;
   private candidateFrameReady = false;
   private candidateSocketReady = false;
@@ -509,7 +515,7 @@ export class ClientRuntime {
   }
 
   downloadAll(): Promise<boolean> {
-    if (this.fullDownload) return this.fullDownload;
+    if (this.fullDownload) return this.fullDownload.promise;
     const active = this.activeSlot.current;
     if (!active) {
       return Promise.reject(
@@ -524,7 +530,7 @@ export class ClientRuntime {
       label: "Downloading full game",
     });
     let lastProgressLogAt = 0;
-    this.fullDownload = active.store
+    const promise = active.store
       .downloadAll({
         onProgress: (value) => {
           if (this.activeSlot.current?.generation !== active.generation) return;
@@ -585,13 +591,15 @@ export class ClientRuntime {
       .finally(() => {
         this.fullDownload = null;
       });
-    return this.fullDownload;
+    this.fullDownload = { store: active.store, promise };
+    return promise;
   }
 
   stopDownload(): void {
-    if (!this.fullDownload) return;
+    const download = this.fullDownload;
+    if (!download) return;
     log("cache", "info", "fullDownload.stopRequested");
-    this.activeSlot.current?.store.stop();
+    download.store.stop();
   }
 
   noteSocketOpen(): void {
