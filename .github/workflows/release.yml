@@ -44,6 +44,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read
     outputs:
       prerelease: ${{ steps.version.outputs.prerelease }}
       tag: ${{ steps.version.outputs.tag }}
@@ -58,6 +59,44 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
+
+      # GitHub disables scheduled workflows in a repository that has been quiet
+      # for 60 days, and a canary that stopped running looks exactly like a
+      # canary that keeps passing. Only the last successful run tells the two
+      # apart, and GitHub already keeps that timestamp; a copy committed here
+      # would need a scheduled job with write access to stay true, which is the
+      # permission this repository deliberately withholds from the canary.
+      # The age is computed in Node so that no wall clock reaches the release
+      # version, which comes from package.json and nowhere else.
+      - name: Require a client canary newer than 14 days
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs="repos/$GITHUB_REPOSITORY/actions/workflows/client-canary.yml/runs"
+          started="$(gh api \
+            "$runs?status=success&branch=$GITHUB_REF_NAME&per_page=1" \
+            --jq '.workflow_runs[0].run_started_at // ""')"
+          if [ -z "$started" ]; then
+            echo "No ArenaNet client canary has ever succeeded on $GITHUB_REF_NAME." >&2
+            echo "Run the 'ArenaNet client canary' workflow, then release." >&2
+            exit 1
+          fi
+          age="$(node -e '
+            const started = Date.parse(process.argv[1]);
+            if (Number.isNaN(started)) {
+              console.error(`unreadable canary timestamp: ${process.argv[1]}`);
+              process.exit(1);
+            }
+            console.log(Math.floor((Date.now() - started) / 86400000));
+          ' "$started")"
+          echo "Last successful ArenaNet client canary: $started ($age days ago)."
+          if [ "$age" -gt 14 ]; then
+            echo "The canary has not passed for $age days, so nothing here has" >&2
+            echo "met ArenaNet's current client. Re-run the 'ArenaNet client" >&2
+            echo "canary' workflow and release once it is green." >&2
+            exit 1
+          fi
+
       - run: pnpm install --frozen-lockfile
 
       - name: Resolve release version
