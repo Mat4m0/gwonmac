@@ -50,6 +50,7 @@ test("saved login has one encrypted owner-only persistence surface", () => {
     "src/main/ipc.ts",
     "src/main/core/credentials.ts",
     "src/main/paths.ts",
+    "src/main/core/paths.ts",
     "src/preload/preload.cjs",
     "src/shared/contracts.ts",
     "src/renderer/harness.js",
