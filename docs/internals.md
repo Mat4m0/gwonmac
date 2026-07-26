@@ -313,10 +313,28 @@ clears that inline value and nothing else. No memory view or per-frame call
 crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
-destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes
-per renderer, and closes an owner’s sockets on reload, renderer loss, or quit.
-DNS accepts only approved ArenaNet/Guild Wars suffixes and retains the raw DNS
-fallback needed for the `0.0.1.2` datacenter sentinel.
+destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on
+reload, renderer loss, or quit. DNS accepts only approved ArenaNet/Guild Wars
+suffixes and retains the raw DNS fallback needed for the `0.0.1.2` datacenter
+sentinel.
+
+Three ceilings bound one renderer: 64 sockets, 4 MiB queued on any single
+socket, and 16 MiB queued across all of them together. The aggregate one is the
+ceiling that matters — a per-socket limit alone leaves 64 × 4 MiB = 256 MiB of
+main-process buffering reachable from one renderer. A send that would cross
+either byte ceiling is refused before anything is queued, and the socket stays
+open, so a refusal costs one packet rather than the connection. Owners are
+accounted separately: a saturated renderer cannot spend, or free, another’s
+budget.
+
+Each write reserves its bytes before the write and releases them exactly once —
+when the write callback runs, or at teardown for whatever the socket still
+holds. Both halves are needed. A destroyed socket may never fire the callbacks
+it owes, so teardown without reclamation leaks an owner’s budget until the
+process exits; and a callback that arrives after teardown must not release the
+same bytes twice, or the reclaimed budget is taken from sockets that are still
+alive. After close, failure, renderer reload and quit, no owner holds any
+reserved bytes.
 
 Game socket payloads are views into WebAssembly memory. The renderer copies
 each outbound view into a compact `Uint8Array` before crossing
