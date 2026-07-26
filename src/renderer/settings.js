@@ -728,23 +728,36 @@
     if (!dataDownload.hidden) renderLauncherDownload();
 
     fullDownloadPromise = window.gwNative.cache.downloadAll()
-      .then(async (complete) => {
+      .then(async (outcome) => {
+        // The download reports why it stopped, and the sentence for that
+        // reason is written here rather than in the main process.
         downloadError = '';
+        if (outcome.status === 'failed') {
+          const { describeDownloadFailure } =
+            await import('./failure-messages.js');
+          downloadError = describeDownloadFailure(outcome.errorCode);
+        }
         const cache = await window.gwNative.cache.info();
         currentCache = cache;
         renderSettingsData(cache);
         if (!dataDownload.hidden) renderLauncherDownload(cache);
-        if (!complete && dialog.open) {
+        if (downloadError) {
+          if (dialog.open) feedback.textContent = downloadError;
+          return false;
+        }
+        if (outcome.status === 'stopped' && dialog.open) {
           settingsCache.textContent = `Download paused · ${cacheStatus(cache)}`;
         }
-        return complete;
+        return outcome.status === 'complete';
       })
-      .catch((error) => {
-        const message =
-          error?.message || 'The full game download could not continue.';
-        downloadError = message;
-        if (dialog.open) feedback.textContent = message;
-        if (!dataDownload.hidden) renderLauncherDownload(currentCache, message);
+      .catch(() => {
+        // Only a broken bridge reaches here: the outcome above covers every
+        // way the download itself can end.
+        downloadError = 'The full game download could not continue.';
+        if (dialog.open) feedback.textContent = downloadError;
+        if (!dataDownload.hidden) {
+          renderLauncherDownload(currentCache, downloadError);
+        }
         return false;
       })
       .finally(async () => {

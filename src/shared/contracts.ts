@@ -54,6 +54,18 @@ export interface DownloadFailure {
 
 export type DownloadProgress = DownloadActivity | DownloadFailure;
 
+/**
+ * How a full-game download ended. It replaces a `boolean` plus a rejected
+ * promise carrying an English sentence: Electron flattens a rejection to its
+ * message, so a *value* is the only way a code can cross to the renderer, and
+ * the renderer is where the sentence belongs. Verified data survives all
+ * three, which is why "failed" needs no separate "how much was kept".
+ */
+export type FullDownloadOutcome =
+  | { status: "complete" }
+  | { status: "stopped" }
+  | { status: "failed"; errorCode: ErrorCode };
+
 export interface PrefetchProgress {
   completedChunks: number;
   totalChunks: number;
@@ -470,7 +482,7 @@ export interface GwNativeApi {
   cache: {
     info(): Promise<CacheInfo>;
     clearAndRestart(): Promise<boolean>;
-    downloadAll(): Promise<boolean>;
+    downloadAll(): Promise<FullDownloadOutcome>;
     stopDownload(): Promise<void>;
   };
   gameStorage: {

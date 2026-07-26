@@ -14,6 +14,7 @@ import type {
   ClientSession,
   DownloadProgress,
   ExternalLinkKind,
+  FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
   ReleaseNotice,
@@ -64,7 +65,7 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
-  downloadFullGame: () => Promise<boolean>;
+  downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: () => Promise<void>;
   retryClient: () => Promise<void>;

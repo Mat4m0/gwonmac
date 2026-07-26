@@ -3,6 +3,7 @@ import type {
   ClientCompatibility,
   ClientCompatibilityState,
   DownloadProgress,
+  FullDownloadOutcome,
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
@@ -45,7 +46,6 @@ import {
   migrateLegacyPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
-import { fullDownloadFailureMessage } from "./core/recovery.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
 import { prepareTemplateSaveClient } from "./core/template-save-client.js";
 import {
@@ -98,8 +98,10 @@ export class ClientRuntime {
    * a generation swap it is no longer `activeSlot.current.store`, and stopping
    * the current one would stop the new client's prefetch instead.
    */
-  private fullDownload: { store: ChunkStore; promise: Promise<boolean> } | null =
-    null;
+  private fullDownload: {
+    store: ChunkStore;
+    promise: Promise<FullDownloadOutcome>;
+  } | null = null;
   private gameUpdate: Promise<void> | null = null;
   /**
    * Which of the three certification states this session is in. Set once per
@@ -563,13 +565,17 @@ export class ClientRuntime {
     return operation;
   }
 
-  downloadAll(): Promise<boolean> {
+  /**
+   * Resolves with the outcome; it does not reject. A rejection crosses IPC as
+   * Electron's flattened message, so a rejected promise could only have
+   * carried prose — which is how the sentence for a failed download came to be
+   * written in the main process at all.
+   */
+  downloadAll(): Promise<FullDownloadOutcome> {
     if (this.fullDownload) return this.fullDownload.promise;
     const active = this.activeSlot.current;
     if (!active) {
-      return Promise.reject(
-        new Error("The game files are not ready yet. Try again in a moment."),
-      );
+      return Promise.resolve({ status: "failed", errorCode: "not_ready" });
     }
     active.store.resume();
     log("cache", "info", "fullDownload.started");
@@ -603,7 +609,7 @@ export class ClientRuntime {
           }
         },
       })
-      .then(async (complete) => {
+      .then(async (complete): Promise<FullDownloadOutcome> => {
         await this.refreshSnapshot(active.generation);
         log(
           "cache",
@@ -617,10 +623,11 @@ export class ClientRuntime {
             label: complete ? "Full game downloaded" : "Download stopped",
           });
         }
-        return complete;
+        return { status: complete ? "complete" : "stopped" };
       })
-      .catch((error) => {
-        logEvent({ k: "fullDownload.failed", code: errorCode(error) });
+      .catch((error): FullDownloadOutcome => {
+        const code = errorCode(error);
+        logEvent({ k: "fullDownload.failed", code });
         if (this.activeSlot.current?.generation === active.generation) {
           this.publishProgress({
             ...INITIAL_PROGRESS,
@@ -628,7 +635,7 @@ export class ClientRuntime {
             label: "Download paused",
           });
         }
-        throw new Error(fullDownloadFailureMessage(error), { cause: error });
+        return { status: "failed", errorCode: code };
       })
       .finally(() => {
         this.fullDownload = null;

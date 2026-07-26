@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, after } from "node:test";
 import { ChunkStore } from "../../src/main/core/chunk-store.ts";
+import { AppError } from "../../src/shared/errors.ts";
 
 const CHUNK = 4096;
 
@@ -385,7 +386,7 @@ describe("chunk-store", () => {
     assert.equal(fetches, 0);
   });
 
-  it("fails fast and preserves fatal local download errors", async () => {
+  it("fails fast and classifies a fatal local write, keeping its cause", async () => {
     const root = await freshDir();
     const payloads = Array.from({ length: 3 }, (_, index) =>
       Buffer.alloc(CHUNK, index + 20),
@@ -412,7 +413,12 @@ describe("chunk-store", () => {
           jobs: 1,
           freeBytes: async () => 10 * 1024 * 1024 * 1024,
         }),
-      (error) => error === diskError,
+      // A bare errno would collapse to "unknown" at every boundary that reads
+      // a code, so the store names the failure and keeps the original beneath.
+      (error) =>
+        error instanceof AppError &&
+        error.code === "disk_full" &&
+        error.cause === diskError,
     );
     assert.equal(fetches, 1);
   });
