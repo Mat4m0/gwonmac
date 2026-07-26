@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   formatBuildEntry,
   inspectTemplateSaveCandidate,
-} from "../main/core/template-save-recert.js";
+} from "./template-save-recert.js";
 import { defaultGuildWarsProfile } from "./toolbox-doctor.js";
 
 const USAGE =

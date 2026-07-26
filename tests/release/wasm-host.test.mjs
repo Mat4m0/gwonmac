@@ -173,7 +173,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
 
 test("a new client build can be re-certified without hand-derivation", async () => {
   const recert = await readFile(
-    path.join(root, "src/main/core/template-save-recert.ts"),
+    path.join(root, "src/tools/template-save-recert.ts"),
     "utf8",
   );
   const cli = await readFile(
@@ -214,13 +214,18 @@ test("the WASM section codec has exactly one home", async () => {
   assert.match(shared, /function copyRange/);
   assert.doesNotMatch(shared, /bodies\.push\(bytes\.slice/);
 
-  for (const file of [
-    "src/main/core/toolbox-transform.ts",
-    "src/main/core/template-save-compat.ts",
-    "src/main/core/template-save-recert.ts",
+  // The recertifier is developer tooling and lives in src/tools/, so it names
+  // the same codec one directory further away (P4.4).
+  for (const [file, specifier] of [
+    ["src/main/core/toolbox-transform.ts", './wasm-binary.js'],
+    ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
+    ["src/tools/template-save-recert.ts", '../main/core/wasm-binary.js'],
   ]) {
     const source = await readFile(path.join(root, file), "utf8");
-    assert.match(source, /from "\.\/wasm-binary\.js"/, `${file} must share the codec`);
+    assert.ok(
+      source.includes(`from "${specifier}"`),
+      `${file} must share the codec`,
+    );
     for (const primitive of [
       "splitSections",
       "parseCode",

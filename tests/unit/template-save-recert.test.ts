@@ -8,7 +8,7 @@ import {
   draftTemplateSaveBuild,
   formatBuildEntry,
   inspectTemplateSaveCandidate,
-} from "../../src/main/core/template-save-recert.js";
+} from "../../src/tools/template-save-recert.js";
 import { defaultGuildWarsProfile } from "../../src/tools/toolbox-doctor.js";
 
 function uleb(value: number): number[] {

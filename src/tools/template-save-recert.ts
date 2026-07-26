@@ -1,6 +1,11 @@
 // Re-derive a `KnownTemplateSaveBuild` entry from a client WASM, by shape
 // rather than by remembered index.
 //
+// Developer tooling: `pnpm template:recertify` is its only caller and no
+// runtime path reaches it, so it lives here rather than in src/main/core/.
+// Forge packages build/main, build/shared, build/renderer and build/preload —
+// build/tools is outside the .app by construction (P4.3, P4.4).
+//
 // Every number in the certified table belongs to one exact build, and ArenaNet
 // updates the client automatically. Recovering them by hand takes hours; this
 // recovers them in seconds and hands the result to the production transform for
@@ -29,7 +34,7 @@ import {
   uleb,
   valueTypeName,
   type FunctionType,
-} from "./wasm-binary.js";
+} from "../main/core/wasm-binary.js";
 import {
   findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
@@ -38,7 +43,7 @@ import {
   type CallSite,
   type KnownTemplateSaveBuild,
   type StubBridge,
-} from "./template-save-compat.js";
+} from "../main/core/template-save-compat.js";
 
 const CARRIER_IMPORT_NAME = "__syscall_newfstatat";
 const ASSERT_HOOK_IMPORT_NAME = "emscripten_asm_const_int";
