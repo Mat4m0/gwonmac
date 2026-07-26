@@ -165,12 +165,47 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   store: "https://store.guildwars.com/en-us",
 };
 
-export interface UpdateStatus {
-  currentVersion: string;
-  latestVersion: string;
-  url: string;
-  hasUpdate: boolean;
-}
+/**
+ * Why a release check produced no answer. Closed vocabulary because the
+ * renderer renders one message per member, and because "we could not tell"
+ * must never arrive looking like "you are up to date".
+ *
+ * `rate-limited` is separate from `server` on purpose: GitHub allows 60
+ * unauthenticated requests per hour per IP, and a manual button invites
+ * mashing, so that case needs its own sentence.
+ */
+export type ReleaseCheckFailure =
+  | "rate-limited"
+  | "offline"
+  | "timeout"
+  | "server"
+  | "unreadable"
+  | "unsupported-build";
+
+/**
+ * Three states, never two. `latestVersion` is re-rendered from the parsed
+ * version rather than passed through from the API response, so no free text
+ * from the network reaches the UI.
+ */
+export type ReleaseNotice =
+  | {
+      state: "update-available";
+      currentVersion: string;
+      latestVersion: string;
+      checkedAt: number;
+    }
+  | {
+      state: "up-to-date";
+      currentVersion: string;
+      latestVersion: string;
+      checkedAt: number;
+    }
+  | {
+      state: "unknown";
+      currentVersion: string;
+      reason: ReleaseCheckFailure;
+      checkedAt: number;
+    };
 
 export const IPC = {
   progressCurrent: "gw:progress:current",
@@ -204,7 +239,9 @@ export const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
-  updateStatus: "gw:update:status",
+  // Named for its trigger: the renderer asks for a check, it does not read a
+  // status the main process was already keeping.
+  releaseNoticeCheck: "gw:releaseNotice:check",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -267,7 +304,7 @@ export interface GwNativeApi {
     retry(): Promise<void>;
     healthy(): Promise<void>;
   };
-  update: {
-    status(): Promise<UpdateStatus | null>;
+  releaseNotice: {
+    check(): Promise<ReleaseNotice>;
   };
 }

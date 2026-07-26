@@ -14,6 +14,7 @@ import type {
   DownloadProgress,
   ExternalLinkKind,
   GraphicsDiagnostics,
+  ReleaseNotice,
   SocketEvent,
 } from "../shared/contracts.js";
 import {
@@ -25,7 +26,6 @@ import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
-import { checkForUpdate } from "./update-check.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
@@ -59,6 +59,7 @@ export interface IpcContext {
   stopFullDownload: () => void;
   confirmClientHealthy: () => Promise<void>;
   retryClient: () => Promise<void>;
+  checkReleaseNotice: () => Promise<ReleaseNotice>;
 }
 
 function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -481,9 +482,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     await ctx.confirmClientHealthy();
   });
 
-  ipcMain.handle(IPC.updateStatus, async (event) => {
+  ipcMain.handle(IPC.releaseNoticeCheck, async (event) => {
     assertSender(event);
-    return checkForUpdate();
+    return ctx.checkReleaseNotice();
   });
 }
 

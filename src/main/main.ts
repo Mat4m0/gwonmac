@@ -33,6 +33,7 @@ import {
 } from "./diagnostics.js";
 import type { AppPhase } from "./diagnostics/schema.js";
 import { emitSocketEvent, registerIpcHandlers } from "./ipc.js";
+import { checkForNewerRelease } from "./release-notice.js";
 import {
   enableSandboxBeforeReady,
   onAppQuit,
@@ -329,6 +330,7 @@ app.whenReady().then(async () => {
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: () => clientRuntime.noteFramePresented(),
     retryClient: () => clientRuntime.retryUpdate(),
+    checkReleaseNotice: () => checkForNewerRelease(app.getVersion()),
   });
 
   onAppQuit(async () => {

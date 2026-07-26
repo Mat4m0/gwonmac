@@ -188,23 +188,6 @@ window.gwLoading = (function () {
     void window.gwNative.app.openExternal(kind);
   });
 
-  // Quiet update awareness: one corner link when a newer release exists.
-  // Main returns null for dev builds and on any network failure.
-  void (async () => {
-    const status = window.gwNative?.update?.status
-      ? await window.gwNative.update.status().catch(() => null)
-      : null;
-    if (!status || !status.hasUpdate) return;
-    const links = el('loading-links');
-    if (!links || links.querySelector('[data-external="releases"]')) return;
-    const link = document.createElement('a');
-    link.href = '#';
-    link.dataset.external = 'releases';
-    link.className = 'update';
-    link.textContent = `Update available · ${status.latestVersion}`;
-    links.prepend(link);
-  })();
-
   async function waitForClient() {
     if (!window.gwNative) {
       api.fail('Native bridge missing — this page must run inside Guild Wars.app.');

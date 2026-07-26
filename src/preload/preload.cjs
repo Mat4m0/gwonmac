@@ -35,7 +35,7 @@ const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
-  updateStatus: "gw:update:status",
+  releaseNoticeCheck: "gw:releaseNotice:check",
 };
 
 function listen(eventChannel, callback) {
@@ -123,8 +123,8 @@ const api = {
     retry: () => ipcRenderer.invoke(IPC.clientRetry),
     healthy: () => ipcRenderer.invoke(IPC.clientHealthy),
   },
-  update: {
-    status: () => ipcRenderer.invoke(IPC.updateStatus),
+  releaseNotice: {
+    check: () => ipcRenderer.invoke(IPC.releaseNoticeCheck),
   },
 };
 for (const namespace of Object.values(api)) Object.freeze(namespace);
