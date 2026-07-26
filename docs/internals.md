@@ -118,7 +118,7 @@ the app no longer asks GitHub anything on its own initiative.
 
 `src/main/release-notice.ts` is the only code that contacts
 `api.github.com/repos/<repo>/releases/latest`, and it has exactly three
-callers: the manual **Check for Updates** action, the **Check now** button on
+callers: the manual **Check for Updates** action, the same action mounted on
 the client-compatibility notice, and one launch-time check that runs only while
 `AppSettings.autoCheckUpdates` is on. That setting defaults to `false` and
 governs every automatic request without exception, the compatibility path

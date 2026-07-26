@@ -198,8 +198,8 @@ exists only when one of three things happens:
 
 1. You choose **Check for Updates**, on the loading screen or under
    **Settings → Advanced**.
-2. You choose **Check now** on the notice that appears when the app does not
-   recognize the game client build ArenaNet is currently serving.
+2. You choose **Check for Updates** on the notice that appears when the app
+   does not recognize the game client build ArenaNet is currently serving.
 3. The app starts while **Check for app updates automatically** is on. That
    box is off unless you turn it on; the first-launch screen offers it beside
    the download-mode question, and **Settings → Advanced** owns it afterwards.
@@ -237,7 +237,7 @@ changes. Recovery needs a new release of this app; retrying, reinstalling, or
 clearing downloaded game data cannot certify a build. The same status is always
 visible under **Settings → Controls**. An uncertified client build does not mean
 the app is out of date — whether a newer release exists is the separate question
-above, answered by the same **Check now** button on the notice.
+above, which the notice's own **Check for Updates** button answers.
 
 The app reads game memory only for **Use the game's own cursor**, which is on
 by default. Clear that box and no Toolbox hook is installed, no companion
