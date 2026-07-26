@@ -1,7 +1,7 @@
 {
   "name": "guild-wars",
   "productName": "Guild Wars",
-  "version": "0.0.2",
+  "version": "2026.7.0-alpha.1",
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",

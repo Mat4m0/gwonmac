@@ -5,12 +5,16 @@
 //
 // So this executes scripts/macos-version.mjs across a ladder of every release
 // this project can cut, in publication order, and demands the build number rise
-// at every rung.
+// at every rung. It also holds the two boundaries the mapping depends on: the
+// version this repository is about to release must map at all, and it must be a
+// version the app's own parser can compare.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { macOSBundleVersions } from "../../scripts/macos-version.mjs";
 import {
   compareReleaseVersions,
+  formatReleaseVersion,
   parseReleaseVersion,
 } from "../../src/shared/release.ts";
 
@@ -125,5 +129,27 @@ describe("the macOS build number derived from a release version", () => {
         `${JSON.stringify(version)} was accepted as a release version`,
       );
     }
+  });
+
+  it("accepts the version this repository would release right now", () => {
+    const { version } = JSON.parse(
+      readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as { version: string };
+    const { appVersion, buildVersion } = macOSBundleVersions(version);
+    assert.ok(
+      compareBundleVersions(buildVersion, "1.1.1") > 0,
+      `${version} -> ${buildVersion} does not exceed the published alpha`,
+    );
+    // The same string has to reach the release check, which compares versions
+    // with src/shared/release.ts and reports "unknown" for anything it cannot
+    // read. A shipped version that fails here makes every install unable to
+    // tell whether it is current.
+    const parsedVersion = parseReleaseVersion(version);
+    assert.ok(parsedVersion, `${version} is not a version the app can compare`);
+    assert.equal(formatReleaseVersion(parsedVersion), version);
+    assert.equal(
+      appVersion,
+      `${parsedVersion.major}.${parsedVersion.minor}.${parsedVersion.patch}`,
+    );
   });
 });
