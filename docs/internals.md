@@ -656,6 +656,31 @@ window was steady.
 
 ## Verification boundaries
 
+### Claims and the tests that prove them
+
+Every statement this project makes in public — the website, `README.md`, the
+in-app copy — is a claim someone can hold us to. Each one gets a row here and
+each row names something that executes.
+
+**The rule: a public claim with no row does not ship, and a row whose proof
+reads _none_ is a claim to narrow or delete, not a claim to explain.** The
+three that read _none_ today are recorded rather than quietly kept.
+
+| Claim | Where it is made | What executes to prove it |
+| --- | --- | --- |
+| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/toolbox-default-cursor-and-gates.test.mjs` — *automation is the one tier a shipped build cannot reach*: the automation constant stays `!app.isPackaged`-gated, and main reaches it only through `toolboxEnabledFor` |
+| The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
+| Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.mjs` for publication, corruption repair and rollback |
+| No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/allowlists.test.ts` (domains, ports, public-destination classification), `tests/unit/proxy-routes.test.ts` — *names unknown routes instead of guessing*. The socket egress boundary itself is still asserted only by the modules' own unit tests, not by one test named for the claim |
+| A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
+| The app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/unit/settings.test.ts` — *exposes the documented defaults* (`autoCheckUpdates: false`); `tests/unit/release-notice.test.ts` and `tests/unit/update-action.test.ts` for the check itself |
+| The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/toolbox-default-cursor-and-gates.test.mjs` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/toolbox-cursor.spec.mjs` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.mjs` for what is tracked |
+| Releases are ad-hoc signed and the shipped fuses hold | website FAQ | `tests/packaged-smoke.mjs` (`codesign --verify --deep --strict`, the nine fuse states), `tests/policy/fuses.test.mjs` |
+| Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.mjs` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.mjs` for the resolutions shown beside each scale |
+| "Up to 60 FPS", "tuned for Apple Silicon" | website capability facts | **none.** No test asserts a frame rate, and `tests/packaged-smoke.mjs` does not assert the packaged binary's architecture |
+| "Full graphics settings — every in-game quality option, fully available" | website capability facts | **none, and the claim is wrong**: the official WebGL client may offer only `None` for antialiasing. `docs/user-guide.md` states this correctly; the website has not been narrowed to match |
+| "Up to 4K" | website capability facts | **none.** Render scale is proved; a 4K backing resolution on a specific display is not |
+
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
 cache coalescing, hash validation, insufficient-disk rejection, interrupted
 full-download resume, smoothed rates, native task-state derivation, and
