@@ -177,6 +177,60 @@ test.describe("client compatibility", () => {
     }
   });
 
+  test("the notice grows the dock without covering the legal footer", async () => {
+    // The notice makes the dock half as tall again. While the footer was
+    // pinned to a constant it went behind the dock's opaque gradient, and the
+    // attribution index.html renders statically — precisely so it cannot
+    // depend on anything succeeding — was unreadable on the one launch that
+    // shows the notice. Real copy, real stylesheet, real Chromium layout.
+    const fixture = await launchOffline("gw-compat-notice-layout-e2e-");
+    try {
+      const { page } = fixture;
+      const rects = () =>
+        page.evaluate(() => {
+          const box = (id) => globalThis.document.getElementById(id).getBoundingClientRect();
+          return {
+            dock: box("loading-dock"),
+            legal: box("loading-legal"),
+            notice: box("client-compat"),
+          };
+        });
+      await expect(page.locator("#loading-dock")).toBeVisible();
+      const before = await rects();
+
+      await page.evaluate(async () => {
+        const { compatibilityReport } = await import(
+          "./client-compatibility-notice.js"
+        );
+        const report = compatibilityReport({
+          state: "uncertified",
+          toolboxRequested: true,
+          clientSha256: "a".repeat(64),
+        });
+        globalThis.document.getElementById("client-compat-title").textContent =
+          report.summary;
+        globalThis.document.getElementById("client-compat-detail").textContent =
+          report.details.join(" ");
+        globalThis.document.getElementById("client-compat-version").textContent =
+          "App version 2026.7.0-alpha.1.";
+        const answer = globalThis.document.getElementById("client-compat-update");
+        answer.textContent =
+          "Couldn't check — GitHub did not answer within five seconds.";
+        answer.hidden = false;
+        globalThis.document.getElementById("client-compat").hidden = false;
+      });
+      const after = await rects();
+
+      // Not a vacuous pass: the notice is on screen and the dock did grow.
+      expect(after.notice.height).toBeGreaterThan(0);
+      expect(after.dock.height).toBeGreaterThan(before.dock.height);
+      expect(after.legal.bottom).toBeLessThanOrEqual(after.dock.top);
+      expect(before.legal.bottom).toBeLessThanOrEqual(before.dock.top);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("rolls back a candidate when its renderer crashes before a frame", async () => {
     const fingerprint = "c".repeat(64);
     let artifacts;

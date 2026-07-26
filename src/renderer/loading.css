@@ -15,7 +15,13 @@
   font-display: swap;
 }
 
+/* The art zone, the footer and the dock are stacked in flow, so the dock's own
+   content decides how tall it is and the footer moves up to meet it. Pinning
+   the footer to a constant instead let the compatibility notice — which makes
+   the dock half as tall again — paint over the legal text. `--dock-h` is the
+   dock's minimum, not a layout constant anything else reads. */
 #loading { position:fixed; inset:0; z-index:10; overflow:hidden;
+           display:flex; flex-direction:column;
            --dock-h: 104px;
            background:#0a0806; color:#e8dcc0;
            font:16px/1.5 "QT Friz Quad","Iowan Old Style",Palatino,Georgia,serif;
@@ -71,15 +77,17 @@
 #loading-update-status { color:#e8dcc0bf; }
 #loading-update-when { color:#e8dcc08c; font-size:11.5px; }
 
-/* Art zone: the logo floats over the artwork, centered above the dock. */
-#loading-inner { position:absolute; inset:0 0 var(--dock-h) 0; display:flex;
+/* Art zone: the logo floats over the artwork, centered in whatever the footer
+   and the dock leave. position:relative keeps it above the scrim. */
+#loading-inner { position:relative; flex:1; min-height:0; overflow:hidden;
+                 display:flex;
                  align-items:center; justify-content:center; pointer-events:none; }
 #loading-logo { width:min(400px,56vw); filter:drop-shadow(0 3px 14px #000a); }
 /* Until the real logo arrives, the alt text should not flash as broken art. */
 #loading-logo:not([src]) { visibility:hidden; }
 
 /* ---------------------------------------------------------------- the dock */
-#loading-dock { position:absolute; left:0; right:0; bottom:0; z-index:2;
+#loading-dock { position:relative; z-index:2;
                 min-height:var(--dock-h); box-sizing:border-box;
                 display:flex; align-items:center;
                 padding:10px 26px;
@@ -260,11 +268,11 @@
 }
 
 /* -------------------------------------------------------- credit + legal */
-/* Pinned just above the dock where the scrim is darkest and text stays
-   legible: screenshot credit left, legal notice right. */
-#loading-footer { position:absolute; left:0; right:0; bottom:calc(var(--dock-h) + 10px);
+/* Sits directly above the dock, whatever height the dock has taken, where the
+   scrim is darkest and text stays legible: credit left, legal notice right. */
+#loading-footer { position:relative; z-index:2; flex:none;
                   display:flex; align-items:flex-end; justify-content:space-between;
-                  gap:18px; padding:0 16px; pointer-events:none; }
+                  gap:18px; padding:0 16px 10px; pointer-events:none; }
 #loading-footer a { pointer-events:auto; }
 
 #loading-credit { font-size:11.5px; color:#e8dcc08c; text-shadow:0 1px 5px #000e; }
