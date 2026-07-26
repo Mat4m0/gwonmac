@@ -151,6 +151,34 @@ describe("settings", () => {
     assert.deepEqual(await loadSettings(path), loaded);
   });
 
+  it("keeps the three newest corrupt backups and drops the rest", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    const path = join(dir, "settings.json");
+    for (const epoch of [1000, 2000, 3000, 4000]) {
+      await writeFile(`${path}.corrupt-${epoch}`, `stale ${epoch}`);
+    }
+    // Neighbours in the same profile directory that this must not touch.
+    await writeFile(join(dir, "window-state.json"), "{}");
+    await writeFile(`${path}.corrupt-not-an-epoch`, "hand-written");
+    await writeFile(path, "{not json");
+
+    let backup = "";
+    await loadSettings(path, (value) => {
+      backup = value;
+    });
+    const kept = (await readdir(dir)).sort();
+    assert.deepEqual(kept, [
+      "settings.json.corrupt-3000",
+      "settings.json.corrupt-4000",
+      "settings.json.corrupt-not-an-epoch",
+      backup.split("/").at(-1),
+      "window-state.json",
+    ].sort());
+    // The newest three are the new one and the two most recent older ones.
+    assert.equal(await readFile(`${path}.corrupt-4000`, "utf8"), "stale 4000");
+    assert.equal(await readFile(backup, "utf8"), "{not json");
+  });
+
   it("moves aside a settings format this build cannot read", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
     const path = join(dir, "settings.json");
