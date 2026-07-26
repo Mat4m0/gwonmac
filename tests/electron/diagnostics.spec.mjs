@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
@@ -68,6 +69,13 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-label")).toContainText(
         "Chromium trace",
       );
+      await page.waitForTimeout(500);
+      await page.evaluate(async () => {
+        window.gwDiagnostics.snapshot(100, 4096, "memory");
+        window.gwDiagnostics.swap(100, 50, 25);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        window.gwDiagnostics.swap(100, 50, 25);
+      });
       expect(
         await app.evaluate(({ Menu }) => {
           const item = Menu.getApplicationMenu()?.getMenuItemById(
@@ -88,6 +96,303 @@ test.describe("diagnostics", () => {
       );
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
+      const diagnosticsDirectory = path.join(fixture.userData, "diagnostics");
+      const traceName = (await readdir(diagnosticsDirectory)).find((name) =>
+        name.startsWith("chromium-") && name.endsWith(".json"));
+      expect(traceName).toBeTruthy();
+      const trace = JSON.parse(
+        await readFile(path.join(diagnosticsDirectory, traceName), "utf8"),
+      );
+      const traceNames = new Set(trace.traceEvents.map((event) => event.name));
+      expect(traceNames.has("gw.snapshot.resolve")).toBe(true);
+      expect(traceNames.has("gw.frame.submit")).toBe(true);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("discards a completed Chromium trace before the next capture and at shutdown", async () => {
+    const fixture = await launchOffline("gw-trace-lifecycle-e2e-");
+    try {
+      const { app, page, userData } = fixture;
+      const diagnosticsDirectory = path.join(userData, "diagnostics");
+      const traceNames = async () =>
+        (await readdir(diagnosticsDirectory)).filter(
+          (name) => name.startsWith("chromium-") && name.endsWith(".json"),
+        );
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+
+      await clickMenu(app, "start-chromium-trace");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+      await expect.poll(traceNames).toHaveLength(1);
+
+      // Beginning Level 1 replaces the completed Level 2 result. The raw
+      // Chromium file has to be gone before that reset happens.
+      await clickMenu(app, "start-performance-capture");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await expect.poll(traceNames).toEqual([]);
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+
+      // The same ownership rule applies when no later capture replaces it:
+      // quit cleanup deletes an unexported completed trace.
+      await clickMenu(app, "start-chromium-trace");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+      await expect.poll(traceNames).toHaveLength(1);
+      await app.evaluate(async (_, modulePath) => {
+        const load = process
+          .getBuiltinModule("node:module")
+          .createRequire(modulePath);
+        await load(modulePath).stopDiagnostics();
+      }, path.join(root, "build/main/diagnostics.js"));
+      await expect.poll(traceNames).toEqual([]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("downgrades a failed Chromium stop to an exportable Level 1 capture", async () => {
+    const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
+    const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
+    try {
+      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const modulePath = path.join(root, "build/main/diagnostics.js");
+      const contractsPath = path.join(root, "build/shared/contracts.js");
+      const stopped = await fixture.app.evaluate(
+        async ({ app: electronApp, contentTracing }, args) => {
+          const load = process
+            .getBuiltinModule("node:module")
+            .createRequire(args.modulePath);
+          const diagnostics = load(args.modulePath);
+          const { DEFAULT_SETTINGS } = load(args.contractsPath);
+          await diagnostics.startDiagnosticCapture(2);
+
+          const originalStopRecording = contentTracing.stopRecording;
+          let attemptedTarget = "";
+          contentTracing.stopRecording = async (traceTarget) => {
+            attemptedTarget = traceTarget;
+            // Stop Chromium for real and create its target, then fail at the
+            // API boundary. This exercises the partial-target branch without
+            // leaving content tracing active in the Electron test process.
+            await originalStopRecording.call(contentTracing, traceTarget);
+            throw new Error("forced stopRecording failure");
+          };
+          try {
+            await diagnostics.stopDiagnosticCapture("manual");
+          } finally {
+            contentTracing.stopRecording = originalStopRecording;
+          }
+          await diagnostics.exportDiagnosticsZip(args.target, {
+            appVersion: electronApp.getVersion(),
+            electronVersions: { electron: process.versions.electron },
+            settings: DEFAULT_SETTINGS,
+          });
+          return {
+            attemptedTarget,
+            captureLevel: diagnostics.diagnosticSummary().captureLevel,
+          };
+        },
+        { modulePath, contractsPath, target },
+      );
+
+      expect(path.basename(stopped.attemptedTarget)).toMatch(/^chromium-.+\.json$/);
+      expect(stopped.captureLevel).toBe(0);
+      expect(
+        (await readdir(path.join(fixture.userData, "diagnostics"))).filter(
+          (name) => name.startsWith("chromium-"),
+        ),
+      ).toEqual([]);
+
+      const extracted = path.join(diagnosticRoot, "extracted");
+      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      const manifest = JSON.parse(
+        await readFile(path.join(extracted, "manifest.json"), "utf8"),
+      );
+      const capture = JSON.parse(
+        await readFile(path.join(extracted, "capture-summary.json"), "utf8"),
+      );
+      expect(manifest).toMatchObject({
+        captureLevel: 1,
+        profilerContaminated: false,
+      });
+      expect(manifest.includedFiles).not.toContain("chromium-trace.json");
+      expect(capture.captureLevel).toBe(1);
+
+      const validated = await execFileAsync(process.execPath, [
+        path.join(root, "build/tools/diagnostics/validate.js"),
+        target,
+      ]);
+      expect(validated.stdout).toContain("valid capture");
+    } finally {
+      await rm(diagnosticRoot, { recursive: true, force: true });
+      await closeOffline(fixture);
+    }
+  });
+
+  // P5.9 moved every channel's parser into the handler registry, ahead of the
+  // handler's own try/catch. Two channels used to parse inside it and record
+  // `credentials.saveFailed` / `settings.saveFailed`, so until the registry
+  // recorded the rejection itself, "my saved login stopped working" produced an
+  // export with no evidence of the refusal in it. The claim under test is the
+  // recorder's, so it is asked of the file the recorder wrote.
+  test("records which channel refused a renderer payload", async () => {
+    const fixture = await launchOffline("gw-ipc-rejected-e2e-");
+    try {
+      const { page, userData } = fixture;
+      // Both cross the bridge unvalidated: the preload is transport, and these
+      // are exactly the shapes the game's own host calls can produce.
+      const refusals = await page.evaluate(async () => {
+        const refused = async (call) => {
+          try {
+            await call();
+            return "accepted";
+          } catch {
+            return "refused";
+          }
+        };
+        return [
+          await refused(() =>
+            window.gwNative.credentials.save({ username: "a", password: 1234 })),
+          await refused(() => window.gwNative.settings.set("not a patch")),
+        ];
+      });
+      expect(refusals).toEqual(["refused", "refused"]);
+
+      const rejections = async () => {
+        const directory = path.join(userData, "diagnostics");
+        const found = [];
+        for (const name of await readdir(directory)) {
+          if (!name.startsWith("session-") || !name.endsWith(".jsonl")) continue;
+          const text = await readFile(path.join(directory, name), "utf8");
+          for (const line of text.split("\n")) {
+            if (!line) continue;
+            let record;
+            try {
+              record = JSON.parse(line);
+            } catch {
+              continue; // The file being appended to can end mid-record.
+            }
+            if (record.name !== "ipc.rejected") continue;
+            found.push({
+              level: record.level,
+              subsystem: record.subsystem,
+              ...record.fields,
+            });
+          }
+        }
+        return found;
+      };
+      await expect.poll(rejections).toEqual([
+        {
+          level: "warn",
+          subsystem: "app",
+          channel: "credentialsSave",
+          code: "credentials_corrupt",
+        },
+        {
+          level: "warn",
+          subsystem: "app",
+          channel: "settingsSet",
+          code: "bad_settings",
+        },
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  // Stopping a capture on the quit path awaits a renderer acknowledgement, so a
+  // renderer that cannot answer must settle the wait rather than hold it. A
+  // renderer whose process is gone is exactly as unable to answer as a
+  // destroyed one, and after a second crash the window, its webContents and its
+  // URL are all still there — nothing else in the settle set fires.
+  test("a command to a renderer whose process is gone settles instead of waiting", async () => {
+    const fixture = await launchOffline("gw-renderer-command-crash-e2e-");
+    try {
+      const outcome = await fixture.app.evaluate(
+        async ({ BrowserWindow }, modulePath) => {
+          const load = process
+            .getBuiltinModule("node:module")
+            .createRequire(modulePath);
+          const { sendRendererCommand } = load(modulePath);
+          const settledWithin = (promise, ms) =>
+            Promise.race([
+              promise,
+              new Promise((resolve) => setTimeout(() => resolve("waiting"), ms)),
+            ]);
+          const probe = async () => {
+            const win = new BrowserWindow({ show: false });
+            await win.loadURL("about:blank");
+            return win;
+          };
+          const crash = async (win) => {
+            const pid = win.webContents.getOSProcessId();
+            const gone = new Promise((resolve) =>
+              win.webContents.once("render-process-gone", resolve));
+            win.webContents.forcefullyCrashRenderer();
+            await gone;
+            return pid;
+          };
+
+          // A probe that shared the application's renderer process would crash
+          // the real window instead, and prove nothing about this one.
+          const mainPid = BrowserWindow.getAllWindows()[0]
+            .webContents.getOSProcessId();
+
+          // The process dies while a command is outstanding.
+          const during = await probe();
+          const outstanding = sendRendererCommand(during, { type: "input.reset" });
+          const duringPid = await crash(during);
+          const whileWaiting = await settledWithin(outstanding, 5_000);
+
+          // The process is already gone when the command is sent: the state a
+          // second crash leaves behind, and the one the quit path meets.
+          const after = await probe();
+          const afterPid = await crash(after);
+          const alreadyGone = await settledWithin(
+            sendRendererCommand(after, { type: "input.reset" }),
+            5_000,
+          );
+          // A live page with no preload handler is bounded too. Destruction
+          // would settle this for another reason, so leave it untouched until
+          // the command's own deadline answers.
+          const unresponsive = await probe();
+          const timedOut = await settledWithin(
+            sendRendererCommand(unresponsive, { type: "input.reset" }),
+            7_000,
+          );
+          const stillAlive = !after.isDestroyed() && !after.webContents.isDestroyed();
+          for (const win of [during, after, unresponsive]) win.destroy();
+          return {
+            whileWaiting,
+            alreadyGone,
+            timedOut,
+            stillAlive,
+            ownProcesses: duringPid !== mainPid && afterPid !== mainPid,
+          };
+        },
+        path.join(root, "build/main/renderer-commands.js"),
+      );
+      expect(outcome).toEqual({
+        whileWaiting: "failed",
+        alreadyGone: "failed",
+        timedOut: "timed-out",
+        // The window that could not answer is neither destroyed nor closed —
+        // that is what made this state unreachable for the other listeners.
+        stillAlive: true,
+        ownProcesses: true,
+      });
+      // The application's own renderer was never touched.
+      expect(await fixture.page.evaluate(() => 1 + 1)).toBe(2);
     } finally {
       await closeOffline(fixture);
     }
@@ -165,6 +470,15 @@ test.describe("diagnostics", () => {
             .join("\n"),
           { mode: 0o600 },
         );
+        // Chromium's atomic-write temporary for an interrupted trace, and an
+        // old-format log. Neither matches a capture-file prefix, so both used
+        // to survive every launch — one of them at 111 MB.
+        await writeFile(
+          path.join(directory, ".com.gwdevhub.guildwars.mpNbZp"),
+          '{"traceEvents":[',
+          { mode: 0o600 },
+        );
+        await writeFile(path.join(directory, "session-13880.log"), "legacy");
       },
     );
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-e2e-"));
@@ -198,19 +512,21 @@ test.describe("diagnostics", () => {
             process.getBuiltinModule("node:module").createRequire;
           const require = createRequire(args.modulePath);
           const diagnostics = require(args.modulePath);
-          diagnostics.log("app", "info", "redaction fixture", {
-            password: "should-never-export",
-            url: "https://example.invalid/?token=also-secret",
-            message:
-              "open /private/var/folders/example/player.db for player@example.invalid",
-          });
           await diagnostics.exportDiagnosticsZip(args.target, {
             appVersion: electronApp.getVersion(),
-            electronVersions: { electron: process.versions.electron },
+            // OS/Chromium summary documents are pattern-scanned rather than
+            // certified. Plant the adversarial values there; app-authored
+            // events have no free-text recording API anymore.
+            electronVersions: {
+              electron: process.versions.electron,
+              password: "should-never-export",
+              url: "https://example.invalid/?token=also-secret",
+              message:
+                "open /private/var/folders/example/player.db for player@example.invalid",
+            },
             settings: {
               renderScale: 1,
-              pointerLock: true,
-              cursorTheme: "guild-wars",
+              nativeCursor: false,
               touchMode: "dbltap",
               showDiagnostics: false,
               dataStrategy: "quick",
@@ -225,8 +541,38 @@ test.describe("diagnostics", () => {
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
+      // P2.5 — `redaction` is the detector's result, not a literal the exporter
+      // writes about itself. Every app-authored record is schema-certified,
+      // while traceBytesScanned states the separate pattern-scanner coverage.
+      expect(manifest.redaction).toMatchObject({
+        records: expect.any(Number),
+        schemaChecked: expect.any(Number),
+        traceBytesScanned: expect.any(Number),
+      });
+      expect(manifest.redaction.records).toBeGreaterThan(0);
+      expect(manifest.redaction.schemaChecked).toBe(
+        manifest.redaction.records,
+      );
+
+      // The fixture above plants three secrets in a pattern-scanned summary
+      // document. Check the bytes, not a verdict the exporter wrote itself.
+      const exportedFiles = await readdir(extracted);
+      let exportedText = "";
+      for (const name of exportedFiles) {
+        const stats = await stat(path.join(extracted, name));
+        if (!stats.isFile()) continue;
+        const body = await readFile(path.join(extracted, name), "latin1");
+        exportedText += body.toLowerCase();
+        for (const secret of [
+          "should-never-export",
+          "also-secret",
+          "player@example.invalid",
+        ]) {
+          expect(body, `${name} leaked ${secret}`).not.toContain(secret);
+        }
+      }
+
       expect(manifest).toMatchObject({
-        redaction: "passed",
         captureLevel: 1,
         previousSession: {
           sessionId: previousSessionId,
@@ -254,10 +600,31 @@ test.describe("diagnostics", () => {
       expect(events).not.toContain("also-secret");
       expect(events).not.toContain("/private/var/folders/example/player.db");
       expect(events).not.toContain("player@example.invalid");
-      expect(events).toContain("[redacted]");
-      expect(events).toContain("[redacted-path]");
-      expect(events).toContain("[redacted-email]");
+      expect(exportedText).toContain("[redacted]");
+      expect(exportedText).toContain("[redacted-path]");
+      expect(exportedText).toContain("[redacted-email]");
       expect(events).toContain("performance.problemmarked");
+
+      const environment = JSON.parse(
+        await readFile(path.join(extracted, "environment.json"), "utf8"),
+      );
+      // Sampled at export, so it agrees with the renderer's own probe instead
+      // of reporting the pre-initialization defaults from before ready.
+      if (environment.graphics?.hardwareAcceleration === true) {
+        expect(environment.gpu.featureStatus.gpu_compositing).not.toBe(
+          "disabled_software",
+        );
+      }
+
+      // The directory keeps session logs and nothing else — including the
+      // seeded atomic-write temporary and the legacy log.
+      const remaining = await readdir(path.join(fixture.userData, "diagnostics"));
+      expect(remaining).toContain(`session-${previousSessionId}.jsonl`);
+      expect(remaining).not.toContain(".com.gwdevhub.guildwars.mpNbZp");
+      expect(remaining).not.toContain("session-13880.log");
+      // A Level 1 capture's frames-<session>.bin is still live here; only the
+      // Chromium trace is discarded once the export exists.
+      expect(remaining.filter((name) => name.startsWith("chromium-"))).toEqual([]);
 
       const validated = await execFileAsync(process.execPath, [
         path.join(root, "build/tools/diagnostics/validate.js"),

@@ -4,16 +4,25 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import type { SnapshotMetadata } from "../shared/contracts.js";
+import { CLIENT_ARTIFACTS } from "./core/access-key.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
   isProxyFetchDestination,
   isProxyRoute,
+  type ProxyRoute,
   resolveProxyHost,
   rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
+import { clientArtifactPath } from "./core/paths.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
-import { count, log, span } from "./diagnostics.js";
+import { errorCode } from "../shared/errors.js";
+import {
+  count,
+  logEvent,
+  startProxyRequestSpan,
+  startSnapshotReadSpan,
+} from "./diagnostics.js";
 import { gamePaths, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
@@ -187,18 +196,24 @@ async function handleSnapshot(request: Request): Promise<Response> {
       headers: headers({ "Cache-Control": "no-store" }),
     });
   }
-  const requestSpan = span("snapshot", "read", {
+  // Resolved before the span is opened: the raw header is renderer-supplied
+  // text, and it used to be recorded verbatim as the span's `priority` field.
+  const priority =
+    request.headers.get("x-gw-priority") === "prefetch"
+      ? "prefetch"
+      : "demand";
+  const requestSpan = startSnapshotReadSpan({
     offsetBytes: range.start,
-    bytes: length,
-    priority: request.headers.get("x-gw-priority") ?? "demand",
+    requestedBytes: length,
+    priority,
   });
   try {
-    const priority =
-      request.headers.get("x-gw-priority") === "prefetch"
-        ? "prefetch"
-        : "demand";
     const data = await store.readRange(range.start, length, priority);
-    requestSpan.end({ bytes: data.byteLength, status: 206 });
+    requestSpan.end({
+      returnedBytes: data.byteLength,
+      status: 206,
+      code: null,
+    });
     count("protocol.snapshotBytes", data.byteLength);
     return new Response(
       Buffer.from(data.buffer, data.byteOffset, data.byteLength),
@@ -214,17 +229,16 @@ async function handleSnapshot(request: Request): Promise<Response> {
       },
     );
   } catch (err) {
-    requestSpan.end(
-      { message: err instanceof Error ? err.message : String(err), status: 503 },
-      "error",
-    );
-    log("snapshot", "error", "snapshot.rangeFailed", {
-      message: err instanceof Error ? err.message : String(err),
+    const code = errorCode(err);
+    requestSpan.end({ returnedBytes: 0, code, status: 503 });
+    logEvent({
+      k: "snapshot.rangeFailed",
+      offsetBytes: range.start,
+      bytes: length,
+      code,
     });
     const message =
-      err instanceof Error &&
-      "code" in err &&
-      err.code === "chunk_offline"
+      code === "chunk_offline"
         ? "No cached copy of this game data is available while offline."
         : "ArenaNet is unavailable. Guild Wars will retry this download.";
     return new Response(message, {
@@ -234,7 +248,11 @@ async function handleSnapshot(request: Request): Promise<Response> {
   }
 }
 
-async function handleProxy(request: Request, route: string, rest: string): Promise<Response> {
+async function handleProxy(
+  request: Request,
+  route: ProxyRoute,
+  rest: string,
+): Promise<Response> {
   const destination =
     request.destination || request.headers.get("sec-fetch-dest") || "";
   if (!isProxyFetchDestination(destination)) {
@@ -258,7 +276,7 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
   }
   const url = new URL(request.url);
   const upstream = `https://${host}/${rest}${url.search}`;
-  const requestSpan = span("proxy", "request", { route, method });
+  const requestSpan = startProxyRequestSpan({ route, method });
   const fwd = new Headers();
   for (const [k, v] of request.headers) {
     const key = k.toLowerCase();
@@ -284,12 +302,20 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
     if (method !== "GET") {
       const declared = Number(request.headers.get("content-length") ?? 0);
       if (Number.isFinite(declared) && declared > MAX_PROXY_BODY_BYTES) {
-        requestSpan.end({ status: 413, reason: "bodyTooLarge" }, "warn");
+        requestSpan.end({
+          status: 413,
+          reason: "bodyTooLarge",
+          code: null,
+        });
         return new Response("request body too large", { status: 413, headers: headers() });
       }
       const body = await request.arrayBuffer();
       if (body.byteLength > MAX_PROXY_BODY_BYTES) {
-        requestSpan.end({ status: 413, reason: "bodyTooLarge" }, "warn");
+        requestSpan.end({
+          status: 413,
+          reason: "bodyTooLarge",
+          code: null,
+        });
         return new Response("request body too large", { status: 413, headers: headers() });
       }
       init.body = Buffer.from(body);
@@ -302,8 +328,12 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
         try {
           safeLocation = rewriteProxyRedirect(route, loc, upstream);
         } catch {
-          log("proxy", "warn", "proxy.redirectBlocked", { route });
-          requestSpan.end({ status: 502, reason: "redirectEscape" }, "warn");
+          logEvent({ k: "proxy.redirectBlocked", route });
+          requestSpan.end({
+            status: 502,
+            reason: "redirectEscape",
+            code: null,
+          });
           return new Response("redirect blocked", { status: 502, headers: headers() });
         }
       }
@@ -320,17 +350,12 @@ async function handleProxy(request: Request, route: string, rest: string): Promi
       }
       out.set(k, key === "location" && safeLocation ? safeLocation : v);
     }
-    requestSpan.end({ status: res.status });
+    requestSpan.end({ status: res.status, reason: null, code: null });
     return new Response(res.body, { status: res.status, headers: out });
   } catch (err) {
-    requestSpan.end(
-      { status: 502, message: err instanceof Error ? err.message : String(err) },
-      "error",
-    );
-    log("proxy", "error", "proxy.requestFailed", {
-      route,
-      message: err instanceof Error ? err.message : String(err),
-    });
+    const code = errorCode(err);
+    requestSpan.end({ status: 502, reason: null, code });
+    logEvent({ k: "proxy.requestFailed", route, code });
     return new Response("proxy error", { status: 502, headers: headers() });
   }
 }
@@ -344,7 +369,10 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   if (pathname === "/") pathname = "/index.html";
 
   const base = pathname.replace(/^\/+/, "");
-  const first = base.split("/")[0] ?? "";
+  // Lower-cased here so `isProxyRoute` can narrow to `ProxyRoute` honestly.
+  // `resolveProxyHost` folded case anyway, so the routing is unchanged; the
+  // rewritten redirect now names the route in its canonical spelling.
+  const first = (base.split("/")[0] ?? "").toLowerCase();
 
   if (base === "Gw.snapshot") return handleSnapshot(request);
 
@@ -367,16 +395,18 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     });
   }
 
-  const artifactName = ["Gw.jspi.js", "Gw.jspi.wasm", "version.json"].includes(base)
-    ? base
+  const artifactName = CLIENT_ARTIFACTS.includes(
+    base as (typeof CLIENT_ARTIFACTS)[number],
+  )
+    ? (base as (typeof CLIENT_ARTIFACTS)[number])
     : null;
   if (artifactName) {
     const active = deps.getActiveClient();
     const file =
       artifactName === "Gw.jspi.wasm"
         ? active?.wasmPath ??
-          path.join(gamePaths().artifacts, "Gw.jspi.wasm")
-        : path.join(
+          clientArtifactPath(gamePaths().artifacts, "Gw.jspi.wasm")
+        : clientArtifactPath(
             active?.artifactsDir ?? gamePaths().artifacts,
             artifactName,
           );

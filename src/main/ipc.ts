@@ -11,21 +11,33 @@ import type {
   AppSettings,
   AppSettingsPatch,
   CacheInfo,
+  ClientHealthToken,
+  ClientSession,
   DownloadProgress,
   ExternalLinkKind,
+  FullDownloadOutcome,
   GraphicsDiagnostics,
+  InvokeChannel,
+  ReleaseNotice,
   SocketEvent,
+  StoredCredentials,
 } from "../shared/contracts.js";
+import type {
+  RendererFrameBatch,
+  RendererMetrics,
+  RendererMilestone,
+  RendererMilestoneFields,
+} from "../shared/diagnostics.js";
 import {
   isRendererFrameBatch,
   isRendererMetrics,
   RENDERER_MILESTONES,
 } from "../shared/diagnostics.js";
-import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
-import { AllowlistError, ValidationError } from "../shared/errors.js";
-import { CredentialsStore } from "./core/credentials.js";
+import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import { isDigest } from "../shared/digest.js";
+import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
+import { CredentialsStore, parseCredentials } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
-import { checkForUpdate } from "./update-check.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
@@ -34,17 +46,18 @@ import {
   count,
   diagnosticSummary,
   diagnosticTimestampUs,
-  log,
+  logEvent,
   recordGraphics,
   recordRendererMetrics,
   recordRendererFrames,
   recordRendererMilestone,
   recordClockOffset,
-  span,
+  startDnsResolveSpan,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { MAX_QUEUED_BYTES } from "./core/sockets.js";
+import { toolboxSelectionChanged } from "./toolbox-policy.js";
+import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
@@ -54,10 +67,12 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
-  downloadFullGame: () => Promise<boolean>;
+  downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
-  confirmClientHealthy: () => Promise<void>;
+  confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
   retryClient: () => Promise<void>;
+  checkReleaseNotice: () => Promise<ReleaseNotice>;
+  getClientSession: () => ClientSession;
 }
 
 function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -86,18 +101,252 @@ function toWireSocketEvent(event: SocketEvent): SocketEvent {
 
 function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolean {
   if (win.isDestroyed() || win.webContents.isDestroyed()) return false;
-  win.webContents.send(channel, value);
-  return true;
+  try {
+    win.webContents.send(channel, value);
+    return true;
+  } catch {
+    // Renderer destruction can race the checks above. Socket callbacks are
+    // native and synchronous, so that ordinary teardown must not escape into
+    // the process-wide fatal-error handler.
+    return false;
+  }
 }
 
-function logOperationFailure(
-  subsystem: "cache" | "filesystem" | "settings",
-  name: string,
-  error: unknown,
-): void {
-  log(subsystem, "error", name, {
-    message: error instanceof Error ? error.message : String(error),
+/**
+ * Turns the raw `invoke` arguments into the handler's input, or throws. One per
+ * channel, and no channel can be registered without one.
+ */
+type Parser<In> = (args: readonly unknown[]) => In;
+type Run<In, Out> = (win: BrowserWindow, input: In) => Out | Promise<Out>;
+
+interface ChannelDef<In, Out> {
+  readonly parse: Parser<In>;
+  readonly run: Run<In, Out>;
+}
+
+/**
+ * A definition with its input type erased, for the `satisfies` constraint.
+ * `ChannelDef` is invariant in `In` — `In` is the return of `parse` and a
+ * parameter of `run` — so the erasure has to widen each side in its own
+ * direction: `parse` to `unknown`, `run` to `never`. That accepts every
+ * `channel()` result without an `any` anywhere.
+ */
+interface AnyChannelDef {
+  readonly parse: Parser<unknown>;
+  readonly run: Run<never, unknown>;
+}
+
+/** You cannot construct a channel without a parser. That is the point. */
+function channel<In, Out>(
+  parse: Parser<In>,
+  run: Run<In, Out>,
+): ChannelDef<In, Out> {
+  return { parse, run };
+}
+
+/** For the channels that carry nothing. Still a parser, still explicit. */
+const exact = (args: readonly unknown[], count: number): void => {
+  if (args.length !== count) {
+    throw new ValidationError(`expected ${count} IPC argument(s)`);
+  }
+};
+
+const nothing: Parser<void> = (args) => {
+  exact(args, 0);
+};
+
+/** Lifts a single-value validator into a parser over the argument list. */
+const one =
+  <In>(parse: (value: unknown) => In): Parser<In> =>
+  (args) => {
+    exact(args, 1);
+    return parse(args[0]);
+  };
+
+const asString = (what: string) =>
+  one((value: unknown): string => {
+    if (typeof value !== "string") throw new ValidationError(`${what} must be a string`);
+    return value;
   });
+
+const parseSocketId = (value: unknown): number => {
+  if (!Number.isInteger(value)) throw new ValidationError("socketId must be an integer");
+  return value as number;
+};
+const asSocketId = one(parseSocketId);
+
+const asClientHealthToken = one((value: unknown): ClientHealthToken => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("invalid client health token");
+  }
+  const token = value as Record<string, unknown>;
+  if (
+    !Number.isSafeInteger(token.generation) ||
+    (token.generation as number) <= 0 ||
+    !isDigest(token.fingerprint) ||
+    Object.keys(token).some(
+      (key) => key !== "generation" && key !== "fingerprint",
+    )
+  ) {
+    throw new ValidationError("invalid client health token");
+  }
+  return {
+    generation: token.generation as number,
+    fingerprint: token.fingerprint,
+  };
+});
+
+const asFiniteNumber = (what: string) =>
+  one((value: unknown): number => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new ValidationError(what);
+    }
+    return value;
+  });
+
+const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
+  exact(args, 2);
+  const socketId = parseSocketId(args[0]);
+  const data = args[1];
+  if (!(data instanceof Uint8Array) && !ArrayBuffer.isView(data)) {
+    throw new ValidationError("data must be a Uint8Array");
+  }
+  if (data.byteLength > MAX_QUEUED_BYTES_PER_SOCKET) {
+    throw new ValidationError(
+      `socket payload exceeds ${MAX_QUEUED_BYTES_PER_SOCKET} bytes`,
+    );
+  }
+  return {
+    socketId,
+    bytes:
+      data instanceof Uint8Array
+        ? data
+        : new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+  };
+};
+
+const asClockResult: Parser<{ offsetUs: number; rttUs: number }> = (args) => {
+  exact(args, 2);
+  const [offsetUs, rttUs] = args;
+  if (
+    typeof offsetUs !== "number" ||
+    !Number.isFinite(offsetUs) ||
+    typeof rttUs !== "number" ||
+    !Number.isFinite(rttUs) ||
+    Math.abs(offsetUs) > Number.MAX_SAFE_INTEGER ||
+    rttUs < 0 ||
+    rttUs > 60_000_000
+  ) {
+    throw new ValidationError("invalid clock synchronization result");
+  }
+  return { offsetUs, rttUs };
+};
+
+const asGraphics = one((value: unknown): GraphicsDiagnostics => {
+  if (!isGraphicsDiagnostics(value)) {
+    throw new ValidationError("invalid graphics diagnostics");
+  }
+  return value;
+});
+
+const asRendererMetrics = one((value: unknown): RendererMetrics => {
+  if (!isRendererMetrics(value)) throw new ValidationError("invalid renderer diagnostics");
+  return value;
+});
+
+const asRendererFrames = one((value: unknown): RendererFrameBatch => {
+  if (!isRendererFrameBatch(value)) {
+    throw new ValidationError("invalid renderer frame batch");
+  }
+  return value;
+});
+
+const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
+  if (
+    value !== "github" &&
+    value !== "discord" &&
+    value !== "donate" &&
+    value !== "releases" &&
+    value !== "store"
+  ) {
+    throw new ValidationError("invalid external link kind");
+  }
+  return value;
+});
+
+interface ParsedMilestone {
+  name: RendererMilestone;
+  rendererTimestampUs: number;
+  fields: RendererMilestoneFields | undefined;
+}
+
+const asMilestone: Parser<ParsedMilestone> = (args) => {
+  exact(args, 3);
+  const [name, rendererTimestampUs, fields] = args;
+  const record = fields as Record<string, unknown> | undefined;
+  const recordIsObject =
+    record !== undefined
+    && record !== null
+    && typeof record === "object"
+    && !Array.isArray(record);
+  const exactBuildInfoFields =
+    recordIsObject
+    && Object.keys(record).length === 2
+    && Object.hasOwn(record, "programId")
+    && Object.hasOwn(record, "buildId");
+  const milestoneFields =
+    recordIsObject &&
+    exactBuildInfoFields &&
+    (typeof record.programId === "string" || typeof record.programId === "number") &&
+    (typeof record.buildId === "string" || typeof record.buildId === "number")
+      ? {
+          programId: record.programId as string | number,
+          buildId: record.buildId as string | number,
+        }
+      : undefined;
+  if (
+    typeof name !== "string" ||
+    !RENDERER_MILESTONES.includes(name as RendererMilestone) ||
+    typeof rendererTimestampUs !== "number" ||
+    !Number.isFinite(rendererTimestampUs) ||
+    rendererTimestampUs < 0 ||
+    rendererTimestampUs > Number.MAX_SAFE_INTEGER ||
+    (name === "build.info" && !milestoneFields) ||
+    (name !== "build.info" && fields !== undefined) ||
+    (milestoneFields &&
+      [milestoneFields.programId, milestoneFields.buildId].some(
+        (value) =>
+          (typeof value === "string" && value.length > 128) ||
+          (typeof value === "number" && (!Number.isSafeInteger(value) || value < 0)),
+      ))
+  ) {
+    throw new ValidationError("invalid renderer milestone");
+  }
+  return {
+    name: name as RendererMilestone,
+    rendererTimestampUs,
+    fields: milestoneFields,
+  };
+};
+
+/**
+ * Ask before restarting to change which Toolbox tools this launch serves. The
+ * module is chosen once, before the renderer exists, so a relaunch is the only
+ * way a tool change can reach the session — and a relaunch closes any game in
+ * progress, which is why it is gated exactly like the other two restarts here.
+ */
+async function confirmToolboxRestart(win: BrowserWindow): Promise<boolean> {
+  await resetGameInput(win);
+  const { response } = await dialog.showMessageBox(win, {
+    type: "warning",
+    buttons: ["Restart Now", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: "Restart to apply this setting?",
+    detail:
+      "This setting is chosen once when the app starts, so it takes effect after a restart. Any game in progress closes. Downloaded game data and your saved login stay untouched.",
+  });
+  return response === 0;
 }
 
 async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
@@ -118,385 +367,312 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = gamePaths();
   const credentials = new CredentialsStore(paths.credentials, safeStorage);
 
-  ipcMain.handle(IPC.progressCurrent, (event) => {
-    assertSender(event);
-    return ctx.getProgress();
-  });
+  /**
+   * Every channel main answers, with the parser that turns its arguments into
+   * the input it takes. Checked against `InvokeChannel`, so a channel with no
+   * handler and a handler with no channel are both build failures, and
+   * `channel()` cannot be called without a parser.
+   */
+  const handlers = {
+    progressCurrent: channel(nothing, () => ctx.getProgress()),
 
-  ipcMain.handle(IPC.snapshotMetadata, async (event) => {
-    assertSender(event);
-    const store = ctx.getChunkStore();
-    if (!store) {
-      const offlineSize =
-        process.env.GW_OFFLINE_SHELL === "1"
-          ? Number(process.env.GW_OFFLINE_SNAPSHOT_SIZE ?? 0)
-          : 0;
-      return buildSnapshotMetadata({
-        size: Number.isSafeInteger(offlineSize) && offlineSize > 0
-          ? offlineSize
-          : 0,
-        chunkSize: 262144,
-        chunkHashes: [],
-        residentIndices: [],
-      });
-    }
-    const bits = await store.residentBits();
-    return {
-      size: store.size,
-      chunkSize: store.chunkSize,
-      chunkHashes: store.hashes,
-      residentBits: bits,
-    };
-  });
-
-  ipcMain.handle(IPC.dnsResolve, async (event, name: unknown) => {
-    assertSender(event);
-    if (typeof name !== "string") throw new ValidationError("dns name must be a string");
-    const lookup = span("dns", "resolve");
-    try {
-      const address = await resolveDns(name);
-      lookup.end({ status: "ok" });
-      return address;
-    } catch (err) {
-      lookup.end(
-        { status: "error", message: err instanceof Error ? err.message : String(err) },
-        "error",
-      );
-      throw err;
-    }
-  });
-
-  ipcMain.handle(IPC.socketConnect, async (event, destination: unknown) => {
-    const win = assertSender(event);
-    if (typeof destination !== "string") {
-      throw new ValidationError("destination must be a string");
-    }
-    return ctx.sockets.connect(win.webContents.id, destination);
-  });
-
-  ipcMain.handle(IPC.socketSend, async (event, socketId: unknown, data: unknown) => {
-    const win = assertSender(event);
-    if (!Number.isInteger(socketId)) throw new ValidationError("socketId must be an integer");
-    if (!(data instanceof Uint8Array) && !ArrayBuffer.isView(data)) {
-      throw new ValidationError("data must be a Uint8Array");
-    }
-    if (data.byteLength > MAX_QUEUED_BYTES) {
-      throw new ValidationError(
-        `socket payload exceeds ${MAX_QUEUED_BYTES} bytes`,
-      );
-    }
-    const bytes =
-      data instanceof Uint8Array
-        ? data
-        : new Uint8Array(
-            (data as ArrayBufferView).buffer,
-            (data as ArrayBufferView).byteOffset,
-            (data as ArrayBufferView).byteLength,
-          );
-    count("socket.ipcReceiveCalls");
-    count("socket.ipcPayloadBytes", bytes.byteLength);
-    count("socket.ipcBackingBytes", bytes.buffer.byteLength);
-    await ctx.sockets.send(socketId as number, bytes, win.webContents.id);
-  });
-
-  ipcMain.handle(IPC.socketClose, async (event, socketId: unknown) => {
-    const win = assertSender(event);
-    if (!Number.isInteger(socketId)) throw new ValidationError("socketId must be an integer");
-    await ctx.sockets.close(socketId as number, win.webContents.id);
-  });
-
-  ipcMain.handle(IPC.settingsGet, async (event) => {
-    assertSender(event);
-    try {
-      return await ctx.getSettings();
-    } catch (error) {
-      logOperationFailure("settings", "settings.loadFailed", error);
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.settingsSet, async (event, value: unknown) => {
-    assertSender(event);
-    try {
-      const previous = await ctx.getSettings();
-      const saved = await ctx.updateSettings(parseSettingsPatch(value));
-      if (previous.dataStrategy !== saved.dataStrategy) {
-        log("settings", "info", "launcher.strategyChanged", {
-          strategy: saved.dataStrategy ?? "unselected",
+    snapshotMetadata: channel(nothing, async () => {
+      const store = ctx.getChunkStore();
+      if (!store) {
+        const offlineSize =
+          process.env.GW_OFFLINE_SHELL === "1"
+            ? Number(process.env.GW_OFFLINE_SNAPSHOT_SIZE ?? 0)
+            : 0;
+        return buildSnapshotMetadata({
+          size:
+            Number.isSafeInteger(offlineSize) && offlineSize > 0 ? offlineSize : 0,
+          chunkSize: 262144,
+          chunkHashes: [],
+          residentIndices: [],
         });
       }
-      return saved;
-    } catch (error) {
-      logOperationFailure("settings", "settings.saveFailed", error);
-      throw error;
-    }
-  });
+      const bits = await store.residentBits();
+      return {
+        size: store.size,
+        chunkSize: store.chunkSize,
+        chunkHashes: store.hashes,
+        residentBits: bits,
+      };
+    }),
 
-  ipcMain.handle(IPC.settingsReset, async (event) => {
-    const win = assertSender(event);
-    await resetGameInput(win);
-    const { response } = await dialog.showMessageBox(win, {
-      type: "warning",
-      buttons: ["Reset Launcher Settings", "Cancel"],
-      defaultId: 1,
-      cancelId: 1,
-      message: "Reset launcher settings?",
-      detail:
-        "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
-    });
-    if (response !== 0) return null;
-    try {
-      const settings = await ctx.resetSettings();
-      await resetWindowState(win);
-      log("settings", "info", "settings.reset");
-      return settings;
-    } catch (error) {
-      logOperationFailure("settings", "settings.resetFailed", error);
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.credentialsLoad, async (event) => {
-    assertSender(event);
-    try {
-      return await credentials.load();
-    } catch (error) {
-      log("credentials", "error", "credentials.loadFailed");
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.credentialsSave, async (event, value: unknown) => {
-    assertSender(event);
-    try {
-      await credentials.save(value);
-    } catch (error) {
-      log("credentials", "error", "credentials.saveFailed");
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.credentialsClear, async (event) => {
-    assertSender(event);
-    try {
-      await credentials.clear();
-    } catch (error) {
-      log("credentials", "error", "credentials.clearFailed");
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.cacheInfo, async (event) => {
-    assertSender(event);
-    try {
-      return await chunkStoreInfo(ctx.getChunkStore());
-    } catch (error) {
-      logOperationFailure("cache", "cache.infoFailed", error);
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.cacheClear, async (event) => {
-    const win = assertSender(event);
-    await resetGameInput(win);
-    const { response } = await dialog.showMessageBox(win, {
-      type: "warning",
-      buttons: ["Clear and Restart", "Cancel"],
-      defaultId: 1,
-      cancelId: 1,
-      message: "Clear downloaded game data?",
-      detail:
-        "The app will restart. Client files stay installed, but game data will download again.",
-    });
-    if (response !== 0) return false;
-    try {
-      await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
-      log("cache", "info", "cache.clearRequested");
-      app.relaunch();
-      app.quit();
-      return true;
-    } catch (error) {
-      logOperationFailure("cache", "cache.clearRequestFailed", error);
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.cacheDownloadAll, async (event) => {
-    assertSender(event);
-    return ctx.downloadFullGame();
-  });
-
-  ipcMain.handle(IPC.cacheStopDownload, (event) => {
-    assertSender(event);
-    ctx.stopFullDownload();
-  });
-
-  ipcMain.handle(IPC.gameStorageReset, async (event) => {
-    const win = assertSender(event);
-    await resetGameInput(win);
-    const { response } = await dialog.showMessageBox(win, {
-      type: "warning",
-      buttons: ["Reset and Restart", "Cancel"],
-      defaultId: 1,
-      cancelId: 1,
-      message: "Reset saved Guild Wars files?",
-      detail:
-        "This removes local Guild Wars settings, build templates, screenshots, and chat logs. Downloaded game data and your saved login stay untouched.",
-    });
-    if (response !== 0) return false;
-    try {
-      await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
-      log("filesystem", "warn", "filesystem.resetRequested");
-      app.relaunch();
-      app.quit();
-      return true;
-    } catch (error) {
-      logOperationFailure("filesystem", "filesystem.resetFailed", error);
-      throw error;
-    }
-  });
-
-  ipcMain.handle(IPC.diagnosticsGraphics, async (event, value: unknown) => {
-    assertSender(event);
-    if (!isGraphicsDiagnostics(value)) {
-      throw new ValidationError("invalid graphics diagnostics");
-    }
-    recordGraphics(value);
-  });
-
-  ipcMain.handle(IPC.diagnosticsClockSync, (event, rendererNowUs: unknown) => {
-    assertSender(event);
-    if (typeof rendererNowUs !== "number" || !Number.isFinite(rendererNowUs)) {
-      throw new ValidationError("invalid renderer clock");
-    }
-    const mainReceiveUs = diagnosticTimestampUs();
-    return { mainReceiveUs, mainSendUs: diagnosticTimestampUs() };
-  });
-
-  ipcMain.handle(
-    IPC.diagnosticsClockResult,
-    (event, offsetUs: unknown, rttUs: unknown) => {
-      assertSender(event);
-      if (
-        typeof offsetUs !== "number" ||
-        !Number.isFinite(offsetUs) ||
-        typeof rttUs !== "number" ||
-        !Number.isFinite(rttUs) ||
-        Math.abs(offsetUs) > Number.MAX_SAFE_INTEGER ||
-        rttUs < 0 ||
-        rttUs > 60_000_000
-      ) {
-        throw new ValidationError("invalid clock synchronization result");
+    dnsResolve: channel(asString("dns name"), async (_win, name) => {
+      const lookup = startDnsResolveSpan();
+      try {
+        const address = await resolveDns(name);
+        lookup.end({ status: "ok", code: null });
+        return address;
+      } catch (err) {
+        lookup.end({ status: "error", code: errorCode(err) });
+        throw err;
       }
+    }),
+
+    socketConnect: channel(asString("destination"), (win, destination) =>
+      ctx.sockets.connect(win.webContents.id, destination),
+    ),
+
+    socketSend: channel(asSocketPayload, async (win, { socketId, bytes }) => {
+      count("socket.ipcReceiveCalls");
+      count("socket.ipcPayloadBytes", bytes.byteLength);
+      count("socket.ipcBackingBytes", bytes.buffer.byteLength);
+      await ctx.sockets.send(socketId, bytes, win.webContents.id);
+    }),
+
+    socketClose: channel(asSocketId, async (win, socketId) => {
+      await ctx.sockets.close(socketId, win.webContents.id);
+    }),
+
+    settingsGet: channel(nothing, async () => {
+      try {
+        return await ctx.getSettings();
+      } catch (error) {
+        logEvent({ k: "settings.loadFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+
+    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
+      try {
+        const previous = await ctx.getSettings();
+        // Changing a Toolbox tool and restarting are one action, so the two
+        // surfaces that offer the tools cannot leave a checkbox claiming
+        // something the running session is not doing. Cancelling saves
+        // nothing: the answer the player sees is the answer on disk.
+        const restart = toolboxSelectionChanged(previous, patch);
+        if (restart && !(await confirmToolboxRestart(win))) return previous;
+        const saved = await ctx.updateSettings(patch);
+        if (previous.dataStrategy !== saved.dataStrategy) {
+          logEvent({ k: "launcher.strategyChanged",
+            strategy: saved.dataStrategy ?? "unselected",
+          });
+        }
+        if (restart) {
+          app.relaunch();
+          app.quit();
+        }
+        return saved;
+      } catch (error) {
+        logEvent({ k: "settings.saveFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+
+    settingsReset: channel(nothing, async (win) => {
+      await resetGameInput(win);
+      try {
+        const previous = await ctx.getSettings();
+        const restart = toolboxSelectionChanged(previous, DEFAULT_SETTINGS);
+        const { response } = await dialog.showMessageBox(win, {
+          type: "warning",
+          buttons: [
+            restart ? "Reset and Restart" : "Reset Launcher Settings",
+            "Cancel",
+          ],
+          defaultId: 1,
+          cancelId: 1,
+          message: "Reset launcher settings?",
+          detail: restart
+            ? "Display, controls, window size and position, and advanced settings return to their defaults, then the app restarts to apply the Toolbox tools. Downloaded game data and your saved login stay untouched."
+            : "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
+        });
+        if (response !== 0) return null;
+        const settings = await ctx.resetSettings();
+        try {
+          await resetWindowState(win);
+        } catch {
+          // The settings file is already durably reset. Window geometry is a
+          // separate document, so its failure must not turn that committed
+          // result into a false "settings reset failed" answer.
+          logEvent({ k: "window.stateResetFailed" });
+        }
+        logEvent({ k: "settings.reset" });
+        if (restart) {
+          app.relaunch();
+          app.quit();
+        }
+        return settings;
+      } catch (error) {
+        logEvent({ k: "settings.resetFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+
+    credentialsLoad: channel(nothing, async () => {
+      try {
+        return await credentials.load();
+      } catch (error) {
+        logEvent({ k: "credentials.loadFailed" });
+        throw error;
+      }
+    }),
+
+    // The store checks the same rule again on its own file; `parseCredentials`
+    // is that rule, so the boundary is validated without a second opinion.
+    credentialsSave: channel(
+      one(parseCredentials),
+      async (_win, value: StoredCredentials) => {
+        try {
+          await credentials.save(value);
+        } catch (error) {
+          logEvent({ k: "credentials.saveFailed" });
+          throw error;
+        }
+      },
+    ),
+
+    credentialsClear: channel(nothing, async () => {
+      try {
+        await credentials.clear();
+      } catch (error) {
+        logEvent({ k: "credentials.clearFailed" });
+        throw error;
+      }
+    }),
+
+    cacheInfo: channel(nothing, async () => {
+      try {
+        return await chunkStoreInfo(ctx.getChunkStore());
+      } catch (error) {
+        logEvent({ k: "cache.infoFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+
+    cacheClear: channel(nothing, async (win) => {
+      await resetGameInput(win);
+      const { response } = await dialog.showMessageBox(win, {
+        type: "warning",
+        buttons: ["Clear and Restart", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "Clear downloaded game data?",
+        detail:
+          "The app will restart. Client files stay installed, but game data will download again.",
+      });
+      if (response !== 0) return false;
+      try {
+        await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
+        logEvent({ k: "cache.clearRequested" });
+        app.relaunch();
+        app.quit();
+        return true;
+      } catch (error) {
+        logEvent({ k: "cache.clearRequestFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+
+    cacheDownloadAll: channel(nothing, () => ctx.downloadFullGame()),
+
+    cacheStopDownload: channel(nothing, () => ctx.stopFullDownload()),
+
+    gameStorageReset: channel(nothing, async (win) => {
+      await resetGameInput(win);
+      const { response } = await dialog.showMessageBox(win, {
+        type: "warning",
+        buttons: ["Reset and Restart", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "Reset saved Guild Wars files?",
+        detail:
+          "This removes local Guild Wars settings, build templates, screenshots, and chat logs. Downloaded game data and your saved login stay untouched.",
+      });
+      if (response !== 0) return false;
+      try {
+        await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
+        logEvent({ k: "filesystem.resetRequested" });
+        app.relaunch();
+        app.quit();
+        return true;
+      } catch (error) {
+        logEvent({ k: "filesystem.resetFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+
+    diagnosticsGraphics: channel(asGraphics, (_win, value) => {
+      recordGraphics(value);
+    }),
+
+    diagnosticsClockSync: channel(
+      asFiniteNumber("invalid renderer clock"),
+      () => {
+        const mainReceiveUs = diagnosticTimestampUs();
+        return { mainReceiveUs, mainSendUs: diagnosticTimestampUs() };
+      },
+    ),
+
+    diagnosticsClockResult: channel(asClockResult, (_win, { offsetUs, rttUs }) => {
       recordClockOffset(offsetUs, rttUs);
-    },
-  );
+    }),
 
-  ipcMain.handle(IPC.diagnosticsRendererMetrics, async (event, value: unknown) => {
-    assertSender(event);
-    if (!isRendererMetrics(value)) {
-      throw new ValidationError("invalid renderer diagnostics");
-    }
-    recordRendererMetrics(value);
-  });
+    diagnosticsRendererMetrics: channel(asRendererMetrics, (_win, value) => {
+      recordRendererMetrics(value);
+    }),
 
-  ipcMain.handle(IPC.diagnosticsRendererFrames, async (event, value: unknown) => {
-    assertSender(event);
-    if (!isRendererFrameBatch(value)) {
-      throw new ValidationError("invalid renderer frame batch");
-    }
-    await recordRendererFrames(value);
-  });
+    diagnosticsRendererFrames: channel(asRendererFrames, async (_win, value) => {
+      await recordRendererFrames(value);
+    }),
 
-  ipcMain.handle(
-    IPC.diagnosticsRendererMilestone,
-    async (
-      event,
-      name: unknown,
-      rendererTimestampUs: unknown,
-      fields: unknown,
-    ) => {
-      assertSender(event);
-      const milestoneFields =
-        fields &&
-        typeof fields === "object" &&
-        !Array.isArray(fields) &&
-        (typeof (fields as Record<string, unknown>).programId === "string" ||
-          typeof (fields as Record<string, unknown>).programId === "number") &&
-        (typeof (fields as Record<string, unknown>).buildId === "string" ||
-          typeof (fields as Record<string, unknown>).buildId === "number")
-          ? {
-              programId: (fields as Record<string, string | number>).programId!,
-              buildId: (fields as Record<string, string | number>).buildId!,
-            }
-          : undefined;
-      if (
-        typeof name !== "string" ||
-        !RENDERER_MILESTONES.includes(
-          name as (typeof RENDERER_MILESTONES)[number],
-        ) ||
-        typeof rendererTimestampUs !== "number" ||
-        !Number.isFinite(rendererTimestampUs) ||
-        rendererTimestampUs < 0 ||
-        rendererTimestampUs > Number.MAX_SAFE_INTEGER ||
-        (name === "build.info" && !milestoneFields) ||
-        (name !== "build.info" && fields !== undefined) ||
-        (milestoneFields &&
-          [milestoneFields.programId, milestoneFields.buildId].some(
-            (value) =>
-              (typeof value === "string" && value.length > 128) ||
-              (typeof value === "number" &&
-                (!Number.isSafeInteger(value) || value < 0)),
-          ))
-      ) {
-        throw new ValidationError("invalid renderer milestone");
+    diagnosticsRendererMilestone: channel(
+      asMilestone,
+      (_win, { name, rendererTimestampUs, fields }) => {
+        recordRendererMilestone(name, rendererTimestampUs, fields);
+      },
+    ),
+
+    diagnosticsCurrent: channel(nothing, () => diagnosticSummary()),
+
+    appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
+      await shell.openExternal(EXTERNAL_URLS[kind]);
+    }),
+
+    appRequestQuit: channel(nothing, () => {
+      app.quit();
+    }),
+
+    clientRetry: channel(nothing, () => ctx.retryClient()),
+
+    clientHealthy: channel(asClientHealthToken, (_win, token) =>
+      ctx.confirmClientHealthy(token),
+    ),
+
+    clientSession: channel(nothing, () => ctx.getClientSession()),
+
+    releaseNoticeCheck: channel(nothing, () => ctx.checkReleaseNotice()),
+  } satisfies Record<InvokeChannel, AnyChannelDef>;
+
+  // One registration, uniform and total: `assertSender` first, then the
+  // channel's own parser, then its run. The cast is the erasure `satisfies`
+  // left behind — `parse` produced exactly what `run` takes when `channel()`
+  // typechecked the pair.
+  //
+  // A refused payload is recorded here rather than by the handler, because the
+  // handler is never entered. Two channels used to parse inside their own
+  // `try` and log `credentials.saveFailed` / `settings.saveFailed`; one event
+  // in the loop keeps that evidence for a bug report and extends it to all
+  // thirty, so a "saved login stopped working" export shows the rejection
+  // instead of nothing.
+  for (const [key, definition] of Object.entries(handlers)) {
+    const def = definition as ChannelDef<unknown, unknown>;
+    const name = key as InvokeChannel;
+    ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
+      const win = assertSender(event);
+      let input: unknown;
+      try {
+        input = def.parse(args);
+      } catch (error) {
+        logEvent({ k: "ipc.rejected", channel: name, code: errorCode(error) });
+        throw error;
       }
-      recordRendererMilestone(
-        name as (typeof RENDERER_MILESTONES)[number],
-        rendererTimestampUs,
-        milestoneFields,
-      );
-    },
-  );
-
-  ipcMain.handle(IPC.diagnosticsCurrent, (event) => {
-    assertSender(event);
-    return diagnosticSummary();
-  });
-
-  ipcMain.handle(IPC.appOpenExternal, async (event, kind: unknown) => {
-    assertSender(event);
-    if (
-      kind !== "github" &&
-      kind !== "discord" &&
-      kind !== "donate" &&
-      kind !== "releases" &&
-      kind !== "store"
-    ) {
-      throw new ValidationError("invalid external link kind");
-    }
-    await shell.openExternal(EXTERNAL_URLS[kind as ExternalLinkKind]);
-  });
-
-  ipcMain.handle(IPC.appRequestQuit, async (event) => {
-    assertSender(event);
-    app.quit();
-  });
-
-  ipcMain.handle(IPC.clientRetry, async (event) => {
-    assertSender(event);
-    await ctx.retryClient();
-  });
-
-  ipcMain.handle(IPC.clientHealthy, async (event) => {
-    assertSender(event);
-    await ctx.confirmClientHealthy();
-  });
-
-  ipcMain.handle(IPC.updateStatus, async (event) => {
-    assertSender(event);
-    return checkForUpdate();
-  });
+      return def.run(win, input);
+    });
+  }
 }
 
 function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {

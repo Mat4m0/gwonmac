@@ -1,4 +1,5 @@
 import { test, expect, _electron as electron } from "@playwright/test";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -22,6 +23,128 @@ const electronBin = path.join(
 test.describe("Electron application", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
+  test("a second instance exits and reveals the primary window", async () => {
+    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
+    const env = {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    };
+    delete env.ELECTRON_RUN_AS_NODE;
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-single-instance-e2e-"));
+    const app = await electron.launch({
+      cwd: root,
+      args: [".", `--user-data-dir=${userData}`],
+      env,
+      executablePath: electronBin,
+    });
+    try {
+      await app.firstWindow({ timeout: 30_000 });
+      await app.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        win?.minimize();
+        win?.hide();
+      });
+
+      const second = spawn(
+        electronBin,
+        [".", `--user-data-dir=${userData}`],
+        { cwd: root, env, stdio: "ignore" },
+      );
+      const exit = await new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("second instance did not exit")),
+          10_000,
+        );
+        second.once("error", reject);
+        second.once("exit", (code, signal) => {
+          clearTimeout(timer);
+          resolve({ code, signal });
+        });
+      });
+
+      expect(exit).toEqual({ code: 0, signal: null });
+      await expect
+        .poll(() =>
+          app.evaluate(({ BrowserWindow }) => {
+            const windows = BrowserWindow.getAllWindows();
+            return {
+              count: windows.length,
+              minimized: windows[0]?.isMinimized() ?? true,
+              visible: windows[0]?.isVisible() ?? false,
+            };
+          }),
+        )
+        .toEqual({ count: 1, minimized: false, visible: true });
+    } finally {
+      await app.close().catch(() => undefined);
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
+  test("a startup failure exits nonzero and releases the instance lock", async () => {
+    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
+    const baseEnv = {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    };
+    delete baseEnv.ELECTRON_RUN_AS_NODE;
+    const failed = spawn(
+      electronBin,
+      [".", `--user-data-dir=${userData}`],
+      {
+        cwd: root,
+        env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
+        stdio: "ignore",
+      },
+    );
+    try {
+      const exit = await new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("failed startup did not exit")),
+          10_000,
+        );
+        failed.once("error", reject);
+        failed.once("exit", (code, signal) => {
+          clearTimeout(timer);
+          resolve({ code, signal });
+        });
+      });
+      expect(exit).toEqual({ code: 1, signal: null });
+
+      const diagnosticsDir = path.join(userData, "diagnostics");
+      const events = (
+        await Promise.all(
+          (await readdir(diagnosticsDir))
+            .filter((name) => name.endsWith(".jsonl"))
+            .map((name) => readFile(path.join(diagnosticsDir, name), "utf8")),
+        )
+      ).join("\n");
+      expect(events).toContain('"name":"app.startupFailed"');
+      expect(events).toContain('"name":"quit.cleanupStarted"');
+      expect(events).toContain('"name":"quit.cleanupCompleted"');
+
+      // A successful launch with the same profile proves the failed primary did
+      // not remain headless while holding Electron's singleton lock.
+      const restarted = await electron.launch({
+        cwd: root,
+        args: [".", `--user-data-dir=${userData}`],
+        env: baseEnv,
+        executablePath: electronBin,
+      });
+      try {
+        await restarted.firstWindow({ timeout: 30_000 });
+      } finally {
+        await restarted.close().catch(() => undefined);
+      }
+    } finally {
+      failed.kill();
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
   test("red X closes sockets and exits cleanly", async () => {
     const server = net.createServer();
     await new Promise((resolve, reject) => {
@@ -31,6 +154,7 @@ test.describe("Electron application", () => {
     const env = {
       ...process.env,
       GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-electron-quit-e2e-"));
@@ -43,6 +167,9 @@ test.describe("Electron application", () => {
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
+      // The socket host arrives behind a dynamic import, so it is not present
+      // at domcontentloaded. Wait for the capability instead of racing it.
+      await page.waitForFunction(() => window.Module?.socket !== undefined);
       await page.evaluate(async () => {
         const sock = window.Module.socket.connect("127.0.0.1:6112");
         await new Promise((resolve, reject) => {
@@ -83,7 +210,7 @@ test.describe("Electron application", () => {
       expect(events).toContain('"name":"app.beforeQuit"');
       expect(events).toContain('"name":"quit.cleanupStarted"');
       expect(events).toContain('"name":"quit.cleanupCompleted"');
-      expect(events).toContain('"reason":"owner closed"');
+      expect(events).toContain('"reason":"owner"');
       expect(events).not.toContain('"name":"app.uncaughtException"');
       expect(events).not.toContain('"name":"renderer.recoveryScheduled"');
       expect(events).not.toContain("Object has been destroyed");
@@ -95,6 +222,7 @@ test.describe("Electron application", () => {
   });
 
   test("restores fullscreen and normal bounds, then resets safely", async () => {
+    // No GW_BACKGROUND_LAUNCH: setFullScreen is unreliable on a non-key window.
     const env = { ...process.env, GW_OFFLINE_SHELL: "1" };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-window-state-e2e-"));
@@ -139,6 +267,7 @@ test.describe("Electron application", () => {
 
       const statePath = path.join(userData, "window-state.json");
       expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({
+        formatVersion: 1,
         bounds: normalBounds,
         mode: "fullscreen",
       });
@@ -203,6 +332,7 @@ test.describe("Electron application", () => {
           { timeout: 15_000 },
         )
         .toEqual({
+          formatVersion: 1,
           bounds: expectedReset,
           mode: "normal",
         });
@@ -225,6 +355,7 @@ test.describe("Electron application", () => {
     const env = {
       ...process.env,
       GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
     };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-electron-socket-e2e-"));
@@ -284,9 +415,9 @@ test.describe("Electron application", () => {
       expect(externalAfter - externalBefore).toBeLessThan(16 * 1024 * 1024);
       expect(result.summary.counters["socket.rendererSendCalls"]).toBe(20);
       expect(result.summary.counters["socket.rendererPayloadBytes"]).toBe(420);
-      expect(result.summary.counters["socket.rendererSourceBackingBytes"]).toBe(
-        20 * 64 * 1024 * 1024,
-      );
+      expect(
+        result.summary.latest["socket.rendererPeakSourceBackingBytes"],
+      ).toBe(64 * 1024 * 1024);
       expect(result.summary.counters["socket.rendererCompactBytes"]).toBe(420);
       expect(result.summary.counters["socket.ipcPayloadBytes"]).toBe(420);
       expect(result.summary.counters["socket.ipcBackingBytes"]).toBe(420);
@@ -311,7 +442,11 @@ test.describe("Electron application", () => {
   });
 
   test("saved login survives an application relaunch without Keychain", async () => {
-    const env = { ...process.env, GW_OFFLINE_SHELL: "1" };
+    const env = {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    };
     delete env.ELECTRON_RUN_AS_NODE;
     const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-e2e-"));
     const launch = () =>
@@ -355,6 +490,7 @@ test.describe("Electron application", () => {
     const env = {
       ...process.env,
       GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
       GW_OFFLINE_SNAPSHOT_SIZE: String(8 * 1024 ** 3),
     };
     delete env.ELECTRON_RUN_AS_NODE;

@@ -10,18 +10,11 @@
     "exactOptionalPropertyTypes": true,
     "allowJs": true,
     "checkJs": true,
-    "noEmit": true,
-    "skipLibCheck": true
+    "noEmit": true
   },
   "include": [
-    "src/renderer/gw-native.d.ts",
-    "src/renderer/diagnostics.js",
-    "src/renderer/filesystem.js",
-    "src/renderer/graphics.js",
-    "src/renderer/harness.js",
-    "src/renderer/input.js",
-    "src/renderer/loading.js",
-    "src/renderer/settings.js",
+    "src/renderer/**/*.js",
+    "src/renderer/**/*.d.ts",
     "src/shared/contracts.ts",
     "src/shared/diagnostics.ts"
   ]

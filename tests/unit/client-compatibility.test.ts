@@ -53,7 +53,11 @@ describe("client compatibility", () => {
       }),
     );
 
-    assert.match(first, /^[a-f0-9]{64}$/);
+    assert.equal(
+      first,
+      "ae77b021cf8638d81c456296ac336b63edb2ec24f8bb2343560f4d539c07552e",
+      "the canonical serializer must preserve persisted client identities",
+    );
     assert.equal(reordered, first);
     assert.notEqual(changed, first);
   });
@@ -114,12 +118,47 @@ describe("client compatibility", () => {
       await confirmClientCandidate({
         artifacts,
         rejectedPath,
+        expectedFingerprint: fingerprint,
       }),
       fingerprint,
     );
     assert.equal(await missing(join(artifacts, ".candidate.json")), true);
     assert.equal(await missing(previousArtifacts), true);
     assert.equal(await missing(rejectedPath), true);
+  });
+
+  it("refuses to confirm a candidate marker that changed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gw-client-stale-confirm-"));
+    const artifacts = join(root, "artifacts");
+    const previousArtifacts = join(root, "artifacts.previous");
+    const rejectedPath = join(root, "rejected-client.json");
+    const expectedFingerprint = "a".repeat(64);
+    const replacementFingerprint = "b".repeat(64);
+    await mkdir(artifacts);
+    await mkdir(previousArtifacts);
+    await markClientCandidate(artifacts, replacementFingerprint);
+    await writeFile(join(previousArtifacts, "client"), "rollback");
+    await writeFile(rejectedPath, "rejection");
+
+    assert.equal(
+      await confirmClientCandidate({
+        artifacts,
+        rejectedPath,
+        expectedFingerprint,
+      }),
+      null,
+    );
+    assert.deepEqual(
+      JSON.parse(
+        await readFile(join(artifacts, ".candidate.json"), "utf8"),
+      ),
+      { formatVersion: 1, fingerprint: replacementFingerprint },
+    );
+    assert.equal(
+      await readFile(join(previousArtifacts, "client"), "utf8"),
+      "rollback",
+    );
+    assert.equal(await readFile(rejectedPath, "utf8"), "rejection");
   });
 
   it("does not interpret unknown persisted record versions", async () => {

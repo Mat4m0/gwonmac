@@ -1,9 +1,20 @@
 # AGENTS.md
 
-Context for humans and agents working on this repository. `README.md` is the
-user-facing overview, `docs/user-guide.md` covers operation, and
-`docs/internals.md` is the technical source of truth. `PRODUCT.md` records the
-product register, users, personality, anti-references, and design principles.
+Context for humans and agents working on this repository. Each document owns
+one thing, and the others link to it rather than restating it:
+
+| Document                 | Owns                                                  |
+| ------------------------ | ----------------------------------------------------- |
+| `docs/internals.md`      | current technical behaviour                           |
+| `docs/user-guide.md`     | current user-facing behaviour                         |
+| `internal/upstream/`     | the investigation record, wrong hypotheses included   |
+| `PRODUCT.md`             | who this is for, the first feature, and the non-goals |
+| `README.md`, `AGENTS.md` | the way in; they link, they do not restate            |
+
+This file adds what an agent needs before touching the code: the constraints
+that are load-bearing, the invariants that must not drift, and how to verify a
+change. When it disagrees with the code, the code is right and this file is a
+bug.
 
 ## What this is
 
@@ -40,12 +51,13 @@ not only happy paths.
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                     |
-| `src/preload/preload.cjs` | frozen sandbox-compatible capability bridge                   |
+| `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.mjs` |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
 | `tests/`                  | unit, integration, Electron, packaged, and release invariants |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                |
+| `internal/upstream/`      | upstream client defects, workaround, re-certification          |
 
 ## Load-bearing constraints
 
@@ -62,6 +74,11 @@ not only happy paths.
 - `dataStrategy` is the only launcher-intent state. The renderer resolves it
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.
+- Progress `phase: "ready"` means the main process has an active client, and
+  only `ClientRuntime.clientReady` may publish it. `PatchClient` reports
+  download progress and nothing else — its `emit` signature excludes `"ready"`.
+  A premature ready lets the renderer read snapshot metadata before a client
+  exists, receive size 0, and silently stream the whole game over the network.
 - Concurrent chunk reads share one promise per content hash.
 - Renderer and native download schedulers cap ArenaNet concurrency at eight.
   Demand work outranks queued prefetch; do not raise the ceiling.
@@ -85,19 +102,42 @@ not only happy paths.
 - Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
   and clear browser cookies at startup and quit. The switch prevents OS
   prompts but gives saved login weaker same-user protection than Keychain.
-- The host app has no update-feed client. Application replacement is manual;
-  ArenaNet client updates remain automatic.
+- The app makes no network request the user did not ask for. `autoCheckUpdates`
+  (default `false`) governs **every** automatic release check without
+  exception, including the one on an unrecognised client build; with it off, a
+  launch reaches github.com zero times. `src/main/release-notice.ts` is the
+  only caller of the releases API, its three callers are the manual action, the
+  compatibility notice's button, and that one opt-in launch check, and its
+  result is three states — never a boolean, never "unknown" collapsed into
+  "up to date". Application replacement is manual; ArenaNet client updates
+  remain automatic. `docs/internals.md` owns the mechanism and
+  `docs/user-guide.md` owns what the player is told.
 
 ## Diagnostics and privacy
 
 There is one canonical main-process flight recorder and one `.gwdiag` report.
 Renderer console text is not exported. Renderer failures cross IPC only as
 allow-listed names plus non-text fingerprints.
-The recorder normalizes every event name to a dot-separated identifier.
+The closed schema owns every dot-separated event name, subsystem, level, field,
+and field validator. There is no generic string logging API.
 
 Never record or export credentials, account identifiers, packet contents,
 request/response bodies, headers, cookies, crash dumps, or filesystem paths.
-Exports are local, bounded, redacted, mode `0600`, and fail closed.
+Exports are local, bounded, mode `0600`, and fail closed: an event the schema
+cannot account for stops the export instead of being scrubbed on the way out.
+
+The protection is three tiers and only the first is a proof, so say which one
+you mean. `events.jsonl` is **certified**: every recorded event is a member of
+the closed union in `src/main/diagnostics/schema.ts`, a `string` field there
+fails `tsc`, producers record an `ErrorCode` rather than a message, and
+`src/main/diagnostics/detector.ts` matches every declared record field by
+field before anything is written — it imports neither the recorder nor the
+scanner, which is what makes it evidence rather than agreement. What the
+manifest calls `schemaChecked` is every app-authored record; it must equal
+`records` or export fails. The Chromium trace and the documents whose leaves
+come from OS and Chromium APIs are **pattern-scanned** by
+`src/main/diagnostics/text-scan.ts`, which catches a vocabulary and cannot
+promise more. `docs/internals.md` states which tier covers which file.
 
 Level 1 captures prove performance. Level 2 Chromium traces locate causes but
 are profiler-contaminated and do not establish gains.
@@ -107,7 +147,8 @@ are profiler-contaminated and do not establish gains.
 Do not commit downloaded game binaries, snapshots, manifests, credentials,
 diagnostic exports, or private traffic. The public client access key in
 `src/main/core/access-key.ts` identifies the official client, not a player;
-release tests exempt only its exact value.
+policy tests exempt that one value and fail on any other UUID-shaped string in
+a tracked file.
 
 Loading artwork is ArenaNet material used by this interoperability project and
 credited in the UI. Do not add third-party fonts or assets without an explicit
@@ -120,24 +161,55 @@ application’s Resources directory.
 
 ## Verification
 
+`pnpm check` is the inner loop: typecheck, lint, markdown link check, unit
+tests, and policy tests. It needs no build and launches no windows.
+
 ```bash
-pnpm typecheck
+pnpm check
+```
+
+The full gate needs a build first. Entry points (`dev`, `package`, `make`,
+`toolbox:*`) build themselves; the `test:*` suites do not, so build once and
+run them against that output:
+
+```bash
+pnpm build
 pnpm lint
+pnpm check:links
 pnpm test:unit
 pnpm test:integration
 pnpm test:electron
+pnpm test:policy
 pnpm test:release
 pnpm package
 pnpm test:packaged
 ```
 
-`pnpm verify` runs the complete local gate. Electron and integration tests need
-permission to launch a local app and bind loopback fixtures. The
-production-network smoke is explicitly opt-in:
+`pnpm test:policy` holds the repository invariants that need no build: import
+boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
+artifacts, and documentation links.
+
+`pnpm verify` runs that gate end to end, and CI runs it on every pull request.
+The website is not part of it: `apps/website` has its own path-filtered
+workflow, and `pnpm test:website` runs that suite locally.
+
+Electron and integration tests need permission to launch a local app and bind
+loopback fixtures. Test launches set `GW_BACKGROUND_LAUNCH=1` so the window
+appears without stealing keyboard focus; the few specs that assert on real OS
+focus opt out and say why. The production-network smoke is explicitly opt-in:
 
 ```bash
-GW_LIVE_SMOKE=1 pnpm test:electron
+pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
+
+When an ArenaNet client update lands, a build is in one of three states and
+`src/main/client-certification.ts` is the only thing that decides which. The
+`client.buildCertification` gauge in a `.gwdiag` names it —
+`certified`, `template-only` (templates save, Toolbox tools cannot load), or
+`uncertified` — and `wasm.templateSaveCompatible` is the older boolean
+derived from that same answer. `pnpm template:recertify` re-derives the
+certified build entry by shape rather than by remembered index. It recovers
+indices, not semantics — `internal/upstream/recertify.md` owns the rest.
 
 For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in
 `docs/toolbox-development.md`, and finish with one scoped `toolbox:live`

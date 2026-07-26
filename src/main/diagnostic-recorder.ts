@@ -9,7 +9,6 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import type {
   DiagnosticFields,
@@ -20,16 +19,19 @@ import type {
   RendererFrameBatch,
 } from "../shared/diagnostics.js";
 import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
+import { diagnosticFramesPath } from "./core/paths.js";
+import { parseLogRecords } from "./diagnostic-report.js";
+import {
+  diagnosticEventRecord,
+  type CaptureStopReason,
+  type DiagnosticEvent,
+} from "./diagnostics/schema.js";
 import { gamePaths } from "./paths.js";
 
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_EVENTS = 2_048;
 const MAX_FRAME_BYTES = 128 * 1024 * 1024;
-const SENSITIVE_KEY =
-  /pass|auth|cookie|token|secret|credential|username|email|account/i;
-const ABSOLUTE_PATH =
-  /(?<=[\s"'(=:])\/(?!\/)[^/\s"',;)}\]]+(?:\/[^/\s"',;)}\]]+)*/g;
 
 export interface LogRecord {
   seq: number;
@@ -37,24 +39,19 @@ export interface LogRecord {
   wallTime: string;
   level: DiagnosticLevel;
   subsystem: DiagnosticSubsystem;
+  /** Current producers are closed by `DiagnosticEvent`; this reader
+   * type stays open because previous-session files may come from format 1. */
   name: string;
   durationUs?: number;
   traceId?: string;
   spanId?: string;
-  parentSpanId?: string;
-  fields?: DiagnosticFields;
-}
-
-export interface Span {
-  readonly traceId: string;
-  readonly spanId: string;
-  end(fields?: DiagnosticFields, level?: DiagnosticLevel): number;
+  fields: DiagnosticFields;
 }
 
 export interface CaptureMetadata {
   startedUs: number;
   endedUs: number;
-  stopReason: "manual" | "automatic" | "buffer-full" | "export" | "shutdown";
+  stopReason: CaptureStopReason;
   firstSequenceNumber: number;
   lastSequenceNumber: number;
 }
@@ -112,51 +109,6 @@ class Histogram {
   }
 }
 
-export function redactDiagnosticText(value: string): string {
-  return value
-    .replaceAll(homedir(), "[home]")
-    .replace(/\bBearer\s+[^\s,;"']+/gi, "Bearer [redacted]")
-    .replace(
-      /\b(password|authorization|cookie|token|secret)\b\s*[:=]\s*[^,\s}"']+/gi,
-      "$1=[redacted]",
-    )
-    .replace(/([?&][^=\s"'&]+)=([^&#\s"',}]+)/g, "$1=[redacted]")
-    .replace(
-      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-      "[redacted-email]",
-    )
-    .replace(ABSOLUTE_PATH, "[redacted-path]");
-}
-
-function redactFields(
-  fields: DiagnosticFields | undefined,
-): DiagnosticFields | undefined {
-  if (!fields) return undefined;
-  return Object.fromEntries(
-    Object.entries(fields).flatMap(([key, value]) =>
-      SENSITIVE_KEY.test(key)
-        ? []
-        : [
-            [
-              key,
-              typeof value === "string"
-                ? redactDiagnosticText(value)
-                : value,
-            ],
-          ],
-    ),
-  );
-}
-
-function canonicalEventName(value: string): string {
-  return (
-    redactDiagnosticText(value)
-      .trim()
-      .replace(/[^A-Za-z0-9]+/g, ".")
-      .replace(/^\.+|\.+$/g, "") || "diagnostics.unnamed"
-  );
-}
-
 export function runtimeVersions(): Record<string, string> {
   return Object.fromEntries(
     Object.entries(process.versions).filter(
@@ -199,16 +151,14 @@ export class FlightRecorder {
     return Number((process.hrtime.bigint() - this.started) / 1_000n);
   }
 
-  event(
-    subsystem: DiagnosticSubsystem,
-    level: DiagnosticLevel,
-    name: string,
-    fields?: DiagnosticFields,
+  record(
+    event: DiagnosticEvent,
     detail: Pick<
       LogRecord,
-      "durationUs" | "traceId" | "spanId" | "parentSpanId"
+      "durationUs" | "traceId" | "spanId"
     > & { timestampUs?: number } = {},
   ): void {
+    const mapped = diagnosticEventRecord(event);
     const timestampUs = detail.timestampUs ?? this.timestampUs();
     const record: LogRecord = {
       seq: ++this.seq,
@@ -217,18 +167,14 @@ export class FlightRecorder {
         new Date(
           Date.parse(this.startedWall) + timestampUs / 1_000,
         ).toISOString(),
-      level,
-      subsystem,
-      name: canonicalEventName(name),
+      level: mapped.level,
+      subsystem: mapped.subsystem,
+      name: mapped.name,
+      fields: mapped.fields,
     };
     if (detail.durationUs !== undefined) record.durationUs = detail.durationUs;
     if (detail.traceId !== undefined) record.traceId = detail.traceId;
     if (detail.spanId !== undefined) record.spanId = detail.spanId;
-    if (detail.parentSpanId !== undefined) {
-      record.parentSpanId = detail.parentSpanId;
-    }
-    const safeFields = redactFields(fields);
-    if (safeFields) record.fields = safeFields;
     if (this.events.length === MAX_EVENTS) {
       this.events.shift();
       this.count("diagnostics.evictedEvents");
@@ -304,7 +250,7 @@ export class FlightRecorder {
   async beginCapture(): Promise<void> {
     await this.flush();
     await rm(
-      path.join(gamePaths().diagnostics, `frames-${this.sessionId}.bin`),
+      diagnosticFramesPath(gamePaths().diagnostics, this.sessionId),
       { force: true },
     );
     this.framesReady = false;
@@ -368,47 +314,6 @@ export class FlightRecorder {
     this.captureStartedDroppedEvents = 0;
   }
 
-  span(
-    subsystem: DiagnosticSubsystem,
-    name: string,
-    fields?: DiagnosticFields,
-    parentSpanId?: string,
-    traceId: string = randomUUID(),
-    recordEvents = true,
-  ): Span {
-    const started = this.timestampUs();
-    const spanId = randomUUID();
-    if (recordEvents) {
-      this.event(subsystem, "debug", `${name}.begin`, fields, {
-        traceId,
-        spanId,
-        ...(parentSpanId ? { parentSpanId } : {}),
-      });
-    }
-    let ended = false;
-    return {
-      traceId,
-      spanId,
-      end: (endFields, level = "debug") => {
-        if (ended) return 0;
-        ended = true;
-        const durationUs = this.timestampUs() - started;
-        this.observe(`${subsystem}.${name}`, durationUs);
-        if (recordEvents || level !== "debug" || durationUs >= 50_000) {
-          const completeFields =
-            fields || endFields ? { ...fields, ...endFields } : undefined;
-          this.event(subsystem, level, `${name}.end`, completeFields, {
-            durationUs,
-            traceId,
-            spanId,
-            ...(parentSpanId ? { parentSpanId } : {}),
-          });
-        }
-        return durationUs;
-      },
-    };
-  }
-
   summary(captureLevel: 0 | 1 | 2): DiagnosticSummary {
     return this.buildSummary(
       captureLevel,
@@ -462,12 +367,12 @@ export class FlightRecorder {
     const files = (await readdir(directory))
       .filter((name) => name.startsWith(prefix) && name.endsWith(".jsonl"))
       .map((name) => path.join(directory, name));
+    // Per file, not over the concatenation: only the file still being written
+    // can end mid-record, and gluing its torn tail to another file's first
+    // line would cost two records instead of one.
     const records: LogRecord[] = [];
     for (const file of files) {
-      const text = await readFile(file, "utf8");
-      for (const line of text.split("\n")) {
-        if (line) records.push(JSON.parse(line) as LogRecord);
-      }
+      records.push(...parseLogRecords(await readFile(file, "utf8")));
     }
     records.sort((left, right) => left.seq - right.seq);
     const first = records[0];
@@ -493,9 +398,9 @@ export class FlightRecorder {
     }
     this.writes = this.writes.then(async () => {
       await this.ensureFile();
-      const file = path.join(
+      const file = diagnosticFramesPath(
         gamePaths().diagnostics,
-        `frames-${this.sessionId}.bin`,
+        this.sessionId,
       );
       if (!this.framesReady) {
         const header = Buffer.alloc(16);
@@ -517,10 +422,7 @@ export class FlightRecorder {
 
   framePath(): string | null {
     return this.framesReady
-      ? path.join(
-          gamePaths().diagnostics,
-          `frames-${this.sessionId}.bin`,
-        )
+      ? diagnosticFramesPath(gamePaths().diagnostics, this.sessionId)
       : null;
   }
 

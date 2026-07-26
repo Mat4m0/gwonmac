@@ -1,16 +1,15 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import {
+  installGameFilesystem,
+  type EmscriptenModule,
+} from "../../src/renderer/filesystem.js";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const source = await readFile(
-  path.join(root, "src/renderer/filesystem.js"),
-  "utf8",
-);
-
+// The module is imported, not read and evaluated in a synthetic context. What
+// it still reaches for ambiently is the Emscripten runtime's `FS`/`IDBFS`,
+// which only exist once the glue has loaded, so the fixture supplies them on
+// globalThis for the duration of the preRun it drives and takes them away
+// again — no test may observe another's runtime.
 type SyncCallback = (error?: unknown) => void;
 
 function fixture(options: {
@@ -67,8 +66,12 @@ function fixture(options: {
       calls.push(`chdir:${value}`);
     },
   };
-  const module = {
-    preRun: undefined as undefined | (() => void),
+  // Typed as the contract rather than inferred, because the fixture stands in
+  // for the module Emscripten hands the renderer. That module arrives with no
+  // preRun at all — installGameFilesystem is what puts one there — so a stand-in
+  // that declares the property up front, holding undefined, is a shape the real
+  // caller never passes and would hide an install that never assigned.
+  const module: EmscriptenModule = {
     addRunDependency(value: string) {
       calls.push(`add:${value}`);
     },
@@ -76,37 +79,44 @@ function fixture(options: {
       calls.push(`remove:${value}`);
     },
   };
-  const context = {
-    FS: fileSystem,
-    IDBFS: {},
-    setTimeout: options.syncNever
-      ? (callback: () => void) => {
-          callback();
-          return 1;
-        }
-      : setTimeout,
-    clearTimeout: options.syncNever ? () => undefined : clearTimeout,
-    window: {} as {
-      gwInstallGameFilesystem?: (options: {
-        module: typeof module;
-        failed(error: unknown): void;
-        log(...values: unknown[]): void;
-      }) => void;
-    },
-  };
-  Object.assign(context, { globalThis: context });
-  vm.runInNewContext(source, context);
-  context.window.gwInstallGameFilesystem?.({
-    module,
-    failed(error) {
-      failures.push(error);
-    },
-    log() {
-      calls.push("ready");
-    },
-  });
-  assert.equal(typeof module.preRun, "function");
-  module.preRun();
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  Object.assign(globalThis, { FS: fileSystem, IDBFS: {} });
+  if (options.syncNever) {
+    Object.assign(globalThis, {
+      setTimeout: (callback: () => void) => {
+        callback();
+        return 1;
+      },
+      clearTimeout: () => undefined,
+    });
+  }
+  try {
+    installGameFilesystem({
+      module,
+      failed(error) {
+        failures.push(error);
+      },
+      log() {
+        calls.push("ready");
+      },
+    });
+    // assert.ok is the assertion of the two that narrows, so the call below is
+    // the one installGameFilesystem installed rather than an optional hook the
+    // checker has to be told about.
+    assert.ok(
+      typeof module.preRun === "function",
+      "installGameFilesystem must install a preRun hook",
+    );
+    module.preRun();
+  } finally {
+    Object.assign(globalThis, {
+      setTimeout: realSetTimeout,
+      clearTimeout: realClearTimeout,
+    });
+    Reflect.deleteProperty(globalThis, "FS");
+    Reflect.deleteProperty(globalThis, "IDBFS");
+  }
   return { calls, failures, fileSystem };
 }
 

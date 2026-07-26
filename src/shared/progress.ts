@@ -1,13 +1,18 @@
-import type { DownloadProgress, PrefetchProgress } from "./contracts.js";
+import type {
+  DownloadActivity,
+  DownloadProgress,
+  PrefetchProgress,
+} from "./contracts.js";
 
-export const INITIAL_PROGRESS: DownloadProgress = {
+/** Never a failure, so it is typed as the activity it is: spreading a
+ * union would make every derived literal a union too. */
+export const INITIAL_PROGRESS: DownloadActivity = {
   phase: "starting",
   label: "Checking the game client",
   received: 0,
   total: 0,
   bytesPerSecond: 0,
   secondsRemaining: null,
-  error: null,
 };
 
 export const EMPTY_PREFETCH: PrefetchProgress = {

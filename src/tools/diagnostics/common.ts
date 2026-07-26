@@ -3,23 +3,26 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import {
+  inspectEventLog,
+  type RedactionResult,
+} from "../../main/diagnostics/detector.js";
 import type {
   DiagnosticReport,
   DiagnosticSummary,
 } from "../../shared/diagnostics.js";
 export type { DiagnosticReport } from "../../shared/diagnostics.js";
+export type { RedactionResult } from "../../main/diagnostics/detector.js";
 
 const execFileAsync = promisify(execFile);
 
-export interface CaptureManifest {
-  formatVersion: number;
+interface ManifestFields {
   applicationVersion: string;
   sessionId: string;
   captureLevel: 0 | 1 | 2;
   exportedAt: string;
   droppedEventCount: number;
   includedFiles: string[];
-  redaction: string;
   profilerContaminated: boolean;
   eventLog?: {
     completeFromStart: boolean;
@@ -51,12 +54,31 @@ export interface CaptureManifest {
   };
 }
 
+/**
+ * The alpha's export. One explicit legacy read path: it declares
+ * `histograms.json` (a strict subset of `summary.json`) and asserts redaction
+ * with a literal nothing can reproduce. Both are why there is a format 2.
+ */
+export type LegacyCaptureManifest = ManifestFields & {
+  formatVersion: 1;
+  redaction: "passed";
+};
+
+export type CurrentCaptureManifest = ManifestFields & {
+  formatVersion: 2;
+  redaction: RedactionResult;
+};
+
+export type CaptureManifest = LegacyCaptureManifest | CurrentCaptureManifest;
+
 export interface Capture {
   manifest: CaptureManifest;
   summary: DiagnosticSummary;
   captureSummary?: DiagnosticSummary;
   report?: DiagnosticReport;
   environment: Record<string, unknown>;
+  /** `events.jsonl` verbatim, so the detector can be re-run over it. */
+  eventLog?: string;
   frames?: FrameAnalysis;
   frameError?: string;
 }
@@ -187,7 +209,7 @@ export function analyzeFrames(bytes: Uint8Array): FrameAnalysis {
 
 export async function withCapture<T>(
   capturePath: string,
-  action: (capture: Capture) => T | Promise<T>,
+  action: (capture: Capture, root: string) => T | Promise<T>,
 ): Promise<T> {
   const root = await mkdtemp(path.join(tmpdir(), "gwdiag-"));
   try {
@@ -197,6 +219,9 @@ export async function withCapture<T>(
       summary: await parseJson(path.join(root, "summary.json")),
       environment: await parseJson(path.join(root, "environment.json")),
     };
+    if (capture.manifest.includedFiles.includes("events.jsonl")) {
+      capture.eventLog = await readFile(path.join(root, "events.jsonl"), "utf8");
+    }
     if (capture.manifest.includedFiles.includes("report.json")) {
       capture.report = await parseJson(path.join(root, "report.json"));
     }
@@ -215,20 +240,68 @@ export async function withCapture<T>(
           error instanceof Error ? error.message : String(error);
       }
     }
-    return await action(capture);
+    return await action(capture, root);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 }
 
+/**
+ * Reproduces the exporter's detector run. The manifest states what was
+ * checked; this checks the same file and refuses to agree unless it gets the
+ * same answer. It calls the schema detector, never the pattern redactor — a
+ * validator that used the redactor as its oracle could only confirm the
+ * redactor agreed with itself.
+ */
+function redactionErrors(capture: Capture): string[] {
+  const manifest = capture.manifest;
+  if (manifest.formatVersion === 1) {
+    return manifest.redaction === "passed" ? [] : ["redaction did not pass"];
+  }
+  const claimed = manifest.redaction;
+  if (capture.eventLog === undefined) {
+    return ["events.jsonl is missing, so the export cannot be re-checked"];
+  }
+  let observed;
+  try {
+    observed = inspectEventLog(capture.eventLog);
+  } catch (error) {
+    return [
+      `events.jsonl is not exportable: ${
+        error instanceof Error ? error.message : "unknown failure"
+      }`,
+    ];
+  }
+  const errors: string[] = [];
+  if (observed.records !== claimed.records) {
+    errors.push(
+      `manifest claims ${claimed.records} event records, events.jsonl has ${observed.records}`,
+    );
+  }
+  if (observed.schemaChecked !== claimed.schemaChecked) {
+    errors.push(
+      `manifest claims ${claimed.schemaChecked} schema-checked records, events.jsonl has ${observed.schemaChecked}`,
+    );
+  }
+  if (
+    claimed.traceBytesScanned > 0 !==
+    capture.manifest.includedFiles.includes("chromium-trace.json")
+  ) {
+    errors.push("trace scan and included files disagree");
+  }
+  return errors;
+}
+
 export function validateCapture(capture: Capture): string[] {
   const errors: string[] = [];
-  if (capture.manifest.formatVersion !== 1) errors.push("unsupported formatVersion");
+  if (capture.manifest.formatVersion !== 1 && capture.manifest.formatVersion !== 2) {
+    errors.push("unsupported formatVersion");
+  }
   if (!capture.manifest.sessionId) errors.push("manifest sessionId is missing");
   if (capture.manifest.sessionId !== capture.summary.sessionId) {
     errors.push("manifest and summary sessionId differ");
   }
-  if (capture.manifest.redaction !== "passed") errors.push("redaction did not pass");
+  errors.push(...redactionErrors(capture));
   if (
     capture.manifest.includedFiles.includes("frames.bin") &&
     (capture.manifest.frameSchema?.format !== "GWFRAME1" ||
@@ -306,17 +379,28 @@ export function validateCapture(capture: Capture): string[] {
   ) {
     errors.push("capture sequence bounds fall outside the exported event log");
   }
+  // `histograms.json` was a strict subset of `summary.json` and is gone from
+  // format 2. It stays required for format 1, because an alpha export that
+  // omitted it really was incomplete.
   for (const file of [
     "manifest.json",
     "summary.json",
     "events.jsonl",
-    "histograms.json",
+    ...(capture.manifest.formatVersion === 1 ? ["histograms.json"] : []),
     "environment.json",
     "settings-redacted.json",
   ]) {
     if (!capture.manifest.includedFiles.includes(file)) {
       errors.push(`manifest does not declare ${file}`);
     }
+  }
+  if (
+    capture.manifest.captureLevel === 2 &&
+    !capture.manifest.includedFiles.includes("chromium-trace.json")
+  ) {
+    // A failed startRecording or stopRecording drops the trace silently while
+    // the manifest still claims Level 2, so the export looks complete.
+    errors.push("Level 2 capture has no Chromium trace");
   }
   if (capture.summary.droppedEvents > 0) {
     errors.push(`${capture.summary.droppedEvents} flight-recorder events were dropped`);

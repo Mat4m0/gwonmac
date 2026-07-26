@@ -131,6 +131,16 @@ window.gwLoading = (function () {
     img.src = pick;
   }).catch(() => {});
 
+  // The running version, in the footer, on every launch. It used to live only
+  // in the macOS About panel, which means a bug report had to go hunting for
+  // it — and under CalVer the number doubles as a staleness signal.
+  window.gwNative?.client.session().then((session) => {
+    const version = document.createElement('p');
+    version.id = 'loading-version';
+    version.textContent = `Guild Wars for macOS ${session.appVersion}`;
+    el('loading-legal').prepend(version);
+  }).catch(() => {});
+
   // A failed boot gets a one-click retry, same as View → Reload Game.
   retry?.addEventListener('click', async () => {
     const requestedRecovery = recovery;
@@ -144,16 +154,21 @@ window.gwLoading = (function () {
       }
       api.set('Retrying the game client', null);
       await window.gwNative.client.retry();
+      // A retry answers on the progress channel, the same one the first
+      // attempt used. Reading it here is what replaced a rejected promise
+      // carrying a sentence the main process had written.
+      const progress = await window.gwNative.progress.current();
+      if (progress.phase === 'error') {
+        const { describeLaunchFailure } = await import('./failure-messages.js');
+        api.fail(describeLaunchFailure(progress.errorCode));
+        return;
+      }
       window.location.reload();
-    } catch (error) {
+    } catch {
       if (requestedRecovery === 'filesystem') {
         api.failFilesystem();
       } else {
-        api.fail(
-          error instanceof Error
-            ? error.message
-            : 'The game client still could not be prepared.',
-        );
+        api.fail('The game client still could not be prepared.');
       }
     } finally {
       retry.disabled = false;
@@ -188,29 +203,15 @@ window.gwLoading = (function () {
     void window.gwNative.app.openExternal(kind);
   });
 
-  // Quiet update awareness: one corner link when a newer release exists.
-  // Main returns null for dev builds and on any network failure.
-  void (async () => {
-    const status = window.gwNative?.update?.status
-      ? await window.gwNative.update.status().catch(() => null)
-      : null;
-    if (!status || !status.hasUpdate) return;
-    const links = el('loading-links');
-    if (!links || links.querySelector('[data-external="releases"]')) return;
-    const link = document.createElement('a');
-    link.href = '#';
-    link.dataset.external = 'releases';
-    link.className = 'update';
-    link.textContent = `Update available · ${status.latestVersion}`;
-    links.prepend(link);
-  })();
-
   async function waitForClient() {
     if (!window.gwNative) {
       api.fail('Native bridge missing — this page must run inside Guild Wars.app.');
       return false;
     }
     api.set('Checking the game client', null);
+    // Resolved before the first progress event can arrive, so the failure
+    // path below stays synchronous.
+    const { describeLaunchFailure } = await import('./failure-messages.js');
 
     return new Promise((resolve) => {
       let settled = false;
@@ -224,7 +225,11 @@ window.gwLoading = (function () {
 
       /** @param {import('../shared/contracts.js').DownloadProgress} p */
       const apply = (p) => {
-        if (p.error) { api.fail(p.error); finish(false); return; }
+        if (p.phase === 'error') {
+          api.fail(describeLaunchFailure(p.errorCode));
+          finish(false);
+          return;
+        }
         window.gwAutomation.set(`launcher.${p.phase}`);
         if (p.phase === 'ready') {
           api.set('Starting Guild Wars', null, p.notice || '');

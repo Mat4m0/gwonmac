@@ -15,7 +15,13 @@
   font-display: swap;
 }
 
+/* The art zone, the footer and the dock are stacked in flow, so the dock's own
+   content decides how tall it is and the footer moves up to meet it. Pinning
+   the footer to a constant instead let the compatibility notice — which makes
+   the dock half as tall again — paint over the legal text. `--dock-h` is the
+   dock's minimum, not a layout constant anything else reads. */
 #loading { position:fixed; inset:0; z-index:10; overflow:hidden;
+           display:flex; flex-direction:column;
            --dock-h: 104px;
            background:#0a0806; color:#e8dcc0;
            font:16px/1.5 "QT Friz Quad","Iowan Old Style",Palatino,Georgia,serif;
@@ -61,16 +67,27 @@
 /* The update notice earns the gold the other links do not. */
 #loading-links a.update { color:#f3dd9d; border:1px solid #a9833880;
                           border-radius:2px; padding:2px 8px; }
+/* The check action with its answer beside it (mounted by settings.js, which
+   owns the same component in the Settings dialog). An answer is a whole
+   sentence, so this one group wraps where the link row does not, and it is
+   bounded so a failure sentence cannot push the row off the window. */
+#loading-update { display:flex; flex-wrap:wrap; align-items:center;
+                  justify-content:flex-end; gap:2px 8px;
+                  max-width:min(46ch,40vw); white-space:normal; }
+#loading-update-status { color:#e8dcc0bf; }
+#loading-update-when { color:#e8dcc08c; font-size:11.5px; }
 
-/* Art zone: the logo floats over the artwork, centered above the dock. */
-#loading-inner { position:absolute; inset:0 0 var(--dock-h) 0; display:flex;
+/* Art zone: the logo floats over the artwork, centered in whatever the footer
+   and the dock leave. position:relative keeps it above the scrim. */
+#loading-inner { position:relative; flex:1; min-height:0; overflow:hidden;
+                 display:flex;
                  align-items:center; justify-content:center; pointer-events:none; }
 #loading-logo { width:min(400px,56vw); filter:drop-shadow(0 3px 14px #000a); }
 /* Until the real logo arrives, the alt text should not flash as broken art. */
 #loading-logo:not([src]) { visibility:hidden; }
 
 /* ---------------------------------------------------------------- the dock */
-#loading-dock { position:absolute; left:0; right:0; bottom:0; z-index:2;
+#loading-dock { position:relative; z-index:2;
                 min-height:var(--dock-h); box-sizing:border-box;
                 display:flex; align-items:center;
                 padding:10px 26px;
@@ -104,6 +121,7 @@
 #loading-retry:focus-visible { outline:2px solid #e0bd73; outline-offset:2px; }
 #loading-retry[hidden] { display:none; }
 #loading-dock:has(#data-choice:not([hidden])) #loading-boot,
+#loading-dock:has(#client-compat:not([hidden])) #loading-boot,
 #loading-dock:has(#data-download:not([hidden])) #loading-boot { display:none; }
 #loading-dock:has(#data-download:not([hidden])) #loading-bar { display:none; }
 
@@ -115,10 +133,20 @@
 
 /* --------------------------------------------------- dock decision panels */
 #data-choice,
+#client-compat,
 #data-download { flex:1; min-width:0; display:flex; align-items:center;
                  justify-content:space-between; gap:20px; color:#eee3c9; }
 #data-choice[hidden],
+#client-compat[hidden],
 #data-download[hidden] { display:none; }
+/* The compatibility notice: a heading, the contract, and the version answer
+   beneath it, which is a separate sentence and not a conclusion drawn from
+   the heading. */
+#client-compat-title { margin:0 0 2px; font-size:17px; font-weight:400;
+                       letter-spacing:.02em; color:#f2e8d2; }
+#client-compat-detail { margin:0; font-size:13px; color:#d8caaaad;
+                        max-width:104ch; }
+.client-compat-version { margin:3px 0 0; font-size:12.5px; color:#e8dcc08c; }
 
 .dock-info { min-width:0; }
 #data-choice-title { margin:0 0 2px; font-size:17px; font-weight:400;
@@ -189,8 +217,12 @@
 #data-download-status { font-size:15px; color:#f0dfb7; }
 #data-download-detail { font-size:12.5px; color:#d8caaa8f; }
 
-.data-download-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.data-download-actions button {
+/* Dock panel controls, shared by the download panel and the compatibility
+   notice so two dock panels cannot look like two applications. */
+.data-download-actions,
+.client-compat-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.data-download-actions button,
+.client-compat-actions button {
   min-height:38px;
   padding:8px 16px;
   border:1px solid #79613c;
@@ -200,40 +232,47 @@
   font:inherit;
   cursor:default;
 }
-.data-download-actions button:hover:not(:disabled) {
+.data-download-actions button:hover:not(:disabled),
+.client-compat-actions button:hover:not(:disabled) {
   border-color:#d1aa5e;
   background:#2b2117f2;
 }
-.data-download-actions button:focus-visible {
+.data-download-actions button:focus-visible,
+.client-compat-actions button:focus-visible {
   outline:2px solid #e0bd73;
   outline-offset:2px;
 }
-.data-download-actions button:disabled { opacity:.5; }
-.data-download-actions .launcher-primary {
+.data-download-actions button:disabled,
+.client-compat-actions button:disabled { opacity:.5; }
+.data-download-actions .launcher-primary,
+.client-compat-actions .launcher-primary {
   border-color:#a98338;
   color:#fff8e7;
   background:#6d5222;
 }
-.data-download-actions .launcher-primary:hover:not(:disabled) { background:#806329; }
-.data-download-actions .launcher-link {
+.data-download-actions .launcher-primary:hover:not(:disabled),
+.client-compat-actions .launcher-primary:hover:not(:disabled) { background:#806329; }
+.data-download-actions .launcher-link,
+.client-compat-actions .launcher-link {
   border-color:transparent;
   color:#d8caaaad;
   background:transparent;
   text-decoration:underline;
   text-underline-offset:3px;
 }
-.data-download-actions .launcher-link:hover:not(:disabled) {
+.data-download-actions .launcher-link:hover:not(:disabled),
+.client-compat-actions .launcher-link:hover:not(:disabled) {
   color:#f3dd9d;
   border-color:transparent;
   background:transparent;
 }
 
 /* -------------------------------------------------------- credit + legal */
-/* Pinned just above the dock where the scrim is darkest and text stays
-   legible: screenshot credit left, legal notice right. */
-#loading-footer { position:absolute; left:0; right:0; bottom:calc(var(--dock-h) + 10px);
+/* Sits directly above the dock, whatever height the dock has taken, where the
+   scrim is darkest and text stays legible: credit left, legal notice right. */
+#loading-footer { position:relative; z-index:2; flex:none;
                   display:flex; align-items:flex-end; justify-content:space-between;
-                  gap:18px; padding:0 16px; pointer-events:none; }
+                  gap:18px; padding:0 16px 10px; pointer-events:none; }
 #loading-footer a { pointer-events:auto; }
 
 #loading-credit { font-size:11.5px; color:#e8dcc08c; text-shadow:0 1px 5px #000e; }
@@ -242,17 +281,19 @@
 #loading-legal { max-width:52ch; text-align:right; font-size:10px;
                  line-height:1.45; color:#e8dcc07a; text-shadow:0 1px 5px #000e; }
 #loading-legal p { margin:0; }
-#loading-legal p.strong { color:#e8dcc0a6; margin-bottom:3px; }
+#loading-legal p.strong, #loading-version { color:#e8dcc0a6; margin-bottom:3px; }
 
 /* Narrow windows: stack the dock's info above its actions, shrink chrome. */
 @media (max-width:860px) {
   #loading { --dock-h: 168px; }
   #loading-dock { flex-wrap:wrap; align-content:center; padding:12px 18px; }
-  #data-choice, #data-download { flex-direction:column; align-items:stretch;
-                                 justify-content:center; gap:10px; text-align:center; }
+  #data-choice, #client-compat, #data-download {
+    flex-direction:column; align-items:stretch;
+    justify-content:center; gap:10px; text-align:center; }
   .data-choice-actions { justify-content:center; }
   .data-choice-option { width:auto; flex:1; max-width:260px; }
-  .data-download-actions { justify-content:center; flex-wrap:wrap; }
+  .data-download-actions,
+  .client-compat-actions { justify-content:center; flex-wrap:wrap; }
   #loading-boot { width:100%; text-align:center; }
   #loading-footer { flex-direction:column; align-items:center; gap:4px; }
   #loading-legal { text-align:center; max-width:100%; }

@@ -1,17 +1,21 @@
 import { net } from "electron";
-import path from "node:path";
 import type {
+  ClientCompatibility,
+  ClientHealthToken,
   DownloadProgress,
+  FullDownloadOutcome,
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
+import { isDigest, type Digest } from "../shared/digest.js";
+import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
+import { certifyClientBuild } from "./client-certification.js";
 import {
-  ACCESS_KEY,
+  PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
-  UA,
 } from "./core/access-key.js";
 import {
   ActiveClientSlot,
@@ -20,40 +24,48 @@ import {
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
+import { prepareClientModule } from "./core/client-module.js";
 import {
   confirmClientCandidate,
   readRejectedClient,
   restoreUnconfirmedClient,
 } from "./core/client-compatibility.js";
+import { sha256File } from "./core/derived-wasm.js";
 import type { Manifest } from "./core/manifest.js";
+import { Mutex } from "./core/mutex.js";
 import { PatchClient } from "./core/patch-client.js";
 import {
+  createBoundedPatchFetch,
   fetchPatchBytes,
-  readBoundedResponse,
   type PatchFetch,
 } from "./core/patch-transport.js";
+import { clientArtifactPath, clientManifestPath } from "./core/paths.js";
 import {
   migrateLegacyPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
-import { fullDownloadFailureMessage } from "./core/recovery.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
-import {
-  prepareToolboxClient,
-  type PreparedToolboxClient,
-} from "./core/toolbox-client.js";
 import { TOOLBOX_TRANSFORM_ABI } from "./core/toolbox-transform.js";
 import {
   count,
   gauge,
-  log,
+  logEvent,
   observe,
   peakGauge,
-  span,
+  startClientUpdateSpan,
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 
 export type { ActiveClient } from "./core/active-client.js";
+
+/**
+ * Client fingerprints are parsed as 64-hex where they are read, so this only
+ * types the crossing into the diagnostics schema. It fails closed to `null`
+ * rather than throwing: a broken invariant must not take down an update.
+ */
+function digestOrNull(value: string | null | undefined): Digest | null {
+  return typeof value === "string" && isDigest(value) ? value : null;
+}
 
 interface ClientRuntimeOptions {
   paths: GamePaths;
@@ -67,19 +79,49 @@ interface ClientRuntimeOptions {
 
 export class ClientRuntime {
   private readonly activeSlot = new ActiveClientSlot();
+  /** Held by every operation that moves a generation directory. */
+  private readonly generationLock = new Mutex();
   private progressValue: DownloadProgress = { ...INITIAL_PROGRESS };
   private saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
   private initialResidencyRecorded = false;
-  private fullDownload: Promise<boolean> | null = null;
+  /**
+   * The store the download is actually driving, kept beside its promise. After
+   * a generation swap it is no longer `activeSlot.current.store`, and stopping
+   * the current one would stop the new client's prefetch instead.
+   */
+  private fullDownload: {
+    store: ChunkStore;
+    promise: Promise<FullDownloadOutcome>;
+  } | null = null;
   private gameUpdate: Promise<void> | null = null;
-  private candidateFrameReady = false;
-  private candidateSocketReady = false;
-  private candidateConfirmation: Promise<void> | null = null;
+  private gameUpdateAbort: AbortController | null = null;
+  /**
+   * Which of the three certification states this session is in. Set once per
+   * generation, where the module it describes is chosen; `null` until a client
+   * has been activated.
+   */
+  private compatibilityValue: ClientCompatibility | null = null;
+  /** Exact candidate identity captured by a renderer before it loads glue. */
+  private candidateHealthToken: ClientHealthToken | null = null;
+  private readonly patchFetch: PatchFetch;
 
-  constructor(private readonly options: ClientRuntimeOptions) {}
+  constructor(private readonly options: ClientRuntimeOptions) {
+    this.patchFetch = createBoundedPatchFetch(
+      (url, init) => net.fetch(url, init),
+      PATCH_REQUEST_TIMEOUT_MS,
+    );
+  }
 
   get active(): ActiveClient | null {
     return this.activeSlot.current;
+  }
+
+  get compatibility(): ClientCompatibility | null {
+    return this.compatibilityValue;
+  }
+
+  get healthToken(): ClientHealthToken | null {
+    return this.candidateHealthToken;
   }
 
   get progress(): DownloadProgress {
@@ -96,28 +138,11 @@ export class ClientRuntime {
   }
 
   private cdnChunkFetcher(compression: "none" | "gzip") {
-    const headers = {
-      "X-Access-Key": ACCESS_KEY,
-      "User-Agent": UA,
-      "Accept-Encoding": "identity",
-    };
-    const patchFetch: PatchFetch = async (url, init) => {
-      const request: RequestInit = {
-        redirect: "manual",
-        signal: AbortSignal.timeout(PATCH_REQUEST_TIMEOUT_MS),
-      };
-      if (init?.headers) request.headers = init.headers;
-      const response = await net.fetch(url, request);
-      return {
-        status: response.status,
-        body: await readBoundedResponse(response, init?.maxBytes ?? 1),
-      };
-    };
     return async (hash: string, expectedLength: number) =>
       fetchPatchBytes({
-        fetch: patchFetch,
+        fetch: this.patchFetch,
         url: `${PATCH_ROOT}/${hash}.bin`,
-        headers,
+        headers: PATCH_REQUEST_HEADERS,
         maxBytes: encodedChunkLimit(expectedLength, compression),
         onAttempt: (durationMs) =>
           observe("cache.networkWire", durationMs * 1_000),
@@ -146,46 +171,73 @@ export class ClientRuntime {
     });
   }
 
-  private async selectToolboxWasm(): Promise<{
+  private async selectClientWasm(): Promise<{
     wasmPath: string;
-    build: PreparedToolboxClient["build"];
+    build: ActiveClient["toolboxBuild"];
   }> {
-    const officialWasm = path.join(
+    const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
       "Gw.jspi.wasm",
     );
-    if (!this.options.toolboxEnabled) {
-      gauge("toolbox.supportedBuild", false);
-      return { wasmPath: officialWasm, build: null };
-    }
+    let officialSha256: string;
     try {
-      const prepared = await prepareToolboxClient(
-        officialWasm,
-        this.options.paths.toolbox,
-      );
-      gauge("toolbox.supportedBuild", prepared.build !== null);
-      log(
-        "wasm",
-        "info",
-        prepared.build ? "toolbox.clientPrepared" : "toolbox.unsupportedBuild",
-        prepared.build
-          ? {
-              buildId: prepared.build.buildId,
-              transformAbi: TOOLBOX_TRANSFORM_ABI,
-            }
-          : {},
-      );
-      return { wasmPath: prepared.wasmPath, build: prepared.build };
+      officialSha256 = await sha256File(officialWasm);
     } catch (error) {
+      // Nothing can be certified without the hash, so nothing is transformed.
+      this.compatibilityValue = null;
+      gauge("wasm.templateSaveCompatible", false);
       gauge("toolbox.supportedBuild", false);
-      log("wasm", "warn", "toolbox.prepareFailed", {
-        code:
-          error instanceof Error && "code" in error
-            ? String(error.code)
-            : "transform_failed",
+      logEvent({ k: "wasm.clientHashUnavailable",
+        code: errorCode(error),
       });
       return { wasmPath: officialWasm, build: null };
     }
+
+    const certification = certifyClientBuild(officialSha256);
+    const prepared = await prepareClientModule({
+      officialWasmPath: officialWasm,
+      officialSha256,
+      certification,
+      toolboxRequested: this.options.toolboxEnabled,
+      compatibilityCacheRoot: this.options.paths.compatibility,
+      toolboxCacheRoot: this.options.paths.toolbox,
+    });
+    const state = prepared.state;
+    this.compatibilityValue = {
+      state,
+      clientSha256: officialSha256,
+      toolboxActive: prepared.toolboxBuild !== null,
+    };
+    gauge("client.buildCertification", state);
+    gauge("wasm.templateSaveCompatible", state !== "uncertified");
+
+    if (prepared.failure?.stage === "template-save") {
+      logEvent({ k: "wasm.templateSavePrepareFailed",
+        code: errorCode(prepared.failure.error),
+      });
+    } else {
+      logEvent({
+        k: state === "uncertified"
+          ? "wasm.templateSaveUnsupported"
+          : "wasm.templateSavePrepared",
+      });
+    }
+
+    if (prepared.failure?.stage === "toolbox") {
+      logEvent({ k: "toolbox.prepareFailed",
+        code: errorCode(prepared.failure.error),
+      });
+    }
+    if (prepared.toolboxBuild) {
+      logEvent({ k: "toolbox.clientPrepared",
+        buildId: prepared.toolboxBuild.buildId,
+        transformAbi: TOOLBOX_TRANSFORM_ABI,
+      });
+    } else if (this.options.toolboxEnabled && state !== "certified") {
+      logEvent({ k: "toolbox.uncertifiedClientBlocked" });
+    }
+    gauge("toolbox.supportedBuild", prepared.toolboxBuild !== null);
+    return { wasmPath: prepared.wasmPath, build: prepared.toolboxBuild };
   }
 
   private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {
@@ -212,11 +264,14 @@ export class ClientRuntime {
     return meta;
   }
 
-  private async activateStore(store: ChunkStore): Promise<ActiveClient> {
+  private async activateStore(
+    store: ChunkStore,
+    candidateFingerprint: string | null = null,
+  ): Promise<ActiveClient> {
     this.initialResidencyRecorded = false;
     const [snapshotMeta, toolbox] = await Promise.all([
       this.snapshotFor(store),
-      this.selectToolboxWasm(),
+      this.selectClientWasm(),
     ]);
     const previous = this.activeSlot.current;
     const active: ActiveClient = this.activeSlot.publish({
@@ -226,8 +281,12 @@ export class ClientRuntime {
       wasmPath: toolbox.wasmPath,
       toolboxBuild: toolbox.build,
     });
-    this.candidateFrameReady = false;
-    this.candidateSocketReady = false;
+    this.candidateHealthToken = candidateFingerprint
+      ? Object.freeze({
+          generation: active.generation,
+          fingerprint: candidateFingerprint,
+        })
+      : null;
     if (this.saveTouchedTimer) clearInterval(this.saveTouchedTimer);
     this.saveTouchedTimer = setInterval(() => {
       if (this.activeSlot.current?.generation !== active.generation) return;
@@ -240,7 +299,10 @@ export class ClientRuntime {
     return active;
   }
 
-  private async activateManifest(manifest: Manifest): Promise<ActiveClient> {
+  private async activateManifest(
+    manifest: Manifest,
+    candidateFingerprint: string | null = null,
+  ): Promise<ActiveClient> {
     const entry = manifest.entry(SNAPSHOT);
     if (!entry) throw new Error("client manifest has no snapshot");
     return this.activateStore(
@@ -250,6 +312,7 @@ export class ClientRuntime {
         entry.chunkHashes,
         manifest.compression,
       ),
+      candidateFingerprint,
     );
   }
 
@@ -257,14 +320,20 @@ export class ClientRuntime {
     const value = await migrateLegacyPublishedClientManifest(
       this.options.paths.artifacts,
     );
-    if (!value) throw new Error("no published client is available");
+    // Both failures are shown to a user, so both carry a code: the renderer
+    // has a sentence for each, and "unknown" would have collapsed them into
+    // the generic one.
+    if (!value) throw new NotReadyError("no published client is available");
     if (
       (await verifyPublishedClientArtifacts(
         this.options.paths.artifacts,
         value,
       )) !== true
     ) {
-      throw new Error("last published client failed integrity verification");
+      throw new AppError(
+        "artifact_unverified",
+        "last published client failed integrity verification",
+      );
     }
     return this.activateStore(
       this.createStore(
@@ -287,35 +356,36 @@ export class ClientRuntime {
     try {
       const removed = await pruneUnreferencedChunks({
         chunksDir: this.options.paths.chunks,
-        currentManifest: path.join(
-          this.options.paths.artifacts,
-          "manifest.json",
-        ),
-        previousManifest: path.join(
+        currentManifest: clientManifestPath(this.options.paths.artifacts),
+        previousManifest: clientManifestPath(
           this.options.paths.previousArtifacts,
-          "manifest.json",
         ),
       });
       if (removed.files > 0) {
-        log("cache", "info", "cache.staleChunksRemoved", {
+        logEvent({ k: "cache.staleChunksRemoved",
           files: removed.files,
           bytes: removed.bytes,
         });
       }
     } catch (error) {
-      log("cache", "warn", "cache.staleChunkCleanupSkipped", {
-        message: error instanceof Error ? error.message : String(error),
+      logEvent({
+        k: "cache.staleChunkCleanupSkipped",
+        code: errorCode(error),
       });
     }
   }
 
-  private clientReady(active: ActiveClient, notice?: string): void {
+  private publishReadyProgress(notice?: string): void {
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "ready",
       label: "Starting Guild Wars",
       ...(notice ? { notice } : {}),
     });
+  }
+
+  private clientReady(active: ActiveClient, notice?: string): void {
+    this.publishReadyProgress(notice);
     void active.store
       .prefetch((progress) => {
         if (this.activeSlot.current?.generation === active.generation) {
@@ -324,9 +394,7 @@ export class ClientRuntime {
       })
       .then(() => this.refreshSnapshot(active.generation))
       .catch((error) =>
-        log("cache", "warn", "prefetch.failed", {
-          message: error instanceof Error ? error.message : String(error),
-        }),
+        logEvent({ k: "prefetch.failed", code: errorCode(error) }),
       );
   }
 
@@ -336,7 +404,8 @@ export class ClientRuntime {
     this.clientReady(active, notice);
   }
 
-  private async runUpdate(): Promise<void> {
+  private async runUpdate(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
     if (this.options.offlineShell) {
       this.publishProgress({
         ...INITIAL_PROGRESS,
@@ -351,14 +420,8 @@ export class ClientRuntime {
           "Live probe is using the existing cached client.",
         );
         gauge("update.usingCachedClient", true);
-      } catch {
-        this.publishProgress({
-          ...INITIAL_PROGRESS,
-          phase: "error",
-          label: "Cached live probe blocked",
-          error:
-            "The cached client is incomplete. No ArenaNet update was started.",
-        });
+      } catch (error) {
+        this.publishProgress({ phase: "error", errorCode: errorCode(error) });
       }
       return;
     }
@@ -366,9 +429,10 @@ export class ClientRuntime {
     const patchClient = new PatchClient({
       artifactsDir: this.options.paths.artifacts,
       chunksDir: this.options.paths.chunks,
+      fetch: this.patchFetch,
       onProgress: (progress) => this.publishProgress(progress),
     });
-    const updateSpan = span("update", "clientUpdate");
+    const updateSpan = startClientUpdateSpan();
     try {
       const rollback = await restoreUnconfirmedClient({
         artifacts: this.options.paths.artifacts,
@@ -376,8 +440,9 @@ export class ClientRuntime {
         hostVersion: this.options.hostVersion,
       });
       if (rollback) {
-        log("update", "warn", "client.candidateRolledBack", {
-          fingerprint: rollback.fingerprint,
+        logEvent({
+          k: "client.candidateRolledBack",
+          fingerprint: digestOrNull(rollback.fingerprint),
         });
       }
       try {
@@ -385,68 +450,79 @@ export class ClientRuntime {
           this.options.paths.artifacts,
         );
         if (migrated) {
-          log("update", "info", "client.integrityMetadataReady", {
-            fingerprint: migrated.clientFingerprint ?? null,
+          logEvent({
+            k: "client.integrityMetadataReady",
+            fingerprint: digestOrNull(migrated.clientFingerprint),
           });
         }
       } catch (error) {
-        log("update", "warn", "client.integrityMigrationSkipped", {
-          reason: error instanceof Error ? error.name : "UnknownError",
+        logEvent({
+          k: "client.integrityMigrationSkipped",
+          code: errorCode(error),
         });
       }
       const blockedFingerprint = await readRejectedClient(
         this.options.paths.rejectedClient,
         this.options.hostVersion,
       );
-      const result = await patchClient.update({ blockedFingerprint });
+      const result = await patchClient.update({ blockedFingerprint, signal });
+      signal.throwIfAborted();
       if (result.blocked) {
         await this.activatePublishedAndReady(
           "A newer game client did not start successfully, so the last working client is being used.",
         );
         gauge("update.usingCachedClient", true);
-        updateSpan.end(
-          {
-            status: "rejectedCandidateSkipped",
-            fingerprint: result.fingerprint,
-          },
-          "warn",
-        );
+        updateSpan.end({
+          status: "rejectedCandidateSkipped",
+          code: null,
+          fingerprint: digestOrNull(result.fingerprint),
+        });
         return;
       }
-      const active = await this.activateManifest(result.manifest);
+      const active = await this.activateManifest(
+        result.manifest,
+        result.candidate ? result.fingerprint : null,
+      );
       await this.pruneChunkCache();
       this.clientReady(active);
       updateSpan.end({
         status: result.candidate ? "candidate" : "ready",
-        fingerprint: result.fingerprint,
+        code: null,
+        fingerprint: digestOrNull(result.fingerprint),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      // Identify the failure by code, so comparing sessions does not depend on
+      // matching English prose — and so no prose reaches the export.
+      if (signal.aborted) {
+        updateSpan.end({
+          status: "cancelled",
+          code: null,
+          fingerprint: null,
+        });
+        return;
+      }
+      const code = errorCode(error);
       try {
         await this.activatePublishedAndReady(
           "The game client update failed, so the previous client was restored.",
         );
-        log("update", "warn", "patch.updateFallback", { message });
+        logEvent({ k: "patch.updateFallback", code });
         gauge("update.usingCachedClient", true);
-        updateSpan.end({ status: "cachedFallback", message }, "warn");
+        updateSpan.end({
+          status: "cachedFallback",
+          code,
+          fingerprint: null,
+        });
         return;
       } catch (fallbackError) {
-        log("update", "error", "patch.updateFailed", {
-          message,
-          fallback:
-            fallbackError instanceof Error
-              ? fallbackError.message
-              : String(fallbackError),
+        logEvent({
+          k: "patch.updateFailed",
+          code,
+          fallbackCode: errorCode(fallbackError),
         });
       }
-      updateSpan.end({ status: "error", message }, "error");
-      this.publishProgress({
-        ...INITIAL_PROGRESS,
-        phase: "error",
-        label: "Update failed",
-        error:
-          "ArenaNet is unavailable and no previous game client could be restored.",
-      });
+      updateSpan.end({ status: "error", code, fingerprint: null });
+      this.publishProgress({ phase: "error", errorCode: code });
     }
   }
 
@@ -457,39 +533,41 @@ export class ClientRuntime {
       phase: "starting",
       label: "Checking the game client",
     });
-    const operation = this.runUpdate().finally(() => {
-      if (this.gameUpdate === operation) this.gameUpdate = null;
-    });
+    const controller = new AbortController();
+    this.gameUpdateAbort = controller;
+    const operation = this.generationLock
+      .run(() => this.runUpdate(controller.signal))
+      .finally(() => {
+        if (this.gameUpdate === operation) {
+          this.gameUpdate = null;
+          this.gameUpdateAbort = null;
+        }
+      });
     this.gameUpdate = operation;
     return operation;
   }
 
-  async retryUpdate(): Promise<void> {
-    await this.requestUpdate();
-    if (this.progressValue.phase === "error") {
-      throw new Error(
-        this.progressValue.error ?? "The game client could not be prepared.",
-      );
-    }
-  }
-
-  downloadAll(): Promise<boolean> {
-    if (this.fullDownload) return this.fullDownload;
+  /**
+   * Resolves with the outcome; it does not reject. A rejection crosses IPC as
+   * Electron's flattened message, so a rejected promise could only have
+   * carried prose — which is how the sentence for a failed download came to be
+   * written in the main process at all.
+   */
+  downloadAll(): Promise<FullDownloadOutcome> {
+    if (this.fullDownload) return this.fullDownload.promise;
     const active = this.activeSlot.current;
     if (!active) {
-      return Promise.reject(
-        new Error("The game files are not ready yet. Try again in a moment."),
-      );
+      return Promise.resolve({ status: "failed", errorCode: "not_ready" });
     }
     active.store.resume();
-    log("cache", "info", "fullDownload.started");
+    logEvent({ k: "fullDownload.started" });
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "image",
       label: "Downloading full game",
     });
     let lastProgressLogAt = 0;
-    this.fullDownload = active.store
+    const promise = active.store
       .downloadAll({
         onProgress: (value) => {
           if (this.activeSlot.current?.generation !== active.generation) return;
@@ -500,12 +578,11 @@ export class ClientRuntime {
             total: value.total,
             bytesPerSecond: value.bytesPerSecond,
             secondsRemaining: value.secondsRemaining,
-            error: null,
           });
           const now = Date.now();
           if (now - lastProgressLogAt >= 5_000) {
             lastProgressLogAt = now;
-            log("cache", "info", "fullDownload.progress", {
+            logEvent({ k: "fullDownload.progress",
               received: value.received,
               total: value.total,
               bytesPerSecond: value.bytesPerSecond,
@@ -514,13 +591,11 @@ export class ClientRuntime {
           }
         },
       })
-      .then(async (complete) => {
+      .then(async (complete): Promise<FullDownloadOutcome> => {
         await this.refreshSnapshot(active.generation);
-        log(
-          "cache",
-          "info",
-          complete ? "fullDownload.completed" : "fullDownload.stopped",
-        );
+        logEvent({
+          k: complete ? "fullDownload.completed" : "fullDownload.stopped",
+        });
         if (this.activeSlot.current?.generation === active.generation) {
           this.publishProgress({
             ...INITIAL_PROGRESS,
@@ -528,16 +603,11 @@ export class ClientRuntime {
             label: complete ? "Full game downloaded" : "Download stopped",
           });
         }
-        return complete;
+        return { status: complete ? "complete" : "stopped" };
       })
-      .catch((error) => {
-        log("cache", "error", "fullDownload.failed", {
-          code:
-            error instanceof Error && "code" in error
-              ? String(error.code)
-              : "unknown",
-          message: error instanceof Error ? error.message : String(error),
-        });
+      .catch((error): FullDownloadOutcome => {
+        const code = errorCode(error);
+        logEvent({ k: "fullDownload.failed", code });
         if (this.activeSlot.current?.generation === active.generation) {
           this.publishProgress({
             ...INITIAL_PROGRESS,
@@ -545,73 +615,100 @@ export class ClientRuntime {
             label: "Download paused",
           });
         }
-        throw new Error(fullDownloadFailureMessage(error), { cause: error });
+        return { status: "failed", errorCode: code };
       })
       .finally(() => {
         this.fullDownload = null;
       });
-    return this.fullDownload;
+    this.fullDownload = { store: active.store, promise };
+    return promise;
   }
 
   stopDownload(): void {
-    if (!this.fullDownload) return;
-    log("cache", "info", "fullDownload.stopRequested");
-    this.activeSlot.current?.store.stop();
+    const download = this.fullDownload;
+    if (!download) return;
+    logEvent({ k: "fullDownload.stopRequested" });
+    download.store.stop();
   }
 
-  noteSocketOpen(): void {
-    this.candidateSocketReady = true;
-    void this.confirmCandidateIfReady().catch((error) => {
-      log("update", "error", "client.candidatePromotionFailed", {
-        message: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }
-
-  async noteFramePresented(): Promise<void> {
-    this.candidateFrameReady = true;
-    await this.confirmCandidateIfReady();
-  }
-
-  private confirmCandidateIfReady(): Promise<void> {
-    if (!this.candidateFrameReady || !this.candidateSocketReady) {
-      return Promise.resolve();
-    }
-    if (this.candidateConfirmation) return this.candidateConfirmation;
-    this.candidateConfirmation = (async () => {
+  confirmCandidateHealthy(token: ClientHealthToken): Promise<void> {
+    return this.generationLock.run(async () => {
+      const expected = this.candidateHealthToken;
+      if (
+        !expected ||
+        token.generation !== expected.generation ||
+        token.fingerprint !== expected.fingerprint ||
+        this.activeSlot.current?.generation !== expected.generation
+      ) {
+        return;
+      }
       const fingerprint = await confirmClientCandidate({
         artifacts: this.options.paths.artifacts,
         rejectedPath: this.options.paths.rejectedClient,
+        expectedFingerprint: expected.fingerprint,
       });
-      this.candidateFrameReady = false;
-      this.candidateSocketReady = false;
+      if (this.candidateHealthToken === expected) {
+        this.candidateHealthToken = null;
+      }
       if (fingerprint) {
         await this.pruneChunkCache();
-        log("update", "info", "client.candidatePromoted", { fingerprint });
+        logEvent({
+          k: "client.candidatePromoted",
+          fingerprint: digestOrNull(fingerprint),
+        });
       }
-    })().finally(() => {
-      this.candidateConfirmation = null;
     });
-    return this.candidateConfirmation;
   }
 
-  async recoverRendererCrash(): Promise<void> {
-    const rollback = await restoreUnconfirmedClient({
-      artifacts: this.options.paths.artifacts,
-      rejectedPath: this.options.paths.rejectedClient,
-      hostVersion: this.options.hostVersion,
-    });
-    if (!rollback) return;
-    await this.activatePublishedAndReady();
-    log(
-      "update",
-      "warn",
-      "client.candidateRolledBackAfterRendererCrash",
-      { fingerprint: rollback.fingerprint },
+  recoverRendererCrash(): Promise<void> {
+    const updateController = this.gameUpdateAbort;
+    const interruptedUpdate =
+      updateController !== null && !updateController.signal.aborted;
+    updateController?.abort(
+      new Error("game client update interrupted for renderer recovery"),
     );
+    return this.generationLock.run(async () => {
+      const rollback = await restoreUnconfirmedClient({
+        artifacts: this.options.paths.artifacts,
+        rejectedPath: this.options.paths.rejectedClient,
+        hostVersion: this.options.hostVersion,
+      });
+      if (!rollback) {
+        if (interruptedUpdate) {
+          const active = this.activeSlot.current;
+          if (active) {
+            this.publishReadyProgress(
+              "The interrupted game client update can be retried.",
+            );
+            return;
+          }
+          try {
+            await this.activatePublishedAndReady(
+              "The interrupted game client update can be retried.",
+            );
+          } catch (error) {
+            this.publishProgress({
+              phase: "error",
+              errorCode: errorCode(error),
+            });
+          }
+        }
+        return;
+      }
+      await this.activatePublishedAndReady();
+      logEvent({
+        k: "client.candidateRolledBackAfterRendererCrash",
+        fingerprint: digestOrNull(rollback.fingerprint),
+      });
+    });
   }
 
   async shutdown(): Promise<void> {
+    const update = this.gameUpdate;
+    this.gameUpdateAbort?.abort(
+      new Error("game client update interrupted for application shutdown"),
+    );
+    await update?.catch(() => undefined);
     if (this.saveTouchedTimer) clearInterval(this.saveTouchedTimer);
     this.saveTouchedTimer = null;
     const active = this.activeSlot.current;

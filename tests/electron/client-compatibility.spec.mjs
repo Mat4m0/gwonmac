@@ -19,46 +19,20 @@ async function pathExists(target) {
 test.describe("client compatibility", () => {
   test.skip(!existsSync(main), "run the build before Electron tests");
 
-  test("promotes a candidate only after a frame and game socket open", async () => {
-    const fingerprint = "a".repeat(64);
+  test("reports one first frame and opens a game socket", async () => {
     const server = net.createServer();
     await new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(6112, "127.0.0.1", resolve);
     });
-    let artifacts;
-    let previous;
-    let rejected;
-    const fixture = await launchOffline(
-      "gw-client-promotion-e2e-",
-      {},
-      async (userData) => {
-        artifacts = path.join(userData, "game", "artifacts");
-        previous = path.join(userData, "game", "artifacts.previous");
-        rejected = path.join(userData, "game", "rejected-client.json");
-        await mkdir(artifacts, { recursive: true });
-        await mkdir(previous, { recursive: true });
-        await writeFile(
-          path.join(artifacts, ".candidate.json"),
-          JSON.stringify({ formatVersion: 1, fingerprint }),
-        );
-        await writeFile(
-          rejected,
-          JSON.stringify({
-            formatVersion: 1,
-            fingerprint: "b".repeat(64),
-            hostVersion: "older-host",
-          }),
-        );
-      },
-    );
+    const fixture = await launchOffline("gw-client-host-e2e-");
     try {
       await fixture.page.waitForFunction(
         () => typeof window.Module?.socket?.connect === "function",
       );
-      expect(await pathExists(previous)).toBe(true);
       expect(
-        await fixture.page.evaluate(() => {
+        await fixture.page.evaluate(async () => {
+          const { installGraphics } = await import("./graphics.js");
           const canvas = globalThis.document.createElement("canvas");
           canvas.width = 32;
           canvas.height = 32;
@@ -73,13 +47,12 @@ test.describe("client compatibility", () => {
             emscripten_get_device_pixel_ratio: () => 1,
             emscripten_set_canvas_element_size: () => 0,
           };
-          window.gwInstallGraphics({
+          installGraphics({
             env,
             module,
             renderScale: () => 2,
             firstFrame: () => {
               frames += 1;
-              void window.gwNative.client.healthy();
             },
             log: () => undefined,
           });
@@ -100,7 +73,58 @@ test.describe("client compatibility", () => {
         visibleRestored: true,
         offscreen: [64, 64],
       });
-      expect(await pathExists(path.join(artifacts, ".candidate.json"))).toBe(true);
+      // The cache is a separate renderer module; prove it ships and resolves as
+      // ESM under gw://app — a copy-renderer or protocol regression rejects the
+      // import — that an incomplete program is never frozen, and that a
+      // completed one stops costing a round trip. Whether *boot* installs it is
+      // not assertable here: installGlProgramCache runs from
+      // Module.instantiateWasm, and the offline shell has no client, so the
+      // glue never loads.
+      expect(
+        await fixture.page.evaluate(async () => {
+          const { installGlProgramCache } = await import("./gl-program-cache.js");
+          // Installing into the live page overwrites gwGlRecon and would bump
+          // the session's real query counters; both are put back below.
+          const realRecon = window.gwGlRecon;
+          const realDiagnostics = window.gwDiagnostics;
+          window.gwDiagnostics = { ...realDiagnostics, glProgramQuery: () => {} };
+          const module = { HEAPU8: new Uint8Array(new ArrayBuffer(1024)) };
+          const calls = [];
+          let answer = 0;
+          const env = {
+            glGetProgramiv: (program, pname, p) => {
+              calls.push(pname);
+              new Int32Array(module.HEAPU8.buffer)[p >>> 2] = answer;
+            },
+            glCreateProgram: () => 1,
+            glLinkProgram: () => undefined,
+            glDeleteProgram: () => undefined,
+          };
+          installGlProgramCache({
+            imports: { env },
+            module,
+            log: () => undefined,
+          });
+          const read = (pname) => {
+            env.glGetProgramiv(1, pname, 64);
+            return new Int32Array(module.HEAPU8.buffer)[16];
+          };
+          env.glCreateProgram();
+          const polling = [read(0x91b1), read(0x91b1)];
+          answer = 1;
+          const completed = read(0x91b1);
+          answer = 0;
+          const held = read(0x91b1);
+          window.gwGlRecon = realRecon;
+          window.gwDiagnostics = realDiagnostics;
+          return { polling, completed, held, calls: calls.length };
+        }),
+      ).toEqual({
+        polling: [0, 0],
+        completed: 1,
+        held: 1,
+        calls: 3,
+      });
       await fixture.page.evaluate(async () => {
         const socket = window.Module.socket.connect("127.0.0.1:6112");
         await new Promise((resolve, reject) => {
@@ -119,14 +143,66 @@ test.describe("client compatibility", () => {
         });
         socket.close();
       });
-      await expect
-        .poll(() => pathExists(path.join(artifacts, ".candidate.json")))
-        .toBe(false);
-      expect(await pathExists(previous)).toBe(false);
-      expect(await pathExists(rejected)).toBe(false);
     } finally {
       await closeOffline(fixture);
       await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  test("the notice grows the dock without covering the legal footer", async () => {
+    // The notice makes the dock half as tall again. While the footer was
+    // pinned to a constant it went behind the dock's opaque gradient, and the
+    // attribution index.html renders statically — precisely so it cannot
+    // depend on anything succeeding — was unreadable on the one launch that
+    // shows the notice. Real copy, real stylesheet, real Chromium layout.
+    const fixture = await launchOffline("gw-compat-notice-layout-e2e-");
+    try {
+      const { page } = fixture;
+      const rects = () =>
+        page.evaluate(() => {
+          const box = (id) => globalThis.document.getElementById(id).getBoundingClientRect();
+          return {
+            dock: box("loading-dock"),
+            legal: box("loading-legal"),
+            notice: box("client-compat"),
+          };
+        });
+      await expect(page.locator("#loading-dock")).toBeVisible();
+      const before = await rects();
+
+      await page.evaluate(async () => {
+        const { compatibilityReport } = await import(
+          "./client-compatibility-notice.js"
+        );
+        const report = compatibilityReport(
+          {
+            state: "uncertified",
+            toolboxActive: false,
+            clientSha256: "a".repeat(64),
+          },
+          { nativeCursor: true, targetReadout: false },
+        );
+        globalThis.document.getElementById("client-compat-title").textContent =
+          report.summary;
+        globalThis.document.getElementById("client-compat-detail").textContent =
+          report.details.join(" ");
+        globalThis.document.getElementById("client-compat-version").textContent =
+          "App version 2026.7.0-alpha.1.";
+        const answer = globalThis.document.getElementById("client-compat-update");
+        answer.textContent =
+          "Couldn't check — GitHub did not answer within five seconds.";
+        answer.hidden = false;
+        globalThis.document.getElementById("client-compat").hidden = false;
+      });
+      const after = await rects();
+
+      // Not a vacuous pass: the notice is on screen and the dock did grow.
+      expect(after.notice.height).toBeGreaterThan(0);
+      expect(after.dock.height).toBeGreaterThan(before.dock.height);
+      expect(after.legal.bottom).toBeLessThanOrEqual(after.dock.top);
+      expect(before.legal.bottom).toBeLessThanOrEqual(before.dock.top);
+    } finally {
+      await closeOffline(fixture);
     }
   });
 

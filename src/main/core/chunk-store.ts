@@ -1,7 +1,7 @@
 import { readFile, readdir, stat, statfs, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { PrefetchProgress } from "../../shared/contracts.js";
-import { AppError } from "../../shared/errors.js";
+import { AppError, type ErrorCode } from "../../shared/errors.js";
 import {
   DownloadRateAverage,
   secondsRemaining,
@@ -61,9 +61,20 @@ function errorCode(error: unknown): string {
     : "";
 }
 
-function isFatalLocalDownloadError(error: unknown): boolean {
-  return ["EACCES", "EDQUOT", "ENOSPC", "EROFS"].includes(errorCode(error));
-}
+/**
+ * Local write failures no retry can fix, and the code each one leaves the
+ * store as. A bare Node errno used to escape here, and `errorCode()` collapses
+ * anything that is not an `AppError` to "unknown" — which lost the one
+ * download failure with a concrete user action, in the export as well as in
+ * the launcher. `disk_full` keeps its own code; the other two have no member
+ * of the catalogue and say so.
+ */
+const FATAL_LOCAL_WRITE: Record<string, ErrorCode> = {
+  ENOSPC: "disk_full",
+  EDQUOT: "disk_full",
+  EACCES: "unknown",
+  EROFS: "unknown",
+};
 
 export class ChunkStore {
   readonly size: number;
@@ -459,19 +470,64 @@ export class ChunkStore {
     return this.touched;
   }
 
+  /**
+   * The boot list records chunk INDICES, so it means something only against
+   * the chunking it was written for. It has always recorded `chunkSize`; it
+   * never checked it, so a change to remote chunking silently reinterpreted
+   * every stored index against a different byte range. A mismatch is a cache
+   * miss: we lose one warm start, not correctness.
+   *
+   * Geometry, not content, is the key, and `chunkSize` is the whole of it —
+   * index `i` is `[i*chunkSize, (i+1)*chunkSize)` no matter how many chunks
+   * the snapshot has. The indices stay meaningful across an ArenaNet client
+   * update — they are still the same byte ranges the game touches at boot — so
+   * gating on anything that tracks the snapshot's *contents* would throw the
+   * hint away on every update for nothing. `count` is exactly such a thing:
+   * `Gw.snapshot` is the game data, so essentially every client update changes
+   * its size and therefore its chunk count. It is still written, for
+   * diagnostics, and a snapshot that shrank simply drops the indices it can no
+   * longer address rather than discarding the whole file. Every prefetched
+   * chunk is hash-verified on arrival, so a wrong index costs a wasted fetch,
+   * never a wrong byte.
+   *
+   * An entry that is not a chunk index at all is different: that file is not
+   * one of ours, and it is refused rather than partly believed.
+   *
+   * A boot list with no `formatVersion` is the shape the public alpha wrote.
+   * It carried the same fields, so it is read as written.
+   */
+  private async readBootChunks(): Promise<number[] | null> {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await readFile(this.bootListPath, "utf8"));
+    } catch {
+      return null;
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const record = raw as Record<string, unknown>;
+    if (record.formatVersion !== undefined && record.formatVersion !== 1) {
+      return null;
+    }
+    if (record.chunkSize !== this.chunkSize || !Array.isArray(record.chunks)) {
+      return null;
+    }
+    const chunks: number[] = [];
+    for (const index of record.chunks as unknown[]) {
+      if (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) {
+        return null;
+      }
+      if (index < this.hashes.length) chunks.push(index);
+    }
+    return [...new Set(chunks)].sort((a, b) => a - b);
+  }
+
   async saveTouched(): Promise<void> {
     if (!this.touchedDirty) return;
-    let known = new Set<number>();
-    try {
-      const raw = JSON.parse(await readFile(this.bootListPath, "utf8")) as { chunks?: number[] };
-      known = new Set(raw.chunks ?? []);
-    } catch {
-      // first write
-    }
+    const known = (await this.readBootChunks()) ?? [];
     const merged = [...new Set([...known, ...this.touched])].sort((a, b) => a - b);
-    const prev = [...known].sort((a, b) => a - b);
-    if (JSON.stringify(merged) !== JSON.stringify(prev)) {
+    if (JSON.stringify(merged) !== JSON.stringify(known)) {
       await writeAtomicJson(this.bootListPath, {
+        formatVersion: 1,
         chunkSize: this.chunkSize,
         count: this.hashes.length,
         chunks: merged,
@@ -485,16 +541,11 @@ export class ChunkStore {
     jobs = PREFETCH_JOBS,
   ): Promise<void> {
     if (!this.fetchFn) return;
-    let want: number[];
-    try {
-      const raw = JSON.parse(await readFile(this.bootListPath, "utf8")) as { chunks?: number[] };
-      want = raw.chunks ?? [];
-    } catch {
-      return;
-    }
+    const want = await this.readBootChunks();
+    if (!want) return;
     const todo: number[] = [];
     for (const i of want) {
-      if (i < this.hashes.length && !(await this.isResident(i))) todo.push(i);
+      if (!(await this.isResident(i))) todo.push(i);
     }
     if (!todo.length) return;
 
@@ -590,7 +641,7 @@ export class ChunkStore {
     const baseline = got;
     const rateAverage = new DownloadRateAverage(baseline, started);
     let firstFailure: unknown;
-    let fatalFailure: unknown;
+    let fatalFailure: { error: unknown; code: ErrorCode } | undefined;
 
     await mapPool(
       todo,
@@ -601,7 +652,8 @@ export class ChunkStore {
           await this.ensureChunk(i, "prefetch");
         } catch (error) {
           firstFailure ??= error;
-          if (isFatalLocalDownloadError(error)) fatalFailure ??= error;
+          const code = FATAL_LOCAL_WRITE[errorCode(error)];
+          if (code) fatalFailure ??= { error, code };
           return;
         }
         got += size;
@@ -617,7 +669,13 @@ export class ChunkStore {
       () => this.stopFlag || firstFailure !== undefined,
     );
 
-    if (fatalFailure !== undefined) throw fatalFailure;
+    if (fatalFailure) {
+      throw new AppError(
+        fatalFailure.code,
+        "a game file could not be written to the chunk cache",
+        { cause: fatalFailure.error },
+      );
+    }
     if (this.stopFlag) return false;
     if (firstFailure !== undefined) {
       throw new AppError(

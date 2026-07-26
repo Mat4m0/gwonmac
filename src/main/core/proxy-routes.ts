@@ -1,12 +1,19 @@
 import { AppError, AllowlistError } from "../../shared/errors.js";
 
-export const PROXY_ROUTES: Readonly<Record<string, string>> = {
+export const PROXY_ROUTES = {
   webgate: "webgate.ncplatform.net",
   account: "account.arena.net",
   help: "help.guildwars.com",
   store: "store.guildwars.com",
   www: "www.guildwars.com",
-};
+} as const satisfies Readonly<Record<string, string>>;
+
+/**
+ * A five-key allowlist, so its keys belong in the type. Diagnostics records
+ * which route failed, and `Record<string, string>` would have made that field
+ * an open string.
+ */
+export type ProxyRoute = keyof typeof PROXY_ROUTES;
 
 const ROUTE_RE = /^\/([a-z0-9][a-z0-9-]{0,30})(\/.*)$/i;
 
@@ -17,13 +24,19 @@ export interface ProxyTarget {
 }
 
 export function resolveProxyHost(route: string): string {
-  const host = PROXY_ROUTES[route.toLowerCase()];
-  if (!host) throw new AllowlistError(`unknown proxy route: ${route}`);
-  return host;
+  const key = route.toLowerCase();
+  if (!isProxyRoute(key)) {
+    throw new AllowlistError(`unknown proxy route: ${route}`);
+  }
+  return PROXY_ROUTES[key];
 }
 
-export function isProxyRoute(route: string): boolean {
-  return Object.hasOwn(PROXY_ROUTES, route.toLowerCase());
+/** Narrows an already-lower-cased path label. `resolveProxyHost` still folds
+ *  case, so mixed-case routes keep resolving; only the narrowing needs the
+ *  caller to have normalised, and it says so in the type rather than folding
+ *  case here and claiming a narrowing it has not proved. */
+export function isProxyRoute(route: string): route is ProxyRoute {
+  return Object.hasOwn(PROXY_ROUTES, route);
 }
 
 export function isProxyFetchDestination(destination: string): boolean {

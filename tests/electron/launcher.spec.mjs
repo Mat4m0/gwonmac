@@ -19,6 +19,16 @@ test.describe("launcher recovery", () => {
     try {
       const { app, page } = fixture;
       await expect(page.locator("#data-choice")).toBeVisible();
+      await expect(page.locator("#data-choice-native-cursor")).toBeChecked();
+      await expect(
+        page.locator("#data-choice-target-readout"),
+      ).not.toBeChecked();
+      await expect(page.locator("#data-choice")).toContainText(
+        "Use the game's own cursor",
+      );
+      await expect(page.locator("#data-choice")).toContainText(
+        "Show target distance and range",
+      );
       await expect(page.locator("#data-choice-full-size")).toHaveText(
         "Download 8.00 GB before starting.",
       );
@@ -34,10 +44,10 @@ test.describe("launcher recovery", () => {
         let firstRequest = true;
         ipcMain.removeHandler("gw:cache:downloadAll");
         ipcMain.handle("gw:cache:downloadAll", () => {
-          if (!firstRequest) return false;
+          if (!firstRequest) return { status: "stopped" };
           firstRequest = false;
-          return new Promise((_resolve, reject) => {
-            globalThis.__rejectLauncherDownloadTest = reject;
+          return new Promise((resolve) => {
+            globalThis.__failLauncherDownloadTest = resolve;
           });
         });
       });
@@ -47,13 +57,15 @@ test.describe("launcher recovery", () => {
         "Pause Download",
       );
       await app.evaluate(() => {
-        globalThis.__rejectLauncherDownloadTest?.(
-          new Error("ArenaNet is unavailable. The download can resume later."),
-        );
-        delete globalThis.__rejectLauncherDownloadTest;
+        // The download reports a code; the sentence below is the renderer's.
+        globalThis.__failLauncherDownloadTest?.({
+          status: "failed",
+          errorCode: "fetch_failed",
+        });
+        delete globalThis.__failLauncherDownloadTest;
       });
-      await expect(page.locator("#data-download-status")).toContainText(
-        "ArenaNet is unavailable",
+      await expect(page.locator("#data-download-status")).toHaveText(
+        "The download could not continue. Check your connection, then choose Resume Download.",
       );
       await expect(page.locator("#data-download-detail")).toHaveText(
         "Verified data is safe. Choose Resume Download to try again.",
@@ -78,6 +90,11 @@ test.describe("launcher recovery", () => {
     });
     try {
       const { app, page } = fixture;
+      // The first boot parks on the strategy choice, because it resolves with
+      // the default settings and therefore never runs a Full Game
+      // verification. Waiting for it leaves the reload as the only boot that
+      // can call downloadAll, which is what the count below asserts.
+      await expect(page.locator("#data-choice")).toBeVisible();
       await page.evaluate(() =>
         window.gwNative.settings.set({ dataStrategy: "full" }),
       );
@@ -93,16 +110,14 @@ test.describe("launcher recovery", () => {
         ipcMain.handle("gw:cache:downloadAll", () => {
           globalThis.__fullGameVerificationCalls =
             (globalThis.__fullGameVerificationCalls || 0) + 1;
-          throw new Error(
-            "A cached chunk was corrupt. Choose Resume Download to repair it.",
-          );
+          return { status: "failed", errorCode: "disk_full" };
         });
       }, size);
       await page.reload();
 
       await expect(page.locator("#data-download")).toBeVisible();
-      await expect(page.locator("#data-download-status")).toContainText(
-        "cached chunk was corrupt",
+      await expect(page.locator("#data-download-status")).toHaveText(
+        "There is not enough free disk space to download the full game. Free some space, then choose Resume Download.",
       );
       await expect(page.locator("#data-download-toggle")).toHaveText(
         "Resume Download",

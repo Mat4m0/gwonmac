@@ -61,86 +61,115 @@ export const DIAGNOSTIC_BUCKETS_US = [
   Number.MAX_SAFE_INTEGER,
 ] as const;
 
-export interface RendererMetrics {
-  intervalMs: number;
-  visible: boolean;
-  rafCount: number;
-  rafTotalUs: number;
-  rafMinUs: number;
-  rafMaxUs: number;
-  rafOver16: number;
-  rafOver33: number;
-  rafOver50: number;
-  swapCount: number;
-  swapTotalUs: number;
-  swapMinUs: number;
-  swapMaxUs: number;
-  presentationFailures: number;
-  submitIntervalCount: number;
-  submitIntervalTotalUs: number;
-  submitIntervalMinUs: number;
-  submitIntervalMaxUs: number;
-  visibleSubmitIntervalCount: number;
-  visibleSubmitIntervalTotalUs: number;
-  visibleSubmitIntervalMinUs: number;
-  visibleSubmitIntervalMaxUs: number;
-  hiddenSubmitIntervalCount: number;
-  hiddenSubmitIntervalTotalUs: number;
-  hiddenSubmitIntervalMinUs: number;
-  hiddenSubmitIntervalMaxUs: number;
-  bitmapOutTotalUs: number;
-  bitmapOutMinUs: number;
-  bitmapOutMaxUs: number;
-  bitmapPresentTotalUs: number;
-  bitmapPresentMinUs: number;
-  bitmapPresentMaxUs: number;
-  snapshotReads: number;
-  snapshotBytes: number;
-  snapshotTotalUs: number;
-  snapshotMinUs: number;
-  snapshotMaxUs: number;
-  memoryHits: number;
-  nativeHits: number;
-  coalesced: number;
-  memoryCacheBytes: number;
-  memoryCacheChunks: number;
-  pendingChunks: number;
-  activeDemand: number;
-  activePrefetch: number;
-  queuedDemand: number;
-  queuedPrefetch: number;
-  cacheEvictions: number;
-  queuePromotions: number;
-  socketSendCalls: number;
-  socketPayloadBytes: number;
-  socketSourceBackingBytes: number;
-  socketCompactBytes: number;
-  socketSyncTotalUs: number;
-  socketSyncMinUs: number;
-  socketSyncMaxUs: number;
-  socketSettles: number;
-  socketSettleTotalUs: number;
-  socketSettleMinUs: number;
-  socketSettleMaxUs: number;
-  inputToSubmitCount: number;
-  inputToSubmitTotalUs: number;
-  inputToSubmitMinUs: number;
-  inputToSubmitMaxUs: number;
-  droppedRecords: number;
-  rendererEvents: RendererDiagnosticEvent[];
-  rafHistogram: number[];
-  swapHistogram: number[];
-  submitIntervalHistogram: number[];
-  visibleSubmitIntervalHistogram: number[];
-  hiddenSubmitIntervalHistogram: number[];
-  bitmapOutHistogram: number[];
-  bitmapPresentHistogram: number[];
-  snapshotHistogram: number[];
-  socketSyncHistogram: number[];
-  socketSettleHistogram: number[];
-  inputToSubmitHistogram: number[];
-  socketSendEvents: number[];
-}
+/**
+ * The metric fields that share runtime validation rules. The public type and
+ * the boundary predicate both derive from this descriptor, so a field cannot
+ * be declared without also being validated.
+ */
+const RENDERER_METRIC_FIELDS = {
+  numbers: [
+    "intervalMs",
+    "rafCount",
+    "rafTotalUs",
+    "rafMinUs",
+    "rafMaxUs",
+    "rafOver33",
+    "rafOver50",
+    "swapCount",
+    "swapTotalUs",
+    "swapMinUs",
+    "swapMaxUs",
+    "presentationFailures",
+    "submitIntervalCount",
+    "submitIntervalTotalUs",
+    "submitIntervalMinUs",
+    "submitIntervalMaxUs",
+    "visibleSubmitIntervalCount",
+    "visibleSubmitIntervalTotalUs",
+    "visibleSubmitIntervalMinUs",
+    "visibleSubmitIntervalMaxUs",
+    "hiddenSubmitIntervalCount",
+    "hiddenSubmitIntervalTotalUs",
+    "hiddenSubmitIntervalMinUs",
+    "hiddenSubmitIntervalMaxUs",
+    "bitmapOutTotalUs",
+    "bitmapOutMinUs",
+    "bitmapOutMaxUs",
+    "bitmapPresentTotalUs",
+    "bitmapPresentMinUs",
+    "bitmapPresentMaxUs",
+    "snapshotReads",
+    "snapshotBytes",
+    "snapshotTotalUs",
+    "snapshotMinUs",
+    "snapshotMaxUs",
+    "memoryHits",
+    "nativeHits",
+    "coalesced",
+    "glProgramQueryHits",
+    "glProgramQueryMisses",
+    "memoryCacheBytes",
+    "memoryCacheChunks",
+    "pendingChunks",
+    "activeDemand",
+    "activePrefetch",
+    "queuedDemand",
+    "queuedPrefetch",
+    "cacheEvictions",
+    "queuePromotions",
+    "socketSendCalls",
+    "socketPayloadBytes",
+    "socketSourceBackingMaxBytes",
+    "socketCompactBytes",
+    "socketSyncTotalUs",
+    "socketSyncMinUs",
+    "socketSyncMaxUs",
+    "socketSettles",
+    "socketSettleTotalUs",
+    "socketSettleMinUs",
+    "socketSettleMaxUs",
+    "inputToSubmitCount",
+    "inputToSubmitTotalUs",
+    "inputToSubmitMinUs",
+    "inputToSubmitMaxUs",
+    "droppedRecords",
+  ],
+  histograms: [
+    "rafHistogram",
+    "swapHistogram",
+    "submitIntervalHistogram",
+    "visibleSubmitIntervalHistogram",
+    "hiddenSubmitIntervalHistogram",
+    "bitmapOutHistogram",
+    "bitmapPresentHistogram",
+    "snapshotHistogram",
+    "socketSyncHistogram",
+    "socketSettleHistogram",
+    "inputToSubmitHistogram",
+  ],
+} as const;
+
+type RendererNumericMetric = (typeof RENDERER_METRIC_FIELDS.numbers)[number];
+type RendererHistogramMetric =
+  (typeof RENDERER_METRIC_FIELDS.histograms)[number];
+const RENDERER_METRIC_KEYS: ReadonlySet<string> = new Set([
+  ...RENDERER_METRIC_FIELDS.numbers,
+  ...RENDERER_METRIC_FIELDS.histograms,
+  "visible",
+  "focused",
+  "rendererEvents",
+  "socketSendEvents",
+]);
+
+export type RendererMetrics = Record<RendererNumericMetric, number> &
+  Record<RendererHistogramMetric, number[]> & {
+    visible: boolean;
+    /** Window focus, which `visible` cannot report: an unfocused or occluded
+     * macOS window stops being composited while `document.hidden` stays false. */
+    focused: boolean;
+    rendererEvents: RendererDiagnosticEvent[];
+    socketSendEvents: number[];
+  };
 
 export interface RendererFrameBatch {
   stride: 7;
@@ -226,95 +255,20 @@ export interface DiagnosticReport {
 export function isRendererMetrics(value: unknown): value is RendererMetrics {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  const numeric = [
-    "intervalMs",
-    "rafCount",
-    "rafTotalUs",
-    "rafMinUs",
-    "rafMaxUs",
-    "rafOver16",
-    "rafOver33",
-    "rafOver50",
-    "swapCount",
-    "presentationFailures",
-    "swapTotalUs",
-    "swapMinUs",
-    "swapMaxUs",
-    "submitIntervalCount",
-    "submitIntervalTotalUs",
-    "submitIntervalMinUs",
-    "submitIntervalMaxUs",
-    "visibleSubmitIntervalCount",
-    "visibleSubmitIntervalTotalUs",
-    "visibleSubmitIntervalMinUs",
-    "visibleSubmitIntervalMaxUs",
-    "hiddenSubmitIntervalCount",
-    "hiddenSubmitIntervalTotalUs",
-    "hiddenSubmitIntervalMinUs",
-    "hiddenSubmitIntervalMaxUs",
-    "bitmapOutTotalUs",
-    "bitmapOutMinUs",
-    "bitmapOutMaxUs",
-    "bitmapPresentTotalUs",
-    "bitmapPresentMinUs",
-    "bitmapPresentMaxUs",
-    "snapshotReads",
-    "snapshotBytes",
-    "snapshotTotalUs",
-    "snapshotMinUs",
-    "snapshotMaxUs",
-    "memoryHits",
-    "nativeHits",
-    "coalesced",
-    "memoryCacheBytes",
-    "memoryCacheChunks",
-    "pendingChunks",
-    "activeDemand",
-    "activePrefetch",
-    "queuedDemand",
-    "queuedPrefetch",
-    "cacheEvictions",
-    "queuePromotions",
-    "socketSendCalls",
-    "socketPayloadBytes",
-    "socketSourceBackingBytes",
-    "socketCompactBytes",
-    "socketSyncTotalUs",
-    "socketSyncMinUs",
-    "socketSyncMaxUs",
-    "socketSettles",
-    "socketSettleTotalUs",
-    "socketSettleMinUs",
-    "socketSettleMaxUs",
-    "inputToSubmitCount",
-    "inputToSubmitTotalUs",
-    "inputToSubmitMinUs",
-    "inputToSubmitMaxUs",
-    "droppedRecords",
-  ];
-  if (
-    !(
-      typeof record.visible === "boolean" &&
-      numeric.every(
-        (key) =>
-          typeof record[key] === "number" &&
-          Number.isFinite(record[key]) &&
-          (record[key] as number) >= 0 &&
-          (record[key] as number) <= Number.MAX_SAFE_INTEGER,
-      ) &&
-      [
-        record.rafHistogram,
-        record.swapHistogram,
-        record.submitIntervalHistogram,
-        record.visibleSubmitIntervalHistogram,
-        record.hiddenSubmitIntervalHistogram,
-        record.bitmapOutHistogram,
-        record.bitmapPresentHistogram,
-        record.snapshotHistogram,
-        record.socketSyncHistogram,
-        record.socketSettleHistogram,
-        record.inputToSubmitHistogram,
-      ].every(
+  if (!(
+    Object.keys(record).every((key) => RENDERER_METRIC_KEYS.has(key)) &&
+    typeof record.visible === "boolean" &&
+    typeof record.focused === "boolean" &&
+    RENDERER_METRIC_FIELDS.numbers.every(
+      (key) =>
+        typeof record[key] === "number" &&
+        Number.isFinite(record[key]) &&
+        (record[key] as number) >= 0 &&
+        (record[key] as number) <= Number.MAX_SAFE_INTEGER,
+    ) &&
+    RENDERER_METRIC_FIELDS.histograms
+      .map((key) => record[key])
+      .every(
         (histogram) =>
           Array.isArray(histogram) &&
           histogram.length === DIAGNOSTIC_BUCKETS_US.length &&
@@ -322,15 +276,15 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
             (count) => Number.isSafeInteger(count) && (count as number) >= 0,
           ),
       )
-    )
-  ) {
+  )) {
     return false;
   }
   if (
     !Array.isArray(record.rendererEvents) ||
     record.rendererEvents.length > 64 ||
     !record.rendererEvents.every((event) => {
-      if (!event || typeof event !== "object" || Array.isArray(event)) return false;
+      if (!event || typeof event !== "object" || Array.isArray(event))
+        return false;
       const item = event as Record<string, unknown>;
       return (
         typeof item.timestampUs === "number" &&
@@ -364,12 +318,12 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
   }
   if (
     record.socketCompactBytes !== record.socketPayloadBytes ||
-    (record.socketSourceBackingBytes as number) <
-      (record.socketPayloadBytes as number) ||
     !record.socketSendEvents.every((_item, index, events) => {
       if (index % 7 !== 0) return true;
-      return events[index + 4]! >= events[index + 3]! &&
-        events[index + 5] === events[index + 3];
+      return (
+        events[index + 4]! >= events[index + 3]! &&
+        events[index + 5] === events[index + 3]
+      );
     })
   ) {
     return false;
@@ -390,7 +344,6 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
   };
   const counters = [
     "rafCount",
-    "rafOver16",
     "rafOver33",
     "rafOver50",
     "swapCount",
@@ -399,6 +352,8 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "memoryHits",
     "nativeHits",
     "coalesced",
+    "glProgramQueryHits",
+    "glProgramQueryMisses",
     "memoryCacheBytes",
     "memoryCacheChunks",
     "pendingChunks",
@@ -410,7 +365,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "queuePromotions",
     "socketSendCalls",
     "socketPayloadBytes",
-    "socketSourceBackingBytes",
+    "socketSourceBackingMaxBytes",
     "socketCompactBytes",
     "socketSettles",
     "inputToSubmitCount",
@@ -433,13 +388,14 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     bounded("inputToSubmit") &&
     counters.every((key) => Number.isSafeInteger(record[key])) &&
     (record.rafOver50 as number) <= (record.rafOver33 as number) &&
-    (record.rafOver33 as number) <= (record.rafOver16 as number) &&
-    (record.rafOver16 as number) <= (record.rafCount as number) &&
+    (record.rafOver33 as number) <= (record.rafCount as number) &&
     (record.presentationFailures as number) <= (record.swapCount as number)
   );
 }
 
-export function isRendererFrameBatch(value: unknown): value is RendererFrameBatch {
+export function isRendererFrameBatch(
+  value: unknown,
+): value is RendererFrameBatch {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const batch = value as { stride?: unknown; data?: unknown };
   return (
@@ -447,7 +403,9 @@ export function isRendererFrameBatch(value: unknown): value is RendererFrameBatc
     Array.isArray(batch.data) &&
     batch.data.length <= 20_000 &&
     batch.data.length % batch.stride === 0 &&
-    batch.data.every((item) => typeof item === "number" && Number.isFinite(item)) &&
+    batch.data.every(
+      (item) => typeof item === "number" && Number.isFinite(item),
+    ) &&
     batch.data.every((item, index) => {
       const column = index % 7;
       if (column <= 3) return item >= 0 && item <= Number.MAX_SAFE_INTEGER;

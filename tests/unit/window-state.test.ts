@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AppError } from "../../src/shared/errors.js";
@@ -27,6 +27,51 @@ describe("window state", () => {
       () => parseWindowState({ ...value, mode: "minimized" }),
       AppError,
     );
+  });
+
+  it("restores an alpha window written without a format version", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-window-state-"));
+    const path = join(dir, "window-state.json");
+    const alpha = {
+      bounds: { x: 120, y: 64, width: 1024, height: 768 },
+      mode: "maximized" as const,
+    };
+    await writeFile(path, JSON.stringify(alpha));
+
+    let invalid = false;
+    const loaded = await loadWindowState(path, () => {
+      invalid = true;
+    });
+    assert.equal(invalid, false, "an alpha window must not be discarded");
+    assert.deepEqual(loaded, alpha);
+
+    await saveWindowState(path, loaded!);
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+      formatVersion: 1,
+      ...alpha,
+    });
+    assert.deepEqual(await loadWindowState(path), alpha);
+  });
+
+  it("discards a window-state format this build cannot read", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-window-state-"));
+    const path = join(dir, "window-state.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        formatVersion: 2,
+        bounds: { x: 0, y: 0, width: 1280, height: 800 },
+        mode: "normal",
+      }),
+    );
+    let invalid = false;
+    assert.equal(
+      await loadWindowState(path, () => {
+        invalid = true;
+      }),
+      null,
+    );
+    assert.equal(invalid, true);
   });
 
   it("removes corrupt state and falls back cleanly", async () => {

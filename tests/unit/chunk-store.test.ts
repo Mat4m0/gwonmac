@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, after } from "node:test";
 import { ChunkStore } from "../../src/main/core/chunk-store.ts";
+import { AppError } from "../../src/shared/errors.ts";
 
 const CHUNK = 4096;
 
@@ -199,6 +200,141 @@ describe("chunk-store", () => {
     assert.deepEqual(second.chunks, [0, 2]);
   });
 
+  describe("boot list validity", () => {
+    const payload = Buffer.alloc(CHUNK, 9);
+    const hash = hashOf(payload);
+
+    async function storeOver(
+      boot: string,
+      root: string,
+      fetched: string[],
+      chunkCount = 3,
+    ): Promise<ChunkStore> {
+      return new ChunkStore({
+        chunksDir: root,
+        size: CHUNK * chunkCount,
+        chunkSize: CHUNK,
+        chunkHashes: Array.from({ length: chunkCount }, () => hash),
+        bootListPath: boot,
+        fetch: async (h) => {
+          fetched.push(h);
+          return new Uint8Array(payload);
+        },
+      });
+    }
+
+    it("prefetches an alpha boot list that carries no format version", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      // Exactly what v0.0.1-alpha.1 wrote: no marker, same three fields.
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK, count: 3, chunks: [0, 2] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.equal(fetched.length, 1, "one hash covers both indices");
+    });
+
+    it("ignores a boot list written for a different chunk size", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK * 2, count: 3, chunks: [0, 2] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.deepEqual(fetched, []);
+    });
+
+    it("keeps the warm start when the snapshot changed size", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      // Every ArenaNet client update changes `Gw.snapshot` and so its chunk
+      // count. The boot indices still name the byte ranges the game touches,
+      // so this must prefetch — discarding it would warm nothing on the one
+      // launch that needs it most.
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK, count: 9, chunks: [0, 2] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.equal(fetched.length, 1, "one hash covers both indices");
+    });
+
+    it("ignores a boot list whose entries are not chunk indices", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK, count: 3, chunks: [0, "2"] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.deepEqual(fetched, []);
+    });
+
+    it("ignores a boot list from a format this build cannot read", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      await writeFile(
+        boot,
+        JSON.stringify({ formatVersion: 2, chunkSize: CHUNK, count: 3, chunks: [0] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.deepEqual(fetched, []);
+    });
+
+    it("drops an index this snapshot cannot address and prefetches the rest", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      // A shrunk snapshot, which is a normal client update. Index 7 no longer
+      // exists; index 0 is still the first 64 bytes of the boot working set.
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK, count: 3, chunks: [0, 7] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.equal(fetched.length, 1);
+    });
+
+    it("replaces a boot list from other chunking instead of merging into it", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK * 2, count: 3, chunks: [1, 2] }),
+      );
+      const store = await storeOver(boot, root, []);
+      await store.readRange(0, 10);
+      await store.saveTouched();
+      assert.deepEqual(JSON.parse(await readFile(boot, "utf8")), {
+        formatVersion: 1,
+        chunkSize: CHUNK,
+        count: 3,
+        chunks: [0],
+      });
+    });
+
+    it("records the chunking a later run has to match", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      const store = await storeOver(boot, root, []);
+      await store.readRange(CHUNK, 10);
+      await store.saveTouched();
+      assert.deepEqual(JSON.parse(await readFile(boot, "utf8")), {
+        formatVersion: 1,
+        chunkSize: CHUNK,
+        count: 3,
+        chunks: [1],
+      });
+    });
+  });
+
   it("full-image resume downloads only missing hashes", async () => {
     const root = await freshDir();
     const payloads = [Buffer.alloc(CHUNK, 1), Buffer.alloc(CHUNK, 2), Buffer.alloc(100, 3)];
@@ -250,7 +386,7 @@ describe("chunk-store", () => {
     assert.equal(fetches, 0);
   });
 
-  it("fails fast and preserves fatal local download errors", async () => {
+  it("fails fast and classifies a fatal local write, keeping its cause", async () => {
     const root = await freshDir();
     const payloads = Array.from({ length: 3 }, (_, index) =>
       Buffer.alloc(CHUNK, index + 20),
@@ -277,7 +413,12 @@ describe("chunk-store", () => {
           jobs: 1,
           freeBytes: async () => 10 * 1024 * 1024 * 1024,
         }),
-      (error) => error === diskError,
+      // A bare errno would collapse to "unknown" at every boundary that reads
+      // a code, so the store names the failure and keeps the original beneath.
+      (error) =>
+        error instanceof AppError &&
+        error.code === "disk_full" &&
+        error.cause === diskError,
     );
     assert.equal(fetches, 1);
   });
@@ -369,6 +510,7 @@ describe("chunk-store", () => {
     const hashes = payloads.map(hashOf);
     const started: string[] = [];
     const releases = new Map<string, () => void>();
+    const gauges = new Map<string, number>();
     let active = 0;
     let peak = 0;
     const store = new ChunkStore({
@@ -376,6 +518,11 @@ describe("chunk-store", () => {
       size: CHUNK * payloads.length,
       chunkSize: CHUNK,
       chunkHashes: hashes,
+      metrics: {
+        count: () => undefined,
+        observe: () => undefined,
+        gauge: (name, value) => gauges.set(name, value),
+      },
       fetch: (hash) =>
         new Promise((resolve) => {
           started.push(hash);
@@ -390,18 +537,36 @@ describe("chunk-store", () => {
     const work = hashes.map((_hash, index) =>
       store.ensureChunk(index, "prefetch"),
     );
-    await waitFor(() => started.length === 8, "eight fetches did not start");
+    // Wait for the queue, and then ask which chunks are actually in it. A
+    // prefetch only reaches the queue once its cache stat() has rejected, and
+    // those ten stats do not complete in submission order under load, so
+    // neither "eight have started" nor "the last two are the queued ones" is
+    // safe to assume. Demanding a chunk that is still in flight cannot promote
+    // anything — there is no way to un-start a fetch — so the old assertion
+    // waited out its two-second deadline for a slot the demand was never going
+    // to get. The scheduler was never wrong; the precondition was never
+    // established.
+    await waitFor(
+      () =>
+        started.length === 8 &&
+        gauges.get("snapshot.native.queuedPrefetch") === 2,
+      "eight fetches did not start with two queued behind them",
+    );
     assert.equal(started.length, 8);
-    const demand = store.ensureChunk(9, "demand");
+    const queued = hashes.filter((hash) => !started.includes(hash));
+    assert.equal(queued.length, 2);
+    const promoted = queued[0]!;
+    const demand = store.ensureChunk(hashes.indexOf(promoted), "demand");
     const activeHash = started[0]!;
     const firstRelease = releases.get(activeHash)!;
     releases.delete(activeHash);
     firstRelease();
     await waitFor(
-      () => started[8] === hashes[9],
+      () => started[8] === promoted,
       "demand did not start before queued prefetch",
     );
-    assert.equal(started[8], hashes[9]);
+    assert.equal(started[8], promoted);
+    assert.equal(started.includes(queued[1]!), false);
     while (started.length < hashes.length || active > 0) {
       for (const hash of [...started]) {
         const release = releases.get(hash);

@@ -16,6 +16,18 @@ export interface ToolboxLayout {
   agentType: number;
   agentPlayerNumber: number;
   agentModelType: number;
+  cursorActiveArt: number;
+  cursorSoftwareModel: number;
+  cursorShowCount: number;
+  cursorColorBuffer: number;
+  cursorArtHotspot: number;
+  cursorArtTexture: number;
+  cursorHandleKey: number;
+  cursorHandleObject: number;
+  cursorViewTexture: number;
+  cursorTextureType: number;
+  cursorTextureWidth: number;
+  cursorTextureHeight: number;
 }
 
 export const TOOLBOX_LAYOUT_FIELDS = [
@@ -36,6 +48,18 @@ export const TOOLBOX_LAYOUT_FIELDS = [
   "agentType",
   "agentPlayerNumber",
   "agentModelType",
+  "cursorActiveArt",
+  "cursorSoftwareModel",
+  "cursorShowCount",
+  "cursorColorBuffer",
+  "cursorArtHotspot",
+  "cursorArtTexture",
+  "cursorHandleKey",
+  "cursorHandleObject",
+  "cursorViewTexture",
+  "cursorTextureType",
+  "cursorTextureWidth",
+  "cursorTextureHeight",
 ] as const satisfies readonly (keyof ToolboxLayout)[];
 
 export function toolboxLayoutWords(layout: ToolboxLayout): number[] {
@@ -53,11 +77,18 @@ export interface KnownToolboxBuild {
   layout: ToolboxLayout;
 }
 
-// Canonical support manifest. Every value is verified against the exact
-// official client hash before a derived module is selected.
+// Canonical support manifest. Every value is verified against the exact input
+// hash before a derived module is selected.
+//
+// The input is the template-save client, not the raw official module: that
+// transform is the floor every launch lands on, and the Toolbox transform is
+// layered on top so opting in never costs template save/load. It only appends
+// functions, so the main-loop index, the free table slot and every data address
+// below are the ones certified against official build 38771
+// (b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483).
 export const TOOLBOX_BUILDS: readonly KnownToolboxBuild[] = Object.freeze([
   Object.freeze({
-    sha256: "b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483",
+    sha256: "68c6e09cec0f6992058a44a5617ca9eac7fab4697be1421943bbf664e6d444f6",
     programId: 1,
     buildId: 38771,
     // ArenaNet's exported browser-driven client loop. The older GWCA
@@ -86,6 +117,22 @@ export const TOOLBOX_BUILDS: readonly KnownToolboxBuild[] = Object.freeze([
       agentType: 0x9c,
       agentPlayerNumber: 0xf4,
       agentModelType: 0xf6,
+      // Live-probe confirmed for build 38771. The game decodes the active
+      // cursor into these fixed buffers on every change and then calls an
+      // empty Emscripten sink. cursorColorBuffer is 32x32 BGRA, pitch 128;
+      // its own alpha already matches the redundant A8 mask.
+      cursorActiveArt: 0x5a1620,
+      cursorSoftwareModel: 0x5a1624,
+      cursorShowCount: 0x5a1628,
+      cursorColorBuffer: 0x298d90,
+      cursorArtHotspot: 0x00,
+      cursorArtTexture: 0x0c,
+      cursorHandleKey: 0x08,
+      cursorHandleObject: 0x00,
+      cursorViewTexture: 0x08,
+      cursorTextureType: 0x0c,
+      cursorTextureWidth: 0x14,
+      cursorTextureHeight: 0x18,
     }),
   }),
 ]);

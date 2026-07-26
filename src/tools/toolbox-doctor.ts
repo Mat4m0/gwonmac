@@ -7,8 +7,10 @@ import {
   COMMON_ARTIFACTS,
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
-import { findToolboxBuild } from "../main/core/toolbox-builds.js";
-import { inspectToolboxCache } from "../main/core/toolbox-client.js";
+import { certifyClientBuild } from "../main/client-certification.js";
+import { inspectToolboxCache } from "../main/core/client-module.js";
+import { parseSettings } from "../main/core/settings.js";
+import { DEFAULT_SETTINGS } from "../shared/contracts.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -18,6 +20,18 @@ import {
 export interface ToolboxDoctorReport {
   profile: "ready" | "missing";
   credentials: "saved" | "missing";
+  /**
+   * The profile's own setting. An observation-tier live run enables nothing, so
+   * this is the only thing that installs the Toolbox for it (P4.7); an
+   * automation run forces it on through GW_TOOLBOX_AUTOMATION and ignores this.
+   */
+  nativeCursor: boolean;
+  /**
+   * The target-readout scenario exercises the player-facing surface, not only
+   * automation's forced core observer, so it refuses a profile where this
+   * player choice is off.
+   */
+  targetReadout: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -52,6 +66,29 @@ async function isFile(filename: string): Promise<boolean> {
     return value.isFile() && value.size > 0;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Read-only on purpose. `loadSettings` moves a corrupt file aside and writes a
+ * backup; a doctor must not change the profile it is inspecting, and both of
+ * its failure paths end at the defaults anyway.
+ */
+async function readToolboxSettings(
+  profile: string,
+): Promise<Pick<ToolboxDoctorReport, "nativeCursor" | "targetReadout">> {
+  try {
+    const text = await readFile(path.join(profile, "settings.json"), "utf8");
+    const settings = parseSettings(JSON.parse(text));
+    return {
+      nativeCursor: settings.nativeCursor,
+      targetReadout: settings.targetReadout,
+    };
+  } catch {
+    return {
+      nativeCursor: DEFAULT_SETTINGS.nativeCursor,
+      targetReadout: DEFAULT_SETTINGS.targetReadout,
+    };
   }
 }
 
@@ -105,6 +142,7 @@ export async function inspectToolboxWorkspace(
     || (await isFile(path.join(profile, "credentials.bin")))
     || missing.length < required.length;
   const credentials = await isFile(path.join(profile, "credentials.bin"));
+  const { nativeCursor, targetReadout } = await readToolboxSettings(profile);
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: ToolboxDoctorReport["artifacts"]["integrity"] =
     "invalid";
@@ -129,10 +167,12 @@ export async function inspectToolboxWorkspace(
   if (!missing.includes("Gw.jspi.wasm")) {
     const bytes = await readFile(path.join(artifactsPath, "Gw.jspi.wasm"));
     sha256 = createHash("sha256").update(bytes).digest("hex");
-    build = findToolboxBuild(sha256);
-    if (build) {
+    // The Toolbox transform consumes the template-save client, so the chain is
+    // resolved by the one module that owns it rather than repeated here.
+    const certification = certifyClientBuild(sha256);
+    if (certification.state === "certified") {
+      build = certification.toolboxBuild;
       transformedCache = await inspectToolboxCache(
-        sha256,
         build,
         path.join(game, "toolbox"),
       );
@@ -146,6 +186,8 @@ export async function inspectToolboxWorkspace(
   return {
     profile: profileReady ? "ready" : "missing",
     credentials: credentials ? "saved" : "missing",
+    nativeCursor,
+    targetReadout,
     artifacts: {
       ready: artifactsReady,
       missing,

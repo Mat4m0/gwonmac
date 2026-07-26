@@ -22,8 +22,11 @@ official exact-hash WASM
 
 Unknown hashes serve the official client unchanged and do not activate
 Toolbox. Official and transformed client binaries are never committed.
-In 0.0.2 this path is dormant in normal and packaged sessions and presents no
-Toolbox UI.
+A session with every tool off runs none of this path and presents no Toolbox UI.
+The cursor and target readout are selected independently: the cursor is on by
+default, while the readout is off. Only the selected tool is collected and
+presented; `docs/internals.md` owns the pipeline and `docs/user-guide.md` owns
+what the player is told.
 
 ## Certified build 38,771
 
@@ -54,13 +57,15 @@ empty slot before cloning only the selected function. It adds:
 - one mutable hook-slot global;
 - one manifest custom section consumed by the renderer.
 
-The official file remains untouched. Main atomically caches the derived module
-by official hash, transform ABI, and build-manifest fingerprint. A corrupt or
-stale derived cache is rebuilt. Failure falls back to the official file.
-Cache/hash/publication policy lives separately in `toolbox-client.ts`; the
-transformer remains a deterministic byte-to-byte operation. The manifest's
-canonical ordered layout fields generate the embedded layout words consumed by
-the renderer, avoiding a second ABI ordering table.
+The official file remains untouched. `client-module.ts` owns the complete
+official → template-save → optional Toolbox chain. It consumes the exact build
+records selected during certification and atomically caches each derived
+module by its input hash, transform ABI, and build-manifest fingerprint. A
+corrupt or stale cache is rebuilt; a Toolbox failure falls back to the verified
+template-save module. The transformer remains a deterministic byte-to-byte
+operation. The manifest's canonical ordered layout fields generate the
+embedded layout words consumed by the renderer, avoiding a second ABI ordering
+table.
 
 The earlier all-functions dispatcher and table-growth experiments were removed.
 Build 38,771 already has one unused table slot, so no table rewrite is needed.

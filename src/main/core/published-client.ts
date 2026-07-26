@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
-import path from "node:path";
+import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { CLIENT_ARTIFACTS, HASH_ALGOS, SNAPSHOT } from "./access-key.js";
 import { writeAtomicJson } from "./atomic-file.js";
+import { fingerprintClientGeneration } from "./client-fingerprint.js";
 import { parseContentHash, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
+import { clientArtifactPath, clientManifestPath } from "./paths.js";
+
+const PUBLISHED_CLIENT_FORMAT = 1;
 
 export interface PublishedClientArtifact {
   name: (typeof CLIENT_ARTIFACTS)[number];
@@ -14,6 +18,7 @@ export interface PublishedClientArtifact {
 }
 
 export interface PublishedClientManifest {
+  formatVersion: typeof PUBLISHED_CLIENT_FORMAT;
   clientFingerprint?: string;
   artifacts?: PublishedClientArtifact[];
   compressionMode: CompressionMode;
@@ -23,6 +28,13 @@ export interface PublishedClientManifest {
   chunkHashes: string[];
 }
 
+/**
+ * A manifest with no `formatVersion` is what the public alpha published; v0
+ * and v1 are the same shape, so an installed generation stays installed and
+ * keeps its rollback value. A version this build cannot read is refused
+ * rather than reinterpreted — the alternative is verifying artifacts against
+ * fields that may not mean what they used to.
+ */
 export function parsePublishedClientManifest(
   raw: unknown,
 ): PublishedClientManifest {
@@ -30,6 +42,15 @@ export function parsePublishedClientManifest(
     throw new AppError("bad_manifest", "published client manifest must be an object");
   }
   const value = raw as Record<string, unknown>;
+  if (
+    value.formatVersion !== undefined &&
+    value.formatVersion !== PUBLISHED_CLIENT_FORMAT
+  ) {
+    throw new AppError(
+      "bad_manifest",
+      "published client manifest has an unreadable format version",
+    );
+  }
   if (
     value.compressionMode !== "none" &&
     value.compressionMode !== "gzip"
@@ -125,8 +146,7 @@ export function parsePublishedClientManifest(
   }
   if (
     value.clientFingerprint !== undefined &&
-    (typeof value.clientFingerprint !== "string" ||
-      !/^[a-f0-9]{64}$/.test(value.clientFingerprint))
+    !isDigest(value.clientFingerprint)
   ) {
     throw new AppError(
       "bad_manifest",
@@ -150,9 +170,9 @@ export function parsePublishedClientManifest(
       "published client manifest has invalid chunk count",
     );
   }
-  return {
-    ...(typeof value.clientFingerprint === "string" &&
-    /^[a-f0-9]{64}$/.test(value.clientFingerprint)
+  const manifest: PublishedClientManifest = {
+    formatVersion: PUBLISHED_CLIENT_FORMAT,
+    ...(isDigest(value.clientFingerprint)
       ? { clientFingerprint: value.clientFingerprint }
       : {}),
     ...(artifacts ? { artifacts } : {}),
@@ -162,6 +182,20 @@ export function parsePublishedClientManifest(
     size,
     chunkHashes,
   };
+  if (
+    manifest.artifacts &&
+    manifest.clientFingerprint !==
+      publishedClientFingerprint({
+        ...manifest,
+        artifacts: manifest.artifacts,
+      })
+  ) {
+    throw new AppError(
+      "bad_manifest",
+      "published client fingerprint does not match its manifest",
+    );
+  }
+  return manifest;
 }
 
 function publishedClientFingerprint(
@@ -176,20 +210,12 @@ function publishedClientFingerprint(
       size: manifest.size,
       chunkHashes: manifest.chunkHashes,
     },
-  ]
-    .sort((left, right) =>
-      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
-    )
-    .map(({ name, size, chunkHashes }) => ({ name, size, chunkHashes }));
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        compression: manifest.compressionMode,
-        chunkSize: manifest.chunkSize,
-        files,
-      }),
-    )
-    .digest("hex");
+  ];
+  return fingerprintClientGeneration({
+    compression: manifest.compressionMode,
+    chunkSize: manifest.chunkSize,
+    files,
+  });
 }
 
 async function describeArtifact(
@@ -198,7 +224,7 @@ async function describeArtifact(
   chunkSize: number,
   hashAlgorithm: "md5" | "sha1" | "sha256",
 ): Promise<PublishedClientArtifact> {
-  const file = await open(path.join(artifactsDir, name), "r");
+  const file = await open(clientArtifactPath(artifactsDir, name), "r");
   try {
     const metadata = await file.stat();
     if (!metadata.isFile() || metadata.size <= 0) {
@@ -228,7 +254,7 @@ async function describeArtifact(
 export async function migrateLegacyPublishedClientManifest(
   artifactsDir: string,
 ): Promise<PublishedClientManifest | null> {
-  const manifestPath = path.join(artifactsDir, "manifest.json");
+  const manifestPath = clientManifestPath(artifactsDir);
   let manifest: PublishedClientManifest;
   try {
     manifest = await readPublishedClientManifest(manifestPath);
@@ -275,7 +301,7 @@ export async function verifyPublishedClientArtifacts(
   for (const artifact of manifest.artifacts) {
     let file;
     try {
-      file = await open(path.join(artifactsDir, artifact.name), "r");
+      file = await open(clientArtifactPath(artifactsDir, artifact.name), "r");
       const metadata = await file.stat();
       if (!metadata.isFile() || metadata.size !== artifact.size) return false;
       for (let index = 0; index < artifact.chunkHashes.length; index++) {

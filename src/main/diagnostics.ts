@@ -18,18 +18,19 @@ import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { promisify } from "node:util";
 import {
   app,
-  BrowserWindow,
   contentTracing,
-  crashReporter,
   dialog,
   powerMonitor,
   screen,
+  type BrowserWindow,
 } from "electron";
-import type { AppSettings, GraphicsDiagnostics } from "../shared/contracts.js";
 import type {
-  DiagnosticFields,
-  DiagnosticLevel,
-  DiagnosticSubsystem,
+  AppSettings,
+  GraphicsDiagnostics,
+  RendererCommand,
+} from "../shared/contracts.js";
+import { errorCode, type ErrorCode } from "../shared/errors.js";
+import type {
   DiagnosticSummary,
   RendererFrameBatch,
   RendererMilestone,
@@ -38,17 +39,34 @@ import type {
 } from "../shared/diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { loadSettings } from "./core/settings.js";
+import type { ProxyRoute } from "./core/proxy-routes.js";
+import {
+  canonicalRendererWindow,
+  sendRendererCommand,
+} from "./renderer-commands.js";
 import {
   FlightRecorder,
-  redactDiagnosticText as redactText,
   runtimeVersions as versions,
   type CaptureMetadata,
-  type Span,
 } from "./diagnostic-recorder.js";
 import {
   buildDiagnosticReport,
   previousAbnormalSession,
 } from "./diagnostic-report.js";
+import {
+  inspectEventLog,
+  type RedactionResult,
+} from "./diagnostics/detector.js";
+import {
+  asAppVersion,
+  asRendererFingerprint,
+  type DiagnosticEvent,
+} from "./diagnostics/schema.js";
+import type { Digest } from "../shared/digest.js";
+import {
+  redactDiagnosticText as redactText,
+  redactTraceStream,
+} from "./diagnostics/text-scan.js";
 
 const execFileAsync = promisify(execFile);
 const SAMPLE_INTERVAL_MS = 1_000;
@@ -77,41 +95,43 @@ let previousEventLoopUtilization = performance.eventLoopUtilization();
 let eventLoopWindowStartedUs = 0;
 let captureStoppedHandler: (() => void | Promise<void>) | null = null;
 
-type RendererCaptureCommand =
-  | { type: "reset" }
-  | { type: "started"; level: 1 | 2 }
-  | { type: "stopped" }
-  | { type: "flush" }
-  | { type: "problem-marked" };
+/**
+ * The renderer half of a capture. `level` crosses as a number inside a typed
+ * event rather than spliced into a string of JavaScript, and the target window
+ * is chosen by the same trust test the inbound direction uses.
+ */
+const rendererCaptureCommand = (
+  command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
+): Promise<void> =>
+  sendRendererCommand(canonicalRendererWindow(), command).then((outcome) => {
+    if (outcome !== "completed") {
+      logEvent({
+        k: "renderer.commandIncomplete",
+        action: command.action,
+        outcome,
+      });
+    }
+  });
 
-async function rendererCaptureCommand(command: RendererCaptureCommand): Promise<void> {
-  const win = BrowserWindow.getAllWindows().find(
-    (candidate) =>
-      !candidate.isDestroyed() &&
-      !candidate.webContents.isDestroyed() &&
-      candidate.webContents.getURL().startsWith("gw://app"),
-  );
-  if (!win) return;
-  const source = command.type === "started"
-    ? `window.gwDiagnostics?.captureStarted(${command.level})`
-    : {
-        reset: "window.gwDiagnostics?.resetForCapture()",
-        stopped: "window.gwDiagnostics?.captureStopped()",
-        flush: "window.gwDiagnostics?.flush()",
-        "problem-marked": "window.gwDiagnostics?.problemMarked()",
-      }[command.type];
-  await win.webContents
-    .executeJavaScript(source)
-    .catch(() => undefined);
+/**
+ * The only way to record an event that carries information about a failure.
+ * The event owns its name, subsystem, level and fields, so two producers of
+ * one event cannot disagree, and no field of one can hold free text.
+ */
+interface EventDetail {
+  durationUs?: number;
+  traceId?: string;
+  spanId?: string;
+  timestampUs?: number;
 }
 
-export function log(
-  subsystem: DiagnosticSubsystem,
-  level: DiagnosticLevel,
-  message: string,
-  fields?: DiagnosticFields,
-): void {
-  recorder.event(subsystem, level, message, fields);
+function recordEvent(event: DiagnosticEvent, detail: EventDetail = {}): void {
+  recorder.record(event, detail);
+}
+
+/** The only public event-recording API. */
+export function logEvent(event: DiagnosticEvent): void {
+  recordEvent(event);
 }
 
 export function count(name: string, delta = 1): void {
@@ -134,8 +154,11 @@ export function peakGauge(name: string, value: number): void {
 }
 
 export function markPerformanceProblem(): void {
-  recorder.event("renderer", "info", "performance.problemMarked");
-  void rendererCaptureCommand({ type: "problem-marked" });
+  logEvent({ k: "performance.problemMarked" });
+  void rendererCaptureCommand({
+    type: "diagnostics.capture",
+    action: "problem-marked",
+  });
 }
 
 export function setDiagnosticCaptureStoppedHandler(
@@ -144,20 +167,114 @@ export function setDiagnosticCaptureStoppedHandler(
   captureStoppedHandler = handler;
 }
 
-export function span(
-  subsystem: DiagnosticSubsystem,
-  name: string,
-  fields?: DiagnosticFields,
-  parentSpanId?: string,
-  traceId?: string,
-): Span {
-  return recorder.span(
-    subsystem,
-    name,
-    fields,
-    parentSpanId,
+export interface ClosedDiagnosticSpan<End> {
+  readonly traceId: string;
+  readonly spanId: string;
+  end(outcome: End): number;
+}
+
+function closedSpan<End>(
+  begin: DiagnosticEvent,
+  finish: (outcome: End) => DiagnosticEvent,
+  histogram: string,
+  recordEvents = true,
+): ClosedDiagnosticSpan<End> {
+  const started = recorder.timestampUs();
+  const traceId = randomUUID();
+  const spanId = randomUUID();
+  if (recordEvents) recordEvent(begin, { traceId, spanId });
+  let ended = false;
+  return {
     traceId,
-    subsystem !== "snapshot" || captureLevel > 0,
+    spanId,
+    end(outcome) {
+      if (ended) return 0;
+      ended = true;
+      const durationUs = recorder.timestampUs() - started;
+      recorder.observe(histogram, durationUs);
+      if (recordEvents || durationUs >= 50_000) {
+        recordEvent(finish(outcome), { durationUs, traceId, spanId });
+      }
+      return durationUs;
+    },
+  };
+}
+
+export function startDnsResolveSpan(): ClosedDiagnosticSpan<
+  | { status: "ok"; code: null }
+  | { status: "error"; code: ErrorCode }
+> {
+  return closedSpan(
+    { k: "dns.resolve.begin" },
+    (outcome) => ({ k: "dns.resolve.end", ...outcome }),
+    "dns.resolve",
+  );
+}
+
+export type ClientUpdateSpanOutcome =
+  | {
+      status: "rejectedCandidateSkipped" | "candidate" | "ready";
+      code: null;
+      fingerprint: Digest | null;
+    }
+  | {
+      status: "cachedFallback" | "error";
+      code: ErrorCode;
+      fingerprint: null;
+    }
+  | {
+      status: "cancelled";
+      code: null;
+      fingerprint: null;
+    };
+
+export function startClientUpdateSpan(): ClosedDiagnosticSpan<ClientUpdateSpanOutcome> {
+  return closedSpan(
+    { k: "update.clientUpdate.begin" },
+    (outcome) => ({ k: "update.clientUpdate.end", ...outcome }),
+    "update.clientUpdate",
+  );
+}
+
+export interface SnapshotReadSpanStart {
+  offsetBytes: number;
+  requestedBytes: number;
+  priority: "demand" | "prefetch";
+}
+
+export type SnapshotReadSpanOutcome =
+  | { returnedBytes: number; status: 206; code: null }
+  | { returnedBytes: 0; status: 503; code: ErrorCode };
+
+export function startSnapshotReadSpan(
+  start: SnapshotReadSpanStart,
+): ClosedDiagnosticSpan<SnapshotReadSpanOutcome> {
+  return closedSpan(
+    { k: "snapshot.read.begin", ...start },
+    (outcome) => ({ k: "snapshot.read.end", ...start, ...outcome }),
+    "snapshot.read",
+    captureLevel > 0,
+  );
+}
+
+export interface ProxyRequestSpanStart {
+  route: ProxyRoute;
+  method: "GET" | "POST" | "PUT";
+}
+
+export type ProxyRequestSpanOutcome =
+  | { status: number; reason: null; code: null }
+  | { status: 413; reason: "bodyTooLarge"; code: null }
+  | { status: 502; reason: "redirectEscape"; code: null }
+  | { status: 502; reason: null; code: ErrorCode };
+
+export function startProxyRequestSpan(
+  start: ProxyRequestSpanStart,
+): ClosedDiagnosticSpan<ProxyRequestSpanOutcome> {
+  return closedSpan(
+    { k: "proxy.request.begin", ...start },
+    (outcome) => ({ k: "proxy.request.end", ...start, ...outcome }),
+    "proxy.request",
   );
 }
 
@@ -173,10 +290,8 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
   recorder.setLatest("graphics.drawingBufferHeight", value.drawingBufferHeight);
   recorder.setLatest("graphics.antialias", value.antialias);
   recorder.setLatest("graphics.samples", value.samples);
-  recorder.event("graphics", "info", "graphics.detected", {
-    webglVersion: value.webglVersion,
-    renderer: value.renderer,
-    vendor: value.vendor,
+  logEvent({
+    k: "graphics.detected",
     jspi: value.jspi,
     hardwareAcceleration: value.hardwareAcceleration,
     canvasWidth: value.canvasWidth,
@@ -194,7 +309,6 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
 
 export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("renderer.raf", value.rafCount);
-  recorder.count("renderer.rafOver16", value.rafOver16);
   recorder.count("renderer.rafOver33", value.rafOver33);
   recorder.count("renderer.rafOver50", value.rafOver50);
   recorder.count("renderer.swaps", value.swapCount);
@@ -204,32 +318,38 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("cache.memoryHits", value.memoryHits);
   recorder.count("cache.nativeHits", value.nativeHits);
   recorder.count("cache.coalesced", value.coalesced);
+  recorder.count("gl.programQueryHits", value.glProgramQueryHits);
+  recorder.count("gl.programQueryMisses", value.glProgramQueryMisses);
   recorder.count("socket.rendererSendCalls", value.socketSendCalls);
   recorder.count("socket.rendererPayloadBytes", value.socketPayloadBytes);
-  recorder.count(
-    "socket.rendererSourceBackingBytes",
-    value.socketSourceBackingBytes,
+  recorder.setPeak(
+    "socket.rendererPeakSourceBackingBytes",
+    value.socketSourceBackingMaxBytes,
   );
   recorder.count("socket.rendererCompactBytes", value.socketCompactBytes);
   recorder.count("socket.rendererSettles", value.socketSettles);
   recorder.count("diagnostics.rendererDropped", value.droppedRecords);
   for (const event of value.rendererEvents) {
-    const subsystem = event.name.startsWith("graphics.") ? "graphics" : "renderer";
-    const level =
-      event.name === "graphics.contextRestored"
-        ? "info"
-        : event.name === "audio.resumeFailed" ||
-            event.name === "pointerLock.failed"
-          ? "warn"
-          : "error";
     recorder.count(`renderer.event.${event.name}`);
-    recorder.event(
-      subsystem,
-      level,
-      event.name,
-      event.fingerprint ? { fingerprint: event.fingerprint } : undefined,
-      { timestampUs: Math.round(event.timestampUs) },
-    );
+    const fingerprint = event.fingerprint
+      ? asRendererFingerprint(event.fingerprint)
+      : null;
+    switch (event.name) {
+      case "renderer.windowError":
+      case "renderer.unhandledRejection":
+      case "graphics.contextLost":
+      case "graphics.contextRestored":
+      case "graphics.presentationFailed":
+      case "client.glueLoadFailed":
+      case "filesystem.persistenceFailed":
+      case "audio.resumeFailed":
+      case "pointerLock.failed":
+        recordEvent(
+          { k: event.name, fingerprint },
+          { timestampUs: Math.round(event.timestampUs) },
+        );
+        break;
+    }
   }
   recorder.mergeHistogram(
     "renderer.rafInterval",
@@ -311,6 +431,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
     value.inputToSubmitMaxUs,
   );
   recorder.setLatest("renderer.visible", value.visible);
+  recorder.setLatest("renderer.focused", value.focused);
   recorder.setLatest("renderer.memoryCacheBytes", value.memoryCacheBytes);
   recorder.setLatest("renderer.memoryCacheChunks", value.memoryCacheChunks);
   recorder.setLatest("renderer.pendingChunks", value.pendingChunks);
@@ -318,12 +439,6 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.setLatest("snapshot.activePrefetch", value.activePrefetch);
   recorder.setLatest("snapshot.queuedDemand", value.queuedDemand);
   recorder.setLatest("snapshot.queuedPrefetch", value.queuedPrefetch);
-  recorder.setLatest(
-    "socket.sourceBackingRatio",
-    value.socketPayloadBytes
-      ? value.socketSourceBackingBytes / value.socketPayloadBytes
-      : 0,
-  );
   recorder.setPeak("renderer.peakMemoryCacheBytes", value.memoryCacheBytes);
   recorder.setPeak("renderer.peakPendingChunks", value.pendingChunks);
   recorder.setPeak(
@@ -343,11 +458,9 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   );
   if (captureLevel > 0) {
     for (let index = 0; index < value.socketSendEvents.length; index += 7) {
-      recorder.event(
-        "socket",
-        "debug",
-        "socket.rendererSend",
+      recordEvent(
         {
+          k: "socket.rendererSend",
           syncUs: Math.round(value.socketSendEvents[index + 1]!),
           settleUs: Math.round(value.socketSendEvents[index + 2]!),
           payloadBytes: value.socketSendEvents[index + 3]!,
@@ -358,7 +471,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
         { timestampUs: Math.round(value.socketSendEvents[index]!) },
       );
     }
-    recorder.event("renderer", "debug", "renderer.metrics", {
+    logEvent({ k: "renderer.metrics",
       visible: value.visible,
       intervalMs: Math.round(value.intervalMs),
       rafCount: value.rafCount,
@@ -381,7 +494,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       queuedPrefetch: value.queuedPrefetch,
       socketSendCalls: value.socketSendCalls,
       socketPayloadBytes: value.socketPayloadBytes,
-      socketSourceBackingBytes: value.socketSourceBackingBytes,
+      socketSourceBackingMaxBytes: value.socketSourceBackingMaxBytes,
       socketCompactBytes: value.socketCompactBytes,
       socketSyncMaxUs: Math.round(value.socketSyncMaxUs),
       socketSettles: value.socketSettles,
@@ -409,7 +522,7 @@ export function recordClockOffset(offsetUs: number, rttUs: number): void {
   rendererClockSynchronized = true;
   recorder.setLatest("renderer.clockOffsetUs", Math.round(offsetUs));
   recorder.setLatest("renderer.clockRttUs", Math.round(rttUs));
-  recorder.event("renderer", "debug", "clock.synchronized", {
+  logEvent({ k: "clock.synchronized",
     offsetUs: Math.round(offsetUs),
     rttUs: Math.round(rttUs),
   });
@@ -428,29 +541,39 @@ export function recordRendererMilestone(
     recorder.setLatest("client.programId", fields.programId);
     recorder.setLatest("client.buildId", fields.buildId);
   }
-  recorder.event(
-    "renderer",
-    "info",
-    name,
-    { clockSynchronized: rendererClockSynchronized, ...fields },
+  recordEvent(
+    { k: name, clockSynchronized: rendererClockSynchronized },
     { timestampUs },
   );
 }
 
-async function stopTrace(): Promise<void> {
-  if (!tracePath) return;
+async function stopTrace(): Promise<boolean> {
+  if (!tracePath) return false;
   if (traceGuard) clearInterval(traceGuard);
   traceGuard = null;
   const target = tracePath;
-  tracePath = "";
   try {
     await contentTracing.stopRecording(target);
+    tracePath = "";
     lastTracePath = target;
-    recorder.event("app", "info", "chromiumTrace.stopped");
+    // Size is the first thing anyone asks after an export goes wrong.
+    const bytes = await stat(target).then((info) => info.size, () => 0);
+    recorder.setLatest("capture.traceBytes", bytes);
+    logEvent({ k: "chromiumTrace.stopped", bytes });
+    return true;
   } catch (err) {
-    recorder.event("app", "error", "chromiumTrace.stopFailed", {
-      message: err instanceof Error ? err.message : String(err),
-    });
+    logEvent({ k: "chromiumTrace.stopFailed", code: errorCode(err) });
+    // A failed stop cannot produce a trustworthy Chromium trace. Delete the
+    // exact target now, but retain it in `tracePath` if deletion itself fails
+    // so quit or the next capture can retry instead of orphaning it.
+    try {
+      await rm(target, { force: true });
+      tracePath = "";
+    } catch {
+      // The target remains tracked. A new capture refuses to replace it until
+      // `discardTrace` can remove it.
+    }
+    return false;
   }
 }
 
@@ -459,18 +582,25 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
     return Promise.reject(new Error("a diagnostics capture is already active"));
   }
   const operation = (async () => {
-    await rendererCaptureCommand({ type: "reset" });
+    // Beginning a capture replaces the previous capture result. Its raw trace
+    // must be deleted first; clearing only the pointer would orphan a file that
+    // can contain Chromium process data.
+    await discardTrace();
+    await rendererCaptureCommand({ type: "diagnostics.capture", action: "reset" });
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
     eventLoopWindowStartedUs = recorder.timestampUs();
-    lastTracePath = "";
     captureLevel = level;
-    await rendererCaptureCommand({ type: "started", level });
+    await rendererCaptureCommand({
+      type: "diagnostics.capture",
+      action: "started",
+      level,
+    });
     captureTimer = setTimeout(() => {
       void stopDiagnosticCapture("automatic");
     }, 120_000);
-    recorder.event("app", "info", "capture.started", { level });
+    logEvent({ k: "capture.started", level });
     recordedCaptureLevel = level;
     if (level !== 2) return;
 
@@ -479,6 +609,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       const wanted = [
         "electron",
         "blink",
+        "blink.user_timing",
         "cc",
         "gpu",
         "viz",
@@ -508,13 +639,17 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       if (captureTimer) clearTimeout(captureTimer);
       captureTimer = null;
       captureLevel = 0;
-      await rendererCaptureCommand({ type: "stopped" });
-      tracePath = "";
+      await rendererCaptureCommand({
+        type: "diagnostics.capture",
+        action: "stopped",
+      });
+      // `startRecording` may have created the target before rejecting. Remove
+      // it by the tracked exact path; if cleanup itself fails, keep the pointer
+      // so shutdown or the next capture can retry.
+      await discardTrace().catch(() => undefined);
       recordedCaptureLevel = 0;
       recorder.cancelCapture();
-      recorder.event("app", "error", "chromiumTrace.startFailed", {
-        message: error instanceof Error ? error.message : String(error),
-      });
+      logEvent({ k: "chromiumTrace.startFailed", code: errorCode(error) });
       throw error;
     }
   })();
@@ -539,15 +674,21 @@ export function stopDiagnosticCapture(
   captureStopPromise = (async () => {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
-    await rendererCaptureCommand({ type: "flush" });
-    await stopTrace();
-    recorder.event("app", "info", "capture.stopped", {
-      level: stoppedLevel,
+    await rendererCaptureCommand({ type: "diagnostics.capture", action: "flush" });
+    const traceCompleted = await stopTrace();
+    const completedLevel =
+      stoppedLevel === 2 && !traceCompleted ? 1 : stoppedLevel;
+    recordedCaptureLevel = completedLevel;
+    logEvent({ k: "capture.stopped",
+      level: completedLevel,
       reason,
     });
-    recorder.endCapture(stoppedLevel, reason);
+    recorder.endCapture(completedLevel, reason);
     captureLevel = 0;
-    await rendererCaptureCommand({ type: "stopped" });
+    await rendererCaptureCommand({
+        type: "diagnostics.capture",
+        action: "stopped",
+      });
     if (
       captureStoppedHandler &&
       (reason === "manual" ||
@@ -590,7 +731,7 @@ function sampleProcesses(): void {
   recorder.setPeak("main.peakExternalBytes", own.external);
   recorder.setPeak("main.peakArrayBuffersBytes", own.arrayBuffers);
   if (detailedSample) {
-    recorder.event("app", "debug", "process.main", {
+    logEvent({ k: "process.main",
       cpuPercentOneCore: mainCpuPercent,
       rssBytes: own.rss,
       heapUsedBytes: own.heapUsed,
@@ -609,8 +750,7 @@ function sampleProcesses(): void {
       metric.cpu.percentCPUUsage,
     );
     recorder.setLatest(`${prefix}.rssBytes`, metric.memory.workingSetSize * 1_024);
-    recorder.event("app", "debug", "process.chromium", {
-      type: metric.type,
+    logEvent({ k: "process.chromium",
       pid: metric.pid,
       cpuPercentElectron: metric.cpu.percentCPUUsage,
       idleWakeupsPerSecond: metric.cpu.idleWakeupsPerSecond,
@@ -659,7 +799,7 @@ function sampleEventLoop(): void {
   );
   previousEventLoopUtilization = currentUtilization;
   recorder.setLatest("main.eventLoopUtilization", utilization.utilization);
-  recorder.event("app", "debug", "eventLoop.sample", {
+  logEvent({ k: "eventLoop.sample",
     windowMs: Math.round((sampledAtUs - eventLoopWindowStartedUs) / 1_000),
     resolutionMs: 5,
     meanUs: Math.round(meanUs),
@@ -672,29 +812,37 @@ function sampleEventLoop(): void {
   eventLoopWindowStartedUs = sampledAtUs;
 }
 
+/**
+ * The recorder owns the diagnostics directory outright, and the only entries
+ * that must outlive a launch are earlier sessions' JSONL. A whitelist is the
+ * rule: prefix matching missed Chromium's `.<bundle-id>.XXXXXX` atomic-write
+ * temporaries, which left a truncated 111 MB trace behind for days.
+ */
+function staleDiagnosticEntries(names: string[]): string[] {
+  return names.filter((name) => !/^session-.+\.jsonl$/.test(name));
+}
+
+/**
+ * Sampled at export, not at ready: the GPU process does not exist when the
+ * recorder starts, so Chromium answers with pre-initialization defaults that
+ * read as software rendering. If the process has since died, "disabled" is
+ * then the truth, and that is exactly what the reader needs.
+ */
+async function gpuEnvironment(): Promise<Record<string, unknown>> {
+  return {
+    featureStatus: app.getGPUFeatureStatus(),
+    info: await app.getGPUInfo("basic").catch(() => null),
+  };
+}
+
 export async function startDiagnostics(): Promise<void> {
-  crashReporter.start({ uploadToServer: false, compress: true });
   const diagnosticsDir = gamePaths().diagnostics;
-  const staleCaptures = (await readdir(diagnosticsDir).catch(() => []))
-    .filter(
-      (name) =>
-        name.startsWith("frames-") ||
-        name.startsWith("chromium-") ||
-        name.startsWith("export-"),
-    )
-    .map((name) => path.join(diagnosticsDir, name));
+  const staleCaptures = staleDiagnosticEntries(
+    await readdir(diagnosticsDir).catch(() => []),
+  ).map((name) => path.join(diagnosticsDir, name));
   await Promise.all(
     staleCaptures.map((file) => rm(file, { recursive: true, force: true })),
   );
-  const crashDir = app.getPath("crashDumps");
-  const crashFiles = (await readdir(crashDir).catch(() => []))
-    .filter((name) => name.endsWith(".dmp"))
-    .map((name) => path.join(crashDir, name));
-  const datedCrashFiles = await Promise.all(
-    crashFiles.map(async (file) => ({ file, mtime: (await stat(file)).mtimeMs })),
-  );
-  datedCrashFiles.sort((a, b) => b.mtime - a.mtime);
-  await Promise.all(datedCrashFiles.slice(3).map(({ file }) => rm(file, { force: true })));
   eventLoop.enable();
   previousEventLoopUtilization = performance.eventLoopUtilization();
   eventLoopWindowStartedUs = recorder.timestampUs();
@@ -719,39 +867,57 @@ export async function startDiagnostics(): Promise<void> {
     appVersion: app.getVersion(),
     versions: versions(),
     startedAt: recorder.startedWall,
-    gpuFeatureStatus: app.getGPUFeatureStatus(),
-    gpuInfo: await app.getGPUInfo("basic").catch(() => null),
   };
-  recorder.event("app", "info", "diagnostics.started", {
-    sessionId: recorder.sessionId,
-    appVersion: app.getVersion(),
-    platform: platform(),
-    architecture: arch(),
-  });
+  logEvent({ k: "diagnostics.started", appVersion: asAppVersion(app.getVersion()) });
   recorder.setLatest("system.thermalState", powerMonitor.getCurrentThermalState());
   recorder.setLatest("system.onBattery", powerMonitor.isOnBatteryPower());
   powerMonitor.on("on-battery", () => {
     recorder.setLatest("system.onBattery", true);
-    recorder.event("app", "warn", "power.onBattery");
+    logEvent({ k: "power.onBattery" });
   });
   powerMonitor.on("on-ac", () => {
     recorder.setLatest("system.onBattery", false);
-    recorder.event("app", "info", "power.onAc");
+    logEvent({ k: "power.onAc" });
   });
-  powerMonitor.on("suspend", () => recorder.event("app", "warn", "power.suspend"));
-  powerMonitor.on("resume", () => recorder.event("app", "info", "power.resume"));
+  powerMonitor.on("suspend", () => logEvent({ k: "power.suspend" }));
+  powerMonitor.on("resume", () => logEvent({ k: "power.resume" }));
   powerMonitor.on("thermal-state-change", ({ state }) => {
     recorder.setLatest("system.thermalState", state);
-    recorder.event("app", state === "serious" || state === "critical" ? "warn" : "info", "thermal.changed", { state });
+    logEvent({
+      k:
+        state === "serious" || state === "critical"
+          ? "thermal.pressure"
+          : "thermal.changed",
+      state,
+    });
   });
   powerMonitor.on("speed-limit-change", ({ limit }) => {
     recorder.setLatest("system.cpuSpeedLimitPercent", limit);
-    recorder.event("app", limit < 100 ? "warn" : "info", "cpuSpeedLimit.changed", { limit });
+    logEvent({
+      k: limit < 100 ? "cpuSpeedLimit.reduced" : "cpuSpeedLimit.restored",
+      limit,
+    });
   });
   sampler = setInterval(() => {
     sampleProcesses();
     sampleEventLoop();
   }, SAMPLE_INTERVAL_MS);
+}
+
+/**
+ * A Level 2 trace is tens to hundreds of megabytes. Remove it by the exact
+ * path we hold — never a glob, and never anything a session still needs.
+ */
+async function discardTrace(): Promise<void> {
+  const targets = [...new Set([tracePath, lastTracePath].filter(Boolean))];
+  for (const target of targets) {
+    // Clear a pointer only after its exact target is gone. In particular,
+    // starting another Level 2 capture must not overwrite the only reference
+    // to a partial target left by a failed stop.
+    await rm(target, { force: true });
+    if (tracePath === target) tracePath = "";
+    if (lastTracePath === target) lastTracePath = "";
+  }
 }
 
 export async function stopDiagnostics(): Promise<void> {
@@ -760,54 +926,46 @@ export async function stopDiagnostics(): Promise<void> {
   eventLoop.disable();
   await stopDiagnosticCapture("shutdown");
   await recorder.flush();
+  // A session that is never exported still bounds itself at quit rather than
+  // waiting for the next launch to sweep.
+  await discardTrace();
 }
 
 export async function flushDiagnostics(): Promise<void> {
   await recorder.flush();
 }
 
-function containsSensitiveText(text: string): boolean {
-  return redactText(text) !== text;
-}
-
-function assertRedacted(text: string): void {
-  if (containsSensitiveText(text)) {
-    throw new Error("diagnostics export failed redaction scan");
-  }
-}
-
-async function assertFileRedacted(file: string): Promise<void> {
-  const stream = createReadStream(file, { encoding: "utf8" });
-  let carry = "";
-  for await (const chunk of stream) {
-    const text = carry + chunk;
-    if (containsSensitiveText(text)) {
-      throw new Error("diagnostics trace failed redaction scan");
-    }
-    carry = text.slice(-4_096);
-  }
-}
-
-async function sanitizeTraceFile(source: string, target: string): Promise<void> {
-  const input = createReadStream(source, {
+/**
+ * The Chromium trace is the one document nobody here authored, so it is the
+ * one a pattern scanner is the right tool for. `redactTraceStream` owns the
+ * chunk boundary — the place a streaming redactor leaks — and this owns the
+ * files. It returns the bytes it scanned, because the manifest states what
+ * was covered rather than asserting a verdict about it.
+ */
+async function sanitizeTraceFile(
+  source: string,
+  target: string,
+): Promise<number> {
+  const input: AsyncIterable<string> = createReadStream(source, {
     encoding: "utf8",
     highWaterMark: 1024 * 1024,
   });
   const output = await open(target, "w", 0o600);
-  let carry = "";
-  try {
+  let scanned = 0;
+  async function* counted(): AsyncGenerator<string> {
     for await (const chunk of input) {
-      const text = redactText(carry + chunk);
-      const split = Math.max(0, text.length - 64 * 1024);
-      const ready = text.slice(0, split);
-      carry = text.slice(split);
-      if (ready) await output.write(ready);
+      scanned += Buffer.byteLength(chunk);
+      yield chunk;
     }
-    await output.write(carry);
+  }
+  try {
+    for await (const text of redactTraceStream(counted())) {
+      await output.write(text);
+    }
   } finally {
     await output.close();
   }
-  await assertFileRedacted(target);
+  return scanned;
 }
 
 export async function exportDiagnosticsZip(
@@ -833,12 +991,15 @@ export async function exportDiagnosticsZip(
     const exportedEvents = await recorder.exportedEvents();
     const capture = recorder.captureResult();
     const previous = await previousAbnormalSession(dir, recorder.sessionId);
+    // P2.4 — the detector runs before anything is written, and it throws. An
+    // event this build cannot account for stops the export rather than being
+    // scrubbed on the way out.
+    const inspection = inspectEventLog(exportedEvents.text);
     const files: string[] = [
       "manifest.json",
       "report.json",
       "summary.json",
       "events.jsonl",
-      "histograms.json",
       "environment.json",
       "settings-redacted.json",
     ];
@@ -849,22 +1010,27 @@ export async function exportDiagnosticsZip(
       await copyFile(framePath, path.join(staging, "frames.bin"));
       files.push("frames.bin");
     }
+    let traceBytesScanned = 0;
     if (lastTracePath) {
-      await sanitizeTraceFile(
+      traceBytesScanned = await sanitizeTraceFile(
         lastTracePath,
         path.join(staging, "chromium-trace.json"),
       );
       files.push("chromium-trace.json");
     }
     const manifest = {
-      formatVersion: 1,
+      // 2 — `histograms.json` is gone (it duplicated `summary.json`) and
+      // `redaction` is the detector's result rather than the word "passed".
+      formatVersion: 2,
       applicationVersion: extras.appVersion,
       sessionId: recorder.sessionId,
       captureLevel: recordedCaptureLevel,
       exportedAt: new Date().toISOString(),
       droppedEventCount: summary.droppedEvents,
       includedFiles: files,
-      redaction: "passed",
+      // What was checked, not a self-awarded verdict. A reader can reproduce
+      // both counts by running the same closed schema over events.jsonl.
+      redaction: { ...inspection, traceBytesScanned } satisfies RedactionResult,
       profilerContaminated: files.includes("chromium-trace.json"),
       eventLog: {
         completeFromStart: exportedEvents.completeFromStart,
@@ -924,15 +1090,31 @@ export async function exportDiagnosticsZip(
       sessionId: recorder.sessionId,
       captureLevel: recordedCaptureLevel,
     });
-    const documents: Record<string, string> = {
+    // The event log is written byte for byte as the detector inspected it.
+    // Redacting it afterwards would mean the file in the export is not the
+    // file that was checked, and a reader could not reproduce the manifest's
+    // numbers.
+    const certified: Record<string, string> = {
+      "events.jsonl": exportedEvents.text,
+    };
+    // Everything else is a summary whose leaves come from OS and Chromium
+    // APIs, or a previous session written by a build whose schema we do not
+    // control. The pattern scanner is the only tool that applies to those,
+    // and it stays until they are schema'd too: dropping it to satisfy
+    // "redactText for the trace only" would be a privacy regression rather
+    // than a simplification.
+    const patternScanned: Record<string, string> = {
       "manifest.json": JSON.stringify(manifest, null, 2),
       "report.json": JSON.stringify(report, null, 2),
       "summary.json": JSON.stringify(summary, null, 2),
-      "events.jsonl": exportedEvents.text,
       ...(previous ? { "previous-events.jsonl": previous.text } : {}),
-      "histograms.json": JSON.stringify(summary.histograms, null, 2),
       "environment.json": JSON.stringify(
-        { ...environment, graphics, electronVersions: extras.electronVersions },
+        {
+          ...environment,
+          gpu: await gpuEnvironment(),
+          graphics,
+          electronVersions: extras.electronVersions,
+        },
         null,
         2,
       ),
@@ -943,16 +1125,27 @@ export async function exportDiagnosticsZip(
           }
         : {}),
     };
+    const documents: Record<string, string> = {
+      ...certified,
+      ...Object.fromEntries(
+        Object.entries(patternScanned).map(([name, text]) => [
+          name,
+          redactText(text),
+        ]),
+      ),
+    };
     for (const [name, text] of Object.entries(documents)) {
-      const redacted = redactText(text);
-      assertRedacted(redacted);
       const file = path.join(staging, name);
-      await writeFile(file, redacted, { mode: 0o600 });
+      await writeFile(file, text, { mode: 0o600 });
       await chmod(file, 0o600);
     }
     await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
     await chmod(zipPart, 0o600);
     await rename(zipPart, zipPath);
+    // The trace deliberately survives the export. `recordedCaptureLevel` stays
+    // at 2 for the rest of the session, so discarding here would make a second
+    // export declare Level 2 with no trace and fail its own validation. Quit
+    // and the launch sweep are what bound it.
     return zipPath;
   } finally {
     await rm(staging, { recursive: true, force: true });

@@ -9,7 +9,12 @@ export interface SafeStorageApi {
   decryptString(value: Buffer): string;
 }
 
-function parseCredentials(value: unknown): StoredCredentials {
+/**
+ * The one credential shape check. Called on two different inputs: whatever the
+ * renderer sent, at the IPC boundary, and whatever was on disk, after
+ * decryption. Exported so the boundary uses this rule rather than a second one.
+ */
+export function parseCredentials(value: unknown): StoredCredentials {
   if (
     value === null ||
     typeof value !== "object" ||

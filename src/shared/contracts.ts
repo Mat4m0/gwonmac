@@ -5,6 +5,7 @@ import type {
   RendererMilestoneFields,
   RendererMetrics,
 } from "./diagnostics.js";
+import type { ErrorCode } from "./errors.js";
 
 export type BuildKind = "jspi";
 
@@ -15,22 +16,55 @@ export interface SnapshotMetadata {
   residentBits: Uint8Array;
 }
 
-export interface DownloadProgress {
+/**
+ * A client preparation that is still running. `label` and `notice` are the
+ * last English the main process writes into this channel, and the renderer
+ * already substitutes its own text for every phase but `image`.
+ */
+export interface DownloadActivity {
   phase:
     | "starting"
     | "checking"
     | "client"
     | "image"
-    | "ready"
-    | "error";
+    | "ready";
   label: string;
   received: number;
   total: number;
   bytesPerSecond: number;
   secondsRemaining: number | null;
-  error: string | null;
   notice?: string;
 }
+
+/**
+ * A client preparation that failed. The code is the entire payload: this used
+ * to be a finished English sentence built in the main process, which put the
+ * wording of a user-facing failure in the one place that cannot see the UI and
+ * cannot be tested against it. `src/renderer/failure-messages.js` is now the
+ * only place that sentence is chosen, and a code is also the only thing the
+ * diagnostics export is allowed to carry.
+ *
+ * A separate member rather than a nullable field on the one above, so that a
+ * failure without a code and a code without a failure are both build errors.
+ */
+export interface DownloadFailure {
+  phase: "error";
+  errorCode: ErrorCode;
+}
+
+export type DownloadProgress = DownloadActivity | DownloadFailure;
+
+/**
+ * How a full-game download ended. It replaces a `boolean` plus a rejected
+ * promise carrying an English sentence: Electron flattens a rejection to its
+ * message, so a *value* is the only way a code can cross to the renderer, and
+ * the renderer is where the sentence belongs. Verified data survives all
+ * three, which is why "failed" needs no separate "how much was kept".
+ */
+export type FullDownloadOutcome =
+  | { status: "complete" }
+  | { status: "stopped" }
+  | { status: "failed"; errorCode: ErrorCode };
 
 export interface PrefetchProgress {
   completedChunks: number;
@@ -55,16 +89,41 @@ export interface SocketDataEvent {
   data: Uint8Array;
 }
 
+/**
+ * Why a socket closed. Closed vocabulary because this value crosses to the
+ * renderer *and* into the diagnostics export; it used to be free text, and one
+ * of its five producers passed `error.message` straight through.
+ */
+export type SocketCloseReason =
+  | "requested"
+  | "peer"
+  | "owner"
+  | "timeout"
+  | "error";
+
+/**
+ * Why a socket failed. Node's `errno` set is open and its messages quote the
+ * destination address, so failures are classified into this allowlist and
+ * anything unrecognised becomes "other".
+ */
+export type SocketFailureCode =
+  | "timeout"
+  | "refused"
+  | "reset"
+  | "unreachable"
+  | "dns"
+  | "other";
+
 export interface SocketClosedEvent {
   type: "close";
   socketId: number;
-  reason: string;
+  reason: SocketCloseReason;
 }
 
 export interface SocketErrorEvent {
   type: "error";
   socketId: number;
-  message: string;
+  code: SocketFailureCode;
 }
 
 export type SocketEvent =
@@ -97,24 +156,62 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
-export interface AppSettings {
+/**
+ * The complete set of independently selectable Toolbox features.
+ *
+ * Canonical here because settings, main-process policy, and the generated
+ * preload transport all need the same names. A new tool is declared once;
+ * its implementation still has to decide what enabling it does.
+ */
+export const TOOLBOX_TOOLS = [
+  "nativeCursor",
+  "targetReadout",
+] as const;
+
+export type ToolboxTool = (typeof TOOLBOX_TOOLS)[number];
+export type ToolboxSelection = Record<ToolboxTool, boolean>;
+
+export interface AppSettings extends ToolboxSelection {
   renderScale: 1 | 1.5 | 2;
-  pointerLock: boolean;
-  cursorTheme: "system" | "guild-wars" | "guild-wars-2";
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
+  /**
+   * Opt in to automatic release checks. `false` means this app makes no
+   * network request to GitHub unless the user asks for one — with no
+   * exceptions, including the check on an uncertified client build.
+   */
+  autoCheckUpdates: boolean;
+  /**
+   * When the last release-check attempt completed, in epoch milliseconds, or
+   * `null` if one has never run. An unsupported local build can finish without
+   * contacting GitHub; this records the attempt, not a network claim.
+   */
+  lastUpdateCheckAt: number | null;
+  /**
+   * The ArenaNet client build (its official module's sha256) whose
+   * compatibility notice the player has already seen, or `null` for none.
+   *
+   * Keyed by build rather than by a boolean on purpose: a new ArenaNet build
+   * has to warn again, and the same one must not nag every launch. It is not
+   * nested with the two update fields above because it is not about updating
+   * this app — it records what the player was told about *their game client*.
+   */
+  compatibilityNoticeSeenFor: string | null;
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
-  pointerLock: true,
-  cursorTheme: "guild-wars",
+  nativeCursor: true,
+  targetReadout: false,
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,
+  autoCheckUpdates: false,
+  lastUpdateCheckAt: null,
+  compatibilityNoticeSeenFor: null,
 };
 
 export interface StoredCredentials {
@@ -141,12 +238,169 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   store: "https://store.guildwars.com/en-us",
 };
 
-export interface UpdateStatus {
-  currentVersion: string;
-  latestVersion: string;
-  url: string;
-  hasUpdate: boolean;
+/**
+ * Why a release check produced no answer. Closed vocabulary because the
+ * renderer renders one message per member, and because "we could not tell"
+ * must never arrive looking like "you are up to date".
+ *
+ * `rate-limited` is separate from `server` on purpose: GitHub allows 60
+ * unauthenticated requests per hour per IP, and a manual button invites
+ * mashing, so that case needs its own sentence.
+ */
+export type ReleaseCheckFailure =
+  | "rate-limited"
+  | "offline"
+  | "timeout"
+  | "server"
+  | "unreadable"
+  | "unsupported-build";
+
+/**
+ * Three states, never two. `latestVersion` is re-rendered from the parsed
+ * version rather than passed through from the API response, so no free text
+ * from the network reaches the UI.
+ */
+export type ReleaseNotice =
+  | {
+      state: "update-available";
+      currentVersion: string;
+      latestVersion: string;
+      checkedAt: number;
+    }
+  | {
+      state: "up-to-date";
+      currentVersion: string;
+      latestVersion: string;
+      checkedAt: number;
+    }
+  | {
+      state: "unknown";
+      currentVersion: string;
+      reason: ReleaseCheckFailure;
+      checkedAt: number;
+    };
+
+/**
+ * Which of the three client-certification states this session is in. The two
+ * WASM transforms are keyed by different hashes, so certification can succeed
+ * for template save/load and fail for the Toolbox tools:
+ *
+ * - `certified`      templates, screenshots and chat logs work; Toolbox may load
+ * - `template-only`  those three work; Toolbox may not load
+ * - `uncertified`    ArenaNet's untouched module is served; nothing is repaired
+ *
+ * `src/main/client-certification.ts` is the only producer.
+ */
+export type ClientCompatibilityState =
+  | "certified"
+  | "template-only"
+  | "uncertified";
+
+export interface ClientCompatibility {
+  state: ClientCompatibilityState;
+  /**
+   * sha256 of ArenaNet's official module for this session. It names the build,
+   * so a notice can be acknowledged per build instead of per launch.
+   */
+  clientSha256: string;
+  /**
+   * Whether the module selected for this session contains the certified
+   * Toolbox transform. This is effective runtime state, not build support.
+   */
+  toolboxActive: boolean;
 }
+
+/**
+ * The candidate generation this renderer is serving. A renderer captures it
+ * before loading the game glue and returns that exact value only after its own
+ * first-frame and socket-open evidence. Main refuses a token for any other
+ * active generation or candidate marker.
+ */
+export interface ClientHealthToken {
+  readonly generation: number;
+  readonly fingerprint: string;
+}
+
+/**
+ * What this session is running. `compatibility` is `null` only before a client
+ * has been activated; `appVersion` is always known, because a user filing a bug
+ * should not have to hunt through the menu bar for it. `healthToken` exists
+ * only while the active generation is awaiting renderer health evidence.
+ */
+export interface ClientSession {
+  appVersion: string;
+  compatibility: ClientCompatibility | null;
+  healthToken: ClientHealthToken | null;
+}
+
+/**
+ * Everything the renderer must know before its first script runs. It used to
+ * ride on the renderer URL as query parameters, which forced the trust root to
+ * allow-list them — including `nativeCursor`, which is user product state and
+ * has no business in a navigation check. It travels as a preload argument
+ * instead, so `isCanonicalRendererUrl` accepts no query string at all.
+ */
+export interface RendererInit {
+  /** Toolbox automation tier. Unpackaged builds only. */
+  toolboxAutomation: boolean;
+  /** The independently selected Toolbox tools for this launch. */
+  toolboxSelection: ToolboxSelection;
+  /** Template filesystem syscall trace. Unpackaged builds only. */
+  templateFsTrace: boolean;
+}
+
+/**
+ * Prefix of the single `webPreferences.additionalArguments` entry that carries
+ * a JSON `RendererInit`. The preload is the only reader.
+ */
+export const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
+
+/**
+ * dirfd markers by which ArenaNet's derived client reaches the renderer.
+ * `src/main/core/template-save-compat.ts` appends forwarders that hand the
+ * stub's arguments to `__syscall_newfstatat` behind one of these, and
+ * `src/renderer/template-save-compatibility.js` answers them against the
+ * mounted IDBFS. No real call can produce a negative dirfd.
+ *
+ * Canonical here rather than beside the transform because both halves need the
+ * values and neither can import the other: the renderer is a sandboxed classic
+ * script, so its copy travels through the generated preload. When the two were
+ * hand-mirrored, drift silently turned every bridged call into an ordinary
+ * `stat` — no error, no log, just templates that stopped saving.
+ */
+export const WASM_BRIDGE_MARKERS = {
+  ensureDirectory: -70_001,
+  findFiles: -70_002,
+  fileBaseName: -70_003,
+  deleteFile: -70_004,
+  fileExists: -70_005,
+} as const;
+
+export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
+
+/**
+ * The closed set of things the main process asks the renderer to do. These
+ * arrived as JavaScript source built by string interpolation and run with
+ * `executeJavaScript` — one of them spliced a capture level into the source.
+ * They are events, so they travel as events and `level` travels as a number.
+ */
+export type RendererCommand =
+  | { type: "input.reset" }
+  | { type: "settings.open" }
+  | { type: "diagnostics.toggle" }
+  | {
+      type: "diagnostics.capture";
+      action: "reset" | "stopped" | "flush" | "problem-marked";
+    }
+  | { type: "diagnostics.capture"; action: "started"; level: 1 | 2 };
+
+/** What the renderer can truthfully acknowledge over IPC. */
+export type RendererCommandCompletion = "completed" | "failed";
+
+/** Main adds its own bounded-wait result to the renderer's acknowledgement. */
+export type RendererCommandOutcome =
+  | RendererCommandCompletion
+  | "timed-out";
 
 export const IPC = {
   progressCurrent: "gw:progress:current",
@@ -180,12 +434,59 @@ export const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
-  updateStatus: "gw:update:status",
+  clientSession: "gw:client:session",
+  // Main→renderer, and the renderer's acknowledgement. Main waits on the
+  // acknowledgement because a capture flush has to finish inside the capture
+  // window, which `executeJavaScript`'s awaited result used to guarantee.
+  rendererCommand: "gw:renderer:command",
+  rendererCommandDone: "gw:renderer:commandDone",
+  // Named for its trigger: the renderer asks for a check, it does not read a
+  // status the main process was already keeping.
+  releaseNoticeCheck: "gw:releaseNotice:check",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
+/**
+ * The channels that are not request/response and so have no `ipcMain.handle`
+ * handler: three main→renderer events, the main→renderer command, and the
+ * renderer's acknowledgement of it, which is an `ipcRenderer.send`.
+ *
+ * Named here so `InvokeChannel` below can be derived rather than listed. The
+ * handler registry in `src/main/ipc.ts` is checked against it, which is what
+ * makes a channel with no handler — and a handler with no channel — a build
+ * failure instead of a runtime "no handler registered".
+ */
+export const EVENT_CHANNELS = [
+  "progressEvent",
+  "prefetchEvent",
+  "socketEvent",
+  "rendererCommand",
+  "rendererCommandDone",
+] as const;
+
+export type EventChannel = (typeof EVENT_CHANNELS)[number];
+
+/** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
+export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
+
 export interface GwNativeApi {
+  /** Launch-time configuration, available before the first renderer script. */
+  init: RendererInit;
+  /**
+   * The derived client's dirfd markers. Not a capability — a constant the
+   * sandboxed renderer cannot import, carried by the one bridge that can.
+   */
+  wasmBridgeMarkers: WasmBridgeMarkers;
+  commands: {
+    /**
+     * Register the renderer's single command handler. A second registration is
+     * an error. Main receives success or failure only after the returned
+     * promise settles, so an awaited capture flush cannot be acknowledged
+     * early or have a rejection disguised as success.
+     */
+    handle(handler: (command: RendererCommand) => void | Promise<void>): void;
+  };
   progress: {
     current(): Promise<DownloadProgress>;
     onChange(callback: (value: DownloadProgress) => void): () => void;
@@ -216,7 +517,7 @@ export interface GwNativeApi {
   cache: {
     info(): Promise<CacheInfo>;
     clearAndRestart(): Promise<boolean>;
-    downloadAll(): Promise<boolean>;
+    downloadAll(): Promise<FullDownloadOutcome>;
     stopDownload(): Promise<void>;
   };
   gameStorage: {
@@ -241,9 +542,10 @@ export interface GwNativeApi {
   };
   client: {
     retry(): Promise<void>;
-    healthy(): Promise<void>;
+    healthy(token: ClientHealthToken): Promise<void>;
+    session(): Promise<ClientSession>;
   };
-  update: {
-    status(): Promise<UpdateStatus | null>;
+  releaseNotice: {
+    check(): Promise<ReleaseNotice>;
   };
 }

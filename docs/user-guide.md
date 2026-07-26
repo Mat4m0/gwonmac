@@ -86,9 +86,23 @@ memory use matters more than sharpness.
 Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
-**Controls** owns right-drag pointer locking and the macOS Default, Guild Wars,
-and Guild Wars 2 cursor choices, with an in-panel cursor preview. Guild Wars is
-the default. Cursor size follows macOS display and accessibility settings.
+Right-drag always locks the pointer while steering the camera and restores it
+on release. **Controls** owns two independent Toolbox choices. **Use the game's
+own cursor** is on by default: the host reads the cursor Guild Wars itself draws
+out of your installed client and shows it over the game view; no cursor artwork
+ships with this app and none is downloaded. **Show target distance and range**
+is off by default and adds the selected target's distance and range band at the
+top of the game view. Either choice can be changed without enabling the other.
+Changing either one changes which observations the launch prepares, so the app
+has to restart to apply it: it asks first, and if you cancel, nothing is saved
+and the boxes return to what they were. **Reset Launcher Settings…** restores
+the cursor to on and the target readout to off.
+**Reload Game** reuses the module the launch already chose.
+When the cursor is off — and whenever it cannot be read, or
+your client build is not one this host has certified — you get the normal macOS
+pointer. That is a cosmetic difference only: nothing about how the game plays
+changes with the box either way. The rest of the window always keeps the macOS
+pointer.
 Touch compatibility and the local performance overlay stay under
 **Advanced**, outside the normal setup path. Settings reopens to the pane most
 recently used during the current session.
@@ -125,21 +139,36 @@ are cleared at startup and quit.
 
 ## Report a problem
 
-Choose **Help → Report a Problem…**.
+Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
+in the app to export diagnostics and open it. Diagnostics are optional.
 
 - For a crash, startup, download, graphics, input, audio, or login problem,
   choose **Export Recent Diagnostics…**.
 - For stutter, choose **Record Performance Problem**, reproduce it, press
   **Cmd+Shift+M** when it is visible, then use **View → Stop Capture**.
+- When investigating a repeatable long loading stall with a Chromium trace,
+  start the trace and wait five seconds before entering the portal or changing
+  maps. Stop the capture after the destination has rendered. The initial wait
+  keeps CPU-profiler startup outside the transition being investigated.
 
 An always-visible capture indicator shows the recording type and elapsed time.
 After **Cmd+Shift+M**, it confirms that the problem marker was registered.
 
-The app creates one `.gwdiag` file and can open the project’s bug form or reveal
-the file in Finder. The export is redacted and excludes credentials, account
-identifiers, packet contents, request/response bodies, headers, cookies,
-filesystem paths, and crash dumps. GitHub issues are public, so review the bug
-form’s privacy notice before attaching it.
+The app creates one `.gwdiag` file and can reveal it in Finder. GitHub does not
+accept that extension directly: Control-click the file, choose **Compress**,
+and attach the resulting `.zip`.
+
+Your password, saved login, account name, game traffic, and crash dumps are
+never recorded, so they are not in the export to begin with. The event log the
+report is built from is a closed list: each event carries numbers, flags, and
+short codes, so a failure is recorded as a code rather than as its text, and
+an export that cannot account for one of its own events fails instead of being
+written. Everything else in the file — Chromium's trace, the graphics and
+environment report, your launcher settings — is scanned for passwords, tokens,
+email addresses, and file paths, and those are replaced. That scan recognizes
+known patterns, so treat it as strong rather than absolute. The export is an
+ordinary ZIP you can open and read before attaching it. GitHub issues are
+public, so review the bug form’s privacy notice as well.
 
 ## Recovery behavior
 
@@ -158,15 +187,77 @@ form’s privacy notice before attaching it.
 - The first unexpected renderer crash is recovered automatically. If it
   repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
 
-## Updates and local data
+## Updates
 
-The host app has no update-feed client. Replace it manually with a newer source
-or release build. ArenaNet client files still update automatically.
+Updating this app is manual. Download a newer release, replace
+`Guild Wars.app`, and your settings, saved login, and downloaded game data stay
+where they are. The app never downloads or installs anything by itself.
+ArenaNet's own client files still update automatically; that is the game
+updating, not the app.
 
-Version 0.0.2 packages internal foundations for future Toolbox development,
-but they are dormant and invisible in normal use. The app serves ArenaNet's
-official WASM unchanged and does not install a Toolbox hook, load its companion
-kernel, observe game memory, or show Toolbox UI.
+The app does not poll for releases. It asks GitHub whether a newer version
+exists only when one of three things happens:
+
+1. You choose **Check for Updates**, on the loading screen or under
+   **Settings → Advanced**.
+2. You choose **Check for Updates** on the notice that appears when the app
+   does not recognize the game client build ArenaNet is currently serving.
+3. The app starts while **Check for app updates automatically** is on. That
+   box is off unless you turn it on; the first-launch screen offers it beside
+   the download-mode question, and **Settings → Advanced** owns it afterwards.
+   It performs one check per launch, and nothing else checks in the background.
+
+While the box is off, the app contacts GitHub only when you press **Check for
+Updates** yourself — including on a client build it does not recognize.
+
+A check has three possible answers, and "we could not tell" is never reported
+as good news:
+
+- a newer version exists, with a link to the releases page;
+- you are on the latest version;
+- the check could not be completed, and the message says why — GitHub could not
+  be reached, did not answer within five seconds, refused further requests from
+  your network, returned an error or an unreadable answer, or this build's
+  version is not on the release line.
+
+**Last checked** beside the button records when the last release-check attempt
+finished and survives a restart, so a failed check cannot be mistaken for a
+fresh success.
+Repeated presses reuse every answer for ten minutes, including an offline,
+timeout, server, rate-limit, or unreadable response, instead of sending more
+requests. After that bounded pause, pressing the button asks GitHub again.
+
+## When the client build is not certified
+
+Each ArenaNet client build is certified separately for two things: the repair
+that makes build templates, screenshots, and chat logs work, and the read-only
+Toolbox transform used by the cursor and target readout. When ArenaNet ships a
+build this app has not certified — or has certified for saving files but not
+yet for the Toolbox tools you selected — the loading screen says so once for
+that build, names exactly what is affected, and offers **Play Guild Wars** as
+the primary action. The notice explains; it does not block you.
+
+Gameplay is unaffected either way: no stat, no timing, and no input path
+changes. Recovery needs a new release of this app; retrying, reinstalling, or
+clearing downloaded game data cannot certify a build. The same status is always
+visible under **Settings → Controls**. An uncertified client build does not mean
+the app is out of date — whether a newer release exists is the separate question
+above, which the notice's own **Check for Updates** button answers.
+
+The two Toolbox choices control their observations independently. The cursor
+choice reads only the cursor Guild Wars is drawing. The target-readout choice
+reads map, player, and selected-target state and shows a small line at the top
+of the game view; it disappears with no target, cannot be clicked, and never
+covers anything interactive. A disabled tool performs no per-tick collection.
+With both choices off, no Toolbox hook is installed, no companion kernel loads,
+and nothing observes game memory. Either way nothing the app does sends game
+input or acts on your behalf. On a certified build the app derives one narrowly
+patched module that connects the client's missing file operations to its
+sandboxed persistent filesystem, which
+is what makes build templates, screenshots, and chat logs work; the downloaded
+official artifact is unchanged whichever way the box is set.
+
+## Local data
 
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually

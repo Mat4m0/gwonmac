@@ -21,6 +21,13 @@
   <!-- noreferrer as well as noopener: these are external sites and there is
        no reason to hand them the address of a server on someone's machine. -->
   <nav id="loading-links">
+    <span id="loading-update">
+      <a href="#" id="loading-update-check">Check for Updates</a>
+      <span id="loading-update-status" role="status" aria-live="polite" hidden></span>
+      <span id="loading-update-when" hidden></span>
+      <a href="#" id="loading-update-get" class="update"
+         data-external="releases" hidden>Get the update</a>
+    </span>
     <a href="#" data-settings>Settings</a>
     <a href="#" data-external="store">Buy Guild Wars</a>
     <a href="#" data-external="discord">Discord</a>
@@ -67,6 +74,26 @@
       <div class="dock-info">
         <h2 id="data-choice-title">Welcome — choose how to play</h2>
         <p>Choose what should happen before Guild Wars starts. You can change this later in Settings.</p>
+        <p>
+          <label>
+            <input type="checkbox" id="data-choice-auto-updates">
+            Also check for app updates automatically
+          </label>
+        </p>
+        <p>
+          <label>
+            <input type="checkbox" id="data-choice-native-cursor">
+            Use the game's own cursor — changing this restarts the app
+          </label>
+          <span id="data-choice-native-cursor-note" role="status" hidden></span>
+        </p>
+        <p>
+          <label>
+            <input type="checkbox" id="data-choice-target-readout">
+            Show target distance and range — changing this restarts the app
+          </label>
+          <span id="data-choice-target-readout-note" role="status" hidden></span>
+        </p>
       </div>
       <div class="data-choice-actions">
         <button type="button" id="data-choice-full" class="data-choice-option">
@@ -104,16 +131,61 @@
         </button>
       </div>
     </section>
+
+    <section id="client-compat" aria-labelledby="client-compat-title" hidden>
+      <div class="dock-info">
+        <h2 id="client-compat-title"></h2>
+        <p id="client-compat-detail"></p>
+        <p class="client-compat-version">
+          <span id="client-compat-version"></span>
+          <span id="client-compat-update" role="status"
+                aria-live="polite" hidden></span>
+        </p>
+      </div>
+      <div class="client-compat-actions">
+        <button type="button" id="client-compat-check" class="launcher-link">
+          Check for Updates
+        </button>
+        <button type="button" id="client-compat-releases" class="launcher-link">
+          Open Releases…
+        </button>
+        <button type="button" id="client-compat-play" class="launcher-primary">
+          Play Guild Wars
+        </button>
+      </div>
+    </section>
   </div>
 </div>
 
 <!-- The module probes for Module.oskInput and concludes it cannot accept text
-     at all without these. It focuses them programmatically, hence tabindex=-1. -->
-<div class="osk-input-container"><input type="text" id="osk-input-text" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
-<div class="osk-input-container"><input type="email" id="osk-input-email" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
-<div class="osk-input-container"><input type="password" id="osk-input-password" class="osk-input" tabindex="-1"></div>
-<div class="osk-input-container"><input type="number" id="osk-input-number" class="osk-input" tabindex="-1" enterkeyhint="enter"></div>
-<div class="osk-input-container"><textarea id="osk-input-multiline" class="osk-input" rows="3" tabindex="-1"></textarea></div>
+     at all without these. It focuses them programmatically, hence tabindex=-1.
+     The game owns editing, so browser writing assistance must not rewrite its
+     input/composition event stream. -->
+<div class="osk-input-container">
+  <input type="text" id="osk-input-text" class="osk-input" tabindex="-1"
+         enterkeyhint="enter" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <input type="email" id="osk-input-email" class="osk-input" tabindex="-1"
+         enterkeyhint="enter" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <input type="password" id="osk-input-password" class="osk-input" tabindex="-1"
+         autocomplete="off" autocorrect="off" autocapitalize="off"
+         spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <input type="number" id="osk-input-number" class="osk-input" tabindex="-1"
+         enterkeyhint="enter" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" writingsuggestions="false">
+</div>
+<div class="osk-input-container">
+  <textarea id="osk-input-multiline" class="osk-input" rows="3" tabindex="-1"
+            autocomplete="off" autocorrect="off" autocapitalize="off"
+            spellcheck="false" writingsuggestions="false"></textarea>
+</div>
 
 <div id="log"></div>
 <output id="diagnostics" aria-live="off"></output>
@@ -219,21 +291,19 @@
                  aria-labelledby="settings-tab-controls">
           <h3 id="settings-controls-title" class="sr-only">Controls</h3>
           <label class="settings-check">
-            <input type="checkbox" name="pointerLock">
-            <span>Lock pointer while controlling the camera</span>
+            <input type="checkbox" name="nativeCursor">
+            <span>Use the game's own cursor</span>
           </label>
-          <p class="settings-note">Hides the cursor while the mouse steers the camera, like on Windows.</p>
-          <label class="settings-field">Cursor style
-            <select name="cursorTheme">
-              <option value="system">macOS Default</option>
-              <option value="guild-wars">Guild Wars</option>
-              <option value="guild-wars-2">Guild Wars 2</option>
-            </select>
+          <p class="settings-note">Reads the cursor from your own installed Guild Wars client while you play, instead of the macOS pointer. Nothing is downloaded and no artwork ships with this app. On by default. Changing this restarts the app; you will be asked first.</p>
+          <label class="settings-check">
+            <input type="checkbox" name="targetReadout">
+            <span>Show target distance and range</span>
           </label>
-          <div id="settings-cursor-preview" data-cursor-theme="guild-wars">
-            Move the pointer here to preview
-          </div>
-          <p class="settings-note">Game cursor artwork is used for interoperability and remains owned by its respective rights holders.</p>
+          <p class="settings-note">Shows a read-only distance and range band for the selected target at the top of the game view. Off by default. Changing this restarts the app; you will be asked first.</p>
+          <p id="settings-compat-status" class="settings-status"
+             role="status"></p>
+          <p id="settings-compat-detail" class="settings-note"></p>
+          <p id="settings-compat-version" class="settings-note"></p>
         </section>
 
         <section class="settings-pane" id="settings-pane-advanced" role="tabpanel"
@@ -251,6 +321,22 @@
             <input type="checkbox" name="showDiagnostics">
             <span>Show performance overlay</span>
           </label>
+          <label class="settings-check">
+            <input type="checkbox" name="autoCheckUpdates">
+            <span>Check for app updates automatically</span>
+          </label>
+          <p class="settings-note">While this is off, the app contacts GitHub only when you ask it to — including when it meets a game client build it does not recognise. Updating the app itself is always manual.</p>
+          <div class="settings-update-actions">
+            <button type="button" id="settings-check-updates">
+              Check for Updates
+            </button>
+            <button type="button" id="settings-open-releases" hidden>
+              Open Releases…
+            </button>
+          </div>
+          <p id="settings-update-status" class="settings-status"
+             role="status" aria-live="polite" hidden></p>
+          <p id="settings-update-when" class="settings-note" hidden></p>
           <div class="settings-divider" aria-hidden="true"></div>
           <button type="button" id="settings-reset-launcher" class="quiet-danger">
             Reset Launcher Settings…
@@ -267,11 +353,11 @@
   </form>
 </dialog>
 
-<!-- loading.js first: it must paint before harness.js starts waiting. -->
+<!-- Page singletons, in dependency order. The six WASM host modules that used
+     to be listed here are ESM and are imported by harness.js's boot(). -->
 <script src="diagnostics.js"></script>
+<script src="commands.js"></script>
 <script src="loading.js"></script>
-<script src="input.js"></script>
-<script src="graphics.js"></script>
-<script src="filesystem.js"></script>
 <script src="harness.js"></script>
+<script src="toolbox-settings.js"></script>
 <script src="settings.js"></script>

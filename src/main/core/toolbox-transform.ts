@@ -4,33 +4,35 @@ import {
   toolboxLayoutWords,
   type KnownToolboxBuild,
 } from "./toolbox-builds.js";
+import {
+  concat,
+  countFunctionImports,
+  encodeCode,
+  encodeIndexVector,
+  encodeSection,
+  parseCode,
+  parseIndexVector,
+  parseTypes,
+  readSleb,
+  readUleb,
+  sectionById,
+  sleb,
+  splitSections,
+  uleb,
+  valueTypeName,
+  WASM_HEADER,
+  type FunctionType,
+  type Section,
+} from "./wasm-binary.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const TOOLBOX_TRANSFORM_ABI = 2;
+export const TOOLBOX_TRANSFORM_ABI = 3;
 export const TOOLBOX_HOOK_EXPORT = "toolbox_hook_slot";
 export const TOOLBOX_ORIGINAL_EXPORT = "toolbox_tick_original";
 export const TOOLBOX_MANIFEST_SECTION = "toolbox_manifest";
-
-const WASM_HEADER = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
-const VALUE_TYPE_NAMES = new Map([
-  [0x7f, "i32"],
-  [0x7e, "i64"],
-  [0x7d, "f32"],
-  [0x7c, "f64"],
-]);
-
-interface Section {
-  id: number;
-  body: Uint8Array;
-}
-
-interface FunctionType {
-  params: number[];
-  results: number[];
-}
 
 interface WasmExport {
   name: string;
@@ -38,172 +40,13 @@ interface WasmExport {
   index: number;
 }
 
-interface Cursor {
-  offset: number;
-}
-
 function fail(message: string): never {
   throw new Error(`toolbox transform: ${message}`);
-}
-
-function readUleb(bytes: Uint8Array, cursor: Cursor): number {
-  let result = 0;
-  let shift = 0;
-  for (let count = 0; count < 5; count += 1) {
-    if (cursor.offset >= bytes.byteLength) fail("truncated LEB128");
-    const byte = bytes[cursor.offset++]!;
-    result |= (byte & 0x7f) << shift;
-    if ((byte & 0x80) === 0) return result >>> 0;
-    shift += 7;
-  }
-  return fail("oversized LEB128");
-}
-
-function uleb(value: number): Uint8Array {
-  if (!Number.isSafeInteger(value) || value < 0) fail("invalid unsigned value");
-  const out: number[] = [];
-  do {
-    let byte = value & 0x7f;
-    value = Math.floor(value / 128);
-    if (value !== 0) byte |= 0x80;
-    out.push(byte);
-  } while (value !== 0);
-  return Uint8Array.from(out);
-}
-
-function sleb(value: number): Uint8Array {
-  if (!Number.isSafeInteger(value)) fail("invalid signed value");
-  const out: number[] = [];
-  let more = true;
-  while (more) {
-    let byte = value & 0x7f;
-    value >>= 7;
-    const sign = (byte & 0x40) !== 0;
-    more = !((value === 0 && !sign) || (value === -1 && sign));
-    if (more) byte |= 0x80;
-    out.push(byte);
-  }
-  return Uint8Array.from(out);
-}
-
-function concat(...parts: readonly Uint8Array[]): Uint8Array {
-  const size = parts.reduce((sum, part) => sum + part.byteLength, 0);
-  const out = new Uint8Array(size);
-  let offset = 0;
-  for (const part of parts) {
-    out.set(part, offset);
-    offset += part.byteLength;
-  }
-  return out;
 }
 
 function encodeName(value: string): Uint8Array {
   const bytes = new TextEncoder().encode(value);
   return concat(uleb(bytes.byteLength), bytes);
-}
-
-function splitSections(bytes: Uint8Array): Section[] {
-  if (
-    bytes.byteLength < WASM_HEADER.byteLength ||
-    !WASM_HEADER.every((byte, index) => bytes[index] === byte)
-  ) {
-    fail("invalid WebAssembly header");
-  }
-  const sections: Section[] = [];
-  const cursor = { offset: WASM_HEADER.byteLength };
-  while (cursor.offset < bytes.byteLength) {
-    const id = bytes[cursor.offset++]!;
-    const size = readUleb(bytes, cursor);
-    const end = cursor.offset + size;
-    if (end > bytes.byteLength) fail("truncated section");
-    sections.push({ id, body: bytes.slice(cursor.offset, end) });
-    cursor.offset = end;
-  }
-  return sections;
-}
-
-function sectionById(sections: readonly Section[], id: number): Uint8Array {
-  const found = sections.find((section) => section.id === id);
-  return found?.body ?? fail(`missing section ${id}`);
-}
-
-function parseTypes(bytes: Uint8Array): FunctionType[] {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const types: FunctionType[] = [];
-  for (let i = 0; i < count; i += 1) {
-    if (bytes[cursor.offset++] !== 0x60) fail("unsupported type form");
-    const paramCount = readUleb(bytes, cursor);
-    const params = Array.from(
-      bytes.slice(cursor.offset, cursor.offset + paramCount),
-    );
-    cursor.offset += paramCount;
-    const resultCount = readUleb(bytes, cursor);
-    const results = Array.from(
-      bytes.slice(cursor.offset, cursor.offset + resultCount),
-    );
-    cursor.offset += resultCount;
-    types.push({ params, results });
-  }
-  if (cursor.offset !== bytes.byteLength) fail("malformed type section");
-  return types;
-}
-
-function skipLimits(bytes: Uint8Array, cursor: Cursor): void {
-  const flags = readUleb(bytes, cursor);
-  readUleb(bytes, cursor);
-  if ((flags & 1) !== 0) readUleb(bytes, cursor);
-}
-
-function countFunctionImports(bytes: Uint8Array): number {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  let functions = 0;
-  for (let i = 0; i < count; i += 1) {
-    const moduleLength = readUleb(bytes, cursor);
-    cursor.offset += moduleLength;
-    const nameLength = readUleb(bytes, cursor);
-    cursor.offset += nameLength;
-    const kind = bytes[cursor.offset++]!;
-    if (kind === 0) {
-      functions += 1;
-      readUleb(bytes, cursor);
-    } else if (kind === 1) {
-      cursor.offset += 1;
-      skipLimits(bytes, cursor);
-    } else if (kind === 2) {
-      skipLimits(bytes, cursor);
-    } else if (kind === 3) {
-      cursor.offset += 2;
-    } else {
-      fail(`unsupported import kind ${kind}`);
-    }
-  }
-  return functions;
-}
-
-function parseVectorOfUleb(bytes: Uint8Array): number[] {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const values: number[] = [];
-  for (let i = 0; i < count; i += 1) values.push(readUleb(bytes, cursor));
-  if (cursor.offset !== bytes.byteLength) fail("malformed index vector");
-  return values;
-}
-
-function parseCode(bytes: Uint8Array): Uint8Array[] {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const bodies: Uint8Array[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const size = readUleb(bytes, cursor);
-    const end = cursor.offset + size;
-    if (end > bytes.byteLength) fail("truncated function body");
-    bodies.push(bytes.slice(cursor.offset, end));
-    cursor.offset = end;
-  }
-  if (cursor.offset !== bytes.byteLength) fail("malformed code section");
-  return bodies;
 }
 
 function parseExports(bytes: Uint8Array): WasmExport[] {
@@ -242,20 +85,6 @@ function parseTable(bytes: Uint8Array): { min: number; max: number | null } {
   return { min, max };
 }
 
-function readSignedConst(bytes: Uint8Array, cursor: Cursor): number {
-  let result = 0;
-  let shift = 0;
-  let byte: number;
-  do {
-    if (cursor.offset >= bytes.byteLength) fail("truncated signed LEB128");
-    byte = bytes[cursor.offset++]!;
-    result |= (byte & 0x7f) << shift;
-    shift += 7;
-  } while ((byte & 0x80) !== 0 && shift < 35);
-  if (shift < 32 && (byte & 0x40) !== 0) result |= ~0 << shift;
-  return result;
-}
-
 function occupiedTableSlots(bytes: Uint8Array): Set<number> {
   const cursor = { offset: 0 };
   const count = readUleb(bytes, cursor);
@@ -264,7 +93,7 @@ function occupiedTableSlots(bytes: Uint8Array): Set<number> {
     const flags = readUleb(bytes, cursor);
     if (flags !== 0) fail(`unsupported element segment flags ${flags}`);
     if (bytes[cursor.offset++] !== 0x41) fail("expected element i32.const");
-    const base = readSignedConst(bytes, cursor);
+    const base = readSleb(bytes, cursor);
     if (bytes[cursor.offset++] !== 0x0b) fail("malformed element offset");
     const entries = readUleb(bytes, cursor);
     for (let i = 0; i < entries; i += 1) {
@@ -274,10 +103,6 @@ function occupiedTableSlots(bytes: Uint8Array): Set<number> {
   }
   if (cursor.offset !== bytes.byteLength) fail("malformed element section");
   return occupied;
-}
-
-function valueTypeName(value: number): string {
-  return VALUE_TYPE_NAMES.get(value) ?? `0x${value.toString(16)}`;
 }
 
 function dispatcher(
@@ -310,21 +135,6 @@ function dispatcher(
   );
 }
 
-function encodeIndexVector(values: readonly number[]): Uint8Array {
-  return concat(uleb(values.length), ...values.map(uleb));
-}
-
-function encodeCode(bodies: readonly Uint8Array[]): Uint8Array {
-  return concat(
-    uleb(bodies.length),
-    ...bodies.map((body) => concat(uleb(body.byteLength), body)),
-  );
-}
-
-function encodeSection(section: Section): Uint8Array {
-  return concat(Uint8Array.of(section.id), uleb(section.body.byteLength), section.body);
-}
-
 function buildManifestSection(build: KnownToolboxBuild): Section {
   const layoutWords = toolboxLayoutWords(build.layout);
   const json = new TextEncoder().encode(
@@ -332,6 +142,8 @@ function buildManifestSection(build: KnownToolboxBuild): Section {
       transformAbi: TOOLBOX_TRANSFORM_ABI,
       snapshotAbi: 1,
       snapshotBytes: 64,
+      cursorSnapshotAbi: 1,
+      cursorSnapshotBytes: 4160,
       configBytes: layoutWords.length * 4,
       programId: build.programId,
       buildId: build.buildId,
@@ -391,7 +203,7 @@ export function inspectToolboxCandidate(
   const sections = splitSections(input);
   const types = parseTypes(sectionById(sections, 1));
   const importCount = countFunctionImports(sectionById(sections, 2));
-  const functionTypes = parseVectorOfUleb(sectionById(sections, 3));
+  const functionTypes = parseIndexVector(sectionById(sections, 3));
   const mainLoopExport = parseExports(sectionById(sections, 7)).find(
     (entry) => entry.kind === 0 && entry.name === "EmscriptenExeThreadMainLoop",
   );
@@ -443,7 +255,7 @@ export function transformToolboxWasm(
   const sections = splitSections(input);
   const types = parseTypes(sectionById(sections, 1));
   const importCount = countFunctionImports(sectionById(sections, 2));
-  const functionTypes = parseVectorOfUleb(sectionById(sections, 3));
+  const functionTypes = parseIndexVector(sectionById(sections, 3));
   const bodies = parseCode(sectionById(sections, 10));
   if (functionTypes.length !== bodies.length) fail("function/code count mismatch");
 

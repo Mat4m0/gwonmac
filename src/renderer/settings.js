@@ -41,14 +41,21 @@
     /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
   const renderScale =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
-  const pointerLock =
-    /** @type {HTMLInputElement} */ (form.elements.namedItem('pointerLock'));
-  const cursorTheme =
-    /** @type {HTMLSelectElement} */ (form.elements.namedItem('cursorTheme'));
   const touchMode =
     /** @type {HTMLSelectElement} */ (form.elements.namedItem('touchMode'));
   const showDiagnostics =
     /** @type {HTMLInputElement} */ (form.elements.namedItem('showDiagnostics'));
+  const autoCheckUpdates =
+    /** @type {HTMLInputElement} */ (
+      form.elements.namedItem('autoCheckUpdates')
+    );
+  const choiceAutoUpdates =
+    /** @type {HTMLInputElement} */ (byId('data-choice-auto-updates'));
+  /** @type {import('./update-action.js').UpdateAction | null} */
+  let updateAction = null;
+
+  /** @type {import('../shared/contracts.js').ClientSession | null} */
+  let currentSession = null;
 
   /** @type {import('../shared/contracts.js').AppSettings | null} */
   let currentSettings = null;
@@ -62,7 +69,9 @@
   let fullDownloadPromise = null;
   /** @type {'idle' | 'running' | 'stopping'} */
   let downloadPhase = 'idle';
-  /** @type {import('../shared/contracts.js').DownloadProgress | null} */
+  // Only ever the "image" phase: the dock renders a running download, and a
+  // failure arrives as the download's own outcome, not as a progress event.
+  /** @type {import('../shared/contracts.js').DownloadActivity | null} */
   let currentDownloadProgress = null;
   let downloadError = '';
   /** @type {(() => void) | null} */
@@ -152,13 +161,6 @@
     return settingsLoad;
   }
 
-  /** @param {import('../shared/contracts.js').AppSettings} settings */
-  function applyRuntimeSettings(settings) {
-    const preview = byId('settings-cursor-preview');
-    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
-    window.gwApplySettings?.(settings);
-  }
-
   function updateRenderScaleDimensions() {
     const canvas = document.getElementById('canvas');
     if (!canvas) return;
@@ -198,11 +200,126 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      applyRuntimeSettings(saved);
+      toolSettings.render(saved);
+      window.gwApplySettings?.(saved);
       return saved;
     });
     settingsWrite = operation.catch(() => undefined);
     return operation;
+  }
+
+  // Both tool surfaces are rendered from the settings main returned, never
+  // from requested state. Declining the required restart therefore restores
+  // what is actually running.
+  const toolSettings = window.gwToolSettings.create({
+    form,
+    byId,
+    selection: window.gwNative.init.toolboxSelection,
+    persist: persistSettings,
+    current: () => currentSettings,
+  });
+
+  function requestUpdateCheck() {
+    void updateAction?.check();
+  }
+
+  void import('./update-action.js')
+    .then((module) => {
+      const action = module.createUpdateAction({
+        check: () => window.gwNative.releaseNotice.check(),
+        remember: (checkedAt) => persistSettings({ lastUpdateCheckAt: checkedAt }),
+      });
+      updateAction = action;
+      module.bindUpdateActionDom(
+        document,
+        action,
+        () => window.gwNative.app.openExternal('releases'),
+      );
+      void loadSettings()
+        .then((settings) => {
+          action.restore(settings.lastUpdateCheckAt);
+          // The only automatic check the renderer makes, and it is off by
+          // default. Every other automatic trigger reads the same flag: one
+          // answer governs every request the user did not ask for.
+          if (settings.autoCheckUpdates) void action.check();
+        })
+        .catch(() => undefined);
+    })
+    .catch(() => {
+      const updateCheck =
+        /** @type {HTMLButtonElement} */ (byId('settings-check-updates'));
+      const compatibilityCheck =
+        /** @type {HTMLButtonElement} */ (byId('client-compat-check'));
+      const launcherCheck = byId('loading-update-check');
+      const updateStatus = byId('settings-update-status');
+      updateCheck.disabled = true;
+      compatibilityCheck.disabled = true;
+      launcherCheck.hidden = true;
+      updateStatus.textContent = 'Update checking is unavailable in this build.';
+      updateStatus.hidden = false;
+      for (const id of ['settings-open-releases', 'client-compat-releases']) {
+        byId(id).addEventListener('click', () => {
+          void window.gwNative.app.openExternal('releases');
+        });
+      }
+    });
+
+  /**
+   * Read the session once and render both surfaces. Neither the running app
+   * version nor the client's certification can change without a relaunch, so
+   * this asks the main process once and remembers the answer.
+   */
+  async function readSession() {
+    // The version is known from the first launch, the certification only once
+    // a client has been activated, so an early answer is not cached as final.
+    if (currentSession?.compatibility) return currentSession;
+    const session = await window.gwNative.client.session();
+    currentSession = session;
+    const { renderClientCompatibility } =
+      await import('./client-compatibility-notice.js');
+    renderClientCompatibility(
+      document,
+      session,
+      window.gwNative.init.toolboxSelection,
+    );
+    return session;
+  }
+
+  /**
+   * The launcher half. It runs after the data-strategy gate and only while
+   * something is actually degraded, and it warns once per ArenaNet build:
+   * a boolean would either nag every launch or stay silent through the next
+   * client update, and both are wrong.
+   *
+   * @returns {Promise<void>}
+   */
+  async function resolveClientCompatibility() {
+    /** @type {import('../shared/contracts.js').ClientSession} */
+    let session;
+    try {
+      session = await readSession();
+    } catch {
+      return;
+    }
+    const compatibility = session.compatibility;
+    if (!compatibility) return;
+    const compatibilityNotice =
+      await import('./client-compatibility-notice.js');
+    if (!compatibilityNotice.compatibilityReport(
+      compatibility,
+      window.gwNative.init.toolboxSelection,
+    ).degraded) return;
+    const settings = await loadSettings().catch(() => null);
+    if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;
+
+    return compatibilityNotice.showCompatibilityNotice(
+      document,
+      () => persistSettings({
+        // Acknowledged for this build only: the next ArenaNet update warns
+        // again.
+        compatibilityNoticeSeenFor: compatibility.clientSha256,
+      }),
+    );
   }
 
   function cacheComplete(cache = currentCache) {
@@ -233,23 +350,13 @@
    * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
    */
   function patchForControl(control) {
+    const toolPatch = toolSettings.patchFor(control);
+    if (toolPatch) return toolPatch;
     switch (control.name) {
       case 'renderScale': {
         const value = Number(control.value);
         return value === 1 || value === 1.5 || value === 2
           ? { renderScale: value }
-          : null;
-      }
-      case 'pointerLock':
-        return control instanceof globalThis.HTMLInputElement
-          ? { pointerLock: control.checked }
-          : null;
-      case 'cursorTheme': {
-        const value = control.value;
-        return value === 'system' ||
-          value === 'guild-wars' ||
-          value === 'guild-wars-2'
-          ? { cursorTheme: value }
           : null;
       }
       case 'touchMode': {
@@ -265,6 +372,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
           : null;
+      case 'autoCheckUpdates':
+        return control instanceof globalThis.HTMLInputElement
+          ? { autoCheckUpdates: control.checked }
+          : null;
       case 'dataStrategy':
         return { dataStrategy: selectedStrategy() };
       default:
@@ -275,17 +386,15 @@
   /** @param {import('../shared/contracts.js').AppSettings} settings */
   function fillForm(settings) {
     renderScale.value = String(settings.renderScale);
-    pointerLock.checked = settings.pointerLock;
-    cursorTheme.value = settings.cursorTheme;
+    toolSettings.render(settings);
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
+    autoCheckUpdates.checked = settings.autoCheckUpdates;
     for (const radio of /** @type {NodeListOf<HTMLInputElement>} */ (
       form.querySelectorAll('input[name="dataStrategy"]')
     )) {
       radio.checked = radio.value === settings.dataStrategy;
     }
-    const preview = byId('settings-cursor-preview');
-    if (preview) preview.dataset.cursorTheme = settings.cursorTheme;
     updateRenderScaleDimensions();
   }
 
@@ -410,23 +519,36 @@
     if (!dataDownload.hidden) renderLauncherDownload();
 
     fullDownloadPromise = window.gwNative.cache.downloadAll()
-      .then(async (complete) => {
+      .then(async (outcome) => {
+        // The download reports why it stopped, and the sentence for that
+        // reason is written here rather than in the main process.
         downloadError = '';
+        if (outcome.status === 'failed') {
+          const { describeDownloadFailure } =
+            await import('./failure-messages.js');
+          downloadError = describeDownloadFailure(outcome.errorCode);
+        }
         const cache = await window.gwNative.cache.info();
         currentCache = cache;
         renderSettingsData(cache);
         if (!dataDownload.hidden) renderLauncherDownload(cache);
-        if (!complete && dialog.open) {
+        if (downloadError) {
+          if (dialog.open) feedback.textContent = downloadError;
+          return false;
+        }
+        if (outcome.status === 'stopped' && dialog.open) {
           settingsCache.textContent = `Download paused · ${cacheStatus(cache)}`;
         }
-        return complete;
+        return outcome.status === 'complete';
       })
-      .catch((error) => {
-        const message =
-          error?.message || 'The full game download could not continue.';
-        downloadError = message;
-        if (dialog.open) feedback.textContent = message;
-        if (!dataDownload.hidden) renderLauncherDownload(currentCache, message);
+      .catch(() => {
+        // Only a broken bridge reaches here: the outcome above covers every
+        // way the download itself can end.
+        downloadError = 'The full game download could not continue.';
+        if (dialog.open) feedback.textContent = downloadError;
+        if (!dataDownload.hidden) {
+          renderLauncherDownload(currentCache, downloadError);
+        }
         return false;
       })
       .finally(async () => {
@@ -480,6 +602,10 @@
     currentCache = cache;
     launcherTotalBytes = total;
     const remaining = Math.max(0, total - (cache.bytes || 0));
+    choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? false;
+    // The gate runs after the settings load, so the tool boxes show the saved
+    // answer rather than a default written a second time in the renderer.
+    if (currentSettings) toolSettings.render(currentSettings);
     dataChoiceFullSize.textContent = remaining > 0
       ? `Download ${size(remaining)} before starting.`
       : 'The full game is already downloaded.';
@@ -503,7 +629,11 @@
     }
   }
 
-  window.gwResolveDataStrategy = async (snapshotBytes) => {
+  /**
+   * @param {number} snapshotBytes
+   * @returns {Promise<void>}
+   */
+  async function resolveDataChoice(snapshotBytes) {
     try {
       const [settings, cache] = await Promise.all([
         loadSettings(),
@@ -540,13 +670,32 @@
       );
       return new Promise(() => {});
     }
+  }
+
+  // The dock shows one thing at a time: the data question is answered first,
+  // then the client build gets its say, then the game starts.
+  window.gwResolveDataStrategy = async (snapshotBytes) => {
+    await resolveDataChoice(snapshotBytes);
+    await resolveClientCompatibility();
   };
+
+  /**
+   * The first-run gate answers two questions with one click. Both are written
+   * together so a saved data choice can never leave the update answer behind.
+   * @param {'quick' | 'full'} dataStrategy
+   * @returns {import('../shared/contracts.js').AppSettingsPatch}
+   */
+  const answeredChoice = (dataStrategy) => ({
+    dataStrategy,
+    autoCheckUpdates: choiceAutoUpdates.checked,
+  });
 
   dataChoiceQuick.addEventListener('click', async () => {
     dataChoiceQuick.disabled = true;
     dataChoiceFull.disabled = true;
     try {
-      await persistSettings({ dataStrategy: 'quick' });
+      await persistSettings(answeredChoice('quick'));
+      if (choiceAutoUpdates.checked) requestUpdateCheck();
       releaseGameBoot('launcher.quickSelected');
     } catch {
       dataChoiceFullSize.textContent =
@@ -561,7 +710,8 @@
     dataChoiceQuick.disabled = true;
     dataChoiceFull.disabled = true;
     try {
-      await persistSettings({ dataStrategy: 'full' });
+      await persistSettings(answeredChoice('full'));
+      if (choiceAutoUpdates.checked) requestUpdateCheck();
       if (!currentCache) {
         throw new Error("download status is not ready");
       }
@@ -611,6 +761,11 @@
       await settingsWrite;
       currentSettings = await window.gwNative.settings.get();
       fillForm(currentSettings);
+      // "Last checked 4 minutes ago" goes stale while a window sits open.
+      updateAction?.restore(currentSettings.lastUpdateCheckAt);
+      // The client build's status is the answer to "why is my cursor plain?",
+      // so it is in Settings whether or not the launcher notice was ever seen.
+      await readSession().catch(() => undefined);
       await refreshCache();
     } catch {
       feedback.textContent = 'Settings could not be loaded. Try reopening this window.';
@@ -630,12 +785,18 @@
     feedback.textContent = '';
     const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
-    if (control.name === 'cursorTheme') {
-      const preview = byId('settings-cursor-preview');
-      preview.dataset.cursorTheme = control.value;
-    }
     void persistSettings(patch)
-      .then(async () => {
+      .then(async (saved) => {
+        // A tool selects which client module this launch serves, and that
+        // choice is made before the renderer exists, so saving it restarts the
+        // app. A player who declined the restart saved nothing, and the box has
+        // already gone back to what is true; the sentence explains why.
+        const toolResult = toolSettings.resultFor(control, patch, saved);
+        if (toolResult) {
+          if (toolResult.applied) flashSaved();
+          feedback.textContent = toolResult.text;
+          return;
+        }
         flashSaved();
         if (!strategyChanged) {
           feedback.textContent = 'Settings saved.';
@@ -652,7 +813,7 @@
       .catch(() => {
         if (currentSettings) {
           fillForm(currentSettings);
-          applyRuntimeSettings(currentSettings);
+          window.gwApplySettings?.(currentSettings);
         }
         feedback.textContent = 'Settings could not be saved.';
       });
@@ -680,8 +841,9 @@
       if (!reset) return;
       currentSettings = reset;
       fillForm(reset);
+      updateAction?.restore(reset.lastUpdateCheckAt);
       renderSettingsData();
-      applyRuntimeSettings(reset);
+      window.gwApplySettings?.(reset);
       feedback.textContent =
         'Launcher settings reset. The download choice will appear next launch.';
     } catch {

@@ -3,19 +3,78 @@ import { FATAL_HTTP } from "./access-key.js";
 
 export type PatchFetch = (
   url: string,
-  init?: { headers?: Record<string, string>; method?: string; maxBytes?: number },
+  init: {
+    headers: Readonly<Record<string, string>>;
+    method?: string;
+    maxBytes: number;
+    signal?: AbortSignal;
+  },
 ) => Promise<{ status: number; body: Uint8Array }>;
 
-const sleep = (milliseconds: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+export type ResponseFetch = (
+  url: string,
+  init: RequestInit,
+) => Promise<Response>;
+
+/**
+ * Adapt one native HTTP implementation to the bounded patch transport.
+ *
+ * Production supplies Electron's `net.fetch`; tests may supply global fetch.
+ * Timeout, abort composition, redirect policy, and response limits therefore
+ * have one owner instead of diverging between manifest and chunk downloads.
+ */
+export function createBoundedPatchFetch(
+  fetchResponse: ResponseFetch,
+  requestTimeoutMs: number,
+): PatchFetch {
+  return async (url, init) => {
+    const timeout = AbortSignal.timeout(requestTimeoutMs);
+    const request: RequestInit = {
+      method: init.method ?? "GET",
+      redirect: "manual",
+      signal: init.signal
+        ? AbortSignal.any([init.signal, timeout])
+        : timeout,
+    };
+    request.headers = init.headers;
+    const response = await fetchResponse(url, request);
+    return {
+      status: response.status,
+      body: await readBoundedResponse(response, init.maxBytes),
+    };
+  };
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  signal?.throwIfAborted();
+}
+
+function sleep(
+  milliseconds: number,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    throwIfAborted(signal);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 export async function fetchPatchBytes(options: {
   fetch: PatchFetch;
   url: string;
-  headers: Record<string, string>;
+  headers: Readonly<Record<string, string>>;
   tries?: number;
   maxBytes: number;
   onAttempt?: (durationMs: number) => void;
+  signal?: AbortSignal;
 }): Promise<Uint8Array> {
   if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes <= 0) {
     throw new AppError("response_limit", "response limit must be positive");
@@ -23,12 +82,15 @@ export async function fetchPatchBytes(options: {
   const tries = options.tries ?? 4;
   let lastError: unknown;
   for (let attempt = 0; attempt < tries; attempt++) {
+    throwIfAborted(options.signal);
     const started = performance.now();
     try {
-      const { status, body } = await options.fetch(options.url, {
+      const init = {
         headers: options.headers,
         maxBytes: options.maxBytes,
-      });
+        ...(options.signal ? { signal: options.signal } : {}),
+      };
+      const { status, body } = await options.fetch(options.url, init);
       if (status === 200) {
         if (body.byteLength > options.maxBytes) {
           throw new AppError(
@@ -48,6 +110,7 @@ export async function fetchPatchBytes(options: {
       options.onAttempt?.(performance.now() - started);
     } catch (error) {
       options.onAttempt?.(performance.now() - started);
+      throwIfAborted(options.signal);
       lastError = error;
       if (
         error instanceof HttpStatusError &&
@@ -57,7 +120,9 @@ export async function fetchPatchBytes(options: {
       }
       if (error instanceof AppError && error.code === "response_too_large") throw error;
     }
-    if (attempt < tries - 1) await sleep(2 ** attempt * 1_000);
+    if (attempt < tries - 1) {
+      await sleep(2 ** attempt * 1_000, options.signal);
+    }
   }
   throw lastError instanceof Error
     ? lastError

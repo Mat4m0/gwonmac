@@ -86,8 +86,43 @@ describe("manifest", () => {
           directories: [{ name: "root" }],
           files: [{ name: "a", size: 1, chunkHashes: [hashA], parentIndex: 9 }],
         }),
-      (e: unknown) => e instanceof AppError && e.code === "manifest_parent",
+      (e: unknown) =>
+        e instanceof AppError &&
+        e.code === "manifest_parent" &&
+        // The offending index and the list length, so a failure is actionable
+        // from the diagnostics export alone.
+        e.message.includes("9") &&
+        e.message.includes("1"),
     );
+  });
+
+  it("treats an explicitly null parentIndex as the root", () => {
+    // The live patch service publishes a flat manifest whose entries all carry
+    // parentIndex: null. Rejecting it made every client update fall back to
+    // the cached client, silently, on every launch.
+    const mf = new Manifest({
+      compressionMode: "none",
+      chunkSize: 262144,
+      directories: [],
+      files: [
+        { name: "Gw.jspi.wasm", size: 4, chunkHashes: [hashA], parentIndex: null },
+        { name: "version.json", size: 4, chunkHashes: [hashB], parentIndex: null },
+      ],
+    });
+    assert.equal(mf.find("Gw.jspi.wasm"), "Gw.jspi.wasm");
+    assert.equal(mf.find("version.json"), "version.json");
+
+    // Directories take the same path, and theirs feeds the parent recursion
+    // and the duplicate-path check.
+    const nested = new Manifest({
+      compressionMode: "none",
+      chunkSize: 262144,
+      directories: [{ name: "pad", parentIndex: null }, { name: "client" }],
+      files: [
+        { name: "Gw.dat", size: 4, chunkHashes: [hashA], parentIndex: 1 },
+      ],
+    });
+    assert.equal(nested.find("Gw.dat"), "client/Gw.dat");
   });
 
   it("rejects unsafe names, duplicate paths, and invalid sizes", () => {

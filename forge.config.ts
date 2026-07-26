@@ -52,13 +52,6 @@ const config: ForgeConfig = {
   // Distribution is the zipped .app; no DMG.
   makers: [new MakerZIP({}, ["darwin"])],
   hooks: {
-    generateAssets: async () => {
-      const { spawnSync } = await import("node:child_process");
-      const r = spawnSync(process.execPath, ["scripts/copy-renderer.mjs"], {
-        stdio: "inherit",
-      });
-      if (r.status !== 0) throw new Error("copy-renderer failed");
-    },
     packageAfterCopy: async (_config, resourcesPath, _version, platform, arch) => {
       if (platform !== "darwin") return;
       await flipFuses(

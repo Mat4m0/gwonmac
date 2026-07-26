@@ -1,6 +1,10 @@
 // Main-process TCP ownership: public unicast only, ports 6112/80/443.
 import net from "node:net";
-import type { SocketEvent } from "../../shared/contracts.js";
+import type {
+  SocketCloseReason,
+  SocketEvent,
+  SocketFailureCode,
+} from "../../shared/contracts.js";
 import { AllowlistError, ValidationError } from "../../shared/errors.js";
 import {
   assertPublicDestination,
@@ -9,7 +13,39 @@ import {
 
 export const CONNECT_TIMEOUT_MS = 10_000;
 export const MAX_SOCKETS_PER_OWNER = 64;
-export const MAX_QUEUED_BYTES = 4 * 1024 * 1024;
+export const MAX_QUEUED_BYTES_PER_SOCKET = 4 * 1024 * 1024;
+export const MAX_QUEUED_BYTES_PER_OWNER = 16 * 1024 * 1024;
+
+/**
+ * The one place a socket failure becomes a publishable value. `error.message`
+ * quotes the destination address and `error.code` is an open libuv set, so
+ * neither may leave this module; both collapse into the closed contract
+ * vocabulary, and anything unrecognised is "other".
+ */
+export function socketFailureCode(error: unknown): SocketFailureCode {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? (error as { code: unknown }).code
+      : undefined;
+  switch (code) {
+    case "ETIMEDOUT":
+      return "timeout";
+    case "ECONNREFUSED":
+      return "refused";
+    case "ECONNRESET":
+    case "EPIPE":
+      return "reset";
+    case "EHOSTUNREACH":
+    case "ENETUNREACH":
+    case "ENETDOWN":
+      return "unreachable";
+    case "ENOTFOUND":
+    case "EAI_AGAIN":
+      return "dns";
+    default:
+      return "other";
+  }
+}
 
 export function parseDestination(destination: string): {
   host: string;
@@ -25,11 +61,26 @@ export function parseDestination(destination: string): {
   };
 }
 
+/**
+ * One outstanding write's claim on the per-socket and per-owner budgets.
+ * `settled` makes the release exactly-once: a socket torn down with pending
+ * writes reclaims its own reservations, and a write callback that fires
+ * afterwards must not subtract those bytes a second time — the owner counter
+ * outlives the socket and would otherwise be charged against surviving ones.
+ */
+interface Reservation {
+  readonly bytes: number;
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
+  settled: boolean;
+}
+
 interface OwnedSocket {
   id: number;
   ownerId: number;
-  socket: net.Socket;
+  socket: ManagedSocket;
   queuedBytes: number;
+  reservations: Set<Reservation>;
   opened: boolean;
   closed: boolean;
   destination: string;
@@ -38,12 +89,33 @@ interface OwnedSocket {
   openedAt: number;
 }
 
+/**
+ * The part of `net.Socket` this manager uses. `net.Socket` satisfies it
+ * structurally, so production is unchanged, and a test can supply a socket
+ * whose write callbacks fire when the test says so rather than when a kernel
+ * buffer happens to drain.
+ */
+export interface ManagedSocket {
+  setNoDelay(enable: boolean): void;
+  write(data: Uint8Array, callback: (error?: Error | null) => void): boolean;
+  destroy(): void;
+  once(event: "connect", listener: () => void): void;
+  on(event: "data", listener: (chunk: Uint8Array) => void): void;
+  on(event: "error", listener: (error: Error) => void): void;
+  on(event: "close", listener: () => void): void;
+}
+
 export type SocketEventSink = (ownerId: number, event: SocketEvent) => void;
 export type SocketDestinationValidator = (destination: string) => {
   host: string;
   port: number;
   family: 4 | 6;
 };
+export type SocketFactory = (options: {
+  host: string;
+  port: number;
+  family: 4 | 6;
+}) => ManagedSocket;
 export interface SocketMetrics {
   count(name: string, delta?: number): void;
   observe(name: string, durationUs: number): void;
@@ -54,21 +126,24 @@ export interface SocketMetrics {
 export class SocketManager {
   private readonly sockets = new Map<number, OwnedSocket>();
   private readonly byOwner = new Map<number, Set<number>>();
+  private readonly queuedByOwner = new Map<number, number>();
   private nextId = 1;
   private activeWrites = 0;
-  private queuedBytes = 0;
   private readonly emit: SocketEventSink;
   private readonly metrics: SocketMetrics | null;
   private readonly validateDestination: SocketDestinationValidator;
+  private readonly createSocket: SocketFactory;
 
   constructor(
     emit: SocketEventSink,
     metrics: SocketMetrics | null = null,
     validateDestination: SocketDestinationValidator = parseDestination,
+    createSocket: SocketFactory = (options) => net.connect(options),
   ) {
     this.emit = emit;
     this.metrics = metrics;
     this.validateDestination = validateDestination;
+    this.createSocket = createSocket;
   }
 
   async connect(ownerId: number, destination: string): Promise<number> {
@@ -79,7 +154,7 @@ export class SocketManager {
     }
 
     const id = this.nextId++;
-    const socket = net.connect({
+    const socket = this.createSocket({
       host: parsed.host,
       port: parsed.port,
       family: parsed.family,
@@ -91,6 +166,7 @@ export class SocketManager {
       ownerId,
       socket,
       queuedBytes: 0,
+      reservations: new Set(),
       opened: false,
       closed: false,
       destination,
@@ -108,7 +184,7 @@ export class SocketManager {
 
     const timer = setTimeout(() => {
       if (!entry.opened && !entry.closed) {
-        this.fail(entry, "connect timeout");
+        this.fail(entry, "timeout");
       }
     }, CONNECT_TIMEOUT_MS);
 
@@ -138,14 +214,14 @@ export class SocketManager {
       this.emit(ownerId, {
         type: "error",
         socketId: id,
-        message: err.message,
+        code: socketFailureCode(err),
       });
-      this.finish(entry, err.message);
+      this.finish(entry, "error");
     });
 
     socket.on("close", () => {
       clearTimeout(timer);
-      this.finish(entry, "closed");
+      this.finish(entry, "peer");
     });
 
     return id;
@@ -159,40 +235,34 @@ export class SocketManager {
     if (!(data instanceof Uint8Array)) {
       throw new ValidationError("socket send requires Uint8Array");
     }
-    if (entry.queuedBytes + data.byteLength > MAX_QUEUED_BYTES) {
-      this.metrics?.count("socket.sendFailures");
-      throw new AllowlistError(`socket send queue exceeds ${MAX_QUEUED_BYTES} bytes`);
-    }
-    const started = process.hrtime.bigint();
-    this.metrics?.count("socket.sendCalls");
-    this.metrics?.count("socket.sendPayloadBytes", data.byteLength);
-    entry.queuedBytes += data.byteLength;
-    this.activeWrites += 1;
-    this.queuedBytes += data.byteLength;
-    this.metrics?.gauge?.("socket.activeWrites", this.activeWrites);
-    this.metrics?.gauge?.("socket.queuedBytes", this.queuedBytes);
-    this.metrics?.peakGauge?.("socket.peakActiveWrites", this.activeWrites);
-    this.metrics?.peakGauge?.("socket.peakQueuedBytes", this.queuedBytes);
     await new Promise<void>((resolve, reject) => {
-      entry.socket.write(data, (err) => {
-        entry.queuedBytes = Math.max(0, entry.queuedBytes - data.byteLength);
-        this.activeWrites = Math.max(0, this.activeWrites - 1);
-        this.queuedBytes = Math.max(0, this.queuedBytes - data.byteLength);
-        this.metrics?.gauge?.("socket.activeWrites", this.activeWrites);
-        this.metrics?.gauge?.("socket.queuedBytes", this.queuedBytes);
-        this.metrics?.observe(
-          "socket.writeCallback",
-          Number((process.hrtime.bigint() - started) / 1_000n),
+      const reservation = this.reserve(entry, data.byteLength, resolve, reject);
+      const started = process.hrtime.bigint();
+      this.metrics?.count("socket.sendCalls");
+      this.metrics?.count("socket.sendPayloadBytes", data.byteLength);
+      try {
+        entry.socket.write(data, (err) => {
+          if (!this.release(entry, reservation)) return;
+          this.metrics?.observe(
+            "socket.writeCallback",
+            Number((process.hrtime.bigint() - started) / 1_000n),
+          );
+          if (err) {
+            this.metrics?.count("socket.sendFailures");
+            reservation.reject(new ValidationError("socket send failed"));
+          } else {
+            entry.bytesSent += data.byteLength;
+            this.metrics?.count("socket.bytesSent", data.byteLength);
+            reservation.resolve();
+          }
+        });
+      } catch {
+        this.rejectReservation(
+          entry,
+          reservation,
+          new ValidationError("socket send failed"),
         );
-        if (err) {
-          this.metrics?.count("socket.sendFailures");
-          reject(err);
-        } else {
-          entry.bytesSent += data.byteLength;
-          this.metrics?.count("socket.bytesSent", data.byteLength);
-          resolve();
-        }
-      });
+      }
     });
   }
 
@@ -200,7 +270,7 @@ export class SocketManager {
     const entry = this.require(socketId, ownerId);
     if (entry.closed) return;
     entry.socket.destroy();
-    this.finish(entry, "closed by peer");
+    this.finish(entry, "requested");
   }
 
   closeAll(ownerId?: number): void {
@@ -212,13 +282,90 @@ export class SocketManager {
       const entry = this.sockets.get(id);
       if (!entry || entry.closed) continue;
       entry.socket.destroy();
-      this.finish(entry, "owner closed");
+      this.finish(entry, "owner");
     }
   }
 
   size(ownerId?: number): number {
     if (ownerId === undefined) return this.sockets.size;
     return this.byOwner.get(ownerId)?.size ?? 0;
+  }
+
+  /**
+   * Bytes reserved for in-flight writes, keyed by owner. An owner with nothing
+   * outstanding has no key, so an idle manager returns an empty map.
+   */
+  queuedBytesByOwner(): Map<number, number> {
+    return new Map(this.queuedByOwner);
+  }
+
+  /** Claim budget for one write, or refuse the write. Both ceilings apply. */
+  private reserve(
+    entry: OwnedSocket,
+    bytes: number,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): Reservation {
+    const ownerQueued = this.queuedByOwner.get(entry.ownerId) ?? 0;
+    if (entry.queuedBytes + bytes > MAX_QUEUED_BYTES_PER_SOCKET) {
+      this.metrics?.count("socket.sendFailures");
+      throw new AllowlistError(
+        `socket send queue exceeds ${MAX_QUEUED_BYTES_PER_SOCKET} bytes`,
+      );
+    }
+    if (ownerQueued + bytes > MAX_QUEUED_BYTES_PER_OWNER) {
+      this.metrics?.count("socket.sendFailures");
+      throw new AllowlistError(
+        `owner send queue exceeds ${MAX_QUEUED_BYTES_PER_OWNER} bytes`,
+      );
+    }
+    const reservation: Reservation = {
+      bytes,
+      resolve,
+      reject,
+      settled: false,
+    };
+    entry.reservations.add(reservation);
+    entry.queuedBytes += bytes;
+    this.queuedByOwner.set(entry.ownerId, ownerQueued + bytes);
+    this.activeWrites += 1;
+    const total = this.publishQueueGauges();
+    this.metrics?.peakGauge?.("socket.peakActiveWrites", this.activeWrites);
+    this.metrics?.peakGauge?.("socket.peakQueuedBytes", total);
+    return reservation;
+  }
+
+  /** Give budget back exactly once, whether the write settled or the socket died. */
+  private release(entry: OwnedSocket, reservation: Reservation): boolean {
+    if (reservation.settled) return false;
+    reservation.settled = true;
+    entry.reservations.delete(reservation);
+    entry.queuedBytes = Math.max(0, entry.queuedBytes - reservation.bytes);
+    const remaining =
+      (this.queuedByOwner.get(entry.ownerId) ?? 0) - reservation.bytes;
+    if (remaining > 0) this.queuedByOwner.set(entry.ownerId, remaining);
+    else this.queuedByOwner.delete(entry.ownerId);
+    this.activeWrites = Math.max(0, this.activeWrites - 1);
+    this.publishQueueGauges();
+    return true;
+  }
+
+  private rejectReservation(
+    entry: OwnedSocket,
+    reservation: Reservation,
+    error: Error,
+  ): void {
+    if (!this.release(entry, reservation)) return;
+    this.metrics?.count("socket.sendFailures");
+    reservation.reject(error);
+  }
+
+  private publishQueueGauges(): number {
+    let total = 0;
+    for (const bytes of this.queuedByOwner.values()) total += bytes;
+    this.metrics?.gauge?.("socket.activeWrites", this.activeWrites);
+    this.metrics?.gauge?.("socket.queuedBytes", total);
+    return total;
   }
 
   private require(socketId: number, ownerId?: number): OwnedSocket {
@@ -232,19 +379,29 @@ export class SocketManager {
     return entry;
   }
 
-  private fail(entry: OwnedSocket, reason: string): void {
+  private fail(entry: OwnedSocket, code: SocketFailureCode): void {
     this.emit(entry.ownerId, {
       type: "error",
       socketId: entry.id,
-      message: reason,
+      code,
     });
     entry.socket.destroy();
-    this.finish(entry, reason);
+    this.finish(entry, code === "timeout" ? "timeout" : "error");
   }
 
-  private finish(entry: OwnedSocket, reason: string): void {
+  private finish(entry: OwnedSocket, reason: SocketCloseReason): void {
     if (entry.closed) return;
     entry.closed = true;
+    // A destroyed socket may never fire the write callbacks it still owes.
+    // Reject every pending send while reclaiming its reservation; a callback
+    // arriving afterwards sees `settled` and changes neither state nor metrics.
+    for (const reservation of [...entry.reservations]) {
+      this.rejectReservation(
+        entry,
+        reservation,
+        new ValidationError("socket closed before queued send completed"),
+      );
+    }
     this.metrics?.count("socket.closed");
     this.metrics?.observe("socket.lifetime", (Date.now() - entry.openedAt) * 1_000);
     this.sockets.delete(entry.id);

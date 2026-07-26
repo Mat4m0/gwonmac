@@ -22,7 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
-  dormant exact-build Toolbox development foundation
+  default-on exact-build Toolbox foundation
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -42,10 +42,12 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/main.ts`        | composition root and application lifecycle                        |
 | `src/main/client-runtime.ts` | atomic generation, update, rollback, cache, selected WASM       |
 | `src/main/core/`          | updater, cache, DNS, sockets, credentials, settings, window state |
+| `src/main/core/wasm-binary.ts` | WASM section codec shared by both transforms and the re-certifier |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
-| `src/preload/preload.cjs` | self-contained sandbox-compatible bridge                          |
+| `src/main/diagnostics/`   | closed event schema, export detector, pattern scanner             |
+| `src/preload/preload.body.cjs` | sandbox-compatible bridge; `scripts/generate-preload.mjs` splices the canonical constants above it |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
 | `src/toolbox-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
@@ -78,9 +80,17 @@ The published local manifest retains the executable artifacts' sizes and chunk
 hashes, so offline fallback is independently verifiable. A changed client is
 kept as a candidate beside one verified previous generation until it has both
 presented a frame and opened a game TCP connection. A login-screen frame alone
-cannot discard the rollback generation. Failure before both signals durably
-rejects that exact client fingerprint for the current host version and restores
-the previous generation.
+cannot discard the rollback generation. Before loading the game glue, the
+renderer captures the active candidate's generation and fingerprint. It returns
+that exact token only after observing both signals; main revalidates the active
+generation and marker under the generation lock before deleting rollback state.
+A stale renderer therefore cannot confirm a replacement generation. Failure
+before both signals durably rejects that exact client fingerprint for the
+current host version and restores the previous generation.
+Renderer-crash recovery aborts an in-flight manifest/chunk preparation before
+waiting for the generation lock. Retries and assembly observe that signal and
+discard the stage; once the short verified-directory swap begins, it finishes
+atomically and recovery rolls the published candidate back under the same lock.
 Invalid or legacy-unverifiable state is never promoted into the rollback slot.
 
 `Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
@@ -108,6 +118,56 @@ derives native task feedback from the canonical `image` progress phase: the
 Dock shows determinate or indeterminate progress and
 `prevent-app-suspension` remains active until the download completes, pauses,
 or fails. There is no renderer-owned download or power state.
+
+## This app's own release check
+
+Replacing the application is manual and always has been. What is new is that
+the app no longer asks GitHub anything on its own initiative.
+
+`src/main/release-notice.ts` is the only code that contacts
+`api.github.com/repos/<repo>/releases?per_page=100`, and it has exactly three
+callers: the manual **Check for Updates** action, the same action mounted on the
+client-compatibility notice, and one launch-time check that runs only while
+`AppSettings.autoCheckUpdates` is on. The bounded list is necessary because
+GitHub's `releases/latest` endpoint excludes prereleases; stable installs ignore
+prereleases, while an install already on a prerelease channel may see a newer
+one. Both GitHub's prerelease flag and SemVer prerelease syntax are honoured;
+drafts and malformed tags are ignored. The setting defaults to `false` and
+governs every automatic request without exception, the compatibility path
+included, so a default launch reaches github.com zero times. There is no
+per-launch poll and no background timer.
+
+`checkForNewerRelease(currentVersion)` takes the running version as an argument
+instead of calling `app.getVersion()`, so main keeps the single Electron
+binding and the module is executable in a unit test. It aborts after five
+seconds, coalesces concurrent callers onto one request, and caches every result
+for ten minutes. That includes offline, timeout, server, and unreadable
+responses: the manual button is a refresh action, not a way to spend an
+unbounded request budget by clicking repeatedly.
+
+The result is three states and never two: `update-available`, `up-to-date`, or
+`unknown` carrying a reason from a closed vocabulary (`rate-limited`,
+`offline`, `timeout`, `server`, `unreadable`, `unsupported-build`). Both a
+parse failure and a network failure are `unknown`; reporting either as
+"up to date" is the class of quiet lie this path exists to remove, so no
+boolean or tri-state "update status" is exported and each reason has its own
+sentence in `src/renderer/update-action.js`. Every result carries `checkedAt`,
+the completion time of the check attempt (including an unsupported local
+version that made no request). The renderer persists it as
+`lastUpdateCheckAt` and renders it as "Last checked". The launcher and the
+settings dialog mount the same controller, so the two surfaces cannot
+disagree.
+
+No attacker-controlled string crosses IPC. The response's URL is discarded
+rather than carried: the renderer can only open the closed `ExternalLinkKind`
+vocabulary, so the releases page is opened by name, and `latestVersion` is
+re-rendered by `formatReleaseVersion` from the parsed version instead of
+echoing the tag. Parsing, comparison, and the channel policy — a prerelease is
+only ever offered to an install already running a prerelease — are
+`src/shared/release.ts`, which is also where the website's resolver points for
+the rule it implements against GitHub's own `prerelease` flag.
+`docs/user-guide.md` owns what the player is told; the numbering itself is
+[Release numbering](release-verification.md#release-numbering).
 
 ## WASM host
 
@@ -156,12 +216,10 @@ game prompts again. A later explicit save atomically replaces it.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 No federated provider is advertised, allowing the client’s username/password
-flow to own the UI. The app has no independent update feed;
-application replacements are manual, while the ArenaNet client updater remains
-automatic. Properly guarded browser, analytics, age-signal, and federated-auth
-namespaces are absent. The two namespaces with defective absence guards
-(`adProvider` and `shop`) are narrow plain objects whose unavailable operations
-reject with the promise shapes expected by the client.
+flow to own the UI. Properly guarded browser, analytics, age-signal, and
+federated-auth namespaces are absent. The two namespaces with defective
+absence guards (`adProvider` and `shop`) are narrow plain objects whose
+unavailable operations reject with the promise shapes expected by the client.
 
 The renderer owns one persistent game filesystem initialization before the
 official client enters `main()`. It mounts and restores Emscripten IDBFS at
@@ -171,59 +229,221 @@ releasing the run dependency. This keeps the client's relative build-template,
 screenshot, chat-log, and preference writes in one durable origin. A restore
 or initial persist failure stops startup instead of silently running against
 ephemeral memory. At Emscripten's public file-operation boundary, Windows-style
-backslashes used by the official template code are normalized to POSIX
-separators before lookup, create, rename, or delete logic sees them.
+backslashes are normalized to POSIX separators before lookup, create, rename,
+or delete logic sees them. Static inspection of the current official WASM
+shows that its template path builder normally inserts `/`; the normalization
+is a boundary invariant, not an explanation of template-save success.
+
+For template-save investigation only, launching an unpackaged build with
+`GW_TEMPLATE_FS_TRACE=1` sets `templateFsTrace` in the renderer init payload.
+Before instantiation, the renderer then wraps the official module's
+`__syscall_openat`, `__syscall_ftruncate64`, `fd_read`, `fd_write`,
+`fd_pwrite`, `fd_seek`, and `fd_close` imports.
+The bounded console trace records only the template kind, flags, descriptor,
+errno, and requested/written byte counts. It never records a filename, path, or
+file content, does not cross IPC, and is not included in `.gwdiag` exports.
+Normal launches retain the original imports unchanged.
+
+`internal/upstream/` holds the full record: the defect report written for
+ArenaNet, the client internals we had to recover, the bridge contract, the
+re-certification procedure for a new client build, and the investigation log.
+Read it before changing anything below.
+
+Every index and offset the transform carries belongs to one exact client build.
+`pnpm template:recertify` re-derives them from a new one by shape — body bytes,
+resolved signatures, and caller-set intersection — and refuses rather than
+guessing when a locator finds the wrong number of candidates. It recovers
+indices, not semantics; `internal/upstream/recertify.md` still owns re-measuring
+what the client's path helpers actually do.
+
+Four `Base/Os` file routines ship unimplemented and never reach Emscripten FS.
+Creating a directory returns error 2 unconditionally, which is why a build save
+fails before any syscall. Enumerating a directory does nothing, which is why
+"Load from Skills Template" lists nothing, and deriving an entry's name writes
+nothing. Deleting a file is `assert("not implemented")` followed by
+`unreachable`, so removing or renaming a build aborts the client. A fifth
+routine is implemented but wrong: `File::Open` mode 1 is meant to open an
+existing file, and the client uses it to ask whether a rename's destination is
+already taken — but in this build it opens `O_RDWR | O_CREAT`, so the probe
+creates the file it is testing for and every rename is refused. The module
+imports no `mkdir`, `getdents`, or `unlink`, so none of this is reachable from
+JavaScript as shipped.
+
+For the exact certified client hash, a deterministic transform appends five
+forwarders and repoints only the template, chat-log, and screenshot call sites
+at them. Appending leaves every existing function index valid, and the stub
+bodies stay intact so the model paths that also call them keep today's
+behaviour. Each forwarder passes the stub's arguments to the existing
+`__syscall_newfstatat` import behind a dirfd marker no real call can produce.
+The `File::Open` forwarder is the one exception: it asks the host first and
+calls the real function only when the file is there, so the load and write
+paths keep their own behaviour and only the probe changes.
+
+The renderer answers the five markers against the mounted IDBFS: create a
+directory tree, list a wildcard, turn an entry into the name the client keys a
+template by, delete a file, and answer whether one exists. Renaming needs no
+marker of its own — the client implements it as probe, write the new name, then
+delete the old. Paths must stay relative and free of traversal, so the client
+cannot address anything outside its own mount. Directory entries the
+mount cannot describe are skipped rather than failing the whole listing. The
+listing block is allocated with the client's own `malloc` because the client
+frees it. Ordinary `newfstatat` calls remain unchanged.
+
+Three details in that contract are load-bearing, and each one cost a round of
+build, ship, and try again. The enumeration flag selects the entry kind — the
+template scans ask for `*.txt` with files and `*` with directories — so
+answering both with files fills the subdirectory list with folders named after
+the templates. A template is keyed by its path below the type directory in
+Windows form with a leading separator, `\Test`, which is what the client's own
+save path builds and what its list filter matches against the current
+subdirectory; a bare `Test` registers but never lists. And the host removes the
+extension itself, because `Path::RemoveExtension` in this build takes the last
+character of the name with it.
+
+The downloaded official module remains canonical. The derived module is
+verified by input hash, instruction signature, WebAssembly validation, and
+expected output hash, then atomically cached and streamed by the existing
+protocol path. Unknown builds use the official module. The derived cache is
+rebuildable from the official artifact and old compatibility generations are
+deleted when the selected client changes.
 
 After native confirmation, the recovery action records a restart request.
 Startup clears only IndexedDB for the owned `gw://app` session before a
 renderer can mount IDBFS, then removes the request. It cannot clear the
 separate native chunk cache or encrypted credential file. There is no native
-arbitrary-file bridge and no production WASM rewrite.
+arbitrary-file bridge.
+
+### Which of three states a client build is in
+
+The two transforms are chained but keyed by **different** hashes: template-save
+by the official build's hash, Toolbox by the hash of what the template-save
+transform produces. Certification can therefore succeed at step one and fail at
+step two — templates saved, cursors gone — which is the normal intermediate
+during a recertification, because the transform that breaks saving is fixed
+before the one that draws a pointer.
+
+`src/main/client-certification.ts` composes the two lookups into one answer:
+`uncertified`, `template-only`, or `certified`. It is the single owner, and
+every consumer asks it rather than composing the chain again — the launcher
+notice, the settings status, the diagnostics gauges, the weekly canary, and
+`pnpm toolbox:doctor`. A certified build whose template-save transform throws
+is published as `uncertified`, because it is degraded exactly that far.
+
+`ClientRuntime` publishes the state once per activated client as
+`client.buildCertification` in a `.gwdiag`, and the older
+`wasm.templateSaveCompatible` boolean is derived from the same object rather
+than computed separately, so the two cannot disagree. The renderer reads the
+state over `gw:client:session` together with the client hash and whether this
+session actually prepared the Toolbox module. The renderer combines those
+facts with the canonical per-tool selection; the effective bit keeps a
+certified build whose transform failed from being reported as available.
+`src/renderer/client-compatibility-notice.js` turns them into the sentences
+both surfaces show.
 
 ### Toolbox instrumentation
 
-The official `Gw.jspi.wasm` remains canonical. In 0.0.2 normal and packaged
-sessions always serve it directly: they do no Toolbox transform, fetch no
-kernel, install no hook, start no snapshot observer, and contain no Toolbox UI.
-Only explicit non-packaged automation enables the development path.
+The official `Gw.jspi.wasm` remains canonical. A session with the Toolbox
+switched off applies only the certified template-save compatibility transform
+described above: it does no Toolbox transform, fetches no kernel, installs no
+Toolbox hook, starts no snapshot observer, and contains no Toolbox UI.
 
-Automation hashes the official module after publication and recognizes only
-entries in the checked-in Toolbox build manifest. A known
-hash is transformed deterministically into a separate cache entry keyed by
-official hash, transform ABI, and manifest fingerprint. The transform clones
-one typed function, installs one dispatcher, and embeds the verified layout as
-a custom section. Unknown hashes and transform failures serve the official
-module unchanged.
+The two shipped tools are independent. `nativeCursor` defaults to **true** and
+reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
+owns the only added overlay, `src/renderer/toolbox-readout.js`: a fixed line at
+the top centre of the game view showing the selected target's distance in game
+units and range band. It is the last stage of the read-only pipeline — manifest
+→ transform/kernel → snapshot → decoder → here — and writes nothing back. It
+renders nothing without a selected target, on a loading screen, after a torn
+read, or on an unsupported build. It is `pointer-events: none` and
+`aria-live="off"`.
 
-`toolbox-transform.ts` is the pure byte transform. `toolbox-client.ts` owns
-streaming hash validation, cache reuse, and atomic derived publication. The
-manifest's ordered layout fields generate the embedded `layoutWords`; the
-renderer does not maintain a second field-order list.
+`TOOLBOX_TOOLS` and `ToolboxSelection` live in the shared contracts. There is
+no stored or transported master switch: `toolbox-policy.ts` derives whether
+main should prepare the transformed module from whether any tool is selected,
+plus the development-only automation gate. Main snapshots the per-tool record
+once at startup and sends that one record in `RendererInit`; the generated
+preload iterates the canonical tool list rather than copying its names.
+Automation remains unreachable from a packaged build whatever the environment
+says, which keeps "does not send game input or act on the player's behalf" a
+mechanically testable claim.
+
+A running session cannot honour a tool change because the kernel feature flags
+are fixed at initialization, so the write and restart are one action:
+`settingsSet` asks `toolboxSelectionChanged` whether the patch alters a tool,
+confirms before saving, and relaunches immediately. Both launcher and Settings
+re-render from main's returned settings, so a declined restart cannot leave a
+checkbox claiming something the session is not doing.
+
+The harness uses request and effective state without conflating them. A tool
+selection or development automation requests Toolbox, while the
+`toolbox_manifest` on the actual instantiated WebAssembly module proves that
+this launch received a certified transform. Only when both are true does it
+import `toolbox.js`. A requested but uncertified launch therefore imports no
+Toolbox module and fetches no kernel. The kernel receives one bit per tool;
+disabled tools perform no per-tick collection. Development automation may force
+the core observation snapshot for live scenarios, but it neither selects a
+player-facing surface nor couples the two tools in packaged builds.
+
+After publication, certification matches the official hash to the exact
+template-save record and then matches that record's output hash to the exact
+Toolbox record. `client-module.ts` consumes those records directly and owns the
+official → template-save → optional Toolbox chain, cache reuse, stale-cache
+discard, and atomic publication. Disabled and unsupported stages delete their
+cache. A Toolbox transform failure serves the verified template-save module;
+an uncertified build serves the official module, so the game stays playable
+and the cursor falls back to the plain macOS pointer.
+
+`toolbox-transform.ts` is the pure byte transform. The manifest's ordered
+layout fields generate the embedded `layoutWords`; the renderer does not
+maintain a second field-order list.
 
 Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
 446. It uses the stock table's null slot 0; the mutable global stores
 `slot + 1`, preserving zero as disabled. No table growth or all-functions
 instrumentation remains.
 
-After runtime initialization in explicit automation, the renderer dynamically
-loads the Toolbox runtime, allocates a config and
-64-byte snapshot through the game's allocator, instantiates the dependency-free
+After runtime initialization in an enabled, manifested session, the renderer
+dynamically loads the Toolbox runtime, allocates its enabled bounded regions
+through the game's allocator, instantiates the dependency-free
 `wasm32-unknown-unknown` companion against the exported memory, installs its
 callback, and enables the dispatcher last. The callback calls the relocated
-original exactly once before collecting checked map/player/target state.
+original exactly once, then collects cursor state and map/player/target state
+only for their enabled feature bits.
 
 Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
-sequence lock. It contains no pointers. The automation observer reads at most
-once per animation frame and rejects unknown flags, invalid IDs/types/bands,
-and non-finite values. It publishes structured `gwToolboxState` without
-production DOM. No memory view or per-frame call crosses preload or IPC.
+sequence lock. It contains no pointers. When target observation is enabled, the
+snapshot observer reads at most once per animation frame and rejects unknown
+flags, invalid IDs/types/bands, and non-finite values. It publishes structured
+`gwToolboxState`; only the separately selected readout renders that state. The
+cursor consumer is installed and polled only when `nativeCursor` is selected,
+and reaches production DOM only as an inline `cursor` on the game canvas;
+losing the cursor clears that value and nothing else. No memory view or
+per-frame call crosses preload or IPC.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
-destinations and ports `6112`, `80`, and `443`, limits handles and queued bytes
-per renderer, and closes an owner’s sockets on reload, renderer loss, or quit.
-DNS accepts only approved ArenaNet/Guild Wars suffixes and retains the raw DNS
-fallback needed for the `0.0.1.2` datacenter sentinel.
+destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on
+reload, renderer loss, or quit. DNS accepts only approved ArenaNet/Guild Wars
+suffixes and retains the raw DNS fallback needed for the `0.0.1.2` datacenter
+sentinel.
+
+Three ceilings bound one renderer: 64 sockets, 4 MiB queued on any single
+socket, and 16 MiB queued across all of them together. The aggregate one is the
+ceiling that matters — a per-socket limit alone leaves 64 × 4 MiB = 256 MiB of
+main-process buffering reachable from one renderer. A send that would cross
+either byte ceiling is refused before anything is queued, and the socket stays
+open, so a refusal costs one packet rather than the connection. Owners are
+accounted separately: a saturated renderer cannot spend, or free, another’s
+budget.
+
+Each write reserves its bytes before the write and releases them exactly once —
+when the write callback runs, or at teardown for whatever the socket still
+holds. Both halves are needed. A destroyed socket may never fire the callbacks
+it owes, so teardown without reclamation leaks an owner’s budget until the
+process exits; and a callback that arrives after teardown must not release the
+same bytes twice, or the reclaimed budget is taken from sockets that are still
+alive. After close, failure, renderer reload and quit, no owner holds any
+reserved bytes.
 
 Game socket payloads are views into WebAssembly memory. The renderer copies
 each outbound view into a compact `Uint8Array` before crossing
@@ -258,6 +478,12 @@ and the process exits with status zero. Main-to-renderer events are dropped
 once either the window or its `webContents` is destroyed. Renderer recovery is
 reserved for unexpected loss while the application is not quitting.
 
+The process acquires Electron's single-instance lock before it reads or sweeps
+profile-owned files. A second launch exits and asks the primary process to
+restore, show, and focus its existing window. That lock is what makes startup
+cleanup of atomic-write temporary files safe: another live app process cannot
+still own a foreign-PID temporary file in the same profile.
+
 ## Rendering and input
 
 The client creates a WebGL context on an `OffscreenCanvas`. The EGL import
@@ -266,19 +492,53 @@ visible canvas’s `bitmaprenderer`. The client remains the only canvas-size
 owner; the host supplies the selected render scale through Emscripten’s device
 pixel ratio import and mirrors client-requested sizes to the offscreen buffer.
 
+A second import patch memoizes asynchronous shader-compile completion. The
+client uses `KHR_parallel_shader_compile` and polls
+`glGetProgramiv(program, COMPLETION_STATUS_KHR)` in a loop; Chromium cannot
+answer that from its client-side cache, so every poll flushes the command
+buffer and waits on the GPU process. A recon session measured 36,713 polls
+against roughly 250 programs in seven minutes.
+
+Only completion is cached, and only once it reads true. False is the answer the
+client is polling for a change in, so freezing it would leave the client
+polling a program that never finishes; true is terminal until the next
+`glLinkProgram`, which clears the entry, as does losing the WebGL context. The
+cache tracks a program only while the host has seen it created and not deleted,
+so a recycled name starts cold and a name from before install is never
+recorded. Every other query passes through untouched, including
+`GL_VALIDATE_STATUS` — evaluated against current GL state rather than the
+program — and the link-derived pnames, which the client was measured asking
+exactly once per program. A missing import disables the whole patch rather than
+half of it, and the `gl.programQuery*` counters prove it is engaged against the
+downloaded client.
+
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
 fullscreen, touch translation, trackpad-wheel normalization, and right-drag
 pointer lock. `input.js` owns the canvas input listeners and accepts validated
-settings from the settings owner; it does not persist settings itself. One
+touch settings from the settings owner; it does not persist settings itself. One
 held-input registry releases keys, buttons, and touches when focus or native UI
 consumes an input release. Pointer lock uses a virtual cursor and recycles a
 held drag at canvas edges so camera rotation does not stall.
+
+The client identifies a key by `KeyboardEvent.key`, so its held-key state is
+character state, not physical state. macOS makes Option a text modifier, which
+rewrites that character for as long as Option is held: `W` arrives as `∑` on a
+US layout, and as a bound character on others — a German Option+L is `@`, which
+the client reads as the `2` key. A press and its release therefore disagree
+whenever Option is held across only one of them, and the key the client believes
+is down never comes up. The input host reads the OS layout map, restates the
+event with the unmodified character of `event.code`, and stops the rewritten
+original so the client sees exactly one event per physical transition. Text
+fields are restated too, because the client relays their key events to the
+canvas; only propagation is stopped, so the field still types the composed
+character. Command is different — macOS withholds the release entirely — and
+that stays handled by releasing every non-modifier key when Command comes up.
 
 ## Diagnostics
 
 Every event uses an integer monotonic microsecond timestamp, sequence number,
 process/subsystem name, level, typed scalar fields, and optional
-`traceId`/`spanId`/`parentSpanId`. Seven-sample renderer/main clock
+`traceId`/`spanId`. Seven-sample renderer/main clock
 synchronization chooses the lowest-round-trip sample and repeats after
 visibility changes and every five minutes.
 
@@ -295,12 +555,51 @@ Level 0 is always active:
   distributions, merged without reducing them to averages;
 - event-loop and process samples;
 - cache/disk/network/protocol spans;
-- GPU, power, thermal, lifecycle, crash, and context-loss signals.
+- GPU, power, thermal, lifecycle, crash, and context-loss signals;
+- window focus, minimize, hide, and resize/move brackets, plus a per-batch
+  renderer `focused` flag.
+
+Window state is load-bearing for stall attribution. An unfocused, occluded, or
+mid-resize window stops being composited, which stops `requestAnimationFrame`
+with no CPU spent in any process — indistinguishable from a real freeze unless
+it is recorded. `document.hidden` reports none of that on macOS, so the main
+process records the transitions itself; it stays responsive while the renderer
+is frozen, which makes its timestamps the ones to line up against `frames.bin`.
+
+GPU process feature status is sampled at export, not at Electron ready: the GPU
+process does not exist when the recorder starts, and Chromium's
+pre-initialization answer reads as software rendering on a machine that is in
+fact running ANGLE on Metal. Sampling late also means that if the GPU process
+has died, “disabled” is the truth rather than an artefact.
+
+At launch the diagnostics directory keeps only `session-*.jsonl`; everything
+else is removed, including Chromium's `.<bundle-id>.XXXXXX` atomic-write
+temporaries, which a prefix-matching sweep could never reach.
 
 Level 1 adds fixed-width per-frame records. The renderer batches them; the main
 process writes `frames.bin` asynchronously with a 128 MB ceiling. Level 2 adds
-an argument-filtered Chromium trace with selected supported categories, a 256
-MB buffer, an 80% stop threshold, and a 120-second time limit.
+an argument-filtered Chromium trace with selected supported categories, a
+256 MB buffer, an 80% stop threshold, and a 120-second time limit.
+The trace is deleted at quit and by the launch sweep, deliberately not after an
+export: the recorded capture level stays at 2 for the rest of the session, so
+discarding it there would make a second export declare Level 2 with no trace and
+fail its own validation. Its size is recorded as `capture.traceBytes`. If a
+trace is ever lost, drop the broad `blink` category before reducing the buffer.
+A Level 2 capture whose manifest declares no `chromium-trace.json` fails
+validation instead of looking complete.
+
+Record Level 2 for fifteen to thirty seconds and stop immediately after the
+hitch. The buffer fills in roughly half a minute of heavy activity, and a trace
+that stops short of the export leaves the stalls after it unattributed.
+
+During Level 2 only, fixed-name `gw.frame.submit` and `gw.snapshot.resolve`
+User Timing marks place frame and snapshot boundaries directly on Chromium's
+trace clock. They carry no arguments and are cleared from the renderer's
+Performance Timeline immediately after emission. Under an active trace each
+mark costs about 114 µs — roughly 1.3% of a capture, and the third hottest leaf
+in it. That cost is `performance.mark` emitting an argument-filtered trace
+event; `performance.clearMarks` was measured at 0.3 µs and is not the lever.
+It is one more reason Level 2 locates causes but cannot establish gains.
 The existing main-to-renderer capture command path also owns a noninteractive
 recording indicator, elapsed timer, and problem-marker acknowledgement; it
 does not add a preload capability.
@@ -315,7 +614,6 @@ capture-summary.json         optional, selected Level 1/2 window only
 events.jsonl
 previous-events.jsonl        optional, latest abnormally ended session
 frames.bin                   optional
-histograms.json
 environment.json
 settings-redacted.json
 chromium-trace.json        optional
@@ -336,22 +634,149 @@ Renderer console text remains renderer-local and bounded. Only allow-listed
 failure names and non-text eight-hex fingerprints cross IPC. This makes
 repeated failures correlatable without exporting exception text, account data,
 chat, paths, request contents, or packet contents.
-The recorder normalizes every event name to a dot-separated identifier, so all
-producers share one searchable vocabulary.
+The closed schema owns every dot-separated event name, so all producers share
+one searchable vocabulary and no generic string logging route exists.
 Event-loop delay uses reset five-second windows at 5 ms resolution. When
 `frames.bin` exists, the tools calculate exact visible-only frame percentiles,
 FPS, and stalls from its fixed-width records.
 
-Exports fail closed on credential-shaped content. Chromium net bodies, HTTP
-headers, account request bodies, TCP payloads, and crash dumps are never
-included. Crashpad is local-only and retains at most three dumps.
+`socket.rendererSettle` measures how long the renderer takes to settle a send
+promise, so it reports *renderer* stalls, not network latency: a frozen renderer
+cannot run the continuation. `socket.writeCallback` is the main-side write, and
+subtracting the two is what separates TCP backpressure from a renderer stall.
+
+### What the export actually guarantees
+
+The export is `formatVersion` 2 and its protection has three tiers, one per
+kind of text in it. The manifest's `redaction` object states which tier
+covered what, as counts rather than as a verdict; the earlier literal
+`redaction: "passed"` claimed a check that could not fail, because it asked an
+idempotent redactor whether its own output was a fixed point.
+
+**`events.jsonl` is certified against a closed schema.** Every event the main
+process records is a member of the discriminated union in
+`src/main/diagnostics/schema.ts`, and every field of every member is a number,
+a boolean, a member of a declared string enum, or a branded fixed-format value
+such as a digest, renderer fingerprint, or application version. A field typed
+`string` fails `tsc` inside the schema file itself, so free text
+is not redacted out of recorded events — it cannot be written in the first
+place. Producers pass a `DiagnosticEvent` to `logEvent`, so a failure records
+an `ErrorCode` from the closed catalogue in `src/shared/errors.ts` where it
+used to record `error.message`; a foreign error's own `code` is an open set we
+do not control and collapses to `unknown` rather than widening ours.
+Before anything is written, `inspectEventLog` in
+`src/main/diagnostics/detector.ts` walks the assembled log and matches each
+declared record against that schema field by field — exactly the declared
+fields, each accepted by the guard for its declared type. A record that does
+not match throws and no export is produced at all. `redaction.records` counts
+every record walked and `redaction.schemaChecked` every record the schema
+matched; the two counts must be equal. Undeclared event names, wrong
+subsystem/level ownership, missing fields, extra fields, and out-of-vocabulary
+values all stop the export. DNS, update, snapshot, and proxy spans are four
+closed typed families with normalized start/end fields. Renderer milestones
+and renderer-originated failures are also schema members. Blocked-navigation
+events record the closed security decision but never copy the rejected URL.
+The detector imports neither the recorder nor the pattern scanner, which is
+what makes it evidence: a checker built from the redactor's own patterns can
+only ever agree with the redactor.
+
+**The trace and the un-schema'd documents are pattern-scanned.**
+`chromium-trace.json`, `environment.json`, `summary.json`, `report.json`,
+`settings-redacted.json`, `capture-summary.json` and `manifest.json` carry
+leaves from OS and Chromium APIs, and `previous-events.jsonl` was written by
+whichever build ran last — for anyone upgrading from the alpha, a build whose
+events still had `message` fields, which is why the previous session is
+scanned and never certified. `src/main/diagnostics/text-scan.ts` is the only
+tool that applies to text we did not author: it replaces the home directory,
+bearer tokens, quoted and unquoted values under a sensitive-key vocabulary,
+`file:` URLs, query-string values, email addresses, and absolute paths —
+including a path at index 0, which the previous positive lookbehind required a
+delimiter to see. Quoted values under a sensitive key are consumed as complete
+JSON strings, including commas, escaped quotes and escaped backslashes, and are
+replaced without making the trace invalid.
+
+A Level 2 trace reaches a quarter of a gigabyte, so it is scanned as a stream.
+The scanner tracks JSON string and escape state and cuts only after a comma
+outside a string. Its carry is raw input rather than already-redacted output,
+so a value straddling an input chunk is scanned once and in full. If the trace
+provides no structural comma before the one-megabyte carry limit, export fails
+closed and its staging output is removed; it never flushes an unscannable
+suffix. The unit test compares streaming and whole-document results at every
+split point in the adversarial corpus and exercises that fail-closed bound.
+`redaction.traceBytesScanned` records how much went through the scanner.
+
+This tier is still a vocabulary, not a proof: it can miss a value for which it
+has no pattern, and it over-redacts benign keys containing a sensitive stem —
+the safe direction. Numeric values under those keys are left alone so the trace
+stays valid JSON for `pnpm diagnostics:attribute-stalls`.
+
+Some things are excluded by construction rather than by any of the three
+tiers. Renderer console text and exception text never cross IPC; only
+allow-listed failure names and non-text fingerprints do. Chromium net bodies,
+HTTP headers, account request bodies, and TCP payloads are never recorded, so
+they are not in the export to be removed. The application does not start
+Crashpad or collect crash dumps.
+
+`pnpm diagnostics:validate` re-runs the detector over the `events.jsonl` it
+extracted and refuses to agree with a manifest whose counts it cannot
+reproduce, so a forged or stale manifest fails rather than being read back at
+face value. Format 1 exports — what the public alpha produced — keep one
+explicit legacy read path: they require `histograms.json`, and `"passed"` is
+still the only verdict they can offer, because nothing inside one of them can
+reproduce more.
+
+### Reading a capture
 
 The comparison tool warns about architecture, OS, app version, GPU renderer,
 render scale, canvas size, capture level, visibility, same-session and
 overlapping-window differences. Deep traces are labeled profiler-contaminated
 and should locate a bottleneck, not provide the final before/after number.
 
+`pnpm diagnostics:attribute-stalls <capture.gwdiag> [threshold-ms]` requires a
+Level 2 capture made by a build with the trace markers above. It finds
+consecutive submitted-frame marks beyond the threshold, counts snapshot
+resolutions inside each interval, reconstructs V8 CPU-profiler stacks, and
+reports CPU categories, hot leaves, hot complete stacks, and the longest
+overlapping renderer-thread trace events. Captures without the markers fail
+report the incompatibility instead of attempting cross-clock timestamp
+inference.
+
+`pnpm diagnostics:attribute-frames <capture.gwdiag> [threshold-ms]` is its
+Level 1 counterpart, and Level 1 is the level that can establish gains. It joins
+visible-frame gaps from `frames.bin` to the main-process events within a second
+and a half either side — the main process keeps running while the renderer is
+frozen, so its timestamps are the reliable side of the join. Each stall is
+attributed to composition loss when the window changed state, to the main
+process when its event loop actually blocked, and otherwise to the renderer.
+Captures recorded before window-state tracking say so rather than claiming the
+window was steady.
+
 ## Verification boundaries
+
+### Claims and the tests that prove them
+
+Every statement this project makes in public — the website, `README.md`, the
+in-app copy — is a claim someone can hold us to. Each one gets a row here and
+each row names something that executes.
+
+**The rule: a public claim with no row does not ship, and a row whose proof
+reads _none_ is a claim to narrow or delete, not a claim to explain.** The
+two that read _none_ today are recorded rather than quietly kept.
+
+| Claim | Where it is made | What executes to prove it |
+| --- | --- | --- |
+| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-toolbox-surface.test.mjs` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/toolbox-policy.js` in a child process with `app.isPackaged` forced true and reads `TOOLBOX_AUTOMATION_ENABLED` as `false` for every value of `GW_TOOLBOX_AUTOMATION`, leaving `toolboxEnabledFor` and the player's explicit per-tool selection as the only way in |
+| The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
+| Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.mjs` for publication, corruption repair and rollback |
+| No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |
+| A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
+| The app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-reaches-github-only-when-asked.spec.mjs` — the row's proof: it wraps the main process's `fetch` and counts **zero** api.github.com requests across a launch with the defaults, then exactly one across a launch with the box ticked. The three unit tests underneath it prove constituents, not the claim: `tests/unit/settings.test.ts` that the default is `false`, `tests/unit/release-notice.test.ts` and `tests/unit/update-action.test.ts` that the check itself behaves |
+| The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-toolbox-surface.test.mjs` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/toolbox-cursor.spec.mjs` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.mjs` for what is tracked |
+| Releases are ad-hoc signed and the shipped fuses hold | website FAQ | `tests/packaged-smoke.mjs` (`codesign --verify --deep --strict`, the nine fuse states), `tests/policy/fuses.test.mjs` |
+| Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.mjs` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.mjs` for the resolutions shown beside each scale |
+| "Up to 60 FPS", "tuned for Apple Silicon" | website capability facts | **none.** No test asserts a frame rate, and `tests/packaged-smoke.mjs` does not assert the packaged binary's architecture |
+| "The client's available graphics settings, plus selectable render scale" | website capability facts | Narrowed in P3.22 from "every in-game quality option, fully available", which was wrong — the official WebGL client may offer only `None` for antialiasing. `tests/website-smoke.mjs` executes the served page and fails if it promises every quality option again; the render-scale half is the row above |
+| "Up to 4K" | website capability facts | **none.** Render scale is proved; a 4K backing resolution on a specific display is not |
 
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
 cache coalescing, hash validation, insufficient-disk rejection, interrupted
@@ -365,14 +790,29 @@ clock/metrics availability, and capture lifecycle.
 
 The opt-in live smoke exercises the current production client from a fresh
 profile: JSPI must initialize, hardware acceleration must be active, snapshot
-reads must complete, render scaling must change the real drawing buffer, and a
-frame must be submitted. A weekly macOS GitHub Actions canary runs this same
-test and records the client fingerprint and renderer in the workflow summary.
-Failures do not rewrite or hook ArenaNet binaries; they identify a host/client
-compatibility change for investigation. The canary does not prove:
+reads must complete, the host filesystem must serve the client's template
+operations across a relaunch, render scaling must change the real drawing
+buffer, and a frame must be submitted. Each block is a named step, so a red
+canary names the claim that broke. It also requires that the build ArenaNet is
+currently serving is one this app has **certified**: `template-only` fails too,
+because templates still saving with the cursors gone is a shipped regression,
+not a pass. The module's sha256 is printed above every assertion, since a red
+canary is exactly when someone needs that hash to recertify.
+
+A weekly macOS GitHub Actions canary runs this same test and records the client
+fingerprint and renderer in the workflow summary. GitHub disables scheduled
+workflows in quiet repositories, so a release build refuses to start when the
+canary last ran more than fourteen days ago or has never run: a green release
+gate behind a canary that stopped running proves nothing. Failures do not
+rewrite or hook ArenaNet binaries; they identify a host/client compatibility
+change for investigation. The canary does not prove:
 
 - a real account completes login;
 - ANGLE/Metal renders the real client correctly on every advertised Mac;
+- that the Toolbox transform still applies cleanly to today's client. The
+  profile it seeds sets `nativeCursor: false`, so the live run exercises the
+  template-save transform and the certification tables but never the Toolbox
+  one — a non-default path since the setting started defaulting to `true`;
 
 Those are explicit live release gates, not assumptions hidden behind unit
 tests.

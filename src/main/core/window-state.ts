@@ -20,6 +20,7 @@ export const DEFAULT_WINDOW_SIZE = {
 } as const;
 
 const DEFAULT_WINDOW_MARGIN = 64;
+const WINDOW_STATE_FORMAT = 1;
 
 const MODES = new Set<WindowState["mode"]>([
   "normal",
@@ -34,11 +35,27 @@ function integer(value: unknown, name: string): number {
   return value as number;
 }
 
+/**
+ * A file with no `formatVersion` is what the public alpha wrote: v0 and v1 are
+ * the same `{ bounds, mode }` shape, so an alpha window comes back where the
+ * player left it. A version this build does not know is refused, and
+ * `loadWindowState` falls back to a default window rather than placing one
+ * from a shape it cannot read.
+ */
 export function parseWindowState(value: unknown): WindowState {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new AppError("bad_window_state", "window state must be an object");
   }
   const record = value as Record<string, unknown>;
+  if (
+    record.formatVersion !== undefined &&
+    record.formatVersion !== WINDOW_STATE_FORMAT
+  ) {
+    throw new AppError(
+      "bad_window_state",
+      `windowState.formatVersion ${JSON.stringify(record.formatVersion)} is not readable`,
+    );
+  }
   if (!record.bounds || typeof record.bounds !== "object" || Array.isArray(record.bounds)) {
     throw new AppError("bad_window_state", "window state bounds are invalid");
   }
@@ -85,7 +102,11 @@ export async function saveWindowState(
   path: string,
   value: WindowState,
 ): Promise<void> {
-  await writeAtomicJson(path, parseWindowState(value), 0o600);
+  await writeAtomicJson(
+    path,
+    { formatVersion: WINDOW_STATE_FORMAT, ...parseWindowState(value) },
+    0o600,
+  );
 }
 
 export async function clearWindowState(path: string): Promise<void> {

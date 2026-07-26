@@ -1,6 +1,11 @@
 export const ACCESS_KEY = "2043FE79-F32D-4FD7-8C27-0D47231C4F03";
 export const PATCH_ROOT = "https://patching.1.arenanetworks.com";
-export const UA = "gw-electron/0.1 (interop research)";
+export const UA = "gwonmac (Guild Wars interoperability client)";
+export const PATCH_REQUEST_HEADERS: Readonly<Record<string, string>> = {
+  "X-Access-Key": ACCESS_KEY,
+  "User-Agent": UA,
+  "Accept-Encoding": "identity",
+};
 export const PREFETCH_JOBS = 8;
 export const PATCH_REQUEST_TIMEOUT_MS = 30_000;
 export const MAX_PATCH_MANIFEST_BYTES = 16 * 1024 * 1024;

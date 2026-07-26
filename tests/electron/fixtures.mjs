@@ -30,6 +30,9 @@ export async function launchOfflineAt(userData, environment = {}) {
   const env = {
     ...process.env,
     GW_OFFLINE_SHELL: "1",
+    // Launch without taking keyboard focus. Specs that assert on real OS focus
+    // (document.hasFocus, pointer lock, fullscreen) pass GW_BACKGROUND_LAUNCH: "0".
+    GW_BACKGROUND_LAUNCH: "1",
     ...environment,
   };
   delete env.ELECTRON_RUN_AS_NODE;

@@ -1,5 +1,65 @@
 import eslint from "@eslint/js";
+import pluginVue from "eslint-plugin-vue";
 import tseslint from "typescript-eslint";
+import vueParser from "vue-eslint-parser";
+
+// P0.2 — each boundary is one regular expression, so every spelling that
+// resolves across it is rejected rather than only the shortest one:
+// `../paths.js`, `../../main/paths.js` and `../../../src/main/paths.js` all
+// name the same file. `no-restricted-imports` sees static imports and
+// `export ... from`; `no-restricted-syntax` covers every other way to name a
+// module, and it keys on the specifier rather than on the call shape.
+
+// Leaving src/main/core: anything that climbs out of it, unless the leading
+// `../` run lands in src/shared — plus any spelling that names src/main from
+// further away. Enumerating the shapes of an upward specifier (a bare file, two
+// levels up) missed `../services/registry.js`, which leaves core just as surely;
+// "climbs out and is not src/shared" is the property, and it is shorter.
+// The exemption is `../../shared/` and deeper: from anywhere in src/main/core
+// the real src/shared is at least two levels up, so a single-level `../shared/`
+// is src/main/shared — upward, and rejected. Two is the minimum true depth, not
+// the exact one: a pattern sees the specifier and not the importing file, so
+// from a hypothetical src/main/core/sub/ the same `../../shared/` would name
+// src/main/shared and pass. src/main/core has no subdirectory today; expressing
+// the exact depth needs a second config block per level, which is more
+// structure than the hole is worth until one exists.
+const OUT_OF_CORE = String.raw`^(?!(?:\.\./){2,}shared/)\.\./|(?:^|/)(?:\.\.|src)/main/`;
+const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
+// Leaving apps/website: any escape into the host application's src/ other than
+// src/shared. Naming main/renderer/preload alone let src/tools/** through while
+// the message claimed only src/shared was reachable. The first alternative is
+// anchored to a `../` run so a package whose own path contains `/src/` is not
+// caught; the second keeps the original spellings rejected.
+const INTO_APP = String.raw`^(?:\.\./)+src/(?!shared/)|(?:^|/)(?:\.\.|src)/(?:main|renderer|preload)/`;
+const ELECTRON = String.raw`^electron(/|$)`;
+
+/** esquery reads `/.../` inside an attribute value, so its slashes need escaping. */
+const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
+
+// Every non-static way to name a module, keyed on the specifier rather than on
+// the shape of the expression around it. Keying on the callee caught
+// `require("electron")` and `createRequire(url)("electron")` but not
+// `const load = createRequire(url); load("electron")`, and keying on
+// `source.value` missed the template-literal spelling of `import()` entirely —
+// one quote character defeated the boundary. An argument value cannot be
+// renamed. Applied to every boundary, so the four are provably symmetric.
+const crossings = (pattern, message) => {
+  const regex = selectorRegex(pattern);
+  return [
+    `ImportExpression[source.value=${regex}]`,
+    `ImportExpression[source.type="TemplateLiteral"][source.quasis.0.value.raw=${regex}]`,
+    `CallExpression[arguments.0.value=${regex}]`,
+    `CallExpression[arguments.0.type="TemplateLiteral"][arguments.0.quasis.0.value.raw=${regex}]`,
+  ].map((selector) => ({ selector, message }));
+};
+
+const NO_ELECTRON =
+  "src/main/core/** must stay Electron-free. Keep Electron behind src/main/*.ts.";
+const NO_UPWARD =
+  "src/main/core/** must not import upward out of src/main/core. Invert the dependency.";
+const NO_MAIN_FROM_RENDERER =
+  "src/renderer/** must not import from src/main/**. Cross the boundary through the preload bridge or src/shared/**.";
+const WEBSITE_SHARED_ONLY = "apps/website/** may only reach into src/shared/**.";
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -10,6 +70,7 @@ export default tseslint.config(
       "out/**",
       "node_modules/**",
       "**/node_modules/**",
+      ".claude/**",
       ".pnpm-store/**",
       "dist/**",
       "dist-release/**",
@@ -19,9 +80,87 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "tools/**",
-      "forge.config.ts",
+      "plans/**",
       "*.py",
     ],
+  },
+  {
+    // P0.2 — architectural boundaries that already hold, pinned so they keep
+    // holding. src/main/core/** has no Electron dependency and no upward
+    // imports into src/main/*.ts.
+    files: ["src/main/core/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { regex: ELECTRON, message: NO_ELECTRON },
+            { regex: OUT_OF_CORE, message: NO_UPWARD },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        ...crossings(ELECTRON, NO_ELECTRON),
+        ...crossings(OUT_OF_CORE, NO_UPWARD),
+      ],
+    },
+  },
+  {
+    // P0.2 — the renderer owns presentation and the game host; it never reaches
+    // into the main process. Every renderer source extension, not only .js:
+    // src/renderer/gw-native.d.ts is a real tracked file.
+    files: ["src/renderer/**/*.{js,mjs,cjs,ts}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ regex: INTO_MAIN, message: NO_MAIN_FROM_RENDERER }] },
+      ],
+      "no-restricted-syntax": ["error", ...crossings(INTO_MAIN, NO_MAIN_FROM_RENDERER)],
+    },
+  },
+  // P0.3 — `flat/essential` only: the rules that catch errors. `flat/recommended`
+  // adds 96 attribute-line-break opinions, and nothing else in this repository
+  // enforces formatting, so adopting them would be churn rather than coverage.
+  ...pluginVue.configs["flat/essential"],
+  {
+    // P0.3 — the .vue SFCs are most of the website (9 files against 4 .ts), so
+    // leaving them unparsed left the P0.2 boundary below unenforced exactly
+    // where the code is. vue-eslint-parser reads the SFC; its inner parser
+    // reads `<script setup lang="ts">`.
+    files: ["**/*.vue"],
+    languageOptions: {
+      parser: vueParser,
+      parserOptions: { parser: tseslint.parser, ecmaVersion: "latest", sourceType: "module" },
+    },
+    rules: {
+      // Nuxt auto-imports (`useSeoMeta`, `useHead`, …) have no import statement,
+      // so ESLint sees every one as undefined. `pnpm test:website` runs
+      // `nuxt typecheck`, which resolves them properly and is the real oracle —
+      // this would be a second, worse one. Same reasoning typescript-eslint
+      // gives for disabling no-undef on TypeScript sources.
+      "no-undef": "off",
+      // Pages and layouts are named by their route, which is a Nuxt convention.
+      "vue/multi-word-component-names": "off",
+    },
+  },
+  {
+    // P0.2 — the website may read canonical contracts, never main-process code.
+    files: ["apps/website/**/*.{js,mjs,ts,vue}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ regex: INTO_APP, message: WEBSITE_SHARED_ONLY }] },
+      ],
+      "no-restricted-syntax": ["error", ...crossings(INTO_APP, WEBSITE_SHARED_ONLY)],
+    },
+  },
+  {
+    // P0.3 — forge.config.ts was excluded from linting entirely.
+    files: ["forge.config.ts"],
+    languageOptions: {
+      globals: { process: "readonly" },
+    },
   },
   {
     files: ["src/main/**/*.ts", "src/shared/**/*.ts", "src/tools/**/*.ts"],

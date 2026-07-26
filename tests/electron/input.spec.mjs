@@ -19,6 +19,51 @@ async function startGameInput(page) {
 test.describe("renderer input", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
+  test("keeps game text entry native-assistance free without blurring the game", async () => {
+    const fixture = await launchOffline("gw-text-input-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const result = await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const inputs = [...globalThis.document.querySelectorAll(".osk-input")];
+        const text = globalThis.document.getElementById("osk-input-text");
+        let clientSawCanvasBlur = false;
+        canvas.addEventListener("blur", () => {
+          clientSawCanvasBlur = true;
+        });
+
+        canvas.focus();
+        window.Module.oskActiveInput = text;
+        text.focus();
+
+        const attributes = Object.fromEntries(
+          ["autocomplete", "autocorrect", "autocapitalize", "spellcheck", "writingsuggestions"]
+            .map((name) => [name, inputs.map((input) => input.getAttribute(name))]),
+        );
+        const activeElement = globalThis.document.activeElement?.id;
+        window.Module.oskActiveInput = null;
+        text.blur();
+        canvas.focus();
+        return { activeElement, attributes, clientSawCanvasBlur };
+      });
+
+      expect(result).toEqual({
+        activeElement: "osk-input-text",
+        attributes: {
+          autocomplete: Array(5).fill("off"),
+          autocorrect: Array(5).fill("off"),
+          autocapitalize: Array(5).fill("off"),
+          spellcheck: Array(5).fill("false"),
+          writingsuggestions: Array(5).fill("false"),
+        },
+        clientSawCanvasBlur: false,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases held input and cancels synthetic touches", async () => {
     const fixture = await launchOffline("gw-input-e2e-");
     try {
@@ -97,6 +142,84 @@ test.describe("renderer input", () => {
         "touchstart",
         "touchcancel",
       ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("restates keys macOS rewrites while Option is held", async () => {
+    const fixture = await launchOffline("gw-option-key-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        window.__gameKeys = [];
+        // Registered after the game input host, so anything it stops — the
+        // rewritten original — never arrives here or at the client.
+        for (const type of ["keydown", "keyup"]) {
+          window.addEventListener(
+            type,
+            (event) => {
+              if (event.code !== "KeyW") return;
+              window.__gameKeys.push(
+                `${event.type}:${event.key}:${event.keyCode}`,
+              );
+            },
+            true,
+          );
+        }
+        globalThis.document.getElementById("canvas").focus();
+      });
+
+      // macOS reports the Option layer in `key` while leaving `code` alone, so
+      // a key pressed before Option is held is released as a different key.
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const alt = 1;
+      const sendW = (type, key, modifiers = 0, text = undefined) =>
+        cdp.send("Input.dispatchKeyEvent", {
+          type,
+          key,
+          code: "KeyW",
+          windowsVirtualKeyCode: 87,
+          nativeVirtualKeyCode: 87,
+          modifiers,
+          ...(text === undefined ? {} : { text }),
+        });
+
+      await sendW("keyDown", "w");
+      await sendW("keyUp", "∑", alt);
+      await sendW("keyDown", "∑", alt);
+      // The registry must hold the restated key, or the interruption path
+      // releases a key the client never saw pressed.
+      await page.evaluate(() =>
+        window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")),
+      );
+
+      expect(await page.evaluate(() => window.__gameKeys)).toEqual([
+        "keydown:w:87",
+        "keyup:w:87",
+        "keydown:w:87",
+        "keyup:w:87",
+      ]);
+
+      // The client relays key events from its own text fields to the canvas,
+      // so a rewritten release strands a key there too. Restating must not
+      // cost the field the character the OS composed.
+      await page.evaluate(() => {
+        window.__gameKeys = [];
+        const text = globalThis.document.getElementById("osk-input-text");
+        window.Module.oskActiveInput = text;
+        text.value = "";
+        text.focus();
+      });
+      await sendW("keyDown", "∑", alt, "∑");
+      await sendW("keyUp", "w");
+      expect(
+        await page.evaluate(() => ({
+          keys: window.__gameKeys,
+          typed: globalThis.document.getElementById("osk-input-text").value,
+        })),
+      ).toEqual({ keys: ["keydown:w:87", "keyup:w:87"], typed: "∑" });
     } finally {
       await closeOffline(fixture);
     }
@@ -218,7 +341,6 @@ test.describe("renderer input", () => {
           edgeTargets: points.map(([x, y]) =>
             globalThis.document.elementFromPoint(x, y)?.id ?? null,
           ),
-          rootTheme: globalThis.document.documentElement.dataset.cursorTheme,
           edgeCursor: globalThis.getComputedStyle(
             globalThis.document.elementFromPoint(
               globalThis.innerWidth - 1,
@@ -234,8 +356,9 @@ test.describe("renderer input", () => {
         "canvas",
         "canvas",
       ]);
-      expect(result.rootTheme).toBe("guild-wars");
-      expect(result.edgeCursor).toContain("guild-wars.png");
+      // No cursor artwork ships, and this session did not opt in, so the very
+      // edge of the canvas is the plain macOS pointer.
+      expect(result.edgeCursor).toBe("auto");
       await page.mouse.move(0, 0);
       await page.mouse.move(result.viewport[0] - 1, 0);
       await page.mouse.move(0, result.viewport[1] - 1);
@@ -368,7 +491,10 @@ test.describe("renderer input", () => {
   });
 
   test("allows pointer lock only for the owned game canvas", async () => {
-    const fixture = await launchOffline("gw-pointer-permission-e2e-");
+    // Real pointer lock needs a focused widget, so this launch takes focus.
+    const fixture = await launchOffline("gw-pointer-permission-e2e-", {
+      GW_BACKGROUND_LAUNCH: "0",
+    });
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -403,6 +529,96 @@ test.describe("renderer input", () => {
           ),
         )
         .toBeNull();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("recycles a held camera drag instead of stalling at an edge", async () => {
+    const fixture = await launchOffline("gw-pointer-edge-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const canvas = page.locator("#canvas");
+      const box = await canvas.boundingBox();
+      await page.evaluate(({ x, y, width, height }) => {
+        const gameCanvas = globalThis.document.getElementById("canvas");
+        globalThis.document.getElementById("loading").classList.add("gone");
+        globalThis.__cameraEvents = [];
+        for (const type of ["mousemove", "mouseup", "mousedown"]) {
+          gameCanvas.addEventListener(type, (event) => {
+            if (!event.isTrusted) {
+              globalThis.__cameraEvents.push({
+                type,
+                button: event.button,
+                buttons: event.buttons,
+                clientX: event.clientX,
+                movementX: event.movementX,
+              });
+            }
+          });
+        }
+        gameCanvas.getBoundingClientRect = () =>
+          new globalThis.DOMRect(x + 95, y, width, height);
+        Object.defineProperty(globalThis.document, "pointerLockElement", {
+          configurable: true,
+          value: gameCanvas,
+        });
+        globalThis.document.exitPointerLock = () => {
+          Object.defineProperty(globalThis.document, "pointerLockElement", {
+            configurable: true,
+            value: null,
+          });
+        };
+        gameCanvas.focus();
+      }, box);
+
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "right" });
+      await page.mouse.move(box.x + 80, box.y + 100);
+      await expect
+        .poll(() => page.evaluate(() => globalThis.__cameraEvents))
+        .toEqual([
+          {
+            type: "mousemove",
+            button: 0,
+            buttons: 2,
+            clientX: box.x + 95,
+            movementX: -5,
+          },
+          {
+            type: "mouseup",
+            button: 2,
+            buttons: 0,
+            clientX: box.x + 95,
+            movementX: 0,
+          },
+          {
+            type: "mousedown",
+            button: 2,
+            buttons: 2,
+            clientX: box.x + 95 + box.width / 2,
+            movementX: 0,
+          },
+          {
+            type: "mousemove",
+            button: 0,
+            buttons: 2,
+            clientX: box.x + 95 + box.width / 2 - 15,
+            movementX: -15,
+          },
+        ]);
+      await page.mouse.move(box.x + 70, box.y + 100);
+      await expect
+        .poll(() => page.evaluate(() => globalThis.__cameraEvents.at(-1)))
+        .toEqual({
+          type: "mousemove",
+          button: 0,
+          buttons: 2,
+          clientX: box.x + 95 + box.width / 2 - 25,
+          movementX: -10,
+        });
+      await page.mouse.up({ button: "right" });
     } finally {
       await closeOffline(fixture);
     }

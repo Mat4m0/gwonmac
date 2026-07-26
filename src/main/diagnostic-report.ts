@@ -8,6 +8,7 @@ import type {
   CaptureMetadata,
   LogRecord,
 } from "./diagnostic-recorder.js";
+import { ValidationError } from "../shared/errors.js";
 
 export interface PreviousSessionExport {
   sessionId: string;
@@ -20,10 +21,37 @@ export interface PreviousSessionExport {
   warningCount: number;
 }
 
-function parseLogRecords(text: string): LogRecord[] {
+/**
+ * The one reader of a session's JSONL. A process killed between `write` and
+ * the newline leaves one incomplete final record, and that is normal: it must
+ * cost the reader that record and nothing else. Both the current session's
+ * export and the previous session's report come through here, so neither can
+ * be tolerant while the other throws.
+ */
+export function parseLogRecords(text: string): LogRecord[] {
   const records: LogRecord[] = [];
-  for (const line of text.split("\n")) {
-    if (!line) continue;
+  const lines = text.split("\n");
+  let finalNonEmpty = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index]) {
+      finalNonEmpty = index;
+      break;
+    }
+  }
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    if (!line) {
+      // One or more line endings after the final record are harmless. An
+      // empty line before later data is interior corruption, just like an
+      // invalid JSON value there; the recorder never writes blank records.
+      if (index < finalNonEmpty) {
+        throw new ValidationError(
+          `diagnostics event log line ${index + 1} is invalid`,
+        );
+      }
+      continue;
+    }
+    let valid = false;
     try {
       const record = JSON.parse(line) as LogRecord;
       if (
@@ -33,9 +61,17 @@ function parseLogRecords(text: string): LogRecord[] {
         typeof record.subsystem === "string"
       ) {
         records.push(record);
+        valid = true;
       }
     } catch {
-      // A killed process can leave one incomplete final JSONL record.
+      // Handled below: only the final non-empty record may be torn.
+    }
+    if (!valid && index !== finalNonEmpty) {
+      // Never quote the line: validation of a diagnostics file must not turn
+      // the private value it rejected into a new error message.
+      throw new ValidationError(
+        `diagnostics event log line ${index + 1} is invalid`,
+      );
     }
   }
   return records.sort((left, right) => left.seq - right.seq);
@@ -62,15 +98,16 @@ export async function previousAbnormalSession(
     (left, right) => right[1].newestMtime - left[1].newestMtime,
   )[0];
   if (!latest) return null;
-  const records = parseLogRecords(
-    (
-      await Promise.all(
-        latest[1].files.map((file) =>
-          readFile(file, "utf8").catch(() => ""),
-        ),
-      )
-    ).join("\n"),
-  );
+  const records = (
+    await Promise.all(
+      latest[1].files.map(async (file) => {
+        const text = await readFile(file, "utf8").catch(() => null);
+        return text === null ? [] : parseLogRecords(text);
+      }),
+    )
+  )
+    .flat()
+    .sort((left, right) => left.seq - right.seq);
   const final = records.at(-1);
   if (!final) return null;
   const abnormal = [...records].reverse().find(

@@ -1,12 +1,13 @@
-import { createHash } from "node:crypto";
 import { readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { isDigest } from "../../shared/digest.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import {
   COMMON_ARTIFACTS,
   JSPI_ARTIFACTS,
   SNAPSHOT,
 } from "./access-key.js";
+import { fingerprintClientGeneration } from "./client-fingerprint.js";
 import type { Manifest } from "./manifest.js";
 
 const CANDIDATE_MARKER = ".candidate.json";
@@ -44,9 +45,7 @@ async function exists(target: string): Promise<boolean> {
 }
 
 function parseFingerprint(value: unknown): string | null {
-  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
-    ? value
-    : null;
+  return isDigest(value) ? value : null;
 }
 
 function parseCandidateMarker(value: unknown): CandidateMarker | null {
@@ -71,7 +70,6 @@ function parseRejectedClient(value: unknown): RejectedClient | null {
 
 export function clientFingerprint(manifest: Manifest): string {
   const files = [...JSPI_ARTIFACTS, ...COMMON_ARTIFACTS, SNAPSHOT]
-    .sort()
     .map((name) => {
       const entry = manifest.entry(name);
       if (!entry) throw new Error(`manifest is missing ${name}`);
@@ -81,15 +79,11 @@ export function clientFingerprint(manifest: Manifest): string {
         chunkHashes: entry.chunkHashes,
       };
     });
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        compression: manifest.compression,
-        chunkSize: manifest.chunkSize,
-        files,
-      }),
-    )
-    .digest("hex");
+  return fingerprintClientGeneration({
+    compression: manifest.compression,
+    chunkSize: manifest.chunkSize,
+    files,
+  });
 }
 
 export async function markClientCandidate(
@@ -169,6 +163,7 @@ export async function restoreUnconfirmedClient(options: {
 export async function confirmClientCandidate(options: {
   artifacts: string;
   rejectedPath: string;
+  expectedFingerprint: string;
 }): Promise<string | null> {
   const markerPath = clientGenerationPaths(options.artifacts).marker;
   let fingerprint: string | null;
@@ -179,7 +174,7 @@ export async function confirmClientCandidate(options: {
   } catch {
     return null;
   }
-  if (!fingerprint) return null;
+  if (!fingerprint || fingerprint !== options.expectedFingerprint) return null;
   await rm(markerPath, { force: true });
   await rm(clientGenerationPaths(options.artifacts).previous, {
     recursive: true,

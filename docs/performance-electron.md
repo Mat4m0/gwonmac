@@ -1,9 +1,15 @@
 # Electron performance record
 
 This is the evidence log for performance changes to the packaged macOS
-application. `port-plan.md` defines the budgets and acceptance rules; this file
-records measurements and conclusions. Level 2 traces locate causes but are
-profiler-contaminated. Only clean Level 1 captures establish improvements.
+application. It records measurements and the conclusions drawn from them.
+Level 2 traces locate causes but are profiler-contaminated. Only clean Level 1
+captures establish improvements.
+
+Every number below is something that was measured, not something that must
+hold. The thresholds a run passes or fails on belong to the code that enforces
+them — `scripts/toolbox-live/scenarios.mjs` for the paired live benchmark and
+`scripts/toolbox-live/acceptance.mjs` for the common gates — so read a figure
+here as history, and change a budget there.
 
 ## Baseline environment
 
@@ -260,3 +266,33 @@ No direct-canvas rewrite, packet batching, transferable transport, WebGPU
 port, forced GPU preference, higher download concurrency, or merged animation
 loop is justified by these measurements. Revisit those choices only if a
 clean Level 1 capture identifies a repeatable budget violation.
+
+## Audio investigation and cold-content follow-up
+
+Two clean Level 1 captures recorded July 25, 2026 used a 48 kHz Web Audio
+context with 5.33 ms base latency and 16 ms output latency. Neither contained a
+positive-duration scheduling gap. The normal-quality capture still contained a
+499.7 ms visible-frame stall and 120.7 ms scheduler delay during a burst of 669
+snapshot reads, so renderer lateness did not establish an audio discontinuity.
+The later high-quality capture was warm, shorter, and nearly stall-free; it
+does not attribute that difference to the in-game audio setting.
+
+The capture-scoped Web Audio prototype observer was therefore removed rather
+than retained as dormant diagnostics. `audio.resumeFailed` remains as the
+operational signal for a genuine browser audio-resume failure.
+
+The cold burst showed resident 256 KB protocol reads completing quickly while
+hundreds of completions repeatedly resumed renderer/WASM work. An 8 ms
+cooperative snapshot-completion pacer was tested and rejected. A clean
+candidate capture exercised 15 forced yields with no errors or dropped records,
+but a paced interval containing 234 snapshot completions and nine yields still
+produced a 477.1 ms visible submit gap. That exceeds the 100 ms acceptance gate,
+so the pacer, its counter, and its tests were removed. Snapshot pacing is not a
+supported optimization without stronger attribution of the work performed
+after each completed read.
+
+The next investigation uses Level 2 fixed-name frame-submit and
+snapshot-resolution marks plus V8 CPU-profile samples. This distinguishes WASM
+execution, JavaScript, garbage collection, compilation/runtime work, and idle
+time inside the exact long-frame interval. It is attribution evidence only:
+profiler-contaminated captures still cannot prove a performance improvement.

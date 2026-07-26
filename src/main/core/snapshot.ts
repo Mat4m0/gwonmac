@@ -31,6 +31,8 @@ export function buildSnapshotMetadata(opts: {
   };
 }
 
+const SNAPSHOT_INDEX_FORMAT = 1;
+
 /** Wire form for snapshot-metadata.json (residentBits as base64). */
 export function snapshotMetadataWire(meta: SnapshotMetadata): {
   size: number;
@@ -55,11 +57,22 @@ export function parseResidentBitsBase64(b64: string, chunkCount: number): Uint8A
   return out;
 }
 
+/**
+ * Written with a format marker; read back by `PatchClient` without one, which
+ * is the shape the public alpha published. Only a version this build cannot
+ * read makes the installed index stale, and the cost of that is republishing
+ * it — never a re-download.
+ */
+export function snapshotIndexFormatReadable(value: unknown): boolean {
+  return value === undefined || value === SNAPSHOT_INDEX_FORMAT;
+}
+
 export async function publishSnapshotIndex(
   path: string,
   opts: { size: number; chunkSize: number; chunkHashes: string[] },
 ): Promise<void> {
   await writeAtomicJson(path, {
+    formatVersion: SNAPSHOT_INDEX_FORMAT,
     size: opts.size,
     chunkSize: opts.chunkSize,
     chunkHashes: opts.chunkHashes,

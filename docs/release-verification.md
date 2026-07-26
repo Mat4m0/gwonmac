@@ -1,5 +1,47 @@
 # Verify a release
 
+## Release numbering
+
+Releases are numbered by date: `YYYY.M.PATCH`, so `2026.7.0` is the first
+release cut in July 2026 and `2026.7.1` the next one that month. The point of
+the scheme is staleness at a glance — in November, `2026.7.1` tells you the app
+is four months behind, where `0.4.2` would tell you nothing.
+
+The numbers are written in SemVer syntax because npm, the packaging tools, and
+the release workflow all parse them that way, and SemVer forbids leading zeroes
+in a number. July is `7`, never `07`: `2026.07.01` is not a valid version, and
+`src/shared/release.ts` — the one parser this app compares versions with —
+refuses to read it rather than guessing what was meant.
+
+Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
+`-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
+An install running a stable release is never offered a prerelease, and the
+download button on the website offers stable releases only; to try a
+prerelease, take it from the
+[releases page](https://github.com/Mat4m0/gwonmac/releases) deliberately.
+
+**What the number does not mean.** It is not a compatibility promise, and in
+particular it says nothing about which Guild Wars client build the release
+works with. ArenaNet ships client builds on its own schedule, and this app
+certifies them one hash at a time; that is a set, not a scale, and no version
+number can encode it. The app tells you directly instead — see
+[When the client build is not certified](user-guide.md#when-the-client-build-is-not-certified).
+A newer app version fixes an uncertified client build only if that release is
+the one that certified it, so a higher number on its own is not the answer.
+
+Nothing about the number implies an automatic update. Updating is manual, and
+the app checks for a newer release only when asked — see
+[Updates](user-guide.md#updates).
+
+Versions published before this scheme, including the public alpha
+`0.0.1-alpha.1`, used a plain `0.x` number and are older than everything above.
+The macOS bundle also carries a `CFBundleVersion` derived from the release
+version, which is monotonic but not the number you read anywhere in the UI;
+`scripts/macos-version.mjs` owns that mapping and `tests/packaged-smoke.mjs`
+checks it.
+
+## Signing and evidence
+
 Guild Wars for macOS releases are ad-hoc signed and are not notarized by
 Apple. The project deliberately does not require a paid Apple Developer
 membership. Each GitHub release instead publishes three independently useful

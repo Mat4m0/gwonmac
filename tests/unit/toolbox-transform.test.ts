@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   toolboxLayoutWords,
+  TOOLBOX_BUILDS,
   type KnownToolboxBuild,
 } from "../../src/main/core/toolbox-builds.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
 import {
   inspectToolboxCandidate,
   TOOLBOX_HOOK_EXPORT,
@@ -29,8 +31,14 @@ function section(id: number, body: number[]): number[] {
   return [id, ...uleb(body.length), ...body];
 }
 
-function fixture(occupied = false): Uint8Array {
-  const type = section(1, [1, 0x60, 1, 0x7f, 0]);
+// `hookParamType` is the WebAssembly value type of the main loop's single
+// parameter: 0x7f is i32, the signature every certified build declares. A
+// caller passes another one — 0x7e is i64 — to build the module a manifest
+// does not certify, which is the only side the mismatch can come from: a
+// KnownToolboxBuild's hookParams is the literal ["i32"] and cannot say
+// otherwise.
+function fixture(occupied = false, hookParamType = 0x7f): Uint8Array {
+  const type = section(1, [1, 0x60, 1, hookParamType, 0]);
   const imports = section(2, [0]);
   const functions = section(3, [1, 0]);
   const table = section(4, [1, 0x70, 1, 1, 1]);
@@ -70,6 +78,10 @@ function manifest(bytes: Uint8Array): KnownToolboxBuild {
       mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
       playerNumber: 9, agentId: 10, agentX: 11, agentY: 12, agentType: 13,
       agentPlayerNumber: 14, agentModelType: 15,
+      cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
+      cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
+      cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
+      cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
     },
   };
 }
@@ -81,8 +93,12 @@ describe("targeted Toolbox WebAssembly transform", () => {
     const first = transformToolboxWasm(input, build);
     const second = transformToolboxWasm(input, build);
     assert.deepEqual(first, second);
-    assert.equal(WebAssembly.validate(first), true);
-    const module = new WebAssembly.Module(first);
+    // The transform returns a plain Uint8Array, which says nothing about the
+    // buffer behind it, and WebAssembly takes only an unshared one. The copy
+    // is the same bytes in a buffer the checker can see is not shared.
+    const bytes = new Uint8Array(first);
+    assert.equal(WebAssembly.validate(bytes), true);
+    const module = new WebAssembly.Module(bytes);
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(TOOLBOX_HOOK_EXPORT));
     assert.ok(names.includes(TOOLBOX_ORIGINAL_EXPORT));
@@ -97,7 +113,9 @@ describe("targeted Toolbox WebAssembly transform", () => {
         transformAbi: TOOLBOX_TRANSFORM_ABI,
         snapshotAbi: 1,
         snapshotBytes: 64,
-        configBytes: 68,
+        cursorSnapshotAbi: 1,
+        cursorSnapshotBytes: 4160,
+        configBytes: 116,
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,
@@ -132,9 +150,27 @@ describe("targeted Toolbox WebAssembly transform", () => {
       () => transformToolboxWasm(input, { ...manifest(input), sha256: "0".repeat(64) }),
       /unsupported/,
     );
+    const wrongSignature = fixture(false, 0x7e);
     assert.throws(
-      () => transformToolboxWasm(input, { ...manifest(input), hookParams: ["i64"] }),
+      () => transformToolboxWasm(wrongSignature, manifest(wrongSignature)),
       /signature/,
     );
+  });
+});
+
+describe("Toolbox client chain", () => {
+  it("certifies the Toolbox transform against the template-save output", () => {
+    // The Toolbox transform is layered on the template-save client so opting
+    // into the game cursor never costs template save/load. If either manifest
+    // is recertified without the other, this pairing is what breaks first.
+    for (const build of TOOLBOX_BUILDS) {
+      const source = TEMPLATE_SAVE_BUILDS.find(
+        (candidate) => candidate.outputSha256 === build.sha256,
+      );
+      assert.ok(
+        source,
+        `Toolbox build ${build.buildId} does not consume any template-save output`,
+      );
+    }
   });
 });
