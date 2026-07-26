@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -73,5 +73,24 @@ describe("Toolbox workspace doctor", () => {
     });
     assert.equal(report.client.supported, false);
     assert.equal(report.readyForCachedLive, false);
+  });
+
+  it("reports the profile's own native cursor setting without writing to it", async () => {
+    // P4.7 — an observation-tier live run enables nothing, so this setting is
+    // the only thing that installs the Toolbox for it.
+    const profile = await mkdtemp(path.join(tmpdir(), "gw-doctor-cursor-"));
+    const settings = path.join(profile, "settings.json");
+
+    assert.equal((await inspectToolboxWorkspace(profile)).nativeCursor, true);
+
+    await writeFile(settings, JSON.stringify({ nativeCursor: false }));
+    assert.equal((await inspectToolboxWorkspace(profile)).nativeCursor, false);
+
+    // loadSettings() renames a corrupt file aside and writes a backup. A doctor
+    // reads the profile it is asked about and leaves it exactly as it found it.
+    await writeFile(settings, "{ not json");
+    assert.equal((await inspectToolboxWorkspace(profile)).nativeCursor, true);
+    assert.equal(await readFile(settings, "utf8"), "{ not json");
+    assert.deepEqual(await readdir(profile), ["settings.json"]);
   });
 });

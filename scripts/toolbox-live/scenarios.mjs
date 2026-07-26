@@ -1,4 +1,20 @@
-import { runPerformanceScenario } from "./performance.mjs";
+// P4.7 — two tiers, drawn here because this is where they meet.
+//
+// **Automation** acts on the player's behalf. Its two capabilities are trusted
+// Playwright input (`page.mouse`, `page.keyboard`, `page.locator`) and the
+// parent-process command channel that main's `process.on("message")` handler
+// serves. Both are gated on `GW_TOOLBOX_AUTOMATION=1`, which
+// `src/main/toolbox-policy.ts` refuses in a packaged app.
+//
+// **Observation** reads. It runs against the configuration a player has —
+// automation off, the Toolbox installed because `settings.nativeCursor` is on —
+// and is handed no input and no command channel to hold, not merely told not to
+// use them. `liveRunPlan` and `scenarioContext` below are the two places that
+// decide, and each scenario names its tier once.
+//
+// Before this split every live run exported `GW_TOOLBOX_AUTOMATION=1` and got
+// an IPC channel, so the observation surface could not be exercised without the
+// automation surface being present. That is the property P4.7 asks for.
 
 // GWToolbox++ portal_connections.json records this bidirectional connection.
 // Keep live navigation scoped to the one route used by release acceptance.
@@ -7,7 +23,7 @@ const CERTIFIED_PORTAL_ROUTES = Object.freeze({
   148: Object.freeze({ x: 7378, y: 5429, toMapId: 146 }),
 });
 
-export async function waitForPlayable(page) {
+export async function waitForPlayable(page, tier) {
   await page.waitForFunction(
     async () => {
       const progress = await window.gwNative.progress.current();
@@ -26,17 +42,25 @@ export async function waitForPlayable(page) {
     { timeout: 60_000, polling: 100 },
   );
   let inputs = 0;
-  for (const delay of [3_000, 5_000, 20_000]) {
-    if (await page.evaluate(() => window.gwToolboxState?.status === "ready")) {
-      break;
+  const ready = () =>
+    page.evaluate(() => window.gwToolboxState?.status === "ready");
+  if (tier === "automation") {
+    for (const delay of [3_000, 5_000, 20_000]) {
+      if (await ready()) break;
+      await page.waitForTimeout(delay);
+      if (await ready()) break;
+      await page.locator("#canvas").focus();
+      await page.keyboard.press("Enter");
+      inputs += 1;
     }
-    await page.waitForTimeout(delay);
-    if (await page.evaluate(() => window.gwToolboxState?.status === "ready")) {
-      break;
-    }
-    await page.locator("#canvas").focus();
-    await page.keyboard.press("Enter");
-    inputs += 1;
+  } else if (!(await ready())) {
+    // The observation tier synthesizes nothing, including the nudge that gets
+    // an idle client past its login screen. Its scenarios are operator-assisted
+    // anyway, so ask rather than press; the wait below allows half an hour.
+    console.log(JSON.stringify({
+      checkpoint: "waiting-for-toolbox",
+      please: "bring the client to a playable character",
+    }));
   }
   await page.waitForFunction(
     () => {
@@ -66,7 +90,7 @@ async function readTarget(page) {
   });
 }
 
-async function runTarget(page) {
+async function runTarget({ page }) {
   const initial = await readTarget(page);
   const viewport = await page.evaluate(() => ({
     width: window.innerWidth,
@@ -96,7 +120,7 @@ async function runTarget(page) {
   return { method: "bounded-party-row", initial, acquired };
 }
 
-async function runMovement(page) {
+async function runMovement({ page }) {
   const before = await page.evaluate(() => ({
     x: window.gwToolboxState.playerX,
     y: window.gwToolboxState.playerY,
@@ -126,7 +150,7 @@ async function runMovement(page) {
   return { gesture: "two-button-forward", before, after, distance };
 }
 
-async function runMapTransition(page) {
+async function runMapTransition({ page }) {
   const readState = () => page.evaluate(() => {
     const state = window.gwToolboxState;
     return {
@@ -268,8 +292,8 @@ const CURSOR_PHASES = Object.freeze([
 const CURSOR_SAMPLE_INTERVAL_MS = 50;
 const CURSOR_MAX_CHANGES = 192;
 
-async function runCursorCapture(page, { sampleObservations }) {
-  if (!sampleObservations) {
+async function runCursorCapture({ sample, evaluate, wait }) {
+  if (!sample) {
     throw new Error("cursor-capture requires at least one --observe address");
   }
   const changes = [];
@@ -286,10 +310,10 @@ async function runCursorCapture(page, { sampleObservations }) {
     }));
     const until = Date.now() + phase.seconds * 1_000;
     while (Date.now() < until) {
-      const values = await sampleObservations();
+      const values = await sample();
       // Renderer-side effect of the same change: what the consumer published
       // and how long the CSS it handed Chromium is. No pixels, no pointers.
-      const applied = await page.evaluate(() => {
+      const applied = await evaluate(() => {
         const cursor = window.gwToolboxRuntime?.cursor;
         const canvas = globalThis.document.getElementById("canvas");
         return cursor
@@ -310,7 +334,7 @@ async function runCursorCapture(page, { sampleObservations }) {
           overflow += 1;
         }
       }
-      await page.waitForTimeout(CURSOR_SAMPLE_INTERVAL_MS);
+      await wait(CURSOR_SAMPLE_INTERVAL_MS);
     }
   }
   return {
@@ -330,8 +354,12 @@ const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
 export const SCENARIOS = Object.freeze({
-  boot: Object.freeze({ run: noEvidence, validate: acceptEvidence }),
+  // Reaching a playable character is itself a keypress, so the scenarios that
+  // only need the client up are automation too. `tier` names what the run does,
+  // not how interesting its evidence is.
+  boot: Object.freeze({ tier: "automation", run: noEvidence, validate: acceptEvidence }),
   target: Object.freeze({
+    tier: "automation",
     run: runTarget,
     validate(result) {
       if (
@@ -346,6 +374,7 @@ export const SCENARIOS = Object.freeze({
     },
   }),
   movement: Object.freeze({
+    tier: "automation",
     run: runMovement,
     validate(result) {
       if (!(result.evidence?.distance > 5)) {
@@ -353,8 +382,11 @@ export const SCENARIOS = Object.freeze({
       }
     },
   }),
-  reload: Object.freeze({ run: noEvidence, validate: acceptEvidence }),
+  reload: Object.freeze({ tier: "automation", run: noEvidence, validate: acceptEvidence }),
+  // The one observation-tier scenario today: it reads typed addresses and the
+  // cursor the renderer published, and asks a human for every state change.
   "cursor-capture": Object.freeze({
+    tier: "observation",
     run: runCursorCapture,
     validate(result) {
       if (!(result.evidence?.changeCount > 1)) {
@@ -363,6 +395,7 @@ export const SCENARIOS = Object.freeze({
     },
   }),
   "map-transition": Object.freeze({
+    tier: "automation",
     run: runMapTransition,
     validate(result) {
       const evidence = result.evidence;
@@ -380,11 +413,15 @@ export const SCENARIOS = Object.freeze({
     },
   }),
   performance: Object.freeze({
-    run: (_page, context) =>
-      runPerformanceScenario(
-        context.page,
-        context.cdp,
-        context.sendAutomationCommand,
+    tier: "automation",
+    // Imported here rather than at the top of this file: performance.mjs is the
+    // benchmark harness and the only holder of AUTOMATION_COMMAND, so an
+    // observation run never loads the command vocabulary at all.
+    run: async ({ page, cdp, sendAutomationCommand }) =>
+      (await import("./performance.mjs")).runPerformanceScenario(
+        page,
+        cdp,
+        sendAutomationCommand,
       ),
     validate(result) {
       const evidence = result.evidence;
@@ -405,6 +442,69 @@ export const SCENARIOS = Object.freeze({
   }),
 });
 
-export function getScenario(name) {
-  return SCENARIOS[name] ?? null;
+/**
+ * The whole tier decision for one live run: which scenario, which environment
+ * the app is launched in, and which channels the parent opens to it. An
+ * observation run boots the app exactly as a player's does — `nativeCursor` on,
+ * `GW_TOOLBOX_AUTOMATION` unset even when the caller's own environment exports
+ * it — and gets no IPC channel, so `child.send` does not exist to be called.
+ *
+ * Returns null for an unknown scenario name.
+ */
+export function liveRunPlan(name, { baseEnv, userData, cachedOnly }) {
+  const scenario = SCENARIOS[name];
+  if (!scenario) return null;
+  const automation = scenario.tier === "automation";
+  const env = { ...baseEnv, GW_EXPECT_USER_DATA: userData };
+  delete env.ELECTRON_RUN_AS_NODE;
+  if (automation) env.GW_TOOLBOX_AUTOMATION = "1";
+  else delete env.GW_TOOLBOX_AUTOMATION;
+  if (cachedOnly) env.GW_REQUIRE_CACHED_CLIENT = "1";
+  return {
+    name,
+    scenario,
+    tier: scenario.tier,
+    env,
+    stdio: automation
+      ? ["ignore", "pipe", "pipe", "ipc"]
+      : ["ignore", "pipe", "pipe"],
+  };
+}
+
+/**
+ * Why this run may not start, or null. One owner for every refusal, so a new
+ * tier cannot quietly acquire a preflight the others do not have.
+ */
+export function liveRunRefusal(plan, preflight, { cachedOnly }) {
+  if (cachedOnly && !preflight.readyForCachedLive) {
+    return "cached-client-incomplete";
+  }
+  if (preflight.credentials !== "saved") return "saved-login-missing";
+  // An observation run enables nothing: the Toolbox installs only because the
+  // profile's own setting is on. Without it the run would wait half an hour for
+  // a hook that is never installed, so refuse and say which setting.
+  if (plan.tier === "observation" && !preflight.nativeCursor) {
+    return "native-cursor-disabled";
+  }
+  return null;
+}
+
+/**
+ * What a scenario is handed. Observation gets reads: page evaluation, the typed
+ * `--observe` sampler, and a clock. Automation additionally gets the page, the
+ * CDP session and the command channel — the two capabilities that act on the
+ * player's behalf are objects it holds, not flags it is asked to respect.
+ */
+export function scenarioContext(tier, capabilities) {
+  const { page, cdp, sendAutomationCommand, sampleObservations } = capabilities;
+  const observation = {
+    evaluate: (body, argument) => page.evaluate(body, argument),
+    wait: (milliseconds) => page.waitForTimeout(milliseconds),
+    sample: sampleObservations,
+  };
+  return Object.freeze(
+    tier === "automation"
+      ? { ...observation, page, cdp, sendAutomationCommand }
+      : observation,
+  );
 }

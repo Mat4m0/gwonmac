@@ -8,6 +8,8 @@ import {
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
 import { certifyClientBuild } from "../main/client-certification.js";
+import { parseSettings } from "../main/core/settings.js";
+import { DEFAULT_SETTINGS } from "../shared/contracts.js";
 import { inspectToolboxCache } from "../main/core/toolbox-client.js";
 import {
   readPublishedClientManifest,
@@ -18,6 +20,12 @@ import {
 export interface ToolboxDoctorReport {
   profile: "ready" | "missing";
   credentials: "saved" | "missing";
+  /**
+   * The profile's own setting. An observation-tier live run enables nothing, so
+   * this is the only thing that installs the Toolbox for it (P4.7); an
+   * automation run forces it on through GW_TOOLBOX_AUTOMATION and ignores this.
+   */
+  nativeCursor: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -52,6 +60,20 @@ async function isFile(filename: string): Promise<boolean> {
     return value.isFile() && value.size > 0;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Read-only on purpose. `loadSettings` moves a corrupt file aside and writes a
+ * backup; a doctor must not change the profile it is inspecting, and both of
+ * its failure paths end at the defaults anyway.
+ */
+async function readNativeCursorSetting(profile: string): Promise<boolean> {
+  try {
+    const text = await readFile(path.join(profile, "settings.json"), "utf8");
+    return parseSettings(JSON.parse(text)).nativeCursor;
+  } catch {
+    return DEFAULT_SETTINGS.nativeCursor;
   }
 }
 
@@ -105,6 +127,7 @@ export async function inspectToolboxWorkspace(
     || (await isFile(path.join(profile, "credentials.bin")))
     || missing.length < required.length;
   const credentials = await isFile(path.join(profile, "credentials.bin"));
+  const nativeCursor = await readNativeCursorSetting(profile);
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: ToolboxDoctorReport["artifacts"]["integrity"] =
     "invalid";
@@ -149,6 +172,7 @@ export async function inspectToolboxWorkspace(
   return {
     profile: profileReady ? "ready" : "missing",
     credentials: credentials ? "saved" : "missing",
+    nativeCursor,
     artifacts: {
       ready: artifactsReady,
       missing,

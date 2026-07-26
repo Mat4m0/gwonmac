@@ -38,8 +38,8 @@ markup and CSS live under `scripts/toolbox-visual/`; they are not production
 navigation or packaged renderer assets.
 
 `toolbox:doctor` is local-only. It checks the existing profile, published
-client, exact WASM hash, transformed cache, saved-login presence, and complete
-snapshot filename presence. It verifies executable artifacts, but labels
+client, exact WASM hash, transformed cache, saved-login presence, the profile's
+`nativeCursor` setting, and complete snapshot filename presence. It verifies executable artifacts, but labels
 snapshot chunks as presence-only because it does not hash their contents. It
 never starts Electron or contacts ArenaNet.
 
@@ -62,6 +62,18 @@ identify, drag, world map) and records only typed transitions at 20 Hz, bounded 
 192 changes. It pairs the observed scalars with the renderer's published cursor
 state, so one run shows both what the game committed and what reached Chromium.
 
+Each scenario declares a tier, and the tier decides how the app is launched.
+An **automation** scenario is one that acts on the player's behalf; it gets
+`GW_TOOLBOX_AUTOMATION=1`, trusted Playwright input, and the parent-process
+command channel. An **observation** scenario — `cursor-capture` today — gets
+none of the three: it is launched exactly as a player's app is, with no IPC
+channel at all and a scenario context holding only page evaluation, the typed
+`--observe` sampler, and a clock. The Toolbox installs for it because the
+profile's `nativeCursor` setting is on, so the run is refused up front with
+`native-cursor-disabled` when it is off, and it asks the operator to bring the
+client to a playable character rather than pressing Enter itself. The tier the
+run used is the `tier` field of the printed result.
+
 The default is cached-only. Main skips the client updater, and the chunk store
 is physically unable to fetch a missing chunk. `--allow-update` is the explicit
 escape hatch for a deliberate ArenaNet client update. `--leave-open` keeps a
@@ -72,9 +84,10 @@ The harness launches Electron directly with the normal Guild Wars profile,
 verifies the effective user-data directory in main before startup, connects to
 the random loopback DevTools endpoint, and observes structured renderer state.
 It never launches through Playwright's temporary Electron profile.
-Its parent-process IPC channel can only start and stop Level 1 diagnostics when
-the explicit Toolbox automation environment is active; capture mutation is not
-exposed to the sandboxed renderer.
+Its parent-process IPC channel exists only for an automation-tier run and can
+only start and stop Level 1 diagnostics when the explicit Toolbox automation
+environment is active; capture mutation is not exposed to the sandboxed
+renderer.
 `scripts/toolbox-live.mjs` owns process launch, CDP connection, bounded failure
 output, common acceptance, and shutdown. Each registry entry in
 `scripts/toolbox-live/scenarios.mjs` owns its action and semantic validation;

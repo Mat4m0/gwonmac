@@ -11,7 +11,9 @@ import {
   parseToolboxObservations,
 } from "../build/tools/toolbox-observations.js";
 import {
-  getScenario,
+  liveRunPlan,
+  liveRunRefusal,
+  scenarioContext,
   waitForPlayable,
 } from "./toolbox-live/scenarios.mjs";
 import {
@@ -36,43 +38,40 @@ const scenarioArgument = process.argv.indexOf("--scenario");
 const scenario = scenarioArgument >= 0
   ? process.argv[scenarioArgument + 1]
   : "target";
-const selectedScenario = getScenario(scenario);
-if (!selectedScenario) {
+const plan = liveRunPlan(scenario, {
+  baseEnv: process.env,
+  userData,
+  cachedOnly: !allowUpdate,
+});
+if (!plan) {
   console.error(`unknown Toolbox live scenario: ${scenario}`);
   process.exit(2);
 }
+const selectedScenario = plan.scenario;
 const observeArgument = process.argv.indexOf("--observe");
 const observations = parseToolboxObservations(
   observeArgument >= 0 ? process.argv[observeArgument + 1] ?? null : null,
 );
 const preflight = await inspectToolboxWorkspace(userData);
-if (!allowUpdate && !preflight.readyForCachedLive) {
-  console.error(JSON.stringify({ preflight, blocked: "cached-client-incomplete" }));
-  process.exit(2);
-}
-if (preflight.credentials !== "saved") {
-  console.error(JSON.stringify({ preflight, blocked: "saved-login-missing" }));
+const blocked = liveRunRefusal(plan, preflight, { cachedOnly: !allowUpdate });
+if (blocked) {
+  console.error(JSON.stringify({ preflight, blocked }));
   process.exit(2);
 }
 const failureDir = path.join(root, "test-results", "toolbox-live");
-const env = {
-  ...process.env,
-  GW_EXPECT_USER_DATA: userData,
-  GW_TOOLBOX_AUTOMATION: "1",
-  ...(allowUpdate ? {} : { GW_REQUIRE_CACHED_CLIENT: "1" }),
-};
-delete env.ELECTRON_RUN_AS_NODE;
 
 const child = spawn(
   electronBin,
   [".", "--remote-debugging-port=0"],
   {
     cwd: root,
-    env,
-    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    env: plan.env,
+    stdio: plan.stdio,
   },
 );
 
+// Only an automation run has a channel to send on; observation runs are spawned
+// without one, so this is never handed to an observation scenario.
 function sendAutomationCommand(command) {
   return new Promise((resolve, reject) => {
     child.send(command, (error) => {
@@ -155,10 +154,10 @@ try {
   });
   page.on("pageerror", (error) => rendererErrors.push(error.message));
   await page.waitForLoadState("domcontentloaded");
-  let loginInputs = await waitForPlayable(page);
+  let loginInputs = await waitForPlayable(page, plan.tier);
   if (scenario === "reload") {
     await page.reload({ waitUntil: "domcontentloaded" });
-    loginInputs += await waitForPlayable(page);
+    loginInputs += await waitForPlayable(page, plan.tier);
   }
 
   const before = await page.evaluate(() => ({
@@ -174,16 +173,19 @@ try {
     elapsedMs: performance.now() - start.at,
   }), before);
   const observationsBefore = await sampleObservations(page);
-  const scenarioEvidence = await selectedScenario.run(page, {
-    page,
-    cdp,
-    sendAutomationCommand,
-    sampleObservations: observations.length > 0
-      ? () => sampleObservations(page)
-      : null,
-  });
+  const scenarioEvidence = await selectedScenario.run(
+    scenarioContext(plan.tier, {
+      page,
+      cdp,
+      sendAutomationCommand,
+      sampleObservations: observations.length > 0
+        ? () => sampleObservations(page)
+        : null,
+    }),
+  );
 
   result = await projectLiveResult(page, cadence, scenario);
+  result.tier = plan.tier;
   result.loginInputs = loginInputs;
   if (scenarioEvidence) result.evidence = scenarioEvidence;
   if (observations.length > 0) {
