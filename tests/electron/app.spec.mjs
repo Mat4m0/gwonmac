@@ -144,6 +144,7 @@ test.describe("Electron application", () => {
 
       const statePath = path.join(userData, "window-state.json");
       expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({
+        formatVersion: 1,
         bounds: normalBounds,
         mode: "fullscreen",
       });
@@ -208,6 +209,7 @@ test.describe("Electron application", () => {
           { timeout: 15_000 },
         )
         .toEqual({
+          formatVersion: 1,
           bounds: expectedReset,
           mode: "normal",
         });
