@@ -101,17 +101,19 @@ test.describe("client compatibility", () => {
         visibleRestored: true,
         offscreen: [64, 64],
       });
-      // The cache is a separate renderer module; prove the live boot installed
-      // it — gwGlRecon exists only after an install — that an incomplete
-      // program is never frozen, and that a completed one stops costing a
-      // round trip.
+      // The cache is a separate renderer module; prove it ships and resolves as
+      // ESM under gw://app — a copy-renderer or protocol regression rejects the
+      // import — that an incomplete program is never frozen, and that a
+      // completed one stops costing a round trip. Whether *boot* installs it is
+      // not assertable here: installGlProgramCache runs from
+      // Module.instantiateWasm, and the offline shell has no client, so the
+      // glue never loads.
       expect(
         await fixture.page.evaluate(async () => {
           const { installGlProgramCache } = await import("./gl-program-cache.js");
-          // Installing a second cache into the live page would otherwise
-          // overwrite gwGlRecon and bump the session's real query counters.
+          // Installing into the live page overwrites gwGlRecon and would bump
+          // the session's real query counters; both are put back below.
           const realRecon = window.gwGlRecon;
-          const bootInstalled = typeof realRecon === "function";
           const realDiagnostics = window.gwDiagnostics;
           window.gwDiagnostics = { ...realDiagnostics, glProgramQuery: () => {} };
           const module = { HEAPU8: new Uint8Array(new ArrayBuffer(1024)) };
@@ -143,10 +145,9 @@ test.describe("client compatibility", () => {
           const held = read(0x91b1);
           window.gwGlRecon = realRecon;
           window.gwDiagnostics = realDiagnostics;
-          return { bootInstalled, polling, completed, held, calls: calls.length };
+          return { polling, completed, held, calls: calls.length };
         }),
       ).toEqual({
-        bootInstalled: true,
         polling: [0, 0],
         completed: 1,
         held: 1,
