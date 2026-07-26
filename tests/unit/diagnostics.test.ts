@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.ts";
+import type { DiagnosticEvent } from "../../src/main/diagnostics/schema.ts";
 import { isRendererMetrics, type RendererMetrics } from "../../src/shared/diagnostics.ts";
 import {
   analyzeFrames,
@@ -193,7 +195,130 @@ describe("frame capture analysis", () => {
   });
 });
 
-describe("capture validation", () => {
+function eventLog(events: DiagnosticEvent[]): string {
+  return events
+    .map((event, index) => {
+      const record = diagnosticEventRecord(event);
+      return JSON.stringify({
+        seq: index + 1,
+        tsUs: (index + 1) * 1_000,
+        wallTime: new Date((index + 1) * 1_000).toISOString(),
+        level: record.level,
+        subsystem: record.subsystem,
+        name: record.name,
+        fields: record.fields,
+      });
+    })
+    .join("\n");
+}
+
+/** A format 2 export: no histograms.json, and a redaction result to reproduce. */
+function currentCapture(events: DiagnosticEvent[]): Capture {
+  return {
+    manifest: {
+      formatVersion: 2,
+      applicationVersion: "1.0.0",
+      sessionId: "session",
+      captureLevel: 0,
+      exportedAt: new Date(0).toISOString(),
+      droppedEventCount: 0,
+      includedFiles: [
+        "manifest.json",
+        "summary.json",
+        "events.jsonl",
+        "environment.json",
+        "settings-redacted.json",
+      ],
+      redaction: {
+        records: events.length,
+        schemaChecked: events.length,
+        openFields: 0,
+        traceBytesScanned: 0,
+      },
+      profilerContaminated: false,
+    },
+    summary: {
+      sessionId: "session",
+      uptimeMs: 1000,
+      captureLevel: 0,
+      droppedEvents: 0,
+      counters: {},
+      histograms: {},
+      latest: {},
+    },
+    environment: {},
+    eventLog: eventLog(events),
+  };
+}
+
+describe("capture validation, format 2", () => {
+  const events: DiagnosticEvent[] = [
+    { k: "socket.close", socketId: 1, reason: "peer" },
+    { k: "settings.saveFailed", code: "disk_full" },
+  ];
+
+  it("reproduces the manifest's redaction result from events.jsonl", () => {
+    assert.deepEqual(validateCapture(currentCapture(events)), []);
+  });
+
+  it("refuses a manifest whose redaction result the event log does not support", () => {
+    const capture = currentCapture(events);
+    // The failure mode `redaction: "passed"` could never have: a manifest
+    // that claims a scan wider than the file it shipped.
+    assert.equal(capture.manifest.formatVersion, 2);
+    if (capture.manifest.formatVersion !== 2) return;
+    capture.manifest.redaction.schemaChecked = 9;
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /claims 9 schema-checked records, events\.jsonl has 2/,
+    );
+  });
+
+  it("rejects an event log carrying a field the schema does not declare", () => {
+    const capture = currentCapture(events);
+    capture.eventLog = `${capture.eventLog}\n${JSON.stringify({
+      seq: 3,
+      tsUs: 3_000,
+      wallTime: new Date(3_000).toISOString(),
+      level: "error",
+      subsystem: "app",
+      name: "app.uncaughtException",
+      fields: { code: "unknown", message: "ENOENT /Users/x/secret.txt" },
+    })}`;
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /events\.jsonl is not exportable[\s\S]*undeclared field message/,
+    );
+  });
+
+  it("does not require histograms.json, and does require the rest", () => {
+    const capture = currentCapture(events);
+    assert.equal(
+      validateCapture(capture).join("\n").includes("histograms.json"),
+      false,
+    );
+    capture.manifest.includedFiles = capture.manifest.includedFiles.filter(
+      (file) => file !== "summary.json",
+    );
+    assert.match(validateCapture(capture).join("\n"), /does not declare summary\.json/);
+  });
+
+  it("refuses a trace scan the included files do not corroborate", () => {
+    const capture = currentCapture(events);
+    if (capture.manifest.formatVersion !== 2) return;
+    capture.manifest.redaction.traceBytesScanned = 4096;
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /trace scan and included files disagree/,
+    );
+  });
+});
+
+// Format 1 is the alpha's export, and 117 of them are in the wild. The
+// validator keeps reading it: `histograms.json` stays required there and
+// `redaction: "passed"` stays the only verdict it can offer, because nothing
+// in a format 1 export can reproduce more than that.
+describe("capture validation, format 1", () => {
   it("accepts a complete redacted capture and rejects dropped records", () => {
     const capture: Capture = {
       manifest: {
@@ -228,6 +353,14 @@ describe("capture validation", () => {
     assert.deepEqual(validateCapture(capture), []);
     capture.summary.droppedEvents = 2;
     assert.match(validateCapture(capture).join("\n"), /2 flight-recorder events/);
+    capture.summary.droppedEvents = 0;
+    capture.manifest.includedFiles = capture.manifest.includedFiles.filter(
+      (file) => file !== "histograms.json",
+    );
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /does not declare histograms\.json/,
+    );
   });
 
   it("refuses to call a Level 2 capture complete without its Chromium trace", () => {

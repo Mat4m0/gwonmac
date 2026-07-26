@@ -50,6 +50,10 @@ import {
   previousAbnormalSession,
 } from "./diagnostic-report.js";
 import {
+  inspectEventLog,
+  type RedactionResult,
+} from "./diagnostics/detector.js";
+import {
   diagnosticEventRecord,
   type DiagnosticEvent,
 } from "./diagnostics/schema.js";
@@ -815,35 +819,37 @@ export async function flushDiagnostics(): Promise<void> {
   await recorder.flush();
 }
 
-function containsSensitiveText(text: string): boolean {
-  return redactText(text) !== text;
-}
-
-function assertRedacted(text: string): void {
-  if (containsSensitiveText(text)) {
-    throw new Error("diagnostics export failed redaction scan");
-  }
-}
-
 /**
  * The Chromium trace is the one document nobody here authored, so it is the
  * one a pattern scanner is the right tool for. `redactTraceStream` owns the
  * chunk boundary — the place a streaming redactor leaks — and this owns the
- * files.
+ * files. It returns the bytes it scanned, because the manifest states what
+ * was covered rather than asserting a verdict about it.
  */
-async function sanitizeTraceFile(source: string, target: string): Promise<void> {
+async function sanitizeTraceFile(
+  source: string,
+  target: string,
+): Promise<number> {
   const input: AsyncIterable<string> = createReadStream(source, {
     encoding: "utf8",
     highWaterMark: 1024 * 1024,
   });
   const output = await open(target, "w", 0o600);
+  let scanned = 0;
+  async function* counted(): AsyncGenerator<string> {
+    for await (const chunk of input) {
+      scanned += Buffer.byteLength(chunk);
+      yield chunk;
+    }
+  }
   try {
-    for await (const text of redactTraceStream(input)) {
+    for await (const text of redactTraceStream(counted())) {
       await output.write(text);
     }
   } finally {
     await output.close();
   }
+  return scanned;
 }
 
 export async function exportDiagnosticsZip(
@@ -869,12 +875,15 @@ export async function exportDiagnosticsZip(
     const exportedEvents = await recorder.exportedEvents();
     const capture = recorder.captureResult();
     const previous = await previousAbnormalSession(dir, recorder.sessionId);
+    // P2.4 — the detector runs before anything is written, and it throws. An
+    // event this build cannot account for stops the export rather than being
+    // scrubbed on the way out.
+    const inspection = inspectEventLog(exportedEvents.text);
     const files: string[] = [
       "manifest.json",
       "report.json",
       "summary.json",
       "events.jsonl",
-      "histograms.json",
       "environment.json",
       "settings-redacted.json",
     ];
@@ -885,22 +894,28 @@ export async function exportDiagnosticsZip(
       await copyFile(framePath, path.join(staging, "frames.bin"));
       files.push("frames.bin");
     }
+    let traceBytesScanned = 0;
     if (lastTracePath) {
-      await sanitizeTraceFile(
+      traceBytesScanned = await sanitizeTraceFile(
         lastTracePath,
         path.join(staging, "chromium-trace.json"),
       );
       files.push("chromium-trace.json");
     }
     const manifest = {
-      formatVersion: 1,
+      // 2 — `histograms.json` is gone (it duplicated `summary.json`) and
+      // `redaction` is the detector's result rather than the word "passed".
+      formatVersion: 2,
       applicationVersion: extras.appVersion,
       sessionId: recorder.sessionId,
       captureLevel: recordedCaptureLevel,
       exportedAt: new Date().toISOString(),
       droppedEventCount: summary.droppedEvents,
       includedFiles: files,
-      redaction: "passed",
+      // What was checked, not a verdict about it. `openFields` is the residue
+      // the closed schema has not absorbed yet, and a reader can hold the
+      // export to these numbers by re-running the detector over events.jsonl.
+      redaction: { ...inspection, traceBytesScanned } satisfies RedactionResult,
       profilerContaminated: files.includes("chromium-trace.json"),
       eventLog: {
         completeFromStart: exportedEvents.completeFromStart,
@@ -960,13 +975,24 @@ export async function exportDiagnosticsZip(
       sessionId: recorder.sessionId,
       captureLevel: recordedCaptureLevel,
     });
-    const documents: Record<string, string> = {
+    // The event log is written byte for byte as the detector inspected it.
+    // Redacting it afterwards would mean the file in the export is not the
+    // file that was checked, and a reader could not reproduce the manifest's
+    // numbers.
+    const certified: Record<string, string> = {
+      "events.jsonl": exportedEvents.text,
+    };
+    // Everything else is a summary whose leaves come from OS and Chromium
+    // APIs, or a previous session written by a build whose schema we do not
+    // control. The pattern scanner is the only tool that applies to those,
+    // and it stays until they are schema'd too: dropping it to satisfy
+    // "redactText for the trace only" would be a privacy regression rather
+    // than a simplification.
+    const patternScanned: Record<string, string> = {
       "manifest.json": JSON.stringify(manifest, null, 2),
       "report.json": JSON.stringify(report, null, 2),
       "summary.json": JSON.stringify(summary, null, 2),
-      "events.jsonl": exportedEvents.text,
       ...(previous ? { "previous-events.jsonl": previous.text } : {}),
-      "histograms.json": JSON.stringify(summary.histograms, null, 2),
       "environment.json": JSON.stringify(
         {
           ...environment,
@@ -984,11 +1010,18 @@ export async function exportDiagnosticsZip(
           }
         : {}),
     };
+    const documents: Record<string, string> = {
+      ...certified,
+      ...Object.fromEntries(
+        Object.entries(patternScanned).map(([name, text]) => [
+          name,
+          redactText(text),
+        ]),
+      ),
+    };
     for (const [name, text] of Object.entries(documents)) {
-      const redacted = redactText(text);
-      assertRedacted(redacted);
       const file = path.join(staging, name);
-      await writeFile(file, redacted, { mode: 0o600 });
+      await writeFile(file, text, { mode: 0o600 });
       await chmod(file, 0o600);
     }
     await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
