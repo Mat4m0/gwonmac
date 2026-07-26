@@ -10,13 +10,19 @@ import vueParser from "vue-eslint-parser";
 // `export ... from`; `no-restricted-syntax` covers dynamic `import()` and
 // `require()`, which that rule does not see.
 
-// Leaving src/main/core: a bare upward file, two or more levels up unless the
-// target is src/shared, or any spelling that names src/main. src/main/core has
-// no subdirectories today; if one is added, `../sibling.js` inside it trips the
-// first alternative. Widen this deliberately then — never disable it.
-const OUT_OF_CORE = String.raw`^\.\./[^/]+$|^(?!(?:\.\./)+shared/)(?:\.\./){2,}|(?:^|/)(?:\.\.|src)/main/`;
+// Leaving src/main/core: anything that climbs out of it, unless the leading
+// `../` run lands in src/shared — plus any spelling that names src/main from
+// further away. Enumerating the shapes of an upward specifier (a bare file, two
+// levels up) missed `../services/registry.js`, which leaves core just as surely;
+// "climbs out and is not src/shared" is the property, and it is shorter.
+const OUT_OF_CORE = String.raw`^(?!(?:\.\./)+shared/)\.\./|(?:^|/)(?:\.\.|src)/main/`;
 const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
-const INTO_APP = String.raw`(?:^|/)(?:\.\.|src)/(?:main|renderer|preload)/`;
+// Leaving apps/website: any escape into the host application's src/ other than
+// src/shared. Naming main/renderer/preload alone let src/tools/** through while
+// the message claimed only src/shared was reachable. The first alternative is
+// anchored to a `../` run so a package whose own path contains `/src/` is not
+// caught; the second keeps the original spellings rejected.
+const INTO_APP = String.raw`^(?:\.\./)+src/(?!shared/)|(?:^|/)(?:\.\.|src)/(?:main|renderer|preload)/`;
 const ELECTRON = String.raw`^electron(/|$)`;
 
 /** esquery reads `/.../` inside an attribute value, so its slashes need escaping. */

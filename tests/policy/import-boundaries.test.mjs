@@ -87,9 +87,23 @@ const REJECTED = [
       'import { userDataDir } from "../../paths.js";\nexport const probe = userDataDir;\n',
   },
   {
+    what: "src/main/core imports upward through a subdirectory of src/main",
+    // src/main has no subdirectory but core today. The rule pins "does not
+    // climb out of core", not "does not name one of today's files", so the day
+    // src/main/services/ appears this must already be rejected.
+    file: "src/main/core/probe.ts",
+    source:
+      'import { registry } from "../services/registry.js";\nexport const probe = registry;\n',
+  },
+  {
     what: "src/main/core dynamically imports upward from src/main",
     file: "src/main/core/probe.ts",
     source: 'export const probe = async () => import("../paths.js");\n',
+  },
+  {
+    what: "src/main/core dynamically imports upward through a subdirectory of src/main",
+    file: "src/main/core/probe.ts",
+    source: 'export const probe = async () => import("../services/registry.js");\n',
   },
   {
     what: "src/main/core dynamically imports upward, spelled through src/main",
@@ -146,6 +160,20 @@ const REJECTED = [
     what: "apps/website dynamically imports src/main",
     file: "apps/website/app/probe.ts",
     source: 'export const probe = async () => import("../../../../src/main/paths");\n',
+  },
+  {
+    what: "apps/website imports developer tooling under src/tools",
+    // "only src/shared" is the boundary; main, renderer and preload were the
+    // only names spelled out, so src/tools/** crossed it with lint green.
+    file: "apps/website/app/probe.ts",
+    source:
+      'import { validate } from "../../../../src/tools/diagnostics/validate";\nexport const probe = validate;\n',
+  },
+  {
+    what: "an apps/website .vue SFC imports developer tooling under src/tools",
+    file: "apps/website/app/pages/probe.vue",
+    source:
+      '<script setup lang="ts">\nimport { validate } from "../../../../src/tools/diagnostics/validate";\nconst probe = validate;\n</script>\n<template><div>{{ probe }}</div></template>\n',
   },
 ];
 
