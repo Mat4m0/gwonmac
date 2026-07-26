@@ -44,7 +44,7 @@ import {
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { MAX_QUEUED_BYTES } from "./core/sockets.js";
+import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
@@ -180,9 +180,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     if (!(data instanceof Uint8Array) && !ArrayBuffer.isView(data)) {
       throw new ValidationError("data must be a Uint8Array");
     }
-    if (data.byteLength > MAX_QUEUED_BYTES) {
+    if (data.byteLength > MAX_QUEUED_BYTES_PER_SOCKET) {
       throw new ValidationError(
-        `socket payload exceeds ${MAX_QUEUED_BYTES} bytes`,
+        `socket payload exceeds ${MAX_QUEUED_BYTES_PER_SOCKET} bytes`,
       );
     }
     const bytes =
