@@ -134,10 +134,14 @@ describe("generation mutex", () => {
 
     // The caller of the failed task still sees its error…
     await assert.rejects(failed, /rollback failed/);
-    // …and the next queued operation runs anyway. With `.then(fn)` instead of
-    // `.then(fn, fn)` this promise would never settle.
-    assert.equal(await queued, "second finished");
+
+    const [outcome] = await Promise.allSettled([queued]);
+    // …and the next queued operation runs anyway. That it *ran* is the property
+    // that separates the two forms: with `.then(fn)` instead of `.then(fn, fn)`
+    // the queued task is never invoked and its caller inherits the previous
+    // task's rejection. It fails with "rollback failed"; it does not hang.
     assert.deepEqual(ran, ["first", "second"]);
+    assert.deepEqual(outcome, { status: "fulfilled", value: "second finished" });
   });
 
   it("gives each caller its own task's result, in queue order", async () => {
