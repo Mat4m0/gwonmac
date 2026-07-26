@@ -98,7 +98,13 @@
     text: 'Check for Updates',
   });
   launcherUpdateCheck.href = '#';
+  // The same sentence is written into all three surfaces, so all three
+  // announce it. The launcher is where the check is offered before Settings is
+  // reachable; a failure nobody is told about is the failure this whole path
+  // exists to stop.
   const launcherUpdateStatus = element('span', { id: 'loading-update-status' });
+  launcherUpdateStatus.setAttribute('role', 'status');
+  launcherUpdateStatus.setAttribute('aria-live', 'polite');
   launcherUpdateStatus.hidden = true;
   const launcherUpdateWhen = element('span', { id: 'loading-update-when' });
   launcherUpdateWhen.hidden = true;
@@ -123,6 +129,8 @@
   const compatDetail = element('p', { id: 'client-compat-detail' });
   const compatVersion = element('span', { id: 'client-compat-version' });
   const compatUpdateStatus = element('span', { id: 'client-compat-update' });
+  compatUpdateStatus.setAttribute('role', 'status');
+  compatUpdateStatus.setAttribute('aria-live', 'polite');
   compatUpdateStatus.hidden = true;
   const compatCheck = element('button', {
     className: 'launcher-link',
