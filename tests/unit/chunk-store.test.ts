@@ -247,12 +247,28 @@ describe("chunk-store", () => {
       assert.deepEqual(fetched, []);
     });
 
-    it("ignores a boot list whose chunk count is not this snapshot's", async () => {
+    it("keeps the warm start when the snapshot changed size", async () => {
+      const root = await freshDir();
+      const boot = join(root, "boot-chunks.json");
+      // Every ArenaNet client update changes `Gw.snapshot` and so its chunk
+      // count. The boot indices still name the byte ranges the game touches,
+      // so this must prefetch — discarding it would warm nothing on the one
+      // launch that needs it most.
+      await writeFile(
+        boot,
+        JSON.stringify({ chunkSize: CHUNK, count: 9, chunks: [0, 2] }),
+      );
+      const fetched: string[] = [];
+      await (await storeOver(boot, root, fetched)).prefetch();
+      assert.equal(fetched.length, 1, "one hash covers both indices");
+    });
+
+    it("ignores a boot list whose entries are not chunk indices", async () => {
       const root = await freshDir();
       const boot = join(root, "boot-chunks.json");
       await writeFile(
         boot,
-        JSON.stringify({ chunkSize: CHUNK, count: 9, chunks: [0, 2] }),
+        JSON.stringify({ chunkSize: CHUNK, count: 3, chunks: [0, "2"] }),
       );
       const fetched: string[] = [];
       await (await storeOver(boot, root, fetched)).prefetch();
@@ -271,16 +287,18 @@ describe("chunk-store", () => {
       assert.deepEqual(fetched, []);
     });
 
-    it("ignores a boot list holding an index this snapshot cannot have", async () => {
+    it("drops an index this snapshot cannot address and prefetches the rest", async () => {
       const root = await freshDir();
       const boot = join(root, "boot-chunks.json");
+      // A shrunk snapshot, which is a normal client update. Index 7 no longer
+      // exists; index 0 is still the first 64 bytes of the boot working set.
       await writeFile(
         boot,
         JSON.stringify({ chunkSize: CHUNK, count: 3, chunks: [0, 7] }),
       );
       const fetched: string[] = [];
       await (await storeOver(boot, root, fetched)).prefetch();
-      assert.deepEqual(fetched, []);
+      assert.equal(fetched.length, 1);
     });
 
     it("replaces a boot list from other chunking instead of merging into it", async () => {

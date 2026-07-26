@@ -461,15 +461,26 @@ export class ChunkStore {
 
   /**
    * The boot list records chunk INDICES, so it means something only against
-   * the chunking it was written for. It has always recorded `chunkSize` and
-   * `count`; it never checked them, so a change to remote chunking silently
-   * reinterpreted every stored index against a different byte range. A
-   * mismatch is a cache miss: we lose one warm start, not correctness.
+   * the chunking it was written for. It has always recorded `chunkSize`; it
+   * never checked it, so a change to remote chunking silently reinterpreted
+   * every stored index against a different byte range. A mismatch is a cache
+   * miss: we lose one warm start, not correctness.
    *
-   * Geometry, not content, is the key. The indices stay meaningful across an
-   * ArenaNet client update — they are still the same byte ranges the game
-   * touches at boot — so hashing the manifest here would throw the hint away
-   * on every update for nothing.
+   * Geometry, not content, is the key, and `chunkSize` is the whole of it —
+   * index `i` is `[i*chunkSize, (i+1)*chunkSize)` no matter how many chunks
+   * the snapshot has. The indices stay meaningful across an ArenaNet client
+   * update — they are still the same byte ranges the game touches at boot — so
+   * gating on anything that tracks the snapshot's *contents* would throw the
+   * hint away on every update for nothing. `count` is exactly such a thing:
+   * `Gw.snapshot` is the game data, so essentially every client update changes
+   * its size and therefore its chunk count. It is still written, for
+   * diagnostics, and a snapshot that shrank simply drops the indices it can no
+   * longer address rather than discarding the whole file. Every prefetched
+   * chunk is hash-verified on arrival, so a wrong index costs a wasted fetch,
+   * never a wrong byte.
+   *
+   * An entry that is not a chunk index at all is different: that file is not
+   * one of ours, and it is refused rather than partly believed.
    *
    * A boot list with no `formatVersion` is the shape the public alpha wrote.
    * It carried the same fields, so it is read as written.
@@ -486,20 +497,16 @@ export class ChunkStore {
     if (record.formatVersion !== undefined && record.formatVersion !== 1) {
       return null;
     }
-    if (
-      record.chunkSize !== this.chunkSize ||
-      record.count !== this.hashes.length ||
-      !Array.isArray(record.chunks)
-    ) {
+    if (record.chunkSize !== this.chunkSize || !Array.isArray(record.chunks)) {
       return null;
     }
-    const chunks = record.chunks.filter(
-      (index): index is number =>
-        Number.isSafeInteger(index) &&
-        (index as number) >= 0 &&
-        (index as number) < this.hashes.length,
-    );
-    if (chunks.length !== record.chunks.length) return null;
+    const chunks: number[] = [];
+    for (const index of record.chunks as unknown[]) {
+      if (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) {
+        return null;
+      }
+      if (index < this.hashes.length) chunks.push(index);
+    }
     return [...new Set(chunks)].sort((a, b) => a - b);
   }
 
