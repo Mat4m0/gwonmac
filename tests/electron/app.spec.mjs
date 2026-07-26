@@ -87,7 +87,7 @@ test.describe("Electron application", () => {
       expect(events).toContain('"name":"app.beforeQuit"');
       expect(events).toContain('"name":"quit.cleanupStarted"');
       expect(events).toContain('"name":"quit.cleanupCompleted"');
-      expect(events).toContain('"reason":"owner closed"');
+      expect(events).toContain('"reason":"owner"');
       expect(events).not.toContain('"name":"app.uncaughtException"');
       expect(events).not.toContain('"name":"renderer.recoveryScheduled"');
       expect(events).not.toContain("Object has been destroyed");
