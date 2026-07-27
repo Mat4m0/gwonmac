@@ -73,7 +73,7 @@ untouched.
 Neither half holds them by hand any more. `WASM_BRIDGE_MARKERS` in
 `src/shared/contracts.ts` is the one source: the transform imports it, and the
 renderer — a sandboxed module that may not reach the main process — receives it
-through the preload that `scripts/generate-preload.mjs` produces. They used to
+through the preload that `scripts/generate-preload.ts` produces. They used to
 be two copies, and drift would have silently turned every bridged call into a
 real `stat`.
 

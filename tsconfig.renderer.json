@@ -43,8 +43,6 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "allowJs": true,
-    "checkJs": true,
     // `pnpm typecheck` overrides this back to --noEmit. Checking is not
     // building: without the override this project writes build/renderer and
     // build/shared, so a bare `pnpm typecheck` after a build replaced the main
@@ -59,9 +57,8 @@
   // src/shared is reached through the renderer's imports, so listing two of its
   // files here only ever said which two the author happened to think of.
   //
-  // Both source extensions, because the renderer converts to TypeScript a batch
-  // at a time and the two must compile as one program while that is under way.
-  // `**/*.ts` subsumes the ambient `src/renderer/gw-native.d.ts` that used to be
-  // named separately.
-  "include": ["src/renderer/**/*.js", "src/renderer/**/*.ts"]
+  // One extension: the renderer holds no JavaScript, so `allowJs`, `checkJs` and
+  // a `**/*.js` glob went with the last file they applied to. `**/*.ts` subsumes
+  // the ambient `src/renderer/gw-native.d.ts` that used to be named separately.
+  "include": ["src/renderer/**/*.ts"]
 }

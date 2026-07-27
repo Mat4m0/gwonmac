@@ -38,7 +38,7 @@ Versions published before this scheme, including the public alpha
 `0.0.1-alpha.1`, used a plain `0.x` number and are older than everything above.
 The macOS bundle also carries a `CFBundleVersion` derived from the release
 version, which is monotonic but not the number you read anywhere in the UI;
-`scripts/macos-version.mjs` owns that mapping and `tests/packaged-smoke.ts`
+`scripts/macos-version.ts` owns that mapping and `tests/packaged-smoke.ts`
 checks it.
 
 ## Signing and evidence

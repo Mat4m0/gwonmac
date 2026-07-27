@@ -86,7 +86,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
           'Screenshots by <a href="https://bloogum.net/guildwars/">Snapshot Henchman</a>',
       },
     );
-    // Not the preload: P5.6 moved that to scripts/generate-preload.mjs, which
+    // Not the preload: P5.6 moved that to scripts/generate-preload.ts, which
     // splices the canonical channel constants in and is the only producer of
     // build/preload/preload.cjs.
     assert.equal(existsSync(path.join(root, "build/preload")), false);
@@ -191,10 +191,6 @@ describe("scripts/build.mjs orders the three producers of build/renderer", () =>
       assets < kernel && renderer < kernel,
       `kernel written at ${kernel}, before assets ${assets} or renderer ${renderer}`,
     );
-  });
-
-  it("generates the preload after the main program it reads its contracts from", () => {
-    assert.ok(mainCompilerPosition() < stepPosition("scripts/generate-preload.mjs"));
   });
 });
 

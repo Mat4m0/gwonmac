@@ -33,10 +33,10 @@ const RELEASE_PATTERN =
  * signed release would ship with `NaN` in its CFBundleVersion, so that drift
  * throws here rather than at the notary.
  *
- * @param {string | undefined} channel The prerelease channel, or `undefined`
- *   for the release the prereleases lead to.
+ * `channel` is the prerelease channel, or `undefined` for the release the
+ * prereleases lead to.
  */
-function stageOf(channel) {
+function stageOf(channel: string | undefined): number {
   switch (channel) {
     case "alpha":
       return 0;
@@ -53,8 +53,7 @@ function stageOf(channel) {
   }
 }
 
-/** @param {string} version */
-export function macOSBundleVersions(version) {
+export function macOSBundleVersions(version: string) {
   const match = RELEASE_PATTERN.exec(version);
   if (!match) {
     throw new Error(

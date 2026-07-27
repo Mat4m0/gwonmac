@@ -24,13 +24,19 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** One local link target, and the line of its document that carries it. */
+export type LocalTarget = { line: number; target: string };
+
+/** A `LocalTarget` that resolved to nothing, named by the document holding it. */
+export type BrokenLink = LocalTarget & { file: string };
+
 /**
  * Markdown files tracked by git, plus new ones that are not gitignored.
  * A file deleted but not yet staged is still cached, so existence is checked
  * here: without it the whole run dies on ENOENT and reports nothing, exactly
  * when a deletion has just broken links elsewhere.
  */
-export function listMarkdownFiles(root = repoRoot) {
+export function listMarkdownFiles(root = repoRoot): string[] {
   return listRepositoryFiles(root)
     .filter((file) => file.endsWith(".md"))
     .filter((file) => existsSync(join(root, file)))
@@ -38,7 +44,7 @@ export function listMarkdownFiles(root = repoRoot) {
 }
 
 /** Every path that will exist after this working tree is committed. */
-export function listRepositoryFiles(root = repoRoot) {
+export function listRepositoryFiles(root = repoRoot): string[] {
   const out = execFileSync(
     "git",
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -47,11 +53,8 @@ export function listRepositoryFiles(root = repoRoot) {
   return [...new Set(out.split("\0").filter(Boolean))].sort();
 }
 
-/**
- * True for targets we do not resolve on disk: URLs, mailto:, bare anchors.
- * @param {string} target
- */
-function isExternal(target) {
+/** True for targets we do not resolve on disk: URLs, mailto:, bare anchors. */
+function isExternal(target: string): boolean {
   return (
     target === "" ||
     target.startsWith("#") ||
@@ -60,8 +63,7 @@ function isExternal(target) {
   );
 }
 
-/** @param {string} line */
-function stripCodeSpans(line) {
+function stripCodeSpans(line: string): string {
   return line.replace(/`[^`]*`/g, (span) => " ".repeat(span.length));
 }
 
@@ -76,16 +78,11 @@ const REFERENCE_DEFINITION = /^ {0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)/;
 const HTML_ATTRIBUTE = /\b(?:href|src)\s*=\s*("[^"]*"|'[^']*')/gi;
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 
-/**
- * Every local link target in one Markdown document.
- * @param {string} source
- * @returns {{ line: number, target: string }[]}
- */
-export function extractLocalTargets(source) {
-  /** @type {{ line: number, target: string }[]} */
-  const found = [];
-  /** The fence character an open fence was opened with. @type {string | null} */
-  let fence = null;
+/** Every local link target in one Markdown document. */
+export function extractLocalTargets(source: string): LocalTarget[] {
+  const found: LocalTarget[] = [];
+  /** The fence character an open fence was opened with. */
+  let fence: string | null = null;
 
   source.split(/\r?\n/).forEach((rawLine, index) => {
     // The character this line opens or closes a fence with, when it is a fence
@@ -104,8 +101,7 @@ export function extractLocalTargets(source) {
     if (fence !== null) return;
 
     const line = stripCodeSpans(rawLine);
-    /** @type {string[]} */
-    const raw = [];
+    const raw: string[] = [];
 
     const definition = REFERENCE_DEFINITION.exec(line)?.[1];
     if (definition !== undefined) raw.push(definition);
@@ -132,8 +128,7 @@ export function extractLocalTargets(source) {
   return found;
 }
 
-/** @param {string} target */
-function decode(target) {
+function decode(target: string): string {
   try {
     return decodeURIComponent(target);
   } catch {
@@ -141,15 +136,13 @@ function decode(target) {
   }
 }
 
-/**
- * @param {string} root
- * @param {readonly string[]} files
- * @returns {{ file: string, line: number, target: string }[]} broken links
- */
-export function findBrokenLinks(root = repoRoot, files = listMarkdownFiles(root)) {
-  /** @type {{ file: string, line: number, target: string }[]} */
-  const broken = [];
-  let repositoryFiles = null;
+/** Every link in `files` that resolves to nothing this repository will keep. */
+export function findBrokenLinks(
+  root = repoRoot,
+  files: readonly string[] = listMarkdownFiles(root),
+): BrokenLink[] {
+  const broken: BrokenLink[] = [];
+  let repositoryFiles: ReadonlySet<string> | null = null;
   try {
     repositoryFiles = new Set(listRepositoryFiles(root));
   } catch {
@@ -159,8 +152,7 @@ export function findBrokenLinks(root = repoRoot, files = listMarkdownFiles(root)
   }
   const absoluteRoot = resolve(root);
   const canonicalRoot = realpathSync(absoluteRoot);
-  /** @param {string} owner @param {string} candidate */
-  const containedBy = (owner, candidate) => {
+  const containedBy = (owner: string, candidate: string): boolean => {
     const path = relative(owner, candidate);
     return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`));
   };

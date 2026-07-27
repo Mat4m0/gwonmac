@@ -3,7 +3,7 @@
 // to the same build number — or to a lower one — the app that ships second is
 // the one that looks stale, and no part of the UI can correct it.
 //
-// So this executes scripts/macos-version.mjs across a ladder of every release
+// So this executes scripts/macos-version.ts across a ladder of every release
 // this project can cut, in publication order, and demands the build number rise
 // at every rung. It also holds the two boundaries the mapping depends on: the
 // version this repository is about to release must map at all, and it must be a
@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { macOSBundleVersions } from "../../scripts/macos-version.mjs";
+import { macOSBundleVersions } from "../../scripts/macos-version.js";
 import {
   compareReleaseVersions,
   formatReleaseVersion,

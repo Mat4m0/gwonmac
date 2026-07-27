@@ -38,10 +38,10 @@ export const DEVELOPER_PACKAGE_FILES = Object.freeze([
   "/build/tools/toolbox-doctor.js",
   "/build/tools/toolbox-observations.js",
   "/build/tools/toolbox-transform.js",
-  "/scripts/toolbox-live.mjs",
-  "/scripts/toolbox-live/scenarios.mjs",
-  "/scripts/toolbox-live/performance.mjs",
-  "/scripts/toolbox-visual.mjs",
+  "/scripts/toolbox-live.ts",
+  "/scripts/toolbox-live/scenarios.ts",
+  "/scripts/toolbox-live/performance.ts",
+  "/scripts/toolbox-visual.ts",
 ]);
 
 export function assertRequiredPackageFiles(inventory: PackageInventory): void {

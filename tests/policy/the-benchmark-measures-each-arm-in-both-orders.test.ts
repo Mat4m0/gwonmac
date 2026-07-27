@@ -2,11 +2,11 @@
 //
 // The old schedule measured the disabled arm first and the enabled arm second,
 // every time. This drives the real scheduler from
-// `scripts/toolbox-live/benchmark.mjs` against a session double whose two arms
+// `scripts/toolbox-live/benchmark.ts` against a session double whose two arms
 // cost exactly the same and whose frame time drifts upward over the run, and
 // shows the two things that matter: the old shape reports that drift as Toolbox
 // overhead, and the mirrored one does not. It also drives the acceptance gate
-// in `scripts/toolbox-live/scenarios.mjs` over the record the scheduler
+// in `scripts/toolbox-live/scenarios.ts` over the record the scheduler
 // produces, so the gate and the benchmark cannot drift apart in shape.
 //
 // Nothing here needs a build, a game, or a page.
@@ -20,8 +20,8 @@ import {
   mergeFrames,
   runBalancedBenchmark,
   summarizeFrames,
-} from "../../scripts/toolbox-live/benchmark.mjs";
-import { SCENARIOS } from "../../scripts/toolbox-live/scenarios.mjs";
+} from "../../scripts/toolbox-live/benchmark.js";
+import { SCENARIOS } from "../../scripts/toolbox-live/scenarios.js";
 
 const OFF = BENCHMARK_ARMS.dispatcherOff;
 const ON = BENCHMARK_ARMS.observerOn;

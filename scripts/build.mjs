@@ -38,8 +38,22 @@ export const BUILD_STEPS = [
   ],
   // The main program, and the owner of build/shared.
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
-  // Reads build/shared/contracts.js, so it has to run after tsc.
-  [process.execPath, ["scripts/generate-preload.mjs"]],
+  // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes
+  // build/preload/preload.cjs, which nothing else here produces — so its
+  // position is free. It is TypeScript, so it is spawned the one way this
+  // repository runs a TypeScript file from Node — the same flags
+  // package.json's script entries use. `--experimental-strip-types` is
+  // redundant from Node 22.18 and stays because package.json's engines floor
+  // is 22.6, where it is not.
+  [
+    process.execPath,
+    [
+      "--import",
+      "./scripts/ts-hook.mjs",
+      "--experimental-strip-types",
+      "scripts/generate-preload.ts",
+    ],
+  ],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
   // It writes into build/renderer, so it goes after everything that fills it.
   [

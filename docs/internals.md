@@ -47,7 +47,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/ipc.ts`         | validated native capability handlers                              |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
 | `src/main/diagnostics/`   | closed event schema, export detector, pattern scanner             |
-| `src/preload/preload.body.cjs` | sandbox-compatible bridge; `scripts/generate-preload.mjs` splices the canonical constants above it |
+| `src/preload/preload.body.cjs` | sandbox-compatible bridge; `scripts/generate-preload.ts` splices the canonical constants above it |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
 | `src/toolbox-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |

@@ -25,69 +25,56 @@ export const BENCHMARK_ARMS = Object.freeze({
   observerOn: "transformed-observer-on",
 });
 
-/**
- * The tail one phase or one arm reports.
- * @typedef {{
- *   count: number,
- *   p50Ms: number,
- *   p95Ms: number,
- *   p99Ms: number,
- *   maxMs: number,
- *   over20Ms: number,
- *   over33Ms: number,
- *   over50Ms: number,
- * }} FrameSummary
- */
+/** The tail one phase or one arm reports. */
+export type FrameSummary = {
+  count: number;
+  p50Ms: number;
+  p95Ms: number;
+  p99Ms: number;
+  maxMs: number;
+  over20Ms: number;
+  over33Ms: number;
+  over50Ms: number;
+};
 
 /**
  * What one arm accumulates while the run proceeds. `frames` holds one summary
  * per phase rather than one merged summary, because the arm's percentiles are
  * meaned over its phases — see `mergeFrames`.
- * @typedef {{
- *   ticks: number,
- *   metrics: Record<string, number>,
- *   phases: number[],
- *   frames: FrameSummary[],
- * }} ArmTotals
  */
+type ArmTotals = {
+  ticks: number;
+  metrics: Record<string, number>;
+  phases: number[];
+  frames: FrameSummary[];
+};
 
-/**
- * One arm as the result publishes it.
- * @typedef {{
- *   frames: FrameSummary,
- *   ticks: number,
- *   metrics: Record<string, number>,
- *   phases: number[],
- * }} ArmResult
- */
+/** One arm as the result publishes it. */
+type ArmResult = {
+  frames: FrameSummary;
+  ticks: number;
+  metrics: Record<string, number>;
+  phases: number[];
+};
 
 /**
  * The parameter is `unknown` rather than `number` on purpose: these figures
  * arrive from a renderer over CDP, so a missing metric really can turn up here
  * as `undefined` and rounding it silently would publish `NaN` as a result.
- * @param {unknown} value
- * @param {number} digits
- * @returns {number}
  */
-const roundTo = (value, digits) => {
+const roundTo = (value: unknown, digits: number): number => {
   if (typeof value !== "number") {
     throw new TypeError(`benchmark value ${String(value)} is not a number`);
   }
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : value;
 };
 
-/**
- * Frame intervals in milliseconds → the tail summary one phase reports.
- * @param {readonly number[]} samples
- * @returns {FrameSummary}
- */
-export function summarizeFrames(samples) {
+/** Frame intervals in milliseconds → the tail summary one phase reports. */
+export function summarizeFrames(samples: readonly number[]): FrameSummary {
   const sorted = [...samples].sort((left, right) => left - right);
-  /** @param {number} percentile */
-  const at = (percentile) =>
+  const at = (percentile: number) =>
     sorted[Math.max(0, Math.ceil(sorted.length * percentile) - 1)] ?? 0;
-  /** @param {number} milliseconds */
-  const over = (milliseconds) =>
+  const over = (milliseconds: number) =>
     samples.filter((sample) => sample > milliseconds).length;
   return {
     count: sorted.length,
@@ -108,20 +95,17 @@ export function summarizeFrames(samples) {
  * percentile lands inside whichever phase's mode contains it, so two phases at
  * different levels give the arm whichever level that percentile happens to
  * fall in, and the mirror stops cancelling anything.
- * @param {readonly FrameSummary[]} summaries
- * @returns {FrameSummary}
  */
-export function mergeFrames(summaries) {
+export function mergeFrames(summaries: readonly FrameSummary[]): FrameSummary {
   if (summaries.length === 0) throw new Error("an arm measured no phase");
-  /** @param {(summary: FrameSummary) => number} pick */
-  const mean = (pick) =>
+  const mean = (pick: (summary: FrameSummary) => number) =>
     roundTo(
       summaries.reduce((total, summary) => total + pick(summary), 0)
         / summaries.length,
       3,
     );
-  /** @param {(summary: FrameSummary) => number} pick */
-  const sum = (pick) => summaries.reduce((total, s) => total + pick(s), 0);
+  const sum = (pick: (summary: FrameSummary) => number) =>
+    summaries.reduce((total, s) => total + pick(s), 0);
   return {
     count: sum((summary) => summary.count),
     p50Ms: mean((summary) => summary.p50Ms),
@@ -139,10 +123,8 @@ export function mergeFrames(summaries) {
  * again in reverse. Each arm's two phases are symmetric about the midpoint of
  * the run, so a drift that is monotone over the run contributes the same mean
  * offset to every arm.
- * @param {readonly string[]} arms
- * @returns {string[]}
  */
-export function balancedOrder(arms) {
+export function balancedOrder(arms: readonly string[]): string[] {
   if (arms.length < 2) {
     throw new Error("a benchmark comparison needs at least two arms");
   }
@@ -160,34 +142,36 @@ export function balancedOrder(arms) {
  *
  * The parameter is `unknown` because the gate asks this of a field read back
  * out of a result record, which may hold anything at all.
- * @param {unknown} order
- * @returns {boolean}
  */
-export function isBalancedOrder(order) {
+export function isBalancedOrder(order: unknown): boolean {
   if (!Array.isArray(order) || order.length < 4 || order.length % 2 !== 0) {
     return false;
   }
-  /** @type {readonly unknown[]} */
-  const measured = order;
+  const measured: readonly unknown[] = order;
   return measured.every(
     (arm, index) => arm === measured[measured.length - 1 - index],
   );
 }
 
-/**
- * Per-phase metric deltas → the arm's totals. Deltas add; nothing else is here.
- * @param {Record<string, number>} total
- * @param {Record<string, number>} metrics
- * @returns {Record<string, number>}
- */
-function addMetrics(total, metrics) {
-  /** @type {Record<string, number>} */
-  const sum = { ...total };
+/** Per-phase metric deltas → the arm's totals. Deltas add; nothing else is here. */
+function addMetrics(
+  total: Record<string, number>,
+  metrics: Record<string, number>,
+): Record<string, number> {
+  const sum: Record<string, number> = { ...total };
   for (const [key, value] of Object.entries(metrics)) {
     sum[key] = roundTo((sum[key] ?? 0) + value, 3);
   }
   return sum;
 }
+
+/** One measured window, as the session hands it back to the scheduler. */
+type MeasuredPhase = {
+  samples: number[];
+  ticks: number;
+  metrics: Record<string, number>;
+  heapUsedMiB: number;
+};
 
 /**
  * Runs one mirrored pass over `arms` and returns what was measured, including
@@ -206,18 +190,15 @@ function addMetrics(total, metrics) {
  * mirror removes. It therefore stays on the phase that measured it, where the
  * phase number says when it was read. The heap figure an arm can honestly
  * publish is the delta, and `metrics.jsHeapDeltaKiB` already sums into one.
- *
- * @param {readonly string[]} arms
- * @param {{
- *   select: (arm: string, phase: number, phases: number) => Promise<void>,
- *   warmUp: () => Promise<unknown>,
- *   measure: () => Promise<{
- *     samples: number[], ticks: number,
- *     metrics: Record<string, number>, heapUsedMiB: number,
- *   }>,
- * }} effects
  */
-export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
+export async function runBalancedBenchmark(
+  arms: readonly string[],
+  { select, warmUp, measure }: {
+    select: (arm: string, phase: number, phases: number) => Promise<void>;
+    warmUp: () => Promise<unknown>;
+    measure: () => Promise<MeasuredPhase>;
+  },
+) {
   const order = balancedOrder(arms);
   const phases = [];
   /**
@@ -225,9 +206,8 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
    * run. Keeping the per-phase summaries here rather than in a second map is
    * what makes each phase a single lookup, so the "the order only ever names
    * an arm we set up" invariant is stated once, below, instead of twice.
-   * @type {Map<string, ArmTotals>}
    */
-  const totals = new Map(
+  const totals = new Map<string, ArmTotals>(
     arms.map((arm) => [arm, { ticks: 0, metrics: {}, phases: [], frames: [] }]),
   );
   for (const [index, arm] of order.entries()) {
@@ -256,8 +236,7 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
       heapUsedMiB: phase.heapUsedMiB,
     });
   }
-  /** @type {Record<string, ArmResult>} */
-  const measured = {};
+  const measured: Record<string, ArmResult> = {};
   for (const [arm, total] of totals) {
     measured[arm] = {
       frames: mergeFrames(total.frames),
@@ -269,20 +248,18 @@ export async function runBalancedBenchmark(arms, { select, warmUp, measure }) {
   return { order, phases, arms: measured };
 }
 
-/**
- * The movement from one arm to another, in both tails.
- * @param {Record<string, { frames: FrameSummary }>} arms
- * @param {string} from
- * @param {string} to
- */
-export function compareArms(arms, from, to) {
+/** The movement from one arm to another, in both tails. */
+export function compareArms(
+  arms: Record<string, { frames: FrameSummary }>,
+  from: string,
+  to: string,
+) {
   const before = arms[from]?.frames;
   const after = arms[to]?.frames;
   if (!before || !after) {
     throw new Error(`benchmark measured no arm ${from} → ${to}`);
   }
-  /** @param {number} start @param {number} end */
-  const percent = (start, end) =>
+  const percent = (start: number, end: number) =>
     start > 0 ? roundTo(((end / start) - 1) * 100, 2) : Number.POSITIVE_INFINITY;
   return {
     from,

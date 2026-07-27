@@ -39,6 +39,15 @@
     // makes that a compile error instead of a surprise.
     "erasableSyntaxOnly": true,
 
+    // The other half of the same bargain. Erasing syntax is all the stripper
+    // does, so it cannot know that a name in `import { X } from "./y.js"` is a
+    // type: it leaves the import intact and Node throws
+    // `does not provide an export named 'X'` on the first run. Nothing else
+    // catches it — `tsc` elides it happily and the ESLint rule that would
+    // demand `import type` is scoped to `src`. This makes it TS1484 at compile
+    // time, which is where these files' only other stripper hazard is caught.
+    "verbatimModuleSyntax": true,
+
     // Several tests import a `.ts` path directly rather than the `.js`
     // specifier the emitted code would use. Nothing here is emitted, so the
     // extension is honest about the file being read.
@@ -65,13 +74,17 @@
     "forge.config.ts",
     "eslint.config.js",
     // Phase 4 converted the suites to TypeScript; what is left under `tests` is
-    // `fixtures.mts` and the two loader scripts, which stay JavaScript because
-    // every other test resolves through them. Naming all three extensions here
-    // is what makes them inputs — relying on a spec importing them would leave
-    // whichever one nothing imports checked by nothing.
+    // `electron/fixtures.mts`. Naming the extensions here rather than relying on
+    // a spec importing them is what makes them inputs — whichever file nothing
+    // imports would otherwise be checked by nothing.
     "tests/**/*.ts",
     "tests/**/*.mts",
     "tests/**/*.mjs",
+    // Phase 5 converted the tooling scripts, so `.ts` is named here for the
+    // same reason the test extensions are: `toolbox-visual.ts` is imported by
+    // nothing, and a script enrolled only by whoever happens to import it is a
+    // script that stops being checked the day that importer goes away.
+    "scripts/**/*.ts",
     "scripts/**/*.mjs",
     "scripts/**/*.mts",
     "src/preload/preload.body.cjs",

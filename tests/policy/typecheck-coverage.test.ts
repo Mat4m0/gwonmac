@@ -29,10 +29,10 @@ const SOURCE = /\.(?:m|c)?[jt]sx?$/u;
 // coverage assertion, so growing it is always a deliberate, reviewed edit.
 //
 // It is empty. Phase 4 emptied it by widening `tsconfig.tests.json`'s include
-// to name `tests/**/*.mts` and `tests/**/*.mjs`, which enrolled the last two
-// holdouts — `tests/ts-hook.mjs` and `tests/ts-resolve.mjs`, which stay
-// JavaScript because they install the loader every other test resolves through
-// and so cannot be resolved through it themselves.
+// to name every remaining extension under `tests` and `scripts`, which enrolled
+// the last holdouts — `scripts/ts-hook.mjs` and `scripts/ts-resolve.mjs`, which
+// stay JavaScript because they install the loader everything else resolves
+// through and so cannot be resolved through it themselves.
 const KNOWN_UNCHECKED: { reason: string; files: string[] }[] = [];
 
 const excused = new Map(

@@ -1,4 +1,4 @@
-// What generate-preload.mjs splices above the preload body.
+// What generate-preload.ts splices above the preload body.
 //
 // `PRELOAD_CONSTANTS` names four canonical exports and the generator emits one
 // `const` per name at the top of build/preload/preload.cjs, so the body reads

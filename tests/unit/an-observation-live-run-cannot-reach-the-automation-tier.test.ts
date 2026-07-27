@@ -1,7 +1,7 @@
 // P4.7 — the automation/observation line, executed rather than described.
 //
 // Every one of these runs the real decision functions from
-// scripts/toolbox-live/scenarios.mjs: the launch plan the runner spawns
+// scripts/toolbox-live/scenarios.ts: the launch plan the runner spawns
 // Electron with, the context object it hands the scenario, and the bootstrap
 // wait, driven against a page double that records what was touched. Nothing
 // here reads source text, and nothing needs a build or a game.
@@ -14,8 +14,8 @@ import {
   scenarioContext,
   SCENARIOS,
   waitForPlayable,
-} from "../../scripts/toolbox-live/scenarios.mjs";
-import { validateCommonAcceptance } from "../../scripts/toolbox-live/acceptance.mjs";
+} from "../../scripts/toolbox-live/scenarios.js";
+import { validateCommonAcceptance } from "../../scripts/toolbox-live/acceptance.js";
 
 // The register itself, not a local restatement of it: the first case below
 // asserts that every entry declares one of the two tiers, and asserting that

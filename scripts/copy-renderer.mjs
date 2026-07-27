@@ -4,7 +4,7 @@
 // Toolbox kernel either — scripts/build.mjs owns that, because this script used
 // to run twice per package build and so compiled it twice — and it does not
 // produce the preload, which is generated from the canonical contracts by
-// scripts/generate-preload.mjs.
+// scripts/generate-preload.ts.
 import fs from "node:fs";
 import path from "node:path";
 

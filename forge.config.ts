@@ -3,7 +3,7 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { macOSBundleVersions } from "./scripts/macos-version.mjs";
+import { macOSBundleVersions } from "./scripts/macos-version.js";
 
 const packageVersion = (
   JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {

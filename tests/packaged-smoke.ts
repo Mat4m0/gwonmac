@@ -17,7 +17,7 @@ import {
 } from "@electron/fuses";
 import { extractFile, listPackage, statFile } from "@electron/asar";
 import forgeConfig from "../forge.config.ts";
-import { macOSBundleVersions } from "../scripts/macos-version.mjs";
+import { macOSBundleVersions } from "../scripts/macos-version.js";
 import {
   assertNoDeveloperPackageFiles,
   assertRequiredPackageFiles,

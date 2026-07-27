@@ -1,17 +1,20 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import type { Browser, Page } from "playwright";
 // The sources, not `build/`. Importing the compiled copy made the contract a
 // second source of truth: a stale `build/` typechecked against a
 // `ToolboxDoctorReport` that no longer existed. `pnpm toolbox:live` loads this
-// file under `tests/ts-hook.mjs`, which is what lets a `.js` specifier reach
+// file under `scripts/ts-hook.mjs`, which is what lets a `.js` specifier reach
 // the `.ts` beside it.
 import {
   defaultGuildWarsProfile,
   inspectToolboxWorkspace,
 } from "../src/tools/toolbox-doctor.js";
+import type { AutomationCommand } from "../src/shared/automation.js";
 import {
   parseToolboxObservations,
 } from "../src/tools/toolbox-observations.js";
@@ -20,20 +23,14 @@ import {
   liveRunRefusal,
   scenarioContext,
   waitForPlayable,
-} from "./toolbox-live/scenarios.mjs";
+} from "./toolbox-live/scenarios.js";
+import type { ObservationSample } from "./toolbox-live/scenarios.js";
 import {
   validateCommonAcceptance,
-} from "./toolbox-live/acceptance.mjs";
-import { projectLiveResult } from "./toolbox-live/result.mjs";
+} from "./toolbox-live/acceptance.js";
+import { projectLiveResult } from "./toolbox-live/result.js";
 
-/** @typedef {import("playwright").Browser} Browser */
-/** @typedef {import("playwright").Page} Page */
-/** @typedef {import("../src/shared/automation.js").AutomationCommand} AutomationCommand */
-/**
- * @typedef {import("./toolbox-live/scenarios.mjs").ObservationSample}
- *   ObservationSample
- */
-/** @typedef {{ code: number | null, signal: NodeJS.Signals | null }} Shutdown */
+type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
 
 if (process.env.GW_LIVE_SMOKE !== "1") {
   console.error("toolbox:live requires GW_LIVE_SMOKE=1");
@@ -100,11 +97,7 @@ if (!stdout || !stderr) {
 
 // Only an automation run has a channel to send on; observation runs are spawned
 // without one, so this is never handed to an observation scenario.
-/**
- * @param {AutomationCommand} command
- * @returns {Promise<void>}
- */
-function sendAutomationCommand(command) {
+function sendAutomationCommand(command: AutomationCommand): Promise<void> {
   return new Promise((resolve, reject) => {
     child.send(command, (error) => {
       if (error) reject(error);
@@ -113,11 +106,9 @@ function sendAutomationCommand(command) {
   });
 }
 
-/**
- * @param {Page} targetPage
- * @returns {Promise<ObservationSample[]>}
- */
-async function sampleObservations(targetPage) {
+async function sampleObservations(
+  targetPage: Page,
+): Promise<ObservationSample[]> {
   if (observations.length === 0) return [];
   return targetPage.evaluate((requested) => {
     // The runtime is declared as an open record, so the module's memory arrives
@@ -132,7 +123,7 @@ async function sampleObservations(targetPage) {
       if (address + width > view.byteLength) {
         return { type, address, value: null, valid: false };
       }
-      let value;
+      let value: number;
       if (type === "u8") value = view.getUint8(address);
       else if (type === "u16") value = view.getUint16(address, true);
       else if (type === "u32") value = view.getUint32(address, true);
@@ -150,8 +141,7 @@ async function sampleObservations(targetPage) {
 
 const MAX_PROCESS_OUTPUT_BYTES = 256 * 1024;
 let processOutput = "";
-/** @param {Buffer} chunk */
-const captureProcessOutput = (chunk) => {
+const captureProcessOutput = (chunk: Buffer) => {
   processOutput = `${processOutput}${chunk.toString()}`.slice(
     -MAX_PROCESS_OUTPUT_BYTES,
   );
@@ -162,18 +152,14 @@ stderr.on("data", captureProcessOutput);
 /**
  * Electron announces its debugging endpoint on stderr once. Rejects if the app
  * exits first, so a launch that fails outright is not a thirty-second wait.
- *
- * @param {import("node:stream").Readable} errorStream
- * @returns {Promise<string>}
  */
-function debuggingEndpoint(errorStream) {
+function debuggingEndpoint(errorStream: Readable): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error("Electron did not expose its debugging endpoint")),
       30_000,
     );
-    /** @param {Buffer} chunk */
-    const inspect = (chunk) => {
+    const inspect = (chunk: Buffer) => {
       const match = /DevTools listening on (ws:\/\/[^\s]+)/.exec(chunk.toString());
       if (!match?.[1]) return;
       clearTimeout(timer);
@@ -187,8 +173,7 @@ function debuggingEndpoint(errorStream) {
   });
 }
 
-/** @returns {Promise<Shutdown>} */
-function waitForExit() {
+function waitForExit(): Promise<Shutdown> {
   return new Promise((resolve) => {
     child.once("exit", (code, signal) => resolve({ code, signal }));
   });
@@ -196,21 +181,17 @@ function waitForExit() {
 
 const endpoint = await debuggingEndpoint(stderr);
 
-/** @type {Browser | undefined} */
-let browser;
+let browser: Browser | undefined;
 // The page the failure handler screenshots, which is the only reason a handle
 // has to outlive the run. The run itself holds the page as a `const`, so the
 // sampler it hands a scenario closes over a page that is definitely there.
-/** @type {Page | null} */
-let failurePage = null;
-/** @type {string[]} */
-const rendererErrors = [];
+let failurePage: Page | null = null;
+const rendererErrors: string[] = [];
 let keepAlive = leaveOpen;
 // What the failure handler writes out. It is set as soon as the run has a
 // readout, so a run that fails its acceptance still reports the readout it
 // failed on.
-/** @type {unknown} */
-let failureResult = null;
+let failureResult: unknown = null;
 try {
   browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
@@ -302,7 +283,7 @@ try {
     if (!page.isClosed()) {
       await page
         .evaluate(() => window.gwNative.app.requestQuit())
-        .catch((error) => {
+        .catch((error: unknown) => {
           if (!page.isClosed()) throw error;
         });
     }

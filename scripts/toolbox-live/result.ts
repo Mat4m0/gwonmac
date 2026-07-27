@@ -1,19 +1,24 @@
+import type { Page } from "playwright";
+
 /**
  * The whole live-run readout, projected inside the page in one round trip.
  *
- * @param {import("playwright").Page} page
- * @param {{ ticks: number, elapsedMs: number }} cadence hook ticks counted over
- *   a measured window, which is the only figure the page cannot derive itself.
- * @param {string} scenario the scenario that ran, echoed into the result.
+ * @param cadence hook ticks counted over a measured window, which is the only
+ *   figure the page cannot derive itself.
+ * @param scenario the scenario that ran, echoed into the result.
  */
-export function projectLiveResult(page, cadence, scenario) {
+export function projectLiveResult(
+  page: Page,
+  cadence: { ticks: number; elapsedMs: number },
+  scenario: string,
+) {
   return page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwToolboxState;
     const runtime = window.gwToolboxRuntime;
     const diagnostics = await window.gwNative.diagnostics.current();
     const settings = await window.gwNative.settings.get();
     const storage = await window.navigator.storage.estimate();
-    const p95 = (/** @type {string} */ metric) =>
+    const p95 = (metric: string) =>
       diagnostics.histograms[metric]?.p95Us ?? 0;
     // `window.gwToolboxRuntime` is an open record: the renderer publishes it
     // for observation and nothing constrains a field's type at this boundary
@@ -21,18 +26,16 @@ export function projectLiveResult(page, cadence, scenario) {
     // it is read. A field the renderer renames then reaches the report as the
     // same 0 the rest of this projection already uses for "not measured",
     // rather than as `undefined` or `NaN` in the JSON.
-    const numeric = (/** @type {unknown} */ value) =>
-      typeof value === "number" ? value : 0;
+    const numeric = (value: unknown) => typeof value === "number" ? value : 0;
     const samples = runtime?.renderSamples;
     const renderSamples = (Array.isArray(samples) ? samples : [])
       .map(numeric)
       .sort((left, right) => left - right);
     const p95Index = Math.max(0, Math.ceil(renderSamples.length * 0.95) - 1);
-    const mib = (/** @type {number} */ bytes) =>
-      Number((bytes / (1024 ** 2)).toFixed(1));
-    const latestMib = (/** @type {string} */ metric) =>
+    const mib = (bytes: number) => Number((bytes / (1024 ** 2)).toFixed(1));
+    const latestMib = (metric: string) =>
       mib(Number(diagnostics.latest[metric]) || 0);
-    const milestoneMs = (/** @type {string} */ metric) =>
+    const milestoneMs = (metric: string) =>
       Number(((Number(diagnostics.latest[metric]) || 0) / 1_000).toFixed(1));
     const memory = runtime?.memory;
     return {

@@ -1,7 +1,7 @@
 // Sandboxed preload must be CommonJS — Electron's sandbox loader does not
 // execute ESM preload graphs, and it whitelists `electron`, `events`, `timers`
 // and `url` only, so this file cannot require the canonical contracts. It is
-// the *body* of the preload: scripts/generate-preload.mjs prepends the
+// the *body* of the preload: scripts/generate-preload.ts prepends the
 // constants below from src/shared/contracts.ts and writes the result to
 // build/preload/preload.cjs. Copying a channel name back into this file would
 // reintroduce the drift the generator exists to remove, so no string literal

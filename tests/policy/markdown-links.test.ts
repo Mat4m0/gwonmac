@@ -6,17 +6,27 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   extractLocalTargets,
   findBrokenLinks,
   listMarkdownFiles,
-} from "../../scripts/check-markdown-links.mjs";
+} from "../../scripts/check-markdown-links.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-const checker = path.join(root, "scripts/check-markdown-links.mjs");
+const checker = path.join(root, "scripts/check-markdown-links.ts");
+
+// The checker is TypeScript, and a spawned child inherits none of this
+// process's flags, so the loader `pnpm check:links` uses is spelled out here.
+// As a file URL rather than the package.json script's relative path: the child
+// resolves `--import` against its own working directory, which is the caller's.
+const LOADER = [
+  "--import",
+  pathToFileURL(path.join(root, "scripts/ts-hook.mjs")).href,
+  "--experimental-strip-types",
+];
 
 const fixtures: string[] = [];
 after(() => {
@@ -36,7 +46,7 @@ function fixture(files: Record<string, string>, { git = false } = {}): string {
 
 /** Runs the entry point `pnpm check` runs, against a fixture repository. */
 function runChecker(dir: string) {
-  const result = spawnSync(process.execPath, [checker, dir], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [...LOADER, checker, dir], { encoding: "utf8" });
   return { status: result.status, stderr: result.stderr };
 }
 

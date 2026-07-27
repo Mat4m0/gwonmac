@@ -1,33 +1,40 @@
 /**
  * The part of a live-run readout every tier has to produce, and therefore the
- * only part common acceptance is allowed to judge. `scripts/toolbox-live.mjs`
+ * only part common acceptance is allowed to judge. `scripts/toolbox-live.ts`
  * assembles the full result and each scenario adds its own evidence on top;
  * naming the subset here keeps a scenario-specific field from quietly becoming
  * a precondition for every run.
- *
- * @typedef {object} CommonAcceptanceResult
- * @property {boolean} supported whether the Toolbox runtime installed at all.
- * @property {number | null} buildId the ArenaNet build the runtime observed.
- * @property {number} installation how many times the hook was installed.
- * @property {number} hookHertz measured hook cadence.
- * @property {unknown} map the stable map/player snapshot, or null for none.
- * @property {number} renderP95Us snapshot observer p95.
- * @property {number} rejectedSnapshots snapshots the observer refused.
- * @property {readonly string[]} rendererErrors console and page errors seen.
  */
+export type CommonAcceptanceResult = {
+  /** whether the Toolbox runtime installed at all. */
+  supported: boolean;
+  /** the ArenaNet build the runtime observed. */
+  buildId: number | null;
+  /** how many times the hook was installed. */
+  installation: number;
+  /** measured hook cadence. */
+  hookHertz: number;
+  /** the stable map/player snapshot, or null for none. */
+  map: unknown;
+  /** snapshot observer p95. */
+  renderP95Us: number;
+  /** snapshots the observer refused. */
+  rejectedSnapshots: number;
+  /** console and page errors seen. */
+  rendererErrors: readonly string[];
+};
 
 /**
- * @param {CommonAcceptanceResult} result
- * @param {number} expectedBuildId the build the preflight said is installed.
- * @param {{ coreObservation?: boolean }} [options] `coreObservation` is false
- *   for a run whose scenario does not read game state, so the cadence, map,
- *   and snapshot checks below have nothing to judge.
+ * @param expectedBuildId the build the preflight said is installed.
+ * @param options `coreObservation` is false for a run whose scenario does not
+ *   read game state, so the cadence, map, and snapshot checks below have
+ *   nothing to judge.
  */
 export function validateCommonAcceptance(
-  result,
-  expectedBuildId,
-  { coreObservation = true } = {},
-) {
+  result: CommonAcceptanceResult,
+  expectedBuildId: number,
+  { coreObservation = true }: { coreObservation?: boolean } = {},
+): void {
   if (!result.supported) throw new Error("Toolbox is unsupported");
   if (result.buildId !== expectedBuildId) {
     throw new Error(

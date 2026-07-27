@@ -10,8 +10,54 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+/**
+ * The scripts index.html loads with a plain `<script src>` tag — no
+ * `type="module"`. Read off the page rather than listed here, because the
+ * invariant belongs to whatever the page happens to load that way, and a
+ * second list would drift from it.
+ */
+function classicScriptSources(html: string): string[] {
+  return [...html.matchAll(/<script\b([^>]*)>/gu)]
+    .map((tag) => tag[1] ?? "")
+    .filter((attributes) => !/\btype\s*=\s*["']module["']/u.test(attributes))
+    .map((attributes) => /\bsrc\s*=\s*["']([^"']+)["']/u.exec(attributes)?.[1])
+    .filter((src) => src !== undefined);
+}
+
+test("the scripts index.html loads with a plain tag emit no ES module", async () => {
+  const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
+  const scripts = classicScriptSources(html);
+  assert.ok(scripts.length > 0, "index.html loads no classic script");
+
+  for (const src of scripts) {
+    // The page names the emitted `.js`; the source beside it is the `.ts`.
+    const file = path.join(root, "src/renderer", src.replace(/\.js$/u, ".ts"));
+    const parsed = ts.createSourceFile(
+      file,
+      await readFile(file, "utf8"),
+      ts.ScriptTarget.ES2022,
+      false,
+      ts.ScriptKind.TS,
+    );
+    // A file with one top-level `import` or `export` is an ES module, and `tsc`
+    // then terminates the emit with `export {}`. Chromium refuses that from a
+    // tag with no `type="module"`, so the script never runs — and `harness.ts`'s
+    // `var Module` stops being the global binding the generated glue redeclares
+    // (AGENTS.md, "Load-bearing constraints"). Nothing else sees it: `tsc` and
+    // ESLint both pass, and the Electron suite fails four assertions that name
+    // widgets rather than this. `import type` counts, which is why the six files
+    // annotate contracts with `import('./x.js').T` instead.
+    assert.equal(
+      ts.isExternalModule(parsed),
+      false,
+      `${src} has a top-level import or export, so it is no longer a classic script`,
+    );
+  }
+});
 
 test("the official gamepad imports stay wired without a production WASM hook", async () => {
   const harness = await readFile(path.join(root, "src/renderer/harness.ts"), "utf8");

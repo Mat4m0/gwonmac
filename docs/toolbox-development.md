@@ -103,11 +103,11 @@ Its parent-process IPC channel exists only for an automation-tier run and can
 only start and stop Level 1 diagnostics when the explicit Toolbox automation
 environment is active; capture mutation is not exposed to the sandboxed
 renderer.
-`scripts/toolbox-live.mjs` owns process launch, CDP connection, bounded failure
+`scripts/toolbox-live.ts` owns process launch, CDP connection, bounded failure
 output, common acceptance, and shutdown. Each registry entry in
-`scripts/toolbox-live/scenarios.mjs` owns its action and semantic validation;
+`scripts/toolbox-live/scenarios.ts` owns its action and semantic validation;
 the paired Level 1 benchmark lives in
-`scripts/toolbox-live/performance.mjs`. Add behavior to the narrow owner rather
+`scripts/toolbox-live/performance.ts`. Add behavior to the narrow owner rather
 than growing another general automation framework.
 
 Gameplay automation uses trusted Playwright input. Saved-login confirmation
@@ -154,7 +154,7 @@ is not comparable between arms. The arm-level heap number is
 Its numbers — phase duration, the sample floor per arm, the tail-percentile
 regression limit, and the absolute p95 movement — live with the benchmark that
 enforces them, in the `performance` entry of
-`scripts/toolbox-live/scenarios.mjs`. They are deliberately not repeated here:
+`scripts/toolbox-live/scenarios.ts`. They are deliberately not repeated here:
 a budget written in two places ends up enforced by one and quoted from the
 other. What belongs here is why the rule has that shape. A regression must be
 corroborated by *both* tail percentiles, so normal outpost variance or a single
@@ -165,7 +165,7 @@ a full run of hooked ticks in the other, so a disconnected benchmark cannot
 pass. Task and heap values are diagnostic rather than gates, because garbage
 collection and unrelated game work can move them between phases.
 
-The schedule and the arithmetic are in `scripts/toolbox-live/benchmark.mjs`,
+The schedule and the arithmetic are in `scripts/toolbox-live/benchmark.ts`,
 which imports nothing, so
 `tests/policy/the-benchmark-measures-each-arm-in-both-orders.test.ts` executes
 them against a drifting session double without a build or a game.
@@ -385,7 +385,7 @@ A Toolbox feature is ready when:
 - the exact-build evidence is canonical and tested;
 - invalid/loading state cannot publish stale values;
 - the automation observer stays below the renderer-time budget in
-  `scripts/toolbox-live/acceptance.mjs`;
+  `scripts/toolbox-live/acceptance.ts`;
 - no raw pointer, packet, or memory slice crosses Electron IPC;
 - cached startup does no transformation or network work;
 - one bounded scenario proves the real semantic change;

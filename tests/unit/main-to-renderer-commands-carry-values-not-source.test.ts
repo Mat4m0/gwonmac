@@ -18,7 +18,7 @@ import {
   type RendererCommand,
   type RendererInit,
 } from "../../src/shared/contracts.ts";
-import { preloadSource as generatePreload } from "../../scripts/generate-preload.mjs";
+import { preloadSource as generatePreload } from "../../scripts/generate-preload.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // The preload as it ships: generated from the canonical contracts, not read

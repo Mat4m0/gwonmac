@@ -29,7 +29,7 @@ test("the hand-written preload body contains no channel literal", () => {
 
 test("the body declares nothing the generator is meant to supply", async () => {
   const { PRELOAD_CONSTANTS } = await import(
-    "../../scripts/generate-preload.mjs"
+    "../../scripts/generate-preload.js"
   );
   const body = readFileSync(
     path.join(root, "src/preload/preload.body.cjs"),
