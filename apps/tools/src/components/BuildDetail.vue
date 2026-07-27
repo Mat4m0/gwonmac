@@ -292,6 +292,7 @@ defineExpose({
           v-else-if="editor.activeSlot.value !== null"
           :editor="editor"
           :catalogue="controller.skills"
+          :describe-skill="controller.describeSkill"
           :allow-player-only="allowPlayerOnly"
           @close="closeCatalogue"
         />

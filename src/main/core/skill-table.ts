@@ -40,11 +40,20 @@ const FIELD = {
   adrenaline: 0x38,
   activation: 0x3c,
   aftercast: 0x40,
+  duration0: 0x44,
+  duration15: 0x48,
   recharge: 0x4c,
+  skillArguments: 0x58,
+  scale0: 0x5c,
+  scale15: 0x60,
+  bonusScale0: 0x64,
+  bonusScale15: 0x68,
   iconFileId: 0x8c,
   iconFileId2: 0x90,
   iconFileIdHiRes: 0x94,
   name: 0x98,
+  concise: 0x9c,
+  description: 0xa0,
 } as const;
 
 /** `special & 0x4`. The client's own test, and what draws the corner marker. */
@@ -75,12 +84,23 @@ export interface SkillRecord {
   readonly adrenalineCost: number;
   readonly activationSeconds: number;
   readonly aftercastSeconds: number;
+  readonly duration0: number;
+  readonly duration15: number;
   readonly rechargeSeconds: number;
+  readonly skillArguments: number;
+  readonly scale0: number;
+  readonly scale15: number;
+  readonly bonusScale0: number;
+  readonly bonusScale15: number;
   /** Archive file id of the 32×32 icon, or 0 for the handful that have none. */
   readonly iconFileId: number;
   readonly iconFileIdHiRes: number;
   /** String id, not text. Resolving it is a separate table this does not read. */
   readonly nameStringId: number;
+  /** Localized concise-description string id from the client skill record. */
+  readonly conciseStringId: number;
+  /** Localized full-description string id from the client skill record. */
+  readonly descriptionStringId: number;
 }
 
 const view = (bytes: Uint8Array) =>
@@ -108,10 +128,19 @@ export function parseSkillRecord(bytes: Uint8Array, at: number): SkillRecord {
     adrenalineCost: data.getUint32(at + FIELD.adrenaline, true),
     activationSeconds: data.getFloat32(at + FIELD.activation, true),
     aftercastSeconds: data.getFloat32(at + FIELD.aftercast, true),
+    duration0: data.getUint32(at + FIELD.duration0, true),
+    duration15: data.getUint32(at + FIELD.duration15, true),
     rechargeSeconds: data.getUint32(at + FIELD.recharge, true),
+    skillArguments: data.getUint32(at + FIELD.skillArguments, true),
+    scale0: data.getUint32(at + FIELD.scale0, true),
+    scale15: data.getUint32(at + FIELD.scale15, true),
+    bonusScale0: data.getUint32(at + FIELD.bonusScale0, true),
+    bonusScale15: data.getUint32(at + FIELD.bonusScale15, true),
     iconFileId: data.getUint32(at + FIELD.iconFileId, true),
     iconFileIdHiRes: data.getUint32(at + FIELD.iconFileIdHiRes, true),
     nameStringId: data.getUint32(at + FIELD.name, true),
+    conciseStringId: data.getUint32(at + FIELD.concise, true),
+    descriptionStringId: data.getUint32(at + FIELD.description, true),
   };
 }
 

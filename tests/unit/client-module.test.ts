@@ -69,14 +69,15 @@ const CALL_OFFSET = 5;
  */
 function officialFixture(): Uint8Array {
   const types = section(1, [
-    3,
+    4,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
     0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
     0x60, 1, 0x7f, 0,
+    0x60, 3, 0x7f, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [3, 0, 0, 2]);
-  const table = section(4, [1, 0x70, 1, 1, 1]);
+  const functions = section(3, [4, 0, 0, 2, 3]);
+  const table = section(4, [1, 0x70, 1, 2, 2]);
   const globals = section(6, [0]);
   const callerName = [...new TextEncoder().encode("caller")];
   const loopName = [
@@ -97,11 +98,13 @@ function officialFixture(): Uint8Array {
     0x0b,
   ];
   const loop = [0, 0x0b];
+  const textResolver = [0, 0x0b];
   const code = section(10, [
-    3,
+    4,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
     ...uleb(loop.length), ...loop,
+    ...uleb(textResolver.length), ...textResolver,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -149,6 +152,8 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 0,
+    textResolveFunction: 4,
+    textCallbackTableSlot: 1,
     layout: {
       contextRoot: 1,
       agentArray: 2,
@@ -332,7 +337,7 @@ describe("client module preparation", () => {
     ]);
   });
 
-  it("drops the Enhancement cache when the certified tool is disabled", async () => {
+  it("keeps certified read-only client services when optional tools are disabled", async () => {
     const value = await fixture();
     await seedCache(value.enhancementCacheRoot);
 
@@ -349,13 +354,15 @@ describe("client module preparation", () => {
     );
 
     assert.equal(prepared.state, "certified");
-    assert.equal(prepared.enhancementBuild, null);
+    assert.equal(prepared.enhancementBuild, value.enhancementBuild);
     assert.equal(prepared.failure, null);
     assert.equal(
-      sha256(await readFile(prepared.wasmPath)),
-      value.templateSaveBuild.outputSha256,
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        value.enhancementCacheRoot,
+      ),
+      "valid",
     );
-    await assertMissing(value.enhancementCacheRoot);
   });
 
   it("falls back at the failed stage without serving an invalid module", async () => {

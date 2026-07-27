@@ -132,7 +132,6 @@ export async function prepareClientModule(
     officialWasmPath,
     officialSha256,
     certification,
-    enhancementRequested,
     compatibilityCacheRoot,
     enhancementCacheRoot,
   } = options;
@@ -202,15 +201,6 @@ export async function prepareClientModule(
         stage: "enhancement",
         error: new Error("Enhancement certification does not match template-save output"),
       },
-    };
-  }
-
-  if (!enhancementRequested) {
-    return {
-      wasmPath: templateSaveWasm,
-      state: "certified",
-      enhancementBuild: null,
-      failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
 

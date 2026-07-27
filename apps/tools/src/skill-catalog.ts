@@ -21,6 +21,16 @@ export interface SkillPresentation {
   readonly iconUrl: string | null;
 }
 
+export interface SkillDescriptionSource {
+  readonly stringId: number;
+  readonly scale0: number;
+  readonly scale15: number;
+  readonly bonusScale0: number;
+  readonly bonusScale15: number;
+  readonly duration0: number;
+  readonly duration15: number;
+}
+
 export interface SkillCatalogue {
   get(id: SkillId): SkillPresentation;
   has(id: SkillId): boolean;

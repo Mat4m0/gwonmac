@@ -622,6 +622,7 @@ function loadGlue() {
       appearance,
       tools,
       buildProjection,
+      skillText,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -635,6 +636,7 @@ function loadGlue() {
       import('./appearance.js'),
       import('./tools-host.js'),
       import('./build-projection.js'),
+      import('./skill-text.js'),
     ]);
     host = {
       ...graphics,
@@ -647,9 +649,14 @@ function loadGlue() {
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
     applyAppearance = appearance.applyAppearance;
+    const resolveSkillDescription = skillText.createSkillTextResolver(() => ({
+      instance: gameWasmInstance,
+      module: gameWasmModule,
+    }));
     disposeToolsHost = tools.installToolsHost({
       releaseHeldKeys: () => inputHost?.releaseAll(),
       publishBuild: buildProjection.publishBuildTemplate,
+      resolveSkillDescription,
     });
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({

@@ -29,9 +29,10 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 4;
+export const ENHANCEMENT_TRANSFORM_ABI = 5;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_ORIGINAL_EXPORT = "enhancement_tick_original";
+export const SKILL_TEXT_RESOLVE_EXPORT = "skill_text_resolve";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 interface WasmExport {
@@ -148,6 +149,7 @@ function buildManifestSection(build: KnownEnhancementBuild): Section {
       programId: build.programId,
       buildId: build.buildId,
       tableSlot: build.tableSlot,
+      textCallbackTableSlot: build.textCallbackTableSlot,
       layoutWords,
     }),
   );
@@ -167,6 +169,17 @@ function assertSignature(type: FunctionType, build: KnownEnhancementBuild): void
     fail(
       `hook signature is (${params.join(",")}) -> (${results.join(",")}), expected ` +
         `(${build.hookParams.join(",")}) -> (${build.hookResults.join(",")})`,
+    );
+  }
+}
+
+function assertTextResolveSignature(type: FunctionType): void {
+  const params = type.params.map(valueTypeName);
+  const results = type.results.map(valueTypeName);
+  if (params.join(",") !== "i32,i32,i32" || results.length !== 0) {
+    fail(
+      `text resolver signature is (${params.join(",")}) -> (${results.join(",")}), ` +
+        "expected (i32,i32,i32) -> ()",
     );
   }
 }
@@ -264,17 +277,35 @@ export function transformEnhancementWasm(
   const typeIndex = functionTypes[localIndex]!;
   const type = types[typeIndex] ?? fail("hook references an unknown type");
   assertSignature(type, build);
+  const textResolveLocalIndex = build.textResolveFunction - importCount;
+  if (
+    textResolveLocalIndex < 0
+    || textResolveLocalIndex >= functionTypes.length
+  ) {
+    fail("text resolver function is out of range");
+  }
+  const textResolveTypeIndex = functionTypes[textResolveLocalIndex]!;
+  const textResolveType =
+    types[textResolveTypeIndex] ?? fail("text resolver references an unknown type");
+  assertTextResolveSignature(textResolveType);
 
   const table = parseTable(sectionById(sections, 4));
-  if (
-    build.tableSlot < 0 ||
-    build.tableSlot >= table.min ||
-    (table.max !== null && build.tableSlot >= table.max)
-  ) {
-    fail("hook table slot is outside table limits");
+  const occupied = occupiedTableSlots(sectionById(sections, 9));
+  for (const [owner, slot] of [
+    ["hook", build.tableSlot],
+    ["text callback", build.textCallbackTableSlot],
+  ] as const) {
+    if (
+      slot < 0 ||
+      slot >= table.min ||
+      (table.max !== null && slot >= table.max)
+    ) {
+      fail(`${owner} table slot is outside table limits`);
+    }
+    if (occupied.has(slot)) fail(`${owner} table slot ${slot} is occupied`);
   }
-  if (occupiedTableSlots(sectionById(sections, 9)).has(build.tableSlot)) {
-    fail(`hook table slot ${build.tableSlot} is occupied`);
+  if (build.tableSlot === build.textCallbackTableSlot) {
+    fail("hook and text callback table slots must be distinct");
   }
 
   const globals = vectorPayload(sectionById(sections, 6));
@@ -296,7 +327,7 @@ export function transformEnhancementWasm(
     Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
   );
   const nextExports = concat(
-    uleb(exports.count + 2),
+    uleb(exports.count + 3),
     exports.entries,
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
@@ -304,6 +335,9 @@ export function transformEnhancementWasm(
     encodeName(ENHANCEMENT_ORIGINAL_EXPORT),
     Uint8Array.of(0x00),
     uleb(originalIndex),
+    encodeName(SKILL_TEXT_RESOLVE_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.textResolveFunction),
   );
 
   const rewritten = sections.map((section): Section => {

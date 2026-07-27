@@ -74,6 +74,8 @@ export interface KnownEnhancementBuild {
   hookParams: readonly ["i32"];
   hookResults: readonly [];
   tableSlot: number;
+  textResolveFunction: number;
+  textCallbackTableSlot: number;
   layout: EnhancementLayout;
 }
 
@@ -97,6 +99,12 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
     tableSlot: 0,
+    // TextResolveIssue(encoded, callback, param). This is a read-only client
+    // service: it asks the installed client's own locale table to decode text.
+    textResolveFunction: 5870,
+    // Reserved alongside the companion hook. A WASM callback temporarily
+    // occupies this slot while one asynchronous string decode is in flight.
+    textCallbackTableSlot: 1,
     layout: Object.freeze({
       contextRoot: 0x5a0e20,
       agentArray: 0x5a4d98,
