@@ -541,6 +541,24 @@ literal colour, a literal corner, or a z-index outside the named scale, so
 `docs/ui-gallery.html` renders the whole vocabulary from the shipped files and
 needs no build step.
 
+The Vue Tools app treats a saved build as the canonical object and creates one
+renderer-local draft while its Build view is open. `use-build-draft.ts` owns
+only editing orchestration; template decoding, attribute costs, catalogue
+eligibility, intrinsic validation, assignment validation, and library
+mutation remain pure TypeScript. Saving replaces the complete authored
+portion of a build once, or forks and rebinds selected team usages in the same
+undo entry. There is no per-control persistence path and no second catalogue
+cache.
+
+Skill facts and artwork come from the installed client catalogue. The normal
+PvE equippability classifier fails closed for IDs outside its audited
+Toolbox++-derived allowlist, while PvP, internal, NPC, item, and other
+non-equippable records never enter the chooser. Player-only PvE skills are an
+assignment concern rather than a persisted build role: the same saved build
+may be valid for a player slot and invalid for a hero slot. The preload and IPC
+layers transport validated library and publication requests but contain none
+of these rules.
+
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam
 sixteen canvases before the host releases the button, re-anchors at center, and

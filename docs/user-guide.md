@@ -142,6 +142,37 @@ software running as your macOS user may be able to recover it. Leave
 **Remember Password** off if that tradeoff is not acceptable. Browser cookies
 are cleared at startup and quit.
 
+## Build and team library
+
+Press **Command-B** while Guild Wars is running to open GWonMac Tools. The
+library stores reusable eight-skill builds and teams that reference those
+builds. It never presses game controls or changes the party for you.
+
+Open a build to edit a draft. Choose the primary and secondary professions,
+allocate the nonlinear 200-point attribute budget, then select a skill-bar
+slot to browse skills that the installed client identifies as PvE-equippable
+for that profession pair. Elite skills have a gold frame and the catalogue
+shows the available energy, adrenaline, health, overcast, activation, and
+recharge facts. The catalogue does not claim that a skill is unlocked on the
+current account.
+
+Draft changes stay separate from the saved library until **Save changes**.
+**Discard** restores the saved build. If teams share the build, saving asks
+whether to update every usage or create a related variant and move selected
+teams to it. The whole decision is one undoable library change.
+
+**Write skill template** is a separate action. It writes the last saved valid
+build into Guild Wars' `Templates/Skills` folder without replacing an existing
+file, then reports the exact filename to load through **Skills and
+Attributes → Load Template**. Save the draft first when that action is
+disabled.
+
+Opening a build from the player team slot allows player-only PvE skills.
+Opening it from a hero slot excludes them and reports any incompatible saved
+assignment before the handoff is prepared. **Prepare team handoff** writes the
+saved valid templates and reports each slot; applying them remains a player
+action inside Guild Wars.
+
 ## Report a problem
 
 Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
