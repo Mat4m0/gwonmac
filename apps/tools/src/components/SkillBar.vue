@@ -6,6 +6,7 @@ defineProps<{
   skills: readonly (SkillId | null)[];
   catalogue: SkillCatalogue;
   compact?: boolean;
+  changedSlots?: readonly number[];
 }>();
 </script>
 
@@ -15,6 +16,7 @@ defineProps<{
       v-for="(skill, index) in skills"
       :key="`${skill ?? 'empty'}-${index}`"
       class="ui-slot skill"
+      :data-changed="changedSlots?.includes(index) ? '' : undefined"
       :data-elite="skill !== null && catalogue.get(skill).elite ? '' : undefined"
       :data-profession="skill === null ? undefined : catalogue.get(skill).profession"
       :data-empty="skill === null ? '' : undefined"

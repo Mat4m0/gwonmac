@@ -8,7 +8,7 @@ import {
 } from "vue";
 import type { ToolsHost } from "./host";
 import type { Build, Team } from "./model";
-import { buildDifference, buildById, heroLabel, teamId } from "./model";
+import { buildDifference, buildById, teamMemberLabel, teamId } from "./model";
 import { useLibrary } from "./use-library";
 import BuildDetail from "./components/BuildDetail.vue";
 import SkillBar from "./components/SkillBar.vue";
@@ -279,7 +279,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                     class="ui-mark"
                     :data-profession="slot.build ? buildById(controller.library.value, slot.build)?.professions[0] : undefined"
                     :data-empty="slot.build ? undefined : ''"
-                    :title="heroLabel(slot.hero)"
+                    :title="teamMemberLabel(slot.hero, index)"
                   >
                     {{ slot.build ? buildById(controller.library.value, slot.build)?.professions[0] : "–" }}
                   </i>

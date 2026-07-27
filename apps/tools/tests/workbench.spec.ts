@@ -65,3 +65,38 @@ test("imports a real template and composes it into a new team", async ({ page })
   await page.locator(".team-slots .ui-select").first().selectOption({ label: "Fresh monk" });
   await expect(page.locator(".team-slots > li").first()).not.toHaveClass(/team-slot--empty/);
 });
+
+test("builds a useful handoff for a fresh account with one hero", async ({ page }) => {
+  await page.getByRole("button", { name: "New team" }).click();
+  await page.getByLabel("Name optional").fill("Me and Koss");
+  await page.getByRole("button", { name: "Create team" }).click();
+
+  const player = page.locator(".team-slots > li").nth(0);
+  const hero = page.locator(".team-slots > li").nth(1);
+  await player.locator(".build-picker select").selectOption({ label: "Splinter Barrage" });
+  await hero.locator(".hero-picker select").selectOption({ label: "Koss" });
+  await hero.locator(".build-picker select").selectOption({ label: "Discord Necro" });
+  await hero.getByRole("button", { name: /Hero controls for Koss/ }).click();
+  await hero.getByRole("checkbox", { name: /skill panel/ }).check();
+  await hero.getByRole("button", { name: /1 Discord/ }).click();
+  await expect(hero.getByRole("button", { name: /1 Discord/ })).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("button", { name: "Prepare team handoff" }).click();
+  await expect(page.locator(".handoff-sheet li")).toHaveCount(2);
+  await expect(page.locator('.handoff-sheet li[data-status="saved"]')).toHaveCount(2);
+  await expect(page.getByText("Nothing was applied automatically")).toBeVisible();
+});
+
+test("adapts a shared build without surprising its other teams", async ({ page }) => {
+  await page.getByRole("tab", { name: /Builds/ }).click();
+  await page.getByRole("option", { name: /Word of Healing Mo/ }).first().click();
+  await page.getByRole("button", { name: "Adapt from code" }).click();
+  await page.getByLabel("Replacement template code").fill("OwAU0Kn8Q4FgMjrUgtEA3TnA");
+  await page.getByRole("button", { name: "Create adapted variant" }).click();
+
+  await expect(page.locator("#build-name")).toHaveValue("Word of Healing — variant");
+  await expect(page.getByText(/Variant of Word of Healing/)).toBeVisible();
+  await expect(page.getByText("Skill 288", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: /Undo/ }).first().click();
+  await expect(page.locator("#build-name")).toHaveValue("Word of Healing");
+});

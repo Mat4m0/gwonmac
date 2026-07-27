@@ -213,6 +213,22 @@ body:has(.tools-stage[data-mode="standalone"]) {
   gap: var(--ui-space-1);
 }
 
+.tag-editor {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+
+.tag-editor .ui-chip span { color: var(--ui-text-faint); }
+
+.tag-entry input {
+  width: 76px;
+  min-height: 26px;
+  padding: 3px 7px;
+}
+
 /* A filter strip that grows without limit pushes the list it filters off the
    screen, so it is bounded — but bounded by a scroll rather than by
    `overflow: hidden`, which cut the last row of tags in half and made a
@@ -506,6 +522,29 @@ body:has(.tools-stage[data-mode="standalone"]) {
   font-variant-numeric: tabular-nums;
 }
 
+.lineage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.comparison-bars {
+  display: grid;
+  max-width: 640px;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-space-3);
+}
+
+.comparison-bars > div {
+  display: grid;
+  gap: var(--ui-space-1);
+}
+
+.comparison-bars > div > span {
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+}
+
 .usage-section,
 .notes-section { max-width: 620px; }
 
@@ -611,7 +650,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
   display: grid;
   min-height: 54px;
   padding: var(--ui-space-2);
-  grid-template-columns: 18px 150px 190px minmax(150px, 1fr) 84px;
+  grid-template-columns: 18px 160px 190px minmax(150px, 1fr) 84px 34px;
   align-items: center;
   gap: var(--ui-space-2);
   border: 1px solid var(--ui-line-soft);
@@ -640,6 +679,17 @@ body:has(.tools-stage[data-mode="standalone"]) {
 }
 
 .hero-cell > span:last-child { min-width: 0; }
+
+.hero-picker {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.hero-picker select {
+  width: 100%;
+  min-width: 0;
+}
 
 .hero-cell strong,
 .hero-cell small {
@@ -670,10 +720,85 @@ body:has(.tools-stage[data-mode="standalone"]) {
 .build-picker select { min-width: 0; }
 .build-picker .ui-link { font-size: var(--ui-font-size-sm); }
 .behavior-picker select { width: 84px; }
+.slot-settings { min-width: 32px; padding-inline: 0; }
 
 .empty-bar {
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
+}
+
+.slot-options {
+  display: grid;
+  padding: var(--ui-space-2) 0 0;
+  grid-column: 2 / -1;
+  gap: var(--ui-space-2);
+  border-top: 1px solid var(--ui-line-soft);
+}
+
+.disabled-skills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1);
+}
+
+.disabled-skills > span {
+  margin-right: var(--ui-space-1);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+}
+
+.disabled-skills .ui-chip {
+  max-width: 150px;
+  opacity: 0.55;
+}
+
+.disabled-skills .ui-chip[aria-pressed="true"] { opacity: 1; }
+
+.disabled-skills .ui-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handoff-sheet {
+  margin-top: var(--ui-space-4);
+  padding: var(--ui-space-4);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-well-fill);
+}
+
+.handoff-sheet > ol {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.handoff-sheet li {
+  display: grid;
+  min-height: 44px;
+  padding: var(--ui-space-2);
+  grid-template-columns: 20px 150px 70px minmax(180px, 1fr);
+  align-items: center;
+  gap: var(--ui-space-2);
+  border-top: 1px solid var(--ui-line-soft);
+}
+
+.handoff-sheet li > span:nth-child(2) strong,
+.handoff-sheet li > span:nth-child(2) small {
+  display: block;
+}
+
+.team-notes {
+  margin-top: var(--ui-space-4);
+  padding-top: var(--ui-space-4);
+  border-top: 1px solid var(--ui-line-soft);
+}
+
+.handoff-sheet li > span:nth-child(2) small {
+  color: var(--ui-text-faint);
 }
 
 /* --------------------------------------------------------------- states */
@@ -755,7 +880,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
 @container (max-width: 860px) {
   .workspace { grid-template-columns: 270px minmax(0, 1fr); }
   .library-pane { width: 270px; }
-  .team-slots > li { grid-template-columns: 18px 135px minmax(160px, 1fr) 84px; }
+  .team-slots > li { grid-template-columns: 18px 145px minmax(160px, 1fr) 84px 34px; }
   .team-slots .skill-bar { display: none; }
   .skill-list { grid-template-columns: 1fr; }
 }
@@ -792,12 +917,16 @@ body:has(.tools-stage[data-mode="standalone"]) {
   }
 
   .detail-view { height: calc(100% - 36px); }
-  .team-slots > li { grid-template-columns: 18px minmax(120px, 1fr) 84px; }
+  .team-slots > li { grid-template-columns: 18px minmax(120px, 1fr) 84px 34px; }
 
   .build-picker {
     grid-column: 2 / -1;
     grid-row: 2;
   }
+
+  .slot-options { grid-column: 1 / -1; }
+  .handoff-sheet li { grid-template-columns: 20px 1fr auto; }
+  .handoff-sheet li > span:last-child { grid-column: 2 / -1; }
 
   .team-slots .skill-bar { display: none; }
 
@@ -807,6 +936,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
   }
 
   .bar-section > .skill-bar { grid-template-columns: repeat(4, minmax(36px, 1fr)); }
+  .comparison-bars { grid-template-columns: 1fr; }
   .detail-actions--explain > span { display: none; }
 }
 

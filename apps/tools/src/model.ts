@@ -123,8 +123,15 @@ export function removeBuild(
 }
 
 export function heroLabel(hero: Team["slots"][number]["hero"]): string {
-  if (hero === null) return "You";
+  if (hero === null) return "Choose hero";
   return HERO_BY_ID.get(hero)?.name.replace(/([a-z])([A-Z])/gu, "$1 $2") ?? `Hero ${hero}`;
+}
+
+export function teamMemberLabel(
+  hero: Team["slots"][number]["hero"],
+  slotIndex: number,
+): string {
+  return slotIndex === 0 ? "You" : heroLabel(hero);
 }
 
 export function searchLibrary(
@@ -142,7 +149,7 @@ export function searchLibrary(
     const visibleText =
       "skills" in value
         ? value.skills.map((skill) => skill === null ? "" : catalogue.get(skill).name).join(" ")
-        : value.slots.map((slot) => heroLabel(slot.hero)).join(" ");
+        : value.slots.map((slot, index) => teamMemberLabel(slot.hero, index)).join(" ");
     return `${value.name} ${value.tags.join(" ")} ${visibleText}`
       .toLocaleLowerCase()
       .includes(term);

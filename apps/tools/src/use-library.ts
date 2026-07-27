@@ -5,6 +5,7 @@ import {
   type TeamSlot,
 } from "../../../src/shared/builds/library";
 import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
+import { validateBuild } from "../../../src/shared/builds/validate";
 import type { ToolsHost } from "./host";
 import {
   buildById,
@@ -15,6 +16,7 @@ import {
   removeBuild,
   searchLibrary,
   teamById,
+  teamMemberLabel,
   teamId,
   type Build,
   type BuildLibrary,
@@ -26,6 +28,15 @@ type Notice = Readonly<{
   tone: "success" | "warning" | "error";
   message: string;
 }> | null;
+
+export type TeamHandoffRow = Readonly<{
+  slot: number;
+  member: string;
+  buildName: string;
+  status: "saved" | "blocked" | "failed";
+  fileName: string | null;
+  message: string;
+}>;
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -56,7 +67,11 @@ export function useLibrary(host: ToolsHost) {
   const selectedId = ref("");
   const query = ref("");
   const tag = ref<string | null>(null);
-  const undoStack = shallowRef<Array<{ label: string; library: BuildLibrary }>>([]);
+  const undoStack = shallowRef<Array<{
+    label: string;
+    library: BuildLibrary;
+    selection: LibraryItem;
+  }>>([]);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   const showNotice = (
@@ -104,13 +119,19 @@ export function useLibrary(host: ToolsHost) {
   ) => {
     if (!library.value || saving.value) return;
     const previous = cloneLibrary(library.value);
+    const previousSelection: LibraryItem = kind.value === "build"
+      ? { kind: "build", id: buildId(selectedId.value) }
+      : { kind: "team", id: teamId(selectedId.value) };
     const next = change(previous);
     library.value = next;
     saving.value = true;
     error.value = null;
     try {
       await host.saveLibrary(next);
-      undoStack.value = [...undoStack.value, { label, library: previous }].slice(-40);
+      undoStack.value = [
+        ...undoStack.value,
+        { label, library: previous, selection: previousSelection },
+      ].slice(-40);
       showNotice(label);
     } catch (cause) {
       library.value = previous;
@@ -129,6 +150,8 @@ export function useLibrary(host: ToolsHost) {
     try {
       await host.saveLibrary(previous.library);
       library.value = previous.library;
+      kind.value = previous.selection.kind;
+      selectedId.value = previous.selection.id;
       undoStack.value = undoStack.value.slice(0, -1);
       showNotice(`Undid “${previous.label}”.`);
     } catch {
@@ -165,6 +188,89 @@ export function useLibrary(host: ToolsHost) {
       return build ? replaceBuild(current, { ...build, notes }) : current;
     });
 
+  const setTags = (
+    target: LibraryItem,
+    values: readonly string[],
+  ) => commit("Tags updated", (current) => {
+    const tags = values
+      .map((value) => value.trim())
+      .filter((value, index, all) =>
+        value.length > 0
+        && value.length <= 24
+        && all.findIndex((candidate) =>
+          candidate.toLocaleLowerCase() === value.toLocaleLowerCase()
+        ) === index
+      );
+    const vocabulary = [...current.tags];
+    for (const value of tags) {
+      if (!vocabulary.some((tag) => tag.toLocaleLowerCase() === value.toLocaleLowerCase())) {
+        vocabulary.push(value);
+      }
+    }
+    return {
+      ...current,
+      tags: vocabulary,
+      builds: target.kind === "build"
+        ? current.builds.map((build) =>
+            build.id === target.id ? { ...build, tags } : build
+          )
+        : current.builds,
+      teams: target.kind === "team"
+        ? current.teams.map((team) =>
+            team.id === target.id ? { ...team, tags } : team
+          )
+        : current.teams,
+    };
+  });
+
+  const updateBuildFromCode = async (
+    sourceId: string,
+    code: string,
+    mode: "all" | "fork",
+    rebindTeamIds: readonly string[],
+  ): Promise<boolean> => {
+    const decoded = decodeSkillTemplate(code.trim());
+    if (!decoded) {
+      showNotice("That is not a valid Guild Wars skill template code.", "error");
+      return false;
+    }
+    const nextId = id("build");
+    await commit(
+      mode === "fork" ? "Variant created with the new bar" : "Build updated",
+      (current) => {
+        const source = buildById(current, sourceId);
+        if (!source) return current;
+        if (mode === "all") {
+          return replaceBuild(current, { ...source, ...decoded });
+        }
+        const forked = forkBuild(current, sourceId, nextId);
+        const variant = buildById(forked, nextId);
+        if (!variant) return current;
+        const updated = replaceBuild(forked, { ...variant, ...decoded });
+        return {
+          ...updated,
+          teams: updated.teams.map((team) =>
+            rebindTeamIds.includes(team.id)
+              ? {
+                  ...team,
+                  slots: team.slots.map((slot) =>
+                    slot.build === sourceId
+                      ? { ...slot, build: buildId(nextId) }
+                      : slot,
+                  ) as unknown as Team["slots"],
+                }
+              : team,
+          ),
+        };
+      },
+    );
+    if (mode === "fork") {
+      kind.value = "build";
+      selectedId.value = nextId;
+    }
+    return true;
+  };
+
   const createFork = async (sourceId: string, rebindTeamIds: readonly string[]) => {
     const nextId = id("build");
     await commit("Variant created", (current) => {
@@ -190,6 +296,42 @@ export function useLibrary(host: ToolsHost) {
   const deleteBuild = async (id: string) => {
     await commit("Build deleted", (current) => removeBuild(current, id));
     selectedId.value = library.value?.builds[0]?.id ?? "";
+  };
+
+  const detachVariant = (id: string) =>
+    commit("Variant detached", (current) => {
+      const build = buildById(current, id);
+      return build
+        ? replaceBuild(current, { ...build, parent: null })
+        : current;
+    });
+
+  const mergeVariant = async (id: string) => {
+    const variant = library.value ? buildById(library.value, id) : undefined;
+    const parentId = variant?.parent;
+    if (!parentId) return;
+    await commit("Variant merged into its original", (current) => {
+      const child = buildById(current, id);
+      const parent = child?.parent ? buildById(current, child.parent) : undefined;
+      if (!child || !parent) return current;
+      const updated = replaceBuild(current, {
+        ...parent,
+        professions: child.professions,
+        skills: child.skills,
+        attributes: child.attributes,
+      });
+      return {
+        ...updated,
+        builds: updated.builds.filter((build) => build.id !== child.id),
+        teams: updated.teams.map((team) => ({
+          ...team,
+          slots: team.slots.map((slot) =>
+            slot.build === child.id ? { ...slot, build: parent.id } : slot,
+          ) as unknown as Team["slots"],
+        })),
+      };
+    });
+    selectedId.value = parentId;
   };
 
   const updateTeam = (
@@ -221,6 +363,14 @@ export function useLibrary(host: ToolsHost) {
     });
     kind.value = "team";
     selectedId.value = nextId;
+  };
+
+  const deleteTeam = async (id: string) => {
+    await commit("Team deleted", (current) => ({
+      ...current,
+      teams: current.teams.filter((team) => team.id !== id),
+    }));
+    selectedId.value = library.value?.teams[0]?.id ?? "";
   };
 
   const importBuild = async (code: string, requestedName = "") => {
@@ -299,6 +449,89 @@ export function useLibrary(host: ToolsHost) {
     }
   };
 
+  const prepareTeam = async (team: Team): Promise<readonly TeamHandoffRow[]> => {
+    if (!library.value || saving.value) return [];
+    saving.value = true;
+    const source = library.value;
+    const duplicateHeroes = new Set<number>();
+    const seenHeroes = new Set<number>();
+    for (const slot of team.slots.slice(1)) {
+      if (slot.hero === null) continue;
+      if (seenHeroes.has(slot.hero)) duplicateHeroes.add(slot.hero);
+      seenHeroes.add(slot.hero);
+    }
+
+    const publications = new Map<string, Awaited<ReturnType<ToolsHost["publishBuild"]>>>();
+    const failures = new Map<string, string>();
+    try {
+      for (const [index, slot] of team.slots.entries()) {
+        if (slot.build === null) continue;
+        if (index > 0 && slot.hero === null) continue;
+        if (slot.hero !== null && duplicateHeroes.has(slot.hero)) continue;
+        const build = buildById(source, slot.build);
+        if (!build || publications.has(build.id) || failures.has(build.id)) continue;
+        try {
+          publications.set(build.id, await host.publishBuild(build));
+        } catch (cause) {
+          failures.set(
+            build.id,
+            cause instanceof Error ? cause.message : "The template could not be saved.",
+          );
+        }
+      }
+
+      const rows: TeamHandoffRow[] = [];
+      for (const [index, slot] of team.slots.entries()) {
+        if (slot.build === null) continue;
+        const member = teamMemberLabel(slot.hero, index);
+        const build = buildById(source, slot.build);
+        if (!build) {
+          rows.push({
+            slot: index + 1, member, buildName: "Missing build",
+            status: "blocked", fileName: null,
+            message: "Choose a build that still exists in the library.",
+          });
+        } else if (index > 0 && slot.hero === null) {
+          rows.push({
+            slot: index + 1, member, buildName: build.name,
+            status: "blocked", fileName: null,
+            message: "Choose which hero runs this build.",
+          });
+        } else if (slot.hero !== null && duplicateHeroes.has(slot.hero)) {
+          rows.push({
+            slot: index + 1, member, buildName: build.name,
+            status: "blocked", fileName: null,
+            message: "A hero can occupy only one party slot.",
+          });
+        } else {
+          const published = publications.get(build.id);
+          rows.push(published
+            ? {
+                slot: index + 1, member, buildName: build.name,
+                status: "saved", fileName: published.fileName,
+                message: `Load ${published.fileName} for ${member}.`,
+              }
+            : {
+                slot: index + 1, member, buildName: build.name,
+                status: "failed", fileName: null,
+                message: failures.get(build.id) ?? "The template could not be saved.",
+              });
+        }
+      }
+      const saved = rows.filter((row) => row.status === "saved").length;
+      const blocked = rows.length - saved;
+      showNotice(
+        blocked === 0
+          ? `${saved} ${saved === 1 ? "slot is" : "slots are"} ready to load in Guild Wars.`
+          : `${saved} ready · ${blocked} need attention.`,
+        blocked === 0 ? "success" : "warning",
+      );
+      return rows;
+    } finally {
+      saving.value = false;
+    }
+  };
+
   const reset = async () => {
     if (!host.reset) return;
     const loaded = await host.reset();
@@ -334,8 +567,14 @@ export function useLibrary(host: ToolsHost) {
       selectedId.value = next.id;
     },
     usage: (id: string) => library.value ? buildUsage(library.value, id) : [],
-    renameBuild, toggleBuildFavourite, updateBuildNotes, createFork,
-    deleteBuild, updateTeam, duplicateTeam, publish, undo, reset,
+    validate: (build: Build) => validateBuild(
+      build,
+      (skill) => host.skills.has(skill) ? host.skills.get(skill) : null,
+    ),
+    renameBuild, toggleBuildFavourite, updateBuildNotes, setTags,
+    updateBuildFromCode, createFork, deleteBuild, detachVariant, mergeVariant,
+    updateTeam, duplicateTeam, deleteTeam,
+    publish, prepareTeam, undo, reset,
     importBuild, createTeam,
   };
 }

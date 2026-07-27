@@ -1,19 +1,56 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { HEROES_IN_PANEL_ORDER } from "../../../../src/shared/builds/heroes";
+import {
+  heroId,
+  type SkillSlotIndex,
+  type TeamSlot,
+} from "../../../../src/shared/builds/library";
 import type { LibraryController } from "../use-library";
-import { buildById, buildId, heroLabel, type Team } from "../model";
+import {
+  buildById,
+  buildId,
+  teamMemberLabel,
+  type Team,
+} from "../model";
 import SkillBar from "./SkillBar.vue";
+import TagEditor from "./TagEditor.vue";
 
 const props = defineProps<{
   team: Team;
   controller: LibraryController;
 }>();
 const name = ref(props.team.name);
+const notes = ref(props.team.notes);
+const expandedSlot = ref<number | null>(null);
+const deleting = ref(false);
+const handoff = ref<Awaited<ReturnType<LibraryController["prepareTeam"]>>>([]);
 watch(
-  () => props.team,
-  (team) => {
-    name.value = team.name;
+  () => props.team.id,
+  () => {
+    expandedSlot.value = null;
+    deleting.value = false;
+    handoff.value = [];
   },
+);
+watch(
+  () => props.team.name,
+  (next) => {
+    name.value = next;
+  },
+);
+watch(
+  () => props.team.notes,
+  (next) => {
+    notes.value = next;
+  },
+);
+
+const usedHeroes = computed(() =>
+  new Set(props.team.slots.flatMap((slot) => slot.hero === null ? [] : [slot.hero])),
+);
+const configured = computed(() =>
+  props.team.slots.filter((slot) => slot.build !== null).length,
 );
 
 const rename = () => {
@@ -25,6 +62,39 @@ const rename = () => {
     },
     "Team renamed",
   );
+};
+
+const updateSlot = (
+  index: number,
+  patch: Partial<TeamSlot>,
+  label: string,
+) => props.controller.updateTeam(
+  props.team.id,
+  (team) => ({
+    ...team,
+    slots: team.slots.map((slot, slotIndex) =>
+      slotIndex === index ? { ...slot, ...patch } : slot,
+    ) as unknown as Team["slots"],
+  }),
+  label,
+);
+
+const chooseHero = (index: number, value: string) => {
+  const hero = value ? heroId(Number(value)) : null;
+  void updateSlot(index, { hero }, "Hero assignment updated");
+};
+
+const toggleDisabled = (index: number, skillSlot: SkillSlotIndex) => {
+  const slot = props.team.slots[index];
+  if (!slot) return;
+  const disabled = slot.disabled.includes(skillSlot)
+    ? slot.disabled.filter((value) => value !== skillSlot)
+    : [...slot.disabled, skillSlot].sort((left, right) => left - right);
+  void updateSlot(index, { disabled }, "Hero skill automation updated");
+};
+
+const prepare = async () => {
+  handoff.value = await props.controller.prepareTeam(props.team);
 };
 </script>
 
@@ -42,7 +112,7 @@ const rename = () => {
             @change="rename"
             @keydown.enter="($event.target as HTMLInputElement).blur()"
           >
-          <p>{{ team.slots.filter((slot) => slot.build).length }} of 8 slots configured</p>
+          <p>{{ configured }} of 8 slots configured</p>
         </div>
         <button
           class="ui-button favourite" data-icon
@@ -64,9 +134,12 @@ const rename = () => {
             {{ mode === "hard" ? "Hard" : "Normal" }}
           </button>
         </div>
-        <div class="tag-row">
-          <span v-for="value in team.tags" :key="value" class="ui-chip">{{ value }}</span>
-        </div>
+        <TagEditor
+          :tags="team.tags"
+          :options="controller.tags.value"
+          label="Team tags"
+          @update="controller.setTags({ kind: 'team', id: team.id }, $event)"
+        />
       </div>
     </header>
 
@@ -92,7 +165,7 @@ const rename = () => {
         <li
           v-for="(slot, index) in team.slots"
           :key="`${slot.hero}-${index}`"
-          :class="{ 'team-slot--empty': !slot.build }"
+          :class="{ 'team-slot--empty': !slot.build, 'team-slot--expanded': expandedSlot === index }"
         >
           <span class="slot-number">{{ index + 1 }}</span>
           <div class="hero-cell">
@@ -102,36 +175,51 @@ const rename = () => {
                 ? buildById(controller.library.value, slot.build)?.professions[0]
                 : undefined"
             >
-              {{ heroLabel(slot.hero)[0] }}
+              {{ teamMemberLabel(slot.hero, index)[0] }}
             </span>
-            <span>
-              <strong>{{ heroLabel(slot.hero) }}</strong>
+            <span v-if="index === 0">
+              <strong>You</strong>
               <small>
                 {{ slot.build && controller.library.value
                   ? buildById(controller.library.value, slot.build)?.professions.join(" / ")
                   : "No build" }}
               </small>
             </span>
+            <label v-else class="hero-picker">
+              <span class="ui-sr-only">Hero in slot {{ index + 1 }}</span>
+              <select
+                class="ui-select"
+                :value="slot.hero ?? ''"
+                @change="chooseHero(index, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">Choose hero</option>
+                <option
+                  v-for="hero in HEROES_IN_PANEL_ORDER"
+                  :key="hero.id"
+                  :value="hero.id"
+                  :disabled="usedHeroes.has(hero.id) && hero.id !== slot.hero"
+                >
+                  {{ teamMemberLabel(hero.id, index) }}
+                </option>
+              </select>
+              <small>
+                {{ slot.build && controller.library.value
+                  ? buildById(controller.library.value, slot.build)?.professions.join(" / ")
+                  : "No build" }}
+              </small>
+            </label>
           </div>
 
           <label class="build-picker">
-            <span class="ui-sr-only">Build for {{ heroLabel(slot.hero) }}</span>
+            <span class="ui-sr-only">Build for {{ teamMemberLabel(slot.hero, index) }}</span>
             <select class="ui-select"
               :value="slot.build ?? ''"
-              @change="controller.updateTeam(
-                team.id,
-                (draft) => {
-                  const build = ($event.target as HTMLSelectElement).value;
-                  return {
-                    ...draft,
-                    slots: draft.slots.map((candidate, slotIndex) =>
-                      slotIndex === index
-                        ? { ...candidate, build: build ? buildId(build) : null }
-                        : candidate,
-                    ) as unknown as Team['slots'],
-                  };
-                },
-                `${heroLabel(slot.hero)}'s build updated`,
+              @change="updateSlot(
+                index,
+                { build: ($event.target as HTMLSelectElement).value
+                  ? buildId(($event.target as HTMLSelectElement).value)
+                  : null },
+                `${teamMemberLabel(slot.hero, index)}'s build updated`,
               )"
             >
               <option value="">No build</option>
@@ -161,22 +249,14 @@ const rename = () => {
           <span v-else class="empty-bar">Empty slot</span>
 
           <label class="behavior-picker">
-            <span class="ui-sr-only">Behavior for {{ heroLabel(slot.hero) }}</span>
+            <span class="ui-sr-only">Behavior for {{ teamMemberLabel(slot.hero, index) }}</span>
             <select class="ui-select"
               :value="slot.behaviour ?? ''"
-              :disabled="slot.hero === null"
-              @change="controller.updateTeam(
-                team.id,
-                (draft) => {
-                  const behaviour = ($event.target as HTMLSelectElement).value as typeof slot.behaviour;
-                  return {
-                    ...draft,
-                    slots: draft.slots.map((candidate, slotIndex) =>
-                      slotIndex === index ? { ...candidate, behaviour } : candidate,
-                    ) as unknown as Team['slots'],
-                  };
-                },
-                `${heroLabel(slot.hero)}'s behavior updated`,
+              :disabled="index === 0 || slot.hero === null"
+              @change="updateSlot(
+                index,
+                { behaviour: ($event.target as HTMLSelectElement).value as typeof slot.behaviour },
+                `${teamMemberLabel(slot.hero, index)}'s behavior updated`,
               )"
             >
               <option value="">Player</option>
@@ -185,13 +265,104 @@ const rename = () => {
               <option value="avoid">Avoid</option>
             </select>
           </label>
+
+          <button
+            v-if="index > 0"
+            class="ui-button slot-settings"
+            data-icon
+            :disabled="slot.hero === null"
+            :aria-expanded="expandedSlot === index"
+            :aria-label="`Hero controls for ${teamMemberLabel(slot.hero, index)}`"
+            @click="expandedSlot = expandedSlot === index ? null : index"
+          >
+            ⚙
+          </button>
+
+          <div v-if="expandedSlot === index && slot.hero !== null" class="slot-options">
+            <label class="ui-check">
+              <input
+                type="checkbox"
+                :checked="slot.panel"
+                @change="updateSlot(index, { panel: !slot.panel }, 'Hero panel preference updated')"
+              >
+              <span>Keep this hero’s skill panel open</span>
+            </label>
+            <div v-if="slot.build && controller.library.value" class="disabled-skills">
+              <span>Hero may use</span>
+              <button
+                v-for="(skill, skillIndex) in buildById(controller.library.value, slot.build)?.skills ?? []"
+                :key="`${skill}-${skillIndex}`"
+                class="ui-chip"
+                :aria-pressed="!slot.disabled.includes(skillIndex as SkillSlotIndex)"
+                :title="skill === null ? 'Empty skill slot' : controller.skills.get(skill).name"
+                :disabled="skill === null"
+                @click="toggleDisabled(index, skillIndex as SkillSlotIndex)"
+              >
+                {{ skillIndex + 1 }}
+                <span>{{ skill === null ? "Empty" : controller.skills.get(skill).name }}</span>
+              </button>
+            </div>
+          </div>
         </li>
       </ol>
+
+      <section v-if="handoff.length" class="handoff-sheet" aria-labelledby="handoff-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="handoff-title">Ready in Guild Wars</h2>
+            <p>Nothing was applied automatically. Load each saved template on the named member.</p>
+          </div>
+          <button class="ui-button" @click="handoff = []">Close</button>
+        </div>
+        <ol>
+          <li v-for="row in handoff" :key="row.slot" :data-status="row.status">
+            <span class="slot-number">{{ row.slot }}</span>
+            <span><strong>{{ row.member }}</strong><small>{{ row.buildName }}</small></span>
+            <span class="ui-chip" :data-level="row.status === 'saved' ? 'good' : row.status === 'blocked' ? 'warn' : 'bad'">
+              {{ row.status }}
+            </span>
+            <span>{{ row.message }}</span>
+          </li>
+        </ol>
+      </section>
+
+      <section class="notes-section team-notes">
+        <label for="team-notes">Team notes</label>
+        <textarea
+          id="team-notes"
+          v-model="notes"
+          class="ui-textarea"
+          rows="3"
+          placeholder="Consumables, route notes, substitutions…"
+          @change="controller.updateTeam(team.id, (draft) => ({ ...draft, notes }), 'Team notes saved')"
+        />
+      </section>
+
+      <section v-if="deleting" class="inline-action inline-action--danger">
+        <div>
+          <h2>Delete {{ team.name }}?</h2>
+          <p>The builds stay in the library. Only this composition is removed.</p>
+        </div>
+        <div class="action-row">
+          <button class="ui-button" @click="deleting = false">Keep team</button>
+          <button class="ui-button" data-variant="danger" @click="controller.deleteTeam(team.id)">
+            Delete team
+          </button>
+        </div>
+      </section>
     </div>
 
     <footer class="detail-actions detail-actions--explain">
-      <span>The demo simulates publication. GWonMac never presses Load for you.</span>
-      <button class="ui-button" data-variant="primary" disabled>Prepare team handoff</button>
+      <span>Templates are saved locally. GWonMac never presses Load for you.</span>
+      <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
+      <button
+        class="ui-button"
+        data-variant="primary"
+        :disabled="configured === 0 || controller.saving.value"
+        @click="prepare"
+      >
+        Prepare team handoff
+      </button>
     </footer>
   </article>
 </template>

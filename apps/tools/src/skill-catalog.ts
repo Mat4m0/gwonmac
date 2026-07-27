@@ -13,6 +13,7 @@ export interface SkillPresentation {
 
 export interface SkillCatalogue {
   get(id: SkillId): SkillPresentation;
+  has(id: SkillId): boolean;
 }
 
 export function createSkillCatalogue(
@@ -20,6 +21,9 @@ export function createSkillCatalogue(
 ): SkillCatalogue & { replace(skills: readonly SkillPresentation[]): void } {
   const byId = new Map(skills.map((skill) => [skill.id, skill]));
   return {
+    has(id) {
+      return byId.has(id);
+    },
     get(id) {
       return byId.get(id) ?? {
         id,
