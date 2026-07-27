@@ -626,7 +626,6 @@ export function useLibrary(host: ToolsHost) {
 
   return {
     skills: host.skills,
-    describeSkill: host.describeSkill,
     library, loading, saving, error, notice, kind, selectedId, query, tag,
     items, tags, selectedBuild, selectedTeam, canUndo, selectKind,
     select: (next: LibraryItem) => {

@@ -7,14 +7,12 @@ import {
   skillId,
   type Attribute,
   type Profession,
-  type SkillId,
 } from "../../../src/shared/builds/library";
 import { demoLibrary, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import {
   createSkillCatalogue,
   type SkillCatalogue,
-  type SkillDescriptionSource,
   type SkillPresentation,
 } from "./skill-catalog";
 
@@ -34,7 +32,6 @@ export interface ToolsHost {
   loadLibrary(): Promise<LibraryLoad>;
   saveLibrary(library: BuildLibrary): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
-  describeSkill(id: SkillId): Promise<string | null>;
   reset?(): Promise<LibraryLoad>;
 }
 
@@ -80,12 +77,6 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { fileName: safeFileName(build.name), location: "Templates/Skills" };
     },
-    async describeSkill(id) {
-      const skill = demoSkillCatalogue.get(id);
-      return skill.availability === "not-equippable"
-        ? null
-        : `${skill.name} is a locally resolved fixture description. In the game, this text comes from the installed client in its selected language.`;
-    },
     async reset() {
       storage?.removeItem(STORAGE_KEY);
       memory = cloneLibrary(demoLibrary);
@@ -97,10 +88,8 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
 export function createNativeHost(
   api: GwNativeApi,
   publishBuild: (build: Build) => Promise<PublishedTemplate>,
-  resolveDescription: (source: SkillDescriptionSource) => Promise<string | null>,
 ): ToolsHost {
   const skills = createSkillCatalogue([]);
-  const descriptions = new Map<SkillId, SkillDescriptionSource>();
   const profession = new Set<Profession>(
     Object.keys(PROFESSIONS) as Profession[],
   );
@@ -122,8 +111,6 @@ export function createNativeHost(
         || typeof record.elite !== "boolean"
         || !["pve", "player-only-pve", "pvp", "not-equippable"].includes(String(record.availability))
         || typeof record.hasIcon !== "boolean"
-        || record.description === null
-        || typeof record.description !== "object"
         || ![
           "energyCost", "adrenalineCost", "healthCost", "overcast",
           "activationSeconds", "aftercastSeconds", "rechargeSeconds",
@@ -133,15 +120,7 @@ export function createNativeHost(
       ) {
         continue;
       }
-      const rawDescription = record.description as Record<string, unknown>;
-      if (![
-        "stringId", "scale0", "scale15", "bonusScale0", "bonusScale15",
-        "duration0", "duration15",
-      ].every((field) => Number.isSafeInteger(rawDescription[field]))) {
-        continue;
-      }
       const id = skillId(record.id as number);
-      descriptions.set(id, rawDescription as unknown as SkillDescriptionSource);
       parsed.push({
         id,
         name: record.name,
@@ -175,9 +154,5 @@ export function createNativeHost(
       await api.buildLibrary.set(library);
     },
     publishBuild,
-    async describeSkill(id) {
-      const source = descriptions.get(id);
-      return source ? resolveDescription(source) : null;
-    },
   };
 }

@@ -29,10 +29,9 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 6;
+export const ENHANCEMENT_TRANSFORM_ABI = 7;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_ORIGINAL_EXPORT = "enhancement_tick_original";
-export const SKILL_TEXT_RESOLVE_EXPORT = "skill_text_resolve";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 interface WasmExport {
@@ -84,29 +83,6 @@ function parseTable(bytes: Uint8Array): { min: number; max: number | null } {
   const min = readUleb(bytes, cursor);
   const max = (flags & 1) !== 0 ? readUleb(bytes, cursor) : null;
   return { min, max };
-}
-
-function appendTableSlot(bytes: Uint8Array, slot: number): Uint8Array {
-  const cursor = { offset: 0 };
-  if (readUleb(bytes, cursor) !== 1) fail("expected exactly one table");
-  if (bytes[cursor.offset++] !== 0x70) fail("expected funcref table");
-  const flags = readUleb(bytes, cursor);
-  const min = readUleb(bytes, cursor);
-  const max = (flags & 1) !== 0 ? readUleb(bytes, cursor) : null;
-  if (cursor.offset !== bytes.byteLength) fail("malformed table section");
-  if (slot !== min) {
-    fail(`text callback slot ${slot} does not extend table length ${min}`);
-  }
-  if (max !== null && max !== min) {
-    fail("client table has capacity the certified transform did not account for");
-  }
-  return concat(
-    uleb(1),
-    Uint8Array.of(0x70),
-    uleb(flags),
-    uleb(min + 1),
-    ...(max === null ? [] : [uleb(max + 1)]),
-  );
 }
 
 function occupiedTableSlots(bytes: Uint8Array): Set<number> {
@@ -172,7 +148,6 @@ function buildManifestSection(build: KnownEnhancementBuild): Section {
       programId: build.programId,
       buildId: build.buildId,
       tableSlot: build.tableSlot,
-      textCallbackTableSlot: build.textCallbackTableSlot,
       layoutWords,
     }),
   );
@@ -192,17 +167,6 @@ function assertSignature(type: FunctionType, build: KnownEnhancementBuild): void
     fail(
       `hook signature is (${params.join(",")}) -> (${results.join(",")}), expected ` +
         `(${build.hookParams.join(",")}) -> (${build.hookResults.join(",")})`,
-    );
-  }
-}
-
-function assertTextResolveSignature(type: FunctionType): void {
-  const params = type.params.map(valueTypeName);
-  const results = type.results.map(valueTypeName);
-  if (params.join(",") !== "i32,i32,i32" || results.length !== 0) {
-    fail(
-      `text resolver signature is (${params.join(",")}) -> (${results.join(",")}), ` +
-        "expected (i32,i32,i32) -> ()",
     );
   }
 }
@@ -300,20 +264,8 @@ export function transformEnhancementWasm(
   const typeIndex = functionTypes[localIndex]!;
   const type = types[typeIndex] ?? fail("hook references an unknown type");
   assertSignature(type, build);
-  const textResolveLocalIndex = build.textResolveFunction - importCount;
-  if (
-    textResolveLocalIndex < 0
-    || textResolveLocalIndex >= functionTypes.length
-  ) {
-    fail("text resolver function is out of range");
-  }
-  const textResolveTypeIndex = functionTypes[textResolveLocalIndex]!;
-  const textResolveType =
-    types[textResolveTypeIndex] ?? fail("text resolver references an unknown type");
-  assertTextResolveSignature(textResolveType);
 
   const table = parseTable(sectionById(sections, 4));
-  const occupied = occupiedTableSlots(sectionById(sections, 9));
   if (
     build.tableSlot < 0
     || build.tableSlot >= table.min
@@ -321,13 +273,9 @@ export function transformEnhancementWasm(
   ) {
     fail("hook table slot is outside table limits");
   }
-  if (occupied.has(build.tableSlot)) {
+  if (occupiedTableSlots(sectionById(sections, 9)).has(build.tableSlot)) {
     fail(`hook table slot ${build.tableSlot} is occupied`);
   }
-  const nextTable = appendTableSlot(
-    sectionById(sections, 4),
-    build.textCallbackTableSlot,
-  );
 
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
@@ -348,7 +296,7 @@ export function transformEnhancementWasm(
     Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
   );
   const nextExports = concat(
-    uleb(exports.count + 3),
+    uleb(exports.count + 2),
     exports.entries,
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
@@ -356,16 +304,12 @@ export function transformEnhancementWasm(
     encodeName(ENHANCEMENT_ORIGINAL_EXPORT),
     Uint8Array.of(0x00),
     uleb(originalIndex),
-    encodeName(SKILL_TEXT_RESOLVE_EXPORT),
-    Uint8Array.of(0x00),
-    uleb(build.textResolveFunction),
   );
 
   const rewritten = sections.map((section): Section => {
     if (section.id === 3) {
       return { id: section.id, body: encodeIndexVector(nextFunctionTypes) };
     }
-    if (section.id === 4) return { id: section.id, body: nextTable };
     if (section.id === 6) return { id: section.id, body: nextGlobals };
     if (section.id === 7) return { id: section.id, body: nextExports };
     if (section.id === 10) return { id: section.id, body: encodeCode(nextBodies) };

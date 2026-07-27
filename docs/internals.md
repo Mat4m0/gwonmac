@@ -559,16 +559,15 @@ may be valid for a player slot and invalid for a hero slot. The preload and IPC
 layers transport validated library and publication requests but contain none
 of these rules.
 
-Localized skill descriptions also come from the installed client. The static
-catalogue supplies the full-description string ID and its scale, bonus, and
-duration ranges; the renderer sends that encoded reference through the
-exact-build-certified client text resolver and caches the resulting readable
-text by string ID. The WASM transform extends the client's full function table
-by one slot for the temporary callback instead of borrowing a client-owned
-entry. The callback crosses the Emscripten ABI as `table slot + 1`, because
-function pointer zero is null. Only one decode is in flight, the callback is
-bounded and removed after completion, and no description database or network
-lookup exists.
+The installed client's static skill table also identifies each localized
+description string ID and its scale, bonus, and duration ranges. Those
+references are not exposed to the Vue catalogue or resolved
+through a renderer-triggered WASM call: ArenaNet's text service requires a
+transient property context owned by the client's event dispatch, and calling it
+after control returns to JavaScript aborts the complete game runtime. A future
+description surface therefore needs an offline, independently testable reader
+for the installed client's language assets; until then the UI makes no
+description claim.
 
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam

@@ -153,9 +153,8 @@ allocate the nonlinear 200-point attribute budget, then select a skill-bar
 slot to browse skills that the installed client identifies as PvE-equippable
 for that profession pair. Elite skills have a gold frame and the catalogue
 shows the available energy, adrenaline, health, overcast, activation, and
-recharge facts. Selecting a catalogue result also shows the localized full
-description read from the installed client, including its effect ranges. The
-catalogue does not claim that a skill is unlocked on the current account.
+recharge facts. The catalogue does not claim that a skill is unlocked on the
+current account.
 
 Draft changes stay separate from the saved library until **Save changes**.
 **Discard** restores the saved build. If teams share the build, saving asks

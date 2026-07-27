@@ -132,6 +132,7 @@ export async function prepareClientModule(
     officialWasmPath,
     officialSha256,
     certification,
+    enhancementRequested,
     compatibilityCacheRoot,
     enhancementCacheRoot,
   } = options;
@@ -185,6 +186,15 @@ export async function prepareClientModule(
     return {
       wasmPath: templateSaveWasm,
       state: "template-only",
+      enhancementBuild: null,
+      failure: await discardEnhancementCache(enhancementCacheRoot),
+    };
+  }
+
+  if (!enhancementRequested) {
+    return {
+      wasmPath: templateSaveWasm,
+      state: "certified",
       enhancementBuild: null,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };

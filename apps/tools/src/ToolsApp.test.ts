@@ -110,9 +110,6 @@ describe("ToolsApp", () => {
     await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Barrage");
     await wrapper.get(".skill-result").trigger("click");
     await flushPromises();
-    expect(wrapper.get(".skill-description").text()).toContain(
-      "Barrage is a locally resolved fixture description.",
-    );
     await wrapper
       .findAll(".skill-inspector .ui-button")
       .find((button) => button.text().includes("Use in slot"))!

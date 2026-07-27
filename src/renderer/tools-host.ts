@@ -1,5 +1,4 @@
 import type { publishBuildTemplate } from "./build-projection.js";
-import type { SkillDescriptionSource } from "./skill-text.js";
 
 type ToolsAppHandle = Readonly<{
   show(): void;
@@ -15,9 +14,6 @@ type ToolsBundle = Readonly<{
       initiallyVisible?: boolean;
       onVisibilityChange?: (visible: boolean) => void;
       publishBuild: typeof publishBuildTemplate;
-      resolveSkillDescription: (
-        source: SkillDescriptionSource,
-      ) => Promise<string | null>;
     },
   ): ToolsAppHandle;
 }>;
@@ -30,13 +26,9 @@ type ToolsBundle = Readonly<{
 export function installToolsHost({
   releaseHeldKeys,
   publishBuild,
-  resolveSkillDescription,
 }: {
   releaseHeldKeys: () => void;
   publishBuild: typeof publishBuildTemplate;
-  resolveSkillDescription: (
-    source: SkillDescriptionSource,
-  ) => Promise<string | null>;
 }) {
   const root = document.createElement("div");
   root.id = "gwonmac-tools-root";
@@ -70,7 +62,6 @@ export function installToolsHost({
         handle = module.mountToolsApp(root, {
           initiallyVisible: false,
           publishBuild,
-          resolveSkillDescription,
           onVisibilityChange(next) {
             visible = next;
             if (!next) {

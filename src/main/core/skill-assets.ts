@@ -35,16 +35,6 @@ export interface SkillAssetFacts {
   readonly activationSeconds: number;
   readonly aftercastSeconds: number;
   readonly rechargeSeconds: number;
-  /** Installed-client text reference and the three substitution ranges it expects. */
-  readonly description: Readonly<{
-    stringId: number;
-    scale0: number;
-    scale15: number;
-    bonusScale0: number;
-    bonusScale15: number;
-    duration0: number;
-    duration15: number;
-  }>;
   readonly hasIcon: boolean;
 }
 
@@ -273,15 +263,6 @@ export class SkillAssets {
       activationSeconds: skill.activationSeconds,
       aftercastSeconds: skill.aftercastSeconds,
       rechargeSeconds: skill.rechargeSeconds,
-      description: {
-        stringId: skill.descriptionStringId,
-        scale0: skill.scale0,
-        scale15: skill.scale15,
-        bonusScale0: skill.bonusScale0,
-        bonusScale15: skill.bonusScale15,
-        duration0: skill.duration0,
-        duration15: skill.duration15,
-      },
       hasIcon:
         skill.iconFileId !== 0
         && findStream(ready.files, ready.fileIndex, skill.iconFileId) !== null,

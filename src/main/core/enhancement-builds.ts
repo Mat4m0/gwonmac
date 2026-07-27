@@ -74,8 +74,6 @@ export interface KnownEnhancementBuild {
   hookParams: readonly ["i32"];
   hookResults: readonly [];
   tableSlot: number;
-  textResolveFunction: number;
-  textCallbackTableSlot: number;
   layout: EnhancementLayout;
 }
 
@@ -99,12 +97,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
     tableSlot: 0,
-    // TextResolveIssue(encoded, callback, param). This is a read-only client
-    // service: it asks the installed client's own locale table to decode text.
-    textResolveFunction: 5870,
-    // The transform appends this slot after the client's full 0..4682 table.
-    // No client function is displaced.
-    textCallbackTableSlot: 4683,
     layout: Object.freeze({
       contextRoot: 0x5a0e20,
       agentArray: 0x5a4d98,

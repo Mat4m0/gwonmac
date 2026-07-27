@@ -7,7 +7,6 @@ import type { BuildDraftController } from "../use-build-draft";
 const props = defineProps<{
   editor: BuildDraftController;
   catalogue: SkillCatalogue;
-  describeSkill: (id: SkillId) => Promise<string | null>;
   allowPlayerOnly: boolean;
 }>();
 const emit = defineEmits<{ close: [] }>();
@@ -15,8 +14,6 @@ const emit = defineEmits<{ close: [] }>();
 const search = ref("");
 const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
 const inspected = ref<SkillPresentation | null>(null);
-const description = ref<string | null>(null);
-const descriptionState = ref<"idle" | "loading" | "ready" | "unavailable">("idle");
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
 
@@ -81,33 +78,6 @@ watch(results, (values) => {
     inspected.value = values[0] ?? null;
   }
 });
-let descriptionRequest = 0;
-watch(
-  () => inspected.value?.id ?? null,
-  async (id) => {
-    const request = ++descriptionRequest;
-    description.value = null;
-    if (id === null) {
-      descriptionState.value = "idle";
-      return;
-    }
-    descriptionState.value = "loading";
-    try {
-      const resolved = await props.describeSkill(id);
-      if (request !== descriptionRequest) return;
-      description.value = resolved;
-      descriptionState.value = resolved ? "ready" : "unavailable";
-    } catch (error) {
-      console.warn(
-        "[tools] skill description unavailable:",
-        error instanceof Error ? error.message : "unknown failure",
-      );
-      if (request === descriptionRequest) descriptionState.value = "unavailable";
-    }
-  },
-  { immediate: true },
-);
-
 function duplicateSlot(skill: SkillPresentation): number | null {
   const active = props.editor.activeSlot.value;
   const slot = props.editor.draft.value.skills.findIndex(
@@ -313,16 +283,6 @@ function clear(): void {
             <span v-if="inspected.activationSeconds"><strong>{{ inspected.activationSeconds }}s</strong><small>Activation</small></span>
             <span v-if="inspected.aftercastSeconds"><strong>{{ inspected.aftercastSeconds }}s</strong><small>Aftercast</small></span>
             <span v-if="inspected.rechargeSeconds"><strong>{{ inspected.rechargeSeconds }}s</strong><small>Recharge</small></span>
-          </div>
-          <div class="skill-description" aria-live="polite">
-            <span class="ui-kicker">Description</span>
-            <p v-if="descriptionState === 'ready'">{{ description }}</p>
-            <p v-else-if="descriptionState === 'loading'" class="description-loading">
-              Reading the installed client…
-            </p>
-            <p v-else>
-              Description unavailable for this client build.
-            </p>
           </div>
           <p v-if="duplicateSlot(inspected) !== null" class="inspector-warning">
             Already used in slot {{ (duplicateSlot(inspected) ?? 0) + 1 }}.

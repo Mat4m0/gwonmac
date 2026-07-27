@@ -38,14 +38,10 @@ function section(id: number, body: number[]): number[] {
 // KnownEnhancementBuild's hookParams is the literal ["i32"] and cannot say
 // otherwise.
 function fixture(occupied = false, hookParamType = 0x7f): Uint8Array {
-  const type = section(1, [
-    2,
-    0x60, 1, hookParamType, 0,
-    0x60, 3, 0x7f, 0x7f, 0x7f, 0,
-  ]);
+  const type = section(1, [1, 0x60, 1, hookParamType, 0]);
   const imports = section(2, [0]);
-  const functions = section(3, [2, 0, 1]);
-  const table = section(4, [1, 0x70, 1, 2, 2]);
+  const functions = section(3, [1, 0]);
+  const table = section(4, [1, 0x70, 1, 1, 1]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
   const loopName = [...new TextEncoder().encode("EmscriptenExeThreadMainLoop")];
@@ -59,11 +55,7 @@ function fixture(occupied = false, hookParamType = 0x7f): Uint8Array {
     occupied ? [1, 0, 0x41, 0, 0x0b, 1, 0] : [0],
   );
   const body = [0, 0x0b];
-  const code = section(10, [
-    2,
-    ...uleb(body.length), ...body,
-    ...uleb(body.length), ...body,
-  ]);
+  const code = section(10, [1, ...uleb(body.length), ...body]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
     ...type, ...imports, ...functions, ...table, ...globals, ...exports,
@@ -80,8 +72,6 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 0,
-    textResolveFunction: 1,
-    textCallbackTableSlot: 2,
     layout: {
       contextRoot: 1, agentArray: 2, manualTargetAgentId: 3,
       automaticTargetAgentId: 4, gameContextSlot: 6, characterContext: 4,
@@ -97,7 +87,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
 }
 
 describe("targeted Enhancement WebAssembly transform", () => {
-  it("is deterministic, valid, and appends one callback table slot", () => {
+  it("is deterministic and valid without changing the client table", () => {
     const input = fixture();
     const build = manifest(input);
     const first = transformEnhancementWasm(input, build);
@@ -112,12 +102,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const instance = new WebAssembly.Instance(module);
     assert.equal(
       (instance.exports.tbl as WebAssembly.Table).length,
-      build.textCallbackTableSlot + 1,
+      1,
     );
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(ENHANCEMENT_HOOK_EXPORT));
     assert.ok(names.includes(ENHANCEMENT_ORIGINAL_EXPORT));
-    assert.ok(names.includes("skill_text_resolve"));
+    assert.ok(!names.includes("skill_text_resolve"));
     const sections = WebAssembly.Module.customSections(
       module,
       ENHANCEMENT_MANIFEST_SECTION,
@@ -135,7 +125,6 @@ describe("targeted Enhancement WebAssembly transform", () => {
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,
-        textCallbackTableSlot: build.textCallbackTableSlot,
         layoutWords: enhancementLayoutWords(build.layout),
       },
     );
@@ -150,9 +139,9 @@ describe("targeted Enhancement WebAssembly transform", () => {
       results: [],
     });
     assert.deepEqual(report.table, {
-      min: 2,
-      max: 2,
-      firstEmptySlots: [0, 1],
+      min: 1,
+      max: 1,
+      firstEmptySlots: [0],
     });
   });
 
@@ -171,13 +160,6 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.throws(
       () => transformEnhancementWasm(wrongSignature, manifest(wrongSignature)),
       /signature/,
-    );
-    assert.throws(
-      () => transformEnhancementWasm(input, {
-        ...manifest(input),
-        textCallbackTableSlot: 1,
-      }),
-      /does not extend table length/,
     );
   });
 });
