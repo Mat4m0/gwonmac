@@ -799,12 +799,20 @@ button.ui-chip:hover {
 /* Guild Wars keeps the elite indicator out of the icon artwork and composes a
  * separate golden frame around it. Two inset strokes reproduce that frame at
  * every size without bundling a second raster asset. */
-.ui-slot[data-elite] {
+.ui-slot[data-elite]::after {
+  z-index: var(--ui-z-readout);
+  background:
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top left / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top left / 3px 45% no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top right / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top right / 3px 45% no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom left / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom left / 3px 45% no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom right / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom right / 3px 45% no-repeat;
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--ui-warning) 45%, var(--ui-outline)),
-    inset 0 0 0 3px var(--ui-warning),
-    inset 0 0 0 4px color-mix(in srgb, var(--ui-warning) 56%, var(--ui-outline)),
-    0 0 0 1px var(--ui-outline);
+    inset 0 0 0 1px color-mix(in srgb, var(--ui-warning) 54%, var(--ui-outline)),
+    inset 0 0 0 4px color-mix(in srgb, var(--ui-warning) 32%, transparent);
 }
 
 /* What changed between two builds. Ringed rather than tinted, so the icon

@@ -20,6 +20,9 @@ const props = defineProps<{
   team: Team;
   controller: LibraryController;
 }>();
+const emit = defineEmits<{
+  editBuild: [id: string, context: "player" | "hero"];
+}>();
 const name = ref(props.team.name);
 const notes = ref(props.team.notes);
 const expandedSlot = ref<number | null>(null);
@@ -52,6 +55,14 @@ const usedHeroes = computed(() =>
 const configured = computed(() =>
   props.team.slots.filter((slot) => slot.build !== null).length,
 );
+
+const assignmentValid = (slot: TeamSlot, index: number): boolean => {
+  if (slot.build === null || !props.controller.library.value) return true;
+  const build = buildById(props.controller.library.value, slot.build);
+  return build
+    ? props.controller.validate(build, index === 0 ? "player" : "hero").valid
+    : false;
+};
 
 const rename = () => {
   if (!name.value.trim() || name.value.trim() === props.team.name) return;
@@ -166,6 +177,7 @@ const prepare = async () => {
           v-for="(slot, index) in team.slots"
           :key="`${slot.hero}-${index}`"
           :class="{ 'team-slot--empty': !slot.build, 'team-slot--expanded': expandedSlot === index }"
+          :data-invalid="!assignmentValid(slot, index) ? '' : undefined"
         >
           <span class="slot-number">{{ index + 1 }}</span>
           <div class="hero-cell">
@@ -234,10 +246,13 @@ const prepare = async () => {
             <button
               v-if="slot.build"
               class="ui-link"
-              @click="controller.select({ kind: 'build', id: slot.build })"
+              @click="emit('editBuild', slot.build, index === 0 ? 'player' : 'hero')"
             >
               Open build
             </button>
+            <small v-if="!assignmentValid(slot, index)" class="assignment-error">
+              This build has skills this member cannot equip.
+            </small>
           </label>
 
           <SkillBar

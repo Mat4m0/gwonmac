@@ -63,6 +63,7 @@ import { ATTRIBUTE_POINT_COST, ATTRIBUTES } from "./heroes.js";
 export interface CataloguedSkill {
   readonly profession: Profession | null;
   readonly elite: boolean;
+  readonly availability: "pve" | "player-only-pve" | "pvp" | "not-equippable";
 }
 
 /**
@@ -162,6 +163,19 @@ export type BuildProblem =
   | { readonly rule: "secondary-repeats-primary"; readonly profession: Profession }
   /** The catalogue does not know this id, so its profession and elite flag are unknown. */
   | { readonly rule: "unknown-skill"; readonly slot: SkillSlotIndex; readonly skill: SkillId }
+  /** The catalogue knows the record, but Guild Wars cannot equip it in PvE. */
+  | {
+      readonly rule: "skill-not-equippable";
+      readonly slot: SkillSlotIndex;
+      readonly skill: SkillId;
+      readonly availability: "pvp" | "not-equippable";
+    }
+  /** A PvE title skill can be equipped by the player, never by a hero. */
+  | {
+      readonly rule: "player-only-skill-on-hero";
+      readonly slot: SkillSlotIndex;
+      readonly skill: SkillId;
+    }
   /** The same skill occupies two slots. */
   | {
       readonly rule: "duplicate-skill";
@@ -240,6 +254,29 @@ export function validateBuild(
     : { valid: false, problems: [first, ...rest] };
 }
 
+/** Assignment-specific rules that do not make the reusable build intrinsically invalid. */
+export function validateBuildFor(
+  build: Build,
+  catalogue: SkillCatalogue,
+  context: "player" | "hero",
+): BuildValidation {
+  const intrinsic = validateBuild(build, catalogue);
+  const problems = intrinsic.valid ? [] : [...intrinsic.problems];
+  if (context === "hero") {
+    for (const slot of SKILL_SLOTS) {
+      const skill = build.skills[slot] ?? null;
+      if (skill === null) continue;
+      if (catalogue(skill)?.availability === "player-only-pve") {
+        problems.push({ rule: "player-only-skill-on-hero", slot, skill });
+      }
+    }
+  }
+  const [first, ...rest] = problems;
+  return first === undefined
+    ? { valid: true }
+    : { valid: false, problems: [first, ...rest] };
+}
+
 /**
  * The bar, slot by slot in order. An empty slot is skipped and never a problem:
  * a half-written bar is a legal saved state, which is why `SkillSlot` is
@@ -279,6 +316,15 @@ function checkSkills(
     if (known === null) {
       problems.push({ rule: "unknown-skill", slot, skill });
       continue;
+    }
+
+    if (known.availability === "pvp" || known.availability === "not-equippable") {
+      problems.push({
+        rule: "skill-not-equippable",
+        slot,
+        skill,
+        availability: known.availability,
+      });
     }
 
     if (known.elite) {

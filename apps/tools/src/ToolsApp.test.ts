@@ -38,14 +38,10 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-tabs button")[1]!.trigger("click");
     await wrapper
-      .findAll(".detail-actions .ui-button")
-      .find((button) => button.text().includes("Fork variant"))!
-      .trigger("click");
-    expect(wrapper.text()).toContain("Fork a linked variant");
-    await wrapper
-      .findAll(".inline-action .ui-button")
-      .find((button) => button.text().includes("Create variant"))!
+      .findAll(".details-danger-zone .ui-button")
+      .find((button) => button.text().includes("Fork independent"))!
       .trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("Word of Healing — variant");
@@ -57,9 +53,13 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
-    await wrapper.get(".bar-section [data-variant=primary]").trigger("click");
+    await wrapper
+      .findAll(".authoring-actions .ui-button")
+      .find((button) => button.text().includes("Write skill template"))!
+      .trigger("click");
     await new Promise((resolve) => setTimeout(resolve, 220));
-    expect(wrapper.text()).toContain("Load it from Guild Wars");
+    expect(wrapper.text()).toContain("Template written:");
+    expect(wrapper.text()).toContain("Load Template");
     wrapper.unmount();
   });
 
@@ -96,22 +96,25 @@ describe("ToolsApp", () => {
     expect(wrapper.text()).toContain("Marksmanship");
     expect(wrapper.text()).not.toContain("Expertise");
 
-    const rank = (name: string) =>
-      wrapper.get<HTMLSelectElement>(`.rank-select[aria-label="${name} rank"]`);
-    await rank("Swordsmanship").setValue("12");
-    await flushPromises();
-    await rank("Marksmanship").setValue("12");
-    await flushPromises();
-    expect(wrapper.get(".attribute-budget strong").text()).toBe("6");
-    await rank("Strength").setValue("3");
-    await flushPromises();
-    expect(wrapper.get(".attribute-budget strong").text()).toBe("0");
+    const increase = async (name: string, times: number) => {
+      const button = () => wrapper.get(`[aria-label="Increase ${name}"]`);
+      for (let index = 0; index < times; index++) await button().trigger("click");
+    };
+    await increase("Swordsmanship", 12);
+    await increase("Marksmanship", 12);
+    expect(wrapper.get(".attribute-budget").text()).toContain("6 remaining");
+    await increase("Strength", 3);
+    expect(wrapper.get(".attribute-budget").text()).toContain("0 remaining");
 
-    await wrapper.findAll(".bar-section .skill--editable")[0]!.trigger("click");
-    await wrapper.get('.skill-picker input[type="search"]').setValue("Barrage");
-    await wrapper.get(".skill-choice").trigger("click");
+    await wrapper.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Barrage");
+    await wrapper.get(".skill-result").trigger("click");
+    await wrapper
+      .findAll(".skill-inspector .ui-button")
+      .find((button) => button.text().includes("Use in slot"))!
+      .trigger("click");
     await flushPromises();
-    expect(wrapper.findAll(".skill-list strong")[0]!.text()).toBe("Barrage");
+    expect(wrapper.findAll(".authoring-bar .skill")[0]!.attributes("title")).toBe("Barrage");
     wrapper.unmount();
   });
 
@@ -119,18 +122,25 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
-    await wrapper.findAll(".bar-section .skill--editable")[0]!.trigger("click");
-    await wrapper.get('.skill-picker input[type="search"]').setValue("Aegis");
-    await wrapper.get(".skill-choice").trigger("click");
-    expect(wrapper.text()).toContain("This build is shared");
-
+    await wrapper.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Infuse Health");
+    await wrapper.get(".skill-result").trigger("click");
     await wrapper
-      .findAll(".shared-edit-dialog .ui-button")
+      .findAll(".skill-inspector .ui-button")
+      .find((button) => button.text().includes("Use in slot"))!
+      .trigger("click");
+    await wrapper
+      .findAll(".authoring-actions .ui-button")
+      .find((button) => button.text().includes("Save changes"))!
+      .trigger("click");
+    expect(wrapper.text()).toContain("This build is shared");
+    await wrapper
+      .findAll(".shared-commit-sheet .ui-button")
       .find((button) => button.text().includes("Fork selected"))!
       .trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("Variant of");
-    expect(wrapper.text()).toContain("Aegis");
+    expect(wrapper.get<HTMLInputElement>("#build-name").element.value).toContain("variant");
+    expect(wrapper.findAll(".authoring-bar .skill")[0]!.attributes("title")).toBe("Infuse Health");
     wrapper.unmount();
   });
 
@@ -156,28 +166,27 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
-  it("adapts a shared build as a linked variant and moves only the chosen team", async () => {
+  it("loads a template into a draft without mutating the saved build", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-tabs button")[1]!.trigger("click");
+    await wrapper.get(".adapt-section .template-code").setValue("OwAU0Kn8Q4FgMjrUgtEA3TnA");
     await wrapper
-      .findAll(".detail-actions .ui-button")
-      .find((button) => button.text().includes("Adapt from code"))!
-      .trigger("click");
-    await wrapper.get(".inline-action .template-code").setValue("OwAU0Kn8Q4FgMjrUgtEA3TnA");
-    await wrapper
-      .findAll(".inline-action .ui-button")
-      .find((button) => button.text().includes("Create adapted variant"))!
+      .findAll(".adapt-section .ui-button")
+      .find((button) => button.text().includes("Load into draft"))!
       .trigger("click");
     await flushPromises();
-
-    expect(wrapper.text()).toContain("Word of Healing — variant");
-    expect(wrapper.text()).toContain("Variant of");
-    expect(wrapper.text()).toContain("Skill 288");
+    expect(wrapper.text()).toContain("Unsaved draft");
+    await wrapper
+      .findAll(".authoring-actions .ui-button")
+      .find((button) => button.text().includes("Discard"))!
+      .trigger("click");
+    expect(wrapper.text()).not.toContain("Unsaved draft");
     wrapper.unmount();
   });
 
-  it("prepares every configured team slot and reports the player-owned load step", async () => {
+  it("prepares valid slots and blocks a player-only skill on a hero", async () => {
     const wrapper = await workbench();
     await wrapper
       .findAll(".detail-actions .ui-button")
@@ -187,8 +196,10 @@ describe("ToolsApp", () => {
     await flushPromises();
 
     expect(wrapper.findAll(".handoff-sheet li")).toHaveLength(8);
-    expect(wrapper.findAll('.handoff-sheet li[data-status="saved"]')).toHaveLength(8);
+    expect(wrapper.findAll('.handoff-sheet li[data-status="saved"]')).toHaveLength(7);
+    expect(wrapper.findAll('.handoff-sheet li[data-status="blocked"]')).toHaveLength(1);
     expect(wrapper.text()).toContain("Load");
+    expect(wrapper.text()).toContain("skills this member cannot equip");
     expect(wrapper.text()).toContain("Nothing was applied automatically");
     wrapper.unmount();
   });
@@ -232,6 +243,7 @@ describe("ToolsApp", () => {
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     const before = wrapper.findAll(".library-row").length;
     await wrapper.findAll(".library-row")[1]!.trigger("click");
+    await wrapper.findAll(".authoring-tabs button")[1]!.trigger("click");
     await wrapper.get(".lineage-actions .ui-link").trigger("click");
     await wrapper
       .findAll(".inline-action .ui-button")

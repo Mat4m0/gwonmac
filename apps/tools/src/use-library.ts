@@ -5,7 +5,10 @@ import {
   type TeamSlot,
 } from "../../../src/shared/builds/library";
 import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
-import { validateBuild } from "../../../src/shared/builds/validate";
+import {
+  validateBuild,
+  validateBuildFor,
+} from "../../../src/shared/builds/validate";
 import type { ToolsHost } from "./host";
 import {
   buildById,
@@ -73,6 +76,20 @@ export function useLibrary(host: ToolsHost) {
     selection: LibraryItem;
   }>>([]);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  const catalogueLookup = (skill: Build["skills"][number]) =>
+    skill !== null && host.skills.has(skill)
+      ? {
+          profession: host.skills.get(skill).profession,
+          elite: host.skills.get(skill).elite,
+          availability: host.skills.get(skill).availability,
+        }
+      : null;
+  const validateInContext = (
+    build: Build,
+    context: "standalone" | "player" | "hero",
+  ) => context === "standalone"
+    ? validateBuild(build, catalogueLookup)
+    : validateBuildFor(build, catalogueLookup, context);
 
   const showNotice = (
     message: string,
@@ -223,29 +240,18 @@ export function useLibrary(host: ToolsHost) {
     };
   });
 
-  const updateBuildFromCode = async (
+  const saveBuildDraft = async (
     sourceId: string,
-    code: string,
-    mode: "all" | "fork",
-    rebindTeamIds: readonly string[],
-  ): Promise<boolean> => {
-    const decoded = decodeSkillTemplate(code.trim());
-    if (!decoded) {
-      showNotice("That is not a valid Guild Wars skill template code.", "error");
-      return false;
-    }
-    return updateBuildContent(sourceId, decoded, mode, rebindTeamIds);
-  };
-
-  const updateBuildContent = async (
-    sourceId: string,
-    content: Pick<Build, "professions" | "attributes" | "skills">,
+    content: Pick<
+      Build,
+      "name" | "professions" | "attributes" | "skills" | "tags" | "notes"
+    >,
     mode: "all" | "fork" = "all",
     rebindTeamIds: readonly string[] = [],
   ): Promise<boolean> => {
     const nextId = id("build");
     await commit(
-      mode === "fork" ? "Variant created with your changes" : "Build updated",
+      mode === "fork" ? "Variant created with your changes" : "Build changes saved",
       (current) => {
         const source = buildById(current, sourceId);
         if (!source) return current;
@@ -255,7 +261,11 @@ export function useLibrary(host: ToolsHost) {
         const forked = forkBuild(current, sourceId, nextId);
         const variant = buildById(forked, nextId);
         if (!variant) return current;
-        const updated = replaceBuild(forked, { ...variant, ...content });
+        const updated = replaceBuild(forked, {
+          ...variant,
+          ...content,
+          name: content.name === source.name ? variant.name : content.name,
+        });
         return {
           ...updated,
           teams: updated.teams.map((team) =>
@@ -477,9 +487,11 @@ export function useLibrary(host: ToolsHost) {
     saving.value = true;
     try {
       const result = await host.publishBuild(build);
-      showNotice(`Saved “${result.fileName}” to ${result.location}. Load it from Guild Wars.`);
+      showNotice(`Template written: ${result.fileName}`);
+      return result;
     } catch (cause) {
       showNotice(cause instanceof Error ? cause.message : "The template could not be saved.", "error");
+      return null;
     } finally {
       saving.value = false;
     }
@@ -506,6 +518,9 @@ export function useLibrary(host: ToolsHost) {
         if (slot.hero !== null && duplicateHeroes.has(slot.hero)) continue;
         const build = buildById(source, slot.build);
         if (!build || publications.has(build.id) || failures.has(build.id)) continue;
+        if (!validateInContext(build, index === 0 ? "player" : "hero").valid) {
+          continue;
+        }
         try {
           publications.set(build.id, await host.publishBuild(build));
         } catch (cause) {
@@ -540,6 +555,21 @@ export function useLibrary(host: ToolsHost) {
             message: "A hero can occupy only one party slot.",
           });
         } else {
+          const verdict = validateInContext(
+            build,
+            index === 0 ? "player" : "hero",
+          );
+          if (!verdict.valid) {
+            rows.push({
+              slot: index + 1,
+              member,
+              buildName: build.name,
+              status: "blocked",
+              fileName: null,
+              message: "Repair this member’s build before writing its template.",
+            });
+            continue;
+          }
           const published = publications.get(build.id);
           rows.push(published
             ? {
@@ -603,12 +633,9 @@ export function useLibrary(host: ToolsHost) {
       selectedId.value = next.id;
     },
     usage: (id: string) => library.value ? buildUsage(library.value, id) : [],
-    validate: (build: Build) => validateBuild(
-      build,
-      (skill) => host.skills.has(skill) ? host.skills.get(skill) : null,
-    ),
+    validate: validateInContext,
     renameBuild, toggleBuildFavourite, updateBuildNotes, setTags,
-    updateBuildFromCode, updateBuildContent,
+    saveBuildDraft,
     createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
     publish, prepareTeam, undo, reset,

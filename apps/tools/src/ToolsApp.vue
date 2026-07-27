@@ -4,11 +4,19 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  shallowRef,
   watch,
 } from "vue";
 import type { ToolsHost } from "./host";
 import type { Build, Team } from "./model";
-import { buildDifference, buildById, teamMemberLabel, teamId } from "./model";
+import type { AuthoringContext } from "./use-build-draft";
+import {
+  buildDifference,
+  buildById,
+  buildId,
+  teamMemberLabel,
+  teamId,
+} from "./model";
 import { useLibrary } from "./use-library";
 import BuildDetail from "./components/BuildDetail.vue";
 import SkillBar from "./components/SkillBar.vue";
@@ -32,6 +40,10 @@ const position = ref({ left: 28, top: 42 });
 const composer = ref<"build" | "team" | null>(null);
 const draftCode = ref("");
 const draftName = ref("");
+const buildContext = ref<AuthoringContext>("standalone");
+const buildDetail = ref<InstanceType<typeof BuildDetail> | null>(null);
+const buildDirty = ref(false);
+const pendingNavigation = shallowRef<null | (() => void)>(null);
 
 const count = computed(() => controller.items.value.length);
 watch(
@@ -51,15 +63,59 @@ watch(
 );
 
 const select = (value: Build | Team) => {
-  if ("skills" in value) controller.select({ kind: "build", id: value.id });
-  else controller.select({ kind: "team", id: value.id });
-  mobileView.value = "detail";
+  navigate(() => {
+    if ("skills" in value) {
+      buildContext.value = "standalone";
+      controller.select({ kind: "build", id: value.id });
+    } else {
+      controller.select({ kind: "team", id: value.id });
+    }
+    mobileView.value = "detail";
+  });
 };
 
 const openTeam = (id: string) => {
-  controller.select({ kind: "team", id: teamId(id) });
-  mobileView.value = "detail";
+  navigate(() => {
+    controller.select({ kind: "team", id: teamId(id) });
+    mobileView.value = "detail";
+  });
 };
+
+const openBuild = (id: string, context: "player" | "hero") => {
+  navigate(() => {
+    buildContext.value = context;
+    controller.select({ kind: "build", id: buildId(id) });
+    mobileView.value = "detail";
+  });
+};
+
+function navigate(action: () => void): void {
+  if (buildDirty.value && controller.selectedBuild.value) {
+    pendingNavigation.value = action;
+    return;
+  }
+  action();
+}
+
+const selectKind = (kind: "team" | "build") => navigate(() => {
+  buildContext.value = "standalone";
+  controller.selectKind(kind);
+  mobileView.value = "list";
+});
+
+const finishNavigation = (discard: boolean) => {
+  if (discard) buildDetail.value?.discard();
+  const action = pendingNavigation.value;
+  pendingNavigation.value = null;
+  action?.();
+};
+
+const saveAndNavigate = async () => {
+  const saved = await buildDetail.value?.requestSave();
+  if (saved) finishNavigation(false);
+};
+
+const requestClose = () => navigate(() => emit("close"));
 
 const finishCreate = async () => {
   if (composer.value === "build") {
@@ -112,7 +168,13 @@ const startDrag = (event: PointerEvent) => {
 
 const onKeydown = (event: KeyboardEvent) => {
   if (!props.visible) return;
+  const editable =
+    event.target instanceof HTMLInputElement
+    || event.target instanceof HTMLTextAreaElement
+    || event.target instanceof HTMLSelectElement
+    || (event.target instanceof HTMLElement && event.target.isContentEditable);
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+    if (editable) return;
     event.preventDefault();
     void controller.undo();
   }
@@ -124,7 +186,8 @@ const onKeydown = (event: KeyboardEvent) => {
     event.preventDefault();
     search.value?.focus();
   }
-  if (event.key === "Escape" && props.mode === "embedded") emit("close");
+  if (event.key === "Escape" && event.defaultPrevented) return;
+  if (event.key === "Escape" && props.mode === "embedded") requestClose();
 };
 
 onMounted(() => window.addEventListener("keydown", onKeydown));
@@ -148,16 +211,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <div class="window-brand" aria-hidden="true">GW</div>
         <div class="window-identity">
           <h1 class="ui-panel-title">GWonMac Tools</h1>
-          <p class="ui-field-hint">{{ host.label }} · Vue workbench</p>
+          <p class="ui-field-hint">{{ host.label }}</p>
         </div>
         <span v-if="controller.saving.value" class="ui-chip" data-level="warn" role="status">Saving…</span>
-        <span v-else class="ui-chip" data-level="good">Ready</span>
         <button
           v-if="mode === 'embedded'"
           class="ui-button window-close"
           data-icon
           aria-label="Close GWonMac Tools"
-          @click="emit('close')"
+          @click="requestClose"
         >
           ×
         </button>
@@ -181,7 +243,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               <button
                 role="tab"
                 :aria-selected="controller.kind.value === 'team'"
-                @click="controller.selectKind('team')"
+                @click="selectKind('team')"
               >
                 Teams
                 <small>{{ controller.library.value.teams.length }}</small>
@@ -189,7 +251,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               <button
                 role="tab"
                 :aria-selected="controller.kind.value === 'build'"
-                @click="controller.selectKind('build')"
+                @click="selectKind('build')"
               >
                 Builds
                 <small>{{ controller.library.value.builds.length }}</small>
@@ -293,7 +355,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                   </i>
                 </span>
                 <span class="row-meta">
-                  {{ value.slots.filter((slot) => slot.build).length }}/8 ready
+                  {{ value.slots.filter((slot) => slot.build).length }}/8 configured
                 </span>
               </template>
             </button>
@@ -321,7 +383,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <button v-if="host.reset" class="ui-link" @click="controller.reset">
               Reset demo
             </button>
-            <span>Changes stay local</span>
+            <span>Local build library</span>
           </footer>
         </aside>
 
@@ -331,14 +393,18 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
           <BuildDetail
             v-if="controller.selectedBuild.value"
+            ref="buildDetail"
             :build="controller.selectedBuild.value"
             :controller="controller"
+            :context="buildContext"
             @open-team="openTeam"
+            @dirty-change="buildDirty = $event"
           />
           <TeamDetail
             v-else-if="controller.selectedTeam.value"
             :team="controller.selectedTeam.value"
             :controller="controller"
+            @edit-build="openBuild"
           />
           <div v-else class="ui-empty empty-state--detail">
             <strong>Select something to inspect</strong>
@@ -364,6 +430,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
       </Transition>
+
+      <section v-if="pendingNavigation" class="leave-sheet" aria-labelledby="leave-title">
+        <div>
+          <h2 id="leave-title">Save this draft?</h2>
+          <p>Your changes have not been added to the local build library yet.</p>
+        </div>
+        <div class="action-row">
+          <button class="ui-button" @click="pendingNavigation = null">Continue editing</button>
+          <button class="ui-button" @click="finishNavigation(true)">Discard changes</button>
+          <button class="ui-button" data-variant="primary" @click="saveAndNavigate">
+            Save changes
+          </button>
+        </div>
+      </section>
 
       <div v-if="composer" class="composer-backdrop" @click.self="composer = null">
         <form class="ui-frame composer-dialog" @submit.prevent="finishCreate">

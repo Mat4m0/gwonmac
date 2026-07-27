@@ -61,6 +61,7 @@ import {
   LEVEL_20_ATTRIBUTE_BUDGET,
   PRIMARY_ATTRIBUTE,
   validateBuild,
+  validateBuildFor,
 } from "../../src/shared/builds/validate.ts";
 
 /**
@@ -69,15 +70,17 @@ import {
  * deliberately absent so the unknown-skill path has an input.
  */
 const CATALOGUE = new Map<number, CataloguedSkill>([
-  [10, { profession: "W", elite: true }],
-  [11, { profession: "W", elite: true }],
-  [12, { profession: "W", elite: false }],
-  [13, { profession: "W", elite: false }],
-  [20, { profession: "Mo", elite: false }],
-  [21, { profession: "Mo", elite: true }],
-  [30, { profession: "E", elite: false }],
-  [40, { profession: null, elite: false }],
-  [41, { profession: null, elite: false }],
+  [10, { profession: "W", elite: true, availability: "pve" }],
+  [11, { profession: "W", elite: true, availability: "pve" }],
+  [12, { profession: "W", elite: false, availability: "pve" }],
+  [13, { profession: "W", elite: false, availability: "pve" }],
+  [20, { profession: "Mo", elite: false, availability: "pve" }],
+  [21, { profession: "Mo", elite: true, availability: "pve" }],
+  [30, { profession: "E", elite: false, availability: "pve" }],
+  [40, { profession: null, elite: false, availability: "pve" }],
+  [41, { profession: null, elite: false, availability: "player-only-pve" }],
+  [42, { profession: null, elite: false, availability: "pvp" }],
+  [43, { profession: null, elite: false, availability: "not-equippable" }],
 ]);
 
 const catalogue: SkillCatalogue = (skill) => CATALOGUE.get(skill) ?? null;
@@ -154,6 +157,30 @@ test("a legal build reports clean, spending exactly the level-20 budget", () => 
   // Not a coincidence worth losing: the fixture sits on the boundary, so an
   // off-by-one in the budget rule fails here rather than in some later feature.
   assert.equal(LEVEL_20_ATTRIBUTE_BUDGET, 200);
+});
+
+test("PvE availability is intrinsic while player-only eligibility belongs to assignment", () => {
+  const playerOnly = broken({
+    skills: bar([10, 12, 13, 20, 40, 41, null, null]),
+  });
+  assert.deepEqual(validateBuildFor(playerOnly, catalogue, "player"), { valid: true });
+  assert.deepEqual(
+    problemsOf(validateBuildFor(playerOnly, catalogue, "hero")),
+    [{ rule: "player-only-skill-on-hero", slot: 5, skill: 41 }],
+  );
+
+  const excluded = broken({
+    skills: bar([10, 12, 13, 20, 42, 43, null, null]),
+  });
+  assert.deepEqual(problemsOf(validateBuild(excluded, catalogue)), [
+    { rule: "skill-not-equippable", slot: 4, skill: 42, availability: "pvp" },
+    {
+      rule: "skill-not-equippable",
+      slot: 5,
+      skill: 43,
+      availability: "not-equippable",
+    },
+  ]);
 });
 
 test("a secondary profession may not repeat the primary", () => {
