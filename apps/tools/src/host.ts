@@ -109,8 +109,12 @@ export function createNativeHost(
         !Number.isSafeInteger(record.id)
         || typeof record.name !== "string"
         || typeof record.elite !== "boolean"
-        || typeof record.playable !== "boolean"
+        || !["pve", "player-only-pve", "pvp", "not-equippable"].includes(String(record.availability))
         || typeof record.hasIcon !== "boolean"
+        || ![
+          "energyCost", "adrenalineCost", "healthCost", "overcast",
+          "activationSeconds", "aftercastSeconds", "rechargeSeconds",
+        ].every((field) => typeof record[field] === "number" && Number.isFinite(record[field]))
         || (record.profession !== null && !profession.has(record.profession as Profession))
         || (record.attribute !== null && !attribute.has(record.attribute as Attribute))
       ) {
@@ -123,7 +127,14 @@ export function createNativeHost(
         profession: record.profession as Profession | null,
         attribute: record.attribute as Attribute | null,
         elite: record.elite,
-        playable: record.playable,
+        availability: record.availability as SkillPresentation["availability"],
+        energyCost: record.energyCost as number,
+        adrenalineCost: record.adrenalineCost as number,
+        healthCost: record.healthCost as number,
+        overcast: record.overcast as number,
+        activationSeconds: record.activationSeconds as number,
+        aftercastSeconds: record.aftercastSeconds as number,
+        rechargeSeconds: record.rechargeSeconds as number,
         iconUrl: record.hasIcon ? `gw://app/skill-icons/${id}.bmp` : null,
       });
     }

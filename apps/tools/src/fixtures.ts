@@ -29,7 +29,14 @@ const presentations: SkillPresentation[] = names.map((name, index) => ({
   profession: professions[Math.floor(index / 8) % professions.length] ?? null,
   attribute: null,
   elite: index % 8 === 0,
-  playable: true,
+  availability: "pve",
+  energyCost: index % 3 === 0 ? 10 : 5,
+  adrenalineCost: 0,
+  healthCost: 0,
+  overcast: 0,
+  activationSeconds: index % 2 === 0 ? 1 : 0.25,
+  aftercastSeconds: 0.75,
+  rechargeSeconds: 5 + index % 4,
   iconUrl: null,
 }));
 

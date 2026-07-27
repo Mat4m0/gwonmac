@@ -10,7 +10,14 @@ export interface SkillPresentation {
   readonly profession: Profession | null;
   readonly attribute: Attribute | null;
   readonly elite: boolean;
-  readonly playable: boolean;
+  readonly availability: "pve" | "player-only-pve" | "pvp" | "not-equippable";
+  readonly energyCost: number;
+  readonly adrenalineCost: number;
+  readonly healthCost: number;
+  readonly overcast: number;
+  readonly activationSeconds: number;
+  readonly aftercastSeconds: number;
+  readonly rechargeSeconds: number;
   readonly iconUrl: string | null;
 }
 
@@ -38,7 +45,14 @@ export function createSkillCatalogue(
         profession: null,
         attribute: null,
         elite: false,
-        playable: false,
+        availability: "not-equippable",
+        energyCost: 0,
+        adrenalineCost: 0,
+        healthCost: 0,
+        overcast: 0,
+        activationSeconds: 0,
+        aftercastSeconds: 0,
+        rechargeSeconds: 0,
         iconUrl: null,
       };
     },

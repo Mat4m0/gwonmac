@@ -39,10 +39,11 @@ directory.
 
 ## Guild Wars archive and texture decoder
 
-The isolated skill-icon decoder under `src/native/skill-icons/vendor/gwdat` is
-ported from [GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), © 2024 Guild
-Wars Dev Hub, under the MIT License. GWToolbox++ identifies that decoder as
-derived from
+The isolated skill-icon decoder under `src/native/skill-icons/vendor/gwdat`
+and the player-equippable skill allowlist used by the build catalogue are
+ported from [GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), © 2024
+Guild Wars Dev Hub, under the MIT License. GWToolbox++ identifies that decoder
+as derived from
 [GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser),
 © 2023 [Jonathan Bjørn Greve](https://github.com/Jonathan-Greve), under its
 custom permissive license.

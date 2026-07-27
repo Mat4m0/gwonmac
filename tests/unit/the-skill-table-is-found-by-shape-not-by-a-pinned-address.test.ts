@@ -27,6 +27,7 @@ import {
   type ReadAt,
 } from "../../src/main/core/gw-archive.ts";
 import {
+  decodeEnergyCost,
   findSkillTable,
   signatureRun,
   SKILL_RECORD_BYTES,
@@ -179,7 +180,17 @@ function skillRecords(count: number, from = 0): Uint8Array {
 }
 
 test("the whole table is read, from record zero", () => {
-  const table = findSkillTable(skillRecords(400));
+  const records = skillRecords(400);
+  const mechanics = new DataView(records.buffer);
+  const third = 3 * SKILL_RECORD_BYTES;
+  const fourth = 4 * SKILL_RECORD_BYTES;
+  records[third + 0x35] = 11;
+  mechanics.setUint32(fourth + 0x2c, 1004, true);
+  records[fourth + 0x33] = 2;
+  mechanics.setFloat32(fourth + 0x3c, 4.25, true);
+  mechanics.setFloat32(fourth + 0x40, 0.75, true);
+  mechanics.setUint32(fourth + 0x4c, 9, true);
+  const table = findSkillTable(records);
   assert.ok(table);
   assert.equal(table.at, 0);
   assert.equal(table.skills.length, 400);
@@ -190,6 +201,18 @@ test("the whole table is read, from record zero", () => {
   assert.equal(table.skills[1]?.elite, false);
   assert.equal(table.skills[1]?.playable, true);
   assert.equal(table.skills[2]?.playable, false, "special & 0x02000000 excludes internal records");
+  assert.equal(table.skills[3]?.energyCost, 15, "encoded energy sentinel 11 means 15");
+  assert.equal(table.skills[4]?.pvpReplacement, 1004);
+  assert.equal(table.skills[4]?.equipType, 2);
+  assert.equal(table.skills[4]?.activationSeconds, 4.25);
+  assert.equal(table.skills[4]?.aftercastSeconds, 0.75);
+  assert.equal(table.skills[4]?.rechargeSeconds, 9);
+});
+
+test("energy-cost sentinels are normalized at the parsing boundary", () => {
+  assert.equal(decodeEnergyCost(5), 5);
+  assert.equal(decodeEnergyCost(11), 15);
+  assert.equal(decodeEnergyCost(12), 25);
 });
 
 test("the table is found even when the scan lands in the middle of it", () => {

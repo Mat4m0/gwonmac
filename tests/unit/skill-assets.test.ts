@@ -5,7 +5,9 @@ import { describe, it } from "node:test";
 import {
   decodedIconToBmp,
   parseSkillNames,
+  skillAvailability,
 } from "../../src/main/core/skill-assets.ts";
+import { isKnownEquippableSkill } from "../../src/main/core/equippable-skills.ts";
 
 describe("local skill names", () => {
   it("follows explicit enum jumps instead of assuming source line numbers are ids", () => {
@@ -47,5 +49,45 @@ describe("decoded skill icon colours", () => {
     ]);
     const bmp = decodedIconToBmp(decoded);
     assert.deepEqual([...bmp.subarray(54, 58)], [0x10, 0x20, 0xf0, 0xff]);
+  });
+});
+
+describe("PvE skill catalogue classification", () => {
+  const skill = (
+    values: Partial<Parameters<typeof skillAvailability>[0]> = {},
+  ): Parameters<typeof skillAvailability>[0] => ({
+    id: 282,
+    playable: true,
+    pvp: false,
+    pve: false,
+    title: 0,
+    ...values,
+  });
+
+  it("uses the audited allowlist for normal profession skills", () => {
+    assert.equal(isKnownEquippableSkill(25), true);
+    assert.equal(isKnownEquippableSkill(282), true);
+    assert.equal(isKnownEquippableSkill(2240), false);
+    assert.equal(skillAvailability(skill()), "pve");
+    assert.equal(
+      skillAvailability(skill({ id: 2240 })),
+      "not-equippable",
+    );
+  });
+
+  it("keeps PvP, player-only PvE, and internal records distinct", () => {
+    assert.equal(skillAvailability(skill({ pvp: true })), "pvp");
+    assert.equal(
+      skillAvailability(skill({ pve: true, title: 20 })),
+      "player-only-pve",
+    );
+    assert.equal(
+      skillAvailability(skill({ pve: true, title: 41 })),
+      "pve",
+    );
+    assert.equal(
+      skillAvailability(skill({ playable: false })),
+      "not-equippable",
+    );
   });
 });

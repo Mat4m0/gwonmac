@@ -31,6 +31,16 @@ const FIELD = {
   special: 0x10,
   profession: 0x28,
   attribute: 0x29,
+  title: 0x2a,
+  pvpReplacement: 0x2c,
+  equipType: 0x33,
+  overcast: 0x34,
+  energy: 0x35,
+  health: 0x36,
+  adrenaline: 0x38,
+  activation: 0x3c,
+  aftercast: 0x40,
+  recharge: 0x4c,
   iconFileId: 0x8c,
   iconFileId2: 0x90,
   iconFileIdHiRes: 0x94,
@@ -41,6 +51,8 @@ const FIELD = {
 const ELITE = 0x4;
 /** `Skill::IsPlayable()`: unset means a player can equip the record. */
 const NOT_PLAYABLE = 0x02000000;
+const PVP = 0x00400000;
+const PVE = 0x00080000;
 
 export interface SkillRecord {
   readonly id: number;
@@ -48,8 +60,20 @@ export interface SkillRecord {
   readonly type: number;
   readonly elite: boolean;
   readonly playable: boolean;
+  readonly pvp: boolean;
+  readonly pve: boolean;
   readonly profession: number;
   readonly attribute: number;
+  readonly title: number;
+  readonly pvpReplacement: number;
+  readonly equipType: number;
+  readonly overcast: number;
+  readonly energyCost: number;
+  readonly healthCost: number;
+  readonly adrenalineCost: number;
+  readonly activationSeconds: number;
+  readonly aftercastSeconds: number;
+  readonly rechargeSeconds: number;
   /** Archive file id of the 32×32 icon, or 0 for the handful that have none. */
   readonly iconFileId: number;
   readonly iconFileIdHiRes: number;
@@ -69,12 +93,31 @@ export function parseSkillRecord(bytes: Uint8Array, at: number): SkillRecord {
     type: data.getUint32(at + FIELD.type, true),
     elite: (special & ELITE) !== 0,
     playable: (special & NOT_PLAYABLE) === 0,
+    pvp: (special & PVP) !== 0,
+    pve: (special & PVE) !== 0,
     profession: bytes[at + FIELD.profession]!,
     attribute: bytes[at + FIELD.attribute]!,
+    title: data.getUint16(at + FIELD.title, true),
+    pvpReplacement: data.getUint32(at + FIELD.pvpReplacement, true),
+    equipType: bytes[at + FIELD.equipType]!,
+    overcast: bytes[at + FIELD.overcast]!,
+    energyCost: decodeEnergyCost(bytes[at + FIELD.energy]!),
+    healthCost: bytes[at + FIELD.health]!,
+    adrenalineCost: data.getUint32(at + FIELD.adrenaline, true),
+    activationSeconds: data.getFloat32(at + FIELD.activation, true),
+    aftercastSeconds: data.getFloat32(at + FIELD.aftercast, true),
+    rechargeSeconds: data.getUint32(at + FIELD.recharge, true),
     iconFileId: data.getUint32(at + FIELD.iconFileId, true),
     iconFileIdHiRes: data.getUint32(at + FIELD.iconFileIdHiRes, true),
     nameStringId: data.getUint32(at + FIELD.name, true),
   };
+}
+
+/** The client stores the two non-literal energy costs as compact sentinels. */
+export function decodeEnergyCost(encoded: number): number {
+  if (encoded === 11) return 15;
+  if (encoded === 12) return 25;
+  return encoded;
 }
 
 /** The ten playable professions, plus 0 for "common to everyone". */

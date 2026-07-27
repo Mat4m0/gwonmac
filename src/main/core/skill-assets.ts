@@ -11,6 +11,7 @@ import {
 } from "./gw-archive.js";
 import { findSkillTable, type SkillRecord } from "./skill-table.js";
 import { ATTRIBUTE_BY_ID } from "../../shared/builds/heroes.js";
+import { isKnownEquippableSkill } from "./equippable-skills.js";
 
 const PROFESSION = new Map<number, string>([
   [1, "W"], [2, "R"], [3, "Mo"], [4, "N"], [5, "Me"],
@@ -25,9 +26,30 @@ export interface SkillAssetFacts {
   readonly name: string;
   readonly profession: string | null;
   readonly elite: boolean;
-  readonly playable: boolean;
+  readonly availability: "pve" | "player-only-pve" | "pvp" | "not-equippable";
   readonly attribute: string | null;
+  readonly energyCost: number;
+  readonly adrenalineCost: number;
+  readonly healthCost: number;
+  readonly overcast: number;
+  readonly activationSeconds: number;
+  readonly aftercastSeconds: number;
+  readonly rechargeSeconds: number;
   readonly hasIcon: boolean;
+}
+
+// Title ids below Codex are the account title tracks used by player-only PvE
+// skills. This is the same boundary the game's team-build catalogue uses.
+const CODEX_TITLE_ID = 41;
+
+export function skillAvailability(
+  skill: Pick<SkillRecord, "id" | "playable" | "pvp" | "pve" | "title">,
+): SkillAssetFacts["availability"] {
+  if (skill.pvp) return "pvp";
+  if (!skill.playable) return "not-equippable";
+  if (skill.pve && skill.title < CODEX_TITLE_ID) return "player-only-pve";
+  if (skill.pve || isKnownEquippableSkill(skill.id)) return "pve";
+  return "not-equippable";
 }
 
 interface SkillAssetSource {
@@ -232,8 +254,15 @@ export class SkillAssets {
       name: ready.names.get(skill.id) ?? `Skill ${skill.id}`,
       profession: PROFESSION.get(skill.profession) ?? null,
       elite: skill.elite,
-      playable: skill.playable,
+      availability: skillAvailability(skill),
       attribute: ATTRIBUTE_BY_ID.get(skill.attribute) ?? null,
+      energyCost: skill.energyCost,
+      adrenalineCost: skill.adrenalineCost,
+      healthCost: skill.healthCost,
+      overcast: skill.overcast,
+      activationSeconds: skill.activationSeconds,
+      aftercastSeconds: skill.aftercastSeconds,
+      rechargeSeconds: skill.rechargeSeconds,
       hasIcon:
         skill.iconFileId !== 0
         && findStream(ready.files, ready.fileIndex, skill.iconFileId) !== null,

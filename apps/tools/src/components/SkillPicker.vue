@@ -23,7 +23,7 @@ const legal = computed(() => {
   const needle = search.value.trim().toLocaleLowerCase();
   return props.catalogue.all()
     .filter((skill) =>
-      skill.playable
+      (skill.availability === "pve" || skill.availability === "player-only-pve")
       && skill.id !== 0
       && (skill.profession === null || skill.profession === primary || skill.profession === secondary)
       && (
