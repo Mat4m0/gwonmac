@@ -1,3 +1,5 @@
+import type { publishBuildTemplate } from "./build-projection.js";
+
 type ToolsAppHandle = Readonly<{
   show(): void;
   hide(): void;
@@ -11,6 +13,7 @@ type ToolsBundle = Readonly<{
     options: {
       initiallyVisible?: boolean;
       onVisibilityChange?: (visible: boolean) => void;
+      publishBuild: typeof publishBuildTemplate;
     },
   ): ToolsAppHandle;
 }>;
@@ -22,8 +25,10 @@ type ToolsBundle = Readonly<{
  */
 export function installToolsHost({
   releaseHeldKeys,
+  publishBuild,
 }: {
   releaseHeldKeys: () => void;
+  publishBuild: typeof publishBuildTemplate;
 }) {
   const root = document.createElement("div");
   root.id = "gwonmac-tools-root";
@@ -56,6 +61,7 @@ export function installToolsHost({
       .then((module: ToolsBundle) => {
         handle = module.mountToolsApp(root, {
           initiallyVisible: false,
+          publishBuild,
           onVisibilityChange(next) {
             visible = next;
             if (!next) {

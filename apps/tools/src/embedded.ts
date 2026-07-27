@@ -8,10 +8,11 @@ export function mountToolsApp(
   options: {
     initiallyVisible?: boolean;
     onVisibilityChange?: (visible: boolean) => void;
-  } = {},
+    publishBuild: Parameters<typeof createNativeHost>[1];
+  },
 ) {
   return mount(target, {
-    host: createNativeHost(window.gwNative),
+    host: createNativeHost(window.gwNative, options.publishBuild),
     mode: "embedded",
     ...options,
   });

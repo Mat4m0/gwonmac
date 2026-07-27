@@ -72,7 +72,10 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
   };
 }
 
-export function createNativeHost(api: GwNativeApi): ToolsHost {
+export function createNativeHost(
+  api: GwNativeApi,
+  publishBuild: (build: Build) => Promise<PublishedTemplate>,
+): ToolsHost {
   return {
     label: "Saved on this Mac",
     // Replaced by the local client catalogue during the asset milestone.
@@ -81,8 +84,6 @@ export function createNativeHost(api: GwNativeApi): ToolsHost {
     async saveLibrary(library) {
       await api.buildLibrary.set(library);
     },
-    async publishBuild() {
-      throw new Error("Template publication is not connected yet.");
-    },
+    publishBuild,
   };
 }

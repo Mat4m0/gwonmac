@@ -621,6 +621,7 @@ function loadGlue() {
       clientHealth,
       appearance,
       tools,
+      buildProjection,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -633,6 +634,7 @@ function loadGlue() {
       import('./client-health.js'),
       import('./appearance.js'),
       import('./tools-host.js'),
+      import('./build-projection.js'),
     ]);
     host = {
       ...graphics,
@@ -647,6 +649,7 @@ function loadGlue() {
     applyAppearance = appearance.applyAppearance;
     disposeToolsHost = tools.installToolsHost({
       releaseHeldKeys: () => inputHost?.releaseAll(),
+      publishBuild: buildProjection.publishBuildTemplate,
     });
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
