@@ -114,7 +114,7 @@ const toggleTeam = (id: string) => {
         <div class="section-heading">
           <div>
             <h2 id="build-title">Skill bar</h2>
-            <p>Synthetic presentation data in this demo; the stored object remains skill IDs.</p>
+            <p>Skill IDs are stored once; names, elite state, and artwork come from the local client catalogue.</p>
           </div>
           <button
             class="ui-button" data-variant="primary"

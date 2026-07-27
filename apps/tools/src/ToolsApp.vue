@@ -29,6 +29,9 @@ const panel = ref<HTMLElement | null>(null);
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
 const position = ref({ left: 28, top: 42 });
+const composer = ref<"build" | "team" | null>(null);
+const draftCode = ref("");
+const draftName = ref("");
 
 const count = computed(() => controller.items.value.length);
 watch(
@@ -55,6 +58,18 @@ const select = (value: Build | Team) => {
 
 const openTeam = (id: string) => {
   controller.select({ kind: "team", id: teamId(id) });
+  mobileView.value = "detail";
+};
+
+const finishCreate = async () => {
+  if (composer.value === "build") {
+    if (!(await controller.importBuild(draftCode.value, draftName.value))) return;
+  } else if (composer.value === "team") {
+    await controller.createTeam(draftName.value);
+  }
+  composer.value = null;
+  draftCode.value = "";
+  draftName.value = "";
   mobileView.value = "detail";
 };
 
@@ -173,6 +188,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               </button>
             </div>
 
+            <div class="create-actions">
+              <button class="ui-button" data-variant="primary" @click="composer = 'build'">
+                Import build
+              </button>
+              <button class="ui-button" @click="composer = 'team'">New team</button>
+            </div>
+
             <label class="ui-input-group">
               <span aria-hidden="true">⌕</span>
               <span class="ui-sr-only">Search library</span>
@@ -269,10 +291,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </button>
 
             <div v-if="!controller.items.value.length" class="ui-empty">
-              <strong>No matches</strong>
-              <p>Try another skill, hero, build name, or clear the selected tag.</p>
-              <button class="ui-button" @click="controller.query.value = ''; controller.tag.value = null">
+              <strong>{{ controller.library.value.builds.length || controller.library.value.teams.length ? "No matches" : "Your library is ready" }}</strong>
+              <p v-if="controller.library.value.builds.length || controller.library.value.teams.length">
+                Try another skill, hero, build name, or clear the selected tag.
+              </p>
+              <p v-else>Import a skill template, then compose it into one or more teams.</p>
+              <button
+                v-if="controller.library.value.builds.length || controller.library.value.teams.length"
+                class="ui-button"
+                @click="controller.query.value = ''; controller.tag.value = null"
+              >
                 Clear filters
+              </button>
+              <button v-else class="ui-button" data-variant="primary" @click="composer = 'build'">
+                Import first build
               </button>
             </div>
           </div>
@@ -324,6 +356,42 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
       </Transition>
+
+      <div v-if="composer" class="composer-backdrop" @click.self="composer = null">
+        <form class="ui-frame composer-dialog" @submit.prevent="finishCreate">
+          <header>
+            <div>
+              <h2>{{ composer === "build" ? "Import a build" : "Create a team" }}</h2>
+              <p v-if="composer === 'build'">
+                Paste the template code Guild Wars already understands.
+              </p>
+              <p v-else>Start empty, then assign library builds to its eight slots.</p>
+            </div>
+            <button type="button" class="ui-button" data-icon aria-label="Close" @click="composer = null">×</button>
+          </header>
+          <label>
+            <span>Name <small>optional</small></span>
+            <input v-model="draftName" class="ui-input" autofocus placeholder="e.g. Story missions">
+          </label>
+          <label v-if="composer === 'build'">
+            <span>Skill template code</span>
+            <textarea
+              v-model="draftCode"
+              class="ui-textarea template-code"
+              rows="3"
+              required
+              spellcheck="false"
+              placeholder="OwAU0Kn8Q4FgMjrUgtEA3TnA"
+            />
+          </label>
+          <footer>
+            <button type="button" class="ui-button" @click="composer = null">Cancel</button>
+            <button class="ui-button" data-variant="primary">
+              {{ composer === "build" ? "Import build" : "Create team" }}
+            </button>
+          </footer>
+        </form>
+      </div>
     </section>
   </div>
 </template>

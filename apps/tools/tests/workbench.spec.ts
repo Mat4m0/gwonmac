@@ -20,7 +20,7 @@ test("manages teams and builds without Electron or the game", async ({ page }) =
 
 test("forks and rebinds through an explicit inline flow", async ({ page }) => {
   await page.getByRole("tab", { name: /Builds/ }).click();
-  await page.getByRole("option", { name: /Word of Healing Monk/ }).first().click();
+  await page.getByRole("option", { name: /Word of Healing Mo/ }).first().click();
   await page.getByRole("button", { name: "Fork variant" }).click();
   await expect(page.getByRole("heading", { name: "Fork a linked variant" })).toBeVisible();
   await page.getByRole("checkbox", { name: /Classic Discordway/ }).check();
@@ -43,10 +43,25 @@ test("supports keyboard search and undo", async ({ page }) => {
   await page.keyboard.press("/");
   await expect(page.getByPlaceholder("Search names, tags, heroes, skills")).toBeFocused();
   await page.getByRole("tab", { name: /Builds/ }).click();
-  await page.getByRole("option", { name: /Word of Healing Monk/ }).first().click();
+  await page.getByRole("option", { name: /Word of Healing Mo/ }).first().click();
   await page.locator("#build-name").fill("Field test monk");
   await page.locator("#build-name").press("Enter");
   await expect(page.locator("#build-name")).toHaveValue("Field test monk");
   await page.keyboard.press("Meta+z");
   await expect(page.locator("#build-name")).toHaveValue("Word of Healing");
+});
+
+test("imports a real template and composes it into a new team", async ({ page }) => {
+  await page.getByRole("button", { name: "Import build" }).click();
+  await page.getByLabel("Name optional").fill("Fresh monk");
+  await page.getByLabel("Skill template code").fill("OwAU0Kn8Q4FgMjrUgtEA3TnA");
+  await page.getByRole("button", { name: "Import build", exact: true }).last().click();
+  await expect(page.locator("#build-name")).toHaveValue("Fresh monk");
+
+  await page.getByRole("button", { name: "New team" }).click();
+  await page.getByLabel("Name optional").fill("Fresh account");
+  await page.getByRole("button", { name: "Create team" }).click();
+  await expect(page.locator("#team-name")).toHaveValue("Fresh account");
+  await page.locator(".team-slots .ui-select").first().selectOption({ label: "Fresh monk" });
+  await expect(page.locator(".team-slots > li").first()).not.toHaveClass(/team-slot--empty/);
 });

@@ -1,4 +1,10 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
+import {
+  LIBRARY_VERSION,
+  buildId as canonicalBuildId,
+  type TeamSlot,
+} from "../../../src/shared/builds/library";
+import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import type { ToolsHost } from "./host";
 import {
   buildById,
@@ -23,6 +29,21 @@ type Notice = Readonly<{
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function emptyTeamSlots(): Team["slots"] {
+  return Array.from({ length: 8 }, (_, index): TeamSlot => ({
+    build: null,
+    hero: null,
+    behaviour: index === 0 ? null : "guard",
+    panel: false,
+    disabled: [],
+  })) as unknown as Team["slots"];
+}
+
+function sameTemplate(left: Build, right: NonNullable<ReturnType<typeof decodeSkillTemplate>>): boolean {
+  return JSON.stringify([left.professions, left.attributes, left.skills])
+    === JSON.stringify([right.professions, right.attributes, right.skills]);
 }
 
 export function useLibrary(host: ToolsHost) {
@@ -202,6 +223,70 @@ export function useLibrary(host: ToolsHost) {
     selectedId.value = nextId;
   };
 
+  const importBuild = async (code: string, requestedName = "") => {
+    const decoded = decodeSkillTemplate(code.trim());
+    if (!decoded || !library.value) {
+      showNotice("That is not a valid Guild Wars skill template code.", "error");
+      return false;
+    }
+    const existing = library.value.builds.find((build) => sameTemplate(build, decoded));
+    if (existing) {
+      kind.value = "build";
+      selectedId.value = existing.id;
+      showNotice(`Already saved as “${existing.name}”.`, "warning");
+      return true;
+    }
+    const elite = decoded.skills
+      .filter((skill): skill is NonNullable<typeof skill> => skill !== null)
+      .map((skill) => host.skills.get(skill))
+      .find((skill) => skill.elite);
+    const baseName = requestedName.trim()
+      || elite?.name
+      || `${decoded.professions.filter(Boolean).join("/")} build`;
+    const names = new Set(library.value.builds.map((build) => build.name));
+    let name = baseName;
+    for (let suffix = 2; names.has(name); suffix++) name = `${baseName} (${suffix})`;
+    const nextId = id("build");
+    await commit("Build imported", (current) => ({
+      ...current,
+      version: LIBRARY_VERSION,
+      builds: [{
+        ...decoded,
+        id: canonicalBuildId(nextId),
+        name,
+        tags: [],
+        notes: "",
+        favourite: false,
+        lastUsed: null,
+        parent: null,
+        origin: "template-code",
+      }, ...current.builds],
+    }));
+    kind.value = "build";
+    selectedId.value = nextId;
+    return true;
+  };
+
+  const createTeam = async (requestedName = "") => {
+    const nextId = id("team");
+    const name = requestedName.trim() || "New team";
+    await commit("Team created", (current) => ({
+      ...current,
+      teams: [{
+        id: teamId(nextId),
+        name,
+        mode: "none",
+        tags: [],
+        favourite: false,
+        lastUsed: null,
+        notes: "",
+        slots: emptyTeamSlots(),
+      }, ...current.teams],
+    }));
+    kind.value = "team";
+    selectedId.value = nextId;
+  };
+
   const publish = async (build: Build) => {
     saving.value = true;
     try {
@@ -251,6 +336,7 @@ export function useLibrary(host: ToolsHost) {
     usage: (id: string) => library.value ? buildUsage(library.value, id) : [],
     renameBuild, toggleBuildFavourite, updateBuildNotes, createFork,
     deleteBuild, updateTeam, duplicateTeam, publish, undo, reset,
+    importBuild, createTeam,
   };
 }
 

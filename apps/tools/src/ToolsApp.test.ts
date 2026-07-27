@@ -54,9 +54,26 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
-    await wrapper.get("[data-variant=primary]").trigger("click");
+    await wrapper.get(".bar-section [data-variant=primary]").trigger("click");
     await new Promise((resolve) => setTimeout(resolve, 220));
     expect(wrapper.text()).toContain("Load it from Guild Wars");
+    wrapper.unmount();
+  });
+
+  it("imports a real client template and creates a team from an empty action", async () => {
+    const wrapper = await workbench();
+    await wrapper.get(".create-actions [data-variant=primary]").trigger("click");
+    await wrapper.get(".template-code").setValue("OwAU0Kn8Q4FgMjrUgtEA3TnA");
+    await wrapper.get(".composer-dialog form, .composer-dialog").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Build imported");
+
+    await wrapper.get(".create-actions .ui-button:nth-child(2)").trigger("click");
+    await wrapper.get(".composer-dialog input").setValue("Fresh account team");
+    await wrapper.get(".composer-dialog form, .composer-dialog").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Fresh account team");
+    expect(wrapper.findAll(".team-slots > li")).toHaveLength(8);
     wrapper.unmount();
   });
 });
