@@ -167,7 +167,7 @@ collection and unrelated game work can move them between phases.
 
 The schedule and the arithmetic are in `scripts/toolbox-live/benchmark.mjs`,
 which imports nothing, so
-`tests/policy/the-benchmark-measures-each-arm-in-both-orders.test.mjs` executes
+`tests/policy/the-benchmark-measures-each-arm-in-both-orders.test.ts` executes
 them against a drifting session double without a build or a game.
 
 The renderer lifecycle surface derives from existing state:

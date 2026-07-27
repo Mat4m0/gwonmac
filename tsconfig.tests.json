@@ -50,7 +50,7 @@
     // is indiscriminate, so it skips this repository's own declaration files
     // just as readily: nothing here may be a `.d.*` file and expect to be
     // checked. `scripts/preload-injected-constants.mts` says why it is not
-    // one, and tests/policy/typecheck-coverage.test.mjs enforces the rule.
+    // one, and tests/policy/typecheck-coverage.test.ts enforces the rule.
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
@@ -64,7 +64,14 @@
     // read it while it drove `pnpm make`, the fuses, and the bundle version.
     "forge.config.ts",
     "eslint.config.js",
+    // Phase 4 converted the suites to TypeScript; what is left under `tests` is
+    // `fixtures.mts` and the two loader scripts, which stay JavaScript because
+    // every other test resolves through them. Naming all three extensions here
+    // is what makes them inputs — relying on a spec importing them would leave
+    // whichever one nothing imports checked by nothing.
     "tests/**/*.ts",
+    "tests/**/*.mts",
+    "tests/**/*.mjs",
     "scripts/**/*.mjs",
     "scripts/**/*.mts",
     "src/preload/preload.body.cjs",
