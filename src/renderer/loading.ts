@@ -1,14 +1,15 @@
 // Loading screen: owns everything the user sees before the canvas appears.
 // Progress comes from the main-process updater via gwNative, not HTTP polling.
+//
+// index.html loads this as a classic script, so the file carries no top-level
+// import or export and names the contracts through type-only `import(…)`.
 
-window.gwAutomation = (function () {
+window.gwAutomation = (function (): ToolboxAutomation {
   let stage = 'renderer.loading';
   let sequence = 0;
-  /** @type {{ sequence: number, stage: string, atMs: number }[]} */
-  const history = [];
+  const history: { sequence: number; stage: string; atMs: number }[] = [];
   return Object.freeze({
-    /** @param {string} next */
-    set(next) {
+    set(next: string) {
       if (typeof next !== 'string' || next === stage) return;
       stage = next;
       sequence += 1;
@@ -28,25 +29,30 @@ window.gwAutomation = (function () {
   });
 })();
 
-window.gwLoading = (function () {
-  /** @param {string} id */
-  const el = (id) => {
+window.gwLoading = (function (): LoadingController {
+  type DownloadProgress = import('../shared/contracts.js').DownloadProgress;
+  // The art index scripts/copy-renderer.mjs writes beside the images. It is
+  // fetched rather than imported, so nothing but this shape is guaranteed.
+  type ArtIndex = {
+    logo?: string | null;
+    credit?: string | null;
+    backgrounds?: string[] | null;
+  };
+
+  const el = (id: string) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`missing renderer element: ${id}`);
     return element;
   };
   const root = el('loading'), bar = el('loading-bar'), fill = el('loading-fill');
   const label = el('loading-label'), detail = el('loading-detail');
-  const retry = /** @type {HTMLButtonElement} */ (el('loading-retry'));
-  /** @type {'client' | 'filesystem'} */
-  let recovery = 'client';
+  const retry = el('loading-retry') as HTMLButtonElement;
+  let recovery: 'client' | 'filesystem' = 'client';
 
-  /** @param {number} n */
-  const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB'
+  const mb = (n: number) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB'
                               : (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB');
 
-  /** @param {number | null} frac */
-  function setBar(frac) {
+  function setBar(frac: number | null) {
     if (frac === null) { bar.classList.add('busy'); return; }
     bar.classList.remove('busy');
     fill.style.width = Math.max(0, Math.min(1, frac)) * 100 + '%';
@@ -59,12 +65,7 @@ window.gwLoading = (function () {
     el('canvas').focus();
   }
 
-  const api = {
-    /**
-     * @param {string} text
-     * @param {number | null} frac
-     * @param {string} [sub]
-     */
+  const api: LoadingController = {
     set(text, frac, sub) {
       recovery = 'client';
       label.textContent = text;
@@ -75,7 +76,6 @@ window.gwLoading = (function () {
       setBar(frac);
     },
 
-    /** @param {string} text */
     fail(text) {
       recovery = 'client';
       root.style.display = '';
@@ -114,22 +114,27 @@ window.gwLoading = (function () {
   };
 
   // Art index is generated at package time next to the images.
-  fetch('images/index.json').then((r) => r.ok ? r.json() : null).then((art) => {
-    if (!art) return;
-    if (art.logo) {
-      /** @type {HTMLImageElement} */ (el('loading-logo')).src = art.logo;
-    }
-    if (art.credit) el('loading-credit').innerHTML = art.credit;
-    if (!art.backgrounds || !art.backgrounds.length) return;
-    const pick = art.backgrounds[Math.floor(Math.random() * art.backgrounds.length)];
-    const img = new Image();
-    img.onload = () => {
-      const bg = el('loading-bg');
-      bg.style.backgroundImage = `url("${pick}")`;
-      bg.classList.add('shown');
-    };
-    img.src = pick;
-  }).catch(() => {});
+  fetch('images/index.json')
+    .then(async (r): Promise<ArtIndex | null> => (r.ok ? r.json() : null))
+    .then((art) => {
+      if (!art) return;
+      if (art.logo) {
+        (el('loading-logo') as HTMLImageElement).src = art.logo;
+      }
+      if (art.credit) el('loading-credit').innerHTML = art.credit;
+      if (!art.backgrounds || !art.backgrounds.length) return;
+      const backgrounds = art.backgrounds;
+      const pick = backgrounds[Math.floor(Math.random() * backgrounds.length)];
+      if (!pick) return;
+      const img = new Image();
+      img.onload = () => {
+        const bg = el('loading-bg');
+        bg.style.backgroundImage = `url("${pick}")`;
+        bg.classList.add('shown');
+      };
+      img.src = pick;
+    })
+    .catch(() => {});
 
   // The running version, in the footer, on every launch. It used to live only
   // in the macOS About panel, which means a bug report had to go hunting for
@@ -213,18 +218,16 @@ window.gwLoading = (function () {
     // path below stays synchronous.
     const { describeLaunchFailure } = await import('./failure-messages.js');
 
-    return new Promise((resolve) => {
+    return new Promise<boolean>((resolve) => {
       let settled = false;
-      /** @param {boolean} ok */
-      const finish = (ok) => {
+      const finish = (ok: boolean) => {
         if (settled) return;
         settled = true;
         unsub();
         resolve(ok);
       };
 
-      /** @param {import('../shared/contracts.js').DownloadProgress} p */
-      const apply = (p) => {
+      const apply = (p: DownloadProgress) => {
         if (p.phase === 'error') {
           api.fail(describeLaunchFailure(p.errorCode));
           finish(false);

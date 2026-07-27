@@ -1,8 +1,19 @@
 // The Toolbox registry reaches the renderer through gwNative.init. This module
 // owns only the two settings surfaces and the words they need; it is not a
 // general settings framework.
+//
+// index.html loads this as a classic script, so the file carries no top-level
+// import or export and names the contracts through type-only `import(…)`.
 
 (function () {
+  type AppSettings = import('../shared/contracts.js').AppSettings;
+  type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
+  type ToolboxTool = import('../shared/contracts.js').ToolboxTool;
+  // The options are named once, in the ambient declaration of the global this
+  // module defines. Restating them here would be a second source of truth for
+  // the shape settings.ts already has to satisfy.
+  type ToolSettingsOptions = Parameters<Window['gwToolSettings']['create']>[0];
+
   const PRESENTATION = Object.freeze({
     nativeCursor: Object.freeze({
       launcherId: 'data-choice-native-cursor',
@@ -16,22 +27,12 @@
     }),
   });
 
-  /**
-   * @param {{
-   *   form: HTMLFormElement,
-   *   byId: (id: string) => HTMLElement,
-   *   selection: import('../shared/contracts.js').ToolboxSelection,
-   *   persist: (
-   *     patch: import('../shared/contracts.js').AppSettingsPatch,
-   *   ) => Promise<import('../shared/contracts.js').AppSettings>,
-   *   current: () => import('../shared/contracts.js').AppSettings | null,
-   * }} options
-   */
-  function createToolSettings(options) {
-    const names =
-      /** @type {import('../shared/contracts.js').ToolboxTool[]} */ (
-        Object.keys(options.selection)
-      );
+  function createToolSettings(options: ToolSettingsOptions) {
+    // `ToolboxSelection` is `Record<ToolboxTool, boolean>`, so its keys are the
+    // registry — but `Object.keys` answers `string[]` for every object. The
+    // check below is what makes the assertion honest: it fails unless the keys
+    // are exactly the ones PRESENTATION knows.
+    const names = Object.keys(options.selection) as ToolboxTool[];
     if (
       names.length !== Object.keys(PRESENTATION).length ||
       names.some((name) => !PRESENTATION[name])
@@ -59,40 +60,28 @@
     });
     const byName = new Map(controls.map((control) => [control.name, control]));
 
-    /** @param {import('../shared/contracts.js').AppSettings} settings */
-    function render(settings) {
+    function render(settings: AppSettings) {
       for (const control of controls) {
         control.settings.checked = settings[control.name];
         control.launcher.checked = settings[control.name];
       }
     }
 
-    /**
-     * @param {HTMLInputElement | HTMLSelectElement} control
-     * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
-     */
-    function patchFor(control) {
-      const tool = byName.get(
-        /** @type {import('../shared/contracts.js').ToolboxTool} */ (
-          control.name
-        ),
-      );
+    function patchFor(
+      control: HTMLInputElement | HTMLSelectElement,
+    ): AppSettingsPatch | null {
+      const tool = byName.get(control.name as ToolboxTool);
       return tool && control instanceof globalThis.HTMLInputElement
         ? { [tool.name]: control.checked }
         : null;
     }
 
-    /**
-     * @param {HTMLInputElement | HTMLSelectElement} control
-     * @param {import('../shared/contracts.js').AppSettingsPatch} patch
-     * @param {import('../shared/contracts.js').AppSettings} saved
-     */
-    function resultFor(control, patch, saved) {
-      const tool = byName.get(
-        /** @type {import('../shared/contracts.js').ToolboxTool} */ (
-          control.name
-        ),
-      );
+    function resultFor(
+      control: HTMLInputElement | HTMLSelectElement,
+      patch: AppSettingsPatch,
+      saved: AppSettings,
+    ) {
+      const tool = byName.get(control.name as ToolboxTool);
       if (!tool) return null;
       const applied = saved[tool.name] === patch[tool.name];
       return {

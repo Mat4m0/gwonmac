@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("the official gamepad imports stay wired without a production WASM hook", async () => {
-  const harness = await readFile(path.join(root, "src/renderer/harness.js"), "utf8");
+  const harness = await readFile(path.join(root, "src/renderer/harness.ts"), "utf8");
   for (const name of [
     "emscripten_sample_gamepad_data",
     "emscripten_set_gamepadconnected_callback_on_thread",
@@ -34,7 +34,7 @@ test("persistent game files are prepared through supported Emscripten startup ho
     "utf8",
   );
   const harness = await readFile(
-    path.join(root, "src/renderer/harness.js"),
+    path.join(root, "src/renderer/harness.ts"),
     "utf8",
   );
 
@@ -55,7 +55,7 @@ test("persistent game files are prepared through supported Emscripten startup ho
 
 test("production diagnostics do not patch Web Audio prototypes", async () => {
   const sources = await Promise.all(
-    ["harness.js", "diagnostics.js", "index.html"].map((file) =>
+    ["harness.ts", "diagnostics.ts", "index.html"].map((file) =>
       readFile(path.join(root, "src/renderer", file), "utf8")),
   );
   const combined = sources.join("\n");
@@ -67,7 +67,7 @@ test("production diagnostics do not patch Web Audio prototypes", async () => {
 
 test("stall attribution markers are fixed-name and Level 2 only", async () => {
   const diagnostics = await readFile(
-    path.join(root, "src/renderer/diagnostics.js"),
+    path.join(root, "src/renderer/diagnostics.ts"),
     "utf8",
   );
   const main = await readFile(
@@ -92,7 +92,7 @@ test("template file tracing is explicit, bounded, and attached only at the impor
     "utf8",
   );
   const harness = await readFile(
-    path.join(root, "src/renderer/harness.js"),
+    path.join(root, "src/renderer/harness.ts"),
     "utf8",
   );
   const window = await readFile(path.join(root, "src/main/window.ts"), "utf8");
@@ -120,7 +120,7 @@ test("the GL program cache memoizes only shader-completion state, and only once 
     path.join(root, "src/renderer/gl-program-cache.ts"),
     "utf8",
   );
-  const harness = await readFile(path.join(root, "src/renderer/harness.js"), "utf8");
+  const harness = await readFile(path.join(root, "src/renderer/harness.ts"), "utf8");
   const graphics = await readFile(path.join(root, "src/renderer/graphics.ts"), "utf8");
 
   // KHR_parallel_shader_compile completion, and nothing else.
@@ -298,7 +298,7 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
 
 test("the served module, not requested settings, decides whether Toolbox imports", async () => {
   const harness = await readFile(
-    path.join(root, "src/renderer/harness.js"),
+    path.join(root, "src/renderer/harness.ts"),
     "utf8",
   );
   const initialized = harness.slice(
@@ -327,7 +327,7 @@ test("the served module, not requested settings, decides whether Toolbox imports
 
 test("a clean WASM process exit closes the host application", async () => {
   const harness = await readFile(
-    path.join(root, "src/renderer/harness.js"),
+    path.join(root, "src/renderer/harness.ts"),
     "utf8",
   );
   assert.match(harness, /onExit\(code\)/);

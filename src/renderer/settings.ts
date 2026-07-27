@@ -1,84 +1,74 @@
 // One owner for launcher strategy, full-download presentation, and Settings.
 // Cache residency is the download-progress truth; dataStrategy is only intent.
+//
+// index.html loads this as a classic script, so the file carries no top-level
+// import or export and names the contracts through type-only `import(…)`.
 
 (function () {
-  /** @param {string} id */
-  const byId = (id) => {
+  type AppSettings = import('../shared/contracts.js').AppSettings;
+  type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
+  type CacheInfo = import('../shared/contracts.js').CacheInfo;
+  type ClientSession = import('../shared/contracts.js').ClientSession;
+  type DownloadActivity = import('../shared/contracts.js').DownloadActivity;
+  type RendererMilestone =
+    import('../shared/diagnostics.js').RendererMilestone;
+  type UpdateAction = import('./update-action.js').UpdateAction;
+
+  const byId = (id: string) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`missing renderer element: ${id}`);
     return element;
   };
-  const dialog =
-    /** @type {HTMLDialogElement} */ (byId('settings-dialog'));
-  const form = /** @type {HTMLFormElement} */ (byId('settings-form'));
-  const settingsDownload =
-    /** @type {HTMLButtonElement} */ (byId('settings-download-full'));
-  const settingsReset =
-    /** @type {HTMLButtonElement} */ (byId('settings-reset-launcher'));
+  const dialog = byId('settings-dialog') as HTMLDialogElement;
+  const form = byId('settings-form') as HTMLFormElement;
+  const settingsDownload = byId('settings-download-full') as HTMLButtonElement;
+  const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
   const settingsCache = byId('settings-cache');
   const settingsDataNote = byId('settings-data-note');
   const settingsSaved = byId('settings-saved');
   const settingsProgress = byId('settings-progress');
   const settingsProgressFill = byId('settings-progress-fill');
-  const settingsPanes =
-    /** @type {HTMLElement} */ (form.querySelector('.settings-panes'));
+  const settingsPanes = form.querySelector('.settings-panes') as HTMLElement;
   const feedback = byId('settings-feedback');
   const dataChoice = byId('data-choice');
-  const dataChoiceQuick =
-    /** @type {HTMLButtonElement} */ (byId('data-choice-quick'));
-  const dataChoiceFull =
-    /** @type {HTMLButtonElement} */ (byId('data-choice-full'));
+  const dataChoiceQuick = byId('data-choice-quick') as HTMLButtonElement;
+  const dataChoiceFull = byId('data-choice-full') as HTMLButtonElement;
   const dataChoiceFullSize = byId('data-choice-full-size');
   const dataDownload = byId('data-download');
   const dataDownloadStatus = byId('data-download-status');
   const dataDownloadDetail = byId('data-download-detail');
   const dataDownloadFill = byId('data-download-fill');
-  const dataDownloadToggle =
-    /** @type {HTMLButtonElement} */ (byId('data-download-toggle'));
-  const dataDownloadPlay =
-    /** @type {HTMLButtonElement} */ (byId('data-download-play'));
-  const dataDownloadQuick =
-    /** @type {HTMLButtonElement} */ (byId('data-download-quick'));
-  const renderScale =
-    /** @type {HTMLSelectElement} */ (form.elements.namedItem('renderScale'));
-  const touchMode =
-    /** @type {HTMLSelectElement} */ (form.elements.namedItem('touchMode'));
-  const showDiagnostics =
-    /** @type {HTMLInputElement} */ (form.elements.namedItem('showDiagnostics'));
-  const autoCheckUpdates =
-    /** @type {HTMLInputElement} */ (
-      form.elements.namedItem('autoCheckUpdates')
-    );
-  const choiceAutoUpdates =
-    /** @type {HTMLInputElement} */ (byId('data-choice-auto-updates'));
-  /** @type {import('./update-action.js').UpdateAction | null} */
-  let updateAction = null;
+  const dataDownloadToggle = byId('data-download-toggle') as HTMLButtonElement;
+  const dataDownloadPlay = byId('data-download-play') as HTMLButtonElement;
+  const dataDownloadQuick = byId('data-download-quick') as HTMLButtonElement;
+  const renderScale = form.elements.namedItem(
+    'renderScale',
+  ) as HTMLSelectElement;
+  const touchMode = form.elements.namedItem('touchMode') as HTMLSelectElement;
+  const showDiagnostics = form.elements.namedItem(
+    'showDiagnostics',
+  ) as HTMLInputElement;
+  const autoCheckUpdates = form.elements.namedItem(
+    'autoCheckUpdates',
+  ) as HTMLInputElement;
+  const choiceAutoUpdates = byId('data-choice-auto-updates') as HTMLInputElement;
+  let updateAction: UpdateAction | null = null;
 
-  /** @type {import('../shared/contracts.js').ClientSession | null} */
-  let currentSession = null;
+  let currentSession: ClientSession | null = null;
 
-  /** @type {import('../shared/contracts.js').AppSettings | null} */
-  let currentSettings = null;
-  /** @type {Promise<import('../shared/contracts.js').AppSettings> | null} */
-  let settingsLoad = null;
-  /** @type {Promise<unknown>} */
-  let settingsWrite = Promise.resolve();
-  /** @type {import('../shared/contracts.js').CacheInfo | null} */
-  let currentCache = null;
-  /** @type {Promise<boolean> | null} */
-  let fullDownloadPromise = null;
-  /** @type {'idle' | 'running' | 'stopping'} */
-  let downloadPhase = 'idle';
+  let currentSettings: AppSettings | null = null;
+  let settingsLoad: Promise<AppSettings> | null = null;
+  let settingsWrite: Promise<unknown> = Promise.resolve();
+  let currentCache: CacheInfo | null = null;
+  let fullDownloadPromise: Promise<boolean> | null = null;
+  let downloadPhase: 'idle' | 'running' | 'stopping' = 'idle';
   // Only ever the "image" phase: the dock renders a running download, and a
   // failure arrives as the download's own outcome, not as a progress event.
-  /** @type {import('../shared/contracts.js').DownloadActivity | null} */
-  let currentDownloadProgress = null;
+  let currentDownloadProgress: DownloadActivity | null = null;
   let downloadError = '';
-  /** @type {(() => void) | null} */
-  let launcherResolve = null;
+  let launcherResolve: (() => void) | null = null;
   let launcherTotalBytes = 0;
-  /** @type {number | null} */
-  let savedTimer = null;
+  let savedTimer: number | null = null;
   let activeSettingsPane = 'data';
   const downloadActive = () =>
     downloadPhase === 'running' || downloadPhase === 'stopping';
@@ -91,22 +81,17 @@
     savedTimer = setTimeout(() => settingsSaved.classList.remove('show'), 1400);
   }
 
-  /** @param {string} name */
-  function selectPane(name) {
+  function selectPane(name: string) {
     activeSettingsPane = name;
     settingsPanes.dataset.active = name;
-    for (const tab of /** @type {NodeListOf<HTMLElement>} */ (
-      form.querySelectorAll('.settings-rtab')
-    )) {
+    for (const tab of form.querySelectorAll<HTMLElement>('.settings-rtab')) {
       const selected = tab.dataset.pane === name;
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
     }
   }
 
-  const railTabs = [.../** @type {NodeListOf<HTMLElement>} */ (
-    form.querySelectorAll('.settings-rtab')
-  )];
+  const railTabs = [...form.querySelectorAll<HTMLElement>('.settings-rtab')];
   for (const tab of railTabs) {
     tab.addEventListener('click', () => {
       if (tab.dataset.pane) selectPane(tab.dataset.pane);
@@ -114,35 +99,34 @@
   }
 
   // Roving tabindex: arrows move between sections, Home/End jump.
-  form.querySelector('.settings-rail')?.addEventListener('keydown', (rawEvent) => {
-    const event = /** @type {KeyboardEvent} */ (rawEvent);
-    const active = document.activeElement;
-    const index =
-      active instanceof globalThis.HTMLElement ? railTabs.indexOf(active) : -1;
-    if (index < 0) return;
-    let target = null;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
-      target = railTabs[(index + 1) % railTabs.length];
-    } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
-      target = railTabs[(index - 1 + railTabs.length) % railTabs.length];
-    } else if (event.key === 'Home') {
-      target = railTabs[0];
-    } else if (event.key === 'End') {
-      target = railTabs[railTabs.length - 1];
-    }
-    if (!target) return;
-    event.preventDefault();
-    target.focus();
-    if (target.dataset.pane) selectPane(target.dataset.pane);
-  });
+  form
+    .querySelector<HTMLElement>('.settings-rail')
+    ?.addEventListener('keydown', (event) => {
+      const active = document.activeElement;
+      const index =
+        active instanceof globalThis.HTMLElement ? railTabs.indexOf(active) : -1;
+      if (index < 0) return;
+      let target: HTMLElement | undefined;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+        target = railTabs[(index + 1) % railTabs.length];
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+        target = railTabs[(index - 1 + railTabs.length) % railTabs.length];
+      } else if (event.key === 'Home') {
+        target = railTabs[0];
+      } else if (event.key === 'End') {
+        target = railTabs[railTabs.length - 1];
+      }
+      if (!target) return;
+      event.preventDefault();
+      target.focus();
+      if (target.dataset.pane) selectPane(target.dataset.pane);
+    });
 
-  /** @param {number} bytes */
-  const size = (bytes) => bytes >= 1_073_741_824
+  const size = (bytes: number) => bytes >= 1_073_741_824
     ? `${(bytes / 1_073_741_824).toFixed(2)} GB`
     : `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`;
 
-  /** @param {import('../shared/diagnostics.js').RendererMilestone} name */
-  const launcherMilestone = (name) => {
+  const launcherMilestone = (name: RendererMilestone) => {
     void window.gwNative.diagnostics
       .recordRendererMilestone(name, performance.now() * 1000)
       .catch(() => {});
@@ -168,8 +152,8 @@
     const height = canvas.clientHeight || window.innerHeight;
     const activeScale = Number(renderScale.value);
     const offscreen = window.Module?.canvas?.offscreen;
-    for (const output of /** @type {NodeListOf<HTMLElement>} */ (
-      form.querySelectorAll('[data-render-scale]')
+    for (const output of form.querySelectorAll<HTMLElement>(
+      '[data-render-scale]',
     )) {
       const scale = Number(output.dataset.renderScale);
       const offscreenWidth = offscreen?.width;
@@ -195,8 +179,7 @@
   }
 
   // Serialize writes so a slower earlier write cannot replace newer intent.
-  /** @param {import('../shared/contracts.js').AppSettingsPatch} patch */
-  function persistSettings(patch) {
+  function persistSettings(patch: AppSettingsPatch) {
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
@@ -246,10 +229,8 @@
         .catch(() => undefined);
     })
     .catch(() => {
-      const updateCheck =
-        /** @type {HTMLButtonElement} */ (byId('settings-check-updates'));
-      const compatibilityCheck =
-        /** @type {HTMLButtonElement} */ (byId('client-compat-check'));
+      const updateCheck = byId('settings-check-updates') as HTMLButtonElement;
+      const compatibilityCheck = byId('client-compat-check') as HTMLButtonElement;
       const launcherCheck = byId('loading-update-check');
       const updateStatus = byId('settings-update-status');
       updateCheck.disabled = true;
@@ -290,12 +271,9 @@
    * something is actually degraded, and it warns once per ArenaNet build:
    * a boolean would either nag every launch or stay silent through the next
    * client update, and both are wrong.
-   *
-   * @returns {Promise<void>}
    */
-  async function resolveClientCompatibility() {
-    /** @type {import('../shared/contracts.js').ClientSession} */
-    let session;
+  async function resolveClientCompatibility(): Promise<void> {
+    let session: ClientSession;
     try {
       session = await readSession();
     } catch {
@@ -326,8 +304,7 @@
     return !!cache?.totalBytes && cache.bytes >= cache.totalBytes;
   }
 
-  /** @param {import('../shared/contracts.js').CacheInfo | null} cache */
-  function cacheStatus(cache) {
+  function cacheStatus(cache: CacheInfo | null) {
     if (!cache?.totalBytes) return 'Game data is still preparing…';
     if (cacheComplete(cache)) {
       return `Full game ready · ${size(cache.bytes)} downloaded`;
@@ -336,20 +313,17 @@
   }
 
   function selectedStrategy() {
-    const selected =
-      /** @type {HTMLInputElement | null} */ (
-        form.querySelector('input[name="dataStrategy"]:checked')
-      );
+    const selected = form.querySelector<HTMLInputElement>(
+      'input[name="dataStrategy"]:checked',
+    );
     return selected?.value === 'quick' || selected?.value === 'full'
       ? selected.value
       : null;
   }
 
-  /**
-   * @param {HTMLInputElement | HTMLSelectElement} control
-   * @returns {import('../shared/contracts.js').AppSettingsPatch | null}
-   */
-  function patchForControl(control) {
+  function patchForControl(
+    control: HTMLInputElement | HTMLSelectElement,
+  ): AppSettingsPatch | null {
     const toolPatch = toolSettings.patchFor(control);
     if (toolPatch) return toolPatch;
     switch (control.name) {
@@ -383,15 +357,14 @@
     }
   }
 
-  /** @param {import('../shared/contracts.js').AppSettings} settings */
-  function fillForm(settings) {
+  function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
     toolSettings.render(settings);
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
-    for (const radio of /** @type {NodeListOf<HTMLInputElement>} */ (
-      form.querySelectorAll('input[name="dataStrategy"]')
+    for (const radio of form.querySelectorAll<HTMLInputElement>(
+      'input[name="dataStrategy"]',
     )) {
       radio.checked = radio.value === settings.dataStrategy;
     }
@@ -582,8 +555,7 @@
     }
   }
 
-  /** @param {import('../shared/diagnostics.js').RendererMilestone} reason */
-  function releaseGameBoot(reason) {
+  function releaseGameBoot(reason: RendererMilestone) {
     if (!launcherResolve) return;
     dataChoice.hidden = true;
     dataDownload.hidden = true;
@@ -594,11 +566,7 @@
     resolve();
   }
 
-  /**
-   * @param {import('../shared/contracts.js').CacheInfo} cache
-   * @param {number} total
-   */
-  function showChoice(cache, total) {
+  function showChoice(cache: CacheInfo, total: number) {
     currentCache = cache;
     launcherTotalBytes = total;
     const remaining = Math.max(0, total - (cache.bytes || 0));
@@ -614,11 +582,7 @@
     launcherMilestone('launcher.choiceShown');
   }
 
-  /**
-   * @param {import('../shared/contracts.js').CacheInfo} cache
-   * @param {number} total
-   */
-  function showFullDownload(cache, total) {
+  function showFullDownload(cache: CacheInfo, total: number) {
     currentCache = cache;
     launcherTotalBytes = total;
     dataChoice.hidden = true;
@@ -629,11 +593,7 @@
     }
   }
 
-  /**
-   * @param {number} snapshotBytes
-   * @returns {Promise<void>}
-   */
-  async function resolveDataChoice(snapshotBytes) {
+  async function resolveDataChoice(snapshotBytes: number): Promise<void> {
     try {
       const [settings, cache] = await Promise.all([
         loadSettings(),
@@ -682,10 +642,10 @@
   /**
    * The first-run gate answers two questions with one click. Both are written
    * together so a saved data choice can never leave the update answer behind.
-   * @param {'quick' | 'full'} dataStrategy
-   * @returns {import('../shared/contracts.js').AppSettingsPatch}
    */
-  const answeredChoice = (dataStrategy) => ({
+  const answeredChoice = (
+    dataStrategy: 'quick' | 'full',
+  ): AppSettingsPatch => ({
     dataStrategy,
     autoCheckUpdates: choiceAutoUpdates.checked,
   });

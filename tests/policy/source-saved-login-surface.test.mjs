@@ -25,7 +25,7 @@ const surface = [
   "src/main/core/paths.ts",
   "src/preload/preload.body.cjs",
   "src/shared/contracts.ts",
-  "src/renderer/harness.js",
+  "src/renderer/harness.ts",
 ]
   .map(read)
   .join("\n");

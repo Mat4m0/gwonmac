@@ -4,7 +4,7 @@
 // note all say the same thing: with `autoCheckUpdates` off — the default — a
 // launch reaches github.com zero times. Until this spec existed the only proof
 // was five call sites read by hand, and deleting the `if (settings.
-// autoCheckUpdates)` gate in `settings.js` left every suite green.
+// autoCheckUpdates)` gate in `settings.ts` left every suite green.
 //
 // So this counts the real thing: `checkForNewerRelease` calls the main
 // process's `fetch`, and the counter below wraps it. The synchronised point is

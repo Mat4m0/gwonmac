@@ -1,14 +1,38 @@
 // Cheap renderer-side aggregation. Hot paths only mutate numbers; one bounded
 // batch crosses IPC every two seconds.
+//
+// index.html loads this as a classic script, so the file carries no top-level
+// import or export and names the contracts through type-only `import(…)`.
 (function () {
   'use strict';
+
+  type Metrics = import('../shared/diagnostics.js').RendererMetrics;
+  type RendererEventName = import('../shared/diagnostics.js').RendererEventName;
+  // Every RendererMetrics field that is a plain counter, derived from the
+  // contract rather than listed again here: a second copy of forty field names
+  // is a second source of truth, and this one would be free to drift.
+  type CounterKey = {
+    [K in keyof Metrics]: Metrics[K] extends number ? K : never;
+  }[keyof Metrics];
+  // Every metric family the histogram helper below can be asked for: a name P
+  // for which the contract declares all four of `${P}Histogram`, `${P}TotalUs`,
+  // `${P}MinUs` and `${P}MaxUs`. Derived for the same reason, and it is what
+  // makes the computed field names safe — a family RendererMetrics does not
+  // declare fails to compile at the call site instead of the recorder adding
+  // to a field that is not there.
+  type MetricFamily = {
+    [K in keyof Metrics]: K extends `${infer P}Histogram`
+      ? `${P}TotalUs` | `${P}MinUs` | `${P}MaxUs` extends keyof Metrics
+        ? P
+        : never
+      : never;
+  }[keyof Metrics];
 
   const histogramLimitsUs = [
     100, 250, 500, 1_000, 2_000, 4_000, 8_000, 12_000, 16_667,
     25_000, 33_333, 50_000, 100_000, 250_000, 500_000, 1_000_000,
     5_000_000, Number.MAX_SAFE_INTEGER,
   ];
-  /** @type {Set<string>} */
   const rendererEventNames = new Set([
     'renderer.windowError',
     'renderer.unhandledRejection',
@@ -20,36 +44,37 @@
     'audio.resumeFailed',
     'pointerLock.failed',
   ]);
-  /** @returns {number[]} */
-  const histogram = () => Array(histogramLimitsUs.length).fill(0);
-  /**
-   * Dynamic metric keys are confined to this histogram helper; the complete
-   * object returned by fresh() is checked against RendererMetrics below.
-   * @param {Record<string, any>} target
-   * @param {string} prefix
-   * @param {number} valueUs
-   * @param {string} [countKey]
-   * @param {boolean} [increment]
-   */
+  const histogram = (): number[] =>
+    new Array<number>(histogramLimitsUs.length).fill(0);
+
+  // Dynamic metric keys are confined to this histogram helper, and the family
+  // it is asked for is checked rather than trusted. The counter is a separate
+  // argument because it is not always `${prefix}Count` — bitmapOut and
+  // bitmapPresent share swapCount, snapshot has snapshotReads — so the default
+  // that used to compute it was right for five of the ten call sites and
+  // unchecked for all ten. Naming it makes it the contract's key too.
   const observe = (
-    target,
-    prefix,
-    valueUs,
-    countKey = `${prefix}Count`,
+    target: Metrics,
+    prefix: MetricFamily,
+    valueUs: number,
+    countKey: CounterKey,
     increment = true,
   ) => {
     const first = increment ? target[countKey] === 0 : target[countKey] === 1;
     if (increment) target[countKey]++;
-    target[`${prefix}TotalUs`] += valueUs;
-    const min = `${prefix}MinUs`;
+    const total = `${prefix}TotalUs` as const;
+    target[total] += valueUs;
+    const min = `${prefix}MinUs` as const;
     target[min] = first ? valueUs : Math.min(target[min], valueUs);
-    target[`${prefix}MaxUs`] = Math.max(target[`${prefix}MaxUs`], valueUs);
+    const max = `${prefix}MaxUs` as const;
+    target[max] = Math.max(target[max], valueUs);
     const index = histogramLimitsUs.findIndex((limit) => valueUs <= limit);
-    target[`${prefix}Histogram`][index < 0 ? histogramLimitsUs.length - 1 : index]++;
+    const bucket = index < 0 ? histogramLimitsUs.length - 1 : index;
+    const buckets = target[`${prefix}Histogram` as const];
+    buckets[bucket] = (buckets[bucket] ?? 0) + 1;
   };
 
-  /** @returns {import('../shared/diagnostics.js').RendererMetrics} */
-  const fresh = () => ({
+  const fresh = (): Metrics => ({
     intervalMs: 0,
     visible: !document.hidden,
     focused: document.hasFocus(),
@@ -143,10 +168,8 @@
   let clockOffsetUs = 0;
   let captureLevel = 0;
   let captureStartedAt = 0;
-  /** @type {number | null} */
-  let captureStatusTimer = null;
-  /** @type {number[]} */
-  let frameData = [];
+  let captureStatusTimer: number | null = null;
+  let frameData: number[] = [];
 
   function updateCaptureStatus() {
     const status = document.getElementById('capture-status');
@@ -160,21 +183,18 @@
       `${minutes}:${seconds}`;
   }
 
-  /** @param {string} message */
-  function announceCapture(message) {
+  function announceCapture(message: string) {
     const output = document.getElementById('capture-announcement');
     if (output) output.textContent = message;
   }
 
-  /** @param {'gw.snapshot.resolve' | 'gw.frame.submit'} name */
-  function traceMark(name) {
+  function traceMark(name: 'gw.snapshot.resolve' | 'gw.frame.submit') {
     if (captureLevel !== 2) return;
     performance.mark(name);
     performance.clearMarks(name);
   }
 
-  /** @param {unknown} value */
-  function fingerprint(value) {
+  function fingerprint(value: unknown) {
     const input = value instanceof Error
       ? `${value.name}:${value.stack || value.message}`
       : String(
@@ -192,11 +212,7 @@
     return (hash >>> 0).toString(16).padStart(8, '0');
   }
 
-  /**
-   * @param {import('../shared/diagnostics.js').RendererEventName} name
-   * @param {unknown} [value]
-   */
-  function recordEvent(name, value) {
+  function recordEvent(name: RendererEventName, value?: unknown) {
     if (!rendererEventNames.has(name)) {
       metrics.droppedRecords += 1;
       return;
@@ -216,7 +232,7 @@
     if (clockSyncRunning || !window.gwNative) return;
     clockSyncRunning = true;
     try {
-      let best = null;
+      let best: { rttUs: number; offsetUs: number } | null = null;
       for (let i = 0; i < 7; i++) {
         const r0 = performance.now() * 1000;
         const { mainReceiveUs, mainSendUs } =
@@ -238,11 +254,10 @@
     }
   }
 
-  /** @param {number} now */
-  function frame(now) {
+  function frame(now: number) {
     if (lastRaf) {
       const deltaUs = (now - lastRaf) * 1000;
-      observe(metrics, 'raf', deltaUs);
+      observe(metrics, 'raf', deltaUs, 'rafCount');
       if (deltaUs > 33333) metrics.rafOver33++;
       if (deltaUs > 50000) metrics.rafOver50++;
     }
@@ -250,8 +265,7 @@
     requestAnimationFrame(frame);
   }
 
-  /** @param {Event} event */
-  function markInput(event) {
+  function markInput(event: Event) {
     if (event.isTrusted && !pendingInput) pendingInput = performance.now();
   }
 
@@ -282,7 +296,10 @@
     }
   }
 
-  window.gwDiagnostics = Object.freeze({
+  // Annotated rather than inferred: the ambient RendererDiagnostics is the
+  // contract every caller reads, so it also supplies these parameter types
+  // instead of a second copy of them being written out here.
+  const diagnostics: RendererDiagnostics = {
     async resetForCapture() {
       while (flushing) await new Promise((resolve) => setTimeout(resolve, 0));
       await flush();
@@ -292,7 +309,6 @@
       lastSubmitted = 0;
       pendingInput = 0;
     },
-    /** @param {1 | 2} level */
     captureStarted(level) {
       captureLevel = level === 2 ? 2 : 1;
       captureStartedAt = performance.now();
@@ -329,11 +345,6 @@
       announceCapture('Performance problem marked.');
     },
     event: recordEvent,
-    /**
-     * @param {number} durationUs
-     * @param {number} bytes
-     * @param {'memory' | 'native'} source
-     */
     snapshot(durationUs, bytes, source) {
       observe(metrics, 'snapshot', durationUs, 'snapshotReads');
       metrics.snapshotBytes += bytes;
@@ -341,7 +352,6 @@
       else if (source === 'native') metrics.nativeHits++;
       traceMark('gw.snapshot.resolve');
     },
-    /** @param {'memory' | 'native' | 'coalesced'} source */
     cache(source) {
       if (source === 'memory') metrics.memoryHits++;
       else if (source === 'native') metrics.nativeHits++;
@@ -350,24 +360,14 @@
     // Proves the GL program-state cache is engaged against the live client:
     // the glue is downloaded at runtime, so a renamed import would otherwise
     // look identical to "the fix stopped helping".
-    /** @param {boolean} hit */
     glProgramQuery(hit) {
       if (hit) metrics.glProgramQueryHits++;
       else metrics.glProgramQueryMisses++;
     },
-    /** @param {'eviction' | 'promotion'} event */
     scheduler(event) {
       if (event === 'eviction') metrics.cacheEvictions++;
       else if (event === 'promotion') metrics.queuePromotions++;
     },
-    /**
-     * @param {number} started
-     * @param {number} syncUs
-     * @param {number} payloadBytes
-     * @param {number} sourceBackingBytes
-     * @param {number} compactBytes
-     * @param {PromiseLike<unknown>} pending
-     */
     socketSend(
       started,
       syncUs,
@@ -395,8 +395,7 @@
         () => settle(1),
         () => settle(0),
       );
-      /** @param {0 | 1} status */
-      function settle(status) {
+      function settle(status: 0 | 1) {
         const durationUs = (performance.now() - started) * 1000;
         metrics.socketSettles++;
         observe(metrics, 'socketSettle', durationUs, 'socketSettles', false);
@@ -415,20 +414,13 @@
         }
       }
     },
-    /** @param {boolean} visible */
     setVisible(visible) {
       overlayVisible = !!visible;
       const output = document.getElementById('diagnostics');
       if (output) output.style.display = overlayVisible ? 'block' : 'none';
     },
-    /**
-     * @param {number} swapUs
-     * @param {number} bitmapOutUs
-     * @param {number} bitmapPresentUs
-     * @param {boolean} [presented]
-     */
     swap(swapUs, bitmapOutUs, bitmapPresentUs, presented = true) {
-      observe(metrics, 'swap', swapUs);
+      observe(metrics, 'swap', swapUs, 'swapCount');
       observe(metrics, 'bitmapOut', bitmapOutUs, 'swapCount', false);
       observe(metrics, 'bitmapPresent', bitmapPresentUs, 'swapCount', false);
       if (!presented) {
@@ -438,38 +430,48 @@
       const submittedAt = performance.now();
       if (lastSubmitted) {
         const intervalUs = (submittedAt - lastSubmitted) * 1000;
-        observe(metrics, 'submitInterval', intervalUs);
-        observe(
-          metrics,
-          document.hidden ? 'hiddenSubmitInterval' : 'visibleSubmitInterval',
-          intervalUs,
-        );
+        observe(metrics, 'submitInterval', intervalUs, 'submitIntervalCount');
+        if (document.hidden) {
+          observe(
+            metrics,
+            'hiddenSubmitInterval',
+            intervalUs,
+            'hiddenSubmitIntervalCount',
+          );
+        } else {
+          observe(
+            metrics,
+            'visibleSubmitInterval',
+            intervalUs,
+            'visibleSubmitIntervalCount',
+          );
+        }
       }
       lastSubmitted = submittedAt;
       traceMark('gw.frame.submit');
       if (captureLevel > 0 && frameData.length <= 19_993) {
-        const canvas =
-          /** @type {HTMLCanvasElement | null} */ (
-            document.getElementById('canvas')
-          );
+        const canvas = document.getElementById('canvas');
+        const backing =
+          canvas instanceof globalThis.HTMLCanvasElement ? canvas : null;
         frameData.push(
           submittedAt * 1000 + clockOffsetUs,
           swapUs,
           bitmapOutUs,
           bitmapPresentUs,
-          canvas?.width || 0,
-          canvas?.height || 0,
+          backing?.width || 0,
+          backing?.height || 0,
           document.hidden ? 0 : 1,
         );
       }
       if (pendingInput) {
         const durationUs = (submittedAt - pendingInput) * 1000;
-        observe(metrics, 'inputToSubmit', durationUs);
+        observe(metrics, 'inputToSubmit', durationUs, 'inputToSubmitCount');
         pendingInput = 0;
       }
     },
     flush,
-  });
+  };
+  window.gwDiagnostics = Object.freeze(diagnostics);
 
   for (const type of ['pointerdown', 'keydown']) {
     addEventListener(type, markInput, { capture: true, passive: true });

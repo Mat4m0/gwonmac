@@ -15,7 +15,7 @@ Two halves, one contract:
 Selection and caching live in
 [`client-module.ts`](../../src/main/core/client-module.ts) and
 [`client-runtime.ts`](../../src/main/client-runtime.ts). Installation is
-[`harness.js`](../../src/renderer/harness.js) inside `Module.instantiateWasm`,
+[`harness.ts`](../../src/renderer/harness.ts) inside `Module.instantiateWasm`,
 before instantiation, so the import object can be wrapped.
 
 ## Why a derived module at all

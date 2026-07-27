@@ -1,35 +1,130 @@
 // Host for Gw.jspi.wasm inside the Electron renderer. Platform services are
 // injected on Module; privileged work goes through window.gwNative.
 //
+// index.html loads this as a classic script, and it must stay one: a top-level
+// import or export would make this an ES module, and the redeclaration below
+// only works between two `var`s in the same global script. Every type here is
+// therefore named through type-only `import(…)`.
+
+/**
+ * The generated glue's import object. Four renderer modules patch or read it,
+ * and each already declares the view it needs, so this is their intersection
+ * rather than a fifth description of the same object. Not `any`: a name none of
+ * them declares is still an error here.
+ */
+type GwClientImports = Parameters<
+  typeof import('./gl-program-cache.js').installGlProgramCache
+>[0]['imports'] &
+  Parameters<
+    typeof import('./template-save-compatibility.js').installTemplateSaveCompatibility
+  >[0]['imports'] &
+  Parameters<
+    typeof import('./template-filesystem-trace.js').installTemplateFilesystemTrace
+  >[0]['imports'] & {
+    env: Parameters<typeof import('./graphics.js').installGraphics>[0]['env'];
+  };
+
+/**
+ * The half of `Module` this host owns: everything it assigns, and the few
+ * members the generated glue publishes that it reads back. ArenaNet's surface
+ * is wider than this — that is the point of the boundary — but a name this
+ * host neither writes nor reads has no business being spelled here.
+ */
+type GwGameModule = {
+  canvas: HTMLCanvasElement;
+  print(text: unknown): void;
+  printErr(text: unknown): void;
+  // `{}` rather than an exports table means instantiation is in flight.
+  instantiateWasm(
+    imports: GwClientImports,
+    success: (
+      instance: WebAssembly.Instance,
+      module: WebAssembly.Module,
+    ) => void,
+  ): object;
+  locateFile(path: string): string;
+  dns: { resolve(name: string): Promise<string> };
+  secureStorage: {
+    getCredentials(): Promise<
+      import('../shared/contracts.js').StoredCredentials
+    >;
+    storeCredentials(username: unknown, password: unknown): Promise<void>;
+    clearCredentials(): Promise<void>;
+  };
+  login: { hasProvider(name: unknown): boolean };
+  getPatchMode(): Promise<'onDemand'>;
+  // The client passes four trailing values whose meaning depends on the stage.
+  setStartupProgress(
+    stage: unknown,
+    a: unknown,
+    b: unknown,
+    c: unknown,
+    d: unknown,
+  ): void;
+  handleFatalReadError(): void;
+  setBuildInfo(
+    info: import('../shared/diagnostics.js').RendererMilestoneFields,
+  ): void;
+  isMobile: boolean;
+  requestFullScreen(): void;
+  requestFullscreen(): void;
+  onRuntimeInitialized(): void;
+  onAbort(reason: unknown): void;
+  onExit(code: unknown): void;
+
+  // Installed after the initial assignment, once what they need exists.
+  image?: import('./image-source.js').ImageSource['image'];
+  socket?: ReturnType<
+    typeof import('./socket-host.js').createSocketHost
+  >['socket'];
+  oskInput?: Record<string, HTMLElement | null>;
+  oskIsModal?: boolean;
+  preRun?: () => void;
+
+  // Published by the generated glue, so absent until it has run.
+  HEAPU8?: Uint8Array;
+  SDL2?: { audioContext?: AudioContext };
+  audioContext?: AudioContext;
+  oskIsActive?: boolean;
+  oskActiveInput?: EventTarget | null;
+};
+
 // Module MUST be var: the glue does `var Module = typeof Module != 'undefined'
 // ? Module : {}`, and a const/let here collides with it at parse time.
-/** @type {any} ArenaNet's generated Emscripten surface is the dynamic boundary. */
-var Module;
+var Module: GwGameModule;
 
 (function () {
 'use strict';
 
+/**
+ * The same object once the generated glue has published its runtime onto it.
+ * Everything below that needs these members runs inside a callback the glue
+ * itself invokes, so this one view states that the glue has loaded instead of
+ * every use guarding against a state it cannot be in.
+ */
+type GwClientRuntime = GwGameModule & {
+  addRunDependency(name: string): void;
+  removeRunDependency(name: string): void;
+  HEAPU8: Uint8Array;
+};
+const clientRuntime = () => Module as GwClientRuntime;
+
 const LOG_LINES = 400;
-/** @type {string[]} */
-const logBuf = [];
-/** @type {WebAssembly.Instance | null} */
-let gameWasmInstance = null;
-/** @type {WebAssembly.Module | null} */
-let gameWasmModule = null;
+const logBuf: string[] = [];
+let gameWasmInstance: WebAssembly.Instance | null = null;
+let gameWasmModule: WebAssembly.Module | null = null;
 let disposeSocketHost = () => {};
 const native = () => window.gwNative;
-/**
- * @param {import('../shared/diagnostics.js').RendererMilestone} name
- * @param {import('../shared/diagnostics.js').RendererMilestoneFields} [fields]
- */
-const milestone = (name, fields) => {
+const milestone = (
+  name: import('../shared/diagnostics.js').RendererMilestone,
+  fields?: import('../shared/diagnostics.js').RendererMilestoneFields,
+) => {
   void native().diagnostics
     .recordRendererMilestone(name, performance.now() * 1000, fields)
     .catch(() => {});
 };
 
-/** @param {...unknown} a */
-const log = (...a) => {
+const log = (...a: unknown[]) => {
   console.log(...a);
   logBuf.push(a.map(String).join(' '));
   if (logBuf.length > LOG_LINES) logBuf.splice(0, logBuf.length - LOG_LINES);
@@ -56,14 +151,13 @@ const STARTUP_LABELS = {
 };
 
 const SNAPSHOT_URL = 'Gw.snapshot';
-/** @type {import('../shared/contracts.js').AppSettings | null} */
-let appSettings = null;
-/** @type {import('./client-health.js').ClientHealthConfirmation | null} */
-let clientHealthConfirmation = null;
-/** @type {typeof import('./client-health.js').createClientHealthConfirmation} */
-let createClientHealthConfirmation;
-/** @type {GameInputController | null} */
-let inputHost = null;
+let appSettings: import('../shared/contracts.js').AppSettings | null = null;
+let clientHealthConfirmation:
+  | import('./client-health.js').ClientHealthConfirmation
+  | null = null;
+let createClientHealthConfirmation:
+  typeof import('./client-health.js').createClientHealthConfirmation;
+let inputHost: GameInputController | null = null;
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
@@ -78,8 +172,7 @@ window.gwApplySettings = (next) => {
 
 // image.fileSize() is synchronous, so the snapshot metadata is read over IPC
 // before the glue loads and the source is constructed from it in boot().
-/** @type {import('./image-source.js').ImageSource | null} */
-let imageSource = null;
+let imageSource: import('./image-source.js').ImageSource | null = null;
 let gamepadImportsAvailable = false;
 
 // The host's supporting modules. They are ESM; this bootstrap is not, because
@@ -87,26 +180,22 @@ let gamepadImportsAvailable = false;
 // them here: `instantiateWasm` and `loadGlue` are called synchronously by the
 // glue and cannot await. Reading `host` before boot() assigns it is a
 // TypeError, not a silently skipped installation.
-/**
- * @type {typeof import('./graphics.js')
- *   & typeof import('./gl-program-cache.js')
- *   & typeof import('./filesystem.js')
- *   & typeof import('./input.js')
- *   & typeof import('./template-save-compatibility.js')
- *   & typeof import('./template-filesystem-trace.js')}
- */
-let host;
+let host: typeof import('./graphics.js') &
+  typeof import('./gl-program-cache.js') &
+  typeof import('./filesystem.js') &
+  typeof import('./input.js') &
+  typeof import('./template-save-compatibility.js') &
+  typeof import('./template-filesystem-trace.js');
 
 /**
  * The one HTTP shape the image source is given: a ranged read of the snapshot,
  * carrying the priority the main-process scheduler reads.
- *
- * @param {number} start
- * @param {number} length
- * @param {'demand' | 'prefetch'} priority
- * @returns {Promise<Uint8Array>}
  */
-async function fetchSnapshotRange(start, length, priority) {
+async function fetchSnapshotRange(
+  start: number,
+  length: number,
+  priority: 'demand' | 'prefetch',
+): Promise<Uint8Array> {
   const res = await fetch(SNAPSHOT_URL, {
     headers: {
       Range: `bytes=${start}-${start + length - 1}`,
@@ -127,18 +216,11 @@ addEventListener('beforeunload', () => {
 });
 
 Module = {
-  canvas:
-    /** @type {HTMLCanvasElement} */ (document.getElementById('canvas')),
-  /** @param {unknown} t */
+  canvas: document.getElementById('canvas') as HTMLCanvasElement,
   print: (t) => log(t),
-  /** @param {unknown} t */
   printErr: (t) => log('[err]', t),
 
   // Take over instantiation so the EGL imports can be patched first.
-  /**
-   * @param {any} imports ArenaNet's generated WebAssembly imports.
-  * @param {(instance: WebAssembly.Instance, module: WebAssembly.Module) => void} success
-  */
   instantiateWasm(imports, success) {
     host.installTemplateSaveCompatibility({
       imports,
@@ -147,9 +229,9 @@ Module = {
       // has to come from the client's own allocator, which only exists once
       // instantiation below resolves.
       exports: () =>
-        /** @type {{ malloc?: (bytes: number) => number }} */ (
-          gameWasmInstance?.exports ?? null
-        ),
+        (gameWasmInstance?.exports ?? null) as
+          | { malloc?: (bytes: number) => number }
+          | null,
     });
     host.installTemplateFilesystemTrace({
       imports,
@@ -216,14 +298,12 @@ Module = {
 
   // Both builds share an output basename, so Gw.jspi.js also asks for
   // "Gw.wasm". Without this it silently pairs with the Asyncify binary.
-  /** @param {string} path */
   locateFile: (path) => path === 'Gw.wasm' ? 'Gw.jspi.wasm' : path,
 
   // Module.image is assigned in boot(), once the snapshot metadata that
   // makes fileSize() answerable synchronously has arrived.
 
   dns: {
-    /** @param {string} name */
     async resolve(name) {
       log('dns.resolve', name);
       return native().dns.resolve(name);
@@ -242,7 +322,6 @@ Module = {
       log('secureStorage: returning saved credentials');
       return stored;
     },
-    /** @param {unknown} username @param {unknown} password */
     async storeCredentials(username, password) {
       if (typeof username !== 'string' || typeof password !== 'string') {
         throw new TypeError('credentials must be strings');
@@ -259,7 +338,6 @@ Module = {
   // No federated auth: reporting no providers falls back to email/password.
   // getAuthToken is absent and nativeAccount is left undefined on purpose.
   login: {
-    /** @param {unknown} name */
     hasProvider(name) {
       log(`login.hasProvider(${name}) -> false (no federated auth in this harness)`);
       return false;
@@ -270,13 +348,6 @@ Module = {
   // before glue load. The module still probes getPatchMode at image init.
   getPatchMode: async () => 'onDemand',
 
-  /**
-   * @param {unknown} stage
-   * @param {unknown} a
-   * @param {unknown} b
-   * @param {unknown} c
-   * @param {unknown} d
-   */
   setStartupProgress(stage, a, b, c, d) {
     log(`[startup] ${stage}`, [a, b, c, d].filter((v) => v !== undefined).join(' '));
     const L = window.gwLoading;
@@ -300,7 +371,7 @@ Module = {
     }
     L.set(
       s in STARTUP_LABELS
-        ? STARTUP_LABELS[/** @type {keyof typeof STARTUP_LABELS} */ (s)]
+        ? STARTUP_LABELS[s as keyof typeof STARTUP_LABELS]
         : 'Loading…',
       null,
     );
@@ -313,7 +384,6 @@ Module = {
       imageSource?.lastError() || 'No cached copy of the required game data is available.',
     );
   },
-  /** @param {import('../shared/diagnostics.js').RendererMilestoneFields} info */
   setBuildInfo(info) {
     window.gwBuildInfo = Object.freeze({
       programId: Number(info.programId),
@@ -370,13 +440,11 @@ Module = {
         ));
     }
   },
-  /** @param {unknown} reason */
   onAbort(reason) {
     milestone('wasm.abort');
     log('[err] WASM aborted:', reason);
     window.gwLoading?.fail('The game client stopped unexpectedly.');
   },
-  /** @param {unknown} code */
   onExit(code) {
     log('WASM exited:', code);
     if (code === 0) {
@@ -394,7 +462,7 @@ Module = {
 
 function mountGameFilesystem() {
   host.installGameFilesystem({
-    module: Module,
+    module: clientRuntime(),
     log,
     failed(error) {
       window.gwDiagnostics?.event('filesystem.persistenceFailed', error);
@@ -426,11 +494,10 @@ function loadGlue() {
     window.gwLoading.fail('Settings were not ready.');
     return;
   }
-  const c =
-    /** @type {HTMLCanvasElement | null} */ (
-      document.getElementById('canvas')
-    );
-  if (!c) throw new Error('missing renderer canvas');
+  const c = document.getElementById('canvas');
+  if (!(c instanceof globalThis.HTMLCanvasElement)) {
+    throw new Error('missing renderer canvas');
+  }
 
   c.focus();
   c.addEventListener('pointerdown', () => {
@@ -440,18 +507,21 @@ function loadGlue() {
   // Outside Capacitor the client rewrites API hosts to same-origin first labels.
   // Map those onto gw://app/<route>/… so the main-process proxy can forward.
   const PROXY_LABELS = new Set(['webgate', 'account', 'help', 'store', 'www']);
-  /** @type {any} Browser overload boundary retained by the wrapper. */
-  const origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = /**
-   * @this {XMLHttpRequest}
-   * @param {string} method
-   * @param {string | URL} url
-   * @param {...any} rest Browser overload boundary.
-   */
-  function (
-    method,
-    url,
-    ...rest
+  // The browser's two overloads, viewed as the one variadic signature this
+  // wrapper needs: `open(method, url)` and `open(method, url, async)` are
+  // different requests, so the tail is forwarded by arity rather than named.
+  // `unknown[]` is what keeps it unreadable here rather than untyped.
+  const origOpen = XMLHttpRequest.prototype.open as (
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    ...rest: unknown[]
+  ) => void;
+  XMLHttpRequest.prototype.open = function (
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    ...rest: unknown[]
   ) {
     try {
       const u = new URL(url, location.href);
@@ -476,8 +546,7 @@ function loadGlue() {
         .catch(reportAudioFailure);
     }
   };
-  /** @param {unknown} error */
-  function reportAudioFailure(error) {
+  function reportAudioFailure(error: unknown) {
     window.gwDiagnostics?.event('audio.resumeFailed', error);
   }
   for (const ev of ['pointerdown', 'keydown']) {
@@ -500,7 +569,9 @@ function loadGlue() {
     multiline: document.getElementById('osk-input-multiline'),
   };
   Module.oskIsModal = Module.isMobile;   // on desktop the field stays behind the canvas
-  const oskInputs = new Set(Object.values(Module.oskInput).filter(Boolean));
+  const oskInputs = new Set<EventTarget | null>(
+    Object.values(Module.oskInput).filter(Boolean),
+  );
 
   // The desktop text proxy is part of the game, not a loss of game focus.
   // Keep the client's canvas-blur callback from muting audio while chat is
@@ -628,7 +699,7 @@ function loadGlue() {
     const source = createImageSource({
       metadata: meta,
       fetchRange: fetchSnapshotRange,
-      writeBytes: (data, address) => Module.HEAPU8.set(data, address),
+      writeBytes: (data, address) => clientRuntime().HEAPU8.set(data, address),
       diagnostics: window.gwDiagnostics,
       log,
     });

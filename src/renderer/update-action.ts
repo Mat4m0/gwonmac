@@ -2,7 +2,7 @@
 //
 // The state and the concrete DOM binding live together here. The three answers
 // must never collapse into two, and every launcher/settings/compatibility
-// surface must show the same request and result. `settings.js` supplies the
+// surface must show the same request and result. `settings.ts` supplies the
 // native actions and persistence; this module owns how that one action appears.
 
 import type {
