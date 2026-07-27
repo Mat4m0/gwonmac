@@ -119,21 +119,22 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   >
     <section
       ref="panel"
-      class="tools-window"
+      class="ui-frame ui-panel tools-window"
       :style="mode === 'embedded' ? { left: `${position.left}px`, top: `${position.top}px` } : undefined"
       aria-label="GWonMac Tools"
     >
-      <header class="window-bar" @pointerdown="startDrag">
+      <header class="ui-panel-head window-bar" @pointerdown="startDrag">
         <div class="window-brand" aria-hidden="true">GW</div>
-        <div>
-          <h1>GWonMac Tools</h1>
-          <p>{{ host.label }} · Vue workbench</p>
+        <div class="window-identity">
+          <h1 class="ui-panel-title">GWonMac Tools</h1>
+          <p class="ui-field-hint">{{ host.label }} · Vue workbench</p>
         </div>
-        <span v-if="controller.saving.value" class="saving-state" role="status">Saving…</span>
-        <span v-else class="saving-state saving-state--saved">Ready</span>
+        <span v-if="controller.saving.value" class="ui-chip" data-level="warn" role="status">Saving…</span>
+        <span v-else class="ui-chip" data-level="good">Ready</span>
         <button
           v-if="mode === 'embedded'"
-          class="icon-button window-close"
+          class="ui-button window-close"
+          data-icon
           aria-label="Close GWonMac Tools"
           @click="emit('close')"
         >
@@ -149,20 +150,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       <div v-else-if="controller.error.value" class="fatal-state" role="alert">
         <strong>The build library could not be opened.</strong>
         <p>{{ controller.error.value }}</p>
-        <button v-if="host.reset" class="button" @click="controller.reset">Restore demo data</button>
+        <button v-if="host.reset" class="ui-button" @click="controller.reset">Restore demo data</button>
       </div>
 
       <div v-else-if="controller.library.value" class="workspace">
         <aside class="library-pane" aria-label="Library">
           <div class="library-toolbar">
-            <div class="kind-switcher" role="tablist" aria-label="Library type">
+            <div class="ui-segment" data-fill role="tablist" aria-label="Library type">
               <button
                 role="tab"
                 :aria-selected="controller.kind.value === 'team'"
                 @click="controller.selectKind('team')"
               >
                 Teams
-                <span>{{ controller.library.value.teams.length }}</span>
+                <small>{{ controller.library.value.teams.length }}</small>
               </button>
               <button
                 role="tab"
@@ -170,24 +171,25 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 @click="controller.selectKind('build')"
               >
                 Builds
-                <span>{{ controller.library.value.builds.length }}</span>
+                <small>{{ controller.library.value.builds.length }}</small>
               </button>
             </div>
 
-            <label class="search-field">
+            <label class="ui-input-group">
               <span aria-hidden="true">⌕</span>
-              <span class="sr-only">Search library</span>
+              <span class="ui-sr-only">Search library</span>
               <input
                 ref="search"
                 v-model="controller.query.value"
                 type="search"
                 placeholder="Search names, tags, heroes, skills"
               >
-              <kbd>/</kbd>
+              <kbd class="ui-kbd">/</kbd>
             </label>
 
             <div class="tag-filters" aria-label="Filter by tag">
               <button
+                class="ui-chip"
                 :aria-pressed="controller.tag.value === null"
                 @click="controller.tag.value = null"
               >
@@ -196,6 +198,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               <button
                 v-for="value in controller.tags.value"
                 :key="value"
+                class="ui-chip"
                 :aria-pressed="controller.tag.value === value"
                 @click="controller.tag.value = controller.tag.value === value ? null : value"
               >
@@ -207,11 +210,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           <div class="library-summary">
             <span>{{ count }} {{ controller.kind.value === "build" ? "builds" : "teams" }}</span>
             <button
-              class="text-button"
+              class="ui-link"
               :disabled="!controller.canUndo.value"
               @click="controller.undo"
             >
-              Undo <kbd>⌘Z</kbd>
+              Undo <kbd class="ui-kbd">⌘Z</kbd>
             </button>
           </div>
 
@@ -219,16 +222,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <button
               v-for="value in controller.items.value"
               :key="value.id"
-              class="library-row"
-              :class="{
-                'library-row--variant': 'parentId' in value && value.parentId,
-              }"
+              class="ui-row library-row"
+              :data-child="'parentId' in value && value.parentId ? '' : undefined"
               role="option"
               :aria-selected="controller.selectedId.value === value.id"
               @click="select(value)"
             >
               <span class="row-title">
-                <span>
+                <span class="ui-row-title">
                   <i v-if="value.favourite" aria-label="Favourite">★</i>
                   {{ value.name }}
                 </span>
@@ -255,8 +256,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                   <i
                     v-for="(slot, index) in value.slots"
                     :key="`${slot.hero}-${index}`"
+                    class="ui-mark"
                     :data-profession="slot.profession"
-                    :class="{ empty: !slot.buildId }"
+                    :data-empty="slot.buildId ? undefined : ''"
                     :title="slot.hero"
                   >
                     {{ slot.profession[0] }}
@@ -268,17 +270,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               </template>
             </button>
 
-            <div v-if="!controller.items.value.length" class="empty-state">
+            <div v-if="!controller.items.value.length" class="ui-empty">
               <strong>No matches</strong>
               <p>Try another skill, hero, build name, or clear the selected tag.</p>
-              <button class="button" @click="controller.query.value = ''; controller.tag.value = null">
+              <button class="ui-button" @click="controller.query.value = ''; controller.tag.value = null">
                 Clear filters
               </button>
             </div>
           </div>
 
           <footer class="library-footer">
-            <button v-if="host.reset" class="text-button" @click="controller.reset">
+            <button v-if="host.reset" class="ui-link" @click="controller.reset">
               Reset demo
             </button>
             <span>Changes stay local</span>
@@ -300,7 +302,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             :team="controller.selectedTeam.value"
             :controller="controller"
           />
-          <div v-else class="empty-state empty-state--detail">
+          <div v-else class="ui-empty empty-state--detail">
             <strong>Select something to inspect</strong>
             <p>The library and detail view stay connected without duplicating state.</p>
           </div>
@@ -310,14 +312,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       <Transition name="notice">
         <div
           v-if="controller.notice.value"
-          class="notice"
+          class="ui-toast notice"
           :data-tone="controller.notice.value.tone"
           role="status"
         >
           <span>{{ controller.notice.value.message }}</span>
           <button
             v-if="controller.canUndo.value && controller.notice.value.tone !== 'error'"
-            class="text-button"
+            class="ui-link"
             @click="controller.undo"
           >
             Undo

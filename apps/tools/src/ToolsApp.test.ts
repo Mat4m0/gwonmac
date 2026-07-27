@@ -38,15 +38,15 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
-    await wrapper.get(".detail-actions .button").trigger("click");
+    await wrapper.get(".detail-actions .ui-button").trigger("click");
     expect(wrapper.text()).toContain("Fork a linked variant");
     await wrapper
-      .findAll(".inline-action .button")
+      .findAll(".inline-action .ui-button")
       .find((button) => button.text().includes("Create variant"))!
       .trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("Word of Healing — variant");
-    expect(wrapper.get(".library-summary .text-button").attributes("disabled")).toBeUndefined();
+    expect(wrapper.get(".library-summary .ui-link").attributes("disabled")).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -54,7 +54,7 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
-    await wrapper.get(".button--primary").trigger("click");
+    await wrapper.get("[data-variant=primary]").trigger("click");
     await new Promise((resolve) => setTimeout(resolve, 220));
     expect(wrapper.text()).toContain("Load it from Guild Wars");
     wrapper.unmount();

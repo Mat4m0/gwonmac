@@ -1,7 +1,18 @@
-@import "./design-system.css";
+/* The Tools workbench's own layout.
+ *
+ * Everything visual comes from `src/shared/ui/tokens.css` and
+ * `src/shared/ui/components.css`: buttons, chips, rows, wells, inputs, the
+ * metal frame, the skill slots. This file positions them. It does not decide
+ * what any of them look like, and
+ * `tests/unit/the-ui-system-has-one-place-to-change-a-colour.test.ts` keeps it
+ * that way.
+ *
+ * Embedded in the renderer, `src/renderer/index.html` links the two shared
+ * stylesheets directly, so they are not imported here — the app must not ship
+ * a second copy of the design system inside `tools-app.css`. The standalone
+ * dev page loads them from `standalone.ts` instead.
+ */
 
-/* The component stylesheet consumes only semantic aliases. Theme choice,
-   density, opacity, frame, and radius are owned by design-system.css. */
 .tools-stage,
 .tools-stage *,
 .tools-stage *::before,
@@ -9,14 +20,20 @@
   box-sizing: border-box;
 }
 
+/* Standalone only. The workbench normally sits over the game, and this stands
+   in for it. It is deliberately bright and varied rather than a tasteful dark
+   wash: panel opacity is a real preference, and against a near-black backdrop
+   every value from 65% to 100% looks identical, so the one control whose whole
+   job is translucency would appear to do nothing. */
 body:has(.tools-stage[data-mode="standalone"]) {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 18% 12%, oklch(42% 0.045 78), transparent 34%),
-    radial-gradient(circle at 85% 82%, oklch(31% 0.035 151), transparent 38%),
-    oklch(19% 0.012 72);
+    radial-gradient(60% 50% at 22% 18%, var(--ui-frame-top), transparent 70%),
+    radial-gradient(50% 45% at 82% 78%, var(--ui-success), transparent 70%),
+    radial-gradient(45% 40% at 70% 15%, var(--ui-warning), transparent 70%),
+    linear-gradient(165deg, var(--ui-line), var(--ui-well) 70%);
 }
 
 .tools-stage button,
@@ -31,48 +48,23 @@ body:has(.tools-stage[data-mode="standalone"]) {
 }
 
 .tools-stage {
-  --surface-base: var(--ui-panel-fill);
-  --surface-raised: var(--ui-raised-fill);
-  --surface-well: var(--ui-well-fill);
-  --surface-hover: var(--ui-hover);
-  --surface-selected: var(--ui-selected);
-  --line: var(--ui-line);
-  --line-soft: var(--ui-line-soft);
-  --text: var(--ui-text);
-  --text-bright: var(--ui-text-bright);
-  --text-muted: var(--ui-text-muted);
-  --text-faint: var(--ui-text-faint);
-  --accent: var(--ui-accent);
-  --accent-strong: var(--ui-accent-strong);
-  --accent-ink: var(--ui-accent-ink);
-  --info: var(--ui-info);
-  --warning: var(--ui-warning);
-  --danger: var(--ui-danger);
-  --success: var(--ui-success);
-  --space-xs: 4px;
-  --space-sm: var(--ui-space-2);
-  --space-md: var(--ui-space-3);
-  --space-lg: var(--ui-space-4);
-  --space-xl: var(--ui-space-5);
-  --radius-sm: var(--ui-radius-sm);
-  --radius-md: var(--ui-radius);
-  --radius-lg: var(--ui-radius-lg);
-  --ease-out: var(--ui-ease-out);
   position: fixed;
   inset: 0;
-  z-index: 30;
-  pointer-events: none;
-  color: var(--text);
-  font: var(--ui-font-size)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  z-index: var(--ui-z-tools);
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   font-kerning: normal;
   -webkit-font-smoothing: antialiased;
+  /* The stage is a full-screen positioning context over a live game; only the
+     window inside it may take a click. */
+  pointer-events: none;
 }
 
 .tools-stage[data-mode="standalone"] {
   position: relative;
   display: grid;
   min-height: 100vh;
-  padding: 32px;
+  padding: var(--ui-space-5);
   place-items: center;
   pointer-events: auto;
 }
@@ -80,23 +72,13 @@ body:has(.tools-stage[data-mode="standalone"]) {
 .tools-window {
   container-type: inline-size;
   position: absolute;
-  display: flex;
   width: min(1120px, calc(100vw - 56px));
   height: min(720px, calc(100vh - 84px));
   min-width: 360px;
   min-height: 360px;
-  flex-direction: column;
   overflow: hidden;
-  border: var(--ui-border-width) solid transparent;
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(var(--surface-base), var(--surface-base)) padding-box,
-    var(--ui-frame) border-box;
-  box-shadow:
-    0 0 0 1px var(--ui-outline),
-    var(--ui-shadow);
+  border-radius: var(--ui-radius-lg);
   pointer-events: auto;
-  text-shadow: 0 1px 1px oklch(8% 0.01 70 / 0.75);
 }
 
 .tools-stage[data-mode="standalone"] .tools-window {
@@ -115,16 +97,12 @@ body:has(.tools-stage[data-mode="standalone"]) {
   user-select: none;
 }
 
-.window-bar {
-  display: flex;
-  min-height: 52px;
-  align-items: center;
-  gap: var(--space-md);
-  padding: 7px 9px 7px 12px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-raised);
-  cursor: grab;
-}
+/* ------------------------------------------------------------ window bar */
+
+.window-bar { cursor: grab; }
+.window-identity { flex: 1; min-width: 0; }
+.window-identity .ui-panel-title { font-size: var(--ui-font-size-lg); }
+.window-identity .ui-field-hint { margin: 0; }
 
 .window-brand {
   display: grid;
@@ -132,70 +110,17 @@ body:has(.tools-stage[data-mode="standalone"]) {
   height: 32px;
   flex: 0 0 32px;
   place-items: center;
-  border: 1px solid var(--accent-strong);
-  border-radius: 50%;
-  color: var(--accent);
-  font: 600 11px/1 "QT Friz Quad", Georgia, serif;
+  border: 1px solid var(--ui-accent-strong);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-accent);
+  font-family: var(--ui-font-display);
+  font-size: var(--ui-font-size-sm);
+  font-weight: 600;
 }
 
-.window-bar h1 {
-  margin: 0;
-  color: var(--text-bright);
-  font: 400 16px/1.15 "QT Friz Quad", Georgia, serif;
-}
+.window-close { font-size: var(--ui-font-size-lg); }
 
-.window-bar p {
-  margin: 3px 0 0;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.saving-state {
-  margin-left: auto;
-  color: var(--warning);
-  font-size: 11px;
-}
-
-.saving-state--saved {
-  color: var(--success);
-}
-
-.icon-button {
-  display: inline-grid;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.icon-button:hover {
-  background: var(--surface-hover);
-  color: var(--text-bright);
-}
-
-.icon-button:focus-visible,
-.button:focus-visible,
-.text-button:focus-visible,
-.library-row:focus-visible,
-.kind-switcher button:focus-visible,
-.tag-filters button:focus-visible,
-.segmented button:focus-visible,
-.tools-stage input:focus-visible,
-.tools-stage select:focus-visible,
-.tools-stage textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.window-close {
-  font-size: 22px;
-  line-height: 1;
-}
+/* -------------------------------------------------------------- library */
 
 .workspace {
   display: grid;
@@ -208,125 +133,39 @@ body:has(.tools-stage[data-mode="standalone"]) {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  border-right: 1px solid var(--line-soft);
-  background: var(--surface-well);
+  border-right: 1px solid var(--ui-line-soft);
+  background: var(--ui-well-fill);
 }
 
 .library-toolbar {
   display: grid;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.kind-switcher,
-.segmented {
-  display: flex;
-  padding: 2px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-base);
-}
-
-.kind-switcher button,
-.segmented button {
-  min-height: 32px;
-  flex: 1;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.kind-switcher button[aria-selected="true"],
-.segmented button[aria-pressed="true"] {
-  background: var(--accent-strong);
-  color: var(--text-bright);
-}
-
-.kind-switcher button span {
-  margin-left: var(--space-xs);
-  color: currentColor;
-  font-size: 10px;
-  opacity: 0.72;
-}
-
-.search-field {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 9px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-base);
-  color: var(--text-faint);
-}
-
-.search-field:focus-within {
-  border-color: var(--accent-strong);
-}
-
-.search-field input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-}
-
-.search-field input::placeholder {
-  color: var(--text-faint);
-  opacity: 1;
-}
-
-kbd {
-  padding: 1px 5px;
-  border: 1px solid var(--line-soft);
-  border-radius: 3px;
-  background: var(--surface-well);
-  color: var(--text-faint);
-  font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-line-soft);
 }
 
 .tag-filters,
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--ui-space-1);
 }
 
+/* A filter strip that grows without limit pushes the list it filters off the
+   screen, so it is bounded — but bounded by a scroll rather than by
+   `overflow: hidden`, which cut the last row of tags in half and made a
+   reachable filter look like a rendering fault.
+
+   The height is exactly two chip rows, derived from the same tokens the chip
+   is: a round number of pixels would show a sliver of the third row, which is
+   the same "is that clipped or is that a scroll?" question in a smaller
+   font. */
 .tag-filters {
-  max-height: 52px;
-  overflow: hidden;
-}
-
-.tag-filters button,
-.tag {
-  min-height: 24px;
-  padding: 3px 8px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--text-muted);
-  font-size: 10px;
-}
-
-.tag-filters button {
-  cursor: pointer;
-}
-
-.tag-filters button[aria-pressed="true"] {
-  border-color: var(--accent-strong);
-  background: var(--surface-selected);
-  color: var(--text-bright);
-}
-
-.tag--usage {
-  border-color: oklch(55% 0.07 237);
-  color: var(--info);
+  --tag-row: calc(var(--ui-control-height) * 0.74);
+  max-height: calc(var(--tag-row) * 2 + var(--ui-space-1));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-line) transparent;
 }
 
 .library-summary,
@@ -335,94 +174,32 @@ kbd {
   min-height: 34px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--space-md);
-  color: var(--text-faint);
-  font-size: 11px;
+  padding: 0 var(--ui-space-3);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
 }
 
-.library-summary {
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.library-footer {
-  border-top: 1px solid var(--line-soft);
-}
-
-.text-button {
-  padding: 3px 4px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 3px;
-}
-
-.text-button:hover {
-  color: var(--text-bright);
-  text-decoration-color: currentColor;
-}
-
-.text-button:disabled {
-  color: var(--text-faint);
-  cursor: default;
-  opacity: 0.55;
-  text-decoration: none;
-}
-
-.text-button kbd {
-  margin-left: 4px;
-}
+.library-summary { border-bottom: 1px solid var(--ui-line-soft); }
+.library-footer { border-top: 1px solid var(--ui-line-soft); }
 
 .library-list {
   min-height: 0;
   flex: 1;
+  padding: var(--ui-space-1);
   overflow: auto;
-  padding: 6px;
 }
 
+/* A library row carries more than a title, so it is a two-column grid rather
+   than the component's single flex line. No `width`: a variant row takes its
+   indent out of the row's own width, and pinning it to 100% made the list
+   scroll sideways. */
 .library-row {
-  position: relative;
   display: grid;
-  width: 100%;
   min-height: 66px;
   margin-bottom: 3px;
-  padding: 8px;
+  padding: var(--ui-space-2);
   grid-template-columns: 1fr auto;
   gap: 7px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-
-.library-row:hover {
-  background: var(--surface-raised);
-}
-
-.library-row[aria-selected="true"] {
-  border-color: var(--accent-strong);
-  background: var(--surface-selected);
-}
-
-.library-row--variant {
-  width: calc(100% - 16px);
-  margin-left: 16px;
-}
-
-.library-row--variant::before {
-  position: absolute;
-  top: -4px;
-  bottom: 50%;
-  left: -10px;
-  width: 8px;
-  border-bottom: 1px solid var(--line);
-  border-left: 1px solid var(--line);
-  border-bottom-left-radius: 4px;
-  content: "";
 }
 
 .row-title {
@@ -430,29 +207,19 @@ kbd {
   min-width: 0;
   grid-column: 1 / -1;
   align-items: baseline;
-  gap: var(--space-sm);
-}
-
-.row-title > span {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  color: var(--text-bright);
-  font: 400 13px/1.25 "QT Friz Quad", Georgia, serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  gap: var(--ui-space-2);
 }
 
 .row-title i {
   margin-right: 3px;
-  color: var(--accent);
+  color: var(--ui-accent);
   font-style: normal;
 }
 
 .row-title em,
 .row-meta {
-  color: var(--text-faint);
-  font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ui-text-faint);
+  font: var(--ui-font-size-sm) / 1.2 var(--ui-font-mono);
   white-space: nowrap;
 }
 
@@ -461,10 +228,12 @@ kbd {
   justify-self: end;
 }
 
+/* --------------------------------------------------------------- skills */
+
 .skill-bar {
   display: grid;
   grid-template-columns: repeat(8, minmax(32px, 1fr));
-  gap: var(--space-xs);
+  gap: var(--ui-space-1);
 }
 
 .skill-bar--compact {
@@ -472,71 +241,18 @@ kbd {
   gap: 2px;
 }
 
-.skill {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  aspect-ratio: 1;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid oklch(72% 0.05 75 / 0.5);
-  border-radius: 5px;
-  background: oklch(55% 0.07 75);
-  color: oklch(16% 0.02 73);
-  font-size: 11px;
-  font-weight: 700;
-  text-shadow: none;
-}
-
 .skill-bar--compact .skill {
   width: 15px;
   height: 15px;
   flex: 0 0 15px;
-  border-radius: 3px;
   font-size: 0;
 }
 
-.skill::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    145deg,
-    oklch(96% 0.02 80 / 0.25),
-    transparent 48%,
-    oklch(12% 0.01 70 / 0.22)
-  );
-  content: "";
-}
-
-.skill--elite {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent-strong);
-}
-
-.skill--elite i {
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  z-index: 1;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-[data-profession="Warrior"] { --profession: oklch(75% 0.08 85); }
-[data-profession="Ranger"] { --profession: oklch(67% 0.1 135); }
-[data-profession="Monk"] { --profession: oklch(88% 0.06 92); }
-[data-profession="Necromancer"] { --profession: oklch(63% 0.07 164); }
-[data-profession="Mesmer"] { --profession: oklch(67% 0.1 315); }
-[data-profession="Elementalist"] { --profession: oklch(68% 0.13 36); }
-[data-profession="Assassin"] { --profession: oklch(66% 0.06 258); }
-[data-profession="Ritualist"] { --profession: oklch(72% 0.09 208); }
-[data-profession="Paragon"] { --profession: oklch(80% 0.1 73); }
-[data-profession="Dervish"] { --profession: oklch(69% 0.07 220); }
-
-.skill[data-profession] {
-  background: var(--profession);
+/* At 15px the elite corner dot stops being a marker and becomes a third of
+   the slot, so a compact bar's elite reads as a differently-coloured skill
+   rather than as the same skill flagged. The ring already says elite here. */
+.skill-bar--compact .skill[data-elite]::before {
+  display: none;
 }
 
 .team-professions {
@@ -544,30 +260,21 @@ kbd {
   gap: 2px;
 }
 
-.team-professions i {
-  display: grid;
+.team-professions .ui-mark {
   width: 15px;
   height: 15px;
-  place-items: center;
-  border-radius: 3px;
-  background: var(--profession);
-  color: oklch(18% 0.02 70);
   font-size: 8px;
   font-style: normal;
-  font-weight: 700;
-  text-shadow: none;
 }
 
-.team-professions i.empty {
-  background: var(--surface-hover);
-  color: var(--text-faint);
-}
+/* --------------------------------------------------------------- detail */
 
 .detail-pane {
   position: relative;
   min-width: 0;
   min-height: 0;
-  background: var(--surface-base);
+  overflow: hidden;
+  background: var(--ui-panel-fill);
 }
 
 .detail-view {
@@ -578,35 +285,21 @@ kbd {
 }
 
 .detail-header {
-  padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-raised);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-line-soft);
+  background: var(--ui-raised-fill);
 }
 
 .detail-title-line {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--ui-space-3);
 }
 
-.profession-mark,
-.team-mark,
-.hero-avatar {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid oklch(92% 0.03 80 / 0.32);
-  background: var(--profession, var(--accent-strong));
-  color: oklch(17% 0.02 70);
-  font-weight: 700;
-  text-shadow: none;
-}
-
-.profession-mark,
-.team-mark {
+.profession-mark {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-md);
+  border-radius: var(--ui-radius);
 }
 
 .title-editor {
@@ -614,167 +307,88 @@ kbd {
   flex: 1;
 }
 
+/* The name is edited in place, so the input is invisible until approached:
+   a boxed field here would make the title look like a form. */
 .title-input {
   width: 100%;
+  min-height: 0;
   padding: 1px 3px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-bright);
-  font: 400 19px/1.25 "QT Friz Quad", Georgia, serif;
+  box-shadow: none;
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-display);
+  font-size: 19px;
+  font-weight: 400;
 }
 
 .title-input:hover,
 .title-input:focus {
-  border-color: var(--line);
-  background: var(--surface-base);
-  outline: 0;
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
 }
 
 .title-editor p,
 .section-heading p {
   margin: 3px 3px 0;
-  color: var(--text-faint);
-  font-size: 11px;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
 }
 
 .favourite {
-  color: var(--text-faint);
+  color: var(--ui-text-faint);
   font-size: 17px;
 }
 
-.favourite[aria-pressed="true"] {
-  color: var(--accent);
-}
+.favourite[aria-pressed="true"] { color: var(--ui-accent); }
 
-.detail-header .tag-row {
-  margin-top: var(--space-sm);
-}
+.detail-header .tag-row { margin-top: var(--ui-space-2); }
 
 .team-controls {
   display: flex;
-  margin-top: var(--space-sm);
+  margin-top: var(--ui-space-2);
   align-items: center;
-  gap: var(--space-md);
-}
-
-.segmented {
-  width: 160px;
-}
-
-.context-strip {
-  display: flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: 6px var(--space-lg);
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 11px;
-}
-
-.context-strip--info {
-  background: oklch(30% 0.035 237);
-  color: oklch(88% 0.035 237);
-}
-
-.context-strip--warning {
-  background: oklch(31% 0.045 70);
-  color: oklch(90% 0.04 75);
+  gap: var(--ui-space-3);
 }
 
 .detail-scroll {
   min-height: 0;
   flex: 1;
+  padding: var(--ui-space-4);
   overflow: auto;
-  padding: var(--space-lg);
 }
 
 .detail-scroll > section + section {
-  margin-top: var(--space-xl);
-  padding-top: var(--space-lg);
-  border-top: 1px solid var(--line-soft);
+  margin-top: var(--ui-space-5);
+  padding-top: var(--ui-space-4);
+  border-top: 1px solid var(--ui-line-soft);
 }
 
 .section-heading {
   display: flex;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--ui-space-3);
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-lg);
+  gap: var(--ui-space-4);
 }
 
 .section-heading h2,
 .detail-scroll h2 {
   margin: 0;
-  color: var(--text-bright);
-  font-size: 13px;
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size);
   font-weight: 600;
 }
 
-.section-heading p {
-  margin-left: 0;
-}
+.section-heading p { margin-left: 0; }
 
-.button {
-  min-height: 34px;
-  padding: 6px 11px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.button:hover:not(:disabled) {
-  border-color: var(--accent-strong);
-  background: var(--surface-hover);
-}
-
-.button:active:not(:disabled) {
-  background: var(--surface-well);
-}
-
-.button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.button--primary {
-  border-color: var(--accent);
-  background: var(--accent-strong);
-  color: var(--text-bright);
-  font-weight: 600;
-}
-
-.button--primary:hover:not(:disabled) {
-  background: oklch(70% 0.11 76);
-  color: var(--accent-ink);
-}
-
-.button--danger {
-  border-color: var(--danger);
-  background: oklch(38% 0.08 32);
-  color: oklch(95% 0.025 32);
-}
-
-.button--quiet-danger {
-  margin-left: auto;
-  border-color: transparent;
-  background: transparent;
-  color: var(--danger);
-}
-
-.bar-section > .skill-bar {
-  max-width: 560px;
-}
+.bar-section > .skill-bar { max-width: 560px; }
 
 .skill-list {
   display: grid;
-  margin: var(--space-md) 0 0;
+  margin: var(--ui-space-3) 0 0;
   padding: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px var(--space-xl);
+  gap: 2px var(--ui-space-5);
   list-style: none;
 }
 
@@ -783,36 +397,36 @@ kbd {
   min-height: 30px;
   grid-template-columns: 18px 1fr auto;
   align-items: center;
-  gap: var(--space-sm);
-  border-bottom: 1px solid var(--line-soft);
+  gap: var(--ui-space-2);
+  border-bottom: 1px solid var(--ui-line-soft);
 }
 
 .skill-list li > span {
-  color: var(--text-faint);
-  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ui-text-faint);
+  font: var(--ui-font-size-sm) var(--ui-font-mono);
 }
 
 .skill-list strong {
   min-width: 0;
   overflow: hidden;
-  font-size: 11px;
+  font-size: var(--ui-font-size-sm);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .skill-list em {
-  color: var(--text-faint);
-  font-size: 9px;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
   font-style: normal;
 }
 
 .attribute-list {
   display: flex;
   max-width: 620px;
-  margin-top: var(--space-sm);
+  margin-top: var(--ui-space-2);
   flex-wrap: wrap;
-  gap: var(--space-sm);
+  gap: var(--ui-space-2);
 }
 
 .attribute-list > div {
@@ -820,206 +434,150 @@ kbd {
   min-width: 150px;
   padding: 7px 9px;
   justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  color: var(--text-muted);
+  gap: var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-line);
+  color: var(--ui-text-muted);
 }
 
 .attribute-list strong {
-  color: var(--accent);
+  color: var(--ui-accent);
   font-variant-numeric: tabular-nums;
 }
 
-.usage-section {
-  max-width: 620px;
-}
+.usage-section,
+.notes-section { max-width: 620px; }
 
 .usage-row {
   display: flex;
   width: 100%;
   min-height: 45px;
-  padding: 6px 8px;
-  align-items: center;
   justify-content: space-between;
-  border: 0;
-  border-bottom: 1px solid var(--line-soft);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-
-.usage-row:hover {
-  background: var(--surface-raised);
+  border-radius: 0;
+  border-bottom: 1px solid var(--ui-line-soft);
 }
 
 .usage-row strong,
-.usage-row small {
-  display: block;
-}
-
-.usage-row strong {
-  font-weight: 500;
-}
+.usage-row small { display: block; }
+.usage-row strong { font-weight: 500; }
 
 .usage-row small {
   margin-top: 2px;
-  color: var(--text-faint);
-}
-
-.notes-section {
-  max-width: 620px;
+  color: var(--ui-text-faint);
 }
 
 .notes-section label {
   display: block;
-  margin-bottom: var(--space-sm);
-  color: var(--text-bright);
+  margin-bottom: var(--ui-space-2);
+  color: var(--ui-text-bright);
   font-weight: 600;
 }
 
-.tools-stage textarea,
-.tools-stage select {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-well);
-  color: var(--text);
-}
-
-.tools-stage textarea {
-  width: 100%;
-  padding: var(--space-sm);
-  resize: vertical;
-}
-
-.tools-stage select {
-  min-height: 32px;
-  padding: 4px 26px 4px 7px;
-}
-
+/* An action that needs explaining before it happens, shown where it will take
+   effect rather than in a dialog over the top of it. */
 .inline-action {
   display: grid;
   max-width: 640px;
-  padding: var(--space-lg);
-  gap: var(--space-md);
-  border: 1px solid var(--accent-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  padding: var(--ui-space-4);
+  gap: var(--ui-space-3);
+  border: 1px solid var(--ui-accent-strong);
+  border-radius: var(--ui-radius);
+  background: var(--ui-raised-fill);
 }
 
-.inline-action--danger {
-  border-color: var(--danger);
-}
-
-.inline-action h2 {
-  margin: 0 0 4px;
-}
+.inline-action--danger { border-color: var(--ui-danger); }
+.inline-action h2 { margin: 0 0 var(--ui-space-1); }
 
 .inline-action p {
   max-width: 62ch;
   margin: 0;
-  color: var(--text-muted);
+  color: var(--ui-text-muted);
 }
 
 .check-list {
   display: grid;
-  gap: var(--space-xs);
+  gap: var(--ui-space-1);
 }
 
-.check-list label {
+.check-list .ui-check {
   display: grid;
   min-height: 38px;
-  padding: 6px 8px;
+  padding: var(--ui-space-2);
   grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-sm);
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--ui-line-soft);
 }
 
-.check-list small {
-  color: var(--text-faint);
-}
+.check-list small { color: var(--ui-text-faint); }
 
 .action-row,
 .detail-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--ui-space-2);
 }
 
-.action-row {
-  justify-content: flex-end;
-}
+.action-row { justify-content: flex-end; }
 
 .detail-actions {
   min-height: 52px;
-  padding: 8px var(--space-lg);
-  border-top: 1px solid var(--line-soft);
-  background: var(--surface-raised);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  border-top: 1px solid var(--ui-line-soft);
+  background: var(--ui-raised-fill);
 }
 
-.detail-actions--explain {
-  justify-content: flex-end;
-}
+.detail-actions--explain { justify-content: flex-end; }
+.detail-actions .ui-link[data-variant="danger"] { margin-left: auto; }
 
 .detail-actions--explain > span {
   margin-right: auto;
-  color: var(--text-faint);
-  font-size: 11px;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
 }
 
-.team-scroll {
-  padding-top: var(--space-md);
-}
+/* ----------------------------------------------------------------- team */
+
+.team-scroll { padding-top: var(--ui-space-3); }
 
 .team-slots {
   display: grid;
   margin: 0;
   padding: 0;
-  gap: 4px;
+  gap: var(--ui-space-1);
   list-style: none;
 }
 
 .team-slots > li {
   display: grid;
   min-height: 54px;
-  padding: 6px 8px;
+  padding: var(--ui-space-2);
   grid-template-columns: 18px 150px 190px minmax(150px, 1fr) 84px;
   align-items: center;
-  gap: var(--space-sm);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  gap: var(--ui-space-2);
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius);
+  background: var(--ui-raised-fill);
 }
 
-.team-slots > li:hover {
-  border-color: var(--line);
-}
-
-.team-slot--empty {
-  opacity: 0.72;
-}
+.team-slots > li:hover { border-color: var(--ui-line); }
+.team-slot--empty { opacity: 0.72; }
 
 .slot-number {
-  color: var(--text-faint);
-  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ui-text-faint);
+  font: var(--ui-font-size-sm) var(--ui-font-mono);
 }
 
 .hero-cell {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--ui-space-2);
 }
 
 .hero-avatar {
   width: 30px;
   height: 30px;
-  border-radius: var(--radius-sm);
 }
 
-.hero-cell > span:last-child {
-  min-width: 0;
-}
+.hero-cell > span:last-child { min-width: 0; }
 
 .hero-cell strong,
 .hero-cell small {
@@ -1030,13 +588,13 @@ kbd {
 }
 
 .hero-cell strong {
-  font-size: 11px;
+  font-size: var(--ui-font-size-sm);
   font-weight: 600;
 }
 
 .hero-cell small {
-  color: var(--text-faint);
-  font-size: 9px;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
 }
 
 .build-picker {
@@ -1044,62 +602,36 @@ kbd {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--ui-space-1);
 }
 
-.build-picker select {
-  min-width: 0;
-}
-
-.build-picker .text-button {
-  font-size: 9px;
-}
-
-.behavior-picker select {
-  width: 84px;
-}
+.build-picker select { min-width: 0; }
+.build-picker .ui-link { font-size: var(--ui-font-size-sm); }
+.behavior-picker select { width: 84px; }
 
 .empty-bar {
-  color: var(--text-faint);
-  font-size: 10px;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
 }
 
-.mobile-back {
-  display: none;
-}
+/* --------------------------------------------------------------- states */
+
+.mobile-back { display: none; }
 
 .notice {
   position: absolute;
-  right: var(--space-lg);
+  right: var(--ui-space-4);
   bottom: 62px;
-  z-index: 4;
-  display: flex;
+  z-index: var(--ui-z-toast);
   max-width: min(440px, calc(100% - 32px));
   min-height: 42px;
-  padding: 8px 10px;
-  align-items: center;
-  gap: var(--space-md);
-  border: 1px solid var(--success);
-  border-radius: var(--radius-md);
-  background: oklch(24% 0.035 140);
-  color: oklch(93% 0.035 140);
-}
-
-.notice[data-tone="warning"] {
-  border-color: var(--warning);
-  background: oklch(27% 0.045 70);
-}
-
-.notice[data-tone="error"] {
-  border-color: var(--danger);
-  background: oklch(25% 0.055 32);
 }
 
 .notice-enter-active,
 .notice-leave-active {
   transition:
-    opacity 180ms var(--ease-out),
-    transform 180ms var(--ease-out);
+    opacity var(--ui-duration) var(--ui-ease-out),
+    transform var(--ui-duration) var(--ui-ease-out);
 }
 
 .notice-enter-from,
@@ -1114,17 +646,16 @@ kbd {
   flex: 1;
   grid-template-columns: 310px 1fr;
   gap: 1px;
-  background: var(--line-soft);
+  background: var(--ui-line-soft);
 }
 
 .skeleton {
-  background:
-    linear-gradient(
-      100deg,
-      var(--surface-base) 30%,
-      var(--surface-raised) 45%,
-      var(--surface-base) 60%
-    );
+  background: linear-gradient(
+    100deg,
+    var(--ui-panel-fill) 30%,
+    var(--ui-raised-fill) 45%,
+    var(--ui-panel-fill) 60%
+  );
   background-size: 240% 100%;
   animation: skeleton 1.4s linear infinite;
 }
@@ -1133,71 +664,42 @@ kbd {
   to { background-position: -240% 0; }
 }
 
-.fatal-state,
-.empty-state {
-  display: grid;
-  padding: var(--space-xl);
-  place-items: start;
-  align-content: center;
-  color: var(--text-muted);
-}
-
 .fatal-state {
+  display: grid;
   min-height: 0;
   flex: 1;
+  padding: var(--ui-space-5);
+  place-items: start;
+  align-content: center;
+  color: var(--ui-text-muted);
 }
 
-.fatal-state strong,
-.empty-state strong {
-  color: var(--text-bright);
-  font-size: 14px;
+.fatal-state strong {
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-lg);
 }
 
-.fatal-state p,
-.empty-state p {
+.fatal-state p {
   max-width: 48ch;
-  margin: var(--space-xs) 0 var(--space-md);
+  margin: var(--ui-space-1) 0 var(--ui-space-3);
 }
 
-.empty-state--detail {
-  height: 100%;
-  place-items: center;
-  text-align: center;
-}
+.empty-state--detail { height: 100%; }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* ----------------------------------------------------------- responsive */
+/* Container queries, not viewport queries: the workbench is a window inside
+   another window, so what matters is how wide *it* is. */
 
 @container (max-width: 860px) {
-  .workspace {
-    grid-template-columns: 270px minmax(0, 1fr);
-  }
-
-  .library-pane {
-    width: 270px;
-  }
-
-  .team-slots > li {
-    grid-template-columns: 18px 135px minmax(160px, 1fr) 84px;
-  }
-
-  .team-slots .skill-bar {
-    display: none;
-  }
-
-  .skill-list {
-    grid-template-columns: 1fr;
-  }
+  .workspace { grid-template-columns: 270px minmax(0, 1fr); }
+  .library-pane { width: 270px; }
+  .team-slots > li { grid-template-columns: 18px 135px minmax(160px, 1fr) 84px; }
+  .team-slots .skill-bar { display: none; }
+  .skill-list { grid-template-columns: 1fr; }
 }
 
+/* Below this, list and detail become separate views rather than two columns
+   too narrow to read. */
 @container (max-width: 640px) {
   .workspace {
     display: block;
@@ -1212,68 +714,47 @@ kbd {
     border: 0;
   }
 
-  .tools-stage[data-mobile-view="list"] .detail-pane {
-    display: none;
-  }
-
-  .tools-stage[data-mobile-view="detail"] .library-pane {
-    display: none;
-  }
+  .tools-stage[data-mobile-view="list"] .detail-pane { display: none; }
+  .tools-stage[data-mobile-view="detail"] .library-pane { display: none; }
 
   .mobile-back {
     display: block;
     width: 100%;
     min-height: 36px;
-    padding: 6px 12px;
+    padding: var(--ui-space-2) var(--ui-space-3);
     border: 0;
-    border-bottom: 1px solid var(--line-soft);
-    background: var(--surface-well);
-    color: var(--accent);
+    border-bottom: 1px solid var(--ui-line-soft);
+    background: var(--ui-well-fill);
+    color: var(--ui-accent);
     text-align: left;
   }
 
-  .detail-view {
-    height: calc(100% - 36px);
-  }
-
-  .team-slots > li {
-    grid-template-columns: 18px minmax(120px, 1fr) 84px;
-  }
+  .detail-view { height: calc(100% - 36px); }
+  .team-slots > li { grid-template-columns: 18px minmax(120px, 1fr) 84px; }
 
   .build-picker {
     grid-column: 2 / -1;
     grid-row: 2;
   }
 
-  .team-slots .skill-bar {
-    display: none;
-  }
-
-  .context-strip {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+  .team-slots .skill-bar { display: none; }
 
   .section-heading {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .bar-section > .skill-bar {
-    grid-template-columns: repeat(4, minmax(36px, 1fr));
-  }
-
-  .detail-actions--explain > span {
-    display: none;
-  }
+  .bar-section > .skill-bar { grid-template-columns: repeat(4, minmax(36px, 1fr)); }
+  .detail-actions--explain > span { display: none; }
 }
 
+/* A finger needs a bigger target than a pointer, and the component's default
+   control height is sized for a pointer. */
 @media (pointer: coarse) {
-  .button,
-  .text-button,
-  .tag-filters button,
-  .kind-switcher button,
-  .segmented button {
+  .tools-stage .ui-button,
+  .tools-stage .ui-link,
+  .tools-stage .ui-chip,
+  .tools-stage .ui-segment button {
     min-height: 44px;
   }
 }

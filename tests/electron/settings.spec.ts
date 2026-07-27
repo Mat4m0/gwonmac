@@ -116,7 +116,18 @@ test.describe("settings experience", () => {
       });
       const tools = page.locator("#gwonmac-tools-root .tools-window");
       await expect(tools).toBeVisible();
-      await expect(tools).toHaveCSS("border-top-width", "3px");
+      // The metal edge is a masked `::after` ring inset by the border
+      // preference, not a CSS border: a `border-box` background layer covers
+      // the whole element, so the older construction painted opaque metal
+      // behind the panel and made `--ui-panel-opacity` do nothing at all.
+      // The preference still has to reach the ring, so that is what is read.
+      await expect
+        .poll(() =>
+          tools.evaluate(
+            (element) => globalThis.getComputedStyle(element, "::after").padding,
+          ),
+        )
+        .toBe("3px");
       // Large panels derive one step above the base radius; controls derive
       // below it. The preference changes the whole geometry rather than
       // stamping one literal onto every component.

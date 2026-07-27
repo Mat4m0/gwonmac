@@ -3,6 +3,12 @@
 <title>Guild Wars</title>
 <!-- Packaged at the protocol root; the link tag avoids a speculative 404. -->
 <link rel="icon" href="favicon.png" type="image/png" sizes="48x48">
+<!-- The design system, before anything that consumes it. `ui/tokens.css` is
+     the only file that decides a colour; `ui/components.css` is the only file
+     that decides what a button or a panel looks like. Both are also loaded by
+     the Tools workbench, so the two surfaces cannot drift apart. -->
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="ui/components.css">
 <link rel="stylesheet" href="harness.css">
 <link rel="stylesheet" href="loading.css">
 <link rel="stylesheet" href="tools/tools-app.css">
@@ -114,7 +120,7 @@
         <div id="data-download-fill"></div>
       </div>
       <div class="dock-info">
-        <h2 id="data-download-title" class="sr-only">Downloading the full game</h2>
+        <h2 id="data-download-title" class="ui-sr-only">Downloading the full game</h2>
         <p id="data-download-status" role="status" aria-live="polite">
           Preparing the download…
         </p>
@@ -195,21 +201,22 @@
   <span id="capture-label">Performance capture · 00:00</span>
   <span id="capture-marker" hidden>Problem marked ✓</span>
 </output>
-<span id="capture-announcement" class="sr-only" role="status" aria-live="polite"></span>
+<span id="capture-announcement" class="ui-sr-only" role="status" aria-live="polite"></span>
 
 <!-- Settings: one compact panel with a section rail. Every pane fits without
      scrolling. A status is never a button; danger actions are quiet and
      separated; changes save automatically and say so. -->
-<dialog id="settings-dialog" aria-labelledby="settings-title">
+<dialog id="settings-dialog" class="ui-frame" aria-labelledby="settings-title">
   <form method="dialog" id="settings-form">
-    <header class="settings-header">
-      <h2 id="settings-title">Settings</h2>
+    <header class="ui-panel-head">
+      <h2 id="settings-title" class="ui-panel-title">Settings</h2>
       <span id="settings-saved" aria-hidden="true">Saved</span>
-      <button value="done" id="settings-done" aria-label="Close settings">&#10005;</button>
+      <button value="done" id="settings-done" class="ui-button" data-icon
+              aria-label="Close settings">&#10005;</button>
     </header>
 
     <div class="settings-body">
-      <div class="settings-rail" role="tablist" aria-label="Settings sections">
+      <div class="ui-rail settings-rail" role="tablist" aria-label="Settings sections">
         <button type="button" class="settings-rtab" id="settings-tab-data"
                 role="tab" aria-selected="true" aria-controls="settings-pane-data"
                 data-pane="data">Game Data</button>
@@ -230,56 +237,58 @@
       <div class="settings-panes" data-active="data">
         <section class="settings-pane" id="settings-pane-data" role="tabpanel"
                  aria-labelledby="settings-tab-data">
-          <h3 id="settings-data-title" class="sr-only">Game Data</h3>
+          <h3 id="settings-data-title" class="ui-sr-only">Game Data</h3>
           <p id="settings-cache" class="settings-status" role="status" aria-live="polite">
             Checking downloaded game data…
           </p>
-          <div id="settings-progress" aria-hidden="true" hidden>
-            <div id="settings-progress-fill"></div>
+          <div id="settings-progress" class="ui-progress" aria-hidden="true" hidden>
+            <div id="settings-progress-fill" class="ui-progress-fill"></div>
           </div>
           <fieldset class="settings-data-strategy">
             <legend>Game data mode</legend>
-            <div class="settings-seg" role="presentation">
-              <label class="settings-radio">
+            <div class="ui-segment" role="presentation">
+              <label>
                 <input type="radio" name="dataStrategy" value="quick">
                 <span>Quick Start</span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="dataStrategy" value="full">
                 <span>Full Game</span>
               </label>
             </div>
           </fieldset>
-          <p id="settings-data-note" class="settings-note"></p>
+          <p id="settings-data-note" class="ui-field-hint"></p>
           <div class="settings-data-actions">
-            <button type="button" id="settings-download-full" class="primary">Start Downloading Now</button>
+            <button type="button" id="settings-download-full" class="ui-button"
+                    data-variant="primary">Start Downloading Now</button>
           </div>
-          <div class="settings-divider" aria-hidden="true"></div>
-          <button type="button" id="settings-clear-cache" class="quiet-danger">Clear Game Data…</button>
-          <p class="settings-danger-sub">Frees the downloaded game data. Your login and settings are kept.</p>
+          <hr class="ui-divider">
+          <button type="button" id="settings-clear-cache" class="ui-link"
+                  data-variant="danger">Clear Game Data…</button>
+          <p class="ui-field-hint">Frees the downloaded game data. Your login and settings are kept.</p>
         </section>
 
         <section class="settings-pane" id="settings-pane-display" role="tabpanel"
                  aria-labelledby="settings-tab-display">
-          <h3 id="settings-display-title" class="sr-only">Display</h3>
+          <h3 id="settings-display-title" class="ui-sr-only">Display</h3>
           <fieldset>
             <legend>Graphics quality</legend>
-            <div class="settings-seg" role="presentation">
-              <label class="settings-radio">
+            <div class="ui-segment" role="presentation">
+              <label>
                 <input type="radio" name="renderScale" value="1">
                 <span class="render-scale-option">
                   <span>1×</span>
                   <small data-render-scale="1">—</small>
                 </span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="renderScale" value="1.5">
                 <span class="render-scale-option">
                   <span>1.5×</span>
                   <small data-render-scale="1.5">—</small>
                 </span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="renderScale" value="2">
                 <span class="render-scale-option">
                   <span>Retina — 2× (Default)</span>
@@ -288,38 +297,43 @@
               </label>
             </div>
           </fieldset>
-          <p class="settings-note">Retina is the visual-quality default. 1.5× renders 2.25 times the pixels of 1×; 2× renders four times the pixels. Lower values improve performance and reduce GPU memory use.</p>
+          <p class="ui-field-hint">Retina is the visual-quality default. 1.5× renders 2.25 times the pixels of 1×; 2× renders four times the pixels. Lower values improve performance and reduce GPU memory use.</p>
         </section>
 
         <section class="settings-pane" id="settings-pane-appearance" role="tabpanel"
                  aria-labelledby="settings-tab-appearance">
           <h3 class="settings-pane-title">Interface</h3>
-          <p class="settings-note settings-pane-intro">Tune every GWonMac panel together. Changes preview immediately and never alter Guild Wars itself.</p>
+          <p class="ui-field-hint">Tunes every GWonMac panel together — this dialog, the performance overlay, and the Tools workbench. It never alters Guild Wars itself.</p>
 
-          <div class="appearance-preview" aria-hidden="true">
-            <div class="appearance-preview-head">
-              <strong>Target distance</strong>
-              <span>Ready</span>
+          <!-- The preview is built from the same components as everything else,
+               so it cannot promise a look the product does not deliver. It is
+               a real panel, not a picture of one. -->
+          <div class="ui-frame appearance-preview" aria-hidden="true">
+            <div class="ui-panel-head">
+              <strong class="ui-panel-title">Target distance</strong>
+              <span class="ui-chip" data-level="good">In range</span>
             </div>
             <div class="appearance-preview-body">
               <span class="appearance-preview-value">1,248</span>
-              <span class="appearance-preview-unit">game units · spellcast</span>
-              <button type="button" tabindex="-1">Panel action</button>
+              <span class="ui-field-hint">game units · spellcast</span>
+              <button type="button" class="ui-button" data-variant="primary"
+                      tabindex="-1">Action</button>
+              <button type="button" class="ui-button" tabindex="-1">Second</button>
             </div>
           </div>
 
           <fieldset>
             <legend>Theme</legend>
-            <div class="settings-seg appearance-themes" role="presentation">
-              <label class="settings-radio">
+            <div class="ui-segment appearance-themes" role="presentation">
+              <label>
                 <input type="radio" name="uiTheme" value="brass">
                 <span><i data-swatch="brass"></i>Brass</span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="uiTheme" value="steel">
                 <span><i data-swatch="steel"></i>Steel</span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="uiTheme" value="jade">
                 <span><i data-swatch="jade"></i>Jade</span>
               </label>
@@ -328,16 +342,16 @@
 
           <fieldset>
             <legend>Density</legend>
-            <div class="settings-seg" role="presentation">
-              <label class="settings-radio">
+            <div class="ui-segment" role="presentation">
+              <label>
                 <input type="radio" name="uiDensity" value="compact">
                 <span>Compact</span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="uiDensity" value="balanced">
                 <span>Balanced</span>
               </label>
-              <label class="settings-radio">
+              <label>
                 <input type="radio" name="uiDensity" value="comfortable">
                 <span>Comfortable</span>
               </label>
@@ -345,83 +359,85 @@
           </fieldset>
 
           <div class="appearance-sliders">
-            <label class="settings-range">
+            <label class="ui-range-field">
               <span>Panel opacity <output id="settings-opacity-value">94%</output></span>
-              <input type="range" name="uiPanelOpacity" min="65" max="100" step="1">
+              <input type="range" class="ui-range" name="uiPanelOpacity" min="65" max="100" step="1">
             </label>
-            <label class="settings-range">
+            <label class="ui-range-field">
               <span>Border <output id="settings-border-value">2px</output></span>
-              <input type="range" name="uiBorderWidth" min="0" max="4" step="1">
+              <input type="range" class="ui-range" name="uiBorderWidth" min="0" max="4" step="1">
             </label>
-            <label class="settings-range">
+            <label class="ui-range-field">
               <span>Corner radius <output id="settings-radius-value">8px</output></span>
-              <input type="range" name="uiRadius" min="0" max="16" step="1">
+              <input type="range" class="ui-range" name="uiRadius" min="0" max="16" step="1">
             </label>
           </div>
         </section>
 
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
-          <h3 id="settings-controls-title" class="sr-only">Controls</h3>
-          <label class="settings-check">
+          <h3 id="settings-controls-title" class="ui-sr-only">Controls</h3>
+          <label class="ui-check">
             <input type="checkbox" name="nativeCursor">
             <span>Use the game's own cursor</span>
           </label>
-          <p class="settings-note">Reads the cursor from your own installed Guild Wars client while you play, instead of the macOS pointer. Nothing is downloaded and no artwork ships with this app. On by default. Changing this restarts the app; you will be asked first.</p>
-          <label class="settings-check">
+          <p class="ui-field-hint">Reads the cursor from your own installed Guild Wars client while you play, instead of the macOS pointer. Nothing is downloaded and no artwork ships with this app. On by default. Changing this restarts the app; you will be asked first.</p>
+          <label class="ui-check">
             <input type="checkbox" name="targetReadout">
             <span>Show target distance and range</span>
           </label>
-          <p class="settings-note">Shows a read-only distance and range band for the selected target at the top of the game view. Off by default. Changing this restarts the app; you will be asked first.</p>
+          <p class="ui-field-hint">Shows a read-only distance and range band for the selected target at the top of the game view. Off by default. Changing this restarts the app; you will be asked first.</p>
           <p id="settings-compat-status" class="settings-status"
              role="status"></p>
-          <p id="settings-compat-detail" class="settings-note"></p>
-          <p id="settings-compat-version" class="settings-note"></p>
+          <p id="settings-compat-detail" class="ui-field-hint"></p>
+          <p id="settings-compat-version" class="ui-field-hint"></p>
         </section>
 
         <section class="settings-pane" id="settings-pane-advanced" role="tabpanel"
                  aria-labelledby="settings-tab-advanced">
-          <h3 id="settings-advanced-title" class="sr-only">Advanced</h3>
-          <label class="settings-field">Mobile touch compatibility
-            <select name="touchMode">
+          <h3 id="settings-advanced-title" class="ui-sr-only">Advanced</h3>
+          <label class="ui-field">
+            <span class="ui-field-label">Mobile touch compatibility</span>
+            <select class="ui-select" name="touchMode">
               <option value="dbltap">Double-click sends double-tap</option>
               <option value="translate">Translate mouse to touch</option>
               <option value="augment">Mouse and touch together</option>
               <option value="off">Off</option>
             </select>
           </label>
-          <label class="settings-check">
+          <label class="ui-check">
             <input type="checkbox" name="showDiagnostics">
             <span>Show performance overlay</span>
           </label>
-          <label class="settings-check">
+          <label class="ui-check">
             <input type="checkbox" name="autoCheckUpdates">
             <span>Check for app updates automatically</span>
           </label>
-          <p class="settings-note">While this is off, the app contacts GitHub only when you ask it to — including when it meets a game client build it does not recognise. Updating the app itself is always manual.</p>
+          <p class="ui-field-hint">While this is off, the app contacts GitHub only when you ask it to — including when it meets a game client build it does not recognise. Updating the app itself is always manual.</p>
           <div class="settings-update-actions">
-            <button type="button" id="settings-check-updates">
+            <button type="button" id="settings-check-updates" class="ui-button">
               Check for Updates
             </button>
-            <button type="button" id="settings-open-releases" hidden>
+            <button type="button" id="settings-open-releases" class="ui-button" hidden>
               Open Releases…
             </button>
           </div>
           <p id="settings-update-status" class="settings-status"
              role="status" aria-live="polite" hidden></p>
-          <p id="settings-update-when" class="settings-note" hidden></p>
-          <div class="settings-divider" aria-hidden="true"></div>
-          <button type="button" id="settings-reset-launcher" class="quiet-danger">
+          <p id="settings-update-when" class="ui-field-hint" hidden></p>
+          <hr class="ui-divider">
+          <button type="button" id="settings-reset-launcher" class="ui-link"
+                  data-variant="danger">
             Reset Launcher Settings…
           </button>
-          <p class="settings-danger-sub">Shows the first-run choice again next launch. Data and login are kept.</p>
+          <p class="ui-field-hint">Shows the first-run choice again next launch. Data and login are kept.</p>
         </section>
       </div>
     </div>
 
-    <footer class="settings-footerbar">
+    <footer class="ui-panel-foot settings-footerbar">
       <p id="settings-feedback" class="settings-feedback" role="status" aria-live="polite"></p>
-      <span class="settings-autosave">Changes are saved automatically</span>
+      <span class="ui-field-hint settings-autosave">Changes are saved automatically</span>
     </footer>
   </form>
 </dialog>

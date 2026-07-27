@@ -523,11 +523,23 @@ held drag so camera rotation does not stall.
 GWonMac presentation has one persisted appearance answer in `AppSettings`.
 Main validates the named theme and density plus bounded opacity, border, and
 radius values. `src/renderer/appearance.ts` translates that answer into the
-three numeric CSS overrides and two root attributes; the Vue Tools bundle and
-the Settings dialog consume the same semantic tokens from
-`apps/tools/src/design-system.css`. Range movement previews in the renderer,
-but only the settled change crosses IPC, so dragging a slider remains one
-atomic settings write.
+three numeric CSS overrides and two root attributes. Range movement previews in
+the renderer, but only the settled change crosses IPC, so dragging a slider
+remains one atomic settings write.
+
+Both surfaces read the same design system: `src/shared/ui/tokens.css` declares
+every colour, corner, edge, duration, and layer, and `src/shared/ui/components.css`
+declares what a button, panel, row, or chip looks like. It sits in `src/shared`
+because the Vue Tools app is built independently and `apps/**` may only reach
+into `src/shared/**`. `scripts/copy-renderer.mjs` copies both into
+`build/renderer/ui/`, where `index.html` links them; the embedded Tools bundle
+inherits them rather than shipping a second copy.
+`tests/unit/the-ui-system-has-one-place-to-change-a-colour.test.ts` fails the
+build when `components.css`, `harness.css`, or the Tools stylesheet contains a
+literal colour, a literal corner, or a z-index outside the named scale, so
+"you can retheme it" stays true rather than merely documented.
+`docs/ui-gallery.html` renders the whole vocabulary from the shipped files and
+needs no build step.
 
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam

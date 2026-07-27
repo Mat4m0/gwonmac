@@ -28,9 +28,6 @@
            transition:opacity .6s ease; }
 #loading.gone { opacity:0; pointer-events:none; }
 
-.sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0;
-           overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
-
 /* The screenshot is a separate layer so it can fade in when it decodes --
    swapping background-image on #loading itself would flash the whole panel.
    It also carries the ambient motion: a scale so slow it is felt, not seen.

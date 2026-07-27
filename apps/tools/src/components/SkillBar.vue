@@ -12,13 +12,12 @@ defineProps<{
     <span
       v-for="skill in skills"
       :key="skill.id"
-      class="skill"
-      :class="{ 'skill--elite': skill.elite }"
+      class="ui-slot skill"
+      :data-elite="skill.elite ? '' : undefined"
       :data-profession="skill.profession"
       :title="skill.name"
     >
       <span>{{ skill.short }}</span>
-      <i v-if="skill.elite" aria-hidden="true" />
     </span>
   </div>
 </template>

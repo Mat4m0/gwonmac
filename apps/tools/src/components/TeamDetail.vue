@@ -32,20 +32,20 @@ const rename = () => {
   <article class="detail-view" aria-labelledby="team-title">
     <header class="detail-header">
       <div class="detail-title-line">
-        <div class="team-mark">8</div>
+        <div class="ui-mark profession-mark">8</div>
         <div class="title-editor">
-          <label class="sr-only" for="team-name">Team name</label>
+          <label class="ui-sr-only" for="team-name">Team name</label>
           <input
             id="team-name"
             v-model="name"
-            class="title-input"
+            class="ui-input title-input"
             @change="rename"
             @keydown.enter="($event.target as HTMLInputElement).blur()"
           >
           <p>{{ team.slots.filter((slot) => slot.buildId).length }} of 8 slots configured</p>
         </div>
         <button
-          class="icon-button favourite"
+          class="ui-button favourite" data-icon
           :aria-label="team.favourite ? 'Remove from favourites' : 'Add to favourites'"
           :aria-pressed="team.favourite"
           @click="controller.updateTeam(team.id, (draft) => { draft.favourite = !draft.favourite }, 'Favourite updated')"
@@ -54,7 +54,7 @@ const rename = () => {
         </button>
       </div>
       <div class="team-controls">
-        <div class="segmented" aria-label="Difficulty">
+        <div class="ui-segment" aria-label="Difficulty">
           <button
             v-for="mode in (['Normal', 'Hard'] as const)"
             :key="mode"
@@ -65,12 +65,12 @@ const rename = () => {
           </button>
         </div>
         <div class="tag-row">
-          <span v-for="value in team.tags" :key="value" class="tag">{{ value }}</span>
+          <span v-for="value in team.tags" :key="value" class="ui-chip">{{ value }}</span>
         </div>
       </div>
     </header>
 
-    <div class="context-strip context-strip--info">
+    <div class="ui-banner">
       <span>
         Teams reference library builds. Edit a shared bar once, or fork it for
         only this team.
@@ -83,7 +83,7 @@ const rename = () => {
           <h2 id="team-title">Team composition</h2>
           <p>Hero, build, and behavior remain visible in one scan.</p>
         </div>
-        <button class="button" @click="controller.duplicateTeam(team.id)">
+        <button class="ui-button" @click="controller.duplicateTeam(team.id)">
           Duplicate team
         </button>
       </div>
@@ -96,7 +96,7 @@ const rename = () => {
         >
           <span class="slot-number">{{ index + 1 }}</span>
           <div class="hero-cell">
-            <span class="hero-avatar" :data-profession="slot.profession">
+            <span class="ui-mark hero-avatar" :data-profession="slot.profession">
               {{ slot.hero === "You" ? "Y" : slot.hero[0] }}
             </span>
             <span>
@@ -106,8 +106,8 @@ const rename = () => {
           </div>
 
           <label class="build-picker">
-            <span class="sr-only">Build for {{ slot.hero }}</span>
-            <select
+            <span class="ui-sr-only">Build for {{ slot.hero }}</span>
+            <select class="ui-select"
               :value="slot.buildId ?? ''"
               @change="controller.updateTeam(
                 team.id,
@@ -128,7 +128,7 @@ const rename = () => {
             </select>
             <button
               v-if="slot.buildId"
-              class="text-button"
+              class="ui-link"
               @click="controller.select({ kind: 'build', id: slot.buildId })"
             >
               Open build
@@ -143,8 +143,8 @@ const rename = () => {
           <span v-else class="empty-bar">Empty slot</span>
 
           <label class="behavior-picker">
-            <span class="sr-only">Behavior for {{ slot.hero }}</span>
-            <select
+            <span class="ui-sr-only">Behavior for {{ slot.hero }}</span>
+            <select class="ui-select"
               :value="slot.behavior"
               @change="controller.updateTeam(
                 team.id,
@@ -165,7 +165,7 @@ const rename = () => {
 
     <footer class="detail-actions detail-actions--explain">
       <span>The demo simulates publication. GWonMac never presses Load for you.</span>
-      <button class="button button--primary" disabled>Prepare team handoff</button>
+      <button class="ui-button" data-variant="primary" disabled>Prepare team handoff</button>
     </footer>
   </article>
 </template>

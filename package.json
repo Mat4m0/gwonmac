@@ -25,6 +25,7 @@
     "tools:dev": "pnpm --filter @gwonmac/tools-ui dev",
     "tools:test": "pnpm --filter @gwonmac/tools-ui test",
     "tools:test:e2e": "pnpm --filter @gwonmac/tools-ui test:e2e",
+    "ui:sweep": "node scripts/ui-visual-sweep.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.tests.json && pnpm --filter @gwonmac/tools-ui typecheck",
     "lint": "eslint .",
     "check:links": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/check-markdown-links.ts",

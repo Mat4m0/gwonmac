@@ -43,6 +43,11 @@ function rendererCheckout(): string {
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/bg1.webp", "webp");
+  // The design system lives in src/shared because apps/tools consumes it too,
+  // and the renderer loads it as `ui/tokens.css`. If this stopped being copied
+  // the packaged app would boot with no colours at all.
+  write("src/shared/ui/tokens.css", ":root { --ui-radius: 8px; }\n");
+  write("src/shared/ui/components.css", ".ui-frame { border-radius: 8px; }\n");
   return root;
 }
 
@@ -74,6 +79,10 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/fonts/COPYING-QUALITYPE"), "utf8"),
       "licence",
+    );
+    assert.equal(
+      readFileSync(path.join(root, "build/renderer/ui/tokens.css"), "utf8"),
+      ":root { --ui-radius: 8px; }\n",
     );
     assert.deepEqual(
       JSON.parse(

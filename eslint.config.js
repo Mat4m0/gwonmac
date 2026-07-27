@@ -257,7 +257,11 @@ export default tseslint.config(
         Buffer: "readonly",
         URL: "readonly",
         TextEncoder: "readonly",
+        // Browser globals: these files run `page.evaluate` bodies, whose
+        // source is written here but whose execution is in the page.
         window: "readonly",
+        document: "readonly",
+        getComputedStyle: "readonly",
         performance: "readonly",
         WebAssembly: "readonly",
         setTimeout: "readonly",

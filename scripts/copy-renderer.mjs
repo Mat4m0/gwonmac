@@ -32,6 +32,12 @@ const src = path.resolve("src/renderer");
 const dest = path.resolve("build/renderer");
 copyAssets(src, dest);
 
+// The design system is in src/shared because the Tools app consumes it too,
+// and apps/** may only reach into src/shared (see eslint.config.mjs). The
+// renderer loads it as `ui/tokens.css`, so it lands beside the renderer's own
+// assets rather than under a shared/ subtree nothing else would use.
+copyAssets(path.resolve("src/shared/ui"), path.join(dest, "ui"));
+
 const imagesDir = path.join(dest, "images");
 if (fs.existsSync(imagesDir)) {
   const names = fs.readdirSync(imagesDir).filter((n) => !n.startsWith("."));

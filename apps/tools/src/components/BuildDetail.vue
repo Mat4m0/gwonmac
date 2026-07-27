@@ -55,15 +55,15 @@ const toggleTeam = (id: string) => {
   <article class="detail-view" aria-labelledby="build-title">
     <header class="detail-header">
       <div class="detail-title-line">
-        <div class="profession-mark" :data-profession="build.professions[0]">
+        <div class="ui-mark profession-mark" :data-profession="build.professions[0]">
           {{ build.professions[0][0] }}
         </div>
         <div class="title-editor">
-          <label class="sr-only" for="build-name">Build name</label>
+          <label class="ui-sr-only" for="build-name">Build name</label>
           <input
             id="build-name"
             v-model="name"
-            class="title-input"
+            class="ui-input title-input"
             @change="commitName"
             @keydown.enter="($event.target as HTMLInputElement).blur()"
           >
@@ -73,7 +73,7 @@ const toggleTeam = (id: string) => {
           </p>
         </div>
         <button
-          class="icon-button favourite"
+          class="ui-button favourite" data-icon
           :aria-label="build.favourite ? 'Remove from favourites' : 'Add to favourites'"
           :aria-pressed="build.favourite"
           @click="controller.toggleBuildFavourite(build.id)"
@@ -83,30 +83,30 @@ const toggleTeam = (id: string) => {
       </div>
 
       <div class="tag-row">
-        <span v-for="value in build.tags" :key="value" class="tag">{{ value }}</span>
-        <span v-if="usage.length" class="tag tag--usage">
+        <span v-for="value in build.tags" :key="value" class="ui-chip">{{ value }}</span>
+        <span v-if="usage.length" class="ui-chip" data-level="info">
           shared across {{ usage.length }} {{ usage.length === 1 ? "team" : "teams" }}
         </span>
       </div>
     </header>
 
-    <div v-if="parent" class="context-strip context-strip--info">
+    <div v-if="parent" class="ui-banner">
       <span>
         Variant of <strong>{{ parent.name }}</strong>
         · {{ buildDifference(parent, build) }}
         {{ buildDifference(parent, build) === 1 ? "change" : "changes" }}
       </span>
       <button
-        class="text-button"
+        class="ui-link"
         @click="controller.select({ kind: 'build', id: parent.id })"
       >
         Compare with original
       </button>
     </div>
 
-    <div v-if="usage.length > 1" class="context-strip context-strip--warning">
+    <div v-if="usage.length > 1" class="ui-banner" data-tone="warning">
       <span>Editing this build changes every linked team.</span>
-      <button class="text-button" @click="forking = true">Fork before editing</button>
+      <button class="ui-link" @click="forking = true">Fork before editing</button>
     </div>
 
     <div class="detail-scroll">
@@ -117,7 +117,7 @@ const toggleTeam = (id: string) => {
             <p>Synthetic presentation data in this demo; the stored object remains skill IDs.</p>
           </div>
           <button
-            class="button button--primary"
+            class="ui-button" data-variant="primary"
             :disabled="controller.saving.value"
             @click="controller.publish(build)"
           >
@@ -149,7 +149,7 @@ const toggleTeam = (id: string) => {
         <button
           v-for="team in usage"
           :key="team.id"
-          class="usage-row"
+          class="ui-row usage-row"
           @click="emit('openTeam', team.id)"
         >
           <span>
@@ -164,7 +164,7 @@ const toggleTeam = (id: string) => {
 
       <section class="notes-section">
         <label for="build-notes">Notes</label>
-        <textarea
+        <textarea class="ui-textarea"
           id="build-notes"
           v-model="notes"
           rows="3"
@@ -181,7 +181,7 @@ const toggleTeam = (id: string) => {
           </p>
         </div>
         <div v-if="usage.length" class="check-list">
-          <label v-for="team in usage" :key="team.id">
+          <label v-for="team in usage" :key="team.id" class="ui-check">
             <input
               type="checkbox"
               :checked="rebind.includes(team.id)"
@@ -192,9 +192,9 @@ const toggleTeam = (id: string) => {
           </label>
         </div>
         <div class="action-row">
-          <button class="button" @click="forking = false">Cancel</button>
+          <button class="ui-button" @click="forking = false">Cancel</button>
           <button
-            class="button button--primary"
+            class="ui-button" data-variant="primary"
             @click="controller.createFork(build.id, rebind)"
           >
             Create variant
@@ -212,8 +212,8 @@ const toggleTeam = (id: string) => {
           <p v-else>Variants are promoted to independent builds.</p>
         </div>
         <div class="action-row">
-          <button class="button" @click="deleting = false">Keep build</button>
-          <button class="button button--danger" @click="controller.deleteBuild(build.id)">
+          <button class="ui-button" @click="deleting = false">Keep build</button>
+          <button class="ui-button" data-variant="danger" @click="controller.deleteBuild(build.id)">
             Delete build
           </button>
         </div>
@@ -221,8 +221,8 @@ const toggleTeam = (id: string) => {
     </div>
 
     <footer class="detail-actions">
-      <button class="button" @click="forking = true">Fork variant</button>
-      <button class="button button--quiet-danger" @click="deleting = true">Delete</button>
+      <button class="ui-button" @click="forking = true">Fork variant</button>
+      <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
     </footer>
   </article>
 </template>
