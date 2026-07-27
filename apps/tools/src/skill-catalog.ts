@@ -18,6 +18,7 @@ export interface SkillPresentation {
   readonly activationSeconds: number;
   readonly aftercastSeconds: number;
   readonly rechargeSeconds: number;
+  readonly description: string | null;
   readonly iconUrl: string | null;
 }
 
@@ -53,6 +54,7 @@ export function createSkillCatalogue(
         activationSeconds: 0,
         aftercastSeconds: 0,
         rechargeSeconds: 0,
+        description: null,
         iconUrl: null,
       };
     },

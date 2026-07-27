@@ -53,6 +53,7 @@ const presentations: SkillPresentation[] = names.map((name, index) => ({
   activationSeconds: index % 2 === 0 ? 1 : 0.25,
   aftercastSeconds: 0.75,
   rechargeSeconds: 5 + index % 4,
+  description: `${name} demonstrates the client-owned skill description in the standalone workbench.`,
   iconUrl: null,
 }));
 

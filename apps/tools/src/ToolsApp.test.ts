@@ -119,6 +119,20 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
+  it("shows the canonical catalogue description in the inline inspector", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-bar .skill--editable")[1]!.trigger("click");
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Dwaynas Kiss");
+    await wrapper.get(".skill-result").trigger("click");
+    expect(wrapper.get(".skill-description").text()).toContain(
+      "Dwaynas Kiss demonstrates the client-owned skill description",
+    );
+    expect(wrapper.find(".description-unavailable").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("asks before changing a shared bar and keeps an edited fork related", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");

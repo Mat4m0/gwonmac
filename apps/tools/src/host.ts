@@ -111,6 +111,7 @@ export function createNativeHost(
         || typeof record.elite !== "boolean"
         || !["pve", "player-only-pve", "pvp", "not-equippable"].includes(String(record.availability))
         || typeof record.hasIcon !== "boolean"
+        || (record.description !== null && typeof record.description !== "string")
         || ![
           "energyCost", "adrenalineCost", "healthCost", "overcast",
           "activationSeconds", "aftercastSeconds", "rechargeSeconds",
@@ -135,6 +136,7 @@ export function createNativeHost(
         activationSeconds: record.activationSeconds as number,
         aftercastSeconds: record.aftercastSeconds as number,
         rechargeSeconds: record.rechargeSeconds as number,
+        description: record.description as string | null,
         iconUrl: record.hasIcon ? `gw://app/skill-icons/${id}.bmp` : null,
       });
     }

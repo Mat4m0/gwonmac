@@ -284,6 +284,13 @@ function clear(): void {
             <span v-if="inspected.aftercastSeconds"><strong>{{ inspected.aftercastSeconds }}s</strong><small>Aftercast</small></span>
             <span v-if="inspected.rechargeSeconds"><strong>{{ inspected.rechargeSeconds }}s</strong><small>Recharge</small></span>
           </div>
+          <div v-if="inspected.description" class="skill-description">
+            <strong>Description</strong>
+            <p>{{ inspected.description }}</p>
+          </div>
+          <p v-else class="description-unavailable">
+            Description is unavailable from this installed client.
+          </p>
           <p v-if="duplicateSlot(inspected) !== null" class="inspector-warning">
             Already used in slot {{ (duplicateSlot(inspected) ?? 0) + 1 }}.
           </p>

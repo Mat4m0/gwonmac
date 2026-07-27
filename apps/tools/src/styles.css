@@ -816,6 +816,29 @@ body:has(.tools-stage[data-mode="standalone"]) {
 .mechanic-list strong { color: var(--ui-text-bright); }
 .mechanic-list small { color: var(--ui-text-faint); }
 
+.skill-description {
+  display: grid;
+  gap: var(--ui-space-1);
+}
+
+.skill-description strong {
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-sm);
+}
+
+.skill-description p,
+.description-unavailable {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--ui-text-muted);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.description-unavailable {
+  font-size: var(--ui-font-size-sm);
+}
+
 .inspector-warning,
 .field-error { color: var(--ui-danger) !important; }
 .skill-inspector .ui-link { align-self: flex-start; }
