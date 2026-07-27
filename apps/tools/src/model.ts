@@ -1,60 +1,29 @@
-export type Profession =
-  | "Warrior"
-  | "Ranger"
-  | "Monk"
-  | "Necromancer"
-  | "Mesmer"
-  | "Elementalist"
-  | "Assassin"
-  | "Ritualist"
-  | "Paragon"
-  | "Dervish";
+import {
+  buildId,
+  forkParentOf,
+  teamId,
+  usedBy,
+  type Build,
+  type BuildId,
+  type BuildLibrary,
+  type Team,
+} from "../../../src/shared/builds/library";
+import { HERO_BY_ID } from "../../../src/shared/builds/heroes";
+import type { SkillCatalogue } from "./skill-catalog";
 
-export type Skill = Readonly<{
-  id: number;
-  name: string;
-  short: string;
-  profession: Profession;
-  elite?: boolean;
-}>;
-
-export type Build = {
-  id: string;
-  name: string;
-  professions: readonly [Profession, Profession | null];
-  skills: readonly Skill[];
-  attributes: Readonly<Record<string, number>>;
-  tags: string[];
-  favourite: boolean;
-  parentId: string | null;
-  notes: string;
-};
-
-export type TeamSlot = {
-  hero: string;
-  profession: Profession;
-  buildId: string | null;
-  behavior: "Fight" | "Guard" | "Avoid";
-};
-
-export type Team = {
-  id: string;
-  name: string;
-  mode: "Normal" | "Hard";
-  tags: string[];
-  favourite: boolean;
-  slots: TeamSlot[];
-};
-
-export type BuildLibrary = {
-  version: 1;
-  builds: Build[];
-  teams: Team[];
-};
+export type {
+  Build,
+  BuildId,
+  BuildLibrary,
+  Profession,
+  SkillId,
+  Team,
+  TeamId,
+} from "../../../src/shared/builds/library";
 
 export type LibraryItem =
-  | { kind: "build"; id: string }
-  | { kind: "team"; id: string };
+  | { kind: "build"; id: BuildId }
+  | { kind: "team"; id: Team["id"] };
 
 export function cloneLibrary(library: BuildLibrary): BuildLibrary {
   return structuredClone(library);
@@ -74,85 +43,93 @@ export function teamById(
   return library.teams.find((team) => team.id === id);
 }
 
-export function buildUsage(library: BuildLibrary, buildId: string): Team[] {
-  return library.teams.filter((team) =>
-    team.slots.some((slot) => slot.buildId === buildId),
-  );
+export function buildUsage(library: BuildLibrary, id: string): readonly Team[] {
+  return usedBy(library, buildId(id));
 }
 
 export function buildDifference(parent: Build, child: Build): number {
   const skillChanges = parent.skills.reduce(
-    (count, skill, index) =>
-      count + (skill.id === child.skills[index]?.id ? 0 : 1),
+    (count, skill, index) => count + (skill === child.skills[index] ? 0 : 1),
     0,
   );
   const attributes = new Set([
     ...Object.keys(parent.attributes),
     ...Object.keys(child.attributes),
   ]);
-  const attributeChanges = [...attributes].reduce(
-    (count, attribute) =>
-      count
-      + (parent.attributes[attribute] === child.attributes[attribute] ? 0 : 1),
-    0,
-  );
-  return skillChanges + attributeChanges;
+  return skillChanges + [...attributes].filter(
+    (attribute) =>
+      parent.attributes[attribute as keyof typeof parent.attributes]
+      !== child.attributes[attribute as keyof typeof child.attributes],
+  ).length;
 }
 
 export function orderedBuilds(builds: readonly Build[]): Build[] {
-  const roots = builds.filter((build) => build.parentId === null);
-  const result: Build[] = [];
-  for (const root of roots) {
-    result.push(root);
-    result.push(...builds.filter((build) => build.parentId === root.id));
-  }
-  result.push(
+  const roots = builds.filter((build) => build.parent === null);
+  const result = roots.flatMap((root) => [
+    root,
+    ...builds.filter((build) => build.parent === root.id),
+  ]);
+  return [
+    ...result,
     ...builds.filter(
       (build) =>
-        build.parentId !== null
-        && !builds.some((parent) => parent.id === build.parentId),
+        build.parent !== null
+        && !builds.some((parent) => parent.id === build.parent),
     ),
-  );
-  return result;
+  ];
 }
 
 export function forkBuild(
   library: BuildLibrary,
-  buildId: string,
-  id: string,
-): Build {
-  const source = buildById(library, buildId);
+  sourceId: string,
+  nextId: string,
+): BuildLibrary {
+  const source = buildById(library, sourceId);
   if (!source) throw new Error("Build not found");
-  const parentId = source.parentId ?? source.id;
-  const copy: Build = {
-    ...structuredClone(source),
-    id,
-    name: `${source.name} — variant`,
-    parentId,
-    favourite: false,
+  return {
+    ...library,
+    builds: [
+      {
+        ...structuredClone(source),
+        id: buildId(nextId),
+        name: `${source.name} — variant`,
+        parent: forkParentOf(source),
+        favourite: false,
+        lastUsed: null,
+      },
+      ...library.builds,
+    ],
   };
-  library.builds.unshift(copy);
-  return copy;
 }
 
 export function removeBuild(
   library: BuildLibrary,
-  buildId: string,
-): void {
-  library.builds = library.builds
-    .filter((build) => build.id !== buildId)
-    .map((build) =>
-      build.parentId === buildId ? { ...build, parentId: null } : build,
-    );
-  for (const team of library.teams) {
-    team.slots = team.slots.map((slot) =>
-      slot.buildId === buildId ? { ...slot, buildId: null } : slot,
-    );
-  }
+  removedId: string,
+): BuildLibrary {
+  return {
+    ...library,
+    builds: library.builds
+      .filter((build) => build.id !== removedId)
+      .map((build) =>
+        build.parent === removedId ? { ...build, parent: null } : build,
+      ),
+    teams: library.teams.map((team) => ({
+      ...team,
+      slots: team.slots.map((slot) =>
+        slot.build === removedId ? { ...slot, build: null } : slot,
+      ) as unknown as Team["slots"],
+    })),
+  };
+}
+
+export function heroLabel(hero: Team["slots"][number]["hero"]): string {
+  if (hero === null) return "You";
+  return HERO_BY_ID.get(hero)?.name.replace(/([a-z])([A-Z])/gu, "$1 $2") ?? `Hero ${hero}`;
 }
 
 export function searchLibrary(
   library: BuildLibrary,
+  catalogue: SkillCatalogue,
   kind: LibraryItem["kind"],
   query: string,
   tag: string | null,
@@ -162,12 +139,14 @@ export function searchLibrary(
   return values.filter((value) => {
     if (tag && !value.tags.includes(tag)) return false;
     if (!term) return true;
-    const buildText =
+    const visibleText =
       "skills" in value
-        ? value.skills.map((skill) => skill.name).join(" ")
-        : value.slots.map((slot) => slot.hero).join(" ");
-    return `${value.name} ${value.tags.join(" ")} ${buildText}`
+        ? value.skills.map((skill) => skill === null ? "" : catalogue.get(skill).name).join(" ")
+        : value.slots.map((slot) => heroLabel(slot.hero)).join(" ");
+    return `${value.name} ${value.tags.join(" ")} ${visibleText}`
       .toLocaleLowerCase()
       .includes(term);
   });
 }
+
+export { buildId, teamId };

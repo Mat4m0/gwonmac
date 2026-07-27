@@ -31,9 +31,9 @@ watch(
 
 const usage = computed(() => props.controller.usage(props.build.id));
 const parent = computed(() =>
-  props.build.parentId
+  props.build.parent
     ? props.controller.library.value?.builds.find(
-        (build) => build.id === props.build.parentId,
+        (build) => build.id === props.build.parent,
       )
     : undefined,
 );
@@ -124,12 +124,15 @@ const toggleTeam = (id: string) => {
             Save to Guild Wars
           </button>
         </div>
-        <SkillBar :skills="build.skills" />
+        <SkillBar :skills="build.skills" :catalogue="controller.skills" />
         <ol class="skill-list">
-          <li v-for="(skill, index) in build.skills" :key="skill.id">
+          <li v-for="(skill, index) in build.skills" :key="`${skill ?? 'empty'}-${index}`">
             <span>{{ index + 1 }}</span>
-            <strong>{{ skill.name }}</strong>
-            <em>{{ skill.profession }}<template v-if="skill.elite"> · Elite</template></em>
+            <strong>{{ skill === null ? "Empty slot" : controller.skills.get(skill).name }}</strong>
+            <em v-if="skill !== null">
+              {{ controller.skills.get(skill).profession ?? "Any" }}
+              <template v-if="controller.skills.get(skill).elite"> · Elite</template>
+            </em>
           </li>
         </ol>
       </section>
@@ -155,7 +158,7 @@ const toggleTeam = (id: string) => {
           <span>
             <strong>{{ team.name }}</strong>
             <small>
-              {{ team.slots.filter((slot) => slot.buildId === build.id).map((slot) => slot.hero).join(", ") }}
+              {{ team.slots.filter((slot) => slot.build === build.id).length }} linked slot(s)
             </small>
           </span>
           <span aria-hidden="true">→</span>
@@ -188,7 +191,7 @@ const toggleTeam = (id: string) => {
               @change="toggleTeam(team.id)"
             >
             <span>{{ team.name }}</span>
-            <small>{{ team.slots.filter((slot) => slot.buildId === build.id).length }} linked slot(s)</small>
+            <small>{{ team.slots.filter((slot) => slot.build === build.id).length }} linked slot(s)</small>
           </label>
         </div>
         <div class="action-row">

@@ -8,7 +8,7 @@ import {
 } from "vue";
 import type { ToolsHost } from "./host";
 import type { Build, Team } from "./model";
-import { buildDifference, buildById } from "./model";
+import { buildDifference, buildById, heroLabel, teamId } from "./model";
 import { useLibrary } from "./use-library";
 import BuildDetail from "./components/BuildDetail.vue";
 import SkillBar from "./components/SkillBar.vue";
@@ -48,15 +48,13 @@ watch(
 );
 
 const select = (value: Build | Team) => {
-  controller.select({
-    kind: controller.kind.value,
-    id: value.id,
-  });
+  if ("skills" in value) controller.select({ kind: "build", id: value.id });
+  else controller.select({ kind: "team", id: value.id });
   mobileView.value = "detail";
 };
 
 const openTeam = (id: string) => {
-  controller.select({ kind: "team", id });
+  controller.select({ kind: "team", id: teamId(id) });
   mobileView.value = "detail";
 };
 
@@ -223,7 +221,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               v-for="value in controller.items.value"
               :key="value.id"
               class="ui-row library-row"
-              :data-child="'parentId' in value && value.parentId ? '' : undefined"
+            :data-child="'parent' in value && value.parent ? '' : undefined"
               role="option"
               :aria-selected="controller.selectedId.value === value.id"
               @click="select(value)"
@@ -233,16 +231,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                   <i v-if="value.favourite" aria-label="Favourite">★</i>
                   {{ value.name }}
                 </span>
-                <em v-if="'mode' in value">{{ value.mode }}</em>
+                <em v-if="'mode' in value">{{ value.mode === "hard" ? "Hard" : value.mode === "normal" ? "Normal" : "Unspecified" }}</em>
                 <em v-else>{{ value.professions[0] }}</em>
               </span>
 
               <template v-if="'skills' in value">
-                <SkillBar :skills="value.skills" compact />
-                <span v-if="value.parentId" class="row-meta">
+                <SkillBar :skills="value.skills" :catalogue="controller.skills" compact />
+                <span v-if="value.parent" class="row-meta">
                   {{
-                    buildById(controller.library.value, value.parentId)
-                      ? `${buildDifference(buildById(controller.library.value, value.parentId)!, value)} changes`
+                    buildById(controller.library.value, value.parent)
+                      ? `${buildDifference(buildById(controller.library.value, value.parent)!, value)} changes`
                       : "independent"
                   }}
                 </span>
@@ -257,15 +255,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                     v-for="(slot, index) in value.slots"
                     :key="`${slot.hero}-${index}`"
                     class="ui-mark"
-                    :data-profession="slot.profession"
-                    :data-empty="slot.buildId ? undefined : ''"
-                    :title="slot.hero"
+                    :data-profession="slot.build ? buildById(controller.library.value, slot.build)?.professions[0] : undefined"
+                    :data-empty="slot.build ? undefined : ''"
+                    :title="heroLabel(slot.hero)"
                   >
-                    {{ slot.profession[0] }}
+                    {{ slot.build ? buildById(controller.library.value, slot.build)?.professions[0] : "–" }}
                   </i>
                 </span>
                 <span class="row-meta">
-                  {{ value.slots.filter((slot) => slot.buildId).length }}/8 ready
+                  {{ value.slots.filter((slot) => slot.build).length }}/8 ready
                 </span>
               </template>
             </button>

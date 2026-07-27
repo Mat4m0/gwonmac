@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import type { LibraryController } from "../use-library";
-import { buildById, type Team } from "../model";
+import { buildById, buildId, heroLabel, type Team } from "../model";
 import SkillBar from "./SkillBar.vue";
 
 const props = defineProps<{
@@ -21,7 +21,7 @@ const rename = () => {
   void props.controller.updateTeam(
     props.team.id,
     (team) => {
-      team.name = name.value.trim();
+      return { ...team, name: name.value.trim() };
     },
     "Team renamed",
   );
@@ -42,13 +42,13 @@ const rename = () => {
             @change="rename"
             @keydown.enter="($event.target as HTMLInputElement).blur()"
           >
-          <p>{{ team.slots.filter((slot) => slot.buildId).length }} of 8 slots configured</p>
+          <p>{{ team.slots.filter((slot) => slot.build).length }} of 8 slots configured</p>
         </div>
         <button
           class="ui-button favourite" data-icon
           :aria-label="team.favourite ? 'Remove from favourites' : 'Add to favourites'"
           :aria-pressed="team.favourite"
-          @click="controller.updateTeam(team.id, (draft) => { draft.favourite = !draft.favourite }, 'Favourite updated')"
+          @click="controller.updateTeam(team.id, (draft) => ({ ...draft, favourite: !draft.favourite }), 'Favourite updated')"
         >
           ★
         </button>
@@ -56,12 +56,12 @@ const rename = () => {
       <div class="team-controls">
         <div class="ui-segment" aria-label="Difficulty">
           <button
-            v-for="mode in (['Normal', 'Hard'] as const)"
+            v-for="mode in (['normal', 'hard'] as const)"
             :key="mode"
             :aria-pressed="team.mode === mode"
-            @click="controller.updateTeam(team.id, (draft) => { draft.mode = mode }, `${mode} mode selected`)"
+            @click="controller.updateTeam(team.id, (draft) => ({ ...draft, mode }), `${mode} mode selected`)"
           >
-            {{ mode }}
+            {{ mode === "hard" ? "Hard" : "Normal" }}
           </button>
         </div>
         <div class="tag-row">
@@ -92,29 +92,46 @@ const rename = () => {
         <li
           v-for="(slot, index) in team.slots"
           :key="`${slot.hero}-${index}`"
-          :class="{ 'team-slot--empty': !slot.buildId }"
+          :class="{ 'team-slot--empty': !slot.build }"
         >
           <span class="slot-number">{{ index + 1 }}</span>
           <div class="hero-cell">
-            <span class="ui-mark hero-avatar" :data-profession="slot.profession">
-              {{ slot.hero === "You" ? "Y" : slot.hero[0] }}
+            <span
+              class="ui-mark hero-avatar"
+              :data-profession="slot.build && controller.library.value
+                ? buildById(controller.library.value, slot.build)?.professions[0]
+                : undefined"
+            >
+              {{ heroLabel(slot.hero)[0] }}
             </span>
             <span>
-              <strong>{{ slot.hero }}</strong>
-              <small>{{ slot.profession }}</small>
+              <strong>{{ heroLabel(slot.hero) }}</strong>
+              <small>
+                {{ slot.build && controller.library.value
+                  ? buildById(controller.library.value, slot.build)?.professions.join(" / ")
+                  : "No build" }}
+              </small>
             </span>
           </div>
 
           <label class="build-picker">
-            <span class="ui-sr-only">Build for {{ slot.hero }}</span>
+            <span class="ui-sr-only">Build for {{ heroLabel(slot.hero) }}</span>
             <select class="ui-select"
-              :value="slot.buildId ?? ''"
+              :value="slot.build ?? ''"
               @change="controller.updateTeam(
                 team.id,
                 (draft) => {
-                  draft.slots[index]!.buildId = ($event.target as HTMLSelectElement).value || null;
+                  const build = ($event.target as HTMLSelectElement).value;
+                  return {
+                    ...draft,
+                    slots: draft.slots.map((candidate, slotIndex) =>
+                      slotIndex === index
+                        ? { ...candidate, build: build ? buildId(build) : null }
+                        : candidate,
+                    ) as unknown as Team['slots'],
+                  };
                 },
-                `${slot.hero}'s build updated`,
+                `${heroLabel(slot.hero)}'s build updated`,
               )"
             >
               <option value="">No build</option>
@@ -127,36 +144,45 @@ const rename = () => {
               </option>
             </select>
             <button
-              v-if="slot.buildId"
+              v-if="slot.build"
               class="ui-link"
-              @click="controller.select({ kind: 'build', id: slot.buildId })"
+              @click="controller.select({ kind: 'build', id: slot.build })"
             >
               Open build
             </button>
           </label>
 
           <SkillBar
-            v-if="slot.buildId && controller.library.value"
-            :skills="buildById(controller.library.value, slot.buildId)?.skills ?? []"
+            v-if="slot.build && controller.library.value"
+            :skills="buildById(controller.library.value, slot.build)?.skills ?? []"
+            :catalogue="controller.skills"
             compact
           />
           <span v-else class="empty-bar">Empty slot</span>
 
           <label class="behavior-picker">
-            <span class="ui-sr-only">Behavior for {{ slot.hero }}</span>
+            <span class="ui-sr-only">Behavior for {{ heroLabel(slot.hero) }}</span>
             <select class="ui-select"
-              :value="slot.behavior"
+              :value="slot.behaviour ?? ''"
+              :disabled="slot.hero === null"
               @change="controller.updateTeam(
                 team.id,
                 (draft) => {
-                  draft.slots[index]!.behavior = ($event.target as HTMLSelectElement).value as typeof slot.behavior;
+                  const behaviour = ($event.target as HTMLSelectElement).value as typeof slot.behaviour;
+                  return {
+                    ...draft,
+                    slots: draft.slots.map((candidate, slotIndex) =>
+                      slotIndex === index ? { ...candidate, behaviour } : candidate,
+                    ) as unknown as Team['slots'],
+                  };
                 },
-                `${slot.hero}'s behavior updated`,
+                `${heroLabel(slot.hero)}'s behavior updated`,
               )"
             >
-              <option>Fight</option>
-              <option>Guard</option>
-              <option>Avoid</option>
+              <option value="">Player</option>
+              <option value="fight">Fight</option>
+              <option value="guard">Guard</option>
+              <option value="avoid">Avoid</option>
             </select>
           </label>
         </li>

@@ -1,4 +1,4 @@
-import { createDemoHost } from "./host";
+import { createNativeHost } from "./host";
 import { mountToolsApp as mount } from "./mount";
 
 export { type ToolsAppHandle } from "./mount";
@@ -11,7 +11,7 @@ export function mountToolsApp(
   } = {},
 ) {
   return mount(target, {
-    host: createDemoHost(window.localStorage),
+    host: createNativeHost(window.gwNative),
     mode: "embedded",
     ...options,
   });

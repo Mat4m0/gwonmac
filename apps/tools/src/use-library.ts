@@ -2,15 +2,18 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import type { ToolsHost } from "./host";
 import {
   buildById,
+  buildId,
   buildUsage,
   cloneLibrary,
   forkBuild,
   removeBuild,
   searchLibrary,
   teamById,
+  teamId,
   type Build,
   type BuildLibrary,
   type LibraryItem,
+  type Team,
 } from "./model";
 
 type Notice = Readonly<{
@@ -29,11 +32,9 @@ export function useLibrary(host: ToolsHost) {
   const error = ref<string | null>(null);
   const notice = ref<Notice>(null);
   const kind = ref<LibraryItem["kind"]>("team");
-  const selectedId = ref("t-vanquish");
+  const selectedId = ref("");
   const query = ref("");
   const tag = ref<string | null>(null);
-  // Shallow by design: a Vue proxy cannot cross structuredClone when the host
-  // persists an undo snapshot. These documents are immutable once pushed.
   const undoStack = shallowRef<Array<{ label: string; library: BuildLibrary }>>([]);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -61,48 +62,38 @@ export function useLibrary(host: ToolsHost) {
   );
   const items = computed(() =>
     library.value
-      ? searchLibrary(library.value, kind.value, query.value, tag.value)
+      ? searchLibrary(library.value, host.skills, kind.value, query.value, tag.value)
       : [],
   );
-  const tags = computed(() => {
-    const values =
-      kind.value === "build"
-        ? library.value?.builds ?? []
-        : library.value?.teams ?? [];
-    return [...new Set(values.flatMap((value) => value.tags))].sort();
-  });
+  const tags = computed(() => library.value?.tags ?? []);
   const canUndo = computed(() => undoStack.value.length > 0);
 
   const selectKind = (next: LibraryItem["kind"]) => {
     kind.value = next;
     query.value = "";
     tag.value = null;
-    const first =
-      next === "build"
-        ? library.value?.builds[0]
-        : library.value?.teams[0];
-    if (first) selectedId.value = first.id;
+    selectedId.value =
+      (next === "build" ? library.value?.builds[0]?.id : library.value?.teams[0]?.id)
+      ?? "";
   };
 
   const commit = async (
     label: string,
-    mutate: (draft: BuildLibrary) => void,
+    change: (current: BuildLibrary) => BuildLibrary,
   ) => {
     if (!library.value || saving.value) return;
     const previous = cloneLibrary(library.value);
-    const draft = cloneLibrary(library.value);
-    mutate(draft);
-    library.value = draft;
+    const next = change(previous);
+    library.value = next;
     saving.value = true;
     error.value = null;
     try {
-      library.value = await host.saveLibrary(draft);
+      await host.saveLibrary(next);
       undoStack.value = [...undoStack.value, { label, library: previous }].slice(-40);
       showNotice(label);
     } catch (cause) {
       library.value = previous;
-      error.value =
-        cause instanceof Error ? cause.message : "The library could not be saved.";
+      error.value = cause instanceof Error ? cause.message : "The library could not be saved.";
       showNotice("Nothing changed—the save failed.", "error");
     } finally {
       saving.value = false;
@@ -113,77 +104,99 @@ export function useLibrary(host: ToolsHost) {
     if (saving.value) return;
     const previous = undoStack.value.at(-1);
     if (!previous) return;
-    undoStack.value = undoStack.value.slice(0, -1);
     saving.value = true;
     try {
-      library.value = await host.saveLibrary(previous.library);
+      await host.saveLibrary(previous.library);
+      library.value = previous.library;
+      undoStack.value = undoStack.value.slice(0, -1);
       showNotice(`Undid “${previous.label}”.`);
+    } catch {
+      showNotice("Undo failed. Nothing changed.", "error");
     } finally {
       saving.value = false;
     }
   };
 
-  const renameBuild = (buildId: string, name: string) =>
-    commit("Build renamed", (draft) => {
-      const build = buildById(draft, buildId);
-      if (build && name.trim()) build.name = name.trim();
+  const replaceBuild = (source: BuildLibrary, next: Build): BuildLibrary => ({
+    ...source,
+    builds: source.builds.map((build) => build.id === next.id ? next : build),
+  });
+
+  const renameBuild = (id: string, name: string) =>
+    commit("Build renamed", (current) => {
+      const build = buildById(current, id);
+      return build && name.trim()
+        ? replaceBuild(current, { ...build, name: name.trim() })
+        : current;
     });
 
-  const toggleBuildFavourite = (buildId: string) =>
-    commit("Favourite updated", (draft) => {
-      const build = buildById(draft, buildId);
-      if (build) build.favourite = !build.favourite;
+  const toggleBuildFavourite = (id: string) =>
+    commit("Favourite updated", (current) => {
+      const build = buildById(current, id);
+      return build
+        ? replaceBuild(current, { ...build, favourite: !build.favourite })
+        : current;
     });
 
-  const updateBuildNotes = (buildId: string, notes: string) =>
-    commit("Notes saved", (draft) => {
-      const build = buildById(draft, buildId);
-      if (build) build.notes = notes;
+  const updateBuildNotes = (id: string, notes: string) =>
+    commit("Notes saved", (current) => {
+      const build = buildById(current, id);
+      return build ? replaceBuild(current, { ...build, notes }) : current;
     });
 
-  const createFork = async (buildId: string, teamIds: readonly string[]) => {
+  const createFork = async (sourceId: string, rebindTeamIds: readonly string[]) => {
     const nextId = id("build");
-    await commit("Variant created", (draft) => {
-      const created = forkBuild(draft, buildId, nextId);
-      for (const teamId of teamIds) {
-        const team = teamById(draft, teamId);
-        if (!team) continue;
-        team.slots = team.slots.map((slot) =>
-          slot.buildId === buildId ? { ...slot, buildId: created.id } : slot,
-        );
-      }
+    await commit("Variant created", (current) => {
+      const forked = forkBuild(current, sourceId, nextId);
+      return {
+        ...forked,
+        teams: forked.teams.map((team) =>
+          rebindTeamIds.includes(team.id)
+            ? {
+                ...team,
+                slots: team.slots.map((slot) =>
+                  slot.build === sourceId ? { ...slot, build: buildId(nextId) } : slot,
+                ) as unknown as Team["slots"],
+              }
+            : team,
+        ),
+      };
     });
     kind.value = "build";
     selectedId.value = nextId;
   };
 
-  const deleteBuild = async (buildId: string) => {
-    await commit("Build deleted", (draft) => removeBuild(draft, buildId));
-    const first = library.value?.builds[0];
-    if (first) selectedId.value = first.id;
+  const deleteBuild = async (id: string) => {
+    await commit("Build deleted", (current) => removeBuild(current, id));
+    selectedId.value = library.value?.builds[0]?.id ?? "";
   };
 
   const updateTeam = (
-    teamId: string,
-    update: (team: NonNullable<ReturnType<typeof teamById>>) => void,
+    id: string,
+    update: (team: Team) => Team,
     label: string,
   ) =>
-    commit(label, (draft) => {
-      const team = teamById(draft, teamId);
-      if (team) update(team);
-    });
+    commit(label, (current) => ({
+      ...current,
+      teams: current.teams.map((team) => team.id === id ? update(team) : team),
+    }));
 
-  const duplicateTeam = async (teamId: string) => {
-    const nextId = id("team");
-    await commit("Team duplicated", (draft) => {
-      const source = teamById(draft, teamId);
-      if (!source) return;
-      draft.teams.unshift({
-        ...structuredClone(source),
-        id: nextId,
-        name: `${source.name} — copy`,
-        favourite: false,
-      });
+  const duplicateTeam = async (id: string) => {
+    const nextId = `team-${crypto.randomUUID()}`;
+    await commit("Team duplicated", (current) => {
+      const source = teamById(current, id);
+      return source
+        ? {
+            ...current,
+            teams: [{
+              ...structuredClone(source),
+              id: teamId(nextId),
+              name: `${source.name} — copy`,
+              favourite: false,
+              lastUsed: null,
+            }, ...current.teams],
+          }
+        : current;
     });
     kind.value = "team";
     selectedId.value = nextId;
@@ -193,14 +206,9 @@ export function useLibrary(host: ToolsHost) {
     saving.value = true;
     try {
       const result = await host.publishBuild(build);
-      showNotice(
-        `Saved “${result.fileName}” to ${result.location}. Load it from Guild Wars.`,
-      );
+      showNotice(`Saved “${result.fileName}” to ${result.location}. Load it from Guild Wars.`);
     } catch (cause) {
-      showNotice(
-        cause instanceof Error ? cause.message : "The template could not be saved.",
-        "error",
-      );
+      showNotice(cause instanceof Error ? cause.message : "The template could not be saved.", "error");
     } finally {
       saving.value = false;
     }
@@ -208,58 +216,41 @@ export function useLibrary(host: ToolsHost) {
 
   const reset = async () => {
     if (!host.reset) return;
-    library.value = await host.reset();
+    const loaded = await host.reset();
+    library.value = loaded.library;
     undoStack.value = [];
     kind.value = "team";
     selectedId.value = library.value.teams[0]?.id ?? "";
-    showNotice("Demo data restored.");
+    showNotice("Fixture data restored.");
   };
 
   onMounted(async () => {
     try {
-      library.value = await host.loadLibrary();
-      const preferred = teamById(library.value, selectedId.value);
-      if (!preferred) selectedId.value = library.value.teams[0]?.id ?? "";
+      const loaded = await host.loadLibrary();
+      library.value = loaded.library;
+      selectedId.value = loaded.library.teams[0]?.id ?? loaded.library.builds[0]?.id ?? "";
+      if (loaded.library.teams.length === 0 && loaded.library.builds.length > 0) kind.value = "build";
+      if (loaded.recovered) {
+        showNotice("The damaged library was preserved and a new empty library opened.", "warning");
+      }
     } catch (cause) {
-      error.value =
-        cause instanceof Error ? cause.message : "The library could not be loaded.";
+      error.value = cause instanceof Error ? cause.message : "The library could not be loaded.";
     } finally {
       loading.value = false;
     }
   });
 
   return {
-    library,
-    loading,
-    saving,
-    error,
-    notice,
-    kind,
-    selectedId,
-    query,
-    tag,
-    items,
-    tags,
-    selectedBuild,
-    selectedTeam,
-    canUndo,
-    selectKind,
+    skills: host.skills,
+    library, loading, saving, error, notice, kind, selectedId, query, tag,
+    items, tags, selectedBuild, selectedTeam, canUndo, selectKind,
     select: (next: LibraryItem) => {
       kind.value = next.kind;
       selectedId.value = next.id;
     },
-    usage: (buildId: string) =>
-      library.value ? buildUsage(library.value, buildId) : [],
-    renameBuild,
-    toggleBuildFavourite,
-    updateBuildNotes,
-    createFork,
-    deleteBuild,
-    updateTeam,
-    duplicateTeam,
-    publish,
-    undo,
-    reset,
+    usage: (id: string) => library.value ? buildUsage(library.value, id) : [],
+    renameBuild, toggleBuildFavourite, updateBuildNotes, createFork,
+    deleteBuild, updateTeam, duplicateTeam, publish, undo, reset,
   };
 }
 

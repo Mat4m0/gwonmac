@@ -1,20 +1,28 @@
-import { demoLibrary } from "./fixtures";
+import type { GwNativeApi } from "../../../src/shared/contracts";
+import { demoLibrary, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
+import type { SkillCatalogue } from "./skill-catalog";
 
 export type PublishedTemplate = Readonly<{
   fileName: string;
   location: string;
 }>;
 
+export type LibraryLoad = Readonly<{
+  library: BuildLibrary;
+  recovered: boolean;
+}>;
+
 export interface ToolsHost {
   readonly label: string;
-  loadLibrary(): Promise<BuildLibrary>;
-  saveLibrary(library: BuildLibrary): Promise<BuildLibrary>;
+  readonly skills: SkillCatalogue;
+  loadLibrary(): Promise<LibraryLoad>;
+  saveLibrary(library: BuildLibrary): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
-  reset?(): Promise<BuildLibrary>;
+  reset?(): Promise<LibraryLoad>;
 }
 
-const STORAGE_KEY = "gwonmac.tools.demo.library.v1";
+const STORAGE_KEY = "gwonmac.tools.demo.library.v2";
 
 function safeFileName(value: string): string {
   const cleaned = value
@@ -32,18 +40,9 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     const saved = storage.getItem(STORAGE_KEY);
     if (!saved) return cloneLibrary(memory);
     try {
-      const value: unknown = JSON.parse(saved);
-      if (
-        typeof value === "object"
-        && value !== null
-        && "version" in value
-        && value.version === 1
-        && "builds" in value
-        && Array.isArray(value.builds)
-        && "teams" in value
-        && Array.isArray(value.teams)
-      ) {
-        return cloneLibrary(value as BuildLibrary);
+      const value = JSON.parse(saved) as BuildLibrary;
+      if (value.version === 2 && Array.isArray(value.builds) && Array.isArray(value.teams)) {
+        return cloneLibrary(value);
       }
     } catch {
       storage.removeItem(STORAGE_KEY);
@@ -51,27 +50,39 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     return cloneLibrary(memory);
   };
   return {
-    label: storage ? "Local demo data" : "Session demo data",
+    label: storage ? "Local fixture library" : "Session fixture library",
+    skills: demoSkillCatalogue,
     async loadLibrary() {
       memory = read();
-      return cloneLibrary(memory);
+      return { library: cloneLibrary(memory), recovered: false };
     },
     async saveLibrary(library) {
       memory = cloneLibrary(library);
       storage?.setItem(STORAGE_KEY, JSON.stringify(memory));
-      return cloneLibrary(memory);
     },
     async publishBuild(build) {
       await new Promise((resolve) => setTimeout(resolve, 180));
-      return {
-        fileName: safeFileName(build.name),
-        location: "Templates/Skills",
-      };
+      return { fileName: safeFileName(build.name), location: "Templates/Skills" };
     },
     async reset() {
       storage?.removeItem(STORAGE_KEY);
       memory = cloneLibrary(demoLibrary);
-      return cloneLibrary(memory);
+      return { library: cloneLibrary(memory), recovered: false };
+    },
+  };
+}
+
+export function createNativeHost(api: GwNativeApi): ToolsHost {
+  return {
+    label: "Saved on this Mac",
+    // Replaced by the local client catalogue during the asset milestone.
+    skills: demoSkillCatalogue,
+    loadLibrary: () => api.buildLibrary.get(),
+    async saveLibrary(library) {
+      await api.buildLibrary.set(library);
+    },
+    async publishBuild() {
+      throw new Error("Template publication is not connected yet.");
     },
   };
 }
