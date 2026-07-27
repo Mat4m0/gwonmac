@@ -348,7 +348,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
 
 .skill--editable { cursor: pointer; }
 
-.skill--editable:hover {
+.skill--editable:hover:not([data-active]):not([data-invalid]) {
   box-shadow: inset 0 0 0 2px var(--ui-focus), 0 0 0 1px var(--ui-outline);
 }
 
@@ -585,7 +585,14 @@ body:has(.tools-stage[data-mode="standalone"]) {
 }
 
 .ui-slot[data-invalid] {
-  box-shadow: 0 0 0 2px var(--ui-danger), var(--ui-shadow-inset);
+  box-shadow: inset 0 0 0 3px var(--ui-danger), var(--ui-shadow-inset);
+}
+
+.ui-slot[data-active][data-invalid] {
+  box-shadow:
+    0 0 0 2px var(--ui-focus),
+    inset 0 0 0 3px var(--ui-danger),
+    var(--ui-shadow-inset);
 }
 
 .bar-keyboard-hint,

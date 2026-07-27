@@ -815,10 +815,20 @@ button.ui-chip:hover {
     inset 0 0 0 4px color-mix(in srgb, var(--ui-warning) 32%, transparent);
 }
 
-/* What changed between two builds. Ringed rather than tinted, so the icon
- * underneath stays readable. */
-.ui-slot[data-changed] {
-  box-shadow: 0 0 0 2px var(--ui-warning), var(--ui-shadow-inset);
+/* A changed slot is supporting information, not the current selection. Keep
+ * the full perimeter available for elite, active, invalid and keyboard-focus
+ * states; a corner marker is enough to make the saved-build diff scannable. */
+.ui-slot[data-changed]::before {
+  content: "";
+  position: absolute;
+  z-index: var(--ui-z-status);
+  bottom: 4px;
+  left: 4px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--ui-outline);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-warning);
 }
 
 /* A filled identity mark: a profession, a team, a hero portrait stand-in. */

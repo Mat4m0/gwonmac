@@ -60,7 +60,12 @@ const drop = (event: DragEvent, index: number) => {
       :data-profession="skill === null ? undefined : catalogue.get(skill).profession"
       :data-empty="skill === null ? '' : undefined"
       :title="skill === null ? 'Empty skill slot' : catalogue.get(skill).name"
-      :aria-label="`${index + 1}. ${skill === null ? 'Empty skill slot' : catalogue.get(skill).name}`"
+      :aria-label="[
+        `${index + 1}. ${skill === null ? 'Empty skill slot' : catalogue.get(skill).name}`,
+        skill !== null && catalogue.get(skill).elite ? 'Elite' : null,
+        changedSlots?.includes(index) ? 'Changed' : null,
+        invalidSlots?.includes(index) ? 'Invalid' : null,
+      ].filter(Boolean).join('. ')"
       :aria-pressed="editable ? activeSlot === index : undefined"
       :draggable="editable && skill !== null"
       @click="editable && emit('select', index)"
