@@ -783,6 +783,12 @@ button.ui-chip:hover {
   );
 }
 
+.ui-slot > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* An empty slot is a real, saveable state — not an error, and not a gap. */
 .ui-slot[data-empty] {
   background: var(--ui-well-fill);
@@ -792,7 +798,9 @@ button.ui-chip:hover {
 
 /* The elite marker the client draws in the corner of an elite skill. */
 .ui-slot[data-elite] {
-  box-shadow: inset 0 0 0 1px var(--ui-accent), 0 0 0 1px var(--ui-accent-strong);
+  box-shadow:
+    inset 0 0 0 2px var(--ui-warning),
+    0 0 0 1px color-mix(in srgb, var(--ui-warning) 68%, var(--ui-outline));
 }
 
 /* Sized against the slot, not in absolute pixels: a 5px dot is a marker on a
@@ -807,7 +815,7 @@ button.ui-chip:hover {
   width: min(5px, 22%);
   height: min(5px, 22%);
   border-radius: var(--ui-radius-pill);
-  background: var(--ui-accent);
+  background: var(--ui-warning);
 }
 
 /* What changed between two builds. Ringed rather than tinted, so the icon

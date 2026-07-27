@@ -1,7 +1,15 @@
 import type { GwNativeApi } from "../../../src/shared/contracts";
+import {
+  PROFESSIONS,
+} from "../../../src/shared/builds/heroes";
+import { skillId, type Profession } from "../../../src/shared/builds/library";
 import { demoLibrary, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
-import type { SkillCatalogue } from "./skill-catalog";
+import {
+  createSkillCatalogue,
+  type SkillCatalogue,
+  type SkillPresentation,
+} from "./skill-catalog";
 
 export type PublishedTemplate = Readonly<{
   fileName: string;
@@ -76,11 +84,49 @@ export function createNativeHost(
   api: GwNativeApi,
   publishBuild: (build: Build) => Promise<PublishedTemplate>,
 ): ToolsHost {
+  const skills = createSkillCatalogue([]);
+  const profession = new Set<Profession>(
+    Object.keys(PROFESSIONS) as Profession[],
+  );
+  const loadSkills = async () => {
+    const response = await fetch("gw://app/skill-catalog.json");
+    if (!response.ok) return;
+    const raw: unknown = await response.json();
+    if (!Array.isArray(raw)) return;
+    const parsed: SkillPresentation[] = [];
+    for (const value of raw) {
+      if (value === null || typeof value !== "object") continue;
+      const record = value as Record<string, unknown>;
+      if (
+        !Number.isSafeInteger(record.id)
+        || typeof record.name !== "string"
+        || typeof record.elite !== "boolean"
+        || typeof record.hasIcon !== "boolean"
+        || (record.profession !== null && !profession.has(record.profession as Profession))
+      ) {
+        continue;
+      }
+      const id = skillId(record.id as number);
+      parsed.push({
+        id,
+        name: record.name,
+        profession: record.profession as Profession | null,
+        elite: record.elite,
+        iconUrl: record.hasIcon ? `gw://app/skill-icons/${id}.bmp` : null,
+      });
+    }
+    skills.replace(parsed);
+  };
   return {
     label: "Saved on this Mac",
-    // Replaced by the local client catalogue during the asset milestone.
-    skills: demoSkillCatalogue,
-    loadLibrary: () => api.buildLibrary.get(),
+    skills,
+    async loadLibrary() {
+      const [library] = await Promise.all([
+        api.buildLibrary.get(),
+        loadSkills().catch(() => undefined),
+      ]);
+      return library;
+    },
     async saveLibrary(library) {
       await api.buildLibrary.set(library);
     },

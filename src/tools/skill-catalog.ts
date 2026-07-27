@@ -30,8 +30,8 @@ import {
   parseArchiveHeader,
   readFileTable,
   type ReadAt,
-} from "./gw-archive.js";
-import { findSkillTable, type SkillRecord } from "./skill-table.js";
+} from "../main/core/gw-archive.js";
+import { findSkillTable, type SkillRecord } from "../main/core/skill-table.js";
 
 interface SnapshotMetadata {
   chunkSize: number;

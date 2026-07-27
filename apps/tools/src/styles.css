@@ -157,7 +157,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
   inset: 0;
   place-items: center;
   padding: var(--ui-space-4);
-  background: color-mix(in srgb, var(--ui-canvas) 76%, transparent);
+  background: color-mix(in srgb, var(--ui-outline) 76%, transparent);
 }
 
 .composer-dialog {

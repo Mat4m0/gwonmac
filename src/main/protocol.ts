@@ -16,6 +16,7 @@ import {
 import { clientArtifactPath } from "./core/paths.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
+import { SkillAssets } from "./core/skill-assets.js";
 import { errorCode } from "../shared/errors.js";
 import {
   count,
@@ -23,7 +24,13 @@ import {
   startProxyRequestSpan,
   startSnapshotReadSpan,
 } from "./diagnostics.js";
-import { gamePaths, rendererRoot } from "./paths.js";
+import {
+  gamePaths,
+  rendererRoot,
+  sharedRendererRoot,
+  skillIconDecoderPath,
+  skillNamesPath,
+} from "./paths.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -58,6 +65,28 @@ export interface ProtocolDeps {
 let deps: ProtocolDeps = {
   getActiveClient: () => null,
 };
+
+let skillAssets: {
+  readonly store: ChunkStore;
+  readonly wasmPath: string;
+  readonly value: SkillAssets;
+} | null = null;
+
+function assetsFor(
+  active: NonNullable<ReturnType<ProtocolDeps["getActiveClient"]>>,
+): SkillAssets {
+  if (skillAssets?.store === active.store && skillAssets.wasmPath === active.wasmPath) {
+    return skillAssets.value;
+  }
+  const value = new SkillAssets({
+    store: active.store,
+    wasmPath: active.wasmPath,
+    namesPath: skillNamesPath(),
+    decoderPath: skillIconDecoderPath(),
+  });
+  skillAssets = { store: active.store, wasmPath: active.wasmPath, value };
+  return value;
+}
 
 export function setProtocolDeps(next: ProtocolDeps): void {
   deps = next;
@@ -395,6 +424,54 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     });
   }
 
+  if (base === "skill-catalog.json") {
+    const active = deps.getActiveClient();
+    if (!active) {
+      return new Response("[]", {
+        status: 503,
+        headers: headers({ "Content-Type": "application/json" }),
+      });
+    }
+    try {
+      const body = JSON.stringify(await assetsFor(active).catalogue());
+      return new Response(body, {
+        status: 200,
+        headers: headers({
+          "Content-Type": "application/json",
+          "Cache-Control": "private, max-age=3600",
+        }),
+      });
+    } catch {
+      return new Response("[]", {
+        status: 503,
+        headers: headers({ "Content-Type": "application/json" }),
+      });
+    }
+  }
+
+  const skillIconMatch = /^skill-icons\/([0-9]{1,7})\.bmp$/u.exec(base);
+  if (skillIconMatch) {
+    const active = deps.getActiveClient();
+    if (!active || request.method !== "GET") {
+      return new Response("not found", { status: 404, headers: headers() });
+    }
+    const id = Number(skillIconMatch[1]);
+    try {
+      const icon = await assetsFor(active).icon(id);
+      return icon
+        ? new Response(icon, {
+            status: 200,
+            headers: headers({
+              "Content-Type": "image/bmp",
+              "Cache-Control": "private, max-age=86400",
+            }),
+          })
+        : new Response("not found", { status: 404, headers: headers() });
+    } catch {
+      return new Response("not found", { status: 404, headers: headers() });
+    }
+  }
+
   const artifactName = CLIENT_ARTIFACTS.includes(
     base as (typeof CLIENT_ARTIFACTS)[number],
   )
@@ -423,6 +500,15 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     } catch {
       /* fall through to proxy */
     }
+  }
+
+  if (first === "shared") {
+    const sharedPath = pathname.replace(/^\/shared\/?/u, "");
+    const sharedFile = safeUnder(sharedRendererRoot(), sharedPath);
+    if (!sharedFile || path.extname(sharedFile) !== ".js") {
+      return new Response("not found", { status: 404, headers: headers() });
+    }
+    return fileResponse(sharedFile, request, MIME[".js"] ?? "text/javascript");
   }
 
   if (isProxyRoute(first)) {

@@ -17,7 +17,7 @@ export interface SkillCatalogue {
 
 export function createSkillCatalogue(
   skills: readonly SkillPresentation[],
-): SkillCatalogue {
+): SkillCatalogue & { replace(skills: readonly SkillPresentation[]): void } {
   const byId = new Map(skills.map((skill) => [skill.id, skill]));
   return {
     get(id) {
@@ -28,6 +28,10 @@ export function createSkillCatalogue(
         elite: false,
         iconUrl: null,
       };
+    },
+    replace(next) {
+      byId.clear();
+      for (const skill of next) byId.set(skill.id, skill);
     },
   };
 }

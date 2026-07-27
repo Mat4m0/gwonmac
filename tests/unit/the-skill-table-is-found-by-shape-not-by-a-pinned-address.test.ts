@@ -25,12 +25,12 @@ import {
   readFileTable,
   SLOT_BYTES,
   type ReadAt,
-} from "../../src/tools/gw-archive.ts";
+} from "../../src/main/core/gw-archive.ts";
 import {
   findSkillTable,
   signatureRun,
   SKILL_RECORD_BYTES,
-} from "../../src/tools/skill-table.ts";
+} from "../../src/main/core/skill-table.ts";
 
 /** A reader over one flat buffer, standing in for the chunk store. */
 const readerOver = (bytes: Uint8Array): ReadAt =>
