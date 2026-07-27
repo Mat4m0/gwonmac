@@ -66,6 +66,28 @@ test("imports a real template and composes it into a new team", async ({ page })
   await expect(page.locator(".team-slots > li").first()).not.toHaveClass(/team-slot--empty/);
 });
 
+test("authors a dual-profession build from an empty bar", async ({ page }) => {
+  await page.getByRole("button", { name: "Import build" }).click();
+  await page.getByLabel("Name optional").fill("Sword and bow");
+  await page.getByRole("button", { name: "Start blank" }).click();
+  await expect(page.locator("#build-name")).toHaveValue("Sword and bow");
+
+  await page.getByLabel("Secondary profession").selectOption("R");
+  await page.getByLabel("Swordsmanship rank").selectOption("12");
+  await page.getByLabel("Marksmanship rank").selectOption("12");
+  await expect(page.locator(".attribute-budget strong")).toHaveText("6");
+  await page.getByLabel("Strength rank").selectOption("3");
+  await expect(page.locator(".attribute-budget strong")).toHaveText("0");
+  await expect(page.getByLabel("Strength rank").locator("option[value='4']")).toHaveAttribute("disabled", "");
+  await expect(page.getByLabel("Expertise rank")).toHaveCount(0);
+
+  await page.locator(".bar-section .skill--editable").first().click();
+  await expect(page.getByRole("heading", { name: "Choose skill 1" })).toBeVisible();
+  await page.getByPlaceholder("Search skill or attribute").fill("Barrage");
+  await page.locator(".skill-picker").getByRole("option", { name: /Barrage/ }).click();
+  await expect(page.locator(".skill-list strong").first()).toHaveText("Barrage");
+});
+
 test("builds a useful handoff for a fresh account with one hero", async ({ page }) => {
   await page.getByRole("button", { name: "New team" }).click();
   await page.getByLabel("Name optional").fill("Me and Koss");

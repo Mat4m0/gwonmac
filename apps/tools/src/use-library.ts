@@ -234,19 +234,28 @@ export function useLibrary(host: ToolsHost) {
       showNotice("That is not a valid Guild Wars skill template code.", "error");
       return false;
     }
+    return updateBuildContent(sourceId, decoded, mode, rebindTeamIds);
+  };
+
+  const updateBuildContent = async (
+    sourceId: string,
+    content: Pick<Build, "professions" | "attributes" | "skills">,
+    mode: "all" | "fork" = "all",
+    rebindTeamIds: readonly string[] = [],
+  ): Promise<boolean> => {
     const nextId = id("build");
     await commit(
-      mode === "fork" ? "Variant created with the new bar" : "Build updated",
+      mode === "fork" ? "Variant created with your changes" : "Build updated",
       (current) => {
         const source = buildById(current, sourceId);
         if (!source) return current;
         if (mode === "all") {
-          return replaceBuild(current, { ...source, ...decoded });
+          return replaceBuild(current, { ...source, ...content });
         }
         const forked = forkBuild(current, sourceId, nextId);
         const variant = buildById(forked, nextId);
         if (!variant) return current;
-        const updated = replaceBuild(forked, { ...variant, ...decoded });
+        const updated = replaceBuild(forked, { ...variant, ...content });
         return {
           ...updated,
           teams: updated.teams.map((team) =>
@@ -417,6 +426,33 @@ export function useLibrary(host: ToolsHost) {
     return true;
   };
 
+  const createBlankBuild = async (requestedName = "") => {
+    if (!library.value) return;
+    const nextId = id("build");
+    const baseName = requestedName.trim() || "New build";
+    const names = new Set(library.value.builds.map((build) => build.name));
+    let name = baseName;
+    for (let suffix = 2; names.has(name); suffix++) name = `${baseName} (${suffix})`;
+    await commit("Blank build created", (current) => ({
+      ...current,
+      builds: [{
+        id: canonicalBuildId(nextId),
+        name,
+        professions: ["W", null],
+        skills: Array.from({ length: 8 }, () => null) as unknown as Build["skills"],
+        attributes: {},
+        tags: [],
+        notes: "",
+        favourite: false,
+        lastUsed: null,
+        parent: null,
+        origin: null,
+      }, ...current.builds],
+    }));
+    kind.value = "build";
+    selectedId.value = nextId;
+  };
+
   const createTeam = async (requestedName = "") => {
     const nextId = id("team");
     const name = requestedName.trim() || "New team";
@@ -572,10 +608,11 @@ export function useLibrary(host: ToolsHost) {
       (skill) => host.skills.has(skill) ? host.skills.get(skill) : null,
     ),
     renameBuild, toggleBuildFavourite, updateBuildNotes, setTags,
-    updateBuildFromCode, createFork, deleteBuild, detachVariant, mergeVariant,
+    updateBuildFromCode, updateBuildContent,
+    createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
     publish, prepareTeam, undo, reset,
-    importBuild, createTeam,
+    importBuild, createBlankBuild, createTeam,
   };
 }
 

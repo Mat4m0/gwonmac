@@ -326,11 +326,18 @@ body:has(.tools-stage[data-mode="standalone"]) {
   font-size: 0;
 }
 
-/* At 15px the elite corner dot stops being a marker and becomes a third of
-   the slot, so a compact bar's elite reads as a differently-coloured skill
-   rather than as the same skill flagged. The ring already says elite here. */
-.skill-bar--compact .skill[data-elite]::before {
-  display: none;
+.skill-bar > .skill {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.skill-bar > .skill:disabled { opacity: 1; }
+
+.skill--editable { cursor: pointer; }
+
+.skill--editable:hover {
+  box-shadow: inset 0 0 0 2px var(--ui-focus), 0 0 0 1px var(--ui-outline);
 }
 
 .team-professions {
@@ -499,27 +506,180 @@ body:has(.tools-stage[data-mode="standalone"]) {
   font-style: normal;
 }
 
-.attribute-list {
-  display: flex;
+.profession-editor {
+  display: grid;
   max-width: 620px;
   margin-top: var(--ui-space-2);
-  flex-wrap: wrap;
-  gap: var(--ui-space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-space-3);
 }
 
-.attribute-list > div {
+.profession-editor label,
+.attribute-editor label {
+  display: grid;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.attribute-editor {
+  display: grid;
+  max-width: 620px;
+  margin-top: var(--ui-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--ui-line);
+}
+
+.attribute-editor label {
+  min-width: 0;
+  padding: var(--ui-space-2);
+  grid-template-columns: minmax(0, 1fr) 105px;
+  align-items: center;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.attribute-editor label:nth-child(odd) { border-right: 1px solid var(--ui-line); }
+
+.attribute-editor label[data-invalid] {
+  background: color-mix(in srgb, var(--ui-danger) 14%, var(--ui-panel-fill));
+  color: var(--ui-danger);
+}
+
+.attribute-editor label > span {
+  display: grid;
+  min-width: 0;
+}
+
+.attribute-editor small {
+  color: var(--ui-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-select {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.attribute-budget {
+  display: grid;
+  min-width: 104px;
+  justify-items: end;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+}
+
+.attribute-budget strong {
+  color: var(--ui-accent);
+  font: 600 var(--ui-font-size-lg) var(--ui-font-mono);
+}
+
+.attribute-budget[data-over] strong { color: var(--ui-danger); }
+
+.attribute-total {
+  max-width: 620px;
+  margin: var(--ui-space-2) 0 0;
+  text-align: right;
+}
+
+.skill-picker-backdrop {
+  position: absolute;
+  z-index: var(--ui-z-toast);
+  display: grid;
+  inset: 0;
+  padding: var(--ui-space-4);
+  place-items: center;
+  background: color-mix(in srgb, var(--ui-outline) 76%, transparent);
+}
+
+.skill-picker,
+.shared-edit-dialog {
+  display: grid;
+  width: min(760px, 100%);
+  max-height: min(680px, 100%);
+  padding: var(--ui-space-4);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  gap: var(--ui-space-3);
+}
+
+.skill-picker header,
+.skill-picker footer {
   display: flex;
-  min-width: 150px;
-  padding: 7px 9px;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--ui-space-3);
-  border-bottom: 1px solid var(--ui-line);
+}
+
+.skill-picker h2,
+.skill-picker p,
+.shared-edit-dialog h2,
+.shared-edit-dialog p { margin: 0; }
+
+.skill-picker p,
+.shared-edit-dialog p {
+  margin-top: var(--ui-space-1);
   color: var(--ui-text-muted);
 }
 
-.attribute-list strong {
-  color: var(--ui-accent);
-  font-variant-numeric: tabular-nums;
+.skill-filters { justify-self: start; }
+
+.skill-picker-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+}
+
+.skill-grid {
+  display: grid;
+  min-height: 0;
+  padding: 1px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--ui-space-1);
+  overflow: auto;
+}
+
+.skill-choice {
+  display: grid;
+  min-width: 0;
+  padding: var(--ui-space-1);
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ui-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-choice:hover,
+.skill-choice[aria-selected="true"] {
+  border-color: var(--ui-edge);
+  background: var(--ui-raised-fill);
+}
+
+.skill-choice > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.skill-choice strong,
+.skill-choice small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-choice strong { font-size: var(--ui-font-size-sm); }
+.skill-choice small { color: var(--ui-text-faint); }
+
+.shared-edit-dialog {
+  width: min(520px, 100%);
+  grid-template-rows: none;
 }
 
 .lineage-actions {
@@ -883,6 +1043,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
   .team-slots > li { grid-template-columns: 18px 145px minmax(160px, 1fr) 84px 34px; }
   .team-slots .skill-bar { display: none; }
   .skill-list { grid-template-columns: 1fr; }
+  .skill-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Below this, list and detail become separate views rather than two columns
@@ -937,6 +1098,10 @@ body:has(.tools-stage[data-mode="standalone"]) {
 
   .bar-section > .skill-bar { grid-template-columns: repeat(4, minmax(36px, 1fr)); }
   .comparison-bars { grid-template-columns: 1fr; }
+  .profession-editor,
+  .attribute-editor { grid-template-columns: 1fr; }
+  .attribute-editor label:nth-child(odd) { border-right: 0; }
+  .skill-grid { grid-template-columns: 1fr; }
   .detail-actions--explain > span { display: none; }
 }
 

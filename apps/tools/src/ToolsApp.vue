@@ -73,6 +73,14 @@ const finishCreate = async () => {
   mobileView.value = "detail";
 };
 
+const startBlankBuild = async () => {
+  await controller.createBlankBuild(draftName.value);
+  composer.value = null;
+  draftCode.value = "";
+  draftName.value = "";
+  mobileView.value = "detail";
+};
+
 const startDrag = (event: PointerEvent) => {
   if (props.mode !== "embedded" || !panel.value) return;
   if ((event.target as Element).closest("button, input, select")) return;
@@ -385,6 +393,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             />
           </label>
           <footer>
+            <button
+              v-if="composer === 'build'"
+              type="button"
+              class="ui-button"
+              @click="startBlankBuild"
+            >
+              Start blank
+            </button>
             <button type="button" class="ui-button" @click="composer = null">Cancel</button>
             <button class="ui-button" data-variant="primary">
               {{ composer === "build" ? "Import build" : "Create team" }}

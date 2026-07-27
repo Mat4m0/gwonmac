@@ -1,9 +1,29 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
+import {
+  attributePointsRemaining,
+  attributePointsSpent,
+  availableAttributes,
+  canSetAttributeRank,
+  withAttributeRank,
+} from "../../../../src/shared/builds/authoring";
+import {
+  ATTRIBUTE_POINT_COST,
+  ATTRIBUTES,
+  PROFESSIONS,
+} from "../../../../src/shared/builds/heroes";
+import type {
+  Attribute,
+  AttributeRank,
+  Profession,
+  SkillId,
+} from "../../../../src/shared/builds/library";
+import { LEVEL_20_ATTRIBUTE_BUDGET } from "../../../../src/shared/builds/validate";
 import type { BuildProblem } from "../../../../src/shared/builds/validate";
 import type { LibraryController } from "../use-library";
 import { buildDifference, type Build } from "../model";
 import SkillBar from "./SkillBar.vue";
+import SkillPicker from "./SkillPicker.vue";
 import TagEditor from "./TagEditor.vue";
 
 const props = defineProps<{
@@ -24,6 +44,11 @@ const replacementCode = ref("");
 const replacementMode = ref<"all" | "fork">("all");
 const replacementTeams = ref<string[]>([]);
 const merging = ref(false);
+const pickingSlot = ref<number | null>(null);
+const pendingEdit = shallowRef<Pick<Build, "professions" | "attributes" | "skills"> | null>(null);
+const editTeams = ref<string[]>([]);
+const professions = Object.entries(PROFESSIONS) as readonly [Profession, { id: number; name: string }][];
+const ranks = Object.keys(ATTRIBUTE_POINT_COST).map(Number) as AttributeRank[];
 
 watch(
   () => props.build.id,
@@ -36,6 +61,9 @@ watch(
     replacementMode.value = "all";
     replacementTeams.value = [];
     merging.value = false;
+    pickingSlot.value = null;
+    pendingEdit.value = null;
+    editTeams.value = [];
   },
 );
 watch(
@@ -62,6 +90,85 @@ const changedSlots = computed(() =>
       )
     : [],
 );
+const editableAttributes = computed(() => {
+  const available = availableAttributes(props.build.professions);
+  const invested = Object.keys(props.build.attributes) as Attribute[];
+  return [...new Set([...available, ...invested])];
+});
+const pointsSpent = computed(() => attributePointsSpent(props.build.attributes));
+const pointsRemaining = computed(() => attributePointsRemaining(props.build.attributes));
+
+const attributeLabel = (attribute: Attribute) =>
+  attribute.replace(/([a-z])([A-Z])/gu, "$1 $2");
+
+const requestEdit = async (
+  content: Pick<Build, "professions" | "attributes" | "skills">,
+) => {
+  if (usage.value.length > 1) {
+    pendingEdit.value = content;
+    editTeams.value = usage.value[0] ? [usage.value[0].id] : [];
+    return;
+  }
+  await props.controller.updateBuildContent(props.build.id, content);
+};
+
+const chooseSkill = async (skill: SkillId | null) => {
+  if (pickingSlot.value === null) return;
+  const skills = [...props.build.skills] as unknown as Build["skills"];
+  (skills as unknown as Array<SkillId | null>)[pickingSlot.value] = skill;
+  pickingSlot.value = null;
+  await requestEdit({
+    professions: props.build.professions,
+    attributes: props.build.attributes,
+    skills,
+  });
+};
+
+const changePrimary = async (event: Event) => {
+  const primary = (event.target as HTMLSelectElement).value as Profession;
+  const [previousPrimary, secondary] = props.build.professions;
+  const nextSecondary = secondary === primary ? previousPrimary : secondary;
+  await requestEdit({
+    professions: [primary, nextSecondary],
+    attributes: props.build.attributes,
+    skills: props.build.skills,
+  });
+};
+
+const changeSecondary = async (event: Event) => {
+  const value = (event.target as HTMLSelectElement).value;
+  await requestEdit({
+    professions: [props.build.professions[0], value === "" ? null : value as Profession],
+    attributes: props.build.attributes,
+    skills: props.build.skills,
+  });
+};
+
+const changeRank = async (attribute: Attribute, event: Event) => {
+  const rank = Number((event.target as HTMLSelectElement).value) as AttributeRank;
+  await requestEdit({
+    professions: props.build.professions,
+    attributes: withAttributeRank(props.build.attributes, attribute, rank),
+    skills: props.build.skills,
+  });
+};
+
+const finishPendingEdit = async (mode: "all" | "fork") => {
+  if (!pendingEdit.value) return;
+  await props.controller.updateBuildContent(
+    props.build.id,
+    pendingEdit.value,
+    mode,
+    editTeams.value,
+  );
+  pendingEdit.value = null;
+};
+
+const toggleEditTeam = (id: string) => {
+  editTeams.value = editTeams.value.includes(id)
+    ? editTeams.value.filter((value) => value !== id)
+    : [...editTeams.value, id];
+};
 
 const commitName = () => {
   if (name.value.trim() && name.value.trim() !== props.build.name) {
@@ -200,7 +307,12 @@ const problemText = (problem: BuildProblem): string => {
             Save to Guild Wars
           </button>
         </div>
-        <SkillBar :skills="build.skills" :catalogue="controller.skills" />
+        <SkillBar
+          :skills="build.skills"
+          :catalogue="controller.skills"
+          editable
+          @select="pickingSlot = $event"
+        />
         <ol class="skill-list">
           <li v-for="(skill, index) in build.skills" :key="`${skill ?? 'empty'}-${index}`">
             <span>{{ index + 1 }}</span>
@@ -230,13 +342,71 @@ const problemText = (problem: BuildProblem): string => {
       </section>
 
       <section class="attributes-section">
-        <h2>Attributes</h2>
-        <div class="attribute-list">
-          <div v-for="(rank, attribute) in build.attributes" :key="attribute">
-            <span>{{ attribute }}</span>
-            <strong>{{ rank }}</strong>
+        <div class="section-heading">
+          <div>
+            <h2>Professions & attributes</h2>
+            <p>Invested ranks use Guild Wars’ nonlinear level-20 point costs. Runes and bonuses are not included.</p>
+          </div>
+          <div class="attribute-budget" :data-over="pointsRemaining < 0 ? '' : undefined">
+            <strong>{{ pointsRemaining }}</strong>
+            <span>of {{ LEVEL_20_ATTRIBUTE_BUDGET }} points left</span>
           </div>
         </div>
+        <div class="profession-editor">
+          <label>
+            <span>Primary profession</span>
+            <select class="ui-select" :value="build.professions[0]" @change="changePrimary">
+              <option v-for="[key, facts] in professions" :key="key" :value="key">
+                {{ facts.name }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span>Secondary profession</span>
+            <select class="ui-select" :value="build.professions[1] ?? ''" @change="changeSecondary">
+              <option value="">None</option>
+              <option
+                v-for="[key, facts] in professions"
+                :key="key"
+                :value="key"
+                :disabled="key === build.professions[0]"
+              >
+                {{ facts.name }}
+              </option>
+            </select>
+          </label>
+        </div>
+        <div class="attribute-editor">
+          <label
+            v-for="attribute in editableAttributes"
+            :key="attribute"
+            :data-invalid="!availableAttributes(build.professions).includes(attribute) ? '' : undefined"
+          >
+            <span>
+              <strong>{{ attributeLabel(attribute) }}</strong>
+              <small>
+                {{ PROFESSIONS[ATTRIBUTES[attribute].profession].name }}
+                <template v-if="!availableAttributes(build.professions).includes(attribute)"> · unavailable</template>
+              </small>
+            </span>
+            <select
+              class="ui-select rank-select"
+              :value="build.attributes[attribute] ?? 0"
+              :aria-label="`${attributeLabel(attribute)} rank`"
+              @change="changeRank(attribute, $event)"
+            >
+              <option
+                v-for="rank in ranks"
+                :key="rank"
+                :value="rank"
+                :disabled="rank > (build.attributes[attribute] ?? 0) && !canSetAttributeRank(build.attributes, attribute, rank)"
+              >
+                {{ rank }} · {{ ATTRIBUTE_POINT_COST[rank] }} pt
+              </option>
+            </select>
+          </label>
+        </div>
+        <p class="attribute-total">{{ pointsSpent }} points invested</p>
       </section>
 
       <section v-if="usage.length" class="usage-section">
@@ -384,6 +554,33 @@ const problemText = (problem: BuildProblem): string => {
           <button class="ui-button" data-variant="primary" @click="controller.mergeVariant(build.id)">
             Merge variant
           </button>
+        </div>
+      </section>
+    </div>
+
+    <SkillPicker
+      v-if="pickingSlot !== null"
+      :build="build"
+      :slot-index="pickingSlot"
+      :catalogue="controller.skills"
+      @choose="chooseSkill"
+      @close="pickingSlot = null"
+    />
+
+    <div v-if="pendingEdit" class="skill-picker-backdrop" @click.self="pendingEdit = null">
+      <section class="ui-frame shared-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="shared-edit-title">
+        <h2 id="shared-edit-title">This build is shared</h2>
+        <p>Apply this change to all {{ usage.length }} linked teams, or keep the original and move selected teams to a related variant.</p>
+        <div class="check-list">
+          <label v-for="team in usage" :key="team.id" class="ui-check">
+            <input type="checkbox" :checked="editTeams.includes(team.id)" @change="toggleEditTeam(team.id)">
+            <span>Move {{ team.name }} to the variant</span>
+          </label>
+        </div>
+        <div class="action-row">
+          <button class="ui-button" @click="pendingEdit = null">Cancel</button>
+          <button class="ui-button" :disabled="editTeams.length === 0" @click="finishPendingEdit('fork')">Fork selected</button>
+          <button class="ui-button" data-variant="primary" @click="finishPendingEdit('all')">Update all</button>
         </div>
       </section>
     </div>

@@ -80,6 +80,60 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
+  it("authors a blank dual-profession build within the 200-point budget", async () => {
+    const wrapper = await workbench();
+    await wrapper.get(".create-actions [data-variant=primary]").trigger("click");
+    await wrapper
+      .findAll(".composer-dialog .ui-button")
+      .find((button) => button.text().includes("Start blank"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get<HTMLInputElement>("#build-name").element.value).toBe("New build");
+    const professions = wrapper.findAll<HTMLSelectElement>(".profession-editor select");
+    await professions[1]!.setValue("R");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Marksmanship");
+    expect(wrapper.text()).not.toContain("Expertise");
+
+    const rank = (name: string) =>
+      wrapper.get<HTMLSelectElement>(`.rank-select[aria-label="${name} rank"]`);
+    await rank("Swordsmanship").setValue("12");
+    await flushPromises();
+    await rank("Marksmanship").setValue("12");
+    await flushPromises();
+    expect(wrapper.get(".attribute-budget strong").text()).toBe("6");
+    await rank("Strength").setValue("3");
+    await flushPromises();
+    expect(wrapper.get(".attribute-budget strong").text()).toBe("0");
+
+    await wrapper.findAll(".bar-section .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.skill-picker input[type="search"]').setValue("Barrage");
+    await wrapper.get(".skill-choice").trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll(".skill-list strong")[0]!.text()).toBe("Barrage");
+    wrapper.unmount();
+  });
+
+  it("asks before changing a shared bar and keeps an edited fork related", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".bar-section .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.skill-picker input[type="search"]').setValue("Aegis");
+    await wrapper.get(".skill-choice").trigger("click");
+    expect(wrapper.text()).toContain("This build is shared");
+
+    await wrapper
+      .findAll(".shared-edit-dialog .ui-button")
+      .find((button) => button.text().includes("Fork selected"))!
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Variant of");
+    expect(wrapper.text()).toContain("Aegis");
+    wrapper.unmount();
+  });
+
   it("assigns heroes and persists the controls that belong to a team slot", async () => {
     const wrapper = await workbench();
     const hero = wrapper.findAll<HTMLSelectElement>(".hero-picker select")[0]!;

@@ -796,26 +796,15 @@ button.ui-chip:hover {
   color: var(--ui-text-faint);
 }
 
-/* The elite marker the client draws in the corner of an elite skill. */
+/* Guild Wars keeps the elite indicator out of the icon artwork and composes a
+ * separate golden frame around it. Two inset strokes reproduce that frame at
+ * every size without bundling a second raster asset. */
 .ui-slot[data-elite] {
   box-shadow:
-    inset 0 0 0 2px var(--ui-warning),
-    0 0 0 1px color-mix(in srgb, var(--ui-warning) 68%, var(--ui-outline));
-}
-
-/* Sized against the slot, not in absolute pixels: a 5px dot is a marker on a
- * 39px slot and a third of a 15px one, and the compact bars are the ones a
- * player scans eight builds of at a time. */
-.ui-slot[data-elite]::before {
-  content: "";
-  position: absolute;
-  right: 6%;
-  bottom: 6%;
-  z-index: 1;
-  width: min(5px, 22%);
-  height: min(5px, 22%);
-  border-radius: var(--ui-radius-pill);
-  background: var(--ui-warning);
+    inset 0 0 0 1px color-mix(in srgb, var(--ui-warning) 45%, var(--ui-outline)),
+    inset 0 0 0 3px var(--ui-warning),
+    inset 0 0 0 4px color-mix(in srgb, var(--ui-warning) 56%, var(--ui-outline)),
+    0 0 0 1px var(--ui-outline);
 }
 
 /* What changed between two builds. Ringed rather than tinted, so the icon
