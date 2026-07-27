@@ -102,9 +102,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // TextResolveIssue(encoded, callback, param). This is a read-only client
     // service: it asks the installed client's own locale table to decode text.
     textResolveFunction: 5870,
-    // Reserved alongside the companion hook. A WASM callback temporarily
-    // occupies this slot while one asynchronous string decode is in flight.
-    textCallbackTableSlot: 1,
+    // The transform appends this slot after the client's full 0..4682 table.
+    // No client function is displaced.
+    textCallbackTableSlot: 4683,
     layout: Object.freeze({
       contextRoot: 0x5a0e20,
       agentArray: 0x5a4d98,

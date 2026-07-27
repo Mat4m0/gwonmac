@@ -559,6 +559,15 @@ may be valid for a player slot and invalid for a hero slot. The preload and IPC
 layers transport validated library and publication requests but contain none
 of these rules.
 
+Localized skill descriptions also come from the installed client. The static
+catalogue supplies the full-description string ID and its scale, bonus, and
+duration ranges; the renderer sends that encoded reference through the
+exact-build-certified client text resolver and caches the resulting readable
+text by string ID. The WASM transform extends the client's full function table
+by one slot for the temporary callback instead of borrowing a client-owned
+entry. Only one decode is in flight, the callback is bounded and removed after
+completion, and no description database or network lookup exists.
+
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam
 sixteen canvases before the host releases the button, re-anchors at center, and

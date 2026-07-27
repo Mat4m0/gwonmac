@@ -81,7 +81,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookResults: [],
     tableSlot: 0,
     textResolveFunction: 1,
-    textCallbackTableSlot: 1,
+    textCallbackTableSlot: 2,
     layout: {
       contextRoot: 1, agentArray: 2, manualTargetAgentId: 3,
       automaticTargetAgentId: 4, gameContextSlot: 6, characterContext: 4,
@@ -97,7 +97,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
 }
 
 describe("targeted Enhancement WebAssembly transform", () => {
-  it("is deterministic, valid, and exports only the hook contract", () => {
+  it("is deterministic, valid, and appends one callback table slot", () => {
     const input = fixture();
     const build = manifest(input);
     const first = transformEnhancementWasm(input, build);
@@ -109,6 +109,11 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const bytes = new Uint8Array(first);
     assert.equal(WebAssembly.validate(bytes), true);
     const module = new WebAssembly.Module(bytes);
+    const instance = new WebAssembly.Instance(module);
+    assert.equal(
+      (instance.exports.tbl as WebAssembly.Table).length,
+      build.textCallbackTableSlot + 1,
+    );
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(ENHANCEMENT_HOOK_EXPORT));
     assert.ok(names.includes(ENHANCEMENT_ORIGINAL_EXPORT));
@@ -166,6 +171,13 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.throws(
       () => transformEnhancementWasm(wrongSignature, manifest(wrongSignature)),
       /signature/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(input, {
+        ...manifest(input),
+        textCallbackTableSlot: 1,
+      }),
+      /does not extend table length/,
     );
   });
 });

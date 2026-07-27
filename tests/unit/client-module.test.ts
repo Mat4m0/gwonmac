@@ -153,7 +153,7 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
     hookResults: [],
     tableSlot: 0,
     textResolveFunction: 4,
-    textCallbackTableSlot: 1,
+    textCallbackTableSlot: 2,
     layout: {
       contextRoot: 1,
       agentArray: 2,
