@@ -1,4 +1,9 @@
-import type { AppSettings, GwNativeApi } from "../shared/contracts.js";
+import type {
+  AppSettings,
+  AppSettingsPatch,
+  GwNativeApi,
+  ToolboxSelection,
+} from "../shared/contracts.js";
 import type {
   RendererEventName,
   RendererMetrics,
@@ -118,13 +123,11 @@ declare global {
   }
 
   interface ToolboxSettingsController {
-    patchFor(
-      control: HTMLInputElement | HTMLSelectElement,
-    ): import("../shared/contracts.js").AppSettingsPatch | null;
+    patchFor(control: HTMLInputElement | HTMLSelectElement): AppSettingsPatch | null;
     render(settings: AppSettings): void;
     resultFor(
       control: HTMLInputElement | HTMLSelectElement,
-      patch: import("../shared/contracts.js").AppSettingsPatch,
+      patch: AppSettingsPatch,
       saved: AppSettings,
     ): Readonly<{ applied: boolean; text: string }> | null;
   }
@@ -155,10 +158,8 @@ declare global {
       create(options: {
         form: HTMLFormElement;
         byId(id: string): HTMLElement;
-        selection: import("../shared/contracts.js").ToolboxSelection;
-        persist(
-          patch: import("../shared/contracts.js").AppSettingsPatch,
-        ): Promise<AppSettings>;
+        selection: ToolboxSelection;
+        persist(patch: AppSettingsPatch): Promise<AppSettings>;
         current(): AppSettings | null;
       }): ToolboxSettingsController;
     }>;

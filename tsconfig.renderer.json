@@ -39,5 +39,10 @@
   },
   // src/shared is reached through the renderer's imports, so listing two of its
   // files here only ever said which two the author happened to think of.
-  "include": ["src/renderer/**/*.js", "src/renderer/**/*.d.ts"]
+  //
+  // Both source extensions, because the renderer converts to TypeScript a batch
+  // at a time and the two must compile as one program while that is under way.
+  // `**/*.ts` subsumes the ambient `src/renderer/gw-native.d.ts` that used to be
+  // named separately.
+  "include": ["src/renderer/**/*.js", "src/renderer/**/*.ts"]
 }

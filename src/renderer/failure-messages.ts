@@ -11,15 +11,14 @@
 // "it broke" fifty ways would be worse than one honest default. A code earns
 // an entry only when it changes what the player should *do*.
 
-/** @typedef {import('../shared/errors.js').ErrorCode} ErrorCode */
+import type { ErrorCode } from '../shared/errors.js';
 
 /**
  * The launch failed and the game cannot start. The default is the sentence
  * this path has always shown; the entries above it are the cases with a
  * different answer.
- * @type {Partial<Record<ErrorCode, string>>}
  */
-const LAUNCH_FAILURE = {
+const LAUNCH_FAILURE: Partial<Record<ErrorCode, string>> = {
   disk_full:
     'There is not enough free disk space to prepare the game client. Free some space, then choose Retry.',
   not_ready:
@@ -36,9 +35,8 @@ const LAUNCH_DEFAULT =
 /**
  * The full-game download stopped and can be resumed. Verified data is always
  * kept, so every sentence here ends at the same action.
- * @type {Partial<Record<ErrorCode, string>>}
  */
-const DOWNLOAD_FAILURE = {
+const DOWNLOAD_FAILURE: Partial<Record<ErrorCode, string>> = {
   disk_full:
     'There is not enough free disk space to download the full game. Free some space, then choose Resume Download.',
   not_ready: 'The game files are not ready yet. Try again in a moment.',
@@ -47,18 +45,10 @@ const DOWNLOAD_FAILURE = {
 const DOWNLOAD_DEFAULT =
   'The download could not continue. Check your connection, then choose Resume Download.';
 
-/**
- * @param {ErrorCode} code
- * @returns {string}
- */
-export function describeLaunchFailure(code) {
+export function describeLaunchFailure(code: ErrorCode): string {
   return LAUNCH_FAILURE[code] ?? LAUNCH_DEFAULT;
 }
 
-/**
- * @param {ErrorCode} code
- * @returns {string}
- */
-export function describeDownloadFailure(code) {
+export function describeDownloadFailure(code: ErrorCode): string {
   return DOWNLOAD_FAILURE[code] ?? DOWNLOAD_DEFAULT;
 }

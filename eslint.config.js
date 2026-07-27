@@ -186,6 +186,10 @@ export default tseslint.config(
     },
   },
   {
+    // The renderer sources still awaiting conversion. Their browser globals are
+    // declared here because nothing else tells ESLint about them; the converted
+    // `.ts` below needs no such list, since typescript-eslint turns `no-undef`
+    // off for TypeScript and the compiler is the better oracle for `Document`.
     files: ["src/renderer/**/*.js"],
     languageOptions: {
       globals: {
@@ -223,6 +227,23 @@ export default tseslint.config(
     },
     rules: {
       "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    },
+  },
+  {
+    // The converted renderer, held to the same two rules as src/main,
+    // src/shared and src/tools — `consistent-type-imports` most of all, since a
+    // renderer module that imports a contract for its type alone must emit no
+    // runtime import: build/renderer is served over gw://app and nothing there
+    // resolves src/shared. No `projectService` here: the renderer's program is
+    // tsconfig.renderer.json, which the service does not reach from the root
+    // tsconfig.json, and neither rule needs type information.
+    files: ["src/renderer/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/consistent-type-imports": "error",
     },
   },
   {

@@ -5,17 +5,18 @@
 // surface must show the same request and result. `settings.js` supplies the
 // native actions and persistence; this module owns how that one action appears.
 
-/** @typedef {import('../shared/contracts.js').ReleaseCheckFailure} ReleaseCheckFailure */
-/** @typedef {import('../shared/contracts.js').ReleaseNotice} ReleaseNotice */
+import type {
+  ReleaseCheckFailure,
+  ReleaseNotice,
+} from '../shared/contracts.js';
 
 /**
  * One sentence per failure reason, keyed by the closed vocabulary so that a
  * reason added to the contract fails `tsc` here instead of rendering as a
  * blank line. "Couldn't check" never says "up to date": that conflation is the
  * quiet lie this whole path exists to remove.
- * @type {Record<ReleaseCheckFailure, string>}
  */
-const FAILURE_MESSAGE = {
+const FAILURE_MESSAGE: Record<ReleaseCheckFailure, string> = {
   'rate-limited':
     "Couldn't check — GitHub is refusing further requests from this network. Try again in an hour.",
   offline: "Couldn't check — GitHub could not be reached.",
@@ -30,11 +31,7 @@ const FAILURE_MESSAGE = {
 // check could not be run at all. That is still not "up to date".
 const UNAVAILABLE_MESSAGE = "Couldn't check — the update check could not run.";
 
-/**
- * @param {ReleaseNotice} notice
- * @returns {string}
- */
-export function describeReleaseNotice(notice) {
+export function describeReleaseNotice(notice: ReleaseNotice): string {
   if (notice.state === 'update-available') {
     return `Version ${notice.latestVersion} is available.`;
   }
@@ -42,21 +39,20 @@ export function describeReleaseNotice(notice) {
   return FAILURE_MESSAGE[notice.reason];
 }
 
-/**
- * @param {number} value
- * @param {string} unit
- */
-const plural = (value, unit) => `${value} ${unit}${value === 1 ? '' : 's'}`;
+const plural = (value: number, unit: string) =>
+  `${value} ${unit}${value === 1 ? '' : 's'}`;
 
 /**
  * When a release check was last attempted. Empty string means never, which is
  * the state that `unknown` would otherwise be indistinguishable from.
  *
- * @param {number | null} checkedAt epoch milliseconds, or null if never checked
- * @param {number} now epoch milliseconds
- * @returns {string}
+ * `checkedAt` and `now` are both epoch milliseconds; a null `checkedAt` means
+ * no check has ever completed.
  */
-export function formatLastChecked(checkedAt, now) {
+export function formatLastChecked(
+  checkedAt: number | null,
+  now: number,
+): string {
   if (checkedAt === null) return '';
   // A profile can travel between machines whose clocks disagree; a negative
   // age is reported as "just now" rather than as a time in the future.
@@ -68,42 +64,44 @@ export function formatLastChecked(checkedAt, now) {
   return `Last checked ${plural(Math.floor(hours / 24), 'day')} ago`;
 }
 
-/**
- * @typedef {object} UpdateActionView
- * @property {string} actionLabel Label for the control that starts a check.
- * @property {boolean} busy A check is in flight; starting another does nothing.
- * @property {string} message The answer, or '' before the first one arrives.
- * @property {string} lastChecked '' until a release check has completed once.
- * @property {boolean} updateAvailable Whether to offer the releases page.
- */
+export type UpdateActionView = {
+  /** Label for the control that starts a check. */
+  actionLabel: string;
+  /** A check is in flight; starting another does nothing. */
+  busy: boolean;
+  /** The answer, or '' before the first one arrives. */
+  message: string;
+  /** '' until a release check has completed once. */
+  lastChecked: string;
+  /** Whether to offer the releases page. */
+  updateAvailable: boolean;
+};
 
-/**
- * @typedef {object} UpdateAction
- * @property {(listener: (view: UpdateActionView) => void) => void} subscribe
- * @property {(checkedAt: number | null) => void} restore
- * @property {() => Promise<void>} check
- */
+export type UpdateAction = {
+  subscribe(listener: (view: UpdateActionView) => void): void;
+  restore(checkedAt: number | null): void;
+  check(): Promise<void>;
+};
 
-/**
- * @param {object} options
- * @param {() => Promise<ReleaseNotice>} options.check Asks the main process.
- * @param {(checkedAt: number) => Promise<unknown>} options.remember Persists
- *   the timestamp, so "never checked" survives a relaunch.
- * @param {() => number} [options.now]
- * @returns {UpdateAction}
- */
-export function createUpdateAction({ check, remember, now = () => Date.now() }) {
-  /** @type {ReleaseNotice | 'unavailable' | null} */
-  let result = null;
-  /** @type {number | null} */
-  let lastCheckedAt = null;
-  /** @type {Promise<void> | null} */
-  let running = null;
-  /** @type {((view: UpdateActionView) => void)[]} */
-  const listeners = [];
+type UpdateActionOptions = {
+  /** Asks the main process. */
+  check(): Promise<ReleaseNotice>;
+  /** Persists the timestamp, so "never checked" survives a relaunch. */
+  remember(checkedAt: number): Promise<unknown>;
+  now?(): number;
+};
 
-  /** @returns {UpdateActionView} */
-  function view() {
+export function createUpdateAction({
+  check,
+  remember,
+  now = () => Date.now(),
+}: UpdateActionOptions): UpdateAction {
+  let result: ReleaseNotice | 'unavailable' | null = null;
+  let lastCheckedAt: number | null = null;
+  let running: Promise<void> | null = null;
+  const listeners: ((view: UpdateActionView) => void)[] = [];
+
+  function view(): UpdateActionView {
     const notice = result === null || result === 'unavailable' ? null : result;
     return {
       actionLabel: running ? 'Checking…' : 'Check for Updates',
@@ -177,42 +175,40 @@ export function createUpdateAction({ check, remember, now = () => Date.now() }) 
   };
 }
 
-/**
- * @param {Document} root
- * @param {string} id
- */
-function requiredElement(root, id) {
+function requiredElement(root: Document, id: string): HTMLElement {
   const node = root.getElementById(id);
   if (!node) throw new Error(`missing update element: ${id}`);
   return node;
 }
 
 /**
+ * The two controls whose `disabled` this module writes. index.html declares
+ * both as `<button>`; the assertion narrows to the property that needs it and
+ * nothing else, so the other nine ids stay plain elements.
+ */
+function requiredButton(root: Document, id: string): HTMLButtonElement {
+  return requiredElement(root, id) as HTMLButtonElement;
+}
+
+/**
  * Bind the one update action to its three fixed surfaces. Static structure
  * belongs in index.html; the synchronized state and clicks belong here.
- *
- * @param {Document} root
- * @param {UpdateAction} action
- * @param {() => Promise<unknown>} openReleases
  */
-export function bindUpdateActionDom(root, action, openReleases) {
-  const launcherCheck =
-    /** @type {HTMLAnchorElement} */ (requiredElement(root, 'loading-update-check'));
+export function bindUpdateActionDom(
+  root: Document,
+  action: UpdateAction,
+  openReleases: () => Promise<unknown>,
+) {
+  const launcherCheck = requiredElement(root, 'loading-update-check');
   const launcherStatus = requiredElement(root, 'loading-update-status');
   const launcherWhen = requiredElement(root, 'loading-update-when');
   const launcherGet = requiredElement(root, 'loading-update-get');
-  const settingsCheck =
-    /** @type {HTMLButtonElement} */ (requiredElement(root, 'settings-check-updates'));
-  const settingsReleases =
-    /** @type {HTMLButtonElement} */ (requiredElement(root, 'settings-open-releases'));
+  const settingsCheck = requiredButton(root, 'settings-check-updates');
+  const settingsReleases = requiredElement(root, 'settings-open-releases');
   const settingsStatus = requiredElement(root, 'settings-update-status');
   const settingsWhen = requiredElement(root, 'settings-update-when');
-  const compatibilityCheck =
-    /** @type {HTMLButtonElement} */ (requiredElement(root, 'client-compat-check'));
-  const compatibilityReleases =
-    /** @type {HTMLButtonElement} */ (
-      requiredElement(root, 'client-compat-releases')
-    );
+  const compatibilityCheck = requiredButton(root, 'client-compat-check');
+  const compatibilityReleases = requiredElement(root, 'client-compat-releases');
   const compatibilityStatus = requiredElement(root, 'client-compat-update');
 
   action.subscribe((view) => {
