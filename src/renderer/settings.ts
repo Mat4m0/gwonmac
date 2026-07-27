@@ -44,6 +44,13 @@
   const renderScale = form.elements.namedItem(
     'renderScale',
   ) as HTMLSelectElement;
+  const uiPanelOpacity = form.elements.namedItem(
+    'uiPanelOpacity',
+  ) as HTMLInputElement;
+  const uiBorderWidth = form.elements.namedItem(
+    'uiBorderWidth',
+  ) as HTMLInputElement;
+  const uiRadius = form.elements.namedItem('uiRadius') as HTMLInputElement;
   const touchMode = form.elements.namedItem('touchMode') as HTMLSelectElement;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
@@ -333,6 +340,38 @@
           ? { renderScale: value }
           : null;
       }
+      case 'uiTheme': {
+        const value = control.value;
+        return value === 'brass' || value === 'steel' || value === 'jade'
+          ? { uiTheme: value }
+          : null;
+      }
+      case 'uiDensity': {
+        const value = control.value;
+        return value === 'compact' ||
+          value === 'balanced' ||
+          value === 'comfortable'
+          ? { uiDensity: value }
+          : null;
+      }
+      case 'uiPanelOpacity': {
+        const value = Number(control.value);
+        return Number.isSafeInteger(value) && value >= 65 && value <= 100
+          ? { uiPanelOpacity: value }
+          : null;
+      }
+      case 'uiBorderWidth': {
+        const value = Number(control.value);
+        return Number.isSafeInteger(value) && value >= 0 && value <= 4
+          ? { uiBorderWidth: value }
+          : null;
+      }
+      case 'uiRadius': {
+        const value = Number(control.value);
+        return Number.isSafeInteger(value) && value >= 0 && value <= 16
+          ? { uiRadius: value }
+          : null;
+      }
       case 'touchMode': {
         const value = control.value;
         return value === 'dbltap' ||
@@ -359,6 +398,20 @@
 
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
+    for (const radio of form.querySelectorAll<HTMLInputElement>(
+      'input[name="uiTheme"]',
+    )) {
+      radio.checked = radio.value === settings.uiTheme;
+    }
+    for (const radio of form.querySelectorAll<HTMLInputElement>(
+      'input[name="uiDensity"]',
+    )) {
+      radio.checked = radio.value === settings.uiDensity;
+    }
+    uiPanelOpacity.value = String(settings.uiPanelOpacity);
+    uiBorderWidth.value = String(settings.uiBorderWidth);
+    uiRadius.value = String(settings.uiRadius);
+    updateAppearanceOutputs();
     toolSettings.render(settings);
     touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
@@ -369,6 +422,12 @@
       radio.checked = radio.value === settings.dataStrategy;
     }
     updateRenderScaleDimensions();
+  }
+
+  function updateAppearanceOutputs() {
+    byId('settings-opacity-value').textContent = `${uiPanelOpacity.value}%`;
+    byId('settings-border-value').textContent = `${uiBorderWidth.value}px`;
+    byId('settings-radius-value').textContent = `${uiRadius.value}px`;
   }
 
   function renderSettingsData(cache = currentCache) {
@@ -777,6 +836,22 @@
         }
         feedback.textContent = 'Settings could not be saved.';
       });
+  });
+
+  // Range controls preview against the canonical saved settings while they
+  // move. Only the ordinary `change` path persists, so a drag remains one
+  // atomic write rather than dozens.
+  form.addEventListener('input', (event) => {
+    const control = event.target;
+    if (
+      !(control instanceof globalThis.HTMLInputElement) ||
+      control.type !== 'range' ||
+      !currentSettings
+    ) return;
+    const patch = patchForControl(control);
+    if (!patch) return;
+    updateAppearanceOutputs();
+    window.gwApplySettings?.({ ...currentSettings, ...patch });
   });
 
   settingsDownload.addEventListener('click', () => {

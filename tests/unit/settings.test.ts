@@ -16,6 +16,11 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
+      uiTheme: "brass",
+      uiDensity: "balanced",
+      uiPanelOpacity: 94,
+      uiBorderWidth: 2,
+      uiRadius: 8,
       // On since P3.34: the game's own cursor is what a Guild Wars player
       // expects to see, so the setting is how it is switched off.
       nativeCursor: true,
@@ -52,6 +57,11 @@ describe("settings", () => {
     assert.equal(got.nativeCursor, true);
     assert.deepEqual(got, {
       renderScale: 1,
+      uiTheme: "brass",
+      uiDensity: "balanced",
+      uiPanelOpacity: 94,
+      uiBorderWidth: 2,
+      uiRadius: 8,
       nativeCursor: true,
       targetReadout: false,
       touchMode: "off",
@@ -80,6 +90,12 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ targetReadout: 1 }), AppError);
     assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
+    assert.throws(() => parseSettings({ uiTheme: "purple" }), AppError);
+    assert.throws(() => parseSettings({ uiDensity: "huge" }), AppError);
+    assert.throws(() => parseSettings({ uiPanelOpacity: 64 }), AppError);
+    assert.throws(() => parseSettings({ uiPanelOpacity: 94.5 }), AppError);
+    assert.throws(() => parseSettings({ uiBorderWidth: 5 }), AppError);
+    assert.throws(() => parseSettings({ uiRadius: -1 }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
 
@@ -176,6 +192,11 @@ describe("settings", () => {
       "showDiagnostics",
       "targetReadout",
       "touchMode",
+      "uiBorderWidth",
+      "uiDensity",
+      "uiPanelOpacity",
+      "uiRadius",
+      "uiTheme",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -202,6 +223,11 @@ describe("settings", () => {
     assert.equal(recovered, "", "an alpha profile must not be treated as corrupt");
     assert.deepEqual(loaded, {
       renderScale: 1.5,
+      uiTheme: "brass",
+      uiDensity: "balanced",
+      uiPanelOpacity: 94,
+      uiBorderWidth: 2,
+      uiRadius: 8,
       nativeCursor: true,
       targetReadout: false,
       touchMode: "translate",

@@ -216,6 +216,9 @@
         <button type="button" class="settings-rtab" id="settings-tab-display"
                 role="tab" aria-selected="false" aria-controls="settings-pane-display"
                 data-pane="display">Display</button>
+        <button type="button" class="settings-rtab" id="settings-tab-appearance"
+                role="tab" aria-selected="false" aria-controls="settings-pane-appearance"
+                data-pane="appearance">Appearance</button>
         <button type="button" class="settings-rtab" id="settings-tab-controls"
                 role="tab" aria-selected="false" aria-controls="settings-pane-controls"
                 data-pane="controls">Controls</button>
@@ -286,6 +289,75 @@
             </div>
           </fieldset>
           <p class="settings-note">Retina is the visual-quality default. 1.5× renders 2.25 times the pixels of 1×; 2× renders four times the pixels. Lower values improve performance and reduce GPU memory use.</p>
+        </section>
+
+        <section class="settings-pane" id="settings-pane-appearance" role="tabpanel"
+                 aria-labelledby="settings-tab-appearance">
+          <h3 class="settings-pane-title">Interface</h3>
+          <p class="settings-note settings-pane-intro">Tune every GWonMac panel together. Changes preview immediately and never alter Guild Wars itself.</p>
+
+          <div class="appearance-preview" aria-hidden="true">
+            <div class="appearance-preview-head">
+              <strong>Target distance</strong>
+              <span>Ready</span>
+            </div>
+            <div class="appearance-preview-body">
+              <span class="appearance-preview-value">1,248</span>
+              <span class="appearance-preview-unit">game units · spellcast</span>
+              <button type="button" tabindex="-1">Panel action</button>
+            </div>
+          </div>
+
+          <fieldset>
+            <legend>Theme</legend>
+            <div class="settings-seg appearance-themes" role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="uiTheme" value="brass">
+                <span><i data-swatch="brass"></i>Brass</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiTheme" value="steel">
+                <span><i data-swatch="steel"></i>Steel</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiTheme" value="jade">
+                <span><i data-swatch="jade"></i>Jade</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Density</legend>
+            <div class="settings-seg" role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="uiDensity" value="compact">
+                <span>Compact</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiDensity" value="balanced">
+                <span>Balanced</span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiDensity" value="comfortable">
+                <span>Comfortable</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="appearance-sliders">
+            <label class="settings-range">
+              <span>Panel opacity <output id="settings-opacity-value">94%</output></span>
+              <input type="range" name="uiPanelOpacity" min="65" max="100" step="1">
+            </label>
+            <label class="settings-range">
+              <span>Border <output id="settings-border-value">2px</output></span>
+              <input type="range" name="uiBorderWidth" min="0" max="4" step="1">
+            </label>
+            <label class="settings-range">
+              <span>Corner radius <output id="settings-radius-value">8px</output></span>
+              <input type="range" name="uiRadius" min="0" max="16" step="1">
+            </label>
+          </div>
         </section>
 
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"

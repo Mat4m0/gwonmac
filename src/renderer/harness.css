@@ -81,17 +81,19 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
    dialog that saves automatically has no Done button -- just a Saved note. */
 
 #settings-dialog {
-  border: 1px solid #9b793f;
-  background: #100d0a;
-  color: #eee3c9;
-  font: 14px/1.45 "QT Friz Quad", "Iowan Old Style", Palatino, Georgia, serif;
+  border: var(--ui-border-width) solid transparent;
+  background:
+    linear-gradient(var(--ui-panel-fill), var(--ui-panel-fill)) padding-box,
+    var(--ui-frame) border-box;
+  color: var(--ui-text);
+  font: var(--ui-font-size)/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   padding: 0;
-  width: min(640px, calc(100vw - 2rem));
+  width: min(760px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   box-sizing: border-box;
   overflow: auto;
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1px #f0d4921c, 0 4px 12px #0009;
+  border-radius: var(--ui-radius);
+  box-shadow: 0 0 0 1px var(--ui-outline), var(--ui-shadow);
 }
 #settings-dialog::backdrop { background: rgba(0,0,0,.68); }
 #settings-form { display: flex; flex-direction: column; }
@@ -100,25 +102,25 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 13px 12px 12px 20px;
-  background: #17120e;
-  border-bottom: 1px solid #806537;
+  padding: var(--ui-space-3) var(--ui-space-3) var(--ui-space-3) var(--ui-space-4);
+  background: var(--ui-raised-fill);
+  border-bottom: 1px solid var(--ui-line);
 }
 .settings-header h2 {
   flex: 1;
   margin: 0;
-  color: #f3dd9d;
-  font-size: 19px;
-  font-weight: 400;
-  letter-spacing: .025em;
+  color: var(--ui-text-bright);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -.01em;
 }
 /* Auto-save proof: flashes when a change lands. aria-hidden -- the feedback
    line in the footer is the accessible announcement channel. */
 #settings-saved {
-  color: #d9b25c;
+  color: var(--ui-accent);
   font: 11.5px/1 Tahoma, sans-serif;
   opacity: 0;
-  transition: opacity .25s ease;
+  transition: opacity var(--ui-duration) var(--ui-ease-out);
 }
 #settings-saved.show { opacity: 1; }
 #settings-form #settings-done {
@@ -126,44 +128,45 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   padding: 5px 10px;
   border-color: transparent;
   background: transparent;
-  color: #cbbd9d99;
+  color: var(--ui-text-faint);
   font-size: 14px;
 }
-#settings-form #settings-done:hover { color: #f3dd9d; background: #f3dd9d1a; border-color: transparent; }
+#settings-form #settings-done:hover { color: var(--ui-text-bright); background: var(--ui-hover); border-color: transparent; }
 
 .settings-body { display: flex; min-height: 292px; }
 
 .settings-rail {
   display: flex;
   flex-direction: column;
-  width: 138px;
+  width: 152px;
   flex-shrink: 0;
   padding: 10px 0;
-  border-right: 1px solid #6e59332e;
-  background: #14100c;
+  border-right: 1px solid var(--ui-line-soft);
+  background: var(--ui-well-fill);
 }
 #settings-form .settings-rtab {
   min-height: 0;
-  padding: 9px 18px;
+  padding: var(--ui-space-3) var(--ui-space-4);
   border: 0;
-  border-left: 2px solid transparent;
+  border-left: var(--ui-border-width) solid transparent;
   border-radius: 0;
   background: transparent;
-  color: #cbbd9dcc;
-  font-size: 14px;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size);
   text-align: left;
 }
-#settings-form .settings-rtab:hover { color: #f0dfb7; background: #f0d49208; border-left-color: transparent; }
+#settings-form .settings-rtab:hover { color: var(--ui-text-bright); background: var(--ui-hover); border-left-color: transparent; }
 #settings-form .settings-rtab[aria-selected="true"] {
-  color: #f3dd9d;
-  border-left-color: #d9b25c;
-  background: #f0d4920d;
+  color: var(--ui-text-bright);
+  border-left-color: var(--ui-accent);
+  background: var(--ui-selected);
 }
 
-.settings-panes { flex: 1; min-width: 0; padding: 18px 20px; }
+.settings-panes { flex: 1; min-width: 0; padding: var(--ui-space-5); }
 .settings-pane { display: none; }
 .settings-panes[data-active="data"] #settings-pane-data,
 .settings-panes[data-active="display"] #settings-pane-display,
+.settings-panes[data-active="appearance"] #settings-pane-appearance,
 .settings-panes[data-active="controls"] #settings-pane-controls,
 .settings-panes[data-active="advanced"] #settings-pane-advanced { display: block; }
 
@@ -175,7 +178,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   flex-direction: column;
   gap: .4rem;
   margin-bottom: 12px;
-  color: #eee3c9;
+  color: var(--ui-text);
 }
 #settings-form label.settings-check {
   display: flex;
@@ -183,7 +186,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   align-items: center;
   gap: .6rem;
   margin-bottom: 8px;
-  color: #eee3c9;
+  color: var(--ui-text);
 }
 #settings-form fieldset {
   min-width: 0;
@@ -193,7 +196,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 #settings-form fieldset legend {
   margin-bottom: 7px;
-  color: #cbbd9dcc;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 
@@ -202,20 +205,20 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
    working; the label paints the segment. */
 .settings-seg {
   display: inline-flex;
-  border: 1px solid #67583e;
-  border-radius: 2px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-sm);
   overflow: hidden;
 }
 #settings-form label.settings-radio {
   position: relative;
   display: block;
   padding: 8px 20px;
-  background: #201a1480;
-  color: #cbbd9dcc;
+  background: var(--ui-well-fill);
+  color: var(--ui-text-muted);
   cursor: default;
 }
-#settings-form label.settings-radio + label.settings-radio { border-left: 1px solid #67583e80; }
-#settings-form label.settings-radio:hover { color: #f0dfb7; background: #2b2117; }
+#settings-form label.settings-radio + label.settings-radio { border-left: 1px solid var(--ui-line); }
+#settings-form label.settings-radio:hover { color: var(--ui-text-bright); background: var(--ui-hover); }
 #settings-form label.settings-radio input {
   position: absolute;
   inset: 0;
@@ -225,12 +228,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   opacity: 0;
 }
 #settings-form label.settings-radio:has(input:checked) {
-  background: #6d5222;
-  color: #fff8e7;
-  box-shadow: inset 0 0 0 1px #a98338;
+  background: var(--ui-accent-strong);
+  color: var(--ui-accent-ink);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
 }
 #settings-form label.settings-radio:has(input:focus-visible) {
-  outline: 2px solid #e0bd73;
+  outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
 }
 .render-scale-option {
@@ -241,44 +244,44 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   gap: 1px;
 }
 .render-scale-option small {
-  color: #cbbd9dcc;
+  color: var(--ui-text-muted);
   font: 10.5px/1.3 Tahoma, sans-serif;
   white-space: nowrap;
 }
 #settings-form label.settings-radio:has(input:checked) .render-scale-option small {
-  color: #fff0c9cc;
+  color: var(--ui-accent-ink);
 }
 
 #settings-form input[type=checkbox] {
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: #a98338;
+  accent-color: var(--ui-accent-strong);
 }
 #settings-form select, #settings-form button {
-  min-height: 36px;
-  border: 1px solid #67583e;
-  border-radius: 2px;
-  background: #201a14;
-  color: #f2e8d2;
+  min-height: var(--ui-control-height);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-raised-fill);
+  color: var(--ui-text);
   font: inherit;
   padding: .45rem .7rem;
 }
 #settings-form button { cursor: default; }
-#settings-form button:hover:not(:disabled) { background: #2d241a; border-color: #9b793f; }
-#settings-form button:active:not(:disabled) { background: #15110d; }
+#settings-form button:hover:not(:disabled) { background: var(--ui-hover); border-color: var(--ui-accent); }
+#settings-form button:active:not(:disabled) { background: var(--ui-well-fill); }
 #settings-form button:focus-visible,
 #settings-form select:focus-visible,
 #settings-form input:focus-visible {
-  outline: 2px solid #e0bd73;
+  outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
 }
 #settings-form button.primary {
-  border-color: #a98338;
-  background: #6d5222;
-  color: #fff8e7;
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-strong);
+  color: var(--ui-accent-ink);
 }
-#settings-form button.primary:hover:not(:disabled) { background: #806329; }
+#settings-form button.primary:hover:not(:disabled) { background: var(--ui-accent); }
 #settings-form button:disabled { cursor: default; opacity: .45; }
 
 .settings-data-actions { margin-top: 12px; }
@@ -289,32 +292,32 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
    something to get. Built by settings.js so the launcher mount stays identical. */
 .settings-update-actions { display: flex; gap: 10px; margin: 12px 0; }
 
-.settings-divider { height: 1px; margin: 16px 0 12px; background: #6e59332e; }
+.settings-divider { height: 1px; margin: 16px 0 12px; background: var(--ui-line-soft); }
 
 #settings-form button.quiet-danger {
   min-height: 0;
   padding: 0;
   border-color: transparent;
   background: transparent;
-  color: #caa99f;
+  color: var(--ui-danger);
   text-decoration: underline;
   text-underline-offset: 3px;
   font-size: 13px;
 }
 #settings-form button.quiet-danger:hover:not(:disabled) {
-  color: #f0c1b2;
+  color: var(--ui-danger);
   border-color: transparent;
   background: transparent;
 }
 .settings-danger-sub {
   margin: 4px 0 0;
-  color: #cbbd9d80;
+  color: var(--ui-text-faint);
   font-size: 11.5px;
 }
 
 .settings-status {
   margin: 0;
-  color: #f0dfb7;
+  color: var(--ui-text-bright);
   font-size: 15px;
 }
 /* Same progress language as the dock rail, scaled for the panel. */
@@ -322,22 +325,21 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   height: 8px;
   margin: 10px 0 0;
   overflow: hidden;
-  border: 1px solid #67583e80;
-  border-radius: 4px;
-  background: #201a145e;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
 }
 #settings-progress[hidden] { display: none; }
 #settings-progress-fill {
   width: 0;
   height: 100%;
-  background: linear-gradient(90deg, #8a6a2b, #d9b25c 55%, #f3dd9d);
-  box-shadow: 0 0 10px #d9b25c73;
-  transition: width .25s ease;
+  background: var(--ui-accent);
+  transition: width var(--ui-duration) var(--ui-ease-out);
 }
 .settings-note {
   margin: 8px 0 0;
   max-width: 48ch;
-  color: #cbbd9d99;
+  color: var(--ui-text-muted);
   font-size: 12px;
   text-wrap: pretty;
 }
@@ -348,26 +350,136 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   justify-content: space-between;
   gap: 14px;
   padding: 9px 20px;
-  border-top: 1px solid #6e59332e;
+  border-top: 1px solid var(--ui-line-soft);
 }
 .settings-feedback {
   min-height: 1.3em;
   margin: 0;
-  color: #e6ae9e;
+  color: var(--ui-danger);
   font-size: 12px;
 }
 .settings-autosave {
   flex-shrink: 0;
-  color: #cbbd9d66;
+  color: var(--ui-text-faint);
   font-size: 11px;
+}
+
+.settings-pane-title {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.settings-pane-intro {
+  margin-top: 4px;
+}
+
+.appearance-preview {
+  margin: var(--ui-space-4) 0;
+  overflow: hidden;
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius);
+  background:
+    linear-gradient(var(--ui-panel-fill), var(--ui-panel-fill)) padding-box,
+    var(--ui-frame) border-box;
+  box-shadow: 0 0 0 1px var(--ui-outline);
+}
+
+.appearance-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-line-soft);
+  background: var(--ui-raised-fill);
+  color: var(--ui-text-bright);
+}
+
+.appearance-preview-head span {
+  color: var(--ui-success);
+  font-size: 11px;
+}
+
+.appearance-preview-body {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+}
+
+.appearance-preview-value {
+  color: var(--ui-accent);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.appearance-preview-unit {
+  flex: 1;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+#settings-form .appearance-preview button {
+  min-height: 28px;
+  pointer-events: none;
+}
+
+.appearance-themes i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px var(--ui-outline);
+}
+
+.appearance-themes [data-swatch="brass"] { --swatch: oklch(78% 0.105 78); }
+.appearance-themes [data-swatch="steel"] { --swatch: oklch(75% 0.11 245); }
+.appearance-themes [data-swatch="jade"] { --swatch: oklch(76% 0.12 157); }
+
+.appearance-sliders {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ui-space-4);
+  margin-top: var(--ui-space-4);
+}
+
+.settings-range {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.settings-range > span {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+}
+
+.settings-range output {
+  color: var(--ui-text-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-range input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--ui-accent-strong);
 }
 
 @media (max-width: 560px) {
   .settings-body { flex-direction: column; min-height: 0; }
   .settings-rail { width: auto; flex-direction: row; overflow-x: auto;
-                   padding: 0; border-right: 0; border-bottom: 1px solid #6e59332e; }
+                   padding: 0; border-right: 0; border-bottom: 1px solid var(--ui-line-soft); }
   #settings-form .settings-rtab { border-left: 0; border-bottom: 2px solid transparent; }
-  #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: #d9b25c; }
+  #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: var(--ui-accent); }
+  .appearance-sliders { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -158,11 +158,14 @@ let clientHealthConfirmation:
   | null = null;
 let createClientHealthConfirmation:
   typeof import('./client-health.js').createClientHealthConfirmation;
+let applyAppearance:
+  typeof import('./appearance.js').applyAppearance = () => {};
 let inputHost: GameInputController | null = null;
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
   appSettings = updated;
+  applyAppearance(updated);
   inputHost?.applySettings(updated);
   if (previousScale !== undefined && updated.renderScale !== previousScale) {
     window.dispatchEvent(new globalThis.Event('resize'));
@@ -616,6 +619,7 @@ function loadGlue() {
       templateSaveCompatibility,
       templateFilesystemTrace,
       clientHealth,
+      appearance,
       tools,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
@@ -627,6 +631,7 @@ function loadGlue() {
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
+      import('./appearance.js'),
       import('./tools-host.js'),
     ]);
     host = {
@@ -639,6 +644,7 @@ function loadGlue() {
     };
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
+    applyAppearance = appearance.applyAppearance;
     disposeToolsHost = tools.installToolsHost({
       releaseHeldKeys: () => inputHost?.releaseAll(),
     });
@@ -679,6 +685,7 @@ function loadGlue() {
       native().client.session(),
     ]);
     appSettings = settings;
+    applyAppearance(settings);
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,
       confirm: (token) => native().client.healthy(token),

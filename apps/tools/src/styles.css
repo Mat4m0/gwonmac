@@ -1,3 +1,7 @@
+@import "./design-system.css";
+
+/* The component stylesheet consumes only semantic aliases. Theme choice,
+   density, opacity, frame, and radius are owned by design-system.css. */
 .tools-stage,
 .tools-stage *,
 .tools-stage *::before,
@@ -27,39 +31,39 @@ body:has(.tools-stage[data-mode="standalone"]) {
 }
 
 .tools-stage {
-  --surface-base: oklch(20% 0.014 73);
-  --surface-raised: oklch(24% 0.016 73);
-  --surface-well: oklch(16% 0.012 73);
-  --surface-hover: oklch(29% 0.018 73);
-  --surface-selected: oklch(31% 0.035 78);
-  --line: oklch(44% 0.025 76);
-  --line-soft: oklch(34% 0.018 76);
-  --text: oklch(91% 0.025 81);
-  --text-bright: oklch(97% 0.03 83);
-  --text-muted: oklch(76% 0.028 78);
-  --text-faint: oklch(65% 0.025 76);
-  --accent: oklch(78% 0.105 78);
-  --accent-strong: oklch(66% 0.11 76);
-  --accent-ink: oklch(20% 0.03 69);
-  --info: oklch(77% 0.075 237);
-  --warning: oklch(79% 0.095 70);
-  --danger: oklch(69% 0.13 32);
-  --success: oklch(75% 0.1 140);
+  --surface-base: var(--ui-panel-fill);
+  --surface-raised: var(--ui-raised-fill);
+  --surface-well: var(--ui-well-fill);
+  --surface-hover: var(--ui-hover);
+  --surface-selected: var(--ui-selected);
+  --line: var(--ui-line);
+  --line-soft: var(--ui-line-soft);
+  --text: var(--ui-text);
+  --text-bright: var(--ui-text-bright);
+  --text-muted: var(--ui-text-muted);
+  --text-faint: var(--ui-text-faint);
+  --accent: var(--ui-accent);
+  --accent-strong: var(--ui-accent-strong);
+  --accent-ink: var(--ui-accent-ink);
+  --info: var(--ui-info);
+  --warning: var(--ui-warning);
+  --danger: var(--ui-danger);
+  --success: var(--ui-success);
   --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-lg: 16px;
-  --space-xl: 24px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --space-sm: var(--ui-space-2);
+  --space-md: var(--ui-space-3);
+  --space-lg: var(--ui-space-4);
+  --space-xl: var(--ui-space-5);
+  --radius-sm: var(--ui-radius-sm);
+  --radius-md: var(--ui-radius);
+  --radius-lg: var(--ui-radius-lg);
+  --ease-out: var(--ui-ease-out);
   position: fixed;
   inset: 0;
   z-index: 30;
   pointer-events: none;
   color: var(--text);
-  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: var(--ui-font-size)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-kerning: normal;
   -webkit-font-smoothing: antialiased;
 }
@@ -83,19 +87,14 @@ body:has(.tools-stage[data-mode="standalone"]) {
   min-height: 360px;
   flex-direction: column;
   overflow: hidden;
-  border: 2px solid transparent;
+  border: var(--ui-border-width) solid transparent;
   border-radius: var(--radius-lg);
   background:
     linear-gradient(var(--surface-base), var(--surface-base)) padding-box,
-    linear-gradient(
-      180deg,
-      oklch(85% 0.07 79),
-      oklch(55% 0.08 73) 55%,
-      oklch(72% 0.08 78)
-    ) border-box;
+    var(--ui-frame) border-box;
   box-shadow:
-    0 0 0 1px oklch(10% 0.01 70),
-    0 8px 8px oklch(8% 0.01 70 / 0.46);
+    0 0 0 1px var(--ui-outline),
+    var(--ui-shadow);
   pointer-events: auto;
   text-shadow: 0 1px 1px oklch(8% 0.01 70 / 0.75);
 }

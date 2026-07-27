@@ -11,6 +11,12 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
+const UI_THEMES = new Set<AppSettings["uiTheme"]>(["brass", "steel", "jade"]);
+const UI_DENSITIES = new Set<AppSettings["uiDensity"]>([
+  "compact",
+  "balanced",
+  "comfortable",
+]);
 const TOUCH_MODES = new Set<AppSettings["touchMode"]>([
   "dbltap",
   "translate",
@@ -26,6 +32,26 @@ function asBool(v: unknown, field: string): boolean {
     throw new AppError("bad_settings", `settings.${field} must be a boolean`);
   }
   return v;
+}
+
+function asBoundedInteger(
+  value: unknown,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
+    throw new AppError(
+      "bad_settings",
+      `settings.${field} must be an integer from ${minimum} to ${maximum}`,
+    );
+  }
+  return value;
 }
 
 /**
@@ -55,6 +81,37 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", `settings.renderScale has unknown type/value`);
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
+  }
+  if ("uiTheme" in src) {
+    if (!UI_THEMES.has(src.uiTheme as AppSettings["uiTheme"])) {
+      throw new AppError("bad_settings", "settings.uiTheme has unknown value");
+    }
+    out.uiTheme = src.uiTheme as AppSettings["uiTheme"];
+  }
+  if ("uiDensity" in src) {
+    if (!UI_DENSITIES.has(src.uiDensity as AppSettings["uiDensity"])) {
+      throw new AppError("bad_settings", "settings.uiDensity has unknown value");
+    }
+    out.uiDensity = src.uiDensity as AppSettings["uiDensity"];
+  }
+  if ("uiPanelOpacity" in src) {
+    out.uiPanelOpacity = asBoundedInteger(
+      src.uiPanelOpacity,
+      "uiPanelOpacity",
+      65,
+      100,
+    );
+  }
+  if ("uiBorderWidth" in src) {
+    out.uiBorderWidth = asBoundedInteger(
+      src.uiBorderWidth,
+      "uiBorderWidth",
+      0,
+      4,
+    );
+  }
+  if ("uiRadius" in src) {
+    out.uiRadius = asBoundedInteger(src.uiRadius, "uiRadius", 0, 16);
   }
   for (const tool of ENHANCEMENTS) {
     if (tool in src) {

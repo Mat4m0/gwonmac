@@ -173,6 +173,11 @@ export type EnhancementSelection = Record<Enhancement, boolean>;
 
 export interface AppSettings extends EnhancementSelection {
   renderScale: 1 | 1.5 | 2;
+  uiTheme: "brass" | "steel" | "jade";
+  uiDensity: "compact" | "balanced" | "comfortable";
+  uiPanelOpacity: number;
+  uiBorderWidth: number;
+  uiRadius: number;
   touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
@@ -204,6 +209,11 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
+  uiTheme: "brass",
+  uiDensity: "balanced",
+  uiPanelOpacity: 94,
+  uiBorderWidth: 2,
+  uiRadius: 8,
   nativeCursor: true,
   targetReadout: false,
   touchMode: "dbltap",

@@ -47,6 +47,87 @@ test.describe("settings experience", () => {
     }
   });
 
+  test("previews and persists one appearance across Settings and Vue Tools", async () => {
+    const fixture = await launchOffline("gw-settings-appearance-e2e-", {
+      GW_BACKGROUND_LAUNCH: "0",
+    });
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-appearance").click();
+
+      await expect(
+        page.locator('input[name="uiTheme"][value="brass"]'),
+      ).toBeChecked();
+      await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue(
+        "94",
+      );
+
+      await page.locator('input[name="uiTheme"][value="steel"]').check();
+      await page.locator('input[name="uiDensity"][value="compact"]').check();
+      await page.locator('input[name="uiPanelOpacity"]').fill("78");
+      await page.locator('input[name="uiBorderWidth"]').fill("3");
+      await page.locator('input[name="uiRadius"]').fill("12");
+
+      await expect
+        .poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({
+          uiTheme: "steel",
+          uiDensity: "compact",
+          uiPanelOpacity: 78,
+          uiBorderWidth: 3,
+          uiRadius: 12,
+        });
+      expect(
+        await page.evaluate(() => ({
+          theme: document.documentElement.dataset.uiTheme,
+          density: document.documentElement.dataset.uiDensity,
+          opacity: document.documentElement.style.getPropertyValue(
+            "--ui-panel-opacity",
+          ),
+          border: document.documentElement.style.getPropertyValue(
+            "--ui-border-width",
+          ),
+          radius: document.documentElement.style.getPropertyValue("--ui-radius"),
+        })),
+      ).toEqual({
+        theme: "steel",
+        density: "compact",
+        opacity: "0.78",
+        border: "3px",
+        radius: "12px",
+      });
+
+      await page.locator("#settings-done").click();
+      await app.evaluate(({ BrowserWindow }) => {
+        const webContents = BrowserWindow.getAllWindows()[0]?.webContents;
+        webContents?.sendInputEvent({
+          type: "keyDown",
+          keyCode: "B",
+          modifiers: ["meta"],
+        });
+        webContents?.sendInputEvent({
+          type: "keyUp",
+          keyCode: "B",
+          modifiers: ["meta"],
+        });
+      });
+      const tools = page.locator("#gwonmac-tools-root .tools-window");
+      await expect(tools).toBeVisible();
+      await expect(tools).toHaveCSS("border-top-width", "3px");
+      // Large panels derive one step above the base radius; controls derive
+      // below it. The preference changes the whole geometry rather than
+      // stamping one literal onto every component.
+      await expect(tools).toHaveCSS("border-top-left-radius", "16px");
+      await page.getByRole("button", { name: "Close GWonMac Tools" }).click();
+      await expect(tools).toBeHidden();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("explains render cost and will not change the cursor without a restart", async () => {
     const fixture = await launchOffline("gw-settings-e2e-");
     try {

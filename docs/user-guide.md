@@ -86,6 +86,11 @@ memory use matters more than sharpness.
 Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
+**Appearance** changes every GWonMac-owned panel together. Brass is the
+default; Steel and Jade provide cooler alternatives. Density changes spacing,
+type, and control height as one choice. Panel opacity, border width, and corner
+radius can be tuned within safe ranges and preview immediately. These controls
+do not restyle or modify Guild Wars itself.
 Right-drag always locks the pointer while steering the camera and restores it
 on release. **Controls** owns two independent GWonMac Tools choices. **Use the
 game's own cursor** is on by default: the host reads the cursor Guild Wars itself draws

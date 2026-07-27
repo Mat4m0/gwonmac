@@ -520,6 +520,15 @@ held-input registry releases keys, buttons, and touches when focus or native UI
 consumes an input release. Pointer lock uses a virtual cursor and recycles a
 held drag so camera rotation does not stall.
 
+GWonMac presentation has one persisted appearance answer in `AppSettings`.
+Main validates the named theme and density plus bounded opacity, border, and
+radius values. `src/renderer/appearance.ts` translates that answer into the
+three numeric CSS overrides and two root attributes; the Vue Tools bundle and
+the Settings dialog consume the same semantic tokens from
+`apps/tools/src/design-system.css`. Range movement previews in the renderer,
+but only the settled change crosses IPC, so dragging a slider remains one
+atomic settings write.
+
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam
 sixteen canvases before the host releases the button, re-anchors at center, and
