@@ -74,7 +74,13 @@ function u16(bytes: Uint8Array, at: number): number {
     .getUint16(at, true);
 }
 
-function rgbaToBmp(decoded: Uint8Array): Buffer {
+/**
+ * The attributed decoder labels RGB565's low five bits `r`, but BC1 stores
+ * those bits as blue. Its byte stream is therefore B,G,R,A despite the RGBA
+ * name. BMP also stores pixels B,G,R,A, so preserve that order here rather
+ * than performing the ordinary RGBA-to-BGRA swap.
+ */
+export function decodedIconToBmp(decoded: Uint8Array): Buffer {
   if (
     decoded.length < 8
     || String.fromCharCode(...decoded.subarray(0, 4)) !== "GWIC"
@@ -106,9 +112,9 @@ function rgbaToBmp(decoded: Uint8Array): Buffer {
     for (let x = 0; x < width; x++) {
       const source = sourceRow + x * 4;
       const target = targetRow + x * 4;
-      bmp[target] = pixels[source + 2]!;
+      bmp[target] = pixels[source]!;
       bmp[target + 1] = pixels[source + 1]!;
-      bmp[target + 2] = pixels[source]!;
+      bmp[target + 2] = pixels[source + 2]!;
       bmp[target + 3] = pixels[source + 3]!;
     }
   }
@@ -152,7 +158,7 @@ function decodeIcon(executable: string, input: Uint8Array): Promise<Buffer> {
         return;
       }
       try {
-        resolve(rgbaToBmp(Buffer.concat(chunks, length)));
+        resolve(decodedIconToBmp(Buffer.concat(chunks, length)));
       } catch (error) {
         reject(error);
       }

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { parseSkillNames } from "../../src/main/core/skill-assets.ts";
+import {
+  decodedIconToBmp,
+  parseSkillNames,
+} from "../../src/main/core/skill-assets.ts";
 
 describe("local skill names", () => {
   it("follows explicit enum jumps instead of assuming source line numbers are ids", () => {
@@ -32,5 +35,17 @@ describe("local skill names", () => {
     assert.equal(names.get(288), "Healing Breeze");
     assert.equal(names.get(314), "Restore Life");
     assert.ok(names.size > 3_000);
+  });
+});
+
+describe("decoded skill icon colours", () => {
+  it("keeps the decoder's RGB565 bytes in BMP's BGR order", () => {
+    const decoded = Buffer.from([
+      0x47, 0x57, 0x49, 0x43, // GWIC
+      0x01, 0x00, 0x01, 0x00, // 1 × 1
+      0x10, 0x20, 0xf0, 0xff, // decoder B, G, R, A
+    ]);
+    const bmp = decodedIconToBmp(decoded);
+    assert.deepEqual([...bmp.subarray(54, 58)], [0x10, 0x20, 0xf0, 0xff]);
   });
 });
