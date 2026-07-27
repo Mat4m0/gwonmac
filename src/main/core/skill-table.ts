@@ -49,6 +49,8 @@ const FIELD = {
 
 /** `special & 0x4`. The client's own test, and what draws the corner marker. */
 const ELITE = 0x4;
+/** The byte at 0x34 is meaningful only for skills carrying this flag. */
+const HAS_OVERCAST = 0x1;
 /** `Skill::IsPlayable()`: unset means a player can equip the record. */
 const NOT_PLAYABLE = 0x02000000;
 const PVP = 0x00400000;
@@ -100,7 +102,7 @@ export function parseSkillRecord(bytes: Uint8Array, at: number): SkillRecord {
     title: data.getUint16(at + FIELD.title, true),
     pvpReplacement: data.getUint32(at + FIELD.pvpReplacement, true),
     equipType: bytes[at + FIELD.equipType]!,
-    overcast: bytes[at + FIELD.overcast]!,
+    overcast: (special & HAS_OVERCAST) !== 0 ? bytes[at + FIELD.overcast]! : 0,
     energyCost: decodeEnergyCost(bytes[at + FIELD.energy]!),
     healthCost: bytes[at + FIELD.health]!,
     adrenalineCost: data.getUint32(at + FIELD.adrenaline, true),

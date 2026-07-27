@@ -238,6 +238,8 @@ function clear(): void {
             <span v-if="skill.availability === 'player-only-pve'" class="ui-chip">Player</span>
             <small v-if="skill.energyCost">{{ skill.energyCost }}e</small>
             <small v-else-if="skill.adrenalineCost">{{ skill.adrenalineCost }}a</small>
+            <small v-if="skill.activationSeconds">{{ skill.activationSeconds }}s cast</small>
+            <small v-if="skill.rechargeSeconds">{{ skill.rechargeSeconds }}s recharge</small>
             <small v-if="duplicateSlot(skill) !== null">
               Slot {{ (duplicateSlot(skill) ?? 0) + 1 }}
             </small>
@@ -280,6 +282,7 @@ function clear(): void {
             <span v-if="inspected.healthCost"><strong>{{ inspected.healthCost }}%</strong><small>Health</small></span>
             <span v-if="inspected.overcast"><strong>{{ inspected.overcast }}</strong><small>Overcast</small></span>
             <span v-if="inspected.activationSeconds"><strong>{{ inspected.activationSeconds }}s</strong><small>Activation</small></span>
+            <span v-if="inspected.aftercastSeconds"><strong>{{ inspected.aftercastSeconds }}s</strong><small>Aftercast</small></span>
             <span v-if="inspected.rechargeSeconds"><strong>{{ inspected.rechargeSeconds }}s</strong><small>Recharge</small></span>
           </div>
           <p v-if="duplicateSlot(inspected) !== null" class="inspector-warning">

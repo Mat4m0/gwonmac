@@ -184,12 +184,16 @@ test("the whole table is read, from record zero", () => {
   const mechanics = new DataView(records.buffer);
   const third = 3 * SKILL_RECORD_BYTES;
   const fourth = 4 * SKILL_RECORD_BYTES;
+  const fifth = 5 * SKILL_RECORD_BYTES;
   records[third + 0x35] = 11;
+  records[fourth + 0x34] = 99;
   mechanics.setUint32(fourth + 0x2c, 1004, true);
   records[fourth + 0x33] = 2;
   mechanics.setFloat32(fourth + 0x3c, 4.25, true);
   mechanics.setFloat32(fourth + 0x40, 0.75, true);
   mechanics.setUint32(fourth + 0x4c, 9, true);
+  mechanics.setUint32(fifth + 0x10, 0x1, true);
+  records[fifth + 0x34] = 10;
   const table = findSkillTable(records);
   assert.ok(table);
   assert.equal(table.at, 0);
@@ -204,9 +208,11 @@ test("the whole table is read, from record zero", () => {
   assert.equal(table.skills[3]?.energyCost, 15, "encoded energy sentinel 11 means 15");
   assert.equal(table.skills[4]?.pvpReplacement, 1004);
   assert.equal(table.skills[4]?.equipType, 2);
+  assert.equal(table.skills[4]?.overcast, 0, "an unflagged padding byte is not overcast");
   assert.equal(table.skills[4]?.activationSeconds, 4.25);
   assert.equal(table.skills[4]?.aftercastSeconds, 0.75);
   assert.equal(table.skills[4]?.rechargeSeconds, 9);
+  assert.equal(table.skills[5]?.overcast, 10, "the special flag makes overcast meaningful");
 });
 
 test("energy-cost sentinels are normalized at the parsing boundary", () => {

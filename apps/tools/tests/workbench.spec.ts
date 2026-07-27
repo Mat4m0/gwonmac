@@ -94,7 +94,7 @@ test("uses the inline catalogue for filters, mechanics, elite replacement, and k
   await expect(page.locator(".skill-result .ui-chip").filter({ hasText: "Elite" }).first()).toBeVisible();
   await page.getByRole("searchbox", { name: "Search skills" }).fill("Cry of Frustration");
   await page.locator(".skill-result").first().click();
-  await expect(page.getByText("Recharge")).toBeVisible();
+  await expect(page.getByText("Recharge", { exact: true })).toBeVisible();
   await expect(page.getByText(/This replaces .* in slot/)).toBeVisible();
   await page.getByRole("button", { name: "Replace current elite" }).click();
   await expect(page.locator(".authoring-bar .skill").nth(0)).toHaveAttribute("title", "Cry of Frustration");
