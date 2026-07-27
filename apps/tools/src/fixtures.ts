@@ -27,7 +27,9 @@ const presentations: SkillPresentation[] = names.map((name, index) => ({
   id: skillId(200 + index),
   name,
   profession: professions[Math.floor(index / 8) % professions.length] ?? null,
+  attribute: null,
   elite: index % 8 === 0,
+  playable: true,
   iconUrl: null,
 }));
 

@@ -166,7 +166,11 @@ function skillRecords(count: number, from = 0): Uint8Array {
     const at = i * SKILL_RECORD_BYTES;
     view.setUint32(at, i, true);
     view.setUint32(at + 0x08, i % 5, true);
-    view.setUint32(at + 0x10, i % 9 === 0 ? 0x4 : 0, true); // elite flag
+    view.setUint32(
+      at + 0x10,
+      (i % 9 === 0 ? 0x4 : 0) | (i === 2 ? 0x02000000 : 0),
+      true,
+    );
     bytes[at + 0x28] = (i % 10) + 1;
     bytes[at + 0x29] = i % 45;
     view.setUint32(at + 0x8c, 50000 + i, true);
@@ -184,6 +188,8 @@ test("the whole table is read, from record zero", () => {
   assert.equal(table.skills[9]?.iconFileId, 50009);
   assert.equal(table.skills[0]?.elite, true, "special & 0x4 is the elite test");
   assert.equal(table.skills[1]?.elite, false);
+  assert.equal(table.skills[1]?.playable, true);
+  assert.equal(table.skills[2]?.playable, false, "special & 0x02000000 excludes internal records");
 });
 
 test("the table is found even when the scan lands in the middle of it", () => {

@@ -10,6 +10,7 @@ import {
   type FileTable,
 } from "./gw-archive.js";
 import { findSkillTable, type SkillRecord } from "./skill-table.js";
+import { ATTRIBUTE_BY_ID } from "../../shared/builds/heroes.js";
 
 const PROFESSION = new Map<number, string>([
   [1, "W"], [2, "R"], [3, "Mo"], [4, "N"], [5, "Me"],
@@ -24,6 +25,8 @@ export interface SkillAssetFacts {
   readonly name: string;
   readonly profession: string | null;
   readonly elite: boolean;
+  readonly playable: boolean;
+  readonly attribute: string | null;
   readonly hasIcon: boolean;
 }
 
@@ -229,6 +232,8 @@ export class SkillAssets {
       name: ready.names.get(skill.id) ?? `Skill ${skill.id}`,
       profession: PROFESSION.get(skill.profession) ?? null,
       elite: skill.elite,
+      playable: skill.playable,
+      attribute: ATTRIBUTE_BY_ID.get(skill.attribute) ?? null,
       hasIcon:
         skill.iconFileId !== 0
         && findStream(ready.files, ready.fileIndex, skill.iconFileId) !== null,

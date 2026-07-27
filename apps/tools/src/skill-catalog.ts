@@ -1,4 +1,5 @@
 import type {
+  Attribute,
   Profession,
   SkillId,
 } from "../../../src/shared/builds/library";
@@ -7,13 +8,16 @@ export interface SkillPresentation {
   readonly id: SkillId;
   readonly name: string;
   readonly profession: Profession | null;
+  readonly attribute: Attribute | null;
   readonly elite: boolean;
+  readonly playable: boolean;
   readonly iconUrl: string | null;
 }
 
 export interface SkillCatalogue {
   get(id: SkillId): SkillPresentation;
   has(id: SkillId): boolean;
+  all(): readonly SkillPresentation[];
 }
 
 export function createSkillCatalogue(
@@ -24,12 +28,17 @@ export function createSkillCatalogue(
     has(id) {
       return byId.has(id);
     },
+    all() {
+      return [...byId.values()];
+    },
     get(id) {
       return byId.get(id) ?? {
         id,
         name: `Skill ${id}`,
         profession: null,
+        attribute: null,
         elite: false,
+        playable: false,
         iconUrl: null,
       };
     },

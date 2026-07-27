@@ -39,12 +39,15 @@ const FIELD = {
 
 /** `special & 0x4`. The client's own test, and what draws the corner marker. */
 const ELITE = 0x4;
+/** `Skill::IsPlayable()`: unset means a player can equip the record. */
+const NOT_PLAYABLE = 0x02000000;
 
 export interface SkillRecord {
   readonly id: number;
   readonly campaign: number;
   readonly type: number;
   readonly elite: boolean;
+  readonly playable: boolean;
   readonly profession: number;
   readonly attribute: number;
   /** Archive file id of the 32×32 icon, or 0 for the handful that have none. */
@@ -65,6 +68,7 @@ export function parseSkillRecord(bytes: Uint8Array, at: number): SkillRecord {
     campaign: data.getUint32(at + FIELD.campaign, true),
     type: data.getUint32(at + FIELD.type, true),
     elite: (special & ELITE) !== 0,
+    playable: (special & NOT_PLAYABLE) === 0,
     profession: bytes[at + FIELD.profession]!,
     attribute: bytes[at + FIELD.attribute]!,
     iconFileId: data.getUint32(at + FIELD.iconFileId, true),

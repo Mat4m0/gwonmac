@@ -1,8 +1,13 @@
 import type { GwNativeApi } from "../../../src/shared/contracts";
 import {
+  ATTRIBUTES,
   PROFESSIONS,
 } from "../../../src/shared/builds/heroes";
-import { skillId, type Profession } from "../../../src/shared/builds/library";
+import {
+  skillId,
+  type Attribute,
+  type Profession,
+} from "../../../src/shared/builds/library";
 import { demoLibrary, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import {
@@ -88,6 +93,9 @@ export function createNativeHost(
   const profession = new Set<Profession>(
     Object.keys(PROFESSIONS) as Profession[],
   );
+  const attribute = new Set<Attribute>(
+    Object.keys(ATTRIBUTES) as Attribute[],
+  );
   const loadSkills = async () => {
     const response = await fetch("gw://app/skill-catalog.json");
     if (!response.ok) return;
@@ -101,8 +109,10 @@ export function createNativeHost(
         !Number.isSafeInteger(record.id)
         || typeof record.name !== "string"
         || typeof record.elite !== "boolean"
+        || typeof record.playable !== "boolean"
         || typeof record.hasIcon !== "boolean"
         || (record.profession !== null && !profession.has(record.profession as Profession))
+        || (record.attribute !== null && !attribute.has(record.attribute as Attribute))
       ) {
         continue;
       }
@@ -111,7 +121,9 @@ export function createNativeHost(
         id,
         name: record.name,
         profession: record.profession as Profession | null,
+        attribute: record.attribute as Attribute | null,
         elite: record.elite,
+        playable: record.playable,
         iconUrl: record.hasIcon ? `gw://app/skill-icons/${id}.bmp` : null,
       });
     }
