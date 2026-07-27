@@ -560,14 +560,22 @@ layers transport validated library and publication requests but contain none
 of these rules.
 
 The installed client's static skill table also identifies each localized
-description string ID and its scale, bonus, and duration ranges. Those
-references are not exposed to the Vue catalogue or resolved
-through a renderer-triggered WASM call: ArenaNet's text service requires a
-transient property context owned by the client's event dispatch, and calling it
-after control returns to JavaScript aborts the complete game runtime. A future
-description surface therefore needs an offline, independently testable reader
-for the installed client's language assets; until then the UI makes no
-description claim.
+description string ID and its scale, bonus, and duration ranges.
+`skill-strings.ts` finds the client-owned language-file table in static WASM
+data, and `SkillAssets` reads only the referenced English shards from the local
+snapshot. The native asset helper removes outer GWDat compression; a bounded
+TypeScript parser walks the 1,024 record headers and decodes the referenced
+context-free UTF-16 record. Numeric placeholders are filled from the same
+skill record before the description joins `skill-catalog.json`, so Vue has no
+second request or text database. Unrelated context-keyed records in the same
+shard remain opaque.
+
+This offline boundary is a safety invariant. ArenaNet's live text service
+requires a transient property context owned by client event dispatch, and
+calling it after control returns to JavaScript aborts the complete game
+runtime. The measured format, full code map, failure behavior, and
+recertification checklist live in
+`plans/research/skills/00-overview.md`.
 
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam
