@@ -29,6 +29,10 @@ const config: ForgeConfig = {
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
       "src/renderer/fonts/COPYING-QUALITYPE",
+      "src/native/skill-icons/vendor/COPYING-GWTOOLBOX",
+      "src/native/skill-icons/vendor/COPYING-GUILDWARSMAPBROWSER",
+      "src/native/skill-icons/vendor/gwca/Skills.h",
+      "build/native/gw-skill-icon-decoder",
     ],
     extendInfo: {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },

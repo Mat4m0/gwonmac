@@ -36,3 +36,18 @@ QT Friz Quad is © 1992 QualiType and is distributed under the SIL Open Font
 License 1.1. The complete license is included as `COPYING-QUALITYPE` beside the
 font in source distributions and in the packaged application's Resources
 directory.
+
+## Guild Wars archive and texture decoder
+
+The isolated skill-icon decoder under `src/native/skill-icons/vendor/gwdat` is
+ported from [GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), © 2024 Guild
+Wars Dev Hub, under the MIT License. GWToolbox++ identifies that decoder as
+derived from
+[GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser),
+© 2023 [Jonathan Bjørn Greve](https://github.com/Jonathan-Greve), under its
+custom permissive license.
+
+The complete grants are included beside the source as `COPYING-GWTOOLBOX` and
+`COPYING-GUILDWARSMAPBROWSER`, and both are copied into packaged application
+Resources. No decoded Guild Wars artwork is distributed; the helper decodes
+icons from the player's own local client.

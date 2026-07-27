@@ -1,6 +1,6 @@
 // The single producer of everything under build/.
 import { spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /**
@@ -58,6 +58,28 @@ export const BUILD_STEPS = [
       "scripts/generate-preload.ts",
     ],
   ],
+  // A quarantined local decoder for the player's own skill-icon bytes. It is
+  // a native helper instead of a Node addon: Electron never loads third-party
+  // C++ into either privileged process, and the wrapper bounds both sides of
+  // the byte stream before the derived decoder sees it.
+  [
+    "clang++",
+    [
+      "-std=c++20",
+      "-O2",
+      "-D__int64=long long",
+      "-Wno-multichar",
+      "-Wno-constant-logical-operand",
+      "-Isrc/native/skill-icons",
+      "src/native/skill-icons/decoder-main.cpp",
+      "src/native/skill-icons/vendor/gwdat/xentax.cpp",
+      "src/native/skill-icons/vendor/gwdat/AtexReader.cpp",
+      "src/native/skill-icons/vendor/gwdat/AtexDecompress.cpp",
+      "src/native/skill-icons/vendor/gwdat/AtexAsm.cpp",
+      "-o",
+      "build/native/gw-skill-icon-decoder",
+    ],
+  ],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
   // It writes into build/renderer, so it goes after everything that fills it.
   [
@@ -85,6 +107,7 @@ export const BUILD_STEPS = [
 
 function build() {
   rmSync("build", { recursive: true, force: true });
+  mkdirSync("build/native", { recursive: true });
 
   for (const [command, args] of BUILD_STEPS) {
     const result = spawnSync(command, args, { stdio: "inherit" });

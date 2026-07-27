@@ -179,6 +179,21 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
   });
 });
 
+describe("scripts/build.mjs owns the native skill icon decoder", () => {
+  const clang = BUILD_STEPS.filter(([command]) => command === "clang++");
+
+  it("compiles one bounded helper from the attributed decoder sources", () => {
+    assert.equal(clang.length, 1);
+    const args = stepArgs(clang[0]!);
+    assert.ok(args.includes("src/native/skill-icons/decoder-main.cpp"));
+    assert.ok(args.includes("src/native/skill-icons/vendor/gwdat/xentax.cpp"));
+    assert.deepEqual(args.slice(-2), [
+      "-o",
+      "build/native/gw-skill-icon-decoder",
+    ]);
+  });
+});
+
 describe("scripts/build.mjs orders the four producers of build/renderer", () => {
   const assets = stepPosition("scripts/copy-renderer.mjs");
   const renderer = stepPosition("tsconfig.renderer.json");
