@@ -1,7 +1,11 @@
 import type { Build } from "../shared/builds/library.js";
 import { encodeSkillTemplate } from "../shared/builds/skill-template.js";
 
-export const TEMPLATE_DIRECTORY = "app:/Templates/Skills";
+// The filesystem host changes into the `app:` IDBFS mount before the game is
+// released. Game-facing operations must therefore use the same relative path
+// the client uses; spelling the mount name again resolves beneath the working
+// directory in the live Emscripten runtime.
+export const TEMPLATE_DIRECTORY = "Templates/Skills";
 const TEMPLATE_MODE = 0o600;
 const MAX_NAME = 64;
 const REJECTED = new Set([...'.*:/<>|"?\\']);

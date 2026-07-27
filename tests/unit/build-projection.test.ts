@@ -65,7 +65,7 @@ describe("build template projection", () => {
     }
     assert.equal(synced, true);
     assert.deepEqual(writes, [[
-      "app:/Templates/Skills/Fresh Monk (2).txt",
+      "Templates/Skills/Fresh Monk (2).txt",
       "OwAU0Kn8Q4FgMjrUgtEA3TnA",
       { mode: 0o600 },
     ]]);
