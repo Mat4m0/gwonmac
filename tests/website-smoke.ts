@@ -47,6 +47,16 @@ const PRERELEASE = {
   assets: [PRERELEASE_ARM64_ZIP],
 };
 const DRAFT = { ...STABLE, tag_name: "v0.0.5", draft: true };
+const SNAPSHOTS = Array.from({ length: 25 }, (_, index) => ({
+  tag_name: `snapshot-${index + 1}-abcdef${index % 10}`,
+  draft: false,
+  prerelease: true,
+  assets: [{
+    name: `Guild-Wars-abcdef${index % 10}-macOS-arm64.zip`,
+    browser_download_url:
+      `https://github.com/Mat4m0/gwonmac/releases/download/snapshot-${index + 1}/snapshot.zip`,
+  }],
+}));
 
 // The resolved download is the arm64 ZIP of the release, not its checksums.
 assert.equal(WEBSITE_RELEASE_CHANNEL, "preview");
@@ -65,6 +75,35 @@ assert.deepEqual(selectWebsiteDownload([PRERELEASE]), {
   url: PRERELEASE_ARM64_ZIP.browser_download_url,
   version: "0.0.4-alpha.1",
 });
+
+// Snapshots are public GitHub prereleases but never application versions. A
+// failed cleanup can put more than one old API page ahead of the beta without
+// changing the website's answer, whichever side of it GitHub returns them on.
+assert.deepEqual(selectWebsiteDownload([...SNAPSHOTS, PRERELEASE, STABLE]), {
+  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  version: "0.0.4-alpha.1",
+});
+assert.deepEqual(selectWebsiteDownload([PRERELEASE, STABLE, ...SNAPSHOTS]), {
+  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  version: "0.0.4-alpha.1",
+});
+assert.deepEqual(
+  selectWebsiteDownload([
+    {
+      ...SNAPSHOTS[0],
+      tag_name: "snapshot-latest",
+    },
+    {
+      ...SNAPSHOTS[1],
+      assets: [CHECKSUMS, SBOM],
+    },
+    PRERELEASE,
+  ]),
+  {
+    url: PRERELEASE_ARM64_ZIP.browser_download_url,
+    version: "0.0.4-alpha.1",
+  },
+);
 
 // Drafts are invisible to a logged-out visitor and are not offered either.
 assert.deepEqual(selectWebsiteDownload([DRAFT, PRERELEASE]), {
@@ -123,8 +162,10 @@ assert.equal(selectWebsiteDownload({ message: "API rate limit exceeded" }), null
 {
   const realFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async () => {
+  let requested = "";
+  globalThis.fetch = async (input) => {
     calls += 1;
+    requested = String(input);
     return new globalThis.Response(JSON.stringify([PRERELEASE, STABLE]), {
       headers: { "content-type": "application/json" },
     });
@@ -137,6 +178,10 @@ assert.equal(selectWebsiteDownload({ message: "API rate limit exceeded" }), null
       loadWebsiteDownload(),
     ]);
     assert.equal(calls, 1);
+    assert.equal(
+      requested,
+      "https://api.github.com/repos/Mat4m0/gwonmac/releases?per_page=100",
+    );
     for (const answer of answers) {
       assert.deepEqual(answer, {
         url: PRERELEASE_ARM64_ZIP.browser_download_url,

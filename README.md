@@ -131,6 +131,22 @@ Releases are cut from `main` by manual dispatch of the macOS workflow. The
 workflow verifies one ad-hoc signed package, generates checksums and an SPDX
 SBOM, attests that exact ZIP, and publishes those same tested files.
 
+### Test snapshots
+
+Every verified push to `main` publishes a temporary
+[`snapshot-*` prerelease](https://github.com/Mat4m0/gwonmac/releases) for
+players who want to test the newest changes. A maintainer can publish the same
+kind of snapshot from another repository branch with the **Tester build**
+workflow. Snapshots are unsupported, never offered by the website or in-app
+release check, and are bounded: only the newest three remain, while every
+snapshot except the newest expires after fourteen days.
+
+Pull requests keep their packaged app as a GitHub Actions artifact for three
+days. Those artifacts require a signed-in GitHub account; snapshot prereleases
+use ordinary public download links. Report results with the
+[preview feedback form](https://github.com/Mat4m0/gwonmac/issues/new?template=preview-feedback.yml);
+diagnostics remain local unless you explicitly attach the exported file.
+
 ## Diagnostics
 
 The app keeps a bounded, local-only flight recorder — startup and frame

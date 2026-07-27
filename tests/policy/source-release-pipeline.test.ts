@@ -97,7 +97,9 @@ test("official releases have one honest ad-hoc signing path", () => {
 
 test("release workflow publishes one tested, attested package version", () => {
   const workflow = read(".github/workflows/release.yml");
-  assert.match(workflow, /runs-on: macos-15/);
+  const verification = read(".github/workflows/macos-verify.yml");
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
+  assert.match(verification, /runs-on: macos-15/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
@@ -109,12 +111,12 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /actions\/attest@/);
   assert.match(workflow, /sbom-path: \$\{\{ steps\.assets\.outputs\.sbom \}\}/);
   assert.match(workflow, /artifact-metadata: write/);
-  assert.match(workflow, /actions\/dependency-review-action@/);
+  assert.match(verification, /actions\/dependency-review-action@/);
   assert.ok(
-    workflow.indexOf("actions/dependency-review-action@") <
-      workflow.indexOf("pnpm install --frozen-lockfile"),
+    verification.indexOf("actions/dependency-review-action@") <
+      verification.indexOf("pnpm install --frozen-lockfile"),
   );
-  assert.match(workflow, /run: pnpm audit --audit-level=high/);
+  assert.match(verification, /run: pnpm audit --audit-level=high/);
   const releaseBuild = workflow.slice(
     workflow.indexOf("  release-build:"),
     workflow.indexOf("\n  release:"),
@@ -135,6 +137,108 @@ test("release workflow publishes one tested, attested package version", () => {
     /if \[ "\$PRERELEASE" = "true" \]; then[\s\S]*This is a prerelease build/,
   );
   assert.match(workflow, /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$SBOM"/);
+});
+
+test("tester snapshots are verified, immutable, bounded, and isolated from releases", () => {
+  const entry = read(".github/workflows/release.yml");
+  const verification = read(".github/workflows/macos-verify.yml");
+  const publisher = read(".github/workflows/publish-snapshot.yml");
+  const manual = read(".github/workflows/tester-build.yml");
+  const retention = read("scripts/snapshot-retention.ts");
+  const feedback = read(".github/ISSUE_TEMPLATE/preview-feedback.yml");
+
+  // One read-only verification path owns PR, main, manual tester, and release
+  // gates. PR artifacts are short-lived and no publishing permission reaches
+  // that reusable workflow.
+  assert.match(verification, /workflow_call:/);
+  assert.match(verification, /permissions:\n {2}contents: read/);
+  assert.doesNotMatch(
+    verification,
+    /contents: write|attestations: write|id-token: write/,
+  );
+  assert.match(verification, /run: pnpm verify/);
+  assert.match(verification, /codesign --verify --deep --strict/);
+  assert.match(verification, /Signature=adhoc/);
+  assert.match(verification, /ditto -c -k --sequesterRsrc --keepParent/);
+  assert.match(verification, /format: spdx-json/);
+  assert.match(verification, /SOURCE_COMMIT\.txt/);
+  assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
+  assert.match(verification, /retention-days: \$\{\{ inputs\.artifact-retention-days \}\}/);
+
+  assert.match(
+    entry,
+    /gwonmac-pr-\{0\}-\{1\}', github\.event\.number, github\.sha/,
+  );
+  assert.match(
+    entry,
+    /artifact-retention-days: \$\{\{ github\.event_name == 'pull_request' && 3 \|\| 1 \}\}/,
+  );
+  assert.match(entry, /dependency-review: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+  assert.match(
+    entry,
+    /snapshot:\n {4}if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
+  );
+  assert.match(
+    entry,
+    /release-build:\n {4}if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
+  );
+
+  // Tester dispatch is separate from the versioned release dispatch. Both
+  // snapshot callers publish only after the same verification job succeeds.
+  assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
+  assert.doesNotMatch(manual, /schedule:|release-build|package\.json'\)\.version/);
+  assert.match(manual, /artifact-retention-days: 1/);
+  assert.match(manual, /publish:\n {4}needs: verify/);
+  assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
+
+  // The handoff identity and checksums are checked before attestations and
+  // release creation. Cleanup runs last and uses an explicit apply switch.
+  const handoff = publisher.indexOf("- name: Verify package handoff");
+  const attest = publisher.indexOf("- name: Attest snapshot provenance");
+  const publish = publisher.indexOf("- name: Publish immutable snapshot prerelease");
+  const prune = publisher.indexOf("- name: Prune expired snapshots");
+  assert.ok(handoff < attest && attest < publish && publish < prune);
+  assert.match(publisher, /test "\$\(tr -d '\\n' < "\$source_commit"\)" = "\$COMMIT_SHA"/);
+  assert.match(publisher, /shasum -a 256 -c SHA256SUMS\.txt/);
+  assert.match(publisher, /tag="snapshot-\$RUN_NUMBER-\$short"/);
+  assert.match(
+    publisher,
+    /test\(\\"\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\\"\)/,
+  );
+  assert.match(publisher, /--target "\$COMMIT_SHA"/);
+  assert.match(publisher, /--prerelease[\s\S]*--latest=false/);
+  assert.match(
+    publisher,
+    /gh release create "\$TAG" "\$ARCHIVE" "\$CHECKSUM" "\$SBOM" "\$SOURCE_COMMIT"/,
+  );
+  assert.match(publisher, /scripts\/snapshot-retention\.ts[\s\S]*--apply/);
+  assert.match(publisher, /only the newest three are retained/);
+  assert.match(publisher, /expire after 14 days/);
+  assert.match(publisher, /preview-feedback\.yml/);
+
+  // Cleanup's authority is the exact snapshot namespace. It deletes a selected
+  // release before its unique tag and cannot match any v* release.
+  assert.match(retention, /\/\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\//);
+  assert.match(retention, /const MAX_SNAPSHOTS = 3/);
+  assert.match(retention, /const MAX_AGE_MS = 14 \* 24 \* 60 \* 60 \* 1_000/);
+  assert.ok(
+    retention.indexOf("repos/${repository}/releases/${release.id}") <
+      retention.indexOf("repos/${repository}/git/refs/tags/${release.tagName}"),
+  );
+  assert.match(retention, /const apply = args\.includes\("--apply"\)/);
+
+  for (const id of [
+    "snapshot",
+    "macos",
+    "hardware",
+    "reproduction",
+    "expected",
+    "actual",
+    "versioned-release",
+  ]) {
+    assert.match(feedback, new RegExp(`id: ${id}[\\s\\S]*?required: true`));
+  }
+  assert.match(feedback, /id: diagnostics[\s\S]*?required: false/);
 });
 
 test("the application ships with no runtime dependency to audit", () => {

@@ -18,7 +18,14 @@ const pinned = /^[^@\s]+\/[^@\s]+@[0-9a-f]{40}$/;
 test("every workflow action is pinned to a full commit SHA", () => {
   assert.deepEqual(
     workflows.sort(),
-    ["client-canary.yml", "release.yml", "website.yml"],
+    [
+      "client-canary.yml",
+      "macos-verify.yml",
+      "publish-snapshot.yml",
+      "release.yml",
+      "tester-build.yml",
+      "website.yml",
+    ],
     "a workflow was added or removed; confirm it is covered here",
   );
 

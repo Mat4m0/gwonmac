@@ -34,6 +34,13 @@ Nothing about the number implies an automatic update. Updating is manual, and
 the app checks for a newer release only when asked — see
 [Updates](user-guide.md#updates).
 
+Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
+application versions. Their tags deliberately do not parse as one of the
+version shapes above, so neither the website nor the in-app release check
+offers them. They remain available as public downloads on GitHub while their
+bounded retention window is open; pull-request packages instead live as
+signed-in-only GitHub Actions artifacts for three days.
+
 Versions published before this scheme, including the public alpha
 `0.0.1-alpha.1`, used a plain `0.x` number and are older than everything above.
 The macOS bundle also carries a `CFBundleVersion` derived from the release
