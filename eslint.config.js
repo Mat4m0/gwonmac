@@ -66,7 +66,7 @@ const NO_UPWARD =
   "src/main/core/** must not import upward out of src/main/core. Invert the dependency.";
 const NO_MAIN_FROM_RENDERER =
   "src/renderer/** must not import from src/main/**. Cross the boundary through the preload bridge or src/shared/**.";
-const WEBSITE_SHARED_ONLY = "apps/website/** may only reach into src/shared/**.";
+const APP_SHARED_ONLY = "apps/** may only reach into src/shared/**.";
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -152,14 +152,15 @@ export default tseslint.config(
     },
   },
   {
-    // P0.2 — the website may read canonical contracts, never main-process code.
-    files: ["apps/website/**/*.{js,mjs,ts,vue}"],
+    // P0.2 — independently-built apps may read canonical contracts, never
+    // main-process, preload, or renderer implementation.
+    files: ["apps/{website,tools}/**/*.{js,mjs,ts,vue}"],
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [{ regex: INTO_APP, message: WEBSITE_SHARED_ONLY }] },
+        { patterns: [{ regex: INTO_APP, message: APP_SHARED_ONLY }] },
       ],
-      "no-restricted-syntax": ["error", ...crossings(INTO_APP, WEBSITE_SHARED_ONLY)],
+      "no-restricted-syntax": ["error", ...crossings(INTO_APP, APP_SHARED_ONLY)],
     },
   },
   {

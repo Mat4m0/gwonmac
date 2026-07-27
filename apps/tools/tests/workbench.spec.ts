@@ -1,0 +1,52 @@
+import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#app[data-ready=true]")).toBeAttached();
+});
+
+test("manages teams and builds without Electron or the game", async ({ page }) => {
+  await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Team composition" })).toBeVisible();
+  await expect(page.locator(".team-slots > li")).toHaveCount(8);
+
+  await page.getByRole("tab", { name: /Builds/ }).click();
+  await page.getByPlaceholder("Search names, tags, heroes, skills").fill("Barrage");
+  await expect(page.getByRole("option", { name: /Splinter Barrage/ })).toHaveCount(1);
+  await page.getByRole("option", { name: /Splinter Barrage/ }).click();
+  await expect(page.getByRole("heading", { name: "Skill bar" })).toBeVisible();
+  await expect(page.locator(".bar-section .skill")).toHaveCount(8);
+});
+
+test("forks and rebinds through an explicit inline flow", async ({ page }) => {
+  await page.getByRole("tab", { name: /Builds/ }).click();
+  await page.getByRole("option", { name: /Word of Healing Monk/ }).first().click();
+  await page.getByRole("button", { name: "Fork variant" }).click();
+  await expect(page.getByRole("heading", { name: "Fork a linked variant" })).toBeVisible();
+  await page.getByRole("checkbox", { name: /Classic Discordway/ }).check();
+  await page.getByRole("button", { name: "Create variant" }).click();
+  await expect(page.locator("#build-name")).toHaveValue(/variant/);
+  await expect(page.getByRole("button", { name: /Undo/ }).first()).toBeEnabled();
+});
+
+test("reflows to list then detail at a narrow panel width", async ({ page }) => {
+  await page.setViewportSize({ width: 520, height: 760 });
+  await expect(page.locator(".library-pane")).toBeVisible();
+  await page.getByRole("option", { name: /Balanced vanquish/ }).click();
+  await expect(page.getByRole("button", { name: "Library" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Team composition" })).toBeVisible();
+  await page.getByRole("button", { name: "Library" }).click();
+  await expect(page.locator(".library-pane")).toBeVisible();
+});
+
+test("supports keyboard search and undo", async ({ page }) => {
+  await page.keyboard.press("/");
+  await expect(page.getByPlaceholder("Search names, tags, heroes, skills")).toBeFocused();
+  await page.getByRole("tab", { name: /Builds/ }).click();
+  await page.getByRole("option", { name: /Word of Healing Monk/ }).first().click();
+  await page.locator("#build-name").fill("Field test monk");
+  await page.locator("#build-name").press("Enter");
+  await expect(page.locator("#build-name")).toHaveValue("Field test monk");
+  await page.keyboard.press("Meta+z");
+  await expect(page.locator("#build-name")).toHaveValue("Word of Healing");
+});

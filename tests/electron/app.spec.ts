@@ -379,6 +379,68 @@ test.describe("Electron application", () => {
     }
   });
 
+  test("opens and closes the Vue tools workspace through the native shortcut", async () => {
+    const env = launchEnv({
+      GW_OFFLINE_SHELL: "1",
+      // Native shortcuts are delivered only to the focused application.
+      GW_BACKGROUND_LAUNCH: "0",
+    });
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-tools-e2e-"));
+    const app = await launch(userData, env);
+    try {
+      const page = await app.firstWindow({ timeout: 30_000 });
+      await expect(page.locator("#gwonmac-tools-root")).toBeAttached();
+      const tools = page.locator("#gwonmac-tools-root .tools-window");
+      const pressToolsShortcut = () =>
+        app.evaluate(async ({ BrowserWindow }) => {
+          const win = BrowserWindow.getAllWindows()[0];
+          win?.focus();
+          const webContents = win?.webContents;
+          if (!webContents) throw new Error("the application window is missing");
+          const observed = new Promise<{
+            key: string;
+            meta: boolean;
+            type: string;
+          }>((resolve) => {
+            webContents.once("before-input-event", (_event, input) => {
+              resolve({ key: input.key, meta: input.meta, type: input.type });
+            });
+          });
+          webContents?.sendInputEvent({
+            type: "keyDown",
+            keyCode: "B",
+            modifiers: ["meta"],
+          });
+          webContents?.sendInputEvent({
+            type: "keyUp",
+            keyCode: "B",
+            modifiers: ["meta"],
+          });
+          return observed;
+        });
+
+      expect(await pressToolsShortcut()).toEqual({
+        key: "b",
+        meta: true,
+        type: "keyDown",
+      });
+      await expect(tools).toBeVisible();
+      await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
+
+      const search = page.getByRole("searchbox", {
+        name: "Search library",
+      });
+      await search.fill("discord");
+      await expect(search).toHaveValue("discord");
+
+      await pressToolsShortcut();
+      await expect(tools).toBeHidden();
+    } finally {
+      await app.close().catch(() => undefined);
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
   test("compacts WASM-backed socket views before crossing Electron", async () => {
     const received: Buffer[] = [];
     const server = net.createServer((socket) => {

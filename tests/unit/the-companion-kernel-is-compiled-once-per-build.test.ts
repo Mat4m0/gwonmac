@@ -170,9 +170,10 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
   });
 });
 
-describe("scripts/build.mjs orders the three producers of build/renderer", () => {
+describe("scripts/build.mjs orders the four producers of build/renderer", () => {
   const assets = stepPosition("scripts/copy-renderer.mjs");
   const renderer = stepPosition("tsconfig.renderer.json");
+  const tools = stepPosition("build:embedded");
   const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
 
   it("copies the assets before the renderer is compiled into the same directory", () => {
@@ -185,11 +186,18 @@ describe("scripts/build.mjs orders the three producers of build/renderer", () =>
     );
   });
 
-  it("compiles the kernel into that directory after both of them", () => {
+  it("builds Tools after renderer assets and code are in place", () => {
+    assert.ok(
+      assets < tools && renderer < tools,
+      `Tools built at ${tools}, before assets ${assets} or renderer ${renderer}`,
+    );
+  });
+
+  it("compiles the kernel into that directory after all of them", () => {
     assert.ok(kernel >= 0, "no rustc step to inspect");
     assert.ok(
-      assets < kernel && renderer < kernel,
-      `kernel written at ${kernel}, before assets ${assets} or renderer ${renderer}`,
+      assets < kernel && renderer < kernel && tools < kernel,
+      `kernel written at ${kernel}, before assets ${assets}, renderer ${renderer}, or Tools ${tools}`,
     );
   });
 });

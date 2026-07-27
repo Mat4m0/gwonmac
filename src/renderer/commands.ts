@@ -47,6 +47,9 @@
       case 'settings.open':
         dispatch('gw:settings');
         break;
+      case 'tools.toggle':
+        dispatch('gw:tools-toggle');
+        break;
       case 'diagnostics.toggle':
         dispatch('gw:diagnostics-toggle');
         break;

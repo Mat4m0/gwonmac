@@ -226,6 +226,18 @@ const REJECTED = [
       'import { validate } from "../../../../src/tools/diagnostics/validate";\nexport const probe = validate;\n',
   },
   {
+    what: "the Tools UI imports renderer implementation",
+    file: "apps/tools/src/probe.ts",
+    source:
+      'import { installToolsHost } from "../../../src/renderer/tools-host.js";\nexport const probe = installToolsHost;\n',
+  },
+  {
+    what: "a Tools UI component imports main-process implementation",
+    file: "apps/tools/src/Probe.vue",
+    source:
+      '<script setup lang="ts">\nimport { gamePaths } from "../../../src/main/paths.js";\nconst probe = gamePaths;\n</script>\n<template><div>{{ probe }}</div></template>\n',
+  },
+  {
     what: "an apps/website .vue SFC imports developer tooling under src/tools",
     file: "apps/website/app/pages/probe.vue",
     source:
@@ -282,6 +294,12 @@ const ALLOWED = [
     source:
       'import { EXTERNAL_URLS } from "../../../../src/shared/contracts";\nexport const probe = EXTERNAL_URLS;\n',
   },
+  {
+    what: "apps/tools imports src/shared",
+    file: "apps/tools/src/probe.ts",
+    source:
+      'import { EXTERNAL_URLS } from "../../../src/shared/contracts.js";\nexport const probe = EXTERNAL_URLS;\n',
+  },
 ];
 
 async function lint(probe: { file: string; source: string }): Promise<string[]> {
@@ -310,15 +328,15 @@ for (const probe of ALLOWED) {
   });
 }
 
-test("the .vue sources this boundary covers still exist", () => {
+test("the .vue sources these app boundaries cover still exist", () => {
   // If the website ever stops using SFCs, the probes above would pass while
   // proving nothing about any real file.
-  const sfcs = execFileSync("git", ["ls-files", "--", "apps/website/**/*.vue"], {
+  const sfcs = execFileSync("git", ["ls-files", "--", "apps/**/*.vue"], {
     cwd: root,
     encoding: "utf8",
   })
     .split("\n")
     .filter(Boolean);
 
-  assert.ok(sfcs.length > 0, "expected the website to still have .vue sources");
+  assert.ok(sfcs.length > 0, "expected the apps to still have .vue sources");
 });

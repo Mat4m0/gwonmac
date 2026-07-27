@@ -114,6 +114,7 @@ const logBuf: string[] = [];
 let gameWasmInstance: WebAssembly.Instance | null = null;
 let gameWasmModule: WebAssembly.Module | null = null;
 let disposeSocketHost = () => {};
+let disposeToolsHost = () => {};
 const native = () => window.gwNative;
 const milestone = (
   name: import('../shared/diagnostics.js').RendererMilestone,
@@ -213,6 +214,7 @@ addEventListener('beforeunload', () => {
   clientHealthConfirmation?.dispose();
   imageSource?.stop();
   disposeSocketHost();
+  disposeToolsHost();
 });
 
 Module = {
@@ -614,6 +616,7 @@ function loadGlue() {
       templateSaveCompatibility,
       templateFilesystemTrace,
       clientHealth,
+      tools,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -624,6 +627,7 @@ function loadGlue() {
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
+      import('./tools-host.js'),
     ]);
     host = {
       ...graphics,
@@ -635,6 +639,9 @@ function loadGlue() {
     };
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
+    disposeToolsHost = tools.installToolsHost({
+      releaseHeldKeys: () => inputHost?.releaseAll(),
+    });
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
       native: native().sockets,

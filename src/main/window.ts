@@ -351,6 +351,22 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     logEvent({ k: "security.webviewBlocked" });
   });
 
+  // Guild Wars treats the base B key as its own command even when a modifier
+  // is held. Main consumes Cmd/Ctrl+B before the web contents can see either
+  // edge, so opening Tools cannot also trigger a game action.
+  win.webContents.on("before-input-event", (event, input) => {
+    const toolsShortcut =
+      input.key.toLocaleLowerCase() === "b"
+      && (input.meta || input.control)
+      && !input.alt
+      && !input.shift;
+    if (!toolsShortcut) return;
+    event.preventDefault();
+    if (input.type === "keyDown" && !input.isAutoRepeat) {
+      void toggleTools(win);
+    }
+  });
+
   win.webContents.on("destroyed", () => {
     logEvent({ k: "webContents.destroyed" });
     host.sockets.closeAll(rendererId);
@@ -415,6 +431,11 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
 
 export async function resetGameInput(win: BrowserWindow): Promise<void> {
   await sendRendererCommand(win, { type: "input.reset" });
+}
+
+async function toggleTools(win: BrowserWindow): Promise<void> {
+  await resetGameInput(win);
+  await sendRendererCommand(win, { type: "tools.toggle" });
 }
 
 export async function exportProblemReport(
@@ -527,6 +548,16 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
               logEvent({ k: "window.stateResetFailed" });
             });
           },
+        },
+        { type: "separator" },
+        {
+          id: "toggle-tools",
+          label: "GWonMac Tools",
+          accelerator: "CommandOrControl+B",
+          // `before-input-event` owns the shortcut. Registering the menu
+          // accelerator as well would toggle twice.
+          registerAccelerator: false,
+          click: () => toggleTools(win),
         },
         { type: "separator" },
         {

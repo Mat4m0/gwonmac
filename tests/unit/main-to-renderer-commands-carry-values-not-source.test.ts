@@ -187,17 +187,20 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
   const fixture = harness(ARGV);
   fixture.deliver(1, { type: "input.reset" });
   fixture.deliver(2, { type: "settings.open" });
-  fixture.deliver(3, { type: "diagnostics.toggle" });
+  fixture.deliver(3, { type: "tools.toggle" });
+  fixture.deliver(4, { type: "diagnostics.toggle" });
   await new Promise(setImmediate);
   assert.deepEqual(fixture.dispatched, [
     "gw:input-reset",
     "gw:settings",
+    "gw:tools-toggle",
     "gw:diagnostics-toggle",
   ]);
   assert.deepEqual(fixture.acknowledgements(), [
     [1, "completed"],
     [2, "completed"],
     [3, "completed"],
+    [4, "completed"],
   ]);
 });
 

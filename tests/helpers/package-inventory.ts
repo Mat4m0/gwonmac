@@ -20,6 +20,8 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/build/renderer/companion-snapshot.js",
   "/build/renderer/enhancement-cursor.js",
   "/build/renderer/enhancement-readout.js",
+  "/build/renderer/tools/tools-app.js",
+  "/build/renderer/tools/tools-app.css",
   "/build/main/core/enhancement-transform.js",
   "/build/main/core/client-module.js",
   "/build/main/core/enhancement-builds.js",
