@@ -47,6 +47,7 @@ test.describe("sandbox boundary", () => {
         // together.
         keys: [
           "app",
+          "buildLibrary",
           "cache",
           "client",
           "commands",
