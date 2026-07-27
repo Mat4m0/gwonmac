@@ -18,6 +18,7 @@ import { clientGenerationPaths } from "./client-compatibility.js";
 export interface GamePaths {
   userData: string;
   settings: string;
+  buildLibrary: string;
   windowState: string;
   credentials: string;
   diagnostics: string;
@@ -39,6 +40,7 @@ export function gamePaths(userData: string): GamePaths {
   return {
     userData,
     settings: path.join(userData, "settings.json"),
+    buildLibrary: path.join(userData, "build-library.json"),
     windowState: path.join(userData, "window-state.json"),
     credentials: path.join(userData, "credentials.bin"),
     diagnostics: path.join(userData, "diagnostics"),

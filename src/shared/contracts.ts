@@ -6,6 +6,7 @@ import type {
   RendererMetrics,
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
+import type { BuildLibrary } from "./builds/library.js";
 
 export type BuildKind = "jspi";
 
@@ -426,6 +427,8 @@ export const IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
+  buildLibraryGet: "gw:buildLibrary:get",
+  buildLibrarySet: "gw:buildLibrary:set",
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
@@ -519,6 +522,10 @@ export interface GwNativeApi {
     get(): Promise<AppSettings>;
     set(value: AppSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
+  };
+  buildLibrary: {
+    get(): Promise<{ library: BuildLibrary; recovered: boolean }>;
+    set(value: BuildLibrary): Promise<void>;
   };
   credentials: {
     load(): Promise<StoredCredentials | null>;

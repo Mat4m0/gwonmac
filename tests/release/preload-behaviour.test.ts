@@ -179,6 +179,12 @@ const INVOCATIONS: Invocation[] = [
   { path: "settings.get", args: [], channel: IPC.settingsGet },
   { path: "settings.set", args: [{ renderScale: 2 }], channel: IPC.settingsSet },
   { path: "settings.reset", args: [], channel: IPC.settingsReset },
+  { path: "buildLibrary.get", args: [], channel: IPC.buildLibraryGet },
+  {
+    path: "buildLibrary.set",
+    args: [{ version: 2, builds: [], teams: [], tags: [] }],
+    channel: IPC.buildLibrarySet,
+  },
   { path: "credentials.load", args: [], channel: IPC.credentialsLoad },
   {
     path: "credentials.save",

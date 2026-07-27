@@ -25,6 +25,7 @@ describe("resolved profile paths", () => {
     assert.deepEqual(gamePaths(root), {
       userData: root,
       settings: `${root}/settings.json`,
+      buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,
       credentials: `${root}/credentials.bin`,
       diagnostics: `${root}/diagnostics`,

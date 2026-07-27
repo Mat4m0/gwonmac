@@ -37,6 +37,11 @@ import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore, parseCredentials } from "./core/credentials.js";
+import {
+  loadBuildLibrary,
+  parseBuildLibrary,
+  saveBuildLibrary,
+} from "./core/build-library.js";
 import { resolveDns } from "./core/dns.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
@@ -434,6 +439,18 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         logEvent({ k: "settings.loadFailed", code: errorCode(error) });
         throw error;
       }
+    }),
+
+    buildLibraryGet: channel(nothing, async () => {
+      let recovered = false;
+      const library = await loadBuildLibrary(paths.buildLibrary, () => {
+        recovered = true;
+      });
+      return { library, recovered };
+    }),
+
+    buildLibrarySet: channel(one(parseBuildLibrary), async (_win, library) => {
+      await saveBuildLibrary(paths.buildLibrary, library);
     }),
 
     settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
