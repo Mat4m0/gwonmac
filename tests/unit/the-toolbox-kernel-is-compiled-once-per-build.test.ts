@@ -1,6 +1,7 @@
 // P4.2 — scripts/build.mjs is the single build producer. copy-renderer.mjs runs
-// to completion without rustc and emits no kernel; the canonical build step
-// list holds exactly one rustc invocation.
+// to completion without rustc, copies assets and no code, and emits no kernel;
+// the canonical build step list holds exactly one rustc invocation, and orders
+// the three producers that write into build/renderer so none erases another.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -35,6 +36,8 @@ function rendererCheckout(): string {
   };
   write("src/renderer/index.html", "<!doctype html>\n");
   write("src/renderer/loading.js", "export {};\n");
+  write("src/renderer/gw-native.d.ts", "export {};\n");
+  write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/bg1.webp", "webp");
   return root;
@@ -47,7 +50,7 @@ function filesUnder(dir: string): string[] {
   });
 }
 
-describe("scripts/copy-renderer.mjs only copies", () => {
+describe("scripts/copy-renderer.mjs only copies assets", () => {
   const root = rendererCheckout();
   // PATH empty: rustc — and every other command — is unreachable.
   const result = spawnSync(
@@ -65,6 +68,10 @@ describe("scripts/copy-renderer.mjs only copies", () => {
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
       "<!doctype html>\n",
     );
+    assert.equal(
+      readFileSync(path.join(root, "build/renderer/fonts/COPYING-QUALITYPE"), "utf8"),
+      "licence",
+    );
     assert.deepEqual(
       JSON.parse(
         readFileSync(path.join(root, "build/renderer/images/index.json"), "utf8"),
@@ -80,6 +87,13 @@ describe("scripts/copy-renderer.mjs only copies", () => {
     // splices the canonical channel constants in and is the only producer of
     // build/preload/preload.cjs.
     assert.equal(existsSync(path.join(root, "build/preload")), false);
+  });
+
+  it("copies no code, because tsc emits build/renderer's JavaScript", () => {
+    const code = filesUnder(path.join(root, "build")).filter(
+      (file) => file.endsWith(".js") || file.endsWith(".ts"),
+    );
+    assert.deepEqual(code, []);
   });
 
   it("emits no WebAssembly", () => {
@@ -106,6 +120,20 @@ function stepArgs(step: (typeof BUILD_STEPS)[number]): string[] {
   return args;
 }
 
+/**
+ * Where the one step whose arguments mention `needle` sits in the list.
+ * Positions are read from the step list rather than written down here, so the
+ * assertions below stay about the ordering that matters and survive a step
+ * being inserted anywhere in it.
+ */
+function stepPosition(needle: string): number {
+  const found = BUILD_STEPS.map((step, index) => ({ step, index })).filter(
+    ({ step }) => stepArgs(step).includes(needle),
+  );
+  assert.equal(found.length, 1, `${needle} is not run by exactly one build step`);
+  return found[0]!.index;
+}
+
 describe("scripts/build.mjs is the one caller of rustc", () => {
   const rustc = BUILD_STEPS.filter(([command]) => command === "rustc");
 
@@ -113,7 +141,7 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
     assert.equal(rustc.length, 1);
   });
 
-  it("writes it into the renderer output, after that output is recreated", () => {
+  it("writes it into the renderer output", () => {
     const kernel = rustc[0];
     assert.ok(kernel, "no rustc step to inspect");
     const args = stepArgs(kernel);
@@ -122,11 +150,39 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
       "build/renderer/toolbox-kernel.wasm",
     ]);
     assert.ok(args.includes("src/toolbox-kernel/lib.rs"));
-    const copy = BUILD_STEPS.findIndex((step) =>
-      stepArgs(step).includes("scripts/copy-renderer.mjs"),
+  });
+});
+
+describe("scripts/build.mjs orders the three producers of build/renderer", () => {
+  const assets = stepPosition("scripts/copy-renderer.mjs");
+  const renderer = stepPosition("tsconfig.renderer.json");
+  const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
+
+  it("copies the assets before the renderer is compiled into the same directory", () => {
+    // The reverse order is the defect this ordering exists to prevent: the copy
+    // step recreated build/renderer, which was harmless only while the renderer
+    // compile emitted nothing.
+    assert.ok(
+      assets < renderer,
+      `assets copied at ${assets}, renderer compiled at ${renderer}`,
     );
-    // copy-renderer.mjs deletes build/renderer, so a kernel written before it
-    // would not survive to be packaged.
-    assert.ok(copy >= 0 && copy < BUILD_STEPS.indexOf(kernel));
+  });
+
+  it("compiles the kernel into that directory after both of them", () => {
+    assert.ok(kernel >= 0, "no rustc step to inspect");
+    assert.ok(
+      assets < kernel && renderer < kernel,
+      `kernel written at ${kernel}, before assets ${assets} or renderer ${renderer}`,
+    );
+  });
+
+  it("generates the preload after the main program it reads its contracts from", () => {
+    const main = BUILD_STEPS.findIndex(
+      (step) =>
+        stepArgs(step).includes("node_modules/typescript/bin/tsc")
+        && !stepArgs(step).includes("tsconfig.renderer.json"),
+    );
+    assert.ok(main >= 0, "no main tsc step to inspect");
+    assert.ok(main < stepPosition("scripts/generate-preload.mjs"));
   });
 });

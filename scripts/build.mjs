@@ -16,15 +16,22 @@ import { pathToFileURL } from "node:url";
  */
 export const BUILD_STEPS = [
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // Reads build/shared/contracts.js, so it has to run after tsc.
+  [process.execPath, ["scripts/generate-preload.mjs"]],
+  // Static assets only. It fills build/renderer with everything the compiler
+  // does not produce, so it has to run before the compiler writes into the
+  // same directory.
+  [process.execPath, ["scripts/copy-renderer.mjs"]],
+  // The renderer's own program, emitting build/renderer/*.js. It used to check
+  // without emitting and the JavaScript was copied verbatim; that is what made
+  // the copy step's old rmSync harmless, and what would delete this emit if the
+  // two ever swapped back.
   [
     process.execPath,
     ["node_modules/typescript/bin/tsc", "-p", "tsconfig.renderer.json"],
   ],
-  // Reads build/shared/contracts.js, so it has to run after tsc.
-  [process.execPath, ["scripts/generate-preload.mjs"]],
-  // Recreates build/renderer, so the kernel has to be written after it.
-  [process.execPath, ["scripts/copy-renderer.mjs"]],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
+  // It writes into build/renderer, so it goes after everything that fills it.
   [
     "rustc",
     [

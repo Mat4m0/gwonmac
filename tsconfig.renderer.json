@@ -1,4 +1,26 @@
 {
+  // The renderer is a second program, not a second source of truth: it compiles
+  // the same src/ tree for Chromium — DOM types, ESNext modules, no Node — while
+  // tsconfig.json compiles it for the main process. It emits its own JavaScript
+  // into build/renderer, so scripts/build.mjs runs it after the static assets
+  // are copied and before rustc writes the kernel into the same directory.
+  //
+  // rootDir is "src" rather than "src/renderer" because the renderer's type-only
+  // imports of src/shared put those files in this program, and TypeScript
+  // refuses a rootDir that does not contain every source file it may emit —
+  // there is no flag that keeps a file in the program but out of the emit.
+  // "src" is what makes the renderer's own output land flat in build/renderer,
+  // which is the layout index.html and the gw://app protocol expect; the
+  // alternative, an inferred common source directory, would bury it under
+  // build/renderer/renderer and put a second copy of the shared contracts
+  // beside it.
+  //
+  // The cost, stated rather than hidden: this project also re-emits the three
+  // shared modules the renderer references into build/shared, which
+  // tsconfig.json owns. The two outputs are byte-identical apart from the
+  // sourceMappingURL comment. TypeScript's only real answer is a project
+  // reference to tsconfig.json, which needs "composite" there and makes this
+  // project's type check depend on a prior build — both outside this change.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -10,12 +32,12 @@
     "exactOptionalPropertyTypes": true,
     "allowJs": true,
     "checkJs": true,
-    "noEmit": true
+    "noEmit": false,
+    "declaration": false,
+    "outDir": "build",
+    "rootDir": "src"
   },
-  "include": [
-    "src/renderer/**/*.js",
-    "src/renderer/**/*.d.ts",
-    "src/shared/contracts.ts",
-    "src/shared/diagnostics.ts"
-  ]
+  // src/shared is reached through the renderer's imports, so listing two of its
+  // files here only ever said which two the author happened to think of.
+  "include": ["src/renderer/**/*.js", "src/renderer/**/*.d.ts"]
 }
