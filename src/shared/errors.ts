@@ -14,6 +14,7 @@
 export const ERROR_CODES = [
   "allowlist",
   "artifact_unverified",
+  "bad_build_library",
   "bad_chunk_size",
   "bad_compression",
   "bad_digest",
