@@ -10,6 +10,12 @@ import {
   type FileTable,
 } from "./gw-archive.js";
 import { findSkillTable, type SkillRecord } from "./skill-table.js";
+import {
+  findLanguageFileIds,
+  formatSkillDescription,
+  parseStringShard,
+  stringShardIndex,
+} from "./skill-strings.js";
 import { ATTRIBUTE_BY_ID } from "../../shared/builds/heroes.js";
 import { isKnownEquippableSkill } from "./equippable-skills.js";
 
@@ -17,7 +23,8 @@ const PROFESSION = new Map<number, string>([
   [1, "W"], [2, "R"], [3, "Mo"], [4, "N"], [5, "Me"],
   [6, "E"], [7, "A"], [8, "Rt"], [9, "P"], [10, "D"],
 ]);
-const MAX_HELPER_OUTPUT = 256 * 256 * 4 + 8;
+const MAX_ICON_HELPER_OUTPUT = 256 * 256 * 4 + 8;
+const MAX_RAW_HELPER_OUTPUT = 1024 * 1024 + 8;
 const HELPER_TIMEOUT_MS = 5_000;
 const MEMORY_ICONS = 256;
 
@@ -35,6 +42,7 @@ export interface SkillAssetFacts {
   readonly activationSeconds: number;
   readonly aftercastSeconds: number;
   readonly rechargeSeconds: number;
+  readonly description: string | null;
   readonly hasIcon: boolean;
 }
 
@@ -64,6 +72,7 @@ interface Ready {
   readonly files: FileTable;
   readonly fileIndex: ReadonlyMap<number, number>;
   readonly names: ReadonlyMap<number, string>;
+  readonly englishStringFiles: readonly number[] | null;
 }
 
 function displayName(identifier: string): string {
@@ -146,9 +155,21 @@ export function decodedIconToBmp(decoded: Uint8Array): Buffer {
   return bmp;
 }
 
-function decodeIcon(executable: string, input: Uint8Array): Promise<Buffer> {
+function runDecoder(
+  executable: string,
+  input: Uint8Array,
+  {
+    args,
+    maxOutput,
+    parse,
+  }: {
+    args: readonly string[];
+    maxOutput: number;
+    parse(output: Uint8Array): Buffer;
+  },
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, [], {
+    const child = spawn(executable, args, {
       stdio: ["pipe", "pipe", "ignore"],
       windowsHide: true,
     });
@@ -167,8 +188,8 @@ function decodeIcon(executable: string, input: Uint8Array): Promise<Buffer> {
     );
     child.stdout.on("data", (chunk: Buffer) => {
       length += chunk.length;
-      if (length > MAX_HELPER_OUTPUT) {
-        fail(new Error("skill icon helper exceeded its output bound"));
+      if (length > maxOutput) {
+        fail(new Error("skill asset helper exceeded its output bound"));
       } else {
         chunks.push(chunk);
       }
@@ -179,11 +200,11 @@ function decodeIcon(executable: string, input: Uint8Array): Promise<Buffer> {
       if (settled) return;
       settled = true;
       if (code !== 0) {
-        reject(new Error("skill icon helper refused the local asset"));
+        reject(new Error("skill asset helper refused the local asset"));
         return;
       }
       try {
-        resolve(decodedIconToBmp(Buffer.concat(chunks, length)));
+        resolve(parse(Buffer.concat(chunks, length)));
       } catch (error) {
         reject(error);
       }
@@ -192,11 +213,58 @@ function decodeIcon(executable: string, input: Uint8Array): Promise<Buffer> {
   });
 }
 
+function decodeIcon(executable: string, input: Uint8Array): Promise<Buffer> {
+  return runDecoder(executable, input, {
+    args: [],
+    maxOutput: MAX_ICON_HELPER_OUTPUT,
+    parse: decodedIconToBmp,
+  });
+}
+
+export function decodedRawAsset(decoded: Uint8Array): Buffer {
+  if (
+    decoded.length < 8
+    || String.fromCharCode(...decoded.subarray(0, 4)) !== "GWDB"
+  ) {
+    throw new Error("skill asset helper returned an invalid raw header");
+  }
+  const length = new DataView(
+    decoded.buffer,
+    decoded.byteOffset + 4,
+    4,
+  ).getUint32(0, true);
+  if (length > 1024 * 1024 || decoded.byteLength !== length + 8) {
+    throw new Error("skill asset helper returned an invalid raw length");
+  }
+  return Buffer.from(decoded.subarray(8));
+}
+
+function decodeRawAsset(executable: string, input: Uint8Array): Promise<Buffer> {
+  return runDecoder(executable, input, {
+    args: ["--raw"],
+    maxOutput: MAX_RAW_HELPER_OUTPUT,
+    parse: decodedRawAsset,
+  });
+}
+
+function range(start: number, end: number): string {
+  return start === end ? String(start) : `${start}–${end}`;
+}
+
+function descriptionValues(skill: SkillRecord): readonly [string, string, string] {
+  return [
+    range(skill.scale0, skill.scale15),
+    range(skill.bonusScale0, skill.bonusScale15),
+    range(skill.duration0, skill.duration15),
+  ];
+}
+
 export class SkillAssets {
   private readonly source: SkillAssetSource;
   private ready: Promise<Ready> | null = null;
   private readonly icons = new Map<number, Buffer>();
   private readonly pending = new Map<number, Promise<Buffer | null>>();
+  private descriptions: Promise<ReadonlyMap<number, string>> | null = null;
 
   constructor(source: SkillAssetSource) {
     this.source = source;
@@ -211,6 +279,7 @@ export class SkillAssets {
       ]);
       const table = findSkillTable(wasm);
       if (!table) throw new Error("the local client has no recognisable skill table");
+      const languageFiles = findLanguageFileIds(wasm);
 
       const headerBytes = await this.source.store.readRange(0, 32);
       const header = parseArchiveHeader(() => headerBytes);
@@ -242,6 +311,7 @@ export class SkillAssets {
         files,
         fileIndex,
         names: parseSkillNames(namesText),
+        englishStringFiles: languageFiles?.[0] ?? null,
       };
     })();
     return this.ready;
@@ -249,6 +319,7 @@ export class SkillAssets {
 
   async catalogue(): Promise<readonly SkillAssetFacts[]> {
     const ready = await this.initialize();
+    const descriptions = await this.loadDescriptions(ready);
     return ready.skills.map((skill) => ({
       id: skill.id,
       name: ready.names.get(skill.id) ?? `Skill ${skill.id}`,
@@ -263,10 +334,52 @@ export class SkillAssets {
       activationSeconds: skill.activationSeconds,
       aftercastSeconds: skill.aftercastSeconds,
       rechargeSeconds: skill.rechargeSeconds,
+      description: descriptions.get(skill.id) ?? null,
       hasIcon:
         skill.iconFileId !== 0
         && findStream(ready.files, ready.fileIndex, skill.iconFileId) !== null,
     }));
+  }
+
+  private loadDescriptions(ready: Ready): Promise<ReadonlyMap<number, string>> {
+    if (this.descriptions) return this.descriptions;
+    this.descriptions = this.decodeDescriptions(ready);
+    return this.descriptions;
+  }
+
+  private async decodeDescriptions(ready: Ready): Promise<ReadonlyMap<number, string>> {
+    if (!ready.englishStringFiles) return new Map();
+    const relevant = ready.skills.filter((skill) =>
+      skill.descriptionStringId !== 0
+      && skillAvailability(skill) !== "not-equippable"
+      && skillAvailability(skill) !== "pvp"
+    );
+    const files = new Map<number, readonly (string | null)[]>();
+    for (const skill of relevant) {
+      const { file } = stringShardIndex(skill.descriptionStringId);
+      if (files.has(file) || file >= ready.englishStringFiles.length) continue;
+      const fileId = ready.englishStringFiles[file];
+      if (fileId === undefined) continue;
+      const stream = findStream(ready.files, ready.fileIndex, fileId);
+      if (!stream || !stream.compressed || stream.size > 1024 * 1024) continue;
+      try {
+        const compressed = await this.source.store.readRange(stream.offset, stream.size);
+        const raw = await decodeRawAsset(this.source.decoderPath, compressed);
+        files.set(file, parseStringShard(raw));
+      } catch {
+        // A missing description must not take names, mechanics, or icons down
+        // with it. The catalogue remains useful and the field stays explicit.
+      }
+    }
+    const descriptions = new Map<number, string>();
+    for (const skill of relevant) {
+      const { file, record } = stringShardIndex(skill.descriptionStringId);
+      const source = files.get(file)?.[record];
+      if (!source) continue;
+      const description = formatSkillDescription(source, descriptionValues(skill));
+      if (description) descriptions.set(skill.id, description);
+    }
+    return descriptions;
   }
 
   async icon(skillId: number): Promise<Buffer | null> {

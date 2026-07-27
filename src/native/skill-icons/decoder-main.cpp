@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <iostream>
 #include <iterator>
+#include <string_view>
 #include <vector>
 
 #include "vendor/gwdat/AtexReader.h"
@@ -16,9 +17,18 @@ void writeU16(std::uint16_t value) {
   std::cout.put(static_cast<char>(value & 0xff));
   std::cout.put(static_cast<char>((value >> 8) & 0xff));
 }
+
+void writeU32(std::uint32_t value) {
+  std::cout.put(static_cast<char>(value & 0xff));
+  std::cout.put(static_cast<char>((value >> 8) & 0xff));
+  std::cout.put(static_cast<char>((value >> 16) & 0xff));
+  std::cout.put(static_cast<char>((value >> 24) & 0xff));
+}
 }
 
-int main() {
+int main(int argc, char** argv) {
+  const bool raw = argc == 2 && std::string_view(argv[1]) == "--raw";
+  if (argc != (raw ? 2 : 1)) return 1;
   std::vector<unsigned char> input{
       std::istreambuf_iterator<char>(std::cin),
       std::istreambuf_iterator<char>()};
@@ -38,6 +48,16 @@ int main() {
   if (!unpacked || unpackedSize != static_cast<int>(declared)) {
     delete[] unpacked;
     return 4;
+  }
+
+  if (raw) {
+    std::cout.write("GWDB", 4);
+    writeU32(static_cast<std::uint32_t>(unpackedSize));
+    std::cout.write(
+        reinterpret_cast<const char*>(unpacked),
+        static_cast<std::streamsize>(unpackedSize));
+    delete[] unpacked;
+    return std::cout.good() ? 0 : 6;
   }
 
   const DatTexture texture = ProcessImageFile(unpacked, unpackedSize);

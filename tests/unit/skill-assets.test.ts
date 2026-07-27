@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import {
+  decodedRawAsset,
   decodedIconToBmp,
   parseSkillNames,
   skillAvailability,
@@ -49,6 +50,25 @@ describe("decoded skill icon colours", () => {
     ]);
     const bmp = decodedIconToBmp(decoded);
     assert.deepEqual([...bmp.subarray(54, 58)], [0x10, 0x20, 0xf0, 0xff]);
+  });
+});
+
+describe("decoded raw skill assets", () => {
+  it("accepts only a bounded, length-prefixed helper result", () => {
+    const decoded = Buffer.from([
+      0x47, 0x57, 0x44, 0x42, // GWDB
+      0x03, 0x00, 0x00, 0x00,
+      0x10, 0x20, 0x30,
+    ]);
+    assert.deepEqual([...decodedRawAsset(decoded)], [0x10, 0x20, 0x30]);
+    assert.throws(
+      () => decodedRawAsset(Buffer.from("GWDB\u0004\u0000\u0000\u0000abc", "binary")),
+      /invalid raw length/u,
+    );
+    assert.throws(
+      () => decodedRawAsset(Buffer.from("NOPE\u0000\u0000\u0000\u0000", "binary")),
+      /invalid raw header/u,
+    );
   });
 });
 
