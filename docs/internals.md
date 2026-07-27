@@ -565,8 +565,10 @@ duration ranges; the renderer sends that encoded reference through the
 exact-build-certified client text resolver and caches the resulting readable
 text by string ID. The WASM transform extends the client's full function table
 by one slot for the temporary callback instead of borrowing a client-owned
-entry. Only one decode is in flight, the callback is bounded and removed after
-completion, and no description database or network lookup exists.
+entry. The callback crosses the Emscripten ABI as `table slot + 1`, because
+function pointer zero is null. Only one decode is in flight, the callback is
+bounded and removed after completion, and no description database or network
+lookup exists.
 
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam

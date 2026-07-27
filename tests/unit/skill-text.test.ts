@@ -4,6 +4,7 @@ import {
   encodeSkillDescription,
   encodeTextId,
   finishSkillDescription,
+  tableSlotToFunctionPointer,
   type SkillDescriptionSource,
 } from "../../src/renderer/skill-text.js";
 
@@ -22,6 +23,12 @@ describe("installed-client skill text", () => {
     assert.deepEqual(encodeTextId(25_774), [26_030]);
     assert.deepEqual(encodeTextId(59_371), [0xe7eb, 0x101]);
     assert.throws(() => encodeTextId(-1), /outside/);
+  });
+
+  it("encodes a table slot as the client's non-null function pointer", () => {
+    assert.equal(tableSlotToFunctionPointer(0), 1);
+    assert.equal(tableSlotToFunctionPointer(4_683), 4_684);
+    assert.throws(() => tableSlotToFunctionPointer(-1), /outside/);
   });
 
   it("appends the three official skill-description substitutions", () => {

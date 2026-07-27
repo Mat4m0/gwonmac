@@ -97,7 +97,11 @@ watch(
       if (request !== descriptionRequest) return;
       description.value = resolved;
       descriptionState.value = resolved ? "ready" : "unavailable";
-    } catch {
+    } catch (error) {
+      console.warn(
+        "[tools] skill description unavailable:",
+        error instanceof Error ? error.message : "unknown failure",
+      );
       if (request === descriptionRequest) descriptionState.value = "unavailable";
     }
   },

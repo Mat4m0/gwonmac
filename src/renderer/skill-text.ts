@@ -42,6 +42,15 @@ export function encodeTextId(value: number): readonly number[] {
   return [0x8000 | (value & 0x7fff), 0x100 + Math.floor(value / 0x8000)];
 }
 
+export function tableSlotToFunctionPointer(slot: number): number {
+  if (!Number.isSafeInteger(slot) || slot < 0 || slot >= 0xffff_ffff) {
+    throw new Error("callback table slot is outside the client encoding");
+  }
+  // Emscripten reserves function pointer 0 for null. Its stored pointer is
+  // therefore the indirect-function-table index plus one.
+  return slot + 1;
+}
+
 function substitution(value0: number, value15: number, placeholder: number): number {
   return value0 === value15 && value0 >= 0 && value0 < 0x7f00
     ? value0
@@ -206,7 +215,11 @@ export function createSkillTextResolver(
           settled = true;
           rejectResult(new Error("client text resolution timed out"));
         }, CALLBACK_TIMEOUT_MS);
-        exports.skill_text_resolve(pointer, slot, 1);
+        exports.skill_text_resolve(
+          pointer,
+          tableSlotToFunctionPointer(slot),
+          1,
+        );
         const text = await result;
         if (text) cache.set(source.stringId, text);
         return text;
