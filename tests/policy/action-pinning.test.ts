@@ -21,6 +21,8 @@ test("every workflow action is pinned to a full commit SHA", () => {
     [
       "client-canary.yml",
       "macos-verify.yml",
+      "main-snapshot.yml",
+      "pr-package.yml",
       "publish-snapshot.yml",
       "release.yml",
       "tester-build.yml",

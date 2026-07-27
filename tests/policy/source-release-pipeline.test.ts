@@ -140,7 +140,9 @@ test("release workflow publishes one tested, attested package version", () => {
 });
 
 test("tester snapshots are verified, immutable, bounded, and isolated from releases", () => {
-  const entry = read(".github/workflows/release.yml");
+  const release = read(".github/workflows/release.yml");
+  const pullRequest = read(".github/workflows/pr-package.yml");
+  const main = read(".github/workflows/main-snapshot.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   const publisher = read(".github/workflows/publish-snapshot.yml");
   const manual = read(".github/workflows/tester-build.yml");
@@ -165,22 +167,32 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(verification, /retention-days: \$\{\{ inputs\.artifact-retention-days \}\}/);
 
+  assert.match(pullRequest, /on:\n {2}pull_request:/);
+  assert.doesNotMatch(pullRequest, /workflow_dispatch:|push:/);
   assert.match(
-    entry,
-    /gwonmac-pr-\{0\}-\{1\}', github\.event\.number, github\.sha/,
+    pullRequest,
+    /gwonmac-pr-\{0\}-\{1\}', github\.event\.pull_request\.number, github\.sha/,
   );
-  assert.match(
-    entry,
-    /artifact-retention-days: \$\{\{ github\.event_name == 'pull_request' && 3 \|\| 1 \}\}/,
+  assert.match(pullRequest, /artifact-retention-days: 3/);
+  assert.match(pullRequest, /dependency-review: true/);
+  assert.doesNotMatch(
+    pullRequest,
+    /contents: write|attestations: write|id-token: write/,
   );
-  assert.match(entry, /dependency-review: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+
+  assert.match(main, /on:\n {2}push:\n {4}branches: \[main\]/);
+  assert.doesNotMatch(main, /pull_request:|workflow_dispatch:/);
+  assert.match(main, /artifact-retention-days: 1/);
   assert.match(
-    entry,
-    /snapshot:\n {4}if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
+    main,
+    /publish:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
   );
+
+  assert.match(release, /name: Versioned release[\s\S]*workflow_dispatch:/);
+  assert.doesNotMatch(release, /pull_request:|push:/);
   assert.match(
-    entry,
-    /release-build:\n {4}if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
+    release,
+    /release-build:\n {4}if: github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
   );
 
   // Tester dispatch is separate from the versioned release dispatch. Both

@@ -1,0 +1,34 @@
+name: Main snapshot
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-snapshot
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/macos-verify.yml
+    with:
+      artifact-name: snapshot-assets-${{ github.run_id }}
+      artifact-retention-days: 1
+
+  publish:
+    needs: verify
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/publish-snapshot.yml
+    with:
+      artifact-name: snapshot-assets-${{ github.run_id }}
+      commit-sha: ${{ github.sha }}
+      run-number: ${{ github.run_number }}
+      require-current-main: true
