@@ -63,9 +63,13 @@ test("packaged releases carry the project and third-party license notices", () =
   assert.match(forge, /extraResource:[\s\S]*"LICENSE"/);
   assert.match(forge, /extraResource:[\s\S]*"THIRD-PARTY-NOTICES\.md"/);
   assert.match(forge, /extraResource:[\s\S]*"src\/renderer\/fonts\/COPYING-QUALITYPE"/);
+  assert.match(forge, /extraResource:[\s\S]*"[^"]*COPYING-GWTOOLBOX"/);
+  assert.match(forge, /extraResource:[\s\S]*"[^"]*COPYING-GUILDWARSMAPBROWSER"/);
   const notices = read("THIRD-PARTY-NOTICES.md");
   assert.match(notices, /not relicensed under GPL-3\.0-only/);
   assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
+  assert.match(notices, /GWToolbox\+\+[\s\S]*MIT License/);
+  assert.match(notices, /GuildWarsMapBrowser[\s\S]*Jonathan Bjørn Greve/);
 });
 
 // What the mapping produces is proved by executing it, in
