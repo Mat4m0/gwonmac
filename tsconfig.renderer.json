@@ -15,12 +15,25 @@
   // build/renderer/renderer and put a second copy of the shared contracts
   // beside it.
   //
-  // The cost, stated rather than hidden: this project also re-emits the three
-  // shared modules the renderer references into build/shared, which
-  // tsconfig.json owns. The two outputs are byte-identical apart from the
-  // sourceMappingURL comment. TypeScript's only real answer is a project
-  // reference to tsconfig.json, which needs "composite" there and makes this
-  // project's type check depend on a prior build — both outside this change.
+  // The cost, stated rather than hidden: this project also emits the shared
+  // modules the renderer references into build/shared, which tsconfig.json owns
+  // and emits with sourcemaps. Whichever compiler runs last wins, so
+  // scripts/build.mjs runs this one first and the main program second, and
+  // tests/unit/the-toolbox-kernel-is-compiled-once-per-build.test.ts asserts
+  // that order. Before it did, this project ran last and left build/shared/*.js
+  // with no sourceMappingURL beside .js.map files nothing referenced.
+  //
+  // TypeScript's only way to drop the duplicate outright is a project reference
+  // to tsconfig.json, which requires "composite": true there. Measured rather
+  // than assumed: it works, and it emits a clean build/renderer with no shared
+  // copy at all. It costs two things. `composite` is contagious — it applies to
+  // every program built from tsconfig.json's options, including the one
+  // tests/unit/diagnostic-schema-rejects-free-text.test.ts constructs to prove
+  // the closed schema rejects free text, which then fails on "Composite
+  // projects may not disable declaration emit" and on composite's demand that a
+  // program list all of its files. And it forces `tsc -b`, whose `--noEmit` is
+  // rejected (TS6310), so `pnpm typecheck` could only check a build by
+  // producing one. Worth revisiting; not worth either price for a sourcemap.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -32,6 +45,12 @@
     "exactOptionalPropertyTypes": true,
     "allowJs": true,
     "checkJs": true,
+    // `pnpm typecheck` overrides this back to --noEmit. Checking is not
+    // building: without the override this project writes build/renderer and
+    // build/shared, so a bare `pnpm typecheck` after a build replaced the main
+    // program's sourcemapped shared output with its own — the same clobber the
+    // step order above prevents, reached by the path the step order cannot
+    // reach. scripts/build.mjs is now the only thing that emits build/.
     "noEmit": false,
     "declaration": false,
     "outDir": "build",

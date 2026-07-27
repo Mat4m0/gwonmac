@@ -15,9 +15,6 @@ import { pathToFileURL } from "node:url";
  * @type {ReadonlyArray<readonly [command: string, args: readonly string[]]>}
  */
 export const BUILD_STEPS = [
-  [process.execPath, ["node_modules/typescript/bin/tsc"]],
-  // Reads build/shared/contracts.js, so it has to run after tsc.
-  [process.execPath, ["scripts/generate-preload.mjs"]],
   // Static assets only. It fills build/renderer with everything the compiler
   // does not produce, so it has to run before the compiler writes into the
   // same directory.
@@ -26,10 +23,23 @@ export const BUILD_STEPS = [
   // without emitting and the JavaScript was copied verbatim; that is what made
   // the copy step's old rmSync harmless, and what would delete this emit if the
   // two ever swapped back.
+  //
+  // It also re-emits build/shared/*.js, which is not its output to own: the
+  // renderer's type-only imports of src/shared make those files emittable, and
+  // TypeScript has no flag that keeps a file in a program but out of its emit.
+  // tsconfig.renderer.json says why the alternative was rejected. What matters
+  // here is the order — this step runs *before* the main program, so the copy
+  // that survives is the one with the sourceMappingURL and the .js.map beside
+  // it. Reversed, main-process stack traces silently lose their source
+  // mapping, which is the defect that made this ordering explicit.
   [
     process.execPath,
     ["node_modules/typescript/bin/tsc", "-p", "tsconfig.renderer.json"],
   ],
+  // The main program, and the owner of build/shared.
+  [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // Reads build/shared/contracts.js, so it has to run after tsc.
+  [process.execPath, ["scripts/generate-preload.mjs"]],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
   // It writes into build/renderer, so it goes after everything that fills it.
   [

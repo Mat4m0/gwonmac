@@ -2,6 +2,8 @@
 // to completion without rustc, copies assets and no code, and emits no kernel;
 // the canonical build step list holds exactly one rustc invocation, and orders
 // the three producers that write into build/renderer so none erases another.
+// The last block covers the other shared directory: the two compiler projects
+// both emit build/shared, so the step list has to say which of them wins.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -17,6 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { BUILD_STEPS } from "../../scripts/build.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -134,6 +137,20 @@ function stepPosition(needle: string): number {
   return found[0]!.index;
 }
 
+/**
+ * Where the main program is compiled. It is the `tsc` step that names no
+ * project file, so it is found by what it lacks rather than by an index.
+ */
+function mainCompilerPosition(): number {
+  const found = BUILD_STEPS.map((step, index) => ({ step, index })).filter(
+    ({ step }) =>
+      stepArgs(step).includes("node_modules/typescript/bin/tsc")
+      && !stepArgs(step).includes("tsconfig.renderer.json"),
+  );
+  assert.equal(found.length, 1, "the main program is not compiled by exactly one step");
+  return found[0]!.index;
+}
+
 describe("scripts/build.mjs is the one caller of rustc", () => {
   const rustc = BUILD_STEPS.filter(([command]) => command === "rustc");
 
@@ -177,12 +194,54 @@ describe("scripts/build.mjs orders the three producers of build/renderer", () =>
   });
 
   it("generates the preload after the main program it reads its contracts from", () => {
-    const main = BUILD_STEPS.findIndex(
-      (step) =>
-        stepArgs(step).includes("node_modules/typescript/bin/tsc")
-        && !stepArgs(step).includes("tsconfig.renderer.json"),
+    assert.ok(mainCompilerPosition() < stepPosition("scripts/generate-preload.mjs"));
+  });
+});
+
+/**
+ * A project as `tsc` resolves it, read through the compiler rather than
+ * `JSON.parse` so the `//` comments in these files stay legal and the paths are
+ * the absolute ones the compiler will emit to.
+ */
+function projectOptions(file: string): ts.CompilerOptions {
+  const configPath = path.join(repoRoot, file);
+  const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile);
+  assert.equal(error, undefined, `${file} could not be read`);
+  const parsed = ts.parseJsonConfigFileContent(
+    config,
+    ts.sys,
+    repoRoot,
+    undefined,
+    configPath,
+  );
+  assert.deepEqual(parsed.errors, [], `${file} does not parse`);
+  return parsed.options;
+}
+
+describe("scripts/build.mjs orders the two producers of build/shared", () => {
+  const main = projectOptions("tsconfig.json");
+  const renderer = projectOptions("tsconfig.renderer.json");
+
+  it("has two compiler projects emitting to the same tree", () => {
+    // Not a preference, a fact this ordering depends on: the renderer's
+    // type-only imports of src/shared make those sources emittable, so it needs
+    // `rootDir: "src"` and lands its copy of build/shared beside the main
+    // program's. If a later change removes the overlap — a project reference is
+    // the only way — this fails, and the ordering below stops being load-bearing.
+    assert.equal(renderer.rootDir, main.rootDir);
+    assert.equal(renderer.outDir, main.outDir);
+  });
+
+  it("compiles the renderer first, so the sourcemapped emit is the one that survives", () => {
+    // Reversed, the renderer's unmapped copy overwrites the main program's and
+    // build/shared/*.js loses its sourceMappingURL while the .js.map files stay
+    // on disk, referenced by nothing. That failure is silent: the build
+    // succeeds, the app runs, and main-process stack traces stop resolving.
+    const renderer = stepPosition("tsconfig.renderer.json");
+    const mainCompiler = mainCompilerPosition();
+    assert.ok(
+      renderer < mainCompiler,
+      `renderer compiled at ${renderer}, main program at ${mainCompiler}`,
     );
-    assert.ok(main >= 0, "no main tsc step to inspect");
-    assert.ok(main < stepPosition("scripts/generate-preload.mjs"));
   });
 });
