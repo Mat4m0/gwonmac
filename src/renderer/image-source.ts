@@ -7,6 +7,8 @@
 // Nothing here touches `window`, `fetch` or `Module`, which is what makes the
 // algorithms testable.
 
+import type { SnapshotMetadata } from '../shared/contracts.js';
+
 // The chunk size the main process publishes; the fallback is the value the
 // harness has always substituted for a metadata document without one.
 const DEFAULT_CHUNK_SIZE = 262144;
@@ -17,161 +19,141 @@ const MAX_CHUNK_REQUESTS = 8;
 const BURST_QUIET_MS = 400;
 const BURST_LOG_BYTES = 4 * 1024 * 1024;
 
+/** How a queued chunk read ranks against the others. */
+type Priority = 'demand' | 'prefetch';
+
 /**
  * The capability the ArenaNet client calls. The client contract fixes every
  * signature, `fileSize` is synchronous, and `readAsync` takes an unused third
  * argument the generated glue still passes.
- *
- * @typedef {{
- *   open(path: string): number,
- *   fileSize(handle: number): number,
- *   close(handle: number): void,
- *   readAsync(
- *     imageId: number,
- *     offset: number,
- *     _unused: unknown,
- *     buffer: number,
- *     bytes: number,
- *   ): Promise<void>,
- *   isCached(handle: number, offset: number, size: number): 0 | 1,
- *   cacheAsync(
- *     handle: number,
- *     offset: number,
- *     size: number,
- *     progress: (bytes: number) => void,
- *   ): Promise<void>,
- * }} ImageCapability
  */
+type ImageCapability = {
+  open(path: string): number;
+  fileSize(handle: number): number;
+  close(handle: number): void;
+  readAsync(
+    imageId: number,
+    offset: number,
+    _unused: unknown,
+    buffer: number,
+    bytes: number,
+  ): Promise<void>;
+  isCached(handle: number, offset: number, size: number): 0 | 1;
+  cacheAsync(
+    handle: number,
+    offset: number,
+    size: number,
+    progress: (bytes: number) => void,
+  ): Promise<void>;
+};
 
-/**
- * @typedef {{
- *   reads: number,
- *   bytes: number,
- *   fromMemory: number,
- *   fromNative: number,
- *   coalesced: number,
- *   cacheBytes: number,
- *   cacheChunks: number,
- *   residentHashes: number,
- * }} ImageStats
- */
+type ImageStats = {
+  reads: number;
+  bytes: number;
+  fromMemory: number;
+  fromNative: number;
+  coalesced: number;
+  cacheBytes: number;
+  cacheChunks: number;
+  residentHashes: number;
+};
 
-/**
- * The scheduler gauges the diagnostics batch carries.
- *
- * @typedef {{
- *   memoryCacheBytes: number,
- *   memoryCacheChunks: number,
- *   pendingChunks: number,
- *   activeDemand: number,
- *   activePrefetch: number,
- *   queuedDemand: number,
- *   queuedPrefetch: number,
- * }} SnapshotState
- */
+/** The scheduler gauges the diagnostics batch carries. */
+type SnapshotState = {
+  memoryCacheBytes: number;
+  memoryCacheChunks: number;
+  pendingChunks: number;
+  activeDemand: number;
+  activePrefetch: number;
+  queuedDemand: number;
+  queuedPrefetch: number;
+};
 
 /**
  * The three counters this subsystem reports. Narrower than the renderer's
  * `RendererDiagnostics`, which `window.gwDiagnostics` satisfies structurally:
  * a module that names the whole recorder is one a test cannot fake honestly.
- *
- * @typedef {{
- *   cache(source: 'memory' | 'native' | 'coalesced'): void,
- *   scheduler(event: 'eviction' | 'promotion'): void,
- *   snapshot(
- *     durationUs: number,
- *     bytes: number,
- *     source: 'memory' | 'native',
- *   ): void,
- * }} ImageDiagnostics
  */
+type ImageDiagnostics = {
+  cache(source: 'memory' | 'native' | 'coalesced'): void;
+  scheduler(event: 'eviction' | 'promotion'): void;
+  snapshot(
+    durationUs: number,
+    bytes: number,
+    source: 'memory' | 'native',
+  ): void;
+};
 
-/**
- * @typedef {{
- *   image: ImageCapability,
- *   stats(): ImageStats,
- *   state(): SnapshotState,
- *   evictMemory(): number,
- *   lastError(): string,
- *   stop(): void,
- * }} ImageSource
- */
+export type ImageSource = {
+  image: ImageCapability;
+  stats(): ImageStats;
+  state(): SnapshotState;
+  evictMemory(): number;
+  lastError(): string;
+  stop(): void;
+};
 
-/**
- * @typedef {{
- *   index: number,
- *   priority: 'demand' | 'prefetch',
- *   state: 'queued' | 'active',
- *   promise: Promise<Uint8Array>,
- *   resolve: (value: Uint8Array) => void,
- *   reject: (reason?: unknown) => void,
- * }} ChunkTask
- */
+type ChunkTask = {
+  index: number;
+  priority: Priority;
+  state: 'queued' | 'active';
+  promise: Promise<Uint8Array>;
+  resolve: (value: Uint8Array) => void;
+  reject: (reason?: unknown) => void;
+};
 
-/**
- * @param {{
- *   metadata: import('../shared/contracts.js').SnapshotMetadata,
- *   fetchRange(
- *     start: number,
- *     length: number,
- *     priority: 'demand' | 'prefetch',
- *   ): Promise<Uint8Array>,
- *   writeBytes(data: Uint8Array, address: number): void,
- *   diagnostics?: ImageDiagnostics,
- *   log(...values: unknown[]): void,
- * }} options
- * @returns {ImageSource}
- */
+type ImageSourceOptions = {
+  metadata: SnapshotMetadata;
+  fetchRange(
+    start: number,
+    length: number,
+    priority: Priority,
+  ): Promise<Uint8Array>;
+  writeBytes(data: Uint8Array, address: number): void;
+  diagnostics?: ImageDiagnostics;
+  log(...values: unknown[]): void;
+};
+
 export function createImageSource({
   metadata,
   fetchRange,
   writeBytes,
   diagnostics,
   log,
-}) {
+}: ImageSourceOptions): ImageSource {
   const size = metadata.size;
   const chunkSize = metadata.chunkSize || DEFAULT_CHUNK_SIZE;
   const chunkHashes = metadata.chunkHashes || [];
 
-  /** @type {Map<number, Uint8Array>} */
-  const chunkCache = new Map();
+  const chunkCache = new Map<number, Uint8Array>();
   let chunkCacheBytes = 0;
 
   // Derived from snapshot-metadata residentBits — isCached must stay synchronous.
-  /** @type {Set<string>} */
-  const residentHashes = new Set();
+  const residentHashes = new Set<string>();
 
   const stats = { reads: 0, bytes: 0, fromMemory: 0, fromNative: 0, coalesced: 0 };
   let burstBytes = 0;
-  /** @type {ReturnType<typeof setTimeout> | null} */
-  let burstTimer = null;
+  let burstTimer: ReturnType<typeof setTimeout> | null = null;
   let lastError = '';
 
-  /** @type {Map<number, ChunkTask>} */
-  const inflight = new Map();
-  /** @type {ChunkTask[]} */
-  const demandQueue = [];
-  /** @type {ChunkTask[]} */
-  const prefetchQueue = [];
+  const inflight = new Map<number, ChunkTask>();
+  const demandQueue: ChunkTask[] = [];
+  const prefetchQueue: ChunkTask[] = [];
   let activeDemand = 0;
   let activePrefetch = 0;
   let stopped = false;
 
-  /** @type {Set<number>} */
-  const handles = new Set();
+  const handles = new Set<number>();
   let nextHandle = 1;
 
-  /** @param {number} i */
-  const hashOf = (i) => chunkHashes[i] || '';
+  const hashOf = (i: number) => chunkHashes[i] || '';
 
-  /** @param {number} i */
-  function markResident(i) {
+  function markResident(i: number) {
     const h = hashOf(i);
     if (h) residentHashes.add(h);
   }
 
-  /** @param {Uint8Array} bits */
-  function applyResidentBits(bits) {
+  function applyResidentBits(bits: Uint8Array) {
     if (!bits || !bits.length) return;
     for (let i = 0; i < chunkHashes.length; i++) {
       const byte = bits[i >> 3];
@@ -179,26 +161,19 @@ export function createImageSource({
     }
   }
 
-  /**
-   * @param {number} offset
-   * @param {number} size
-   * @returns {[number, number]}
-   */
-  const chunkRange = (offset, size) => [
+  const chunkRange = (offset: number, size: number): [number, number] => [
     Math.floor(offset / chunkSize),
     Math.floor((offset + size - 1) / chunkSize),
   ];
 
   // Re-insert on hit to move the entry to the LRU tail.
-  /** @param {number} i */
-  function cacheTouch(i) {
+  function cacheTouch(i: number) {
     const buf = chunkCache.get(i);
     if (buf !== undefined) { chunkCache.delete(i); chunkCache.set(i, buf); }
     return buf;
   }
 
-  /** @param {number} i @param {Uint8Array} buf */
-  function cachePut(i, buf) {
+  function cachePut(i: number, buf: Uint8Array) {
     if (chunkCache.has(i)) return;
     chunkCache.set(i, buf);
     chunkCacheBytes += buf.length;
@@ -213,8 +188,7 @@ export function createImageSource({
     }
   }
 
-  /** @param {ChunkTask} task */
-  function promote(task) {
+  function promote(task: ChunkTask) {
     if (task.priority !== 'prefetch' || task.state !== 'queued') return;
     const index = prefetchQueue.indexOf(task);
     if (index < 0) return;
@@ -256,12 +230,7 @@ export function createImageSource({
     }
   }
 
-  /**
-   * @param {number} i
-   * @param {'demand' | 'prefetch'} priority
-   * @returns {Promise<Uint8Array>}
-   */
-  function chunkBytes(i, priority) {
+  function chunkBytes(i: number, priority: Priority): Promise<Uint8Array> {
     const hit = cacheTouch(i);
     if (hit !== undefined) {
       stats.fromMemory++;
@@ -277,46 +246,39 @@ export function createImageSource({
       return pending.promise;
     }
 
-    /** @type {(value: Uint8Array) => void} */
-    let resolve = () => {};
-    /** @type {(reason?: unknown) => void} */
-    let reject = () => {};
-    /** @type {Promise<Uint8Array>} */
-    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-    /** @type {ChunkTask} */
-    const task = { index: i, priority, state: 'queued', promise, resolve, reject };
+    let resolve: (value: Uint8Array) => void = () => {};
+    let reject: (reason?: unknown) => void = () => {};
+    const promise = new Promise<Uint8Array>((yes, no) => { resolve = yes; reject = no; });
+    const task: ChunkTask = { index: i, priority, state: 'queued', promise, resolve, reject };
     inflight.set(i, task);
     (priority === 'demand' ? demandQueue : prefetchQueue).push(task);
     drainChunkQueue();
     return promise;
   }
 
-  /** @param {number} first @param {number} last */
-  async function fetchDemandChunks(first, last) {
+  async function fetchDemandChunks(first: number, last: number) {
     return Promise.all(
       Array.from({ length: last - first + 1 }, (_, n) =>
         chunkBytes(first + n, 'demand')),
     );
   }
 
-  /**
-   * @param {number} first
-   * @param {number} last
-   * @param {((bytes: number) => void) | undefined} progress
-   */
-  async function fetchPrefetchChunks(first, last, progress) {
+  async function fetchPrefetchChunks(
+    first: number,
+    last: number,
+    progress: ((bytes: number) => void) | undefined,
+  ) {
     for (let i = first; i <= last; i++) {
       const buf = await chunkBytes(i, 'prefetch');
       if (progress) progress(buf.length);
     }
   }
 
-  /**
-   * @param {number} offset
-   * @param {number} size
-   * @param {(index: number) => Uint8Array | undefined} chunk
-   */
-  function assembleRange(offset, size, chunk) {
+  function assembleRange(
+    offset: number,
+    size: number,
+    chunk: (index: number) => Uint8Array | undefined,
+  ) {
     const [first, last] = chunkRange(offset, size);
     if (first === last) {
       const buf = chunk(first);
@@ -341,13 +303,11 @@ export function createImageSource({
   }
 
   // Assemble a byte range from cached chunks; null if any part is missing.
-  /** @param {number} offset @param {number} size */
-  function readFromCache(offset, size) {
+  function readFromCache(offset: number, size: number) {
     return assembleRange(offset, size, cacheTouch);
   }
 
-  /** @param {number} bytes */
-  function summariseBurst(bytes) {
+  function summariseBurst(bytes: number) {
     burstBytes += bytes;
     if (burstTimer !== null) clearTimeout(burstTimer);
     burstTimer = setTimeout(() => {
@@ -364,8 +324,7 @@ export function createImageSource({
   log('snapshot:', size, 'bytes,', chunkHashes.length,
       'chunks of', chunkSize, `(${residentHashes.size} resident)`);
 
-  /** @type {ImageCapability} */
-  const image = {
+  const image: ImageCapability = {
     // Only the snapshot is backed. image is a filesystem over the whole
     // manifest, so the module asks for other files (ChatFilter.ini among
     // them); handing back a handle makes fileSize answer 4.2GB for a small ini

@@ -5,21 +5,33 @@
 let diagnosticsFrame = 0;
 
 /**
- * @param {HTMLCanvasElement} visible
- * @param {OffscreenCanvas} offscreen
- * @param {1 | 1.5 | 2} renderScale
- * @param {(...values: unknown[]) => void} log
+ * The visible canvas, carrying the two things this module attaches to it: the
+ * OffscreenCanvas the client renders into and the bitmaprenderer context that
+ * presents it. An interface rather than an intersection so an ordinary
+ * `HTMLCanvasElement` is assignable to it without an assertion.
  */
-function scheduleDiagnostics(visible, offscreen, renderScale, log) {
+interface PresentationCanvas extends HTMLCanvasElement {
+  offscreen?: OffscreenCanvas;
+  context?: ImageBitmapRenderingContext | null;
+}
+
+function scheduleDiagnostics(
+  visible: HTMLCanvasElement,
+  offscreen: OffscreenCanvas,
+  renderScale: 1 | 1.5 | 2,
+  log: (...values: unknown[]) => void,
+) {
   cancelAnimationFrame(diagnosticsFrame);
   diagnosticsFrame = requestAnimationFrame(async () => {
     try {
       const gl = offscreen.getContext('webgl2') || offscreen.getContext('webgl');
       const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
-      const renderer = dbg
+      // `getParameter` is declared `any`, so both are pinned to `unknown` and
+      // stringified below rather than trusted.
+      const renderer: unknown = dbg
         ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
         : (gl ? 'unknown' : 'none');
-      const vendor = dbg
+      const vendor: unknown = dbg
         ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)
         : (gl ? 'unknown' : 'none');
       const attributes = gl?.getContextAttributes();
@@ -58,16 +70,13 @@ function scheduleDiagnostics(visible, offscreen, renderScale, log) {
   });
 }
 
-/**
- * @param {{
- *   env: ArenaNetEglImports,
- *   module: ArenaNetGraphicsModule,
- *   renderScale(): 1 | 1.5 | 2,
- *   firstFrame(): void,
- *   log(...values: unknown[]): void,
- * }} options
- */
-export const installGraphics = (options) => {
+export const installGraphics = (options: {
+  env: ArenaNetEglImports;
+  module: ArenaNetGraphicsModule;
+  renderScale: () => 1 | 1.5 | 2;
+  firstFrame: () => void;
+  log: (...values: unknown[]) => void;
+}) => {
   const { env, module, renderScale, firstFrame, log } = options;
   if (!env || typeof env.eglCreateContext !== 'function') {
     log('[warn] no eglCreateContext import — nothing will be presented');
@@ -75,22 +84,14 @@ export const installGraphics = (options) => {
   }
 
   const createContext = env.eglCreateContext;
-  /** @type {(HTMLCanvasElement & {
-   *   offscreen?: OffscreenCanvas,
-   *   context?: ImageBitmapRenderingContext | null
-   * }) | null} */
-  let visibleCanvas = null;
+  let visibleCanvas: PresentationCanvas | null = null;
   let presentationFailureReported = false;
   env.eglCreateContext = (...args) => {
     const candidate = module.canvas;
     if (!(candidate instanceof globalThis.HTMLCanvasElement)) {
       throw new Error('EGL context requires the visible canvas');
     }
-    const visible =
-      /** @type {HTMLCanvasElement & {
-       *   offscreen?: OffscreenCanvas,
-       *   context?: ImageBitmapRenderingContext | null
-       * }} */ (candidate);
+    const visible: PresentationCanvas = candidate;
     visibleCanvas = visible;
     if (!visible.offscreen) {
       visible.offscreen = new OffscreenCanvas(visible.width, visible.height);
@@ -112,7 +113,7 @@ export const installGraphics = (options) => {
     }
     const offscreen = visible.offscreen;
     module.canvas = offscreen;
-    let context;
+    let context: unknown;
     try {
       context = createContext(...args);
     } finally {
@@ -144,8 +145,7 @@ export const installGraphics = (options) => {
     let bitmapPresentUs = 0;
     let presented = false;
     if (ok && visibleCanvas?.offscreen && visibleCanvas.context) {
-      /** @type {ImageBitmap | null} */
-      let bitmap = null;
+      let bitmap: ImageBitmap | null = null;
       try {
         const outStarted = performance.now();
         bitmap = visibleCanvas.offscreen.transferToImageBitmap();
@@ -182,11 +182,6 @@ export const installGraphics = (options) => {
 
   const setSize = env.emscripten_set_canvas_element_size;
   if (typeof setSize === 'function') {
-    /**
-     * @param {unknown} target
-     * @param {number} width
-     * @param {number} height
-     */
     env.emscripten_set_canvas_element_size = (target, width, height) => {
       const result = setSize(target, width, height);
       if (result === 0 && visibleCanvas?.offscreen) {

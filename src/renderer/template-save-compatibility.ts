@@ -30,8 +30,16 @@ const ERROR_NOT_FOUND = 2;
 
 const TRACE_PREFIX = '[template-fs-bridge]';
 
-/** @returns {{ (event: Record<string, unknown>): void; enabled: boolean }} */
-function silent() {
+// The generated glue publishes only `Module.HEAPU8`, so that one view is all
+// anything here may assume the module carries.
+type ClientMemory = { HEAPU8?: Uint8Array };
+
+type Trace = {
+  (event: Record<string, unknown>): void;
+  enabled: boolean;
+};
+
+function silent(): Trace {
   const off = () => {};
   off.enabled = false;
   return off;
@@ -41,14 +49,11 @@ function silent() {
  * Counts and outcomes only, under the same opt-in flag as the syscall trace.
  * No filename, path, or file content is recorded, and nothing is exported or
  * leaves the renderer.
- *
- * @returns {{ (event: Record<string, unknown>): void; enabled: boolean }}
  */
-function tracer() {
+function tracer(): Trace {
   if (!window.gwNative.init.templateFsTrace) return silent();
   let sequence = 0;
-  /** @param {Record<string, unknown>} event */
-  const on = (event) => {
+  const on = (event: Record<string, unknown>) => {
     sequence += 1;
     console.info(TRACE_PREFIX, JSON.stringify({ sequence, ...event }));
   };
@@ -56,11 +61,7 @@ function tracer() {
   return on;
 }
 
-/**
- * @param {{ HEAPU8?: Uint8Array }} module
- * @param {number} pointer
- */
-function readWide(module, pointer) {
+function readWide(module: ClientMemory, pointer: number) {
   const bytes = module.HEAPU8;
   if (!bytes || pointer <= 0 || (pointer & 1) !== 0) return null;
   const heap = new Uint16Array(bytes.buffer);
@@ -85,10 +86,8 @@ function readWide(module, pointer) {
  * client joins its type directory with `/` onto a record name that already
  * begins with `\`, so every file operation on a listed template arrives as
  * `Templates/Skills/\Test.txt` — a redundant separator, not a traversal.
- *
- * @param {string} value
  */
-function normalize(value) {
+function normalize(value: string) {
   const trimmed = value
     .replaceAll('\\', '/')
     .replace(/\/{2,}/g, '/')
@@ -103,8 +102,7 @@ function normalize(value) {
     : null;
 }
 
-/** @param {string} glob */
-function globToRegExp(glob) {
+function globToRegExp(glob: string) {
   const source = glob.replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
     .replaceAll('*', '[^/]*')
     .replaceAll('?', '[^/]');
@@ -127,10 +125,8 @@ const FIND_DIRECTORIES_FLAG = 2;
  * `Path::RemoveExtension`, which is off by one in this build and takes the
  * last character of the name with it: `\Test.txt` becomes `\Tes`. Handing it
  * a name with no extension leaves it nothing to trim.
- *
- * @param {string} name
  */
-function internalPath(name) {
+function internalPath(name: string) {
   const relative = name.replaceAll('/', '\\').replace(/^\\+/, '');
   const separator = relative.lastIndexOf('\\');
   const dot = relative.lastIndexOf('.');
@@ -138,13 +134,13 @@ function internalPath(name) {
   return `\\${bare}`;
 }
 
-/**
- * @param {{ HEAPU8?: Uint8Array }} module
- * @param {number} pointer
- * @param {string} value
- * @param {number} limit Buffer size in characters, including the terminator.
- */
-function writeWide(module, pointer, value, limit) {
+/** `limit` is a buffer size in characters, including the terminator. */
+function writeWide(
+  module: ClientMemory,
+  pointer: number,
+  value: string,
+  limit: number,
+) {
   const bytes = module.HEAPU8;
   if (!bytes || pointer <= 0 || (pointer & 1) !== 0 || limit < 1) return false;
   const heap = new Uint16Array(bytes.buffer);
@@ -158,35 +154,35 @@ function writeWide(module, pointer, value, limit) {
   return true;
 }
 
-/**
- * @typedef {{
- *   readdir(path: string): string[],
- *   unlink(path: string): void,
- *   analyzePath(path: string): { exists: boolean },
- *   stat(path: string): { mode: number },
- *   isFile(mode: number): boolean,
- *   isDir(mode: number): boolean,
- *   mkdirTree(path: string): void,
- * }} EmscriptenFileSystem
- */
+type EmscriptenFileSystem = {
+  readdir(path: string): string[];
+  unlink(path: string): void;
+  analyzePath(path: string): { exists: boolean };
+  stat(path: string): { mode: number };
+  isFile(mode: number): boolean;
+  isDir(mode: number): boolean;
+  mkdirTree(path: string): void;
+};
 
-/** @returns {EmscriptenFileSystem | null} */
-function filesystem() {
-  const runtime = /** @type {{ FS?: EmscriptenFileSystem }} */ (globalThis);
+// The generated glue publishes FS on the global object once it has mounted, so
+// the boundary is named as the global object plus the one property the runtime
+// adds rather than widened to `any`.
+function filesystem(): EmscriptenFileSystem | null {
+  const runtime = globalThis as typeof globalThis & {
+    FS?: EmscriptenFileSystem;
+  };
   return runtime.FS ?? null;
 }
 
-/**
- * @param {EmscriptenFileSystem} fs
- * @param {string} directory
- * @param {RegExp} pattern
- * @param {number} flags
- */
-function matchingEntries(fs, directory, pattern, flags) {
+function matchingEntries(
+  fs: EmscriptenFileSystem,
+  directory: string,
+  pattern: RegExp,
+  flags: number,
+) {
   const wantFiles = (flags & FIND_FILES_FLAG) !== 0;
   const wantDirectories = (flags & FIND_DIRECTORIES_FLAG) !== 0;
-  /** @type {string[]} */
-  const found = [];
+  const found: string[] = [];
   for (const entry of fs.readdir(directory)) {
     if (entry === '.' || entry === '..') continue;
     if (!pattern.test(entry) || entry.length >= NAME_LIMIT) continue;
@@ -202,14 +198,17 @@ function matchingEntries(fs, directory, pattern, flags) {
   return found.sort();
 }
 
-/**
- * @param {{
- *   imports: { env?: Record<string, (...args: any[]) => any> },
- *   module: { HEAPU8?: Uint8Array },
- *   exports: () => { malloc?: (bytes: number) => number } | null | undefined,
- * }} options
- */
-export const installTemplateSaveCompatibility = ({ imports, module, exports }) => {
+export const installTemplateSaveCompatibility = ({
+  imports,
+  module,
+  exports,
+}: {
+  // The carrier is an ordinary WASM import: an i32 dirfd and three more i32
+  // words in, an errno out.
+  imports: { env?: Record<string, (...args: number[]) => number> };
+  module: ClientMemory;
+  exports: () => { malloc?: (bytes: number) => number } | null | undefined;
+}) => {
   const env = imports.env;
   const carrier = env?.__syscall_newfstatat;
   const trace = tracer();
@@ -218,8 +217,7 @@ export const installTemplateSaveCompatibility = ({ imports, module, exports }) =
     return;
   }
 
-  /** @param {number} path */
-  const ensureDirectory = (path) => {
+  const ensureDirectory = (path: number) => {
     const raw = readWide(module, path);
     const directory = raw === null ? null : normalize(raw);
     const fs = filesystem();
@@ -244,11 +242,11 @@ export const installTemplateSaveCompatibility = ({ imports, module, exports }) =
   };
 
   /**
-   * @param {number} path Wildcard such as `Templates/Skills/*`.
-   * @param {number} out Zeroed list header: entries at +0, count at +8.
-   * @param {number} flags Which entry kinds the caller wants.
+   * `path` is a wildcard such as `Templates/Skills/*`, `out` a zeroed list
+   * header — entries at +0, count at +8 — and `flags` says which entry kinds
+   * the caller wants.
    */
-  const findFiles = (path, out, flags) => {
+  const findFiles = (path: number, out: number, flags: number) => {
     const bytes = module.HEAPU8;
     const raw = readWide(module, path);
     const pattern = raw === null ? null : normalize(raw);
@@ -268,8 +266,7 @@ export const installTemplateSaveCompatibility = ({ imports, module, exports }) =
     const cut = pattern.lastIndexOf('/');
     const directory = cut < 0 ? '.' : pattern.slice(0, cut);
     const glob = cut < 0 ? pattern : pattern.slice(cut + 1);
-    /** @type {string[]} */
-    let names;
+    let names: string[];
     let listed = -1;
     try {
       listed = fs.readdir(directory).length;
@@ -324,12 +321,8 @@ export const installTemplateSaveCompatibility = ({ imports, module, exports }) =
     return 0;
   };
 
-  /**
-   * @param {number} path A directory entry name from findFiles.
-   * @param {number} destination
-   * @param {number} limit
-   */
-  const fileBaseName = (path, destination, limit) => {
+  /** `path` is a directory entry name from findFiles. */
+  const fileBaseName = (path: number, destination: number, limit: number) => {
     const raw = readWide(module, path);
     if (raw === null) return 0;
     const name = internalPath(raw);
@@ -347,10 +340,8 @@ export const installTemplateSaveCompatibility = ({ imports, module, exports }) =
    * The client's own delete is `assert("not implemented")` followed by
    * `unreachable`, so this is the difference between deleting a build and
    * aborting the client. Its caller treats a non-zero result as success.
-   *
-   * @param {number} path
    */
-  const deleteFile = (path) => {
+  const deleteFile = (path: number) => {
     const raw = readWide(module, path);
     const file = raw === null ? null : normalize(raw);
     const fs = filesystem();
@@ -380,10 +371,8 @@ export const installTemplateSaveCompatibility = ({ imports, module, exports }) =
    *
    * An undecidable path answers "taken", which refuses a rename rather than
    * silently overwriting a template.
-   *
-   * @param {number} path
    */
-  const fileExists = (path) => {
+  const fileExists = (path: number) => {
     const raw = readWide(module, path);
     const file = raw === null ? null : normalize(raw);
     const fs = filesystem();

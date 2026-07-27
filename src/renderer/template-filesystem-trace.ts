@@ -1,39 +1,44 @@
 const EVENT_LIMIT = 128;
 const TRACE_PREFIX = '[template-fs-trace]';
 
-/** @typedef {'skills' | 'equipment'} TemplateKind */
-/**
- * @typedef {{
- *   sequence: number;
- *   operation: string;
- *   kind?: TemplateKind;
- *   fd?: number;
- *   errno?: number;
- *   flags?: number;
- *   access?: number;
- *   create?: boolean;
- *   truncate?: boolean;
- *   exclusive?: boolean;
- *   append?: boolean;
- *   mode?: number;
- *   separator?: 'slash' | 'backslash' | 'mixed' | 'none';
- *   txtSuffix?: boolean;
- *   requested?: number;
- *   written?: number;
- *   iovCount?: number;
- *   whence?: number;
- * }} TraceEvent
- */
+type TemplateKind = 'skills' | 'equipment';
+type PathSeparator = 'slash' | 'backslash' | 'mixed' | 'none';
 
-/**
- * @param {string} value
- * @returns {{
- *   kind: TemplateKind;
- *   separator: 'slash' | 'backslash' | 'mixed' | 'none';
- *   txtSuffix: boolean;
- * } | null}
- */
-function classifyTemplatePath(value) {
+type TraceEvent = {
+  sequence: number;
+  operation: string;
+  kind?: TemplateKind;
+  fd?: number;
+  errno?: number;
+  flags?: number;
+  access?: number;
+  create?: boolean;
+  truncate?: boolean;
+  exclusive?: boolean;
+  append?: boolean;
+  mode?: number;
+  separator?: PathSeparator;
+  txtSuffix?: boolean;
+  requested?: number;
+  written?: number;
+  iovCount?: number;
+  whence?: number;
+};
+
+// The generated glue publishes only `Module.HEAPU8`, so that one view is all
+// anything here may assume the module carries.
+type ClientMemory = { HEAPU8?: Uint8Array };
+
+// Every WASM import is a numeric function: the syscalls take i32 pointers, file
+// descriptors, and flag words, and answer with an errno or a descriptor. Saying
+// so is what lets the wrappers below do arithmetic on their own arguments.
+type WasmImports = Record<string, (...args: number[]) => number>;
+
+function classifyTemplatePath(value: string): {
+  kind: TemplateKind;
+  separator: PathSeparator;
+  txtSuffix: boolean;
+} | null {
   const hasSlash = value.includes('/');
   const hasBackslash = value.includes('\\');
   const normalized = value.replaceAll('\\', '/');
@@ -55,12 +60,8 @@ function classifyTemplatePath(value) {
   };
 }
 
-/**
- * Read a bounded C string without relying on generated-glue helpers.
- * @param {{ HEAPU8?: Uint8Array }} module
- * @param {number} pointer
- */
-function readCString(module, pointer) {
+/** Read a bounded C string without relying on generated-glue helpers. */
+function readCString(module: ClientMemory, pointer: number) {
   const heap = module.HEAPU8;
   if (!heap || !Number.isSafeInteger(pointer) || pointer <= 0) return '';
   const endLimit = Math.min(heap.length, pointer + 2048);
@@ -74,29 +75,18 @@ function readCString(module, pointer) {
  * The generated glue publishes only `Module.HEAPU8`, so every wider view has
  * to be taken from its buffer. Reading `Module.HEAPU32` yields `undefined`
  * and silently drops every byte count from the trace.
- *
- * @param {{ HEAPU8?: Uint8Array }} module
  */
-function words(module) {
+function words(module: ClientMemory) {
   return module.HEAPU8 ? new Uint32Array(module.HEAPU8.buffer) : undefined;
 }
 
-/**
- * @param {{ HEAPU8?: Uint8Array }} module
- * @param {number} pointer
- */
-function readU32(module, pointer) {
+function readU32(module: ClientMemory, pointer: number) {
   const heap = words(module);
   const index = pointer >>> 2;
   return heap && pointer >= 0 && index < heap.length ? heap[index] : undefined;
 }
 
-/**
- * @param {{ HEAPU8?: Uint8Array }} module
- * @param {number} iov
- * @param {number} count
- */
-function requestedBytes(module, iov, count) {
+function requestedBytes(module: ClientMemory, iov: number, count: number) {
   const heap = words(module);
   if (!heap || !Number.isSafeInteger(count) || count < 0 || count > 1024) {
     return undefined;
@@ -112,16 +102,16 @@ function requestedBytes(module, iov, count) {
   return total;
 }
 
-/**
- * @param {{
- *   imports: {
- *     env?: Record<string, (...args: any[]) => any>;
- *     wasi_snapshot_preview1?: Record<string, (...args: any[]) => any>;
- *   };
- *   module: { HEAPU8?: Uint8Array };
- * }} options
- */
-export const installTemplateFilesystemTrace = ({ imports, module }) => {
+export const installTemplateFilesystemTrace = ({
+  imports,
+  module,
+}: {
+  imports: {
+    env?: WasmImports;
+    wasi_snapshot_preview1?: WasmImports;
+  };
+  module: ClientMemory;
+}) => {
   if (!window.gwNative.init.templateFsTrace) return;
 
   const env = imports.env;
@@ -134,14 +124,11 @@ export const installTemplateFilesystemTrace = ({ imports, module }) => {
     return;
   }
 
-  /** @type {TraceEvent[]} */
-  const events = [];
-  /** @type {Map<number, TemplateKind>} */
-  const descriptors = new Map();
+  const events: TraceEvent[] = [];
+  const descriptors = new Map<number, TemplateKind>();
   let sequence = 0;
 
-  /** @param {Omit<TraceEvent, 'sequence'>} value */
-  const record = (value) => {
+  const record = (value: Omit<TraceEvent, 'sequence'>) => {
     const event = Object.freeze({ sequence: (sequence += 1), ...value });
     events.push(event);
     if (events.length > EVENT_LIMIT) events.shift();
@@ -154,9 +141,7 @@ export const installTemplateFilesystemTrace = ({ imports, module }) => {
   const openat = env.__syscall_openat;
   if (typeof openat === 'function') {
     env.__syscall_openat = function (dirfd, path, flags, varargs) {
-      const classification = classifyTemplatePath(
-        readCString(module, path),
-      );
+      const classification = classifyTemplatePath(readCString(module, path));
       const result = openat.call(this, dirfd, path, flags, varargs);
       if (classification) {
         const mode =

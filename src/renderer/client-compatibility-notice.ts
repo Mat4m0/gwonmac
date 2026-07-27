@@ -5,9 +5,12 @@
 // owns the notice acknowledgement. Certification gaps require a new release;
 // a runtime preparation failure is retryable and says so.
 
-/** @typedef {import('../shared/contracts.js').ClientCompatibility} ClientCompatibility */
-/** @typedef {import('../shared/contracts.js').ClientSession} ClientSession */
-/** @typedef {import('../shared/contracts.js').ToolboxSelection} ToolboxSelection */
+import type {
+  ClientCompatibility,
+  ClientCompatibilityState,
+  ClientSession,
+  ToolboxSelection,
+} from '../shared/contracts.js';
 
 /**
  * The compatibility transform repairs three call-site families, not one.
@@ -33,37 +36,39 @@ const SEPARATION =
   'This does not mean the app is out of date — whether a newer version of the '
   + 'app exists is a separate question.';
 
-/**
- * @typedef {object} CompatibilityReport
- * @property {import('../shared/contracts.js').ClientCompatibilityState} state
- * @property {boolean} degraded Something works worse than in a fully prepared
- *   certified session.
- * @property {boolean} toolboxDegraded The player selected at least one Toolbox
- *   tool and this build cannot provide it.
- * @property {string} summary One line, shown on both surfaces.
- * @property {string[]} details The contract: what is affected, what is not,
- *   and what recovery actually requires.
- */
+export type CompatibilityReport = {
+  state: ClientCompatibilityState;
+  /** Something works worse than in a fully prepared certified session. */
+  degraded: boolean;
+  /**
+   * The player selected at least one Toolbox tool and this build cannot
+   * provide it.
+   */
+  toolboxDegraded: boolean;
+  /** One line, shown on both surfaces. */
+  summary: string;
+  /**
+   * The contract: what is affected, what is not, and what recovery actually
+   * requires.
+   */
+  details: string[];
+};
 
-/** @param {ToolboxSelection} selection */
-function selectedToolNames(selection) {
+function selectedToolNames(selection: ToolboxSelection): string[] {
   return [
     selection.nativeCursor ? 'game cursor' : '',
     selection.targetReadout ? 'target readout' : '',
   ].filter(Boolean);
 }
 
-/** @param {string[]} names */
-function toolList(names) {
+function toolList(names: string[]): string {
   return names.length === 2 ? `${names[0]} and ${names[1]}` : names[0] ?? '';
 }
 
-/**
- * @param {ClientCompatibility} compatibility
- * @param {ToolboxSelection} selection
- * @returns {CompatibilityReport}
- */
-export function compatibilityReport(compatibility, selection) {
+export function compatibilityReport(
+  compatibility: ClientCompatibility,
+  selection: ToolboxSelection,
+): CompatibilityReport {
   const { state } = compatibility;
   const selectedTools = selectedToolNames(selection);
   const requestedTools = toolList(selectedTools);
@@ -159,16 +164,11 @@ export function compatibilityReport(compatibility, selection) {
   };
 }
 
-/** @param {string} text */
-function capitalise(text) {
+function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/**
- * @param {Document} root
- * @param {string} id
- */
-function requiredElement(root, id) {
+function requiredElement(root: Document, id: string): HTMLElement {
   const node = root.getElementById(id);
   if (!node) throw new Error(`missing compatibility element: ${id}`);
   return node;
@@ -176,13 +176,12 @@ function requiredElement(root, id) {
 
 /**
  * Render the session into both fixed compatibility surfaces.
- *
- * @param {Document} root
- * @param {ClientSession} session
- * @param {ToolboxSelection} selection
- * @returns {CompatibilityReport | null}
  */
-export function renderClientCompatibility(root, session, selection) {
+export function renderClientCompatibility(
+  root: Document,
+  session: ClientSession,
+  selection: ToolboxSelection,
+): CompatibilityReport | null {
   const settingsStatus = requiredElement(root, 'settings-compat-status');
   const settingsDetail = requiredElement(root, 'settings-compat-detail');
   const settingsVersion = requiredElement(root, 'settings-compat-version');
@@ -212,17 +211,16 @@ export function renderClientCompatibility(root, session, selection) {
 /**
  * Show the warning until the player acknowledges it. A failed settings write
  * must never keep the player out of the game.
- *
- * @param {Document} root
- * @param {() => Promise<unknown>} acknowledge
- * @returns {Promise<void>}
  */
-export function showCompatibilityNotice(root, acknowledge) {
+export function showCompatibilityNotice(
+  root: Document,
+  acknowledge: () => Promise<unknown>,
+): Promise<void> {
   const notice = requiredElement(root, 'client-compat');
-  const play =
-    /** @type {HTMLButtonElement} */ (
-      requiredElement(root, 'client-compat-play')
-    );
+  // The one control whose `disabled` this module writes. index.html declares
+  // it as a `<button>`; the assertion narrows to the property that needs it
+  // and leaves the other six ids plain elements.
+  const play = requiredElement(root, 'client-compat-play') as HTMLButtonElement;
   notice.hidden = false;
   play.disabled = false;
 

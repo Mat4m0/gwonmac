@@ -10,7 +10,7 @@ Two halves, one contract:
 | Half | File | Job |
 | --- | --- | --- |
 | Main | [`src/main/core/template-save-compat.ts`](../../src/main/core/template-save-compat.ts) | derive one module from the certified official hash |
-| Renderer | [`src/renderer/template-save-compatibility.js`](../../src/renderer/template-save-compatibility.js) | answer the derived module's calls against the mounted IDBFS |
+| Renderer | [`src/renderer/template-save-compatibility.ts`](../../src/renderer/template-save-compatibility.ts) | answer the derived module's calls against the mounted IDBFS |
 
 Selection and caching live in
 [`client-module.ts`](../../src/main/core/client-module.ts) and
@@ -203,7 +203,7 @@ perfectly ordinary path. That cost us a round on delete and rename.
 renderer init payload and enables two console-only traces:
 
 - `[template-fs-trace]` — the syscall wrappers, from
-  [`template-filesystem-trace.js`](../../src/renderer/template-filesystem-trace.js)
+  [`template-filesystem-trace.ts`](../../src/renderer/template-filesystem-trace.ts)
 - `[template-fs-bridge]` — the bridge itself: which marker fired, how many
   entries were listed and matched, whether the block was published, and each
   outcome

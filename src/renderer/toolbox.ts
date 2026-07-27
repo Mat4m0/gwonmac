@@ -1,3 +1,4 @@
+import type { ToolboxSelection } from "../shared/contracts.js";
 import { createCursorConsumer } from "./toolbox-cursor.js";
 import { createTargetReadout } from "./toolbox-readout.js";
 import {
@@ -11,43 +12,64 @@ import {
 const TOOLBOX_FEATURE_NATIVE_CURSOR = 1 << 0;
 const TOOLBOX_FEATURE_TARGET_READOUT = 1 << 1;
 
-/** @param {WebAssembly.Module} module */
-function decodeManifest(module) {
+/**
+ * The five values the installer needs out of the kernel's manifest section.
+ * The section is JSON the decoder does not control, so it is read as unknown
+ * fields and named a manifest only once every one of them has been checked.
+ */
+type ToolboxManifest = Readonly<{
+  buildId: number;
+  programId: number;
+  tableSlot: number;
+  layoutWords: readonly number[];
+  configBytes: number;
+}>;
+
+function decodeManifest(module: WebAssembly.Module): ToolboxManifest | null {
   const sections = WebAssembly.Module.customSections(module, "toolbox_manifest");
   if (sections.length !== 1) return null;
   try {
-    const value = JSON.parse(new TextDecoder().decode(sections[0]));
+    const value: Record<string, unknown> | null = JSON.parse(
+      new TextDecoder().decode(sections[0]),
+    );
+    if (value === null) return null;
+    const { buildId, programId, tableSlot, layoutWords, configBytes } = value;
     if (
-      value?.snapshotAbi !== TOOLBOX_SNAPSHOT_ABI
-      || value?.snapshotBytes !== TOOLBOX_SNAPSHOT_BYTES
-      || value?.cursorSnapshotAbi !== TOOLBOX_CURSOR_ABI
-      || value?.cursorSnapshotBytes !== TOOLBOX_CURSOR_BYTES
-      || !Number.isSafeInteger(value?.buildId)
-      || value.buildId <= 0
-      || !Number.isSafeInteger(value?.programId)
-      || value.programId <= 0
-      || !Number.isSafeInteger(value?.tableSlot)
-      || value.tableSlot < 0
-      || !Array.isArray(value?.layoutWords)
-      || value.layoutWords.length === 0
-      || value.layoutWords.some(
-        (/** @type {unknown} */ word) =>
+      value.snapshotAbi !== TOOLBOX_SNAPSHOT_ABI
+      || value.snapshotBytes !== TOOLBOX_SNAPSHOT_BYTES
+      || value.cursorSnapshotAbi !== TOOLBOX_CURSOR_ABI
+      || value.cursorSnapshotBytes !== TOOLBOX_CURSOR_BYTES
+      || !Number.isSafeInteger(buildId)
+      || Number(buildId) <= 0
+      || !Number.isSafeInteger(programId)
+      || Number(programId) <= 0
+      || !Number.isSafeInteger(tableSlot)
+      || Number(tableSlot) < 0
+      || !Array.isArray(layoutWords)
+      || layoutWords.length === 0
+      || layoutWords.some(
+        (word: unknown) =>
           !Number.isInteger(word)
           || Number(word) < 0
           || Number(word) > 0xffff_ffff,
       )
-      || value?.configBytes !== value.layoutWords.length * Uint32Array.BYTES_PER_ELEMENT
+      || configBytes !== layoutWords.length * Uint32Array.BYTES_PER_ELEMENT
     ) {
       return null;
     }
-    return Object.freeze(value);
+    return Object.freeze({
+      buildId: Number(buildId),
+      programId: Number(programId),
+      tableSlot: Number(tableSlot),
+      layoutWords: layoutWords.map(Number),
+      configBytes: Number(configBytes),
+    });
   } catch {
     return null;
   }
 }
 
-/** @param {any} state */
-function recordLifecycle(state) {
+function recordLifecycle(state: ToolboxState) {
   if (state.status === "ready") {
     window.gwAutomation?.set(
       state.instanceType === 1 ? "game.explorable" : "game.outpost",
@@ -59,13 +81,23 @@ function recordLifecycle(state) {
   }
 }
 
-/**
- * @param {any} runtime
- * @param {{ poll: () => void } | null} cursor
- * @param {{ update: (state: any) => void } | null} readout
- * @param {boolean} observeState
- */
-function observeSnapshots(runtime, cursor, readout, observeState) {
+/** The per-frame counters and gauges the observer keeps on the runtime. */
+type SnapshotObserverTarget = {
+  memory: WebAssembly.Memory;
+  snapshotPointer: number;
+  snapshotReads: number;
+  rejectedSnapshots: number;
+  hertz: number;
+  lastRenderUs: number;
+  renderSamples: number[];
+};
+
+function observeSnapshots(
+  runtime: SnapshotObserverTarget,
+  cursor: ReturnType<typeof createCursorConsumer> | null,
+  readout: ReturnType<typeof createTargetReadout> | null,
+  observeState: boolean,
+) {
   let frame = 0;
   let cadenceAt = performance.now();
   let cadenceTick = 0;
@@ -105,16 +137,10 @@ function observeSnapshots(runtime, cursor, readout, observeState) {
   return () => cancelAnimationFrame(frame);
 }
 
-/**
- * @param {WebAssembly.Instance} instance
- * @param {WebAssembly.Module} module
- * @param {import("../shared/contracts.js").ToolboxSelection} selection
- * @param {boolean} automation Development-only observation override.
- */
 export async function installToolbox(
-  instance,
-  module,
-  selection,
+  instance: WebAssembly.Instance,
+  module: WebAssembly.Module,
+  selection: ToolboxSelection,
   automation = false,
 ) {
   // Automation may force the core observation snapshot for live development
@@ -143,10 +169,11 @@ export async function installToolbox(
   }
 
   const table = exports.__indirect_function_table;
-  const hookSlot = /** @type {WebAssembly.Global} */ (
-    exports.toolbox_hook_slot
-  );
-  const free = /** @type {(pointer: number) => void} */ (exports.free);
+  const hookSlot = exports.toolbox_hook_slot;
+  // The guard above proves `free` is callable, but WebAssembly exports are typed
+  // as the bare `Function`, so the kernel's ABI has to be named here or the five
+  // call sites below stop checking what they pass.
+  const free = exports.free as (pointer: number) => void;
   if (table.get(manifest.tableSlot) !== null) {
     throw new Error(`Toolbox table slot ${manifest.tableSlot} is occupied`);
   }
@@ -202,7 +229,7 @@ export async function installToolbox(
       throw new Error("Toolbox kernel rejected its ABI");
     }
 
-    let cursor = null;
+    let cursor: ReturnType<typeof createCursorConsumer> | null = null;
     if (selection.nativeCursor) {
       const element = document.getElementById("canvas");
       if (!element) throw new Error("Toolbox cursor target is missing");
@@ -244,8 +271,7 @@ export async function installToolbox(
         return readout?.state ?? null;
       },
       installation: (window.gwToolboxInstallations ?? 0) + 1,
-      /** @param {boolean} enabled */
-      setHookEnabledForBenchmark(enabled) {
+      setHookEnabledForBenchmark(enabled: boolean) {
         hookSlot.value = enabled
           ? manifest.tableSlot + 1
           : 0;

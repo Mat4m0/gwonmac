@@ -3,48 +3,42 @@
 // or filesystem failures can be transient, so this controller makes a small,
 // bounded number of attempts instead of latching the first rejection forever.
 
-/** @typedef {import('../shared/contracts.js').ClientHealthToken} ClientHealthToken */
+import type { ClientHealthToken } from '../shared/contracts.js';
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1_000;
 
-/**
- * @typedef {ReturnType<typeof globalThis.setTimeout>} RetryTimer
- */
+type RetryTimer = ReturnType<typeof globalThis.setTimeout>;
 
-/**
- * @typedef {object} ClientHealthConfirmation
- * @property {() => void} firstFramePresented
- * @property {() => void} gameSocketOpened
- * @property {() => void} dispose
- */
+export type ClientHealthConfirmation = {
+  firstFramePresented: () => void;
+  gameSocketOpened: () => void;
+  dispose: () => void;
+};
 
-/**
- * @param {object} options
- * @param {ClientHealthToken | null} options.token The exact generation this
- *   renderer captured before loading the game.
- * @param {(token: ClientHealthToken) => Promise<void>} options.confirm
- * @param {(error: unknown, attempt: number, willRetry: boolean) => void}
- *   options.onFailure
- * @param {(task: () => void, delayMs: number) => RetryTimer} [options.schedule]
- * @param {(timer: RetryTimer) => void} [options.cancel]
- * @returns {ClientHealthConfirmation}
- */
+type ClientHealthOptions = {
+  /** The exact generation this renderer captured before loading the game. */
+  token: ClientHealthToken | null;
+  confirm: (token: ClientHealthToken) => Promise<void>;
+  onFailure: (error: unknown, attempt: number, willRetry: boolean) => void;
+  schedule?: (task: () => void, delayMs: number) => RetryTimer;
+  cancel?: (timer: RetryTimer) => void;
+};
+
 export function createClientHealthConfirmation({
   token,
   confirm,
   onFailure,
   schedule = (task, delayMs) => globalThis.setTimeout(task, delayMs),
   cancel = (timer) => globalThis.clearTimeout(timer),
-}) {
+}: ClientHealthOptions): ClientHealthConfirmation {
   let firstFramePresented = false;
   let gameSocketOpened = false;
   let attempts = 0;
   let running = false;
   let confirmed = false;
   let disposed = false;
-  /** @type {RetryTimer | null} */
-  let retryTimer = null;
+  let retryTimer: RetryTimer | null = null;
 
   function tryConfirm() {
     if (

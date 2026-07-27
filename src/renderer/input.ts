@@ -1,6 +1,8 @@
 // Renderer-owned game input. The Emscripten host installs this once before its
 // glue loads; native interruptions all converge on releaseAll().
 
+import type { AppSettings } from '../shared/contracts.js';
+
 // Canvases a held drag may wander from the one it started on. The client keeps
 // integrating mouse moves whose coordinates fall outside the canvas, so a drag
 // need not stop at the edge — it only needs to stop somewhere, or the
@@ -13,59 +15,63 @@ const POINTER_ROAM = 16;
 const MAX_POINTER_REGRABS = 4;
 
 /**
- * @param {{
- *   canvas: HTMLCanvasElement,
- *   initialSettings: import('../shared/contracts.js').AppSettings,
- *   diagnostics?: GameInputDiagnostics,
- *   log(...values: unknown[]): void,
- * }} options
- * @returns {GameInputController}
+ * What a trusted press recorded, so the synthetic release can restate it
+ * exactly. `target` is the node the press reached, which is where its release
+ * has to be dispatched.
  */
+type HeldKey = {
+  target: EventTarget | null;
+  key: string;
+  code: string;
+  location: number;
+  charCode: number;
+  keyCode: number;
+  which: number;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+};
+
+/**
+ * The same for a held mouse button. The coordinates and modifiers are updated
+ * by every trusted mousemove, so a release lands where the pointer now is.
+ */
+type HeldButton = {
+  target: EventTarget | null;
+  button: number;
+  clientX: number;
+  clientY: number;
+  screenX: number;
+  screenY: number;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+};
+
+type GameInputOptions = {
+  canvas: HTMLCanvasElement;
+  initialSettings: AppSettings;
+  diagnostics?: GameInputDiagnostics;
+  log(...values: unknown[]): void;
+};
+
 export const installGameInput = ({
   canvas,
   initialSettings,
   diagnostics,
   log,
-}) => {
-  /** @type {Map<string, {
-   *   target: EventTarget | null,
-   *   key: string,
-   *   code: string,
-   *   location: number,
-   *   charCode: number,
-   *   keyCode: number,
-   *   which: number,
-   *   ctrlKey: boolean,
-   *   shiftKey: boolean,
-   *   altKey: boolean,
-   *   metaKey: boolean
-   * }>} */
-  const heldKeys = new Map();
-  /** @type {Map<number, {
-   *   target: EventTarget | null,
-   *   button: number,
-   *   clientX: number,
-   *   clientY: number,
-   *   screenX: number,
-   *   screenY: number,
-   *   ctrlKey: boolean,
-   *   shiftKey: boolean,
-   *   altKey: boolean,
-   *   metaKey: boolean
-   * }>} */
-  const heldButtons = new Map();
-  /** @type {Map<number, Touch>} */
-  const syntheticTouches = new Map();
-  /** @type {Set<ReturnType<typeof setTimeout>>} */
-  const tapTimers = new Set();
+}: GameInputOptions): GameInputController => {
+  const heldKeys = new Map<string, HeldKey>();
+  const heldButtons = new Map<number, HeldButton>();
+  const syntheticTouches = new Map<number, Touch>();
+  const tapTimers = new Set<ReturnType<typeof setTimeout>>();
   let touchMode = initialSettings.touchMode;
-  /** @type {{ x: number, y: number } | null} */
-  let pendingTap = null;
+  let pendingTap: { x: number; y: number } | null = null;
   let touchId = 0;
-  /** @type {Touch | null} */
-  let activeTouch = null;
-  /** @type {{ x: number, y: number } | null} */
-  let virtualCursor = null;
+  let activeTouch: Touch | null = null;
+  let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let releasing = false;
   let wheelRemainder = 0;
@@ -90,8 +96,7 @@ export const installGameInput = ({
     return buttons;
   };
 
-  /** @param {() => void} callback @param {number} delay */
-  const schedule = (callback, delay) => {
+  const schedule = (callback: () => void, delay: number) => {
     const timer = setTimeout(() => {
       tapTimers.delete(timer);
       callback();
@@ -105,8 +110,7 @@ export const installGameInput = ({
     tapTimers.clear();
   };
 
-  /** @param {number} x @param {number} y @param {number} identifier */
-  const makeTouch = (x, y, identifier) => new Touch({
+  const makeTouch = (x: number, y: number, identifier: number) => new Touch({
     identifier,
     target: canvas,
     clientX: x,
@@ -121,11 +125,10 @@ export const installGameInput = ({
     force: 1,
   });
 
-  /**
-   * @param {'touchstart' | 'touchmove' | 'touchend' | 'touchcancel'} type
-   * @param {Touch} touch
-   */
-  const sendTouch = (type, touch) => {
+  const sendTouch = (
+    type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel',
+    touch: Touch,
+  ) => {
     const ended = type === 'touchend' || type === 'touchcancel';
     canvas.dispatchEvent(new TouchEvent(type, {
       bubbles: true,
@@ -137,21 +140,15 @@ export const installGameInput = ({
     }));
   };
 
-  /** @param {Touch} touch */
-  const startTouch = (touch) => {
+  const startTouch = (touch: Touch) => {
     syntheticTouches.set(touch.identifier, touch);
     sendTouch('touchstart', touch);
   };
-  /** @param {Touch} touch */
-  const moveTouch = (touch) => {
+  const moveTouch = (touch: Touch) => {
     syntheticTouches.set(touch.identifier, touch);
     sendTouch('touchmove', touch);
   };
-  /**
-   * @param {'touchend' | 'touchcancel'} type
-   * @param {Touch} touch
-   */
-  const finishTouch = (type, touch) => {
+  const finishTouch = (type: 'touchend' | 'touchcancel', touch: Touch) => {
     syntheticTouches.delete(touch.identifier);
     sendTouch(type, touch);
   };
@@ -166,15 +163,14 @@ export const installGameInput = ({
     syntheticTouches.clear();
   };
 
-  /**
-   * @param {string} type
-   * @param {DOMRect} rect
-   * @param {number} buttons
-   * @param {number} button
-   * @param {number} movementX
-   * @param {number} movementY
-   */
-  const sendMouse = (type, rect, buttons, button, movementX, movementY) => {
+  const sendMouse = (
+    type: 'mousedown' | 'mousemove' | 'mouseup',
+    rect: DOMRect,
+    buttons: number,
+    button: number,
+    movementX: number,
+    movementY: number,
+  ) => {
     if (!virtualCursor) return false;
     const modifiers = heldButtons.get(button) ??
       (buttons & 2 ? heldButtons.get(2) : undefined);
@@ -205,8 +201,7 @@ export const installGameInput = ({
   // movement keys down for good. The physical key is in `code`; ask the OS
   // what that key produces unmodified, and restate the event before the
   // client (or our own held-key registry) sees it.
-  /** @type {Map<string, string>} */
-  let layoutKeys = new Map();
+  let layoutKeys = new Map<string, string>();
   const readLayoutKeys = () => {
     const layout = navigator.keyboard?.getLayoutMap?.();
     if (!layout) {
@@ -215,7 +210,7 @@ export const installGameInput = ({
     }
     layout.then((map) => {
       layoutKeys = new Map(map);
-    }).catch((error) => {
+    }).catch((error: unknown) => {
       diagnostics?.event('keyboard.layoutFailed', error);
       log(
         '[warn] keyboard layout unreadable:',
@@ -232,9 +227,8 @@ export const installGameInput = ({
   /**
    * Returns the key the client should see, having already re-dispatched a
    * corrected event in place of a modifier-rewritten one.
-   * @param {KeyboardEvent} event
    */
-  const layoutKey = (event) => {
+  const layoutKey = (event: KeyboardEvent) => {
     const target = event.target;
     if (!event.altKey || !target) return event.key;
     const key = layoutKeys.get(event.code);
@@ -276,8 +270,7 @@ export const installGameInput = ({
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
 
-  /** @param {(code: string) => boolean} [matches] */
-  function releaseKeys(matches = () => true) {
+  function releaseKeys(matches: (code: string) => boolean = () => true) {
     const inputs = [...heldKeys.entries()].filter(([code]) => matches(code));
     for (const [code] of inputs) heldKeys.delete(code);
     for (const [, input] of inputs) {
@@ -415,8 +408,7 @@ export const installGameInput = ({
 
   // Pixel deltas from trackpads become bounded pixel steps; discrete mouse
   // wheel events pass through unchanged.
-  /** @type {WeakSet<WheelEvent>} */
-  const normalizedWheels = new WeakSet();
+  const normalizedWheels = new WeakSet<WheelEvent>();
   canvas.addEventListener('wheel', (event) => {
     if (normalizedWheels.has(event)) return;
     if (event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL) {
@@ -459,8 +451,7 @@ export const installGameInput = ({
     canvas.dispatchEvent(normalized);
   }, { capture: true, passive: false });
 
-  /** @param {number} x @param {number} y @param {number} delay */
-  const tapAt = (x, y, delay) => schedule(() => {
+  const tapAt = (x: number, y: number, delay: number) => schedule(() => {
     const touch = makeTouch(x, y, ++touchId);
     startTouch(touch);
     schedule(() => finishTouch('touchend', touch), 30);
@@ -530,8 +521,7 @@ export const installGameInput = ({
   // while the physical button stays held, then spend the rest of the delta in
   // the same tick — deferring the remainder to the next animation frame froze
   // the camera for that frame.
-  /** @param {number} movementX @param {number} movementY */
-  const sendDelta = (movementX, movementY) => {
+  const sendDelta = (movementX: number, movementY: number) => {
     if (!virtualCursor) return;
     const rect = canvas.getBoundingClientRect();
     const roamX = rect.width * POINTER_ROAM;
@@ -575,7 +565,7 @@ export const installGameInput = ({
         if (!pointerWanted && document.pointerLockElement === canvas) {
           document.exitPointerLock();
         }
-      }).catch((error) => {
+      }).catch((error: unknown) => {
           diagnostics?.event('pointerLock.failed', error);
           log(
             '[warn] pointer lock refused:',
@@ -632,8 +622,7 @@ export const installGameInput = ({
 
   return Object.freeze({
     releaseAll,
-    /** @param {import('../shared/contracts.js').AppSettings} next */
-    applySettings(next) {
+    applySettings(next: AppSettings) {
       if (next.touchMode !== touchMode) {
         cancelSyntheticTouches();
       }

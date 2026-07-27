@@ -30,7 +30,7 @@ test("the official gamepad imports stay wired without a production WASM hook", a
 
 test("persistent game files are prepared through supported Emscripten startup hooks", async () => {
   const filesystem = await readFile(
-    path.join(root, "src/renderer/filesystem.js"),
+    path.join(root, "src/renderer/filesystem.ts"),
     "utf8",
   );
   const harness = await readFile(
@@ -88,7 +88,7 @@ test("stall attribution markers are fixed-name and Level 2 only", async () => {
 
 test("template file tracing is explicit, bounded, and attached only at the import boundary", async () => {
   const trace = await readFile(
-    path.join(root, "src/renderer/template-filesystem-trace.js"),
+    path.join(root, "src/renderer/template-filesystem-trace.ts"),
     "utf8",
   );
   const harness = await readFile(
@@ -117,11 +117,11 @@ test("template file tracing is explicit, bounded, and attached only at the impor
 
 test("the GL program cache memoizes only shader-completion state, and only once it is true", async () => {
   const cache = await readFile(
-    path.join(root, "src/renderer/gl-program-cache.js"),
+    path.join(root, "src/renderer/gl-program-cache.ts"),
     "utf8",
   );
   const harness = await readFile(path.join(root, "src/renderer/harness.js"), "utf8");
-  const graphics = await readFile(path.join(root, "src/renderer/graphics.js"), "utf8");
+  const graphics = await readFile(path.join(root, "src/renderer/graphics.ts"), "utf8");
 
   // KHR_parallel_shader_compile completion, and nothing else.
   assert.match(cache, /COMPLETION_STATUS_KHR = 0x91b1/);
@@ -161,7 +161,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
     "utf8",
   );
   const bridge = await readFile(
-    path.join(root, "src/renderer/template-save-compatibility.js"),
+    path.join(root, "src/renderer/template-save-compatibility.ts"),
     "utf8",
   );
   const runtime = await readFile(

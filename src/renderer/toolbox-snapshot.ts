@@ -23,8 +23,7 @@ const FLAGS = Object.freeze({
 const KNOWN_FLAGS =
   FLAGS.ready | FLAGS.player | FLAGS.target | FLAGS.loading;
 
-/** @param {number} value */
-function validCoordinate(value) {
+function validCoordinate(value: number) {
   return Number.isFinite(value) && Math.abs(value) <= 1_000_000;
 }
 
@@ -41,17 +40,12 @@ const AGENT_TYPE_BITS = 0x400 | 0x200 | 0xdb;
  * hostile/item/gadget as the next proof — so every other accepted word is
  * published as `agentTypeBits` under a kind that claims nothing. Naming a
  * value the client has not certified is how a guess becomes a fact.
- * @param {number} bits
  */
-function agentKind(bits) {
+function agentKind(bits: number) {
   return (bits & 0xdb) !== 0 ? "Living" : "Unknown";
 }
 
-/**
- * @param {ArrayBuffer} buffer
- * @param {number} pointer
- */
-export function readToolboxSnapshot(buffer, pointer) {
+export function readToolboxSnapshot(buffer: ArrayBuffer, pointer: number) {
   if (
     !(buffer instanceof ArrayBuffer)
     || !Number.isInteger(pointer)
@@ -171,11 +165,7 @@ const CURSOR_FLAGS = Object.freeze({
 const KNOWN_CURSOR_FLAGS =
   CURSOR_FLAGS.valid | CURSOR_FLAGS.hidden | CURSOR_FLAGS.unsupported;
 
-/**
- * @param {ArrayBuffer} buffer
- * @param {number} pointer
- */
-function cursorView(buffer, pointer) {
+function cursorView(buffer: ArrayBuffer, pointer: number) {
   if (
     !(buffer instanceof ArrayBuffer)
     || !Number.isInteger(pointer)
@@ -189,10 +179,8 @@ function cursorView(buffer, pointer) {
 
 /**
  * Header-only read for the per-frame change check. Never touches the payload.
- * @param {ArrayBuffer} buffer
- * @param {number} pointer
  */
-export function readToolboxCursorHeader(buffer, pointer) {
+export function readToolboxCursorHeader(buffer: ArrayBuffer, pointer: number) {
   const view = cursorView(buffer, pointer);
   if (view === null) {
     return Object.freeze({ status: "waiting", reason: "memory" });
@@ -274,10 +262,8 @@ export function readToolboxCursorHeader(buffer, pointer) {
 /**
  * Full seqlock read: the header and a private copy of the RGBA payload from
  * one publish. Null when the region is torn, malformed, or carries no cursor.
- * @param {ArrayBuffer} buffer
- * @param {number} pointer
  */
-export function readToolboxCursorPixels(buffer, pointer) {
+export function readToolboxCursorPixels(buffer: ArrayBuffer, pointer: number) {
   const view = cursorView(buffer, pointer);
   if (view === null) return null;
   const firstSequence = view.getUint32(8, true);

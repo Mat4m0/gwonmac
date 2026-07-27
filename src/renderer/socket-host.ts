@@ -1,25 +1,39 @@
-/**
- * @typedef {{
- *   connect(destination: string): Promise<number>,
- *   send(socketId: number, data: Uint8Array): Promise<void>,
- *   close(socketId: number): Promise<void>,
- *   onEvent(callback: (event: import('../shared/contracts.js').SocketEvent) => void): () => void
- * }} NativeSockets
- */
+import type { GwNativeApi, SocketEvent } from '../shared/contracts.js';
+
+// The bridge's own socket surface, named rather than restated: this host is the
+// only renderer-side caller of it, and a second spelling of those four methods
+// would be free to drift from the contract the preload actually exposes.
+type NativeSockets = GwNativeApi['sockets'];
 
 /**
- * @param {{
- *   native: NativeSockets,
- *   diagnostics?: RendererDiagnostics,
- *   socketOpened?: () => void,
- *   log(...values: unknown[]): void
- * }} options
+ * One connection as ArenaNet's glue uses it: three assignable callbacks and
+ * `send`/`close`. `deliver` is this host's own entry point — the demultiplexer
+ * calls it, the client never does.
  */
-export function createSocketHost({ native, diagnostics, socketOpened, log }) {
-  /** @type {Map<number, ReturnType<typeof makeSocket>>} */
-  const sockets = new Map();
-  /** @type {Map<number, import('../shared/contracts.js').SocketEvent[]>} */
-  const earlyEvents = new Map();
+type HostSocket = {
+  onopen: (() => void) | null;
+  onclose: (() => void) | null;
+  onmessage: ((data: Uint8Array) => void) | null;
+  send(data: Uint8Array | ArrayBuffer): Promise<void>;
+  close(): void;
+  deliver(event: SocketEvent): void;
+};
+
+type SocketHostOptions = {
+  native: NativeSockets;
+  diagnostics?: RendererDiagnostics;
+  socketOpened?: () => void;
+  log(...values: unknown[]): void;
+};
+
+export function createSocketHost({
+  native,
+  diagnostics,
+  socketOpened,
+  log,
+}: SocketHostOptions) {
+  const sockets = new Map<number, HostSocket>();
+  const earlyEvents = new Map<number, SocketEvent[]>();
 
   const unsubscribe = native.onEvent((event) => {
     const socket = sockets.get(event.socketId);
@@ -32,10 +46,8 @@ export function createSocketHost({ native, diagnostics, socketOpened, log }) {
     earlyEvents.set(event.socketId, pending);
   });
 
-  /** @param {string} destination */
-  function makeSocket(destination) {
-    /** @type {number | null} */
-    let id = null;
+  function makeSocket(destination: string): HostSocket {
+    let id: number | null = null;
     let opened = false;
     let closed = false;
     let closeRequested = false;
@@ -50,14 +62,10 @@ export function createSocketHost({ native, diagnostics, socketOpened, log }) {
       socket.onclose?.();
     };
 
-    const socket = {
-      /** @type {null | (() => void)} */
+    const socket: HostSocket = {
       onopen: null,
-      /** @type {null | (() => void)} */
       onclose: null,
-      /** @type {null | ((data: Uint8Array) => void)} */
       onmessage: null,
-      /** @param {Uint8Array | ArrayBuffer} data */
       send(data) {
         const source = data instanceof Uint8Array ? data : new Uint8Array(data);
         const bytes = Uint8Array.from(source);
@@ -83,7 +91,6 @@ export function createSocketHost({ native, diagnostics, socketOpened, log }) {
           void native.close(id).catch(() => finish());
         }
       },
-      /** @param {import('../shared/contracts.js').SocketEvent} event */
       deliver(event) {
         if (closed) return;
         if (event.type === 'open') {
@@ -119,7 +126,7 @@ export function createSocketHost({ native, diagnostics, socketOpened, log }) {
       if (closeRequested && !closed) {
         void native.close(socketId).catch(() => finish());
       }
-    }).catch((error) => {
+    }).catch((error: unknown) => {
       log(
         'socket.connect failed',
         error instanceof Error ? error.message : String(error),

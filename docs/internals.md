@@ -151,7 +151,7 @@ The result is three states and never two: `update-available`, `up-to-date`, or
 parse failure and a network failure are `unknown`; reporting either as
 "up to date" is the class of quiet lie this path exists to remove, so no
 boolean or tri-state "update status" is exported and each reason has its own
-sentence in `src/renderer/update-action.js`. Every result carries `checkedAt`,
+sentence in `src/renderer/update-action.ts`. Every result carries `checkedAt`,
 the completion time of the check attempt (including an unsupported local
 version that made no request). The renderer persists it as
 `lastUpdateCheckAt` and renders it as "Last checked". The launcher and the
@@ -337,7 +337,7 @@ state over `gw:client:session` together with the client hash and whether this
 session actually prepared the Toolbox module. The renderer combines those
 facts with the canonical per-tool selection; the effective bit keeps a
 certified build whose transform failed from being reported as available.
-`src/renderer/client-compatibility-notice.js` turns them into the sentences
+`src/renderer/client-compatibility-notice.ts` turns them into the sentences
 both surfaces show.
 
 ### Toolbox instrumentation
@@ -349,7 +349,7 @@ Toolbox hook, starts no snapshot observer, and contains no Toolbox UI.
 
 The two shipped tools are independent. `nativeCursor` defaults to **true** and
 reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
-owns the only added overlay, `src/renderer/toolbox-readout.js`: a fixed line at
+owns the only added overlay, `src/renderer/toolbox-readout.ts`: a fixed line at
 the top centre of the game view showing the selected target's distance in game
 units and range band. It is the last stage of the read-only pipeline — manifest
 → transform/kernel → snapshot → decoder → here — and writes nothing back. It
@@ -514,7 +514,7 @@ downloaded client.
 
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
 fullscreen, touch translation, trackpad-wheel normalization, and right-drag
-pointer lock. `input.js` owns the canvas input listeners and accepts validated
+pointer lock. `input.ts` owns the canvas input listeners and accepts validated
 touch settings from the settings owner; it does not persist settings itself. One
 held-input registry releases keys, buttons, and touches when focus or native UI
 consumes an input release. Pointer lock uses a virtual cursor and recycles a

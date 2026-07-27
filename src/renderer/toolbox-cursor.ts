@@ -8,8 +8,7 @@ const RETINA_EDGE = EDGE * 2;
 /* Runtime-composed drag cursors would otherwise grow this without limit. */
 const CACHE_LIMIT = 64;
 
-/** @param {number} edge */
-function createSurface(edge) {
+function createSurface(edge: number) {
   const canvas = document.createElement("canvas");
   canvas.width = edge;
   canvas.height = edge;
@@ -20,18 +19,19 @@ function createSurface(edge) {
 
 const source = createSurface(EDGE);
 const retina = createSurface(RETINA_EDGE);
-/** @type {Map<string, string>} */
-const cssCache = new Map();
+const cssCache = new Map<string, string>();
 
 /**
  * Chromium drops a custom cursor above 32 CSS px, so the authoring grid is
  * fixed at 32 and Retina crispness comes from the 2x image-set candidate.
  * Hotspots stay in authoring-grid pixels; Blink scales them per candidate.
- * @param {Uint8ClampedArray} pixels canonical RGBA8, row-major 32x32
- * @param {number} hotspotX
- * @param {number} hotspotY
+ * `pixels` is canonical RGBA8, row-major 32x32.
  */
-export function buildCursorCss(pixels, hotspotX, hotspotY) {
+export function buildCursorCss(
+  pixels: Uint8ClampedArray,
+  hotspotX: number,
+  hotspotY: number,
+) {
   const image = source.context.createImageData(EDGE, EDGE);
   image.data.set(pixels);
   source.context.putImageData(image, 0, 0);
@@ -46,17 +46,11 @@ export function buildCursorCss(pixels, hotspotX, hotspotY) {
   }") 2x) ${hotspotX} ${hotspotY}, default`;
 }
 
-/**
- * @param {number} pixelHash
- * @param {number} hotspotX
- * @param {number} hotspotY
- */
-function cacheKey(pixelHash, hotspotX, hotspotY) {
+function cacheKey(pixelHash: number, hotspotX: number, hotspotY: number) {
   return `${pixelHash}:${hotspotX}:${hotspotY}`;
 }
 
-/** @param {string} key */
-function cacheGet(key) {
+function cacheGet(key: string) {
   const css = cssCache.get(key);
   if (css === undefined) return undefined;
   cssCache.delete(key);
@@ -64,11 +58,7 @@ function cacheGet(key) {
   return css;
 }
 
-/**
- * @param {string} key
- * @param {string} css
- */
-function cacheSet(key, css) {
+function cacheSet(key: string, css: string) {
   cssCache.set(key, css);
   while (cssCache.size > CACHE_LIMIT) {
     const oldest = cssCache.keys().next().value;
@@ -77,20 +67,17 @@ function cacheSet(key, css) {
   }
 }
 
-/**
- * Owns cursor presentation and nothing else.
- * @param {{
- *   element: HTMLElement,
- *   memory: WebAssembly.Memory,
- *   cursorPointer: number,
- *   fallback?: string,
- * }} options
- */
+/** Owns cursor presentation and nothing else. */
 export function createCursorConsumer({
   element,
   memory,
   cursorPointer,
   fallback = "",
+}: {
+  element: HTMLElement;
+  memory: WebAssembly.Memory;
+  cursorPointer: number;
+  fallback?: string;
 }) {
   let applied = fallback;
   let generation = -1;
@@ -109,8 +96,7 @@ export function createCursorConsumer({
     "position:fixed;top:0;left:0;height:1px;pointer-events:none;opacity:0";
   document.body.append(beacon);
 
-  /** @param {string} css */
-  const apply = (css) => {
+  const apply = (css: string) => {
     applied = css;
     // Inline style beats the stylesheet theme; the empty string hands it back.
     element.style.cursor = css;

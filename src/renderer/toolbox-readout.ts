@@ -38,22 +38,21 @@ const RANGE_STYLE = "color:#c9c9c9";
 /**
  * The shape this reads out of a decoded snapshot. Everything is optional
  * because the decoder's waiting states carry none of it.
- * @typedef {{
- *   status?: string,
- *   targetValid?: boolean,
- *   distance?: number,
- *   rangeName?: string,
- * }} SnapshotState
  */
+type SnapshotState = {
+  status?: string;
+  targetValid?: boolean;
+  distance?: number;
+  rangeName?: string;
+};
 
 /**
  * What the readout says for a decoded snapshot, or `null` when it says
  * nothing. The distance is the snapshot's own value rounded to a whole game
  * unit: no unit is invented, no band is recomputed, and a state the decoder
  * did not certify as ready renders nothing at all.
- * @param {SnapshotState} state
  */
-export function targetReadout(state) {
+export function targetReadout(state: SnapshotState) {
   if (state?.status !== "ready" || state.targetValid !== true) return null;
   const { distance, rangeName } = state;
   // The decoder guarantees both for a ready target; a readout that would
@@ -68,9 +67,8 @@ export function targetReadout(state) {
 /**
  * Mounts the readout and keeps it in step with the snapshot. Owns its own
  * element, so nothing else in the page has to know it exists.
- * @param {HTMLElement} parent
  */
-export function createTargetReadout(parent) {
+export function createTargetReadout(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement("div");
   root.id = "toolbox-target";
@@ -97,9 +95,8 @@ export function createTargetReadout(parent) {
     /**
      * Called once per animation frame, so it touches the DOM only when the
      * text it would write has actually changed.
-     * @param {SnapshotState} state
      */
-    update(state) {
+    update(state: SnapshotState) {
       const next = targetReadout(state);
       const line = next === null ? "" : `${next.distance} ${next.range}`;
       if (line === rendered) return;

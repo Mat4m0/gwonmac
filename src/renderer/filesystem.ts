@@ -11,51 +11,54 @@ const REQUIRED_DIRECTORIES = [
   `${MOUNT}/Templates/Equipment`,
 ];
 
-/**
- * @typedef {{
- *   analyzePath(path: string): { error: number },
- *   chdir(path: string): void,
- *   lookupPath(path: string, options?: unknown): unknown,
- *   open(path: unknown, ...args: unknown[]): unknown,
- *   rename(oldPath: string, newPath: string): void,
- *   unlink(path: string): void,
- *   mknod(path: string, ...args: unknown[]): unknown,
- *   mkdir(path: string): void,
- *   mkdirTree(path: string): void,
- *   rmdir(path: string): void,
- *   symlink(oldPath: string, newPath: string): void,
- *   mount(type: unknown, options: { autoPersist: boolean }, path: string): void,
- *   syncfs(populate: boolean, callback: (error?: unknown) => void): void,
- * }} EmscriptenFileSystem
- */
+type EmscriptenFileSystem = {
+  analyzePath(path: string): { error: number };
+  chdir(path: string): void;
+  lookupPath(path: string, options?: unknown): unknown;
+  open(path: unknown, ...args: unknown[]): unknown;
+  rename(oldPath: string, newPath: string): void;
+  unlink(path: string): void;
+  mknod(path: string, ...args: unknown[]): unknown;
+  mkdir(path: string): void;
+  mkdirTree(path: string): void;
+  rmdir(path: string): void;
+  symlink(oldPath: string, newPath: string): void;
+  mount(type: unknown, options: { autoPersist: boolean }, path: string): void;
+  syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+};
 
-/**
- * @typedef {{
- *   addRunDependency(name: string): void,
- *   removeRunDependency(name: string): void,
- *   preRun?: () => void,
- * }} EmscriptenModule
- */
+export type EmscriptenModule = {
+  addRunDependency(name: string): void;
+  removeRunDependency(name: string): void;
+  preRun?: () => void;
+};
 
-/**
- * @param {{
- *   module: EmscriptenModule,
- *   failed(error: unknown): void,
- *   log(...values: unknown[]): void,
- * }} options
- */
-export const installGameFilesystem = ({ module, failed, log }) => {
+// The generated glue publishes FS and IDBFS on the global object, and only once
+// it has loaded — after this module is imported, before the preRun below runs.
+// Nothing declares them, so the boundary is named here as the global object plus
+// the two properties the runtime adds, rather than widened to `any`.
+type EmscriptenRuntime = typeof globalThis & {
+  FS: EmscriptenFileSystem;
+  IDBFS: unknown;
+};
+
+export const installGameFilesystem = ({
+  module,
+  failed,
+  log,
+}: {
+  module: EmscriptenModule;
+  failed(error: unknown): void;
+  log(...values: unknown[]): void;
+}) => {
   module.preRun = () => {
     module.addRunDependency(DEPENDENCY);
-    const runtime = /** @type {any} ArenaNet's generated runtime boundary. */ (
-      globalThis
-    );
-    const fs = /** @type {EmscriptenFileSystem} */ (runtime.FS);
+    const runtime = globalThis as EmscriptenRuntime;
+    const fs = runtime.FS;
     const idbfs = runtime.IDBFS;
     let finished = false;
 
-    /** @param {unknown} error */
-    const stop = (error) => {
+    const stop = (error: unknown) => {
       if (finished) return;
       finished = true;
       failed(error);
@@ -66,11 +69,7 @@ export const installGameFilesystem = ({ module, failed, log }) => {
       log('persistent filesystem ready');
       module.removeRunDependency(DEPENDENCY);
     };
-    /**
-     * @param {boolean} populate
-     * @param {(error?: unknown) => void} callback
-     */
-    const sync = (populate, callback) => {
+    const sync = (populate: boolean, callback: (error?: unknown) => void) => {
       const timer = setTimeout(
         () => callback(new Error('persistent filesystem sync timed out')),
         SYNC_TIMEOUT_MS,
@@ -113,8 +112,7 @@ export const installGameFilesystem = ({ module, failed, log }) => {
               const mkdirTree = fs.mkdirTree.bind(fs);
               const rmdir = fs.rmdir.bind(fs);
               const symlink = fs.symlink.bind(fs);
-              /** @param {string} file */
-              const normalize = (file) =>
+              const normalize = (file: string) =>
                 file.includes('\\')
                   ? file.replace(/^\\+/, '').replaceAll('\\', '/')
                   : file;

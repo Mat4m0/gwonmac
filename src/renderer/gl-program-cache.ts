@@ -25,14 +25,27 @@ const GL_TRUE = 1;
 // exists to remove; overflow degrades to pass-through, never to wrong.
 const MAX_PROGRAMS = 1024;
 
-/**
- * @param {{
- *   imports: { env?: Record<string, (...args: any[]) => any> },
- *   module: { HEAPU8?: Uint8Array },
- *   log(...values: unknown[]): void,
- * }} options
- */
-export const installGlProgramCache = ({ imports, module, log }) => {
+// The four entry points this cache touches, out of an import table it neither
+// reads nor patches otherwise. Each is optional because absence is the case the
+// guard below exists for. Only the arguments this file inspects are named; the
+// trailing rest and the `unknown` results say that everything the generated
+// glue does beyond them is forwarded untouched rather than understood here.
+type GlProgramImports = {
+  glGetProgramiv?: (program: number, pname: number, out: number) => unknown;
+  glCreateProgram?: (...args: unknown[]) => unknown;
+  glLinkProgram?: (program: number, ...rest: unknown[]) => unknown;
+  glDeleteProgram?: (program: number, ...rest: unknown[]) => unknown;
+};
+
+export const installGlProgramCache = ({
+  imports,
+  module,
+  log,
+}: {
+  imports: { env?: GlProgramImports };
+  module: { HEAPU8?: Uint8Array };
+  log: (...values: unknown[]) => void;
+}) => {
   const env = imports.env;
   const getProgramiv = env?.glGetProgramiv;
   const createProgram = env?.glCreateProgram;
@@ -56,21 +69,16 @@ export const installGlProgramCache = ({ imports, module, log }) => {
   // name we never saw created passes through forever — which matters, because
   // the glue's "program >= GL.counter" branch writes nothing at all, so
   // recording the out-pointer there would capture whatever was in memory.
-  /** @type {Map<number, boolean>} */
-  const programs = new Map();
+  const programs = new Map<number, boolean>();
 
   // Queries that still reach the client, by pname, so a hot one we do not
   // cache stays visible after an ArenaNet client update.
-  /** @type {Map<number, number>} */
-  const passThrough = new Map();
-  /** @param {number} pname */
-  const countPassThrough = (pname) =>
+  const passThrough = new Map<number, number>();
+  const countPassThrough = (pname: number) =>
     passThrough.set(pname, (passThrough.get(pname) ?? 0) + 1);
 
-  /** @type {ArrayBufferLike | null} */
-  let backing = null;
-  /** @type {Int32Array | null} */
-  let words = null;
+  let backing: ArrayBufferLike | null = null;
+  let words: Int32Array | null = null;
   function heap() {
     const bytes = module.HEAPU8;
     if (!bytes) return null;
@@ -82,7 +90,7 @@ export const installGlProgramCache = ({ imports, module, log }) => {
     return words;
   }
 
-  env.glCreateProgram = function (...args) {
+  env.glCreateProgram = function (this: unknown, ...args) {
     const program = createProgram.apply(this, args);
     if (typeof program === 'number' && program > 0 && programs.size < MAX_PROGRAMS) {
       programs.set(program, false);
@@ -90,19 +98,19 @@ export const installGlProgramCache = ({ imports, module, log }) => {
     return program;
   };
 
-  env.glLinkProgram = function (program, ...rest) {
+  env.glLinkProgram = function (this: unknown, program, ...rest) {
     // Relinking restarts the asynchronous compile, so completion is false
     // again until the client observes otherwise.
     if (programs.has(program)) programs.set(program, false);
     return linkProgram.call(this, program, ...rest);
   };
 
-  env.glDeleteProgram = function (program, ...rest) {
+  env.glDeleteProgram = function (this: unknown, program, ...rest) {
     programs.delete(program);
     return deleteProgram.call(this, program, ...rest);
   };
 
-  env.glGetProgramiv = function (program, pname, p) {
+  env.glGetProgramiv = function (this: unknown, program, pname, p) {
     if (pname !== COMPLETION_STATUS_KHR) {
       countPassThrough(pname);
       return getProgramiv.call(this, program, pname, p);
@@ -151,7 +159,10 @@ export const installGlProgramCache = ({ imports, module, log }) => {
     passThrough: Object.fromEntries(
       [...passThrough]
         .sort((left, right) => right[1] - left[1])
-        .map(([pname, count]) => [`0x${pname.toString(16).toUpperCase()}`, count]),
+        .map(([pname, count]): [string, number] => [
+          `0x${pname.toString(16).toUpperCase()}`,
+          count,
+        ]),
     ),
   });
 };
