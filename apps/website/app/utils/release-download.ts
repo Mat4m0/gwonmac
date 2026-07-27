@@ -18,9 +18,10 @@ import {
 } from "../../../../src/shared/release.ts";
 
 export const RELEASES_FALLBACK_URL = EXTERNAL_URLS.releases;
-// Enough entries to see past a run of prereleases. `per_page=1` returned the
-// newest release of any channel, which is regularly a prerelease.
-const API_URL = `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=20`;
+// Snapshot tags are not release versions and are ignored below. Fetch the API
+// maximum so a temporarily failed snapshot-pruning run cannot hide the latest
+// valid versioned release behind a page of snapshots.
+const API_URL = `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=100`;
 
 type WebsiteReleaseChannel = "stable" | "preview";
 

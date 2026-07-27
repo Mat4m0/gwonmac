@@ -1,0 +1,73 @@
+name: Preview feedback
+description: Report results from a temporary tester snapshot.
+title: "[Snapshot]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing a snapshot. Snapshots are temporary and unsupported, so the exact tag is required to connect your report to its source.
+
+        GitHub issues are public. Diagnostics stay on your Mac unless you explicitly attach them. The app excludes credentials, account identifiers, packet contents, HTTP bodies, headers, cookies, filesystem paths, and crash dumps from a `.gwdiag`.
+  - type: input
+    id: snapshot
+    attributes:
+      label: Snapshot tag and commit
+      description: Copy both values from the snapshot release page.
+      placeholder: snapshot-42-f45f762 — f45f7629e9d31d5456ef3387e154a88f53750e84
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.5
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Mac hardware
+      placeholder: M2 Pro Mac mini
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: versioned-release
+    attributes:
+      label: Does this happen on the latest versioned release?
+      options:
+        - No — this is a snapshot regression
+        - Yes — it also happens on the latest versioned release
+        - I have not compared them
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (optional)
+      description: If you choose to share a `.gwdiag`, Control-click it in Finder, choose **Compress**, then drag the resulting `.zip` here. GitHub does not accept `.gwdiag` directly.
+      placeholder: Drag the .zip file here, or leave this blank.
+    validations:
+      required: false
