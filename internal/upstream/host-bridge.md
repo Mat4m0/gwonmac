@@ -10,12 +10,12 @@ Two halves, one contract:
 | Half | File | Job |
 | --- | --- | --- |
 | Main | [`src/main/core/template-save-compat.ts`](../../src/main/core/template-save-compat.ts) | derive one module from the certified official hash |
-| Renderer | [`src/renderer/template-save-compatibility.js`](../../src/renderer/template-save-compatibility.js) | answer the derived module's calls against the mounted IDBFS |
+| Renderer | [`src/renderer/template-save-compatibility.ts`](../../src/renderer/template-save-compatibility.ts) | answer the derived module's calls against the mounted IDBFS |
 
 Selection and caching live in
 [`client-module.ts`](../../src/main/core/client-module.ts) and
 [`client-runtime.ts`](../../src/main/client-runtime.ts). Installation is
-[`harness.js`](../../src/renderer/harness.js) inside `Module.instantiateWasm`,
+[`harness.ts`](../../src/renderer/harness.ts) inside `Module.instantiateWasm`,
 before instantiation, so the import object can be wrapped.
 
 ## Why a derived module at all
@@ -73,7 +73,7 @@ untouched.
 Neither half holds them by hand any more. `WASM_BRIDGE_MARKERS` in
 `src/shared/contracts.ts` is the one source: the transform imports it, and the
 renderer — a sandboxed module that may not reach the main process — receives it
-through the preload that `scripts/generate-preload.mjs` produces. They used to
+through the preload that `scripts/generate-preload.ts` produces. They used to
 be two copies, and drift would have silently turned every bridged call into a
 real `stat`.
 
@@ -192,7 +192,7 @@ perfectly ordinary path. That cost us a round on delete and rename.
 - Function bodies are never modified, only call sites — so uncertified callers
   are untouched.
 - The bridge stays inside the renderer: no IPC, no `fetch`, no native bridge.
-  Asserted in `tests/policy/source-wasm-host.test.mjs`.
+  Asserted in `tests/policy/source-wasm-host.test.ts`.
 - The listing block comes from the client's allocator.
 - Bump `TEMPLATE_SAVE_TRANSFORM_ABI` whenever the derived bytes or the bridge
   contract change; it is part of the cache key.
@@ -203,7 +203,7 @@ perfectly ordinary path. That cost us a round on delete and rename.
 renderer init payload and enables two console-only traces:
 
 - `[template-fs-trace]` — the syscall wrappers, from
-  [`template-filesystem-trace.js`](../../src/renderer/template-filesystem-trace.js)
+  [`template-filesystem-trace.ts`](../../src/renderer/template-filesystem-trace.ts)
 - `[template-fs-bridge]` — the bridge itself: which marker fired, how many
   entries were listed and matched, whether the block was published, and each
   outcome

@@ -16,7 +16,7 @@ import type { GwNativeApi } from "../../src/shared/contracts.ts";
 import {
   PRELOAD_CONSTANTS,
   preloadSource,
-} from "../../scripts/generate-preload.mjs";
+} from "../../scripts/generate-preload.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 

@@ -10,6 +10,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import * as contracts from "../../src/shared/contracts.ts";
 import {
   RENDERER_INIT_ARGUMENT,
@@ -17,16 +18,27 @@ import {
   type RendererCommand,
   type RendererInit,
 } from "../../src/shared/contracts.ts";
-import { preloadSource as generatePreload } from "../../scripts/generate-preload.mjs";
+import { preloadSource as generatePreload } from "../../scripts/generate-preload.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // The preload as it ships: generated from the canonical contracts, not read
 // from a checked-in copy of them.
 const preloadSource: string = generatePreload(contracts, root);
-const routerSource = await readFile(
-  path.join(root, "src/renderer/commands.js"),
-  "utf8",
-);
+// The router is a classic script — index.html loads it with a `<script>` tag
+// and it exports nothing — so the only way to drive it is to run its text. It
+// is TypeScript from P3, so the text is transpiled here under the same target
+// and module the renderer project emits with. Reading src/ and transpiling is
+// what keeps this test buildless; reading build/renderer would make it depend
+// on a build the unit suite does not run.
+const routerSource = ts.transpileModule(
+  await readFile(path.join(root, "src/renderer/commands.ts"), "utf8"),
+  {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  },
+).outputText;
 
 interface CaptureCall {
   name: string;

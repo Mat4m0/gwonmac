@@ -1,7 +1,7 @@
 // Sandboxed preload must be CommonJS — Electron's sandbox loader does not
 // execute ESM preload graphs, and it whitelists `electron`, `events`, `timers`
 // and `url` only, so this file cannot require the canonical contracts. It is
-// the *body* of the preload: scripts/generate-preload.mjs prepends the
+// the *body* of the preload: scripts/generate-preload.ts prepends the
 // constants below from src/shared/contracts.ts and writes the result to
 // build/preload/preload.cjs. Copying a channel name back into this file would
 // reintroduce the drift the generator exists to remove, so no string literal
@@ -9,7 +9,7 @@
 // `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
 // binding the preload may read. The four spliced constants are declared for the
-// type checker in scripts/preload-injected-constants.d.mts.
+// type checker in scripts/preload-injected-constants.mts.
 /* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;

@@ -1,9 +1,10 @@
 {
   // The third project. `tsconfig.json` owns `src` and `tsconfig.renderer.json`
   // owns the renderer, which between them left the tests, the build scripts,
-  // and the preload body outside every project: `tests/unit/*.ts` is
-  // type-stripped by Node at runtime and never checked, and `tsconfig.json`
-  // does not set `allowJs`, so no `.mjs` or `.cjs` file was ever an input.
+  // the root tool configuration, and the preload body outside every project:
+  // `tests/unit/*.ts` is type-stripped by Node at runtime and never checked,
+  // and `tsconfig.json` does not set `allowJs`, so no `.mjs` or `.cjs` file
+  // was ever an input.
   //
   // This project checks that remainder against the real production contracts:
   // the `src/**/*.ts` the tests import are pulled in by module resolution
@@ -38,20 +39,54 @@
     // makes that a compile error instead of a surprise.
     "erasableSyntaxOnly": true,
 
+    // The other half of the same bargain. Erasing syntax is all the stripper
+    // does, so it cannot know that a name in `import { X } from "./y.js"` is a
+    // type: it leaves the import intact and Node throws
+    // `does not provide an export named 'X'` on the first run. Nothing else
+    // catches it — `tsc` elides it happily and the ESLint rule that would
+    // demand `import type` is scoped to `src`. This makes it TS1484 at compile
+    // time, which is where these files' only other stripper hazard is caught.
+    "verbatimModuleSyntax": true,
+
     // Several tests import a `.ts` path directly rather than the `.js`
     // specifier the emitted code would use. Nothing here is emitted, so the
     // extension is honest about the file being read.
     "allowImportingTsExtensions": true,
     "noEmit": true,
 
+    // Third-party declarations do not compile under this strictness — the
+    // ESLint parsers `eslint.config.js` pulls in fail on their own. The flag
+    // is indiscriminate, so it skips this repository's own declaration files
+    // just as readily: nothing here may be a `.d.*` file and expect to be
+    // checked. `scripts/preload-injected-constants.mts` says why it is not
+    // one, and tests/policy/typecheck-coverage.test.ts enforces the rule.
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": [
+    // The two root tool configurations belong with the build scripts they sit
+    // beside, not in `tsconfig.json`: that project's `include: ["src"]` and
+    // `rootDir: "src"` are what make `src` mean one thing, and widening it to
+    // reach a sibling file would emit into `build/` alongside the application.
+    // `forge.config.ts` looked checked because it is TypeScript, yet nothing
+    // read it while it drove `pnpm make`, the fuses, and the bundle version.
+    "forge.config.ts",
+    "eslint.config.js",
+    // Phase 4 converted the suites to TypeScript; what is left under `tests` is
+    // `electron/fixtures.mts`. Naming the extensions here rather than relying on
+    // a spec importing them is what makes them inputs — whichever file nothing
+    // imports would otherwise be checked by nothing.
     "tests/**/*.ts",
+    "tests/**/*.mts",
+    "tests/**/*.mjs",
+    // Phase 5 converted the tooling scripts, so `.ts` is named here for the
+    // same reason the test extensions are: `enhancements-visual.ts` is imported by
+    // nothing, and a script enrolled only by whoever happens to import it is a
+    // script that stops being checked the day that importer goes away.
+    "scripts/**/*.ts",
     "scripts/**/*.mjs",
-    "scripts/**/*.d.mts",
+    "scripts/**/*.mts",
     "src/preload/preload.body.cjs",
 
     // Ambient declarations are reached by no `import`, so the renderer sources

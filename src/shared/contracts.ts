@@ -40,7 +40,7 @@ export interface DownloadActivity {
  * A client preparation that failed. The code is the entire payload: this used
  * to be a finished English sentence built in the main process, which put the
  * wording of a user-facing failure in the one place that cannot see the UI and
- * cannot be tested against it. `src/renderer/failure-messages.js` is now the
+ * cannot be tested against it. `src/renderer/failure-messages.ts` is now the
  * only place that sentence is chosen, and a code is also the only thing the
  * diagnostics export is allowed to carry.
  *
@@ -359,7 +359,7 @@ export const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
  * dirfd markers by which ArenaNet's derived client reaches the renderer.
  * `src/main/core/template-save-compat.ts` appends forwarders that hand the
  * stub's arguments to `__syscall_newfstatat` behind one of these, and
- * `src/renderer/template-save-compatibility.js` answers them against the
+ * `src/renderer/template-save-compatibility.ts` answers them against the
  * mounted IDBFS. No real call can produce a negative dirfd.
  *
  * Canonical here rather than beside the transform because both halves need the

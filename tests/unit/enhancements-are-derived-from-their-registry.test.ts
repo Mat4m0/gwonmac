@@ -16,7 +16,7 @@
 // every other answer in this file comes from the tool registry alone.
 //
 // The gate across *all four* postures is executed by
-// `tests/release/packaged-enhancement-surface.test.mjs`, which re-evaluates the
+// `tests/release/packaged-enhancement-surface.test.ts`, which re-evaluates the
 // built module in a child process per case. This file cannot: the gate is
 // resolved at import, and one process imports it once.
 import assert from "node:assert/strict";

@@ -15,16 +15,47 @@ import { pathToFileURL } from "node:url";
  * @type {ReadonlyArray<readonly [command: string, args: readonly string[]]>}
  */
 export const BUILD_STEPS = [
-  [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // Static assets only. It fills build/renderer with everything the compiler
+  // does not produce, so it has to run before the compiler writes into the
+  // same directory.
+  [process.execPath, ["scripts/copy-renderer.mjs"]],
+  // The renderer's own program, emitting build/renderer/*.js. It used to check
+  // without emitting and the JavaScript was copied verbatim; that is what made
+  // the copy step's old rmSync harmless, and what would delete this emit if the
+  // two ever swapped back.
+  //
+  // It also re-emits build/shared/*.js, which is not its output to own: the
+  // renderer's type-only imports of src/shared make those files emittable, and
+  // TypeScript has no flag that keeps a file in a program but out of its emit.
+  // tsconfig.renderer.json says why the alternative was rejected. What matters
+  // here is the order — this step runs *before* the main program, so the copy
+  // that survives is the one with the sourceMappingURL and the .js.map beside
+  // it. Reversed, main-process stack traces silently lose their source
+  // mapping, which is the defect that made this ordering explicit.
   [
     process.execPath,
     ["node_modules/typescript/bin/tsc", "-p", "tsconfig.renderer.json"],
   ],
-  // Reads build/shared/contracts.js, so it has to run after tsc.
-  [process.execPath, ["scripts/generate-preload.mjs"]],
-  // Recreates build/renderer, so the kernel has to be written after it.
-  [process.execPath, ["scripts/copy-renderer.mjs"]],
+  // The main program, and the owner of build/shared.
+  [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes
+  // build/preload/preload.cjs, which nothing else here produces — so its
+  // position is free. It is TypeScript, so it is spawned the one way this
+  // repository runs a TypeScript file from Node — the same flags
+  // package.json's script entries use. `--experimental-strip-types` is
+  // redundant from Node 22.18 and stays because package.json's engines floor
+  // is 22.6, where it is not.
+  [
+    process.execPath,
+    [
+      "--import",
+      "./scripts/ts-hook.mjs",
+      "--experimental-strip-types",
+      "scripts/generate-preload.ts",
+    ],
+  ],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
+  // It writes into build/renderer, so it goes after everything that fills it.
   [
     "rustc",
     [

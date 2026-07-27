@@ -1,6 +1,6 @@
 # Enhancement development runbook
 
-This is the working procedure for extending the Electron/WASM enhancement. The
+This is the working procedure for extending the Electron/WASM Enhancement. The
 certified build manifest in `src/main/core/enhancement-builds.ts` is the only
 runtime source of build-local addresses, signatures, and table slots.
 
@@ -83,7 +83,7 @@ An **automation** scenario is one that acts on the player's behalf; it gets
 command channel. An **observation** scenario — `cursor-capture` today — gets
 none of the three: it is launched exactly as a player's app is, with no IPC
 channel at all and a scenario context holding only page evaluation, the typed
-`--observe` sampler, and a clock. The enhancement installs for it because the
+`--observe` sampler, and a clock. The Enhancement installs for it because the
 profile's `nativeCursor` setting is on, so the run is refused up front with
 `native-cursor-disabled` when it is off, and it asks the operator to bring the
 client to a playable character rather than pressing Enter itself. The tier the
@@ -100,14 +100,14 @@ verifies the effective user-data directory in main before startup, connects to
 the random loopback DevTools endpoint, and observes structured renderer state.
 It never launches through Playwright's temporary Electron profile.
 Its parent-process IPC channel exists only for an automation-tier run and can
-only start and stop Level 1 diagnostics when the explicit enhancement automation
+only start and stop Level 1 diagnostics when the explicit Enhancement automation
 environment is active; capture mutation is not exposed to the sandboxed
 renderer.
-`scripts/enhancements-live.mjs` owns process launch, CDP connection, bounded failure
+`scripts/enhancements-live.ts` owns process launch, CDP connection, bounded failure
 output, common acceptance, and shutdown. Each registry entry in
-`scripts/enhancements-live/scenarios.mjs` owns its action and semantic validation;
+`scripts/enhancements-live/scenarios.ts` owns its action and semantic validation;
 the paired Level 1 benchmark lives in
-`scripts/enhancements-live/performance.mjs`. Add behavior to the narrow owner rather
+`scripts/enhancements-live/performance.ts`. Add behavior to the narrow owner rather
 than growing another general automation framework.
 
 Gameplay automation uses trusted Playwright input. Saved-login confirmation
@@ -127,9 +127,9 @@ game module — `transformed-dispatcher-off` holds its hook slot at zero, so the
 game calls its original tick and the kernel never runs, and
 `transformed-observer-on` lets the kernel write snapshots for the renderer to
 read. So the delta is the incremental kernel/snapshot-observer cost, not the
-enhancement's total cost against ArenaNet's untransformed module: that third arm is
+Enhancement's total cost against ArenaNet's untransformed module: that third arm is
 not reachable from a session that can measure these two, because automation
-forces the enhancement on and the module is chosen in the main process before the
+forces the Enhancement on and the module is chosen in the main process before the
 renderer exists. The arms are named for what they run so the number is not read
 as something wider than it is. It reports p50, p95, p99, maximum frame time,
 long-frame counts, renderer task/script/layout time, JavaScript heap use, and
@@ -154,20 +154,20 @@ is not comparable between arms. The arm-level heap number is
 Its numbers — phase duration, the sample floor per arm, the tail-percentile
 regression limit, and the absolute p95 movement — live with the benchmark that
 enforces them, in the `performance` entry of
-`scripts/enhancements-live/scenarios.mjs`. They are deliberately not repeated here:
+`scripts/enhancements-live/scenarios.ts`. They are deliberately not repeated here:
 a budget written in two places ends up enforced by one and quoted from the
 other. What belongs here is why the rule has that shape. A regression must be
 corroborated by *both* tail percentiles, so normal outpost variance or a single
-0.1 ms-quantized scheduling boundary is not reported as an enhancement regression,
+0.1 ms-quantized scheduling boundary is not reported as a Enhancement regression,
 while the absolute p95 limit still catches a real shift that a percentage would
 flatter. The result also requires zero hook ticks in the dispatcher-off arm and
 a full run of hooked ticks in the other, so a disconnected benchmark cannot
 pass. Task and heap values are diagnostic rather than gates, because garbage
 collection and unrelated game work can move them between phases.
 
-The schedule and the arithmetic are in `scripts/enhancements-live/benchmark.mjs`,
+The schedule and the arithmetic are in `scripts/enhancements-live/benchmark.ts`,
 which imports nothing, so
-`tests/policy/the-benchmark-measures-each-arm-in-both-orders.test.mjs` executes
+`tests/policy/the-benchmark-measures-each-arm-in-both-orders.test.ts` executes
 them against a drifting session double without a build or a game.
 
 The renderer lifecycle surface derives from existing state:
@@ -243,7 +243,7 @@ effect absent -> present -> removed
 
 ## Cursor pipeline
 
-The enhancement path is no longer developer-only. Its canonical tools are
+The Enhancement path is no longer developer-only. Its canonical tools are
 `nativeCursor` (on by default) and `targetReadout` (off by default), carried to
 the renderer as one `EnhancementSelection`. `enhancement-policy.ts` derives module
 preparation from whether any tool is selected, plus
@@ -251,7 +251,7 @@ preparation from whether any tool is selected, plus
 `GW_ENHANCEMENT_AUTOMATION=1`). The harness does not trust that request as the
 answer: it imports `enhancements.js` only when the actual instantiated module also
 carries `enhancement_manifest`, so a requested but uncertified build executes no
-enhancement renderer code.
+Enhancement renderer code.
 
 The kernel receives independent feature bits. A disabled cursor performs no
 cursor collection; a disabled target readout performs no map/player/target
@@ -313,15 +313,15 @@ Unknown builds continue serving the official client unchanged.
 
 The two transforms are chained, not alternatives. Both rewrite the same official
 module, so neither output contains the other's fix; main prepares the
-template-save client first and layers the enhancement transform on top of it.
+template-save client first and layers the Enhancement transform on top of it.
 `ENHANCEMENT_BUILDS[].sha256` is therefore a template-save **output** hash, pinned by
 a unit test, and recertification order is fixed: certify the template-save build
-first, then certify the enhancement transform against its output.
+first, then certify the Enhancement transform against its output.
 
 The template-save transform only appends functions, so the main-loop index, the
 free table slot and every layout address stay those of the official build.
 
-An opted-in launch that cannot produce an enhancement module still returns the
+An opted-in launch that cannot produce a Enhancement module still returns the
 template-save client, so an uncertified build costs the cursor and nothing else.
 
 ## ABI evolution
@@ -380,12 +380,12 @@ plugin ABI are replacement work, not compatibility targets.
 
 ## Completion bar for a feature
 
-An enhancement feature is ready when:
+A Enhancement feature is ready when:
 
 - the exact-build evidence is canonical and tested;
 - invalid/loading state cannot publish stale values;
 - the automation observer stays below the renderer-time budget in
-  `scripts/enhancements-live/acceptance.mjs`;
+  `scripts/enhancements-live/acceptance.ts`;
 - no raw pointer, packet, or memory slice crosses Electron IPC;
 - cached startup does no transformation or network work;
 - one bounded scenario proves the real semantic change;

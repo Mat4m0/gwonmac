@@ -34,5 +34,5 @@ jobs:
         run: |
           pnpm build
           pnpm exec playwright test \
-            --config=tests/electron/playwright.config.mjs \
-            tests/electron/live.spec.mjs
+            --config=tests/electron/playwright.config.ts \
+            tests/electron/live.spec.ts

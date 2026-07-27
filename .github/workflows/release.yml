@@ -98,17 +98,21 @@ jobs:
           fi
 
       # Before install, because it needs neither: a bad version should cost
-      # seconds, not a full build. scripts/macos-version.mjs is the one owner of
+      # seconds, not a full build. scripts/macos-version.ts is the one owner of
       # what a release version may be — it rejects leading zeroes, months that
       # are not months, and anything that cannot become a valid CFBundleVersion.
       # `pnpm make` reaches the same function through forge.config.ts, so a
       # second regex here could only ever disagree with the build.
+      #
+      # It is TypeScript, so this runs under the repository's one loader — the
+      # same two flags package.json's script entries carry. Both files are
+      # tracked, so this still needs no install.
       - name: Resolve release version
         id: version
         run: |
           version="$(node -p "require('./package.json').version")"
-          node -e '
-            const { macOSBundleVersions } = await import("./scripts/macos-version.mjs");
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types -e '
+            const { macOSBundleVersions } = await import("./scripts/macos-version.js");
             try {
               const { appVersion, buildVersion } = macOSBundleVersions(process.argv[1]);
               console.log(`CFBundleShortVersionString ${appVersion}`);

@@ -242,9 +242,9 @@ describe("atomic-file orphan sweep", () => {
       process.execPath,
       [
         "--import",
-        fileURLToPath(new URL("../ts-hook.mjs", import.meta.url)),
+        fileURLToPath(new URL("../../scripts/ts-hook.mjs", import.meta.url)),
         "--experimental-strip-types",
-        fileURLToPath(new URL("../fixtures/kill-mid-atomic-write.mjs", import.meta.url)),
+        fileURLToPath(new URL("../fixtures/kill-mid-atomic-write.ts", import.meta.url)),
         target,
       ],
       { stdio: "ignore" },

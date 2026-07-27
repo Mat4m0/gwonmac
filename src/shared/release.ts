@@ -7,7 +7,7 @@
 // it is not, or a download button pointing at a prerelease.
 //
 // SemVer only. The versioning *scheme* (CalVer semantics in SemVer syntax) is a
-// product decision owned by scripts/macos-version.mjs and the release workflow;
+// product decision owned by scripts/macos-version.ts and the release workflow;
 // nothing in this file knows what a year or a month is. It knows the shapes
 // .github/workflows/release.yml actually publishes: `X.Y.Z`, optionally
 // `-alpha.N` / `-beta.N` / `-rc.N`, optionally tag-prefixed with `v`.

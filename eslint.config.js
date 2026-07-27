@@ -33,7 +33,10 @@ const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
 const INTO_APP = String.raw`^(?:\.\./)+src/(?!shared/)|(?:^|/)(?:\.\.|src)/(?:main|renderer|preload)/`;
 const ELECTRON = String.raw`^electron(/|$)`;
 
-/** esquery reads `/.../` inside an attribute value, so its slashes need escaping. */
+/**
+ * esquery reads `/.../` inside an attribute value, so its slashes need escaping.
+ * @param {string} pattern
+ */
 const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
 
 // Every non-static way to name a module, keyed on the specifier rather than on
@@ -43,6 +46,10 @@ const selectorRegex = (pattern) => `/${pattern.replaceAll("/", "\\/")}/`;
 // `source.value` missed the template-literal spelling of `import()` entirely —
 // one quote character defeated the boundary. An argument value cannot be
 // renamed. Applied to every boundary, so the four are provably symmetric.
+/**
+ * @param {string} pattern
+ * @param {string} message
+ */
 const crossings = (pattern, message) => {
   const regex = selectorRegex(pattern);
   return [
@@ -179,43 +186,51 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/renderer/**/*.js"],
-    languageOptions: {
-      globals: {
-        window: "readonly",
-        performance: "readonly",
-        WebAssembly: "readonly",
-        document: "readonly",
-        navigator: "readonly",
-        location: "readonly",
-        console: "readonly",
-        WebGL2RenderingContext: "readonly",
-        XMLHttpRequest: "readonly",
-        OffscreenCanvas: "readonly",
-        Image: "readonly",
-        Touch: "readonly",
-        TouchEvent: "readonly",
-        MouseEvent: "readonly",
-        Uint8Array: "readonly",
-        Uint32Array: "readonly",
-        ArrayBuffer: "readonly",
-        DataView: "readonly",
-        TextDecoder: "readonly",
-        Event: "readonly",
-        URL: "readonly",
-        crypto: "readonly",
-        requestAnimationFrame: "readonly",
-        cancelAnimationFrame: "readonly",
-        setTimeout: "readonly",
-        clearTimeout: "readonly",
-        setInterval: "readonly",
-        addEventListener: "readonly",
-        fetch: "readonly",
-        Module: "writable",
-      },
-    },
+    // The converted renderer, held to the same two rules as src/main,
+    // src/shared and src/tools — `consistent-type-imports` most of all, since a
+    // renderer module that imports a contract for its type alone must emit no
+    // runtime import: build/renderer is served over gw://app and nothing there
+    // resolves src/shared. No `projectService` here: the renderer's program is
+    // tsconfig.renderer.json, which the service does not reach from the root
+    // tsconfig.json, and neither rule needs type information.
+    files: ["src/renderer/**/*.ts"],
     rules: {
-      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/consistent-type-imports": "error",
+    },
+  },
+  {
+    // The six page singletons index.html loads with a `<script>` tag, listed
+    // rather than globbed because being a classic script is a property of these
+    // files and not of a directory. A classic script is exactly a file with no
+    // top-level `import` or `export`: one of either makes it an ES module, and
+    // `harness.ts`'s `var Module` then stops being the global binding the
+    // generated glue redeclares (AGENTS.md, "Load-bearing constraints"). So the
+    // two rules that would forbid what that costs are relaxed here, and only
+    // here:
+    //   - `no-var`, which typescript-eslint turns on for every `.ts`, is what
+    //     the redeclaration needs;
+    //   - `import()` type annotations are the only way left to name a contract,
+    //     since `import type` is still a top-level import statement. `prefer`
+    //     stays on, so a *value* import is still required to be a type import
+    //     where one belongs.
+    files: [
+      "src/renderer/commands.ts",
+      "src/renderer/diagnostics.ts",
+      "src/renderer/harness.ts",
+      "src/renderer/loading.ts",
+      "src/renderer/settings.ts",
+      "src/renderer/enhancement-settings.ts",
+    ],
+    rules: {
+      "no-var": "off",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { disallowTypeAnnotations: false },
+      ],
     },
   },
   {
