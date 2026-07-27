@@ -105,7 +105,11 @@ Chromium's derived network cache is cleared at startup; otherwise it duplicates
 hundreds of megabytes of already-resident native chunks. This does not remove
 or redownload the canonical chunk store. `image.fileSize` stays synchronous
 because the snapshot metadata is obtained before the Emscripten glue is
-appended.
+appended. Adjacent demand chunks already queued in the same renderer turn share
+one bounded range request and are split back into compact cache entries; the
+eight-request ceiling continues to count chunks, not HTTP requests. A
+multi-chunk `image.cacheAsync` queues its whole range so the same scheduler can
+use all eight slots while demand retains priority over queued prefetch.
 
 Download concurrency is capped at eight. This is a conduct constraint as well
 as a performance setting: every installation uses the public client access key

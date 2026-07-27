@@ -112,6 +112,7 @@
     snapshotTotalUs: 0,
     snapshotMinUs: 0,
     snapshotMaxUs: 0,
+    snapshotMemoryReads: 0,
     memoryHits: 0,
     nativeHits: 0,
     coalesced: 0,
@@ -345,11 +346,12 @@
       announceCapture('Performance problem marked.');
     },
     event: recordEvent,
+    // This is per readAsync. The cache() counters below are per chunk, so
+    // mixing them would produce a ratio with two different denominators.
     snapshot(durationUs, bytes, source) {
       observe(metrics, 'snapshot', durationUs, 'snapshotReads');
       metrics.snapshotBytes += bytes;
-      if (source === 'memory') metrics.memoryHits++;
-      else if (source === 'native') metrics.nativeHits++;
+      if (source === 'memory') metrics.snapshotMemoryReads++;
       traceMark('gw.snapshot.resolve');
     },
     cache(source) {

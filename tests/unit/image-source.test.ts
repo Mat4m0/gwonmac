@@ -170,41 +170,82 @@ describe("renderer image source", () => {
     source.stop();
   });
 
-  it("shares the eight-request ceiling between demand and prefetch work", async () => {
+  it("batches adjacent queued demand chunks without fetching across a gap", async () => {
+    const { image, source, transport, heap, handle } = makeSource({
+      size: 64 * 5,
+      chunkSize: 64,
+    });
+
+    const first = image.readAsync(handle, 0, null, 0, 16);
+    const adjacent = image.readAsync(handle, 64, null, 64, 16);
+    const afterGap = image.readAsync(handle, 3 * 64, null, 128, 16);
+    await turn();
+
+    assert.equal(transport.requests.length, 2);
+    assert.deepEqual(
+      transport.requests.map(({ start, length, priority }) => ({
+        start,
+        length,
+        priority,
+      })),
+      [
+        { start: 0, length: 128, priority: "demand" },
+        { start: 3 * 64, length: 64, priority: "demand" },
+      ],
+    );
+    assert.equal(source.state().activeDemand, 3, "the ceiling counts chunks");
+
+    transport.serveImmediately();
+    await Promise.all([first, adjacent, afterGap]);
+    assert.deepEqual(heap.subarray(0, 16), snapshotBytes(0, 16));
+    assert.deepEqual(heap.subarray(64, 80), snapshotBytes(64, 16));
+    assert.deepEqual(heap.subarray(128, 144), snapshotBytes(3 * 64, 16));
+    assert.equal(source.stats().fromNative, 3);
+    source.stop();
+  });
+
+  it("counts batched demand chunks toward the shared eight-chunk ceiling", async () => {
     const { image, source, transport, handle } = makeSource({
       size: 64 * 16,
       chunkSize: 64,
     });
 
-    // Four prefetches take four of the eight slots.
+    // All work is queued in one turn. Demand overtakes prefetch, and its six
+    // adjacent chunks share one range request while still consuming six slots.
     for (let chunk = 0; chunk < 4; chunk++) {
       void image.cacheAsync(handle, chunk * 64, 1, () => {}).catch(() => {});
     }
-    // Six demand reads compete for the four that are left.
     const reads = Array.from({ length: 6 }, (_, n) =>
       image.readAsync(handle, (4 + n) * 64, null, 0, 16));
     await turn();
 
-    assert.equal(transport.requests.length, 8, "the ceiling counts both priorities");
+    assert.equal(transport.requests.length, 3);
+    assert.deepEqual(
+      {
+        start: transport.requests[0]!.start,
+        length: transport.requests[0]!.length,
+        priority: transport.requests[0]!.priority,
+      },
+      { start: 4 * 64, length: 6 * 64, priority: "demand" },
+    );
     assert.deepEqual(source.state(), {
       memoryCacheBytes: 0,
       memoryCacheChunks: 0,
       pendingChunks: 10,
-      activeDemand: 4,
-      activePrefetch: 4,
-      queuedDemand: 2,
-      queuedPrefetch: 0,
+      activeDemand: 6,
+      activePrefetch: 2,
+      queuedDemand: 0,
+      queuedPrefetch: 2,
     });
 
-    // A prefetch finishing hands its slot to a queued demand read, not to more
-    // prefetch work.
+    // Completing one range releases all six logical demand slots. The queued
+    // prefetch chunks can then start, but total active chunks never exceeds 8.
     transport.serve(0);
     await turn();
-    assert.equal(transport.requests.length, 9);
-    assert.deepEqual(transport.issued()[8], { start: 8 * 64, priority: "demand" });
-    assert.equal(source.state().activeDemand, 5);
-    assert.equal(source.state().activePrefetch, 3);
-    assert.equal(source.state().queuedDemand, 1);
+    assert.equal(transport.requests.length, 5);
+    assert.equal(source.state().activeDemand, 0);
+    assert.equal(source.state().activePrefetch, 4);
+    assert.equal(source.state().queuedPrefetch, 0);
 
     transport.serveImmediately();
     await Promise.all(reads);
@@ -238,12 +279,13 @@ describe("renderer image source", () => {
     source.stop();
   });
 
-  it("holds the eight-request ceiling, and releases a slot when a request completes", async () => {
+  it("runs one multi-chunk cacheAsync eight-wide and reports every chunk", async () => {
     const { image, source, transport } = makeSource({ size: 64 * 12, chunkSize: 64 });
 
-    for (let chunk = 0; chunk < 12; chunk++) {
-      void image.cacheAsync(1, chunk * 64, 1, () => {}).catch(() => {});
-    }
+    const progress: number[] = [];
+    const prefetch = image.cacheAsync(1, 0, 64 * 12, (bytes) => {
+      progress.push(bytes);
+    });
     await turn();
 
     assert.equal(transport.requests.length, 8);
@@ -263,6 +305,10 @@ describe("renderer image source", () => {
     assert.equal(transport.requests.length, 9);
     assert.equal(source.state().activePrefetch, 8);
     assert.equal(source.state().queuedPrefetch, 3);
+    transport.serveImmediately();
+    await prefetch;
+    assert.equal(progress.length, 12);
+    assert.equal(progress.reduce((sum, bytes) => sum + bytes, 0), 64 * 12);
     source.stop();
   });
 
@@ -342,7 +388,7 @@ describe("renderer image source", () => {
     source.stop();
   });
 
-  it("does not dead-end after eight simultaneous failures", async () => {
+  it("releases every slot after a batched failure", async () => {
     const { image, source, transport, heap, handle } = makeSource({
       size: 64 * 12,
       chunkSize: 64,
@@ -352,25 +398,49 @@ describe("renderer image source", () => {
     const reads = Array.from({ length: 12 }, (_, chunk) =>
       image.readAsync(handle, chunk * 64, null, 0, 16));
     await turn();
-    assert.equal(transport.requests.length, 8);
+    assert.equal(transport.requests.length, 1);
+    assert.equal(transport.requests[0]!.length, 8 * 64);
     assert.equal(source.state().queuedDemand, 4);
 
-    // Every slot fails. If a failure kept its slot the scheduler would be
-    // permanently full and the four queued chunks would never be requested.
-    for (let index = 0; index < 8; index++) {
-      transport.fail(index, `Game data download failed (HTTP 50${index}).`);
-      await assert.rejects(reads[index]!, new RegExp(`HTTP 50${index}`));
-    }
+    // One failed range rejects its eight affected chunks and releases all
+    // eight logical slots, allowing the remaining batch to run.
+    transport.fail(0, "Game data download failed (HTTP 503).");
+    const failed = await Promise.allSettled(reads.slice(0, 8));
+    assert.ok(failed.every((result) => result.status === "rejected"));
     await turn();
 
-    assert.equal(transport.requests.length, 12, "the queued chunks got the freed slots");
+    assert.equal(transport.requests.length, 2, "the queued chunks got the freed slots");
+    assert.equal(transport.requests[1]!.start, 8 * 64);
+    assert.equal(transport.requests[1]!.length, 4 * 64);
     assert.equal(source.state().activeDemand, 4);
     assert.equal(source.state().queuedDemand, 0);
-    assert.equal(source.lastError(), "Game data download failed (HTTP 507).");
+    assert.equal(source.lastError(), "Game data download failed (HTTP 503).");
 
     transport.serveImmediately();
     await Promise.all(reads.slice(8));
     assert.deepEqual(heap.subarray(0, 16), snapshotBytes(11 * 64, 16));
+    source.stop();
+  });
+
+  it("rejects every affected chunk when a batched response is truncated", async () => {
+    const { image, source, transport, handle } = makeSource({
+      size: 128,
+      chunkSize: 64,
+      bytesFor: (start, length) => snapshotBytes(start, length - 1),
+    });
+
+    const reads = [
+      image.readAsync(handle, 0, null, 0, 16),
+      image.readAsync(handle, 64, null, 64, 16),
+    ];
+    await turn();
+    assert.equal(transport.requests.length, 1);
+
+    transport.serve(0);
+    await assert.rejects(Promise.all(reads), /received 127/);
+    await turn();
+    assert.equal(source.state().activeDemand, 0);
+    assert.equal(source.state().pendingChunks, 0);
     source.stop();
   });
 
@@ -384,24 +454,22 @@ describe("renderer image source", () => {
 
     await image.readAsync(handle, 12, null, 0, 20);
     assert.deepEqual(heap.subarray(0, 20), snapshotBytes(12, 20));
-    assert.deepEqual(transport.issued(), [
-      { start: 0, priority: "demand" },
-      { start: 16, priority: "demand" },
-    ]);
+    assert.deepEqual(transport.issued(), [{ start: 0, priority: "demand" }]);
+    assert.equal(transport.requests[0]!.length, 32);
 
     // Into the tail: chunk 1 is already resident, chunk 2 is 8 bytes long.
     await image.readAsync(handle, 30, null, 64, 10);
     assert.deepEqual(heap.subarray(64, 74), snapshotBytes(30, 10));
-    assert.equal(transport.requests.length, 3);
+    assert.equal(transport.requests.length, 2);
     assert.deepEqual(
-      { start: transport.requests[2]!.start, length: transport.requests[2]!.length },
+      { start: transport.requests[1]!.start, length: transport.requests[1]!.length },
       { start: 32, length: 8 },
     );
 
     // Wholly inside one cached chunk: no transport at all.
     await image.readAsync(handle, 20, null, 128, 4);
     assert.deepEqual(heap.subarray(128, 132), snapshotBytes(20, 4));
-    assert.equal(transport.requests.length, 3);
+    assert.equal(transport.requests.length, 2);
     assert.equal(source.stats().reads, 3);
     assert.ok(source.stats().fromMemory >= 1);
     source.stop();
