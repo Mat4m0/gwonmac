@@ -56,7 +56,7 @@ import {
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { toolboxSelectionChanged } from "./toolbox-policy.js";
+import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
@@ -330,12 +330,12 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
 };
 
 /**
- * Ask before restarting to change which Toolbox tools this launch serves. The
+ * Ask before restarting to change which enhancements this launch serves. The
  * module is chosen once, before the renderer exists, so a relaunch is the only
  * way a tool change can reach the session — and a relaunch closes any game in
  * progress, which is why it is gated exactly like the other two restarts here.
  */
-async function confirmToolboxRestart(win: BrowserWindow): Promise<boolean> {
+async function confirmEnhancementRestart(win: BrowserWindow): Promise<boolean> {
   await resetGameInput(win);
   const { response } = await dialog.showMessageBox(win, {
     type: "warning",
@@ -439,12 +439,12 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
       try {
         const previous = await ctx.getSettings();
-        // Changing a Toolbox tool and restarting are one action, so the two
+        // Changing an enhancement and restarting are one action, so the two
         // surfaces that offer the tools cannot leave a checkbox claiming
         // something the running session is not doing. Cancelling saves
         // nothing: the answer the player sees is the answer on disk.
-        const restart = toolboxSelectionChanged(previous, patch);
-        if (restart && !(await confirmToolboxRestart(win))) return previous;
+        const restart = enhancementSelectionChanged(previous, patch);
+        if (restart && !(await confirmEnhancementRestart(win))) return previous;
         const saved = await ctx.updateSettings(patch);
         if (previous.dataStrategy !== saved.dataStrategy) {
           logEvent({ k: "launcher.strategyChanged",
@@ -466,7 +466,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       await resetGameInput(win);
       try {
         const previous = await ctx.getSettings();
-        const restart = toolboxSelectionChanged(previous, DEFAULT_SETTINGS);
+        const restart = enhancementSelectionChanged(previous, DEFAULT_SETTINGS);
         const { response } = await dialog.showMessageBox(win, {
           type: "warning",
           buttons: [
@@ -477,7 +477,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           cancelId: 1,
           message: "Reset launcher settings?",
           detail: restart
-            ? "Display, controls, window size and position, and advanced settings return to their defaults, then the app restarts to apply the Toolbox tools. Downloaded game data and your saved login stay untouched."
+            ? "Display, controls, window size and position, and advanced settings return to their defaults, then the app restarts to apply the GWonMac Tools settings. Downloaded game data and your saved login stay untouched."
             : "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
         });
         if (response !== 0) return null;

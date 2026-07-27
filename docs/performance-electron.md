@@ -7,8 +7,8 @@ captures establish improvements.
 
 Every number below is something that was measured, not something that must
 hold. The thresholds a run passes or fails on belong to the code that enforces
-them — `scripts/toolbox-live/scenarios.ts` for the paired live benchmark and
-`scripts/toolbox-live/acceptance.ts` for the common gates — so read a figure
+them — `scripts/enhancements-live/scenarios.ts` for the paired live benchmark and
+`scripts/enhancements-live/acceptance.ts` for the common gates — so read a figure
 here as history, and change a budget there.
 
 ## Baseline environment
@@ -191,7 +191,7 @@ Five clean Level 1 candidate runs are required for final release acceptance.
 Record every run here, including failures and profiler contamination; never
 replace the baseline with a single favorable run.
 
-## 0.0.2 Toolbox release captures
+## 0.0.2 Enhancement release captures
 
 Recorded July 25, 2026 on the default Retina 2× setting. Each candidate is a
 60-second disabled baseline followed by a 60-second enabled capture. All five
@@ -244,12 +244,12 @@ counter; GPU-process RSS was approximately 122–140 MiB during these runs.
 The corrected 1× build passed the paired live performance gate:
 
 ```text
-phase duration               60 s baseline + 60 s Toolbox
+phase duration               60 s baseline + 60 s Enhancement
 frame samples                3598 / 3600
 baseline p50/p95/p99         16.7 / 18.4 / 18.6 ms
-Toolbox p50/p95/p99          16.7 / 18.3 / 18.6 ms
-Toolbox p95 regression       -0.54%
-frames >20/33/50 ms          0 / 0 / 0 with Toolbox
+Enhancement p50/p95/p99          16.7 / 18.3 / 18.6 ms
+Enhancement p95 regression       -0.54%
+frames >20/33/50 ms          0 / 0 / 0 with Enhancement
 hook callbacks               3602
 rejected snapshots           0
 snapshot render p95          <=0.1 ms

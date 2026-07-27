@@ -11,11 +11,11 @@ import {
   TEMPLATE_SAVE_TRANSFORM_ABI,
   type KnownTemplateSaveBuild,
 } from "./template-save-compat.js";
-import type { KnownToolboxBuild } from "./toolbox-builds.js";
+import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import {
-  TOOLBOX_TRANSFORM_ABI,
-  transformToolboxWasm,
-} from "./toolbox-transform.js";
+  ENHANCEMENT_TRANSFORM_ABI,
+  transformEnhancementWasm,
+} from "./enhancement-transform.js";
 
 /**
  * The exact records matched while certifying the official client hash. The
@@ -31,18 +31,18 @@ export type ClientCertification =
   | {
       state: "certified";
       templateSaveBuild: KnownTemplateSaveBuild;
-      toolboxBuild: KnownToolboxBuild;
+      enhancementBuild: KnownEnhancementBuild;
     };
 
 export interface ClientModulePreparationFailure {
-  readonly stage: "template-save" | "toolbox";
+  readonly stage: "template-save" | "enhancement";
   readonly error: unknown;
 }
 
 export interface PreparedClientModule {
   readonly wasmPath: string;
   readonly state: ClientCompatibilityState;
-  readonly toolboxBuild: KnownToolboxBuild | null;
+  readonly enhancementBuild: KnownEnhancementBuild | null;
   readonly failure: ClientModulePreparationFailure | null;
 }
 
@@ -50,9 +50,9 @@ export interface PrepareClientModuleOptions {
   readonly officialWasmPath: string;
   readonly officialSha256: string;
   readonly certification: ClientCertification;
-  readonly toolboxRequested: boolean;
+  readonly enhancementRequested: boolean;
   readonly compatibilityCacheRoot: string;
-  readonly toolboxCacheRoot: string;
+  readonly enhancementCacheRoot: string;
 }
 
 function templateSaveCache(
@@ -68,14 +68,14 @@ function templateSaveCache(
   };
 }
 
-function toolboxCache(
-  build: KnownToolboxBuild,
+function enhancementCache(
+  build: KnownEnhancementBuild,
   cacheRoot: string,
 ): DerivedWasmCache {
   return {
     inputSha256: build.sha256,
     cacheRoot,
-    transformAbi: TOOLBOX_TRANSFORM_ABI,
+    transformAbi: ENHANCEMENT_TRANSFORM_ABI,
     buildFingerprint: buildFingerprint(build),
     // The kernel is built from source, so its output is verified against the
     // hash recorded during atomic publication rather than a source constant.
@@ -83,44 +83,44 @@ function toolboxCache(
   };
 }
 
-export async function inspectToolboxCache(
-  build: KnownToolboxBuild,
+export async function inspectEnhancementCache(
+  build: KnownEnhancementBuild,
   cacheRoot: string,
 ): Promise<"valid" | "missing-or-invalid"> {
-  return inspectDerivedWasmCache(toolboxCache(build, cacheRoot));
+  return inspectDerivedWasmCache(enhancementCache(build, cacheRoot));
 }
 
 async function discardUnsupportedCaches(
   compatibilityCacheRoot: string,
-  toolboxCacheRoot: string,
+  enhancementCacheRoot: string,
 ): Promise<ClientModulePreparationFailure | null> {
-  const [compatibility, toolbox] = await Promise.allSettled([
+  const [compatibility, enhancement] = await Promise.allSettled([
     discardDerivedWasm(compatibilityCacheRoot),
-    discardDerivedWasm(toolboxCacheRoot),
+    discardDerivedWasm(enhancementCacheRoot),
   ]);
   if (compatibility.status === "rejected") {
     return { stage: "template-save", error: compatibility.reason };
   }
-  return toolbox.status === "rejected"
-    ? { stage: "toolbox", error: toolbox.reason }
+  return enhancement.status === "rejected"
+    ? { stage: "enhancement", error: enhancement.reason }
     : null;
 }
 
-async function discardToolboxCache(
+async function discardEnhancementCache(
   cacheRoot: string,
 ): Promise<ClientModulePreparationFailure | null> {
   try {
     await discardDerivedWasm(cacheRoot);
     return null;
   } catch (error) {
-    return { stage: "toolbox", error };
+    return { stage: "enhancement", error };
   }
 }
 
 /**
  * Select and prepare the one client module this launch serves.
  *
- * The chain is fixed: official -> template-save -> optional Toolbox. Unknown
+ * The chain is fixed: official -> template-save -> optional Enhancement. Unknown
  * and disabled stages delete caches they cannot use. A transform failure is
  * graceful and leaves the last good cache intact, but never serves it for a
  * different input.
@@ -132,30 +132,30 @@ export async function prepareClientModule(
     officialWasmPath,
     officialSha256,
     certification,
-    toolboxRequested,
+    enhancementRequested,
     compatibilityCacheRoot,
-    toolboxCacheRoot,
+    enhancementCacheRoot,
   } = options;
 
   if (certification.state === "uncertified") {
     return {
       wasmPath: officialWasmPath,
       state: "uncertified",
-      toolboxBuild: null,
+      enhancementBuild: null,
       failure: await discardUnsupportedCaches(
         compatibilityCacheRoot,
-        toolboxCacheRoot,
+        enhancementCacheRoot,
       ),
     };
   }
 
   const templateSaveBuild = certification.templateSaveBuild;
   if (templateSaveBuild.sha256 !== officialSha256) {
-    await discardUnsupportedCaches(compatibilityCacheRoot, toolboxCacheRoot);
+    await discardUnsupportedCaches(compatibilityCacheRoot, enhancementCacheRoot);
     return {
       wasmPath: officialWasmPath,
       state: "uncertified",
-      toolboxBuild: null,
+      enhancementBuild: null,
       failure: {
         stage: "template-save",
         error: new Error("template-save certification does not match client hash"),
@@ -171,13 +171,13 @@ export async function prepareClientModule(
       (base) => rewriteTemplateSaveWasm(base, templateSaveBuild),
     );
   } catch (error) {
-    // The Toolbox input cannot exist if its required floor failed. Keep the
-    // compatibility cache's last good entry, but remove every Toolbox entry.
-    await discardDerivedWasm(toolboxCacheRoot).catch(() => undefined);
+    // The Enhancement input cannot exist if its required floor failed. Keep the
+    // compatibility cache's last good entry, but remove every Enhancement entry.
+    await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
       wasmPath: officialWasmPath,
       state: "uncertified",
-      toolboxBuild: null,
+      enhancementBuild: null,
       failure: { stage: "template-save", error },
     };
   }
@@ -186,31 +186,31 @@ export async function prepareClientModule(
     return {
       wasmPath: templateSaveWasm,
       state: "template-only",
-      toolboxBuild: null,
-      failure: await discardToolboxCache(toolboxCacheRoot),
+      enhancementBuild: null,
+      failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
 
-  const toolboxBuild = certification.toolboxBuild;
-  if (toolboxBuild.sha256 !== templateSaveBuild.outputSha256) {
-    await discardDerivedWasm(toolboxCacheRoot).catch(() => undefined);
+  const enhancementBuild = certification.enhancementBuild;
+  if (enhancementBuild.sha256 !== templateSaveBuild.outputSha256) {
+    await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
       wasmPath: templateSaveWasm,
       state: "template-only",
-      toolboxBuild: null,
+      enhancementBuild: null,
       failure: {
-        stage: "toolbox",
-        error: new Error("Toolbox certification does not match template-save output"),
+        stage: "enhancement",
+        error: new Error("Enhancement certification does not match template-save output"),
       },
     };
   }
 
-  if (!toolboxRequested) {
+  if (!enhancementRequested) {
     return {
       wasmPath: templateSaveWasm,
       state: "certified",
-      toolboxBuild: null,
-      failure: await discardToolboxCache(toolboxCacheRoot),
+      enhancementBuild: null,
+      failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
 
@@ -218,19 +218,19 @@ export async function prepareClientModule(
     return {
       wasmPath: await prepareDerivedWasm(
         templateSaveWasm,
-        toolboxCache(toolboxBuild, toolboxCacheRoot),
-        (base) => transformToolboxWasm(base, toolboxBuild),
+        enhancementCache(enhancementBuild, enhancementCacheRoot),
+        (base) => transformEnhancementWasm(base, enhancementBuild),
       ),
       state: "certified",
-      toolboxBuild,
+      enhancementBuild,
       failure: null,
     };
   } catch (error) {
     return {
       wasmPath: templateSaveWasm,
       state: "certified",
-      toolboxBuild: null,
-      failure: { stage: "toolbox", error },
+      enhancementBuild: null,
+      failure: { stage: "enhancement", error },
     };
   }
 }

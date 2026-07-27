@@ -26,7 +26,7 @@ export interface GamePaths {
   previousArtifacts: string;
   rejectedClient: string;
   compatibility: string;
-  toolbox: string;
+  enhancements: string;
   chunks: string;
   bootChunks: string;
   cacheClearRequest: string;
@@ -47,7 +47,7 @@ export function gamePaths(userData: string): GamePaths {
     previousArtifacts: clientGenerationPaths(artifacts).previous,
     rejectedClient: path.join(game, "rejected-client.json"),
     compatibility: path.join(game, "compatibility"),
-    toolbox: path.join(game, "toolbox"),
+    enhancements: path.join(game, "enhancements"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),
@@ -74,8 +74,34 @@ export function documentDirectories(paths: GamePaths): string[] {
     paths.artifacts,
     paths.previousArtifacts,
     paths.compatibility,
-    paths.toolbox,
+    paths.enhancements,
   ];
+}
+
+/**
+ * Derived cache written by 2026.7.0-beta.1. Remove this after the next release;
+ * its contents are never migrated because transform ABI 4 cannot consume them.
+ */
+export function obsoleteEnhancementCachePath(paths: GamePaths): string {
+  return path.join(paths.game, "toolbox");
+}
+
+export async function discardObsoleteEnhancementCache(
+  paths: GamePaths,
+  remove: (
+    directory: string,
+    options: { recursive: true; force: true },
+  ) => Promise<unknown>,
+): Promise<unknown | null> {
+  try {
+    await remove(obsoleteEnhancementCachePath(paths), {
+      recursive: true,
+      force: true,
+    });
+    return null;
+  } catch (error) {
+    return error;
+  }
 }
 
 /** The published manifest of one client generation (installed, previous or stage). */

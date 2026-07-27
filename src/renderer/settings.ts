@@ -194,10 +194,10 @@
   // Both tool surfaces are rendered from the settings main returned, never
   // from requested state. Declining the required restart therefore restores
   // what is actually running.
-  const toolSettings = window.gwToolSettings.create({
+  const toolSettings = window.gwEnhancementSettings.create({
     form,
     byId,
-    selection: window.gwNative.init.toolboxSelection,
+    selection: window.gwNative.init.enhancementSelection,
     persist: persistSettings,
     current: () => currentSettings,
   });
@@ -261,7 +261,7 @@
     renderClientCompatibility(
       document,
       session,
-      window.gwNative.init.toolboxSelection,
+      window.gwNative.init.enhancementSelection,
     );
     return session;
   }
@@ -285,7 +285,7 @@
       await import('./client-compatibility-notice.js');
     if (!compatibilityNotice.compatibilityReport(
       compatibility,
-      window.gwNative.init.toolboxSelection,
+      window.gwNative.init.enhancementSelection,
     ).degraded) return;
     const settings = await loadSettings().catch(() => null);
     if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;

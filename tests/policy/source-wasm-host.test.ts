@@ -21,10 +21,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  * second list would drift from it.
  */
 function classicScriptSources(html: string): string[] {
-  return [...html.matchAll(/<script\b([^>]*)>/gu)]
+  return [...html.matchAll(/<script\b([^>]*)>/giu)]
     .map((tag) => tag[1] ?? "")
-    .filter((attributes) => !/\btype\s*=\s*["']module["']/u.test(attributes))
-    .map((attributes) => /\bsrc\s*=\s*["']([^"']+)["']/u.exec(attributes)?.[1])
+    .filter((attributes) => !/\btype\s*=\s*["']module["']/iu.test(attributes))
+    .map((attributes) => /\bsrc\s*=\s*["']([^"']+)["']/iu.exec(attributes)?.[1])
     .filter((src) => src !== undefined);
 }
 
@@ -294,7 +294,7 @@ test("the WASM section codec has exactly one home", async () => {
   // The recertifier is developer tooling and lives in src/tools/, so it names
   // the same codec one directory further away (P4.4).
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
-    ["src/main/core/toolbox-transform.ts", './wasm-binary.js'],
+    ["src/main/core/enhancement-transform.ts", './wasm-binary.js'],
     ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
     ["src/tools/template-save-recert.ts", '../main/core/wasm-binary.js'],
   ];
@@ -345,7 +345,7 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
   );
 });
 
-test("the served module, not requested settings, decides whether Toolbox imports", async () => {
+test("the served module, not requested settings, decides whether Enhancement imports", async () => {
   const harness = await readFile(
     path.join(root, "src/renderer/harness.ts"),
     "utf8",
@@ -357,19 +357,19 @@ test("the served module, not requested settings, decides whether Toolbox imports
   assert.ok(initialized.length > 0, "runtime initialization was not found");
   assert.match(
     initialized,
-    /Object\.values\(init\.toolboxSelection\)\.some\(Boolean\)/u,
+    /Object\.values\(init\.enhancementSelection\)\.some\(Boolean\)/u,
   );
   assert.match(
     initialized,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'toolbox_manifest',\s*\)\.length === 1/u,
+    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length === 1/u,
   );
   assert.match(
     initialized,
-    /installToolbox\(\s*toolboxInstance,\s*toolboxModule,\s*init\.toolboxSelection,\s*init\.toolboxAutomation,/u,
+    /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementSelection,\s*init\.enhancementAutomation,/u,
   );
   assert.ok(
-    initialized.indexOf("customSections") < initialized.indexOf("import('./toolbox.js')"),
-    "Toolbox was imported before the served module proved its manifest",
+    initialized.indexOf("customSections") < initialized.indexOf("import('./enhancements.js')"),
+    "Enhancement was imported before the served module proved its manifest",
   );
   assert.doesNotMatch(initialized, /init\.nativeCursor/u);
 });

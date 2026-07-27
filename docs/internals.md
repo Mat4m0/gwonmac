@@ -22,7 +22,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
-  default-on exact-build Toolbox foundation
+  default-on exact-build Enhancement foundation
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,
@@ -49,7 +49,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/diagnostics/`   | closed event schema, export detector, pattern scanner             |
 | `src/preload/preload.body.cjs` | sandbox-compatible bridge; `scripts/generate-preload.ts` splices the canonical constants above it |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
-| `src/toolbox-kernel/`     | freestanding read-only game-state companion WASM                  |
+| `src/companion-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
 | `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
@@ -177,7 +177,7 @@ the rule it implements against GitHub's own `prerelease` flag.
 its chunk store, snapshot metadata, artifact directory, and selected WASM can
 never come from different client generations. Full-file protocol responses stream from disk, allowing
 `WebAssembly.instantiateStreaming` to compile without first retaining the
-whole module in main-process memory. Cached Toolbox validation also streams
+whole module in main-process memory. Cached Enhancement validation also streams
 both hashes; the official bytes are loaded only for a cold transform. Asyncify
 is not a production fallback.
 
@@ -316,7 +316,7 @@ arbitrary-file bridge.
 ### Which of three states a client build is in
 
 The two transforms are chained but keyed by **different** hashes: template-save
-by the official build's hash, Toolbox by the hash of what the template-save
+by the official build's hash, Enhancement by the hash of what the template-save
 transform produces. Certification can therefore succeed at step one and fail at
 step two — templates saved, cursors gone — which is the normal intermediate
 during a recertification, because the transform that breaks saving is fixed
@@ -326,7 +326,7 @@ before the one that draws a pointer.
 `uncertified`, `template-only`, or `certified`. It is the single owner, and
 every consumer asks it rather than composing the chain again — the launcher
 notice, the settings status, the diagnostics gauges, the weekly canary, and
-`pnpm toolbox:doctor`. A certified build whose template-save transform throws
+`pnpm enhancements:doctor`. A certified build whose template-save transform throws
 is published as `uncertified`, because it is degraded exactly that far.
 
 `ClientRuntime` publishes the state once per activated client as
@@ -334,22 +334,22 @@ is published as `uncertified`, because it is degraded exactly that far.
 `wasm.templateSaveCompatible` boolean is derived from the same object rather
 than computed separately, so the two cannot disagree. The renderer reads the
 state over `gw:client:session` together with the client hash and whether this
-session actually prepared the Toolbox module. The renderer combines those
+session actually prepared the Enhancement module. The renderer combines those
 facts with the canonical per-tool selection; the effective bit keeps a
 certified build whose transform failed from being reported as available.
 `src/renderer/client-compatibility-notice.ts` turns them into the sentences
 both surfaces show.
 
-### Toolbox instrumentation
+### Enhancement instrumentation
 
-The official `Gw.jspi.wasm` remains canonical. A session with the Toolbox
+The official `Gw.jspi.wasm` remains canonical. A session with the Enhancement
 switched off applies only the certified template-save compatibility transform
-described above: it does no Toolbox transform, fetches no kernel, installs no
-Toolbox hook, starts no snapshot observer, and contains no Toolbox UI.
+described above: it does no Enhancement transform, fetches no kernel, installs no
+Enhancement hook, starts no snapshot observer, and contains no Enhancement UI.
 
 The two shipped tools are independent. `nativeCursor` defaults to **true** and
 reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
-owns the only added overlay, `src/renderer/toolbox-readout.ts`: a fixed line at
+owns the only added overlay, `src/renderer/enhancement-readout.ts`: a fixed line at
 the top centre of the game view showing the selected target's distance in game
 units and range band. It is the last stage of the read-only pipeline — manifest
 → transform/kernel → snapshot → decoder → here — and writes nothing back. It
@@ -357,8 +357,8 @@ renders nothing without a selected target, on a loading screen, after a torn
 read, or on an unsupported build. It is `pointer-events: none` and
 `aria-live="off"`.
 
-`TOOLBOX_TOOLS` and `ToolboxSelection` live in the shared contracts. There is
-no stored or transported master switch: `toolbox-policy.ts` derives whether
+`ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. There is
+no stored or transported master switch: `enhancement-policy.ts` derives whether
 main should prepare the transformed module from whether any tool is selected,
 plus the development-only automation gate. Main snapshots the per-tool record
 once at startup and sends that one record in `RendererInit`; the generated
@@ -369,31 +369,31 @@ mechanically testable claim.
 
 A running session cannot honour a tool change because the kernel feature flags
 are fixed at initialization, so the write and restart are one action:
-`settingsSet` asks `toolboxSelectionChanged` whether the patch alters a tool,
+`settingsSet` asks `enhancementSelectionChanged` whether the patch alters a tool,
 confirms before saving, and relaunches immediately. Both launcher and Settings
 re-render from main's returned settings, so a declined restart cannot leave a
 checkbox claiming something the session is not doing.
 
 The harness uses request and effective state without conflating them. A tool
-selection or development automation requests Toolbox, while the
-`toolbox_manifest` on the actual instantiated WebAssembly module proves that
+selection or development automation requests Enhancement, while the
+`enhancement_manifest` on the actual instantiated WebAssembly module proves that
 this launch received a certified transform. Only when both are true does it
-import `toolbox.js`. A requested but uncertified launch therefore imports no
-Toolbox module and fetches no kernel. The kernel receives one bit per tool;
+import `enhancements.js`. A requested but uncertified launch therefore imports no
+Enhancement module and fetches no kernel. The kernel receives one bit per tool;
 disabled tools perform no per-tick collection. Development automation may force
 the core observation snapshot for live scenarios, but it neither selects a
 player-facing surface nor couples the two tools in packaged builds.
 
 After publication, certification matches the official hash to the exact
 template-save record and then matches that record's output hash to the exact
-Toolbox record. `client-module.ts` consumes those records directly and owns the
-official → template-save → optional Toolbox chain, cache reuse, stale-cache
+Enhancement record. `client-module.ts` consumes those records directly and owns the
+official → template-save → optional Enhancement chain, cache reuse, stale-cache
 discard, and atomic publication. Disabled and unsupported stages delete their
-cache. A Toolbox transform failure serves the verified template-save module;
+cache. A Enhancement transform failure serves the verified template-save module;
 an uncertified build serves the official module, so the game stays playable
 and the cursor falls back to the plain macOS pointer.
 
-`toolbox-transform.ts` is the pure byte transform. The manifest's ordered
+`enhancement-transform.ts` is the pure byte transform. The manifest's ordered
 layout fields generate the embedded `layoutWords`; the renderer does not
 maintain a second field-order list.
 
@@ -403,7 +403,7 @@ Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
 instrumentation remains.
 
 After runtime initialization in an enabled, manifested session, the renderer
-dynamically loads the Toolbox runtime, allocates its enabled bounded regions
+dynamically loads the Enhancement runtime, allocates its enabled bounded regions
 through the game's allocator, instantiates the dependency-free
 `wasm32-unknown-unknown` companion against the exported memory, installs its
 callback, and enables the dispatcher last. The callback calls the relocated
@@ -415,7 +415,7 @@ compile-time size assertions, checked pointer arithmetic, and an odd/even
 sequence lock. It contains no pointers. When target observation is enabled, the
 snapshot observer reads at most once per animation frame and rejects unknown
 flags, invalid IDs/types/bands, and non-finite values. It publishes structured
-`gwToolboxState`; only the separately selected readout renders that state. The
+`gwCompanionState`; only the separately selected readout renders that state. The
 cursor consumer is installed and polled only when `nativeCursor` is selected,
 and reaches production DOM only as an inline `cursor` on the game canvas;
 losing the cursor clears that value and nothing else. No memory view or
@@ -461,7 +461,7 @@ The generated client mounts Emscripten IDBFS at `app:` and restores
 file is about 919 MB, while the official WASM linear memory is about 369 MiB.
 Restoring IDBFS can therefore create a short-lived RSS peak above 1 GiB in both
 the browser/main and renderer processes even though steady resident memory
-falls sharply after the pages become reclaimable. This is not Toolbox state,
+falls sharply after the pages become reclaimable. This is not Enhancement state,
 the 256 MB snapshot LRU, or Chromium's network cache.
 
 Avoiding that peak requires an architectural replacement for the official
@@ -776,13 +776,13 @@ two that read _none_ today are recorded rather than quietly kept.
 
 | Claim | Where it is made | What executes to prove it |
 | --- | --- | --- |
-| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-toolbox-surface.test.ts` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/toolbox-policy.js` in a child process with `app.isPackaged` forced true and reads `TOOLBOX_AUTOMATION_ENABLED` as `false` for every value of `GW_TOOLBOX_AUTOMATION`, leaving `toolboxEnabledFor` and the player's explicit per-tool selection as the only way in |
+| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-enhancement-surface.test.ts` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/enhancement-policy.js` in a child process with `app.isPackaged` forced true and reads `ENHANCEMENT_AUTOMATION_ENABLED` as `false` for every value of `GW_ENHANCEMENT_AUTOMATION`, leaving `enhancementsEnabledFor` and the player's explicit per-tool selection as the only way in |
 | The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.ts` for publication, corruption repair and rollback |
 | No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |
 | A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
 | The app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-reaches-github-only-when-asked.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts **zero** api.github.com requests across a launch with the defaults, then exactly one across a launch with the box ticked. The three unit tests underneath it prove constituents, not the claim: `tests/unit/settings.test.ts` that the default is `false`, `tests/unit/release-notice.test.ts` and `tests/unit/update-action.test.ts` that the check itself behaves |
-| The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-toolbox-surface.test.ts` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/toolbox-cursor.spec.ts` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.ts` for what is tracked |
+| The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/enhancement-cursor.spec.ts` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.ts` for what is tracked |
 | Releases are ad-hoc signed and the shipped fuses hold | website FAQ | `tests/packaged-smoke.ts` (`codesign --verify --deep --strict`, the nine fuse states), `tests/policy/fuses.test.ts` |
 | Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.ts` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.ts` for the resolutions shown beside each scale |
 | "Up to 60 FPS", "tuned for Apple Silicon" | website capability facts | **none.** No test asserts a frame rate, and `tests/packaged-smoke.ts` does not assert the packaged binary's architecture |
@@ -820,17 +820,17 @@ change for investigation. The canary does not prove:
 
 - a real account completes login;
 - ANGLE/Metal renders the real client correctly on every advertised Mac;
-- that the Toolbox transform still applies cleanly to today's client. The
+- that the Enhancement transform still applies cleanly to today's client. The
   profile it seeds sets `nativeCursor: false`, so the live run exercises the
-  template-save transform and the certification tables but never the Toolbox
+  template-save transform and the certification tables but never the Enhancement
   one — a non-default path since the setting started defaulting to `true`;
 
 Those are explicit live release gates, not assumptions hidden behind unit
 tests.
 
-Toolbox development uses the layered, cached-safe workflow in
-`docs/toolbox-development.md`. Unknown client hashes always use the official
-WASM unchanged, and a live Toolbox run cannot update the client unless update
+Enhancement development uses the layered, cached-safe workflow in
+`docs/enhancement-development.md`. Unknown client hashes always use the official
+WASM unchanged, and a live Enhancement run cannot update the client unless update
 permission is explicit.
 
 The dependency audit has one explicit exception for

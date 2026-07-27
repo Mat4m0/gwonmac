@@ -397,6 +397,9 @@ test.describe("Electron application", () => {
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
+      await page.waitForFunction(
+        () => (window.Module as GameModule | undefined)?.socket !== undefined,
+      );
       const externalBefore = await app.evaluate(() => process.memoryUsage().external);
       const result = await page.evaluate(async () => {
         const host = (window.Module as GameModule | undefined)?.socket;

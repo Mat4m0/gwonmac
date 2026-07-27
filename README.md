@@ -83,7 +83,7 @@ pnpm dev
 ```
 
 Rust is a build prerequisite, not an optional extra: every entry point runs
-`pnpm build`, which compiles `src/toolbox-kernel/lib.rs` to WebAssembly with
+`pnpm build`, which compiles `src/companion-kernel/lib.rs` to WebAssembly with
 `rustc`. `rust-toolchain.toml` pins the compiler version and the
 `wasm32-unknown-unknown` target, so rustup installs both on the first build.
 
@@ -200,7 +200,7 @@ Upstream authors:
   from.
 - **[Jon (3vcloud)](https://github.com/3vcloud)** — [gwdevhub](https://github.com/gwdevhub)
   maintainer and contributor.
-- **[GWToolbox](https://gwtoolbox.com)** — contributed the macOS launch
+- **[GWToolbox++](https://gwtoolbox.com)** — contributed the macOS launch
   wrapper that this app's native host grew out of.
 
 Upstream is licensed GPL-3.0, and so is this fork. If you find this project

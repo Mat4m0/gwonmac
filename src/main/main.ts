@@ -9,7 +9,7 @@ import {
   type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
-  type ToolboxSelection,
+  type EnhancementSelection,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
@@ -41,13 +41,16 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
-import { documentDirectories } from "./core/paths.js";
+import {
+  discardObsoleteEnhancementCache,
+  documentDirectories,
+} from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
-  TOOLBOX_AUTOMATION_ENABLED,
-  toolboxEnabledFor,
-  toolboxSelectionFor,
-} from "./toolbox-policy.js";
+  ENHANCEMENT_AUTOMATION_ENABLED,
+  enhancementsEnabledFor,
+  enhancementSelectionFor,
+} from "./enhancement-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,
@@ -250,11 +253,11 @@ async function applyPendingGameStorageClear(): Promise<void> {
 function buildWindowHost(
   clientRuntime: ClientRuntime,
   sockets: SocketManager,
-  toolboxSelection: ToolboxSelection,
+  enhancementSelection: EnhancementSelection,
 ): WindowHost {
   return {
     sockets,
-    toolboxSelection,
+    enhancementSelection,
     getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
@@ -295,6 +298,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
+  const obsoleteCacheError = await discardObsoleteEnhancementCache(
+    gamePaths(),
+    rm,
+  );
+  if (obsoleteCacheError !== null) {
+    // This is a derived beta cache. Failure must not block the canonical client.
+    logEvent({
+      k: "enhancement.obsoleteCacheDiscardFailed",
+      code: errorCode(obsoleteCacheError),
+    });
+  }
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
   logEvent({ k: "electron.ready" });
@@ -308,7 +322,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
-  const toolboxSelection = toolboxSelectionFor(settings);
+  const enhancementSelection = enhancementSelectionFor(settings);
   await prepareWindowState();
   const paths = gamePaths();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
@@ -320,7 +334,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     hostVersion: app.getVersion(),
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
-    toolboxEnabled: toolboxEnabledFor(settings),
+    enhancementsEnabled: enhancementsEnabledFor(settings),
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -375,10 +389,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const win = createMainWindow(buildWindowHost(
     clientRuntime,
     sockets,
-    toolboxSelection,
+    enhancementSelection,
   ));
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
-  if (TOOLBOX_AUTOMATION_ENABLED) {
+  if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
         void startDiagnosticCapture(1).catch((error) => {
@@ -419,7 +433,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   app.on("activate", () => {
     if (!getMainWindow()) {
-      createMainWindow(buildWindowHost(clientRuntime, sockets, toolboxSelection));
+      createMainWindow(buildWindowHost(clientRuntime, sockets, enhancementSelection));
     }
   });
   app.on("child-process-gone", (_event, details) => {

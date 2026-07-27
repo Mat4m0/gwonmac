@@ -8,16 +8,16 @@ import {
   type CertifiedBuildTables,
 } from "../../src/main/client-certification.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
-import { TOOLBOX_BUILDS } from "../../src/main/core/toolbox-builds.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
 
 const OFFICIAL = TEMPLATE_SAVE_BUILDS[0]!;
 const UNKNOWN = "0".repeat(64);
 
-/** The shipped tables with the Toolbox side emptied: state 2, exactly. */
-const withoutToolbox: CertifiedBuildTables = {
+/** The shipped tables with the Enhancement side emptied: state 2, exactly. */
+const withoutEnhancement: CertifiedBuildTables = {
   templateSave: (sha256) =>
     TEMPLATE_SAVE_BUILDS.find((build) => build.sha256 === sha256) ?? null,
-  toolbox: () => null,
+  enhancement: () => null,
 };
 
 describe("client certification", () => {
@@ -33,9 +33,9 @@ describe("client certification", () => {
     // Keyed by the template-save transform's OUTPUT, not by the official hash.
     assert.equal(
       certification.state === "certified"
-        ? certification.toolboxBuild.sha256
+        ? certification.enhancementBuild.sha256
         : null,
-      TOOLBOX_BUILDS[0]!.sha256,
+      ENHANCEMENT_BUILDS[0]!.sha256,
     );
     assert.notEqual(OFFICIAL.sha256, OFFICIAL.outputSha256);
   });
@@ -44,10 +44,10 @@ describe("client certification", () => {
     assert.deepEqual(certifyClientBuild(UNKNOWN), { state: "uncertified" });
   });
 
-  it("reports templates certified and Toolbox not as its own state", () => {
+  it("reports templates certified and Enhancement not as its own state", () => {
     // The recertification intermediate: saving is fixed first, the cursor
     // second. Before this module it was two independent gauges and no state.
-    const certification = certifyClientBuild(OFFICIAL.sha256, withoutToolbox);
+    const certification = certifyClientBuild(OFFICIAL.sha256, withoutEnhancement);
     assert.equal(certification.state, "template-only");
     assert.equal(
       certification.state === "template-only"
@@ -57,12 +57,12 @@ describe("client certification", () => {
     );
   });
 
-  it("stays uncertified when the Toolbox table certifies an unrelated build", () => {
-    // A Toolbox entry that matches the official hash rather than the
+  it("stays uncertified when the Enhancement table certifies an unrelated build", () => {
+    // A Enhancement entry that matches the official hash rather than the
     // template-save output must not promote anything: the chain is ordered.
     const certification = certifyClientBuild(UNKNOWN, {
       templateSave: () => null,
-      toolbox: () => TOOLBOX_BUILDS[0]!,
+      enhancement: () => ENHANCEMENT_BUILDS[0]!,
     });
     assert.deepEqual(certification, { state: "uncertified" });
   });

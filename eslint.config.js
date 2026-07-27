@@ -223,7 +223,7 @@ export default tseslint.config(
       "src/renderer/harness.ts",
       "src/renderer/loading.ts",
       "src/renderer/settings.ts",
-      "src/renderer/toolbox-settings.ts",
+      "src/renderer/enhancement-settings.ts",
     ],
     rules: {
       "no-var": "off",

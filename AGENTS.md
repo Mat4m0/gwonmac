@@ -169,7 +169,7 @@ pnpm check
 ```
 
 The full gate needs a build first. Entry points (`dev`, `package`, `make`,
-`toolbox:*`) build themselves; the `test:*` suites do not, so build once and
+`enhancements:*`) build themselves; the `test:*` suites do not, so build once and
 run them against that output:
 
 ```bash
@@ -206,15 +206,15 @@ pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 When an ArenaNet client update lands, a build is in one of three states and
 `src/main/client-certification.ts` is the only thing that decides which. The
 `client.buildCertification` gauge in a `.gwdiag` names it —
-`certified`, `template-only` (templates save, Toolbox tools cannot load), or
+`certified`, `template-only` (templates save, enhancement tools cannot load), or
 `uncertified` — and `wasm.templateSaveCompatible` is the older boolean
 derived from that same answer. `pnpm template:recertify` re-derives the
 certified build entry by shape rather than by remembered index. It recovers
 indices, not semantics — `internal/upstream/recertify.md` owns the rest.
 
-For Toolbox work, begin with `pnpm toolbox:doctor`, use the offline layers in
-`docs/toolbox-development.md`, and finish with one scoped `toolbox:live`
-scenario. Live Toolbox runs are cached-only unless `--allow-update` is
+For enhancement work, begin with `pnpm enhancements:doctor`, use the offline layers in
+`docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
+scenario. Live enhancement runs are cached-only unless `--allow-update` is
 explicit; do not bypass that guard or use a temporary Electron profile.
 
 Before finishing, check for a second source of truth, retained old paths,

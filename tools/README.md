@@ -35,11 +35,11 @@ forward slashes — so Win32-form paths need normalising and tail-matching.
 ### Production targeted transform
 
 The application and developer CLI share the TypeScript transformer in
-`src/main/core/toolbox-transform.ts`. It accepts only an exact supported hash,
+`src/main/core/enhancement-transform.ts`. It accepts only an exact supported hash,
 clones one selected function, inserts one typed dispatcher, and uses the
 verified null table slot without growing the table:
 
-    pnpm toolbox:transform -- dist/Gw.jspi.wasm build/Gw.toolbox.wasm
+    pnpm enhancements:transform -- dist/Gw.jspi.wasm build/Gw.enhancement.wasm
 
 The former table-growth and all-functions detour experiments were removed.
 They rewrote far more of the client than the production hook requires.
@@ -73,17 +73,17 @@ matches. It is a triage tool for choosing re-derivation targets.
 
     python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
     python3 tools/gensyms.py dist/Gw.jspi.wasm build/
-    pnpm toolbox:transform -- dist/Gw.jspi.wasm build/Gw.toolbox.wasm
+    pnpm enhancements:transform -- dist/Gw.jspi.wasm build/Gw.enhancement.wasm
 
-## Toolbox workspace
+## enhancement workspace
 
-    pnpm toolbox:doctor
-    pnpm toolbox:recertify -- path/to/Gw.jspi.wasm
-    GW_LIVE_SMOKE=1 pnpm toolbox:live -- --scenario target
+    pnpm enhancements:doctor
+    pnpm enhancements:recertify -- path/to/Gw.jspi.wasm
+    GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario target
 
-`toolbox:doctor` is local-only. `toolbox:recertify` reports semantic hook and
+`enhancements:doctor` is local-only. `enhancements:recertify` reports semantic hook and
 table candidates without publishing a transformed client. The live runner is
 cached-only unless `--allow-update` is explicitly supplied and supports at
 most 16 typed scalar observations through `--observe`.
 Its coordinator, fixed gameplay scenarios, and paired performance capture are
-kept in separate modules under `scripts/toolbox-live/`.
+kept in separate modules under `scripts/enhancements-live/`.

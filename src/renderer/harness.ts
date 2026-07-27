@@ -407,35 +407,35 @@ Module = {
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
     const init = native().init;
-    // The module is the effective truth. Main may have requested Toolbox for a
+    // The module is the effective truth. Main may have requested Enhancement for a
     // selected tool, but an uncertified build is served without the manifest;
-    // that launch must not import Toolbox or fetch its kernel. Conversely, the
+    // that launch must not import Enhancement or fetch its kernel. Conversely, the
     // selection is one generated record, so adding a canonical tool cannot
     // leave this gate hand-copying an incomplete list.
-    const toolboxRequested =
-      init.toolboxAutomation ||
-      Object.values(init.toolboxSelection).some(Boolean);
+    const enhancementRequested =
+      init.enhancementAutomation ||
+      Object.values(init.enhancementSelection).some(Boolean);
     if (
-      toolboxRequested
+      enhancementRequested
       && gameWasmInstance
       && gameWasmModule
       && WebAssembly.Module.customSections(
         gameWasmModule,
-        'toolbox_manifest',
+        'enhancement_manifest',
       ).length === 1
     ) {
-      const toolboxInstance = gameWasmInstance;
-      const toolboxModule = gameWasmModule;
-      void import('./toolbox.js')
-        .then(({ installToolbox }) =>
-          installToolbox(
-            toolboxInstance,
-            toolboxModule,
-            init.toolboxSelection,
-            init.toolboxAutomation,
+      const enhancementInstance = gameWasmInstance;
+      const enhancementModule = gameWasmModule;
+      void import('./enhancements.js')
+        .then(({ installEnhancements }) =>
+          installEnhancements(
+            enhancementInstance,
+            enhancementModule,
+            init.enhancementSelection,
+            init.enhancementAutomation,
           ))
         .catch((error) => log(
-          '[toolbox]',
+          '[enhancement]',
           error instanceof Error ? error.message : String(error),
         ));
     }

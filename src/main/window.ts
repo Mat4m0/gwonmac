@@ -13,7 +13,7 @@ import type {
   AppSettingsPatch,
   DownloadProgress,
   RendererInit,
-  ToolboxSelection,
+  EnhancementSelection,
 } from "../shared/contracts.js";
 import { EXTERNAL_URLS, RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
@@ -32,7 +32,7 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { sendRendererCommand } from "./renderer-commands.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
-import { TOOLBOX_AUTOMATION_ENABLED } from "./toolbox-policy.js";
+import { ENHANCEMENT_AUTOMATION_ENABLED } from "./enhancement-policy.js";
 import { isDevBuild } from "./protocol.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
@@ -47,7 +47,7 @@ const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 export interface WindowHost {
   sockets: SocketManager;
   /** Launch-time tool choices; the served module decides whether they can run. */
-  toolboxSelection: ToolboxSelection;
+  enhancementSelection: EnhancementSelection;
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
@@ -220,14 +220,14 @@ export const RENDERER_URL = "gw://app/";
  * Launch configuration, delivered to the preload as one process argument
  * instead of as query parameters the trust root had to allow-list. It is fixed
  * for the life of a window, which is what a reload must not drop: reloading
- * `RENDERER_URL` keeps the same `additionalArguments`, so the Toolbox survives.
+ * `RENDERER_URL` keeps the same `additionalArguments`, so the Enhancement survives.
  */
 export function rendererInitArgument(options: {
-  toolboxSelection: ToolboxSelection;
+  enhancementSelection: EnhancementSelection;
 }): string {
   const init: RendererInit = {
-    toolboxAutomation: TOOLBOX_AUTOMATION_ENABLED,
-    toolboxSelection: options.toolboxSelection,
+    enhancementAutomation: ENHANCEMENT_AUTOMATION_ENABLED,
+    enhancementSelection: options.enhancementSelection,
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
   };

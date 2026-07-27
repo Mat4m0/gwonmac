@@ -19,7 +19,8 @@ moment anything about that fails.
 **Guild Wars players on a Mac** who want the official client without Windows,
 Wine, or a browser tab.
 
-**The first Toolbox user is a returning player who used GWToolbox on Windows.**
+**The first GWonMac Tools user is a returning player who used GWToolbox++ on
+Windows.**
 They are not asking for a plugin platform. They want the handful of readouts
 the game itself never showed them, and they notice the absence within an hour
 of playing. The exact-build certification, the read-only snapshot, and the

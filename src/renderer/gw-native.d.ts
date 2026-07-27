@@ -2,7 +2,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   GwNativeApi,
-  ToolboxSelection,
+  EnhancementSelection,
 } from "../shared/contracts.js";
 import type {
   RendererEventName,
@@ -99,7 +99,7 @@ declare global {
     flush(): Promise<void>;
   }
 
-  interface ToolboxState {
+  interface CompanionState {
     status?: string;
     reason?: string;
     instanceType?: number;
@@ -107,7 +107,7 @@ declare global {
     [key: string]: unknown;
   }
 
-  interface ToolboxAutomation {
+  interface EnhancementAutomation {
     set(stage: string): void;
     read(): Readonly<{
       stage: string;
@@ -117,12 +117,12 @@ declare global {
         stage: string;
         atMs: number;
       }>;
-      toolboxStatus: string;
+      enhancementStatus: string;
       tickCount: number;
     }>;
   }
 
-  interface ToolboxSettingsController {
+  interface EnhancementSettingsController {
     patchFor(control: HTMLInputElement | HTMLSelectElement): AppSettingsPatch | null;
     render(settings: AppSettings): void;
     resultFor(
@@ -151,19 +151,19 @@ declare global {
       programId: number;
       buildId: number;
     }>;
-    gwToolboxInstallations?: number;
-    gwToolboxRuntime?: Record<string, unknown> | null;
-    gwToolboxState?: ToolboxState;
-    readonly gwToolSettings: Readonly<{
+    gwCompanionInstallations?: number;
+    gwCompanionRuntime?: Record<string, unknown> | null;
+    gwCompanionState?: CompanionState;
+    readonly gwEnhancementSettings: Readonly<{
       create(options: {
         form: HTMLFormElement;
         byId(id: string): HTMLElement;
-        selection: ToolboxSelection;
+        selection: EnhancementSelection;
         persist(patch: AppSettingsPatch): Promise<AppSettings>;
         current(): AppSettings | null;
-      }): ToolboxSettingsController;
+      }): EnhancementSettingsController;
     }>;
-    gwAutomation: ToolboxAutomation;
+    gwAutomation: EnhancementAutomation;
     gwGlRecon?(): Readonly<{
       livePrograms: number;
       passThrough: Record<string, number>;

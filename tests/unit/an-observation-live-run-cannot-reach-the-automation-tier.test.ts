@@ -1,7 +1,7 @@
 // P4.7 — the automation/observation line, executed rather than described.
 //
 // Every one of these runs the real decision functions from
-// scripts/toolbox-live/scenarios.ts: the launch plan the runner spawns
+// scripts/enhancements-live/scenarios.ts: the launch plan the runner spawns
 // Electron with, the context object it hands the scenario, and the bootstrap
 // wait, driven against a page double that records what was touched. Nothing
 // here reads source text, and nothing needs a build or a game.
@@ -14,8 +14,8 @@ import {
   scenarioContext,
   SCENARIOS,
   waitForPlayable,
-} from "../../scripts/toolbox-live/scenarios.js";
-import { validateCommonAcceptance } from "../../scripts/toolbox-live/acceptance.js";
+} from "../../scripts/enhancements-live/scenarios.js";
+import { validateCommonAcceptance } from "../../scripts/enhancements-live/acceptance.js";
 
 // The register itself, not a local restatement of it: the first case below
 // asserts that every entry declares one of the two tiers, and asserting that
@@ -95,12 +95,12 @@ describe("an observation live run cannot reach the automation tier", () => {
   it("launches the app with the automation gate off, whatever the caller exports", () => {
     // The developer's own shell may export the variable; inheriting it would
     // silently turn an observation run back into an automation run.
-    const observation = planFor("cursor-capture", { GW_TOOLBOX_AUTOMATION: "1" });
+    const observation = planFor("cursor-capture", { GW_ENHANCEMENT_AUTOMATION: "1" });
     assert.equal(observation.tier, "observation");
-    assert.equal("GW_TOOLBOX_AUTOMATION" in observation.env, false);
+    assert.equal("GW_ENHANCEMENT_AUTOMATION" in observation.env, false);
 
     const automation = planFor("movement");
-    assert.equal(automation.env.GW_TOOLBOX_AUTOMATION, "1");
+    assert.equal(automation.env.GW_ENHANCEMENT_AUTOMATION, "1");
   });
 
   it("opens no parent-process command channel for an observation run", () => {
@@ -133,7 +133,7 @@ describe("an observation live run cannot reach the automation tier", () => {
   });
 
   it("refuses an observation run against a profile with the cursor turned off", () => {
-    // Nothing else would install the Toolbox for it, so the run would sit in a
+    // Nothing else would install the Enhancement for it, so the run would sit in a
     // thirty-minute wait for a hook that never arrives.
     const ready = {
       readyForCachedLive: true,
@@ -146,7 +146,7 @@ describe("an observation live run cannot reach the automation tier", () => {
       liveRunRefusal(planFor("cursor-capture"), ready, options),
       "native-cursor-disabled",
     );
-    // An automation run forces the Toolbox on regardless of the setting.
+    // An automation run forces the Enhancement on regardless of the setting.
     assert.equal(liveRunRefusal(planFor("movement"), ready, options), null);
     assert.equal(
       liveRunRefusal(planFor("cursor-capture"), { ...ready, nativeCursor: true }, options),

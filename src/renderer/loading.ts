@@ -4,7 +4,7 @@
 // index.html loads this as a classic script, so the file carries no top-level
 // import or export and names the contracts through type-only `import(…)`.
 
-window.gwAutomation = (function (): ToolboxAutomation {
+window.gwAutomation = (function (): EnhancementAutomation {
   let stage = 'renderer.loading';
   let sequence = 0;
   const history: { sequence: number; stage: string; atMs: number }[] = [];
@@ -17,13 +17,13 @@ window.gwAutomation = (function (): ToolboxAutomation {
       if (history.length > 32) history.shift();
     },
     read() {
-      const toolbox = window.gwToolboxState;
+      const enhancement = window.gwCompanionState;
       return Object.freeze({
         stage,
         sequence,
         transitions: history.slice(),
-        toolboxStatus: toolbox?.status ?? 'not-installed',
-        tickCount: toolbox?.tickCount ?? 0,
+        enhancementStatus: enhancement?.status ?? 'not-installed',
+        tickCount: enhancement?.tickCount ?? 0,
       });
     },
   });

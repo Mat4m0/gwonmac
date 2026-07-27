@@ -12,10 +12,10 @@ test.describe("sandbox boundary", () => {
         protocol: globalThis.location.protocol,
         search: globalThis.location.search,
         init: { ...window.gwNative.init },
-        toolboxSelectionFrozen: Object.isFrozen(
-          window.gwNative.init.toolboxSelection,
+        enhancementSelectionFrozen: Object.isFrozen(
+          window.gwNative.init.enhancementSelection,
         ),
-        toolboxPresent: globalThis.document.getElementById("toolbox") !== null,
+        enhancementPresent: globalThis.document.getElementById("enhancement") !== null,
         keys: Object.keys(window.gwNative).sort(),
         nativeFrozen: Object.isFrozen(window.gwNative),
         namespacesFrozen: Object.values(window.gwNative).every(Object.isFrozen),
@@ -30,15 +30,15 @@ test.describe("sandbox boundary", () => {
         search: "",
         // The game cursor ships on, so a default launch asks for it here.
         init: {
-          toolboxAutomation: false,
-          toolboxSelection: {
+          enhancementAutomation: false,
+          enhancementSelection: {
             nativeCursor: true,
             targetReadout: false,
           },
           templateFsTrace: false,
         },
-        toolboxSelectionFrozen: true,
-        toolboxPresent: false,
+        enhancementSelectionFrozen: true,
+        enhancementPresent: false,
         // The whole exposed surface, as a human-reviewed list: adding a
         // capability must be a deliberate edit here. What each one *does* is
         // executed against the built preload in
@@ -195,23 +195,23 @@ test.describe("sandbox boundary", () => {
     }
   });
 
-  test("accepts explicit automation without adding production Toolbox UI", async () => {
-    const fixture = await launchOffline("gw-toolbox-developer-e2e-", {
-      GW_TOOLBOX_AUTOMATION: "1",
+  test("accepts explicit automation without adding production Enhancement UI", async () => {
+    const fixture = await launchOffline("gw-enhancement-developer-e2e-", {
+      GW_ENHANCEMENT_AUTOMATION: "1",
     });
     try {
       expect(new URL(fixture.page.url()).search).toBe("");
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
-        toolboxAutomation: true,
-        toolboxSelection: {
+        enhancementAutomation: true,
+        enhancementSelection: {
           nativeCursor: true,
           targetReadout: false,
         },
         templateFsTrace: false,
       });
-      await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
+      await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);
     }
@@ -226,14 +226,14 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
-        toolboxAutomation: false,
-        toolboxSelection: {
+        enhancementAutomation: false,
+        enhancementSelection: {
           nativeCursor: true,
           targetReadout: false,
         },
         templateFsTrace: true,
       });
-      await expect(fixture.page.locator("#toolbox")).toHaveCount(0);
+      await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
     } finally {
       await closeOffline(fixture);
     }

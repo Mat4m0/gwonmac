@@ -625,20 +625,25 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "info",
     fields: none,
   },
-  "toolbox.prepareFailed": {
+  "enhancement.prepareFailed": {
     subsystem: "wasm",
     level: "warn",
     fields: { code },
   },
-  "toolbox.clientPrepared": {
+  "enhancement.clientPrepared": {
     subsystem: "wasm",
     level: "info",
     fields: { buildId: finiteNumber, transformAbi: finiteNumber },
   },
-  "toolbox.uncertifiedClientBlocked": {
+  "enhancement.uncertifiedClientBlocked": {
     subsystem: "wasm",
     level: "info",
     fields: none,
+  },
+  "enhancement.obsoleteCacheDiscardFailed": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { code },
   },
   "patch.updateFallback": {
     subsystem: "update",

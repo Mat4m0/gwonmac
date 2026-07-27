@@ -13,33 +13,33 @@ import type {
   ClientCompatibility,
   ClientCompatibilityState,
   ClientSession,
-  ToolboxSelection,
+  EnhancementSelection,
 } from "../../src/shared/contracts.js";
 
 const compatibility = (
   state: ClientCompatibilityState,
-  selection: ToolboxSelection,
-  toolboxActive =
+  selection: EnhancementSelection,
+  enhancementActive =
     state === "certified" && Object.values(selection).some(Boolean),
 ): ClientCompatibility => ({
   state,
   clientSha256: "a".repeat(64),
-  toolboxActive,
+  enhancementActive,
 });
 
-const NONE: ToolboxSelection = {
+const NONE: EnhancementSelection = {
   nativeCursor: false,
   targetReadout: false,
 };
-const CURSOR: ToolboxSelection = {
+const CURSOR: EnhancementSelection = {
   nativeCursor: true,
   targetReadout: false,
 };
-const READOUT: ToolboxSelection = {
+const READOUT: EnhancementSelection = {
   nativeCursor: false,
   targetReadout: true,
 };
-const BOTH: ToolboxSelection = {
+const BOTH: EnhancementSelection = {
   nativeCursor: true,
   targetReadout: true,
 };
@@ -92,7 +92,7 @@ function compatibilityDom() {
   };
 }
 
-const text = (state: ClientCompatibilityState, selection: ToolboxSelection) => {
+const text = (state: ClientCompatibilityState, selection: EnhancementSelection) => {
   const report = compatibilityReport(compatibility(state, selection), selection);
   return [report.summary, ...report.details].join(" ");
 };
@@ -113,7 +113,7 @@ describe("client compatibility notice", () => {
       compatibilityReport(compatibility("template-only", NONE), NONE).degraded,
       false,
     );
-    // An uncertified build breaks saving even when no Toolbox tool was wanted.
+    // An uncertified build breaks saving even when no Enhancement tool was wanted.
     assert.equal(
       compatibilityReport(compatibility("uncertified", BOTH), BOTH).degraded,
       true,
@@ -124,7 +124,7 @@ describe("client compatibility notice", () => {
     );
   });
 
-  it("reports a certified Toolbox preparation failure as retryable", () => {
+  it("reports a certified Enhancement preparation failure as retryable", () => {
     const report = compatibilityReport(
       compatibility("certified", BOTH, false),
       BOTH,
@@ -132,12 +132,28 @@ describe("client compatibility notice", () => {
     const said = [report.summary, ...report.details].join(" ");
 
     assert.equal(report.degraded, true);
-    assert.equal(report.toolboxDegraded, true);
+    assert.equal(report.enhancementDegraded, true);
     assert.match(said, /could not be prepared/);
     assert.match(said, /game cursor and target readout/);
     assert.match(said, /Restart the app/);
     assert.match(said, /export diagnostics/);
     assert.doesNotMatch(said, /takes a new release of this app/);
+  });
+
+  it("uses the GWonMac Tools name on every public degraded surface", () => {
+    for (const said of [
+      text("uncertified", CURSOR),
+      text("template-only", READOUT),
+      [
+        compatibilityReport(
+          compatibility("certified", BOTH, false),
+          BOTH,
+        ).summary,
+      ].join(" "),
+    ]) {
+      assert.match(said, /GWonMac Tools/);
+      assert.doesNotMatch(said, /\bEnhancement\b/);
+    }
   });
 
   it("names all three affected features on an uncertified build", () => {
@@ -151,7 +167,7 @@ describe("client compatibility notice", () => {
     }
   });
 
-  it("says templates survive when only Toolbox is uncertified", () => {
+  it("says templates survive when only Enhancement is uncertified", () => {
     for (const selection of SELECTIONS) {
       const report = compatibilityReport(
         compatibility("template-only", selection),
@@ -172,7 +188,7 @@ describe("client compatibility notice", () => {
         const said = [report.summary, ...report.details].join(" ");
         const degraded =
           Object.values(selection).some(Boolean) && state !== "certified";
-        assert.equal(report.toolboxDegraded, degraded);
+        assert.equal(report.enhancementDegraded, degraded);
         if (!degraded) continue;
         assert.equal(/game cursor/.test(said), selection.nativeCursor);
         assert.equal(/target readout/.test(said), selection.targetReadout);
