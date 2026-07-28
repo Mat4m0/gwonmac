@@ -248,15 +248,34 @@ server offline.
 
 Acquisition opens a `BrowserWindow` the main process owns and tears down. It has
 its own in-memory session partition shared with nothing, no preload and no Node,
-deny-by-default permission and download handlers, no popups and no webviews,
-navigation confined to the derived allowlist, and the live origin in a title bar
-the loaded page can neither draw over nor rename. The redirect carrying the
-token is intercepted *before it is fetched* — so the return URL is never
-requested and needs no proxy allowlist entry — and its `state` nonce is checked
-against the value generated for that attempt, which is what makes an unsolicited
-or replayed response fail rather than hand over a token. The partition is
-cleared and the window destroyed however sign-in ends: success, refusal, or
-cancellation.
+deny-by-default permission and download handlers, no popups and no webviews, and
+navigation confined to the derived allowlist. The redirect carrying the token is
+intercepted *before it is fetched* — so the return URL is never requested and
+needs no proxy allowlist entry — and its `state` nonce is checked against the
+value generated for that attempt, which is what makes an unsolicited or replayed
+response fail rather than hand over a token. The partition is cleared and the
+window destroyed however sign-in ends: success, refusal, or cancellation. The
+window is hidden the moment an attempt settles, because the token-carrying
+redirect is cancelled rather than followed and the clear is awaited before
+destroy — leaving it visible for that stretch reads as the app going black.
+
+**The window is a modal child, and the origin is not visible in it.** `modal` is
+load-bearing: `src/main/window.ts` restores the game window to fullscreen, and a
+plain parented child is promoted into that fullscreen space and sized to the whole
+display, so sign-in fills the screen instead of appearing as a contained sheet.
+`tests/electron/steam-acquire.spec.ts` pins the modal, parented, requested-width
+presentation for that reason.
+
+The cost is R18. A macOS sheet draws no title bar, so the live origin
+`showOrigin()` writes — and the `page-title-updated` `preventDefault` that stops
+the page renaming it — are **not visible in the configuration that ships**. Both
+are kept because a parentless window (no game window yet) is an ordinary titled
+window where they do apply, but the player cannot verify the origin by eye during
+a normal sign-in. This is accepted rather than solved: what constrains the window
+is the fail-closed allowlist, not the player's inspection.
+`docs/user-guide.md` says so plainly instead of asking them to check a title bar
+that is not there, and
+`docs/residual-review-findings/feat-steam-login-unified.md` records the decision.
 
 The token persists in `steam-session.bin` as `{ token, expiry }`, under the same
 `EncryptedJsonStore` mechanism as `credentials.bin` — `safeStorage` encryption,

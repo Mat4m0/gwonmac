@@ -92,6 +92,46 @@ accepting a redirect — is already true by construction.
 **If revisited:** do it after a live sign-in has shown which origins the real
 Steam page actually needs, then allowlist those and guard the rest.
 
+## 4. R18's visible origin is not satisfied, and is accepted as unsatisfied
+
+**P2, security, confidence 50, `src/main/steam-acquire.ts`** — confirmed by live
+test, resolved as accepted.
+
+R18 asks that the sign-in window "displays the live origin in a region the loaded
+page cannot draw over or rename". `showOrigin()` writes the origin into the window
+title and `page-title-updated` is `preventDefault`ed so the page cannot change it
+— but the window ships as a modal child, macOS presents that as a sheet, and a
+sheet draws no title bar. **Confirmed by live test: the origin is not visible.**
+
+**Why it is not fixed.** The obvious fix — drop `modal` so the window gets its own
+title bar — was tried and is worse. `src/main/window.ts` restores the game window
+to fullscreen, so a plain parented child is promoted into that fullscreen space
+and sized to the whole display: the Steam page filled the screen, and after
+sign-in the screen went black (that blank full-screen window sitting through the
+awaited partition clear). `modal` is therefore load-bearing for usability, and
+`tests/electron/steam-acquire.spec.ts` now pins it.
+
+The remaining options all cost more than the requirement is worth here: a custom
+origin strip owned by main and drawn above the web view, or `titleBarStyle`
+experiments that may not survive the sheet presentation at all. The owner accepted
+the gap explicitly rather than spend that.
+
+**What actually constrains the window,** and what the docs now say instead of
+asking the player to check a title bar: navigation is confined to a fail-closed
+allowlist of Steam- and Valve-owned origins, the window carries no preload and no
+Node, it runs in a throwaway partition destroyed with it, and the redirect is
+read by the application rather than followed. The protection is that the window
+cannot go anywhere else — not that the player verifies where it is.
+
+`showOrigin()` and the rename guard are kept rather than deleted, because a
+parentless window (no game window yet) is an ordinary titled window where both do
+apply.
+
+**Documented in:** `docs/user-guide.md` (states plainly that there is no origin
+to check, and what to rely on instead), `docs/internals.md` (the reasoning and
+the modal trade-off), `AGENTS.md` (do not write docs or UI telling a player to
+verify the origin).
+
 ## Smaller residual risks (noted, no action)
 
 - A freshly acquired token is stored with the flow's hardcoded ~1-year lifetime

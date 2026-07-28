@@ -92,8 +92,10 @@ function createSignInWindow(
     // sign-in sheet, and a full-screen blank one during teardown.
     //
     // A sheet draws no title bar, so the origin `showOrigin()` maintains is not
-    // visible in this configuration and R18's anti-phishing affordance needs a
-    // different home. See docs/residual-review-findings/feat-steam-login-unified.md.
+    // visible here — confirmed by live test, and accepted: what confines this
+    // window is the fail-closed allowlist, not the player's inspection. The docs
+    // say so rather than asking anyone to check a title bar that is not there.
+    // See docs/residual-review-findings/feat-steam-login-unified.md.
     //
     // Only a real parent may be passed under exactOptionalPropertyTypes; with
     // no game window yet this simply opens a top-level window.
@@ -211,8 +213,11 @@ export async function acquireSteamToken(
     win.webContents.on("will-navigate", guard);
     win.webContents.on("will-redirect", guard);
 
-    // R18: the live origin sits in the title bar, which the loaded page can
-    // neither draw over nor rename, so the player can confirm where they are.
+    // Keeps the live origin in the title bar and stops the page renaming it.
+    // Visible only when this window has no parent (no game window yet) — the
+    // shipped presentation is a sheet with no title bar, so R18's affordance is
+    // nominal there. Kept because the parentless case is real, not as a claim
+    // that a player can read it during a normal sign-in.
     const showOrigin = (): void => {
       if (win.isDestroyed()) return;
       let origin = "";

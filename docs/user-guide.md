@@ -145,10 +145,22 @@ fields. Use whichever matches how you bought the game; adding Steam takes
 nothing away from the email and password route.
 
 Choosing Steam opens a separate Steam sign-in window that this application owns.
-Check the origin shown in its title bar before typing anything — the page inside
-cannot change that text. Once you finish signing in, the window closes by itself
-and the game continues to character select. Everything that window stored while
-it was open, cookies included, is destroyed with it.
+macOS presents it as a sheet attached to the game window, and a sheet draws no
+title bar, so **there is no address bar or origin label for you to check** — you
+cannot verify by eye that the page is Steam's.
+
+What protects you instead is that the window is not free to go anywhere. It may
+only load Steam- and Valve-owned addresses; a navigation to anything else is
+blocked outright rather than shown to you. It runs in a throwaway browser
+session of its own with no access to the game or to this application, and the
+sign-in result is read by the application itself rather than by loading whatever
+page the redirect points at. If the sheet ever renders empty or broken, close it
+and use the email and password fields instead of typing your Steam password into
+it.
+
+Once you finish signing in, the window closes by itself and the game continues to
+character select. Everything that window stored while it was open, cookies
+included, is destroyed with it.
 
 You only do this once per machine. The sign-in is remembered in an encrypted,
 owner-only local file and replayed on later launches, so no Steam window appears

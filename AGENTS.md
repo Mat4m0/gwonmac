@@ -116,6 +116,13 @@ not only happy paths.
   redirect carrying the token intercepted before it is fetched with its `state`
   nonce checked. gwonmac logs in an existing Steam↔Guild Wars link and never
   creates one.
+- That window is `modal` on its parent, and must stay so: the game window can be
+  restored to fullscreen, and a non-modal parented child gets promoted into that
+  fullscreen space and sized to the whole display. A macOS sheet draws no title
+  bar, so **the sign-in origin is not visible to the player** — the allowlist is
+  what confines the window, not the player's inspection. Do not write docs or
+  UI that tell a player to verify the origin. `docs/internals.md` owns the
+  reasoning; `tests/electron/steam-acquire.spec.ts` pins the presentation.
 - Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
   and clear browser cookies at startup and quit. The switch prevents OS
   prompts but gives saved login weaker same-user protection than Keychain. The
