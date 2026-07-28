@@ -165,6 +165,28 @@ const proxyRoute: FieldGuard<ProxyRoute> = (
   value,
 ): value is ProxyRoute =>
   typeof value === "string" && isProxyRoute(value);
+// Steam sign-in reports outcomes and nothing else. There is deliberately no
+// field here that could carry a Steam identifier, a token, or an expiry (R20,
+// R21) — the closed schema is what makes that a build-time guarantee.
+const steamTokenOutcome = literal(["vended", "absent", "acquired"] as const);
+const steamBlocked = literal([
+  "navigation",
+  "popup",
+  "download",
+  "webview",
+] as const);
+const steamSignInOutcome = literal([
+  "success",
+  "cancelled",
+  "failed",
+  "state-mismatch",
+  "no-token",
+] as const);
+const steamStorebackOutcome = literal([
+  "refreshed",
+  "ignored",
+  "failed",
+] as const);
 const windowMode = literal(["normal", "maximized", "fullscreen"] as const);
 const launcherStrategy = literal(["quick", "full", "unselected"] as const);
 const snapshotPriority = literal(["demand", "prefetch"] as const);
@@ -510,6 +532,56 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "credentials",
     level: "error",
     fields: none,
+  },
+  "steam.tokenRequested": {
+    subsystem: "steam",
+    level: "info",
+    fields: { outcome: steamTokenOutcome, silent: boolean },
+  },
+  "steam.tokenLoadFailed": {
+    subsystem: "steam",
+    level: "error",
+    fields: { code },
+  },
+  "steam.tokenExpired": {
+    subsystem: "steam",
+    level: "warn",
+    fields: none,
+  },
+  "steam.tokenStoreFailed": {
+    subsystem: "steam",
+    level: "error",
+    fields: { code },
+  },
+  "steam.tokenCleared": {
+    subsystem: "steam",
+    level: "info",
+    fields: none,
+  },
+  "steam.tokenClearFailed": {
+    subsystem: "steam",
+    level: "error",
+    fields: { code },
+  },
+  "steam.storeback": {
+    subsystem: "steam",
+    level: "info",
+    fields: { outcome: steamStorebackOutcome },
+  },
+  "steam.signInOpened": {
+    subsystem: "steam",
+    level: "info",
+    fields: none,
+  },
+  "steam.signInBlocked": {
+    subsystem: "steam",
+    level: "warn",
+    fields: { what: steamBlocked },
+  },
+  "steam.signInResult": {
+    subsystem: "steam",
+    level: "info",
+    fields: { outcome: steamSignInOutcome },
   },
   "filesystem.resetRequested": {
     subsystem: "filesystem",

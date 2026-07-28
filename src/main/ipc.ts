@@ -38,6 +38,13 @@ import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore, parseCredentials } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
+import { STEAM_OAUTH } from "./core/steam-oauth.js";
+import {
+  refreshSteamExpiry,
+  resolveSteamToken,
+  SteamSessionStore,
+} from "./core/steam-session.js";
+import { acquireSteamToken } from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
@@ -261,6 +268,29 @@ const asRendererFrames = one((value: unknown): RendererFrameBatch => {
   return value;
 });
 
+const asSilentFlag = one((value: unknown): boolean => {
+  if (typeof value !== "boolean") throw new ValidationError("silent must be a boolean");
+  return value;
+});
+
+/**
+ * The client's storeback. An empty or wrong-shaped token is *not* refused here:
+ * `refreshSteamExpiry` ignores anything that is not the token already held, and
+ * ignoring is the documented outcome (KTD5) rather than an error the client has
+ * to handle. Only genuinely malformed arguments are rejected.
+ */
+const asSteamStoreback: Parser<{ token: string; expiry: number | null }> = (args) => {
+  exact(args, 2);
+  const [token, expiry] = args;
+  if (typeof token !== "string" || token.length > 4096) {
+    throw new ValidationError("steam token must be a string");
+  }
+  if (expiry !== null && (typeof expiry !== "number" || !Number.isFinite(expiry))) {
+    throw new ValidationError("steam token expiry must be a finite number or null");
+  }
+  return { token, expiry };
+};
+
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   if (
     value !== "github" &&
@@ -366,6 +396,28 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = gamePaths();
   const credentials = new CredentialsStore(paths.credentials, safeStorage);
+  const steam = new SteamSessionStore(paths.steamSession, safeStorage);
+
+  /**
+   * Run the Steam sign-in flow, reporting what the window did. Adapts the
+   * window's result to the `string | null` that `resolveSteamToken` takes,
+   * which is what keeps `src/main/core/**` free of Electron.
+   */
+  const acquireSteam = async (win: BrowserWindow): Promise<string | null> => {
+    const result = await acquireSteamToken(STEAM_OAUTH, {
+      parent: win,
+      record: (event) => {
+        if (event.k === "opened") logEvent({ k: "steam.signInOpened" });
+        if (event.k === "blocked") {
+          logEvent({ k: "steam.signInBlocked", what: event.what });
+        }
+        if (event.k === "settled") {
+          logEvent({ k: "steam.signInResult", outcome: event.outcome });
+        }
+      },
+    });
+    return result.ok ? result.token : null;
+  };
 
   /**
    * Every channel main answers, with the parser that turns its arguments into
@@ -530,6 +582,47 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         await credentials.clear();
       } catch (error) {
         logEvent({ k: "credentials.clearFailed" });
+        throw error;
+      }
+    }),
+
+    // The seam that may open a Steam window — and only for a non-silent
+    // request. It answers `null` rather than throwing, because the client
+    // rebuilds its own login screen from a refused credential and a rejection
+    // here would only turn "no token" into a launch failure (R8).
+    steamToken: channel(asSilentFlag, async (win, silent) => {
+      const resolution = await resolveSteamToken(steam, {
+        silent,
+        acquire: () => acquireSteam(win),
+      });
+      for (const note of resolution.notes) {
+        if (note.note === "loadFailed") {
+          logEvent({ k: "steam.tokenLoadFailed", code: note.code });
+        }
+        if (note.note === "expired") logEvent({ k: "steam.tokenExpired" });
+        if (note.note === "storeFailed") {
+          logEvent({ k: "steam.tokenStoreFailed", code: note.code });
+        }
+      }
+      const acquired = resolution.notes.some((note) => note.note === "acquired");
+      logEvent({ k: "steam.tokenRequested",
+        outcome: resolution.token ? (acquired ? "acquired" : "vended") : "absent",
+        silent,
+      });
+      return resolution.token;
+    }),
+
+    steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
+      const outcome = await refreshSteamExpiry(steam, token, expiry);
+      logEvent({ k: "steam.storeback", outcome });
+    }),
+
+    steamClear: channel(nothing, async () => {
+      try {
+        await steam.clear();
+        logEvent({ k: "steam.tokenCleared" });
+      } catch (error) {
+        logEvent({ k: "steam.tokenClearFailed", code: errorCode(error) });
         throw error;
       }
     }),
