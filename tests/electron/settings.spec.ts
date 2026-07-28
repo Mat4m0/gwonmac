@@ -322,6 +322,7 @@ test.describe("settings experience", () => {
       ).toEqual([
         { name: "nativeCursor", settings: true, launcher: true },
         { name: "targetReadout", settings: true, launcher: true },
+        { name: "teamManagement", settings: true, launcher: true },
       ]);
     } finally {
       await closeOffline(fixture);

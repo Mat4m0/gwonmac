@@ -13,9 +13,9 @@ import {
   liveRunRefusal,
   scenarioContext,
   SCENARIOS,
-  waitForPlayable,
 } from "../../scripts/enhancements-live/scenarios.js";
 import { validateCommonAcceptance } from "../../scripts/enhancements-live/acceptance.js";
+import { waitForPlayable } from "../../scripts/enhancements-live/session.js";
 
 // The register itself, not a local restatement of it: the first case below
 // asserts that every entry declares one of the two tiers, and asserting that
@@ -47,7 +47,24 @@ function recordingPage(ready: boolean) {
     touched,
     presses: 0,
     waitForFunction: async () => undefined,
-    evaluate: async () => ready,
+    evaluate: async (body: unknown, argument?: unknown) => {
+      const source = String(body);
+      if (source.includes("performance.now") && argument === undefined) return 0;
+      if (source.includes("getElementById")) {
+        return {
+          atMs: 0,
+          reason: "initial",
+          input: 0,
+          progress: "ready",
+          stage: ready ? "game.outpost" : "client.frontend",
+          enhancementStatus: ready ? "ready" : "not-installed",
+          tickCount: ready ? 6 : 0,
+          canvasReady: true,
+          loadingVisible: false,
+        };
+      }
+      return ready;
+    },
     waitForTimeout: async () => undefined,
     get keyboard() {
       forbid("keyboard");
@@ -69,7 +86,24 @@ function automatablePage(ready: boolean) {
   const page = {
     presses: 0,
     waitForFunction: async () => undefined,
-    evaluate: async () => ready,
+    evaluate: async (body: unknown, argument?: unknown) => {
+      const source = String(body);
+      if (source.includes("performance.now") && argument === undefined) return 0;
+      if (source.includes("getElementById")) {
+        return {
+          atMs: 0,
+          reason: "initial",
+          input: page.presses,
+          progress: "ready",
+          stage: ready ? "game.outpost" : "client.frontend",
+          enhancementStatus: ready ? "ready" : "not-installed",
+          tickCount: ready ? 6 : 0,
+          canvasReady: true,
+          loadingVisible: false,
+        };
+      }
+      return ready;
+    },
     waitForTimeout: async () => undefined,
     keyboard: { press: async () => { page.presses += 1; } },
     mouse: {},
@@ -101,6 +135,7 @@ describe("an observation live run cannot reach the automation tier", () => {
 
     const automation = planFor("movement");
     assert.equal(automation.env.GW_ENHANCEMENT_AUTOMATION, "1");
+    assert.equal(planFor("hero-map").tier, "automation");
   });
 
   it("opens no parent-process command channel for an observation run", () => {
@@ -196,9 +231,13 @@ describe("an observation live run cannot reach the automation tier", () => {
       cdp: asCdp({ send: async () => undefined }),
       sendAutomationCommand: async () => undefined,
       sampleObservations: async () => [],
+      wasmBreakpoints: null,
     };
     const observation = scenarioContext("observation", capabilities);
-    assert.deepEqual(Object.keys(observation).sort(), ["evaluate", "sample", "wait"]);
+    assert.deepEqual(
+      Object.keys(observation).sort(),
+      ["evaluate", "sample", "wait", "wasmBreakpoints"],
+    );
     for (const capability of ["page", "cdp", "sendAutomationCommand"]) {
       assert.equal(capability in observation, false);
     }
@@ -228,6 +267,7 @@ describe("an observation live run cannot reach the automation tier", () => {
       sampleObservations: async () => [
         { type: "u8", address: 0, value: 7, valid: true },
       ],
+      wasmBreakpoints: null,
     }) as {
       evaluate: (body: unknown, argument?: unknown) => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
@@ -244,18 +284,60 @@ describe("an observation live run cannot reach the automation tier", () => {
     // The pre-split runner pressed Enter up to three times to get an idle
     // client past its login screen, for every scenario.
     const page = recordingPage(false);
-    assert.equal(await waitForPlayable(asPage(page), "observation"), 0);
+    assert.equal((await waitForPlayable(asPage(page), "observation")).inputs, 0);
     assert.deepEqual(page.touched, []);
   });
 
   it("still nudges an automation run, so the double above would have caught it", async () => {
     const page = automatablePage(false);
-    assert.equal(await waitForPlayable(asPage(page), "automation"), 3);
-    assert.equal(page.presses, 3);
+    await assert.rejects(
+      waitForPlayable(asPage(page), "automation"),
+      /automatic login did not reach a playable character/,
+    );
+    assert.equal(page.presses, 4);
 
     const playable = automatablePage(true);
-    assert.equal(await waitForPlayable(asPage(playable), "automation"), 0);
+    assert.equal(
+      (await waitForPlayable(asPage(playable), "automation")).inputs,
+      0,
+    );
     assert.equal(playable.presses, 0);
+  });
+
+  it("waits out a game load without sending input to the changing surface", async () => {
+    let waits = 0;
+    const page = {
+      presses: 0,
+      waitForFunction: async () => undefined,
+      waitForTimeout: async () => {
+        waits += 1;
+      },
+      evaluate: async (body: unknown, argument?: unknown) => {
+        const source = String(body);
+        if (source.includes("performance.now") && argument === undefined) return 0;
+        if (source.includes("getElementById")) {
+          const playable = waits >= 3;
+          return {
+            atMs: waits,
+            reason: "initial",
+            input: page.presses,
+            progress: "ready",
+            stage: playable ? "game.outpost" : "game.loading",
+            enhancementStatus: playable ? "ready" : "waiting",
+            tickCount: playable ? 6 : waits,
+            canvasReady: true,
+            loadingVisible: false,
+          };
+        }
+        return true;
+      },
+      keyboard: { press: async () => { page.presses += 1; } },
+      mouse: {},
+      locator: () => ({ focus: async () => undefined }),
+    };
+    const result = await waitForPlayable(asPage(page), "automation");
+    assert.equal(result.inputs, 0);
+    assert.equal(page.presses, 0);
   });
 
   it("does not require target-state evidence from a cursor-only observation", () => {

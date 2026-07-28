@@ -22,10 +22,9 @@ Wine, or a browser tab.
 **The first GWonMac Tools user is a returning player who used GWToolbox++ on
 Windows.**
 They are not asking for a plugin platform. They want the handful of readouts
-the game itself never showed them, and they notice the absence within an hour
-of playing. The exact-build certification, the read-only snapshot, and the
-fail-closed transform all exist to serve that person without asking them to
-trust us with their account.
+and outpost setup workflows the game itself never made convenient, and they
+notice the absence within an hour of playing. Exact-build certification,
+checked snapshots, and fail-closed commands exist to keep that trust narrow.
 
 ## The first feature
 
@@ -51,9 +50,11 @@ Refusals, not a backlog.
 - **No Windows or Linux build.**
 - **No modification of ArenaNet's client.** The downloaded artifact stays
   canonical and is never redistributed.
-- **No automation, ever.** The app sends no game input and takes no action on a
-  player's behalf. The development-only automation tier cannot be reached by a
-  packaged build at all — a gate in code, not a promise.
+- **No unattended, combat, economy, or PvP automation.** The one game-changing
+  product action is an explicit Apply in a PvE outpost. It reconciles the
+  selected party and builds once, waits for every acknowledgement, and stops
+  on the first failure. The broader development automation tier cannot be
+  reached by a packaged build.
 - **No account features.** No bots, macros, multiboxing help, or trading tools.
 - **No telemetry.** Nothing leaves the machine unless the player attaches a
   diagnostics file to a bug report themselves.
@@ -80,6 +81,7 @@ and packaging tests establish, or dropped. Measured frame rates live in
 specific machines, never as a promise.
 
 Three claims cost us more than the rest, and that is the point: the official
-artifact is preserved, no game traffic or account data is uploaded, and nothing
-acts on a player's behalf. A feature that weakens one of those is a feature
-this project does not ship.
+artifact is preserved, no game traffic or account data is uploaded, and every
+game-changing command is explicit, bounded, PvE-outpost-only, acknowledged,
+and fail-closed. A feature that weakens one of those is a feature this project
+does not ship.

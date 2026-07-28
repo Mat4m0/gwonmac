@@ -338,6 +338,7 @@ test.describe("enhancement cursor presentation", () => {
         enhancementSelection: {
           nativeCursor: true,
           targetReadout: false,
+          teamManagement: false,
         },
         templateFsTrace: false,
         // The configuration is no longer in the URL the trust root checks.

@@ -26,6 +26,8 @@ describe("settings", () => {
       nativeCursor: true,
       // The first optional read-only feature stays opt-in.
       targetReadout: false,
+      // Game-changing team management is always explicit.
+      teamManagement: false,
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
@@ -64,6 +66,7 @@ describe("settings", () => {
       uiRadius: 8,
       nativeCursor: true,
       targetReadout: false,
+      teamManagement: false,
       touchMode: "off",
       showDiagnostics: true,
       dataStrategy: "full",
@@ -191,6 +194,7 @@ describe("settings", () => {
       "renderScale",
       "showDiagnostics",
       "targetReadout",
+      "teamManagement",
       "touchMode",
       "uiBorderWidth",
       "uiDensity",
@@ -230,6 +234,7 @@ describe("settings", () => {
       uiRadius: 8,
       nativeCursor: true,
       targetReadout: false,
+      teamManagement: false,
       touchMode: "translate",
       showDiagnostics: true,
       dataStrategy: "full",

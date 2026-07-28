@@ -29,9 +29,20 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 7;
+export const ENHANCEMENT_TRANSFORM_ABI = 21;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_ORIGINAL_EXPORT = "enhancement_tick_original";
+export const ENHANCEMENT_HERO_ADD_EXPORT = "enhancement_hero_add";
+export const ENHANCEMENT_HERO_KICK_EXPORT = "enhancement_hero_kick";
+export const ENHANCEMENT_DIFFICULTY_EXPORT = "enhancement_difficulty";
+export const ENHANCEMENT_SECONDARY_PROFESSION_EXPORT =
+  "enhancement_secondary_profession";
+export const ENHANCEMENT_ATTRIBUTES_EXPORT = "enhancement_attributes";
+export const ENHANCEMENT_SKILLBAR_EXPORT = "enhancement_skillbar";
+export const ENHANCEMENT_HERO_BEHAVIOR_EXPORT = "enhancement_hero_behavior";
+export const ENHANCEMENT_HERO_SKILL_TOGGLE_EXPORT =
+  "enhancement_hero_skill_toggle";
+export const ENHANCEMENT_HERO_PANEL_EXPORT = "enhancement_hero_panel";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 interface WasmExport {
@@ -135,15 +146,34 @@ function dispatcher(
   );
 }
 
+function heroPanelDispatcher(
+  uiMessageFunction: number,
+): Uint8Array {
+  const hideHeroPanel = 0x1000_01a3;
+  const showHeroPanel = 0x1000_01a4;
+  return concat(
+    uleb(0),
+    Uint8Array.of(0x20),
+    uleb(1),
+    Uint8Array.of(0x04, 0x7f, 0x41),
+    sleb(showHeroPanel),
+    Uint8Array.of(0x05, 0x41),
+    sleb(hideHeroPanel),
+    Uint8Array.of(0x0b, 0x20),
+    uleb(0),
+    Uint8Array.of(0x41),
+    sleb(0),
+    Uint8Array.of(0x10),
+    uleb(uiMessageFunction),
+    Uint8Array.of(0x0b),
+  );
+}
+
 function buildManifestSection(build: KnownEnhancementBuild): Section {
   const layoutWords = enhancementLayoutWords(build.layout);
   const json = new TextEncoder().encode(
     JSON.stringify({
       transformAbi: ENHANCEMENT_TRANSFORM_ABI,
-      snapshotAbi: 1,
-      snapshotBytes: 64,
-      cursorSnapshotAbi: 1,
-      cursorSnapshotBytes: 4160,
       configBytes: layoutWords.length * 4,
       programId: build.programId,
       buildId: build.buildId,
@@ -157,7 +187,10 @@ function buildManifestSection(build: KnownEnhancementBuild): Section {
   };
 }
 
-function assertSignature(type: FunctionType, build: KnownEnhancementBuild): void {
+function assertSignature(
+  type: FunctionType,
+  build: KnownEnhancementBuild,
+): void {
   const params = type.params.map(valueTypeName);
   const results = type.results.map(valueTypeName);
   if (
@@ -167,6 +200,33 @@ function assertSignature(type: FunctionType, build: KnownEnhancementBuild): void
     fail(
       `hook signature is (${params.join(",")}) -> (${results.join(",")}), expected ` +
         `(${build.hookParams.join(",")}) -> (${build.hookResults.join(",")})`,
+    );
+  }
+}
+
+function assertI32VoidFunction(
+  label: string,
+  functionIndex: number,
+  paramCount: number,
+  importCount: number,
+  functionTypes: readonly number[],
+  types: readonly FunctionType[],
+  bodyCount: number,
+): void {
+  const localIndex = functionIndex - importCount;
+  if (localIndex < 0 || localIndex >= bodyCount) {
+    fail(`${label} function is out of range`);
+  }
+  const type =
+    types[functionTypes[localIndex]!] ??
+    fail(`${label} function references an unknown type`);
+  if (
+    type.params.length !== paramCount ||
+    type.params.some((param) => param !== 0x7f) ||
+    type.results.length !== 0
+  ) {
+    fail(
+      `${label} signature is not (${Array(paramCount).fill("i32").join(",")}) -> ()`,
     );
   }
 }
@@ -257,19 +317,101 @@ export function transformEnhancementWasm(
   const importCount = countFunctionImports(sectionById(sections, 2));
   const functionTypes = parseIndexVector(sectionById(sections, 3));
   const bodies = parseCode(sectionById(sections, 10));
-  if (functionTypes.length !== bodies.length) fail("function/code count mismatch");
+  if (functionTypes.length !== bodies.length)
+    fail("function/code count mismatch");
 
   const localIndex = build.hookFunction - importCount;
-  if (localIndex < 0 || localIndex >= bodies.length) fail("hook function is out of range");
+  if (localIndex < 0 || localIndex >= bodies.length)
+    fail("hook function is out of range");
   const typeIndex = functionTypes[localIndex]!;
   const type = types[typeIndex] ?? fail("hook references an unknown type");
   assertSignature(type, build);
-
+  assertI32VoidFunction(
+    "hero add",
+    build.heroAddDispatchFunction,
+    1,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "hero kick",
+    build.heroKickDispatchFunction,
+    1,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "difficulty",
+    build.difficultyDispatchFunction,
+    1,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "secondary profession",
+    build.secondaryProfessionDispatchFunction,
+    2,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "attributes",
+    build.attributeDispatchFunction,
+    4,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "skillbar",
+    build.skillbarDispatchFunction,
+    3,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "hero behavior",
+    build.heroBehaviorDispatchFunction,
+    2,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "hero skill toggle",
+    build.heroSkillToggleDispatchFunction,
+    2,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
+  assertI32VoidFunction(
+    "UI message",
+    build.uiMessageDispatchFunction,
+    3,
+    importCount,
+    functionTypes,
+    types,
+    bodies.length,
+  );
   const table = parseTable(sectionById(sections, 4));
   if (
-    build.tableSlot < 0
-    || build.tableSlot >= table.min
-    || (table.max !== null && build.tableSlot >= table.max)
+    build.tableSlot < 0 ||
+    build.tableSlot >= table.min ||
+    (table.max !== null && build.tableSlot >= table.max)
   ) {
     fail("hook table slot is outside table limits");
   }
@@ -280,10 +422,18 @@ export function transformEnhancementWasm(
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
   const originalIndex = importCount + bodies.length;
+  const panelIndex = originalIndex + 1;
   const hookGlobalIndex = globals.count;
+  const panelTypeIndex =
+    functionTypes[build.heroBehaviorDispatchFunction - importCount] ??
+    fail("hero panel wrapper type is unavailable");
 
-  const nextFunctionTypes = [...functionTypes, typeIndex];
-  const nextBodies = [...bodies, bodies[localIndex]!];
+  const nextFunctionTypes = [...functionTypes, typeIndex, panelTypeIndex];
+  const nextBodies = [
+    ...bodies,
+    bodies[localIndex]!,
+    heroPanelDispatcher(build.uiMessageDispatchFunction),
+  ];
   nextBodies[localIndex] = dispatcher(
     type.params.length,
     typeIndex,
@@ -296,7 +446,7 @@ export function transformEnhancementWasm(
     Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
   );
   const nextExports = concat(
-    uleb(exports.count + 2),
+    uleb(exports.count + 11),
     exports.entries,
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
@@ -304,6 +454,33 @@ export function transformEnhancementWasm(
     encodeName(ENHANCEMENT_ORIGINAL_EXPORT),
     Uint8Array.of(0x00),
     uleb(originalIndex),
+    encodeName(ENHANCEMENT_HERO_ADD_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.heroAddDispatchFunction),
+    encodeName(ENHANCEMENT_HERO_KICK_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.heroKickDispatchFunction),
+    encodeName(ENHANCEMENT_DIFFICULTY_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.difficultyDispatchFunction),
+    encodeName(ENHANCEMENT_SECONDARY_PROFESSION_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.secondaryProfessionDispatchFunction),
+    encodeName(ENHANCEMENT_ATTRIBUTES_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.attributeDispatchFunction),
+    encodeName(ENHANCEMENT_SKILLBAR_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.skillbarDispatchFunction),
+    encodeName(ENHANCEMENT_HERO_BEHAVIOR_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.heroBehaviorDispatchFunction),
+    encodeName(ENHANCEMENT_HERO_SKILL_TOGGLE_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(build.heroSkillToggleDispatchFunction),
+    encodeName(ENHANCEMENT_HERO_PANEL_EXPORT),
+    Uint8Array.of(0x00),
+    uleb(panelIndex),
   );
 
   const rewritten = sections.map((section): Section => {
@@ -312,7 +489,8 @@ export function transformEnhancementWasm(
     }
     if (section.id === 6) return { id: section.id, body: nextGlobals };
     if (section.id === 7) return { id: section.id, body: nextExports };
-    if (section.id === 10) return { id: section.id, body: encodeCode(nextBodies) };
+    if (section.id === 10)
+      return { id: section.id, body: encodeCode(nextBodies) };
     return section;
   });
   const output = concat(

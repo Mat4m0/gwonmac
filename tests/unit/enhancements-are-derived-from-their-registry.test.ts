@@ -117,6 +117,7 @@ test("the launch selection carries every tool and no unrelated setting", () => {
   assert.deepEqual(enhancementSelectionFor(DEFAULT_SETTINGS), {
     nativeCursor: true,
     targetReadout: false,
+    teamManagement: false,
   });
   assert.deepEqual(
     Object.keys(enhancementSelectionFor(DEFAULT_SETTINGS)).sort(),

@@ -57,12 +57,32 @@ GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario reload
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario map-transition
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario performance
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario cursor-capture
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario hero-build-reconcile
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario hero-map
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- \
+  --scenario hero-trace \
+  --break-functions 16592,16959,16988,16989
 ```
+
+`hero-build-reconcile` changes one already-present hero's attributes, skill
+order, behavior, and one disabled-skill choice, waits for authoritative
+readback after every write, and restores the exact initial build. It is the
+bounded live acceptance scenario for the kernel. The production Tools button
+is covered separately by the Tools component tests and the
+[player QA checklist](team-management-qa.md); the live harness does not create
+or persist a second test library.
 
 `cursor-capture` is human-assisted. It prints eight prompts (arrow, hover, salvage,
 identify, drag, world map) and records only typed transitions at 20 Hz, bounded to
 192 changes. It pairs the observed scalars with the renderer's published cursor
 state, so one run shows both what the game committed and what reached Chromium.
+
+`hero-trace` is a 60-second, human-assisted function-entry trace. It asks for
+exact function indices, then records only which candidate ran, its scalar WASM
+locals, and a stack no deeper than eight frames. The observer is capped at 16
+candidate functions and 128 hits. It has no input capability and does not read
+linear memory, strings, packets, or pointers. Perform exactly one party or
+template action per run so a hit has an unambiguous cause.
 
 `target-readout` is the one deliberate production-client confirmation for the
 player-facing target feature. Enable **Target distance and range** in Settings,
@@ -80,10 +100,13 @@ snapshot. Do not run another live scenario for that release decision.
 Each scenario declares a tier, and the tier decides how the app is launched.
 An **automation** scenario is one that acts on the player's behalf; it gets
 `GW_ENHANCEMENT_AUTOMATION=1`, trusted Playwright input, and the parent-process
-command channel. An **observation** scenario — `cursor-capture` today — gets
+command channel. An **observation** scenario — `cursor-capture` or `hero-trace`
+— gets
 none of the three: it is launched exactly as a player's app is, with no IPC
 channel at all and a scenario context holding only page evaluation, the typed
-`--observe` sampler, and a clock. The Enhancement installs for it because the
+`--observe` sampler, the bounded WASM breakpoint observer, and a clock. The raw
+CDP session remains outside the scenario context. The Enhancement installs for
+it because the
 profile's `nativeCursor` setting is on, so the run is refused up front with
 `native-cursor-disabled` when it is off, and it asks the operator to bring the
 client to a playable character rather than pressing Enter itself. The tier the
@@ -103,17 +126,27 @@ Its parent-process IPC channel exists only for an automation-tier run and can
 only start and stop Level 1 diagnostics when the explicit Enhancement automation
 environment is active; capture mutation is not exposed to the sandboxed
 renderer.
-`scripts/enhancements-live.ts` owns process launch, CDP connection, bounded failure
-output, common acceptance, and shutdown. Each registry entry in
-`scripts/enhancements-live/scenarios.ts` owns its action and semantic validation;
-the paired Level 1 benchmark lives in
+`scripts/enhancements-live.ts` owns process launch, CDP connection, bounded
+failure output, common acceptance, and shutdown.
+`scripts/enhancements-live/session.ts` owns launcher/frontend/world
+classification and bounded saved-login input. Each registry entry in
+`scripts/enhancements-live/scenarios.ts` owns only its feature action and
+semantic validation; the paired Level 1 benchmark lives in
 `scripts/enhancements-live/performance.ts`. Add behavior to the narrow owner rather
 than growing another general automation framework.
 
+One owner-only lock lives in the normal persistent profile for the lifetime of
+a run. It records the exact runner PID, Electron PID, scenario, DevTools
+endpoint, and state. Another worktree therefore cannot start a second writer
+against that profile. A well-formed lock is reclaimed only when both recorded
+processes are dead; a live or malformed lock is refused rather than guessed at
+with a broad process search.
+
 Gameplay automation uses trusted Playwright input. Saved-login confirmation
-uses Enter, target acquisition uses the normal nearest-ally key with a bounded
-party-row fallback, and movement uses the standard two-button forward gesture.
-Do not change account controls to make a scenario pass.
+uses bounded Enter presses against the focused game canvas, target acquisition
+uses the normal nearest-ally key with a bounded party-row fallback, and
+movement uses the standard two-button forward gesture. Do not change account
+controls to make a scenario pass.
 
 `map-transition` owns one certified, bidirectional map 146/148 portal route.
 It steers in short segments using renderer-local player coordinates and stops
@@ -157,7 +190,7 @@ enforces them, in the `performance` entry of
 `scripts/enhancements-live/scenarios.ts`. They are deliberately not repeated here:
 a budget written in two places ends up enforced by one and quoted from the
 other. What belongs here is why the rule has that shape. A regression must be
-corroborated by *both* tail percentiles, so normal outpost variance or a single
+corroborated by _both_ tail percentiles, so normal outpost variance or a single
 0.1 ms-quantized scheduling boundary is not reported as a Enhancement regression,
 while the absolute p95 limit still catches a real shift that a percentage would
 flatter. The result also requires zero hook ticks in the dispatcher-off arm and
@@ -182,19 +215,50 @@ game.explorable
 enhancement.unsupported
 ```
 
-`client.frontend` intentionally covers saved-login confirmation and character
-selection until a certified internal screen discriminator is found. The
-harness sends at most three Enter presses at bounded intervals and stops as
-soon as a valid game snapshot appears. It does not inspect or report account
-fields. An unexpected credential, two-factor, legal, or captcha prompt remains
-a human boundary. Screenshots are a failure diagnostic, not the normal control
-loop.
+`client.frontend` intentionally covers saved-login confirmation, character
+selection, and the first load until a certified internal screen discriminator
+is found. A missing map before the first playable snapshot does not become
+`game.loading`; that stage is reserved for losing map state after the renderer
+has already published a playable map. The distinction lets automation advance
+the saved-login form without sending input during a later map transition.
+
+The runner accepts either the lifecycle marker or the actually visible canvas
+as frontend readiness, because an optional marker must never deadlock the
+first input. It records a bounded checkpoint before and after each attempt,
+including stage, companion status, tick count, and loading/canvas visibility.
+It sends at most four Enter presses at increasing intervals and stops as soon
+as a valid game snapshot appears. An unsupported companion ABI fails
+immediately. A final timeout includes the checkpoint history and leaves a
+local screenshot, so a populated login form, a real load, and missing readback
+are different failures rather than the same silent wait. It does not inspect
+or report account fields. An unexpected credential, two-factor, legal, or
+captcha prompt remains a human boundary. Screenshots are a failure diagnostic,
+not the normal control loop.
+
+The two reversible team scenarios are additionally recovery-first. Before the
+first game request they atomically persist the client build, map,
+account-neutral HeroIDs, exact bounded before state, and planned state to
+`test-results/enhancements-live/mutation-journal.json` with mode `0600`.
+Acknowledged mutation and restoration advance that journal. A new mutating run
+is refused while an earlier journal is `prepared` or `mutated`; it must never
+capture the already-modified state as a new baseline. Read-only scenarios do
+not create or consume this record.
 
 Each successful scenario prints one compact JSON record with preflight state,
-lifecycle transitions, login input count, hook cadence, snapshot counters,
-map/player/target state, DOM writes, renderer p95, host/process memory,
-browser-storage use, EGL presentation, snapshot/socket timing, startup
-milestones, errors, and shutdown.
+lifecycle transitions, login checkpoints and input count, hook cadence,
+snapshot counters, map/player/target state, DOM writes, renderer p95,
+host/process memory, browser-storage use, EGL presentation, snapshot/socket
+timing, startup milestones, errors, and shutdown.
+
+`hero-map` is the operator-paced exception to one-action scenarios. It keeps
+one client open, shows a development-only checklist over the game, and creates
+an isolated bounded breakpoint capture for each manually completed row. A row
+installs only its 2–7 relevant functions, and a noisy function disarms itself
+after 16 hits; the full mapping allow-list is never active at once.
+**Done** records the current action, **Skip** preserves an explicit gap, and
+**Finish session** stops the remaining rows. Its combined owner-only report is
+`test-results/enhancements-live/hero-mapping.json`; the overlay performs no game
+action itself.
 
 ## Deterministic feature workflow
 
@@ -230,6 +294,23 @@ Allowed types are `u8`, `u16`, `u32`, `i32`, and `f32`. There is no string,
 byte-range, pointer-walk, packet, or memory-dump mode. Observations stay in the
 renderer and the compact before/after values return over the local DevTools
 connection. Candidate observations are research evidence, never runtime truth.
+
+For stripped WASM functions, generate a stable static report before a live
+trace:
+
+```bash
+python3 tools/wasmscan.py path/to/Gw.jspi.wasm \
+  --functions 16592,16959,16988,16989 \
+  --json
+```
+
+The report includes the exact signature, body range and SHA-256, direct callers
+and callees, ordered direct-call sites, and table slot. It also derives the
+property-context assertion roots, conservatively marks every transitive caller
+as context-bound, and reports the first context-free callees below each bound
+candidate. That classification rejects unsafe exports; it does not name the
+remaining callees. Indices and body identities are build-local; do not copy one
+into production certification from a trace alone.
 
 Use controlled differentials:
 
@@ -343,6 +424,15 @@ Every region needs magic, ABI version, byte size, sequence, count/capacity, and
 explicit overflow/invalid flags. Derived output must be rebuildable from the
 official WASM and the canonical build manifest.
 
+The transformed-game manifest owns only official-client facts: build identity,
+function/layout facts, the free table slot, and the layout payload. It does not
+repeat companion snapshot versions or sizes. The compiled companion exports
+one packed ABI/size contract for each shared-memory region, and the renderer
+checks those exports against its decoders before initialization. A snapshot
+change therefore cannot be hidden behind an otherwise-valid transformed cache.
+Any change to emitted game-transform bytes still raises
+`ENHANCEMENT_TRANSFORM_ABI`.
+
 Commands must be named domain operations with typed arguments, game-thread
 execution, loading/map preconditions, rate limits, cancellation, and explicit
 failure results. Never expose `writeMemory`, `callFunction`, or `sendPacket`.
@@ -357,23 +447,23 @@ are accepted by the decoder without having been seen. A domain leaves
 and until then nothing published from it may carry a semantic name that live
 evidence has not certified.
 
-| Domain | Foundation | Live evidence | Next proof |
-| --- | --- | --- | --- |
-| Hook lifecycle | Observed | continuous tick, reload, clean shutdown | one live map transition |
-| Map/player | Observed | live identity, 201-unit movement delta | one live map transition |
-| Target identity/distance | Observed | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
-| Cursor | Observed | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
-| Cursor presentation | Shipped, default-on | offline Electron + `cursor-capture` | play on a fresh certified build |
-| Target readout | Shipped, opt-in | decoder/readout unit suite | one live selected-target run |
-| Party | Not modeled | none | locate bounded roster |
-| Skills/recharge | Not modeled | none | locate skill context |
-| Effects/conditions | Not modeled | none | locate bounded effect collection |
-| Nearby agents | Partial array knowledge | player/target only | filtered collection ABI |
-| Inventory/equipment | Not modeled | none | lifecycle and string decoding |
-| Events/combat | No event channel | none | prove snapshot insufficiency first |
-| Game commands | Read-only by design | none | one harmless typed target command |
-| Packet-derived state | No packet hook | none | identify dispatch boundary |
-| Extension modules | Intentionally deferred | none | extract after repeated modules |
+| Domain                   | Foundation              | Live evidence                                        | Next proof                                    |
+| ------------------------ | ----------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| Hook lifecycle           | Observed                | continuous tick, reload, clean shutdown              | one live map transition                       |
+| Map/player               | Observed                | live identity, 201-unit movement delta               | one live map transition                       |
+| Target identity/distance | Observed                | target ID 1 -> 12, loading invalidation offline      | hostile/item/gadget and live map invalidation |
+| Cursor                   | Observed                | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps             |
+| Cursor presentation      | Shipped, default-on     | offline Electron + `cursor-capture`                  | play on a fresh certified build               |
+| Target readout           | Shipped, opt-in         | decoder/readout unit suite                           | one live selected-target run                  |
+| Party                    | Not modeled             | none                                                 | locate bounded roster                         |
+| Skills/recharge          | Not modeled             | none                                                 | locate skill context                          |
+| Effects/conditions       | Not modeled             | none                                                 | locate bounded effect collection              |
+| Nearby agents            | Partial array knowledge | player/target only                                   | filtered collection ABI                       |
+| Inventory/equipment      | Not modeled             | none                                                 | lifecycle and string decoding                 |
+| Events/combat            | No event channel        | none                                                 | prove snapshot insufficiency first            |
+| Game commands            | Read-only by design     | none                                                 | one harmless typed target command             |
+| Packet-derived state     | No packet hook          | none                                                 | identify dispatch boundary                    |
+| Extension modules        | Intentionally deferred  | none                                                 | extract after repeated modules                |
 
 Native DLL injection, GWCA pointers, Direct3D/ImGui rendering, and the Windows
 plugin ABI are replacement work, not compatibility targets.
@@ -389,5 +479,6 @@ A Enhancement feature is ready when:
 - no raw pointer, packet, or memory slice crosses Electron IPC;
 - cached startup does no transformation or network work;
 - one bounded scenario proves the real semantic change;
+- every mutating scenario has a durable before-state and acknowledged restore;
 - shutdown has no trap, rejection, unknown socket, or orphan process;
 - the unsupported-build path remains fully playable.

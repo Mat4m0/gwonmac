@@ -9,6 +9,7 @@ import {
   validateBuild,
   validateBuildFor,
 } from "../../../src/shared/builds/validate";
+import { resolveTeamApplyPlan } from "../../../src/shared/builds/team-apply";
 import type { ToolsHost } from "./host";
 import {
   buildById,
@@ -19,7 +20,6 @@ import {
   removeBuild,
   searchLibrary,
   teamById,
-  teamMemberLabel,
   teamId,
   type Build,
   type BuildLibrary,
@@ -31,15 +31,6 @@ type Notice = Readonly<{
   tone: "success" | "warning" | "error";
   message: string;
 }> | null;
-
-export type TeamHandoffRow = Readonly<{
-  slot: number;
-  member: string;
-  buildName: string;
-  status: "saved" | "blocked" | "failed";
-  fileName: string | null;
-  message: string;
-}>;
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -497,102 +488,58 @@ export function useLibrary(host: ToolsHost) {
     }
   };
 
-  const prepareTeam = async (team: Team): Promise<readonly TeamHandoffRow[]> => {
-    if (!library.value || saving.value) return [];
+  const applyTeam = async (team: Team) => {
+    if (!library.value || saving.value) return null;
     saving.value = true;
     const source = library.value;
-    const duplicateHeroes = new Set<number>();
-    const seenHeroes = new Set<number>();
-    for (const slot of team.slots.slice(1)) {
-      if (slot.hero === null) continue;
-      if (seenHeroes.has(slot.hero)) duplicateHeroes.add(slot.hero);
-      seenHeroes.add(slot.hero);
-    }
-
-    const publications = new Map<string, Awaited<ReturnType<ToolsHost["publishBuild"]>>>();
-    const failures = new Map<string, string>();
     try {
-      for (const [index, slot] of team.slots.entries()) {
-        if (slot.build === null) continue;
-        if (index > 0 && slot.hero === null) continue;
-        if (slot.hero !== null && duplicateHeroes.has(slot.hero)) continue;
-        const build = buildById(source, slot.build);
-        if (!build || publications.has(build.id) || failures.has(build.id)) continue;
-        if (!validateInContext(build, index === 0 ? "player" : "hero").valid) {
-          continue;
-        }
-        try {
-          publications.set(build.id, await host.publishBuild(build));
-        } catch (cause) {
-          failures.set(
-            build.id,
-            cause instanceof Error ? cause.message : "The template could not be saved.",
-          );
-        }
-      }
-
-      const rows: TeamHandoffRow[] = [];
-      for (const [index, slot] of team.slots.entries()) {
-        if (slot.build === null) continue;
-        const member = teamMemberLabel(slot.hero, index);
-        const build = buildById(source, slot.build);
-        if (!build) {
-          rows.push({
-            slot: index + 1, member, buildName: "Missing build",
-            status: "blocked", fileName: null,
-            message: "Choose a build that still exists in the library.",
-          });
-        } else if (index > 0 && slot.hero === null) {
-          rows.push({
-            slot: index + 1, member, buildName: build.name,
-            status: "blocked", fileName: null,
-            message: "Choose which hero runs this build.",
-          });
-        } else if (slot.hero !== null && duplicateHeroes.has(slot.hero)) {
-          rows.push({
-            slot: index + 1, member, buildName: build.name,
-            status: "blocked", fileName: null,
-            message: "A hero can occupy only one party slot.",
-          });
-        } else {
-          const verdict = validateInContext(
-            build,
-            index === 0 ? "player" : "hero",
-          );
-          if (!verdict.valid) {
-            rows.push({
-              slot: index + 1,
-              member,
-              buildName: build.name,
-              status: "blocked",
-              fileName: null,
-              message: "Repair this member’s build before writing its template.",
-            });
-            continue;
-          }
-          const published = publications.get(build.id);
-          rows.push(published
-            ? {
-                slot: index + 1, member, buildName: build.name,
-                status: "saved", fileName: published.fileName,
-                message: `Load ${published.fileName} for ${member}.`,
-              }
-            : {
-                slot: index + 1, member, buildName: build.name,
-                status: "failed", fileName: null,
-                message: failures.get(build.id) ?? "The template could not be saved.",
-              });
-        }
-      }
-      const saved = rows.filter((row) => row.status === "saved").length;
-      const blocked = rows.length - saved;
-      showNotice(
-        blocked === 0
-          ? `${saved} ${saved === 1 ? "slot is" : "slots are"} ready to load in Guild Wars.`
-          : `${saved} ready · ${blocked} need attention.`,
-        blocked === 0 ? "success" : "warning",
+      const resolution = resolveTeamApplyPlan(
+        team,
+        source,
+        (build, context) => validateInContext(build, context),
       );
-      return rows;
+      if (!resolution.valid) {
+        showNotice(
+          `${resolution.problems.length} team ${
+            resolution.problems.length === 1 ? "assignment needs" : "assignments need"
+          } attention before Apply.`,
+          "warning",
+        );
+        return null;
+      }
+      const result = await host.applyTeam(resolution.plan);
+      const changes = `${result.completedChanges} ${
+        result.completedChanges === 1 ? "change" : "changes"
+      }`;
+      const appliedAt = Date.now();
+      const next = {
+        ...source,
+        teams: source.teams.map((candidate) =>
+          candidate.id === team.id
+            ? { ...candidate, lastUsed: appliedAt }
+            : candidate,
+        ),
+      };
+      try {
+        await host.saveLibrary(next);
+        library.value = next;
+      } catch {
+        showNotice(
+          `Team applied (${changes}), but its last-used time could not be saved.`,
+          "warning",
+        );
+        return result;
+      }
+      showNotice(result.skillsSkipped
+        ? `Team applied · ${changes}. Guild Wars skipped one or more unavailable skills.`
+        : `Team applied · ${changes}.`);
+      return result;
+    } catch (cause) {
+      showNotice(
+        cause instanceof Error ? cause.message : "The team could not be applied.",
+        "error",
+      );
+      return null;
     } finally {
       saving.value = false;
     }
@@ -638,7 +585,7 @@ export function useLibrary(host: ToolsHost) {
     saveBuildDraft,
     createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
-    publish, prepareTeam, undo, reset,
+    publish, applyTeam, undo, reset,
     importBuild, createBlankBuild, createTeam,
   };
 }

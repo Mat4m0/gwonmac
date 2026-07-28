@@ -151,13 +151,21 @@ test("the launch argument prefix comes from the contracts too", () => {
       load([
         contracts.RENDERER_INIT_ARGUMENT +
           JSON.stringify({
-            enhancementSelection: { nativeCursor: true, targetReadout: true },
+            enhancementSelection: {
+              nativeCursor: true,
+              targetReadout: true,
+              teamManagement: true,
+            },
           }),
       ]).init,
     ),
     {
       enhancementAutomation: false,
-      enhancementSelection: { nativeCursor: false, targetReadout: false },
+      enhancementSelection: {
+        nativeCursor: false,
+        targetReadout: false,
+        teamManagement: false,
+      },
       templateFsTrace: false,
     },
   );
@@ -166,11 +174,15 @@ test("the launch argument prefix comes from the contracts too", () => {
       ...load([
         prefix +
           JSON.stringify({
-            enhancementSelection: { nativeCursor: true, targetReadout: true },
+            enhancementSelection: {
+              nativeCursor: true,
+              targetReadout: true,
+              teamManagement: true,
+            },
           }),
       ]).init.enhancementSelection,
     },
-    { nativeCursor: true, targetReadout: true },
+    { nativeCursor: true, targetReadout: true, teamManagement: true },
   );
 });
 

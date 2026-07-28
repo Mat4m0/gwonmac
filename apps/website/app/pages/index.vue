@@ -151,8 +151,10 @@ const SCREENSHOTS = [
             Probably not, but we cannot make promises on ArenaNet's behalf. The app downloads and
             preserves ArenaNet's official client artifact, and derives a local copy that repairs
             features the web build left unfinished: saving build templates, and drawing the cursor
-            the client already contains. It does not send game input or act on the player's behalf.
-            It is an interoperability layer that lets the client run on macOS.
+            the client already contains. Optional team management is off by default and acts only
+            when you press Apply in a PvE outpost; it is disabled in PvP maps and lobbies and stops
+            if Guild Wars does not acknowledge a change. There is no unattended, combat, economy,
+            or PvP automation.
           </p>
           <p>
             Still, use it at your own discretion:

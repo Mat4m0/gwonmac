@@ -27,13 +27,11 @@ const name = ref(props.team.name);
 const notes = ref(props.team.notes);
 const expandedSlot = ref<number | null>(null);
 const deleting = ref(false);
-const handoff = ref<Awaited<ReturnType<LibraryController["prepareTeam"]>>>([]);
 watch(
   () => props.team.id,
   () => {
     expandedSlot.value = null;
     deleting.value = false;
-    handoff.value = [];
   },
 );
 watch(
@@ -53,7 +51,9 @@ const usedHeroes = computed(() =>
   new Set(props.team.slots.flatMap((slot) => slot.hero === null ? [] : [slot.hero])),
 );
 const configured = computed(() =>
-  props.team.slots.filter((slot) => slot.build !== null).length,
+  props.team.slots.filter(
+    (slot, index) => slot.build !== null || (index > 0 && slot.hero !== null),
+  ).length,
 );
 
 const assignmentValid = (slot: TeamSlot, index: number): boolean => {
@@ -104,9 +104,7 @@ const toggleDisabled = (index: number, skillSlot: SkillSlotIndex) => {
   void updateSlot(index, { disabled }, "Hero skill automation updated");
 };
 
-const prepare = async () => {
-  handoff.value = await props.controller.prepareTeam(props.team);
-};
+const apply = () => props.controller.applyTeam(props.team);
 </script>
 
 <template>
@@ -321,26 +319,6 @@ const prepare = async () => {
         </li>
       </ol>
 
-      <section v-if="handoff.length" class="handoff-sheet" aria-labelledby="handoff-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="handoff-title">Ready in Guild Wars</h2>
-            <p>Nothing was applied automatically. Load each saved template on the named member.</p>
-          </div>
-          <button class="ui-button" @click="handoff = []">Close</button>
-        </div>
-        <ol>
-          <li v-for="row in handoff" :key="row.slot" :data-status="row.status">
-            <span class="slot-number">{{ row.slot }}</span>
-            <span><strong>{{ row.member }}</strong><small>{{ row.buildName }}</small></span>
-            <span class="ui-chip" :data-level="row.status === 'saved' ? 'good' : row.status === 'blocked' ? 'warn' : 'bad'">
-              {{ row.status }}
-            </span>
-            <span>{{ row.message }}</span>
-          </li>
-        </ol>
-      </section>
-
       <section class="notes-section team-notes">
         <label for="team-notes">Team notes</label>
         <textarea
@@ -368,15 +346,15 @@ const prepare = async () => {
     </div>
 
     <footer class="detail-actions detail-actions--explain">
-      <span>Templates are saved locally. GWonMac never presses Load for you.</span>
+      <span>Applies the roster, difficulty, builds, behavior, disabled skills, and pinned hero panels.</span>
       <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
       <button
         class="ui-button"
         data-variant="primary"
         :disabled="configured === 0 || controller.saving.value"
-        @click="prepare"
+        @click="apply"
       >
-        Prepare team handoff
+        {{ controller.saving.value ? "Applying…" : "Apply team" }}
       </button>
     </footer>
   </article>

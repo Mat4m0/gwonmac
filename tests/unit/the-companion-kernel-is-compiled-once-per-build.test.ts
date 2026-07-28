@@ -176,6 +176,18 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
       "build/renderer/companion-kernel.wasm",
     ]);
     assert.ok(args.includes("src/companion-kernel/lib.rs"));
+    assert.ok(
+      args.includes("link-arg=--export=__stack_pointer"),
+      "the shared-memory kernel stack pointer is not host-owned",
+    );
+    assert.ok(
+      args.includes("link-arg=--emit-relocs"),
+      "the shared-memory kernel data addresses cannot be relocated",
+    );
+    assert.ok(
+      !args.includes("link-arg=--strip-all"),
+      "strip-all removes the relocation evidence required by the loader",
+    );
   });
 });
 

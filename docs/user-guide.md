@@ -146,7 +146,8 @@ are cleared at startup and quit.
 
 Press **Command-B** while Guild Wars is running to open GWonMac Tools. The
 library stores reusable eight-skill builds and teams that reference those
-builds. It never presses game controls or changes the party for you.
+builds. Library editing and writing an individual template do not change the
+party.
 
 Open a build to edit a draft. Choose the primary and secondary professions,
 allocate the nonlinear 200-point attribute budget, then select a skill-bar
@@ -169,9 +170,30 @@ disabled.
 
 Opening a build from the player team slot allows player-only PvE skills.
 Opening it from a hero slot excludes them and reports any incompatible saved
-assignment before the handoff is prepared. **Prepare team handoff** writes the
-saved valid templates and reports each slot; applying them remains a player
-action inside Guild Wars.
+assignment before Apply. Team management is a separate opt-in setting and
+defaults off. After enabling it and restarting, **Apply team** performs one
+bounded reconciliation in a PvE outpost: it removes owned heroes not selected,
+adds selected heroes that are available, then applies the player and hero
+professions, attributes, skills, hero behaviour, and disabled-skill choices.
+Before removing or changing anything, Guild Wars' own live state must confirm
+that every selected hero is available, the final party fits the current
+outpost, and every member receiving a build has the requested primary
+profession. Low-level attribute allocations and secondary professions are
+submitted without a GWonMac policy check; Guild Wars remains authoritative
+about what that member can use. Unassigned
+mercenary heroes are currently rejected because their
+account-specific identity cannot be checked without reading character names.
+The command waits for Guild Wars to acknowledge each change and stops on the
+first failure. Account skill unlocks remain server-authoritative. Guild Wars
+may leave unavailable skills out of the applied bar; Apply then succeeds,
+reports one generic warning, and leaves the saved build unchanged so it can be
+used on another account or character.
+Team Apply is unavailable in explorable areas, PvP maps and lobbies, and Guild
+Halls. Difficulty mode and pinned hero panels are included in the same explicit
+Apply operation.
+
+For a repeatable player check before a release, follow the
+[team-management QA checklist](team-management-qa.md).
 
 ## Report a problem
 
@@ -266,8 +288,9 @@ requests. After that bounded pause, pressing the button asks GitHub again.
 ## When the client build is not certified
 
 Each ArenaNet client build is certified separately for two things: the repair
-that makes build templates, screenshots, and chat logs work, and the read-only
-enhancement transform used by the cursor and target readout. When ArenaNet ships
+that makes build templates, screenshots, and chat logs work, and the
+Enhancement transform used by the cursor, target readout, and optional team
+management. When ArenaNet ships
 a build this app has not certified — or has certified for saving files but not
 yet for the GWonMac Tools you selected — the loading screen says so once for
 that build, names exactly what is affected, and offers **Play Guild Wars** as

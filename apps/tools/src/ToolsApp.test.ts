@@ -1,19 +1,53 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import type { TeamSlots } from "../../../src/shared/builds/library";
+import type { TeamApplyResult } from "../../../src/shared/builds/team-apply";
 import ToolsApp from "./ToolsApp.vue";
-import { createDemoHost } from "./host";
+import { createDemoHost, type ToolsHost } from "./host";
 
-async function workbench() {
+async function workbench(host: ToolsHost = createDemoHost()) {
   const wrapper = mount(ToolsApp, {
     attachTo: document.body,
     props: {
-      host: createDemoHost(),
+      host,
       mode: "standalone",
       visible: true,
     },
   });
   await flushPromises();
   return wrapper;
+}
+
+function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
+  const demo = createDemoHost();
+  return {
+    ...demo,
+    async loadLibrary() {
+      const loaded = await demo.loadLibrary();
+      return {
+        ...loaded,
+        library: {
+          ...loaded.library,
+          teams: loaded.library.teams.map((team, teamIndex) => teamIndex === 0
+            ? {
+                ...team,
+                slots: team.slots.map((slot, slotIndex) => slotIndex === 0
+                  ? slot
+                  : {
+                      ...slot,
+                      hero: null,
+                      build: null,
+                      behaviour: null,
+                      panel: false,
+                      disabled: [],
+                    }) as unknown as TeamSlots,
+              }
+            : team),
+        },
+      };
+    },
+    applyTeam,
+  };
 }
 
 describe("ToolsApp", () => {
@@ -187,21 +221,81 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
-  it("prepares valid slots and blocks a player-only skill on a hero", async () => {
+  it("blocks Apply when a hero has a player-only skill", async () => {
     const wrapper = await workbench();
     await wrapper
       .findAll(".detail-actions .ui-button")
-      .find((button) => button.text().includes("Prepare team handoff"))!
+      .find((button) => button.text().includes("Apply team"))!
       .trigger("click");
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
     await flushPromises();
 
-    expect(wrapper.findAll(".handoff-sheet li")).toHaveLength(8);
-    expect(wrapper.findAll('.handoff-sheet li[data-status="saved"]')).toHaveLength(7);
-    expect(wrapper.findAll('.handoff-sheet li[data-status="blocked"]')).toHaveLength(1);
-    expect(wrapper.text()).toContain("Load");
+    expect(wrapper.text()).toContain("needs attention before Apply");
     expect(wrapper.text()).toContain("skills this member cannot equip");
-    expect(wrapper.text()).toContain("Nothing was applied automatically");
+    expect(wrapper.find(".handoff-sheet").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("runs the production Apply path once and reports actual changes", async () => {
+    let finish!: (result: TeamApplyResult) => void;
+    const pending = new Promise<TeamApplyResult>((resolve) => {
+      finish = resolve;
+    });
+    const plans: unknown[] = [];
+    const wrapper = await workbench(applicableHost(async (plan) => {
+      plans.push(plan);
+      return pending;
+    }));
+    const apply = wrapper
+      .findAll(".detail-actions .ui-button")
+      .find((button) => button.text().includes("Apply team"))!;
+
+    await apply.trigger("click");
+    await flushPromises();
+    expect(plans).toHaveLength(1);
+    expect(apply.text()).toBe("Applying…");
+    expect(apply.attributes("disabled")).toBeDefined();
+    await apply.trigger("click");
+    expect(plans).toHaveLength(1);
+
+    finish({ commandId: 7, completedChanges: 3, skillsSkipped: false });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Team applied · 3 changes.");
+    wrapper.unmount();
+  });
+
+  it("explains when Guild Wars omitted unavailable skills", async () => {
+    const wrapper = await workbench(applicableHost(async () => ({
+      commandId: 8,
+      completedChanges: 1,
+      skillsSkipped: true,
+    })));
+    await wrapper
+      .findAll(".detail-actions .ui-button")
+      .find((button) => button.text().includes("Apply team"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Team applied · 1 change.");
+    expect(wrapper.text()).toContain(
+      "Guild Wars skipped one or more unavailable skills.",
+    );
+    wrapper.unmount();
+  });
+
+  it("shows an authoritative Apply failure without changing the library", async () => {
+    const wrapper = await workbench(applicableHost(async () => {
+      throw new Error("Team management is available only in a PvE outpost.");
+    }));
+    await wrapper
+      .findAll(".detail-actions .ui-button")
+      .find((button) => button.text().includes("Apply team"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Team management is available only in a PvE outpost.",
+    );
+    expect(wrapper.text()).not.toContain("Team applied ·");
     wrapper.unmount();
   });
 

@@ -167,6 +167,7 @@ export interface ClockSyncResponse {
 export const ENHANCEMENTS = [
   "nativeCursor",
   "targetReadout",
+  "teamManagement",
 ] as const;
 
 export type Enhancement = (typeof ENHANCEMENTS)[number];
@@ -217,6 +218,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiRadius: 8,
   nativeCursor: true,
   targetReadout: false,
+  teamManagement: false,
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,

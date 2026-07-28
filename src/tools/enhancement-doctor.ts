@@ -32,6 +32,9 @@ export interface EnhancementDoctorReport {
    * player choice is off.
    */
   targetReadout: boolean;
+  /** The production Tools Apply button exists in every build, but can submit
+   * only when this opt-in selected the team-management kernel at launch. */
+  teamManagement: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -76,18 +79,25 @@ async function isFile(filename: string): Promise<boolean> {
  */
 async function readEnhancementSettings(
   profile: string,
-): Promise<Pick<EnhancementDoctorReport, "nativeCursor" | "targetReadout">> {
+): Promise<
+  Pick<
+    EnhancementDoctorReport,
+    "nativeCursor" | "targetReadout" | "teamManagement"
+  >
+> {
   try {
     const text = await readFile(path.join(profile, "settings.json"), "utf8");
     const settings = parseSettings(JSON.parse(text));
     return {
       nativeCursor: settings.nativeCursor,
       targetReadout: settings.targetReadout,
+      teamManagement: settings.teamManagement,
     };
   } catch {
     return {
       nativeCursor: DEFAULT_SETTINGS.nativeCursor,
       targetReadout: DEFAULT_SETTINGS.targetReadout,
+      teamManagement: DEFAULT_SETTINGS.teamManagement,
     };
   }
 }
@@ -142,7 +152,8 @@ export async function inspectEnhancementWorkspace(
     || (await isFile(path.join(profile, "credentials.bin")))
     || missing.length < required.length;
   const credentials = await isFile(path.join(profile, "credentials.bin"));
-  const { nativeCursor, targetReadout } = await readEnhancementSettings(profile);
+  const { nativeCursor, targetReadout, teamManagement } =
+    await readEnhancementSettings(profile);
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: EnhancementDoctorReport["artifacts"]["integrity"] =
     "invalid";
@@ -188,6 +199,7 @@ export async function inspectEnhancementWorkspace(
     credentials: credentials ? "saved" : "missing",
     nativeCursor,
     targetReadout,
+    teamManagement,
     artifacts: {
       ready: artifactsReady,
       missing,

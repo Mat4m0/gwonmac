@@ -30,20 +30,29 @@ const compatibility = (
 const NONE: EnhancementSelection = {
   nativeCursor: false,
   targetReadout: false,
+  teamManagement: false,
 };
 const CURSOR: EnhancementSelection = {
   nativeCursor: true,
   targetReadout: false,
+  teamManagement: false,
 };
 const READOUT: EnhancementSelection = {
   nativeCursor: false,
   targetReadout: true,
+  teamManagement: false,
 };
 const BOTH: EnhancementSelection = {
   nativeCursor: true,
   targetReadout: true,
+  teamManagement: false,
 };
-const SELECTIONS = [NONE, CURSOR, READOUT, BOTH];
+const TEAM: EnhancementSelection = {
+  nativeCursor: false,
+  targetReadout: false,
+  teamManagement: true,
+};
+const SELECTIONS = [NONE, CURSOR, READOUT, BOTH, TEAM];
 
 const STATES: ClientCompatibilityState[] = [
   "certified",
@@ -192,6 +201,7 @@ describe("client compatibility notice", () => {
         if (!degraded) continue;
         assert.equal(/game cursor/.test(said), selection.nativeCursor);
         assert.equal(/target readout/.test(said), selection.targetReadout);
+        assert.equal(/team management/.test(said), selection.teamManagement);
       }
     }
   });

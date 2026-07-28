@@ -123,7 +123,9 @@ declare global {
   }
 
   interface EnhancementSettingsController {
-    patchFor(control: HTMLInputElement | HTMLSelectElement): AppSettingsPatch | null;
+    patchFor(
+      control: HTMLInputElement | HTMLSelectElement,
+    ): AppSettingsPatch | null;
     render(settings: AppSettings): void;
     resultFor(
       control: HTMLInputElement | HTMLSelectElement,
@@ -154,6 +156,7 @@ declare global {
     gwCompanionInstallations?: number;
     gwCompanionRuntime?: Record<string, unknown> | null;
     gwCompanionState?: CompanionState;
+    gwCompanionTeam?: CompanionState;
     readonly gwEnhancementSettings: Readonly<{
       create(options: {
         form: HTMLFormElement;
@@ -168,15 +171,17 @@ declare global {
       livePrograms: number;
       passThrough: Record<string, number>;
     }>;
-    gwTemplateFilesystemTrace?(): ReadonlyArray<Readonly<{
-      sequence: number;
-      operation: string;
-      kind?: "skills" | "equipment";
-      fd?: number;
-      errno?: number;
-      requested?: number;
-      written?: number;
-    }>>;
+    gwTemplateFilesystemTrace?(): ReadonlyArray<
+      Readonly<{
+        sequence: number;
+        operation: string;
+        kind?: "skills" | "equipment";
+        fd?: number;
+        errno?: number;
+        requested?: number;
+        written?: number;
+      }>
+    >;
   }
 }
 

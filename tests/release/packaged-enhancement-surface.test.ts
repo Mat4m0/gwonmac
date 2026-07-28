@@ -139,14 +139,22 @@ console.log(
     none: policy.enhancementsEnabledFor({
       nativeCursor: false,
       targetReadout: false,
+      teamManagement: false,
     }),
     cursorOnly: policy.enhancementsEnabledFor({
       nativeCursor: true,
       targetReadout: false,
+      teamManagement: false,
     }),
     readoutOnly: policy.enhancementsEnabledFor({
       nativeCursor: false,
       targetReadout: true,
+      teamManagement: false,
+    }),
+    teamOnly: policy.enhancementsEnabledFor({
+      nativeCursor: false,
+      targetReadout: false,
+      teamManagement: true,
     }),
   }),
 );
@@ -159,6 +167,7 @@ interface EnhancementGate {
   none: boolean;
   cursorOnly: boolean;
   readoutOnly: boolean;
+  teamOnly: boolean;
 }
 
 /** Loads the packaged policy module in a build that is, or is not, packaged. */
@@ -198,6 +207,7 @@ test("automation is the one tier a packaged build cannot reach", () => {
     assert.equal(gate.none, false);
     assert.equal(gate.cursorOnly, true);
     assert.equal(gate.readoutOnly, true);
+    assert.equal(gate.teamOnly, true);
   }
 
   // Unpackaged, the variable is the switch, and only the exact value "1".
@@ -224,15 +234,19 @@ test("the tools keep independent defaults and explicit choices", async () => {
 
   assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
   assert.equal(DEFAULT_SETTINGS.targetReadout, false);
+  assert.equal(DEFAULT_SETTINGS.teamManagement, false);
   // A profile from before the flip never wrote the key; it gets the default.
   assert.equal(parseSettings({ renderScale: 1 }).nativeCursor, true);
   assert.equal(parseSettings({ renderScale: 1 }).targetReadout, false);
+  assert.equal(parseSettings({ renderScale: 1 }).teamManagement, false);
   // A player who turned it off keeps it off across the same read path. The
   // default must never be re-applied over a recorded "no".
   assert.equal(parseSettings({ nativeCursor: false }).nativeCursor, false);
   assert.equal(parseSettings({ targetReadout: true }).targetReadout, true);
+  assert.equal(parseSettings({ teamManagement: true }).teamManagement, true);
 
   // Every choice is reachable from the shipped UI, not only from the file.
   assert.match(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
   assert.match(shippedText("/build/renderer/index.html"), /name="targetReadout"/u);
+  assert.match(shippedText("/build/renderer/index.html"), /name="teamManagement"/u);
 });

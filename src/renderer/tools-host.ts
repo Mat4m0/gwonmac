@@ -1,4 +1,8 @@
 import type { publishBuildTemplate } from "./build-projection.js";
+import type {
+  TeamApplyPlan,
+  TeamApplyResult,
+} from "../shared/builds/team-apply.js";
 
 type ToolsAppHandle = Readonly<{
   show(): void;
@@ -14,6 +18,7 @@ type ToolsBundle = Readonly<{
       initiallyVisible?: boolean;
       onVisibilityChange?: (visible: boolean) => void;
       publishBuild: typeof publishBuildTemplate;
+      applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
     },
   ): ToolsAppHandle;
 }>;
@@ -62,6 +67,10 @@ export function installToolsHost({
         handle = module.mountToolsApp(root, {
           initiallyVisible: false,
           publishBuild,
+          applyTeam: (plan) =>
+            import("./enhancements.js").then(({ submitTeamPlan }) =>
+              submitTeamPlan(plan),
+            ),
           onVisibilityChange(next) {
             visible = next;
             if (!next) {

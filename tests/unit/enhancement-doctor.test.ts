@@ -101,17 +101,23 @@ describe("Enhancement workspace doctor", () => {
       {
         nativeCursor: initial.nativeCursor,
         targetReadout: initial.targetReadout,
+        teamManagement: initial.teamManagement,
       },
-      { nativeCursor: true, targetReadout: false },
+      { nativeCursor: true, targetReadout: false, teamManagement: false },
     );
 
     await writeFile(
       settings,
-      JSON.stringify({ nativeCursor: false, targetReadout: true }),
+      JSON.stringify({
+        nativeCursor: false,
+        targetReadout: true,
+        teamManagement: true,
+      }),
     );
     const selected = await inspectEnhancementWorkspace(profile);
     assert.equal(selected.nativeCursor, false);
     assert.equal(selected.targetReadout, true);
+    assert.equal(selected.teamManagement, true);
 
     // loadSettings() renames a corrupt file aside and writes a backup. A doctor
     // reads the profile it is asked about and leaves it exactly as it found it.
@@ -119,6 +125,7 @@ describe("Enhancement workspace doctor", () => {
     const defaults = await inspectEnhancementWorkspace(profile);
     assert.equal(defaults.nativeCursor, true);
     assert.equal(defaults.targetReadout, false);
+    assert.equal(defaults.teamManagement, false);
     assert.equal(await readFile(settings, "utf8"), "{ not json");
     assert.deepEqual(await readdir(profile), ["settings.json"]);
   });

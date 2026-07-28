@@ -49,7 +49,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/diagnostics/`   | closed event schema, export detector, pattern scanner             |
 | `src/preload/preload.body.cjs` | sandbox-compatible bridge; `scripts/generate-preload.ts` splices the canonical constants above it |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
-| `src/companion-kernel/`     | freestanding read-only game-state companion WASM                  |
+| `src/companion-kernel/`     | freestanding checked snapshot and team-command WASM               |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
 | `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
@@ -347,7 +347,7 @@ switched off applies only the certified template-save compatibility transform
 described above: it does no Enhancement transform, fetches no kernel, installs no
 Enhancement hook, starts no snapshot observer, and contains no Enhancement UI.
 
-The two shipped tools are independent. `nativeCursor` defaults to **true** and
+The three shipped tools are independent. `nativeCursor` defaults to **true** and
 reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
 owns the only added overlay, `src/renderer/enhancement-readout.ts`: a fixed line at
 the top centre of the game view showing the selected target's distance in game
@@ -357,15 +357,38 @@ renders nothing without a selected target, on a loading screen, after a torn
 read, or on an unsupported build. It is `pointer-events: none` and
 `aria-live="off"`.
 
+`teamManagement` also defaults to **false**. When selected, the kernel publishes
+the checked player/owned-hero build snapshot and accepts one copied fixed team
+plan. The plan is resolved from the canonical Team and Build library, never
+persisted, and contains no function indices or pointers. On an explicit Apply,
+the kernel requires a PvE outpost, rejects official map metadata marked PvP or
+Guild Hall, then performs one read-only preflight before any dispatcher can
+run. The exact-build layout reads `PartyInfo` players, henchmen and heroes,
+`WorldContext.hero_info`, the player and hero levels, and the current
+`AreaInfo.max_party_size`. The preflight rejects unavailable HeroIDs, a final
+party over capacity, and a mismatched primary profession with zero game
+writes. It does not duplicate Guild Wars' low-level attribute, profession, or
+unlock rules: Apply submits the saved build and reports the state Guild Wars
+accepts.
+Standard heroes are available only when
+present in `hero_info`; an already-present mercenary is accepted, while an
+absent mercenary fails closed because proving its account-specific assignment
+would require a name read. The kernel then reconciles the owned HeroID set and
+walks each selected member through profession, attributes, skills, behaviour,
+and disabled skills. Only one game request may be outstanding; every request
+advances only after exact readback, has no retry, and times out. Skill unlock
+applicability is not projected into the preflight; the game/server remains
+authoritative and lack of the requested readback is a hard failure.
+
 `ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. There is
 no stored or transported master switch: `enhancement-policy.ts` derives whether
 main should prepare the transformed module from whether any tool is selected,
 plus the development-only automation gate. Main snapshots the per-tool record
 once at startup and sends that one record in `RendererInit`; the generated
 preload iterates the canonical tool list rather than copying its names.
-Automation remains unreachable from a packaged build whatever the environment
-says, which keeps "does not send game input or act on the player's behalf" a
-mechanically testable claim.
+The broad developer automation tier remains unreachable from a packaged build
+whatever the environment says. Product team management is separate: it is
+reachable only through the player's stored opt-in and foreground Apply action.
 
 A running session cannot honour a tool change because the kernel feature flags
 are fixed at initialization, so the write and restart are one action:
@@ -409,6 +432,15 @@ through the game's allocator, instantiates the dependency-free
 callback, and enables the dispatcher last. The callback calls the relocated
 original exactly once, then collects cursor state and map/player/target state
 only for their enabled feature bits.
+
+Importing the game's memory does not give the companion a private Rust address
+space. The build therefore retains LLVM's relocation records. Before
+instantiation, the renderer allocates the companion's data image and stack
+through the game allocator, rewrites only the recorded memory relocations, and
+sets the exported stack pointer. Kernel mutable state is another host-owned
+allocation reached through one imported accessor. A new relocation kind fails
+closed. This prevents module instantiation or a large Rust stack frame from
+overwriting the client's live 1 MiB region.
 
 Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
@@ -825,7 +857,7 @@ two that read _none_ today are recorded rather than quietly kept.
 
 | Claim | Where it is made | What executes to prove it |
 | --- | --- | --- |
-| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-enhancement-surface.test.ts` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/enhancement-policy.js` in a child process with `app.isPackaged` forced true and reads `ENHANCEMENT_AUTOMATION_ENABLED` as `false` for every value of `GW_ENHANCEMENT_AUTOMATION`, leaving `enhancementsEnabledFor` and the player's explicit per-tool selection as the only way in |
+| Team management is explicit, opt-in, PvE-outpost-only, acknowledged, and stops on failure | website FAQ, settings, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` proves the tool defaults off and only the stored selection enables its transformed runtime; `tests/integration/enhancements.test.ts` proves PvP/Guild-Hall rejection, roster acknowledgement before builds, one outstanding request, no retry, timeout, and complete build readback |
 | The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.ts` for publication, corruption repair and rollback |
 | No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |

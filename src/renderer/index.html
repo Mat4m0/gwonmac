@@ -101,6 +101,13 @@
           </label>
           <span id="data-choice-target-readout-note" role="status" hidden></span>
         </p>
+        <p>
+          <label>
+            <input type="checkbox" id="data-choice-team-management">
+            Enable build and hero team management — changing this restarts the app
+          </label>
+          <span id="data-choice-team-management-note" role="status" hidden></span>
+        </p>
       </div>
       <div class="data-choice-actions">
         <button type="button" id="data-choice-full" class="data-choice-option">
@@ -387,6 +394,11 @@
             <span>Show target distance and range</span>
           </label>
           <p class="ui-field-hint">Shows a read-only distance and range band for the selected target at the top of the game view. Off by default. Changing this restarts the app; you will be asked first.</p>
+          <label class="ui-check">
+            <input type="checkbox" name="teamManagement">
+            <span>Enable build and hero team management</span>
+          </label>
+          <p class="ui-field-hint">Allows an explicit Apply action in the Tools window to reconcile your owned heroes and their builds in PvE outposts. It stays unavailable in PvP maps, PvP lobbies, Guild Halls, and explorable areas. Off by default. Changing this restarts the app; you will be asked first.</p>
           <p id="settings-compat-status" class="settings-status"
              role="status"></p>
           <p id="settings-compat-detail" class="ui-field-hint"></p>

@@ -8,6 +8,10 @@ import {
   type Attribute,
   type Profession,
 } from "../../../src/shared/builds/library";
+import type {
+  TeamApplyPlan,
+  TeamApplyResult,
+} from "../../../src/shared/builds/team-apply";
 import { demoLibrary, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import {
@@ -32,6 +36,7 @@ export interface ToolsHost {
   loadLibrary(): Promise<LibraryLoad>;
   saveLibrary(library: BuildLibrary): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
+  applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
   reset?(): Promise<LibraryLoad>;
 }
 
@@ -77,6 +82,10 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { fileName: safeFileName(build.name), location: "Templates/Skills" };
     },
+    async applyTeam() {
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      return { commandId: 1, completedChanges: 0, skillsSkipped: false };
+    },
     async reset() {
       storage?.removeItem(STORAGE_KEY);
       memory = cloneLibrary(demoLibrary);
@@ -88,6 +97,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
 export function createNativeHost(
   api: GwNativeApi,
   publishBuild: (build: Build) => Promise<PublishedTemplate>,
+  applyTeam: (plan: TeamApplyPlan) => Promise<TeamApplyResult>,
 ): ToolsHost {
   const skills = createSkillCatalogue([]);
   const profession = new Set<Profession>(
@@ -154,5 +164,6 @@ export function createNativeHost(
       await api.buildLibrary.set(library);
     },
     publishBuild,
+    applyTeam,
   };
 }

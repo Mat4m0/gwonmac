@@ -29,7 +29,8 @@ import {
 
 const scratchDirs: string[] = [];
 after(async () => {
-  for (const dir of scratchDirs) await rm(dir, { recursive: true, force: true });
+  for (const dir of scratchDirs)
+    await rm(dir, { recursive: true, force: true });
 });
 
 function sha256(bytes: Uint8Array): string {
@@ -68,43 +69,67 @@ const CALL_OFFSET = 5;
  * stub/caller plus the exported typed loop and empty table slot Enhancement needs.
  */
 function officialFixture(): Uint8Array {
-  const types = section(1, [
-    3,
-    0x60, 2, 0x7f, 0x7f, 1, 0x7f,
-    0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
-    0x60, 1, 0x7f, 0,
-  ]);
+  const types = section(
+    1,
+    [
+      7, 0x60, 2, 0x7f, 0x7f, 1, 0x7f, 0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
+      0x60, 1, 0x7f, 0, 0x60, 2, 0x7f, 0x7f, 0, 0x60, 3, 0x7f, 0x7f, 0x7f, 0,
+      0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 0, 0x60, 3, 0x7f, 0x7f, 0x7f, 1, 0x7f,
+    ],
+  );
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [3, 0, 0, 2]);
+  const functions = section(3, [7, 0, 0, 2, 3, 4, 5, 6]);
   const table = section(4, [1, 0x70, 1, 1, 1]);
   const globals = section(6, [0]);
   const callerName = [...new TextEncoder().encode("caller")];
-  const loopName = [
-    ...new TextEncoder().encode("EmscriptenExeThreadMainLoop"),
-  ];
+  const loopName = [...new TextEncoder().encode("EmscriptenExeThreadMainLoop")];
   const exports = section(7, [
     3,
-    ...uleb(callerName.length), ...callerName, 0, 2,
-    ...uleb(loopName.length), ...loopName, 0, 3,
-    3, 116, 98, 108, 1, 0,
+    ...uleb(callerName.length),
+    ...callerName,
+    0,
+    2,
+    ...uleb(loopName.length),
+    ...loopName,
+    0,
+    3,
+    3,
+    116,
+    98,
+    108,
+    1,
+    0,
   ]);
   const elements = section(9, [0]);
-  const caller = [
-    0,
-    0x20, 0,
-    0x20, 1,
-    ...paddedCall(1),
-    0x0b,
-  ];
+  const caller = [0, 0x20, 0, 0x20, 1, ...paddedCall(1), 0x0b];
   const loop = [0, 0x0b];
+  const result = [0, 0x41, 1, 0x0b];
   const code = section(10, [
-    3,
-    ...uleb(STUB_BODY.length), ...STUB_BODY,
-    ...uleb(caller.length), ...caller,
-    ...uleb(loop.length), ...loop,
+    7,
+    ...uleb(STUB_BODY.length),
+    ...STUB_BODY,
+    ...uleb(caller.length),
+    ...caller,
+    ...uleb(loop.length),
+    ...loop,
+    ...uleb(loop.length),
+    ...loop,
+    ...uleb(loop.length),
+    ...loop,
+    ...uleb(loop.length),
+    ...loop,
+    ...uleb(result.length),
+    ...result,
   ]);
   return Uint8Array.from([
-    0, 97, 115, 109, 1, 0, 0, 0,
+    0,
+    97,
+    115,
+    109,
+    1,
+    0,
+    0,
+    0,
     ...types,
     ...imports,
     ...functions,
@@ -149,6 +174,15 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 0,
+    heroAddDispatchFunction: 3,
+    heroKickDispatchFunction: 3,
+    difficultyDispatchFunction: 3,
+    secondaryProfessionDispatchFunction: 4,
+    attributeDispatchFunction: 6,
+    skillbarDispatchFunction: 5,
+    heroBehaviorDispatchFunction: 4,
+    heroSkillToggleDispatchFunction: 4,
+    uiMessageDispatchFunction: 5,
     layout: {
       contextRoot: 1,
       agentArray: 2,
@@ -160,7 +194,40 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
       isExplorable: 6,
       currentMapId: 7,
       currentInstanceType: 8,
+      areaInfoBase: 25,
       playerNumber: 9,
+      partyContext: 76,
+      playerParty: 84,
+      partyHeroes: 36,
+      heroMemberStride: 24,
+      heroAgentId: 0,
+      heroOwnerPlayerId: 4,
+      heroId: 8,
+      worldContext: 44,
+      worldAttributes: 172,
+      partyAttributeStride: 1084,
+      partyAttributeAgentId: 0,
+      partyAttributeValues: 4,
+      attributeStride: 20,
+      attributeId: 0,
+      attributeBaseRank: 4,
+      worldHeroFlags: 1412,
+      heroFlagStride: 36,
+      heroFlagHeroId: 0,
+      heroFlagAgentId: 4,
+      heroFlagBehavior: 12,
+      worldProfessionStates: 1724,
+      professionStateStride: 20,
+      professionStateAgentId: 0,
+      professionStatePrimary: 4,
+      professionStateSecondary: 8,
+      worldSkillbars: 1776,
+      skillbarStride: 188,
+      skillbarAgentId: 0,
+      skillbarSkills: 4,
+      skillStride: 20,
+      skillId: 12,
+      skillbarDisabled: 164,
       agentId: 10,
       agentX: 11,
       agentY: 12,
@@ -179,6 +246,18 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
       cursorTextureType: 12,
       cursorTextureWidth: 20,
       cursorTextureHeight: 24,
+      partyPlayers: 4,
+      playerMemberStride: 12,
+      partyHenchmen: 20,
+      henchmanMemberStride: 52,
+      heroMemberLevel: 20,
+      worldHeroInfo: 0x594,
+      heroInfoStride: 0x9c,
+      heroInfoHeroId: 0,
+      heroInfoLevel: 8,
+      heroInfoPrimary: 12,
+      heroInfoSecondary: 16,
+      agentLevel: 0x110,
     },
   };
 }
@@ -263,7 +342,8 @@ describe("client module preparation", () => {
       ),
     );
     assert.equal(
-      WebAssembly.Module.customSections(module, ENHANCEMENT_MANIFEST_SECTION).length,
+      WebAssembly.Module.customSections(module, ENHANCEMENT_MANIFEST_SECTION)
+        .length,
       1,
     );
 
@@ -372,7 +452,10 @@ describe("client module preparation", () => {
         true,
       ),
     );
-    assert.equal(afterTemplateFailure.wasmPath, templateFailure.officialWasmPath);
+    assert.equal(
+      afterTemplateFailure.wasmPath,
+      templateFailure.officialWasmPath,
+    );
     assert.equal(afterTemplateFailure.state, "uncertified");
     assert.equal(afterTemplateFailure.failure?.stage, "template-save");
     await assertMissing(templateFailure.enhancementCacheRoot);

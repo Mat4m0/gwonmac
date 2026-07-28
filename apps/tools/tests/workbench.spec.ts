@@ -112,7 +112,7 @@ test("keeps imported conflicts visible and repairs a profession change", async (
   await expect(page.getByRole("heading", { name: /Choose skill/ })).toBeVisible();
 });
 
-test("builds a handoff for a fresh account with one hero", async ({ page }) => {
+test("applies a fresh account team with one hero", async ({ page }) => {
   await page.getByRole("button", { name: "New team" }).click();
   await page.getByLabel("Name optional").fill("Me and Koss");
   await page.getByRole("button", { name: "Create team" }).click();
@@ -126,10 +126,13 @@ test("builds a handoff for a fresh account with one hero", async ({ page }) => {
   await hero.getByRole("checkbox", { name: /skill panel/ }).check();
   await hero.getByRole("button", { name: /1 Discord/ }).click();
 
-  await page.getByRole("button", { name: "Prepare team handoff" }).click();
-  await expect(page.locator(".handoff-sheet li")).toHaveCount(2);
-  await expect(page.locator('.handoff-sheet li[data-status="saved"]')).toHaveCount(2);
-  await expect(page.getByText("Nothing was applied automatically")).toBeVisible();
+  await page.getByRole("button", { name: "Apply team" }).click();
+  await expect(page.getByText(/Team applied/)).toBeVisible();
+  await expect(
+    page.getByText(
+      /Applies the roster, difficulty, builds, behavior, disabled skills, and pinned hero panels/,
+    ),
+  ).toBeVisible();
 });
 
 for (const width of [320, 360, 640]) {

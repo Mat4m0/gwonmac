@@ -27,6 +27,8 @@ hash, that routes the broken routines back into the host.
 | [host-bridge.md](host-bridge.md) | us | What we actually ship: the transform, the five markers, the bridge contract, and the invariants that must hold. |
 | [recertify.md](recertify.md) | us | The procedure when ArenaNet publishes a new client. Every index and offset below is build-specific. |
 | [investigation-log.md](investigation-log.md) | us | The chronology, including every wrong turn and what corrected it. Read this before re-deriving anything. |
+| [hero-automation.md](hero-automation.md) | us | The controlled static and live experiment loop for party, hero, and template primitives. |
+| [enhancement-retrospective.md](enhancement-retrospective.md) | us | The evidence language, durable ownership boundaries, and ordered long-term workflow after the hero-management investigation. |
 
 ## The build this describes
 

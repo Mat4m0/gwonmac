@@ -27,12 +27,6 @@ import {
   ENHANCEMENT_BUILDS,
   enhancementLayoutWords,
 } from "../src/main/core/enhancement-builds.ts";
-import {
-  COMPANION_CURSOR_ABI,
-  COMPANION_CURSOR_BYTES,
-  COMPANION_SNAPSHOT_ABI,
-  COMPANION_SNAPSHOT_BYTES,
-} from "../src/renderer/companion-snapshot.ts";
 import { root } from "./electron/fixtures.mts";
 
 /**
@@ -87,10 +81,8 @@ assert.ok(
 );
 
 const OFFICIAL_WASM = Uint8Array.from([
-  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-  0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
-  0x03, 0x02, 0x01, 0x00,
-  0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
+  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00,
+  0x00, 0x03, 0x02, 0x01, 0x00, 0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 ]);
 const OFFICIAL_SHA256 = createHash("sha256")
   .update(OFFICIAL_WASM)
@@ -98,12 +90,11 @@ const OFFICIAL_SHA256 = createHash("sha256")
 // `assert.fail` returns `never`, so this is the build itself rather than an
 // optional every function below would have to re-narrow.
 const ENHANCEMENT_BUILD =
-  ENHANCEMENT_BUILDS[0] ?? assert.fail("the canonical Enhancement build table is empty");
+  ENHANCEMENT_BUILDS[0] ??
+  assert.fail("the canonical Enhancement build table is empty");
 const LAYOUT_WORDS = enhancementLayoutWords(ENHANCEMENT_BUILD.layout);
 const SNAPSHOT_BYTES = Uint8Array.of(0);
-const SNAPSHOT_HASH = createHash("md5")
-  .update(SNAPSHOT_BYTES)
-  .digest("hex");
+const SNAPSHOT_HASH = createHash("md5").update(SNAPSHOT_BYTES).digest("hex");
 const SYNTHETIC_GLUE = [
   "Module.instantiateWasm({ env: {} }, function () {",
   "  Module.onRuntimeInitialized();",
@@ -125,8 +116,17 @@ function customSectionModule(nameText: string, payload: number[] = []) {
   const name = [...new TextEncoder().encode(nameText)];
   const body = [...uleb(name.length), ...name, ...payload];
   return Uint8Array.from([
-    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-    0x00, ...uleb(body.length), ...body,
+    0x00,
+    0x61,
+    0x73,
+    0x6d,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    ...uleb(body.length),
+    ...body,
   ]);
 }
 
@@ -138,17 +138,17 @@ function manifestMarkerModule() {
 }
 
 function installableManifestModule() {
-  const manifest = [...new TextEncoder().encode(JSON.stringify({
-    snapshotAbi: COMPANION_SNAPSHOT_ABI,
-    snapshotBytes: COMPANION_SNAPSHOT_BYTES,
-    cursorSnapshotAbi: COMPANION_CURSOR_ABI,
-    cursorSnapshotBytes: COMPANION_CURSOR_BYTES,
-    configBytes: LAYOUT_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
-    buildId: ENHANCEMENT_BUILD.buildId,
-    programId: ENHANCEMENT_BUILD.programId,
-    tableSlot: ENHANCEMENT_BUILD.tableSlot,
-    layoutWords: LAYOUT_WORDS,
-  }))];
+  const manifest = [
+    ...new TextEncoder().encode(
+      JSON.stringify({
+        configBytes: LAYOUT_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
+        buildId: ENHANCEMENT_BUILD.buildId,
+        programId: ENHANCEMENT_BUILD.programId,
+        tableSlot: ENHANCEMENT_BUILD.tableSlot,
+        layoutWords: LAYOUT_WORDS,
+      }),
+    ),
+  ];
   return customSectionModule("enhancement_manifest", manifest);
 }
 
@@ -188,8 +188,8 @@ async function connectCdp(port: number, child: ChildProcess, output: string[]) {
     }
   }
   throw new Error(
-    `packaged Chromium did not expose CDP: ${String(lastError)}\n`
-      + output.join("").slice(-4_000),
+    `packaged Chromium did not expose CDP: ${String(lastError)}\n` +
+      output.join("").slice(-4_000),
   );
 }
 
@@ -201,8 +201,9 @@ async function rendererPage(
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && child.exitCode === null) {
     for (const context of browser.contexts()) {
-      const page = context.pages().find((candidate) =>
-        candidate.url().startsWith("gw://app/"));
+      const page = context
+        .pages()
+        .find((candidate) => candidate.url().startsWith("gw://app/"));
       if (page) {
         await page.waitForLoadState("domcontentloaded");
         return page;
@@ -239,10 +240,7 @@ interface LaunchOptions {
 async function launchPackaged(
   prefix: string,
   settings: AppSettingsPatch,
-  {
-    cachedOnly = false,
-    prepare = async () => undefined,
-  }: LaunchOptions = {},
+  { cachedOnly = false, prepare = async () => undefined }: LaunchOptions = {},
 ) {
   const userData = await mkdtemp(path.join(tmpdir(), prefix));
   const artifacts = path.join(userData, "game", "artifacts");
@@ -313,36 +311,35 @@ async function driveHarnessRuntime(page: Page) {
   await page.waitForFunction(() => {
     const { Module } = globalThis as PageGlobals;
     return (
-      typeof Module?.instantiateWasm === "function"
-      && typeof Module?.socket?.connect === "function"
+      typeof Module?.instantiateWasm === "function" &&
+      typeof Module?.socket?.connect === "function"
     );
   });
-  return page.evaluate(() =>
-    new Promise<{ manifestSections: number; enhancementHookExports: string[] }>(
-      (resolve, reject) => {
+  return page.evaluate(
+    () =>
+      new Promise<{
+        manifestSections: number;
+        enhancementHookExports: string[];
+      }>((resolve, reject) => {
         const timeout = setTimeout(
           () => reject(new Error("synthetic game module did not instantiate")),
           10_000,
         );
         const { Module } = globalThis as PageGlobals;
         if (!Module) throw new Error("the renderer published no Module");
-        Module.instantiateWasm(
-          { env: {} },
-          (_instance, module) => {
-            clearTimeout(timeout);
-            resolve({
-              manifestSections: WebAssembly.Module.customSections(
-                module,
-                "enhancement_manifest",
-              ).length,
-              enhancementHookExports: WebAssembly.Module.exports(module)
-                .filter((entry) => entry.name.startsWith("enhancement_"))
-                .map((entry) => entry.name),
-            });
-          },
-        );
-      },
-    ),
+        Module.instantiateWasm({ env: {} }, (_instance, module) => {
+          clearTimeout(timeout);
+          resolve({
+            manifestSections: WebAssembly.Module.customSections(
+              module,
+              "enhancement_manifest",
+            ).length,
+            enhancementHookExports: WebAssembly.Module.exports(module)
+              .filter((entry) => entry.name.startsWith("enhancement_"))
+              .map((entry) => entry.name),
+          });
+        });
+      }),
   );
 }
 
@@ -374,7 +371,10 @@ async function seedCachedClient({ artifacts, userData }: LaunchPaths) {
       path.join(compatibility, "Gw.jspi.wasm"),
       "stale compatibility output",
     ),
-    writeFile(path.join(enhancement, "Gw.jspi.wasm"), "stale Enhancement output"),
+    writeFile(
+      path.join(enhancement, "Gw.jspi.wasm"),
+      "stale Enhancement output",
+    ),
   ]);
 }
 
@@ -403,29 +403,24 @@ async function assertPackagedOffSession() {
       return progress.phase === "ready";
     });
     await fixture.page.waitForFunction(
-      () =>
-        performance.getEntriesByName("gw.runtime.initialized").length > 0,
+      () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
     );
-    assert.deepEqual(
-      await fixture.page.evaluate(() => window.gwNative.init),
-      {
-        enhancementAutomation: false,
-        enhancementSelection: {
-          nativeCursor: false,
-          targetReadout: false,
-        },
-        templateFsTrace: false,
+    assert.deepEqual(await fixture.page.evaluate(() => window.gwNative.init), {
+      enhancementAutomation: false,
+      enhancementSelection: {
+        nativeCursor: false,
+        targetReadout: false,
+        teamManagement: false,
       },
-    );
+      templateFsTrace: false,
+    });
 
     const session = await fixture.page.evaluate(() =>
-      window.gwNative.client.session());
+      window.gwNative.client.session(),
+    );
     assert.equal(session.compatibility?.state, "uncertified");
     assert.equal(session.compatibility?.enhancementActive, false);
-    assert.match(
-      session.compatibility?.clientSha256 ?? "",
-      /^[a-f0-9]{64}$/u,
-    );
+    assert.match(session.compatibility?.clientSha256 ?? "", /^[a-f0-9]{64}$/u);
 
     // Typed as the manifest main seals rather than as `any`: the two fields
     // below are optional in that contract, and the assertions say outright
@@ -460,12 +455,11 @@ async function assertPackagedOffSession() {
       enhancementHookExports: [],
     });
     assert.deepEqual(
-      await fixture.page.evaluate(async () =>
-        [
-          ...new Uint8Array(
-            await (await globalThis.fetch("Gw.jspi.wasm")).arrayBuffer(),
-          ),
-        ]),
+      await fixture.page.evaluate(async () => [
+        ...new Uint8Array(
+          await (await globalThis.fetch("Gw.jspi.wasm")).arrayBuffer(),
+        ),
+      ]),
       [...OFFICIAL_WASM],
     );
     // Packaged main has now migrated, verified and selected the unknown
@@ -474,12 +468,7 @@ async function assertPackagedOffSession() {
     // the real harness instantiation again: now the module-side gate is open
     // and the all-false launch selection is the sole reason Enhancement stays dark.
     await writeFile(
-      path.join(
-        fixture.userData,
-        "game",
-        "artifacts",
-        "Gw.jspi.wasm",
-      ),
+      path.join(fixture.userData, "game", "artifacts", "Gw.jspi.wasm"),
       manifestMarkerModule(),
     );
     assert.deepEqual(await driveHarnessRuntime(fixture.page), {
@@ -492,11 +481,14 @@ async function assertPackagedOffSession() {
       Module.onRuntimeInitialized();
       return new Promise<void>((resolve) =>
         globalThis.requestAnimationFrame(() =>
-          globalThis.requestAnimationFrame(() => resolve())));
+          globalThis.requestAnimationFrame(() => resolve()),
+        ),
+      );
     });
 
     const performanceResources = await fixture.page.evaluate(() =>
-      performance.getEntriesByType("resource").map((entry) => entry.name));
+      performance.getEntriesByType("resource").map((entry) => entry.name),
+    );
     const allResources = [...resources, ...performanceResources];
     assert.ok(
       allResources.some((url) => new URL(url).pathname === "/Gw.jspi.wasm"),
@@ -525,97 +517,108 @@ async function assertPackagedOffSession() {
 }
 
 async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
-  return page.evaluate(async (bytes: number[]) => {
-    const memory = new WebAssembly.Memory({ initial: 256 });
-    const table = new WebAssembly.Table({
-      initial: 1,
-      maximum: 1,
-      element: "anyfunc",
-    });
-    const hookSlot = new WebAssembly.Global(
-      { value: "i32", mutable: true },
-      0,
-    );
-    const allocations: { pointer: number; size: number }[] = [];
-    const freed: number[] = [];
-    let nextPointer = 0x1000;
-    const malloc = (size: number) => {
-      const pointer = nextPointer;
-      nextPointer = (nextPointer + size + 7) & ~7;
-      allocations.push({ pointer, size });
-      return pointer;
-    };
-    const free = (pointer: number) => freed.push(pointer);
-    const module = new WebAssembly.Module(Uint8Array.from(bytes));
-    // Page-relative, so it is resolved by the packaged renderer against
-    // gw://app/ rather than by the checker against this directory. The
-    // annotation is what keeps the import typed: the module it loads is the
-    // build of `src/renderer/enhancements.ts`.
-    const specifier = "./enhancements.js";
-    const { installEnhancements }: typeof import("../src/renderer/enhancements.ts") =
-      await import(specifier);
-    const runtime = await installEnhancements(
-      {
-        exports: {
-          memory,
-          __indirect_function_table: table,
-          malloc,
-          free,
-          enhancement_tick_original: () => undefined,
-          enhancement_hook_slot: hookSlot,
-        },
-      },
-      module,
-      { nativeCursor: false, targetReadout: true },
-      false,
-    );
-    if (!runtime) throw new Error("target readout did not install");
-
-    let sequence = 0;
-    const publish = ({
-      distance = 130.8,
-      rangeBand = 1,
-      target = true,
-    }: { distance?: number; rangeBand?: number; target?: boolean } = {}) => {
-      sequence += 2;
-      const view = new DataView(
-        memory.buffer,
-        runtime.snapshotPointer,
-        64,
+  return page.evaluate(
+    async (bytes: number[]) => {
+      const memory = new WebAssembly.Memory({ initial: 256 });
+      const table = new WebAssembly.Table({
+        initial: 1,
+        maximum: 1,
+        element: "anyfunc",
+      });
+      const hookSlot = new WebAssembly.Global(
+        { value: "i32", mutable: true },
+        0,
       );
-      view.setUint32(8, sequence - 1, true);
-      view.setUint32(0, 0x4254_5747, true);
-      view.setUint16(4, 1, true);
-      view.setUint16(6, 64, true);
-      view.setUint32(12, target ? 7 : 3, true);
-      view.setUint32(16, sequence, true);
-      view.setUint32(20, 133, true);
-      view.setUint32(24, 0, true);
-      view.setUint32(28, 7, true);
-      view.setFloat32(32, 10, true);
-      view.setFloat32(36, 20, true);
-      view.setUint32(40, target ? 9 : 0, true);
-      view.setUint32(44, target ? 0xdb : 0, true);
-      view.setFloat32(48, target ? 110 : 0, true);
-      view.setFloat32(52, target ? 20 : 0, true);
-      view.setFloat32(56, target ? distance : 0, true);
-      view.setUint32(60, target ? rangeBand : 0, true);
-      view.setUint32(8, sequence, true);
-    };
-    (globalThis as ReadoutPageGlobals).__targetReadoutFixture = {
-      allocations,
-      freed,
-      hookSlot,
-      publish,
-      table,
-    };
-    return {
-      allocations: allocations.map(({ size }) => size),
-      hook: hookSlot.value,
-      installed: runtime.status,
-      readout: runtime.readout,
-    };
-  }, [...moduleBytes]);
+      const allocations: { pointer: number; size: number }[] = [];
+      const freed: number[] = [];
+      let nextPointer = 0x1000;
+      const malloc = (size: number) => {
+        const pointer = nextPointer;
+        nextPointer = (nextPointer + size + 7) & ~7;
+        allocations.push({ pointer, size });
+        return pointer;
+      };
+      const free = (pointer: number) => freed.push(pointer);
+      const module = new WebAssembly.Module(Uint8Array.from(bytes));
+      // Page-relative, so it is resolved by the packaged renderer against
+      // gw://app/ rather than by the checker against this directory. The
+      // annotation is what keeps the import typed: the module it loads is the
+      // build of `src/renderer/enhancements.ts`.
+      const specifier = "./enhancements.js";
+      const {
+        installEnhancements,
+      }: typeof import("../src/renderer/enhancements.ts") = await import(
+        specifier
+      );
+      const runtime = await installEnhancements(
+        {
+          exports: {
+            memory,
+            __indirect_function_table: table,
+            malloc,
+            free,
+            enhancement_tick_original: () => undefined,
+            enhancement_hero_add: () => undefined,
+            enhancement_hero_kick: () => undefined,
+            enhancement_difficulty: () => undefined,
+            enhancement_secondary_profession: () => undefined,
+            enhancement_attributes: () => undefined,
+            enhancement_skillbar: () => undefined,
+            enhancement_hero_behavior: () => undefined,
+            enhancement_hero_skill_toggle: () => undefined,
+            enhancement_hero_panel: () => undefined,
+            enhancement_hook_slot: hookSlot,
+          },
+        },
+        module,
+        { nativeCursor: false, targetReadout: true, teamManagement: false },
+        false,
+      );
+      if (!runtime) throw new Error("target readout did not install");
+
+      let sequence = 0;
+      const publish = ({
+        distance = 130.8,
+        rangeBand = 1,
+        target = true,
+      }: { distance?: number; rangeBand?: number; target?: boolean } = {}) => {
+        sequence += 2;
+        const view = new DataView(memory.buffer, runtime.snapshotPointer, 64);
+        view.setUint32(8, sequence - 1, true);
+        view.setUint32(0, 0x4254_5747, true);
+        view.setUint16(4, 1, true);
+        view.setUint16(6, 64, true);
+        view.setUint32(12, target ? 7 : 3, true);
+        view.setUint32(16, sequence, true);
+        view.setUint32(20, 133, true);
+        view.setUint32(24, 0, true);
+        view.setUint32(28, 7, true);
+        view.setFloat32(32, 10, true);
+        view.setFloat32(36, 20, true);
+        view.setUint32(40, target ? 9 : 0, true);
+        view.setUint32(44, target ? 0xdb : 0, true);
+        view.setFloat32(48, target ? 110 : 0, true);
+        view.setFloat32(52, target ? 20 : 0, true);
+        view.setFloat32(56, target ? distance : 0, true);
+        view.setUint32(60, target ? rangeBand : 0, true);
+        view.setUint32(8, sequence, true);
+      };
+      (globalThis as ReadoutPageGlobals).__targetReadoutFixture = {
+        allocations,
+        freed,
+        hookSlot,
+        publish,
+        table,
+      };
+      return {
+        allocations: allocations.map(({ size }) => size),
+        hook: hookSlot.value,
+        installed: runtime.status,
+        readout: runtime.readout,
+      };
+    },
+    [...moduleBytes],
+  );
 }
 
 async function assertTargetReadoutLifecycle() {
@@ -631,14 +634,16 @@ async function assertTargetReadoutLifecycle() {
       return typeof Module?.socket?.connect === "function";
     });
     assert.deepEqual(
-      await fixture.page.evaluate(() => window.gwNative.init.enhancementSelection),
-      { nativeCursor: false, targetReadout: true },
+      await fixture.page.evaluate(
+        () => window.gwNative.init.enhancementSelection,
+      ),
+      { nativeCursor: false, targetReadout: true, teamManagement: false },
     );
 
     assert.deepEqual(
       await installTargetReadout(fixture.page, installableManifestModule()),
       {
-        allocations: [64, 116],
+        allocations: [64, 296, 991, 65_551, 1_848],
         hook: 1,
         installed: "installed",
         readout: { visible: false, line: "" },
@@ -651,8 +656,11 @@ async function assertTargetReadoutLifecycle() {
     );
 
     await fixture.page.evaluate(() =>
-      (globalThis as ReadoutPageGlobals).__targetReadoutFixture.publish());
-    await fixture.page.locator("#enhancement-target").waitFor({ state: "visible" });
+      (globalThis as ReadoutPageGlobals).__targetReadoutFixture.publish(),
+    );
+    await fixture.page
+      .locator("#enhancement-target")
+      .waitFor({ state: "visible" });
     assert.equal(
       await fixture.page.locator("#enhancement-target").innerText(),
       "TARGET\n131\nAdjacent",
@@ -662,16 +670,17 @@ async function assertTargetReadoutLifecycle() {
       (globalThis as ReadoutPageGlobals).__targetReadoutFixture.publish({
         distance: 1_001.2,
         rangeBand: 5,
-      }));
+      }),
+    );
     await fixture.page.waitForFunction(() => {
       // `gwCompanionRuntime` is declared as an open record, so the rendered line
       // is narrowed rather than asserted into a shape this file invented.
       const readout = window.gwCompanionRuntime?.readout;
       return (
-        typeof readout === "object"
-        && readout !== null
-        && "line" in readout
-        && readout.line === "1001 Spellcast"
+        typeof readout === "object" &&
+        readout !== null &&
+        "line" in readout &&
+        readout.line === "1001 Spellcast"
       );
     });
     assert.equal(
@@ -682,8 +691,11 @@ async function assertTargetReadoutLifecycle() {
     await fixture.page.evaluate(() =>
       (globalThis as ReadoutPageGlobals).__targetReadoutFixture.publish({
         target: false,
-      }));
-    await fixture.page.locator("#enhancement-target").waitFor({ state: "hidden" });
+      }),
+    );
+    await fixture.page
+      .locator("#enhancement-target")
+      .waitFor({ state: "hidden" });
 
     const disposed = await fixture.page.evaluate(() => {
       globalThis.dispatchEvent(new globalThis.Event("pagehide"));
@@ -701,7 +713,7 @@ async function assertTargetReadoutLifecycle() {
       "pagehide did not dispose the target readout",
     );
     assert.deepEqual(disposed, {
-      freed: [0x1000, 0x1040],
+      freed: [0x1000, 0x1040, 0x1168, 0x1548, 0x11_558],
       hook: 0,
       runtime: null,
       tableEmpty: true,

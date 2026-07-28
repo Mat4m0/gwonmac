@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Decode Gw.wasm and resolve string anchors to function indices."""
+"""Decode Gw.wasm, resolve anchors, and report candidate functions."""
 
+import argparse
+import hashlib
+import json
 import sys
 from collections import defaultdict
 
@@ -79,12 +82,42 @@ class WasmModule:
             self.secs[sid].append((p, ln))
             p += ln
         self._data_segments()
+        self._types()
         self._func_imports()
+        self._defined_function_types()
         self._code_ranges()
         self._ref_index = None
         self._table = None
+        self._call_graph = None
 
     # -- sections ---------------------------------------------------------
+
+    def _types(self):
+        """Decode the function types needed to describe candidate functions."""
+        self.types = []
+        if 1 not in self.secs:
+            return
+        off, _ = self.secs[1][0]
+        n, q = uleb(self.d, off)
+        names = {
+            0x7F: 'i32', 0x7E: 'i64', 0x7D: 'f32', 0x7C: 'f64',
+            0x7B: 'v128', 0x70: 'funcref', 0x6F: 'externref',
+        }
+        for _ in range(n):
+            if self.d[q] != 0x60:
+                raise DecodeError(f'unsupported type form 0x{self.d[q]:02x}')
+            q += 1
+            pc, q = uleb(self.d, q)
+            params = []
+            for _ in range(pc):
+                value = self.d[q]; q += 1
+                params.append(names.get(value, f'0x{value:02x}'))
+            rc, q = uleb(self.d, q)
+            results = []
+            for _ in range(rc):
+                value = self.d[q]; q += 1
+                results.append(names.get(value, f'0x{value:02x}'))
+            self.types.append((params, results))
 
     def _data_segments(self):
         self.segs = []
@@ -107,6 +140,9 @@ class WasmModule:
 
     def _func_imports(self):
         self.num_func_imports = 0
+        self.import_func_types = []
+        if 2 not in self.secs:
+            return
         off, _ = self.secs[2][0]
         n, q = uleb(self.d, off)
         for _ in range(n):
@@ -115,7 +151,8 @@ class WasmModule:
             kind = self.d[q]; q += 1
             if kind == 0:
                 self.num_func_imports += 1
-                _, q = uleb(self.d, q)
+                typeidx, q = uleb(self.d, q)
+                self.import_func_types.append(typeidx)
             elif kind == 1:
                 q += 1
                 fl = self.d[q]; q += 1
@@ -129,6 +166,16 @@ class WasmModule:
                     _, q = uleb(self.d, q)
             elif kind == 3:
                 q += 2
+
+    def _defined_function_types(self):
+        self.defined_func_types = []
+        if 3 not in self.secs:
+            return
+        off, _ = self.secs[3][0]
+        n, q = uleb(self.d, off)
+        for _ in range(n):
+            typeidx, q = uleb(self.d, q)
+            self.defined_func_types.append(typeidx)
 
     def _code_ranges(self):
         self.funcs = []
@@ -265,6 +312,153 @@ class WasmModule:
     def refs_to(self, addr):
         return dict(self.build_ref_index().get(addr, {}))
 
+    # -- candidate reports ------------------------------------------------
+
+    def call_graph(self):
+        """Return direct calls for every decoded defined function.
+
+        The graph is cached because both the ordinary candidate report and the
+        property-context classifier need the same full-module walk.
+        """
+        if self._call_graph is not None:
+            return self._call_graph
+        callees = defaultdict(set)
+        callers = defaultdict(set)
+        call_sites = defaultdict(list)
+        failures = []
+        for start, end, caller in self.funcs:
+            try:
+                for offset, opcode, operand in self.decode_body(start, end):
+                    if opcode != 0x10 or operand is None:
+                        continue
+                    callees[caller].add(operand)
+                    callers[operand].add(caller)
+                    call_sites[caller].append({
+                        'bodyOffset': offset - start,
+                        'functionIndex': operand,
+                    })
+            except (DecodeError, IndexError) as error:
+                failures.append({'functionIndex': caller, 'error': str(error)})
+        self._call_graph = (callees, callers, call_sites, failures)
+        return self._call_graph
+
+    def property_context_report(self, explicit_roots=None):
+        """Conservatively classify functions that can reach property context.
+
+        The official client asserts on the literal `s_propContext` when a
+        wrapper is entered outside its owning callback. The functions that
+        reference that assertion are roots. Every direct or transitive caller
+        is context-bound for cross-boundary export purposes.
+
+        `explicit_roots` exists for fixtures and for a future build whose
+        assertion text has moved. Production investigations should normally
+        use the assertion-derived roots.
+        """
+        roots = set(explicit_roots or ())
+        if not roots:
+            roots.update(self.find_use_of_string('s_propContext'))
+        callees, callers, _call_sites, _failures = self.call_graph()
+        bound = set(roots)
+        pending = list(roots)
+        while pending:
+            callee = pending.pop()
+            for caller in callers.get(callee, ()):
+                if caller not in bound:
+                    bound.add(caller)
+                    pending.append(caller)
+
+        defined = {fidx for _start, _end, fidx in self.funcs}
+
+        def frontier(function):
+            """First context-free defined callees below a bound wrapper."""
+            found = set()
+            seen = set()
+            pending = [function]
+            while pending:
+                current = pending.pop()
+                if current in seen:
+                    continue
+                seen.add(current)
+                for callee in callees.get(current, ()):
+                    if callee not in defined:
+                        continue
+                    if callee in bound:
+                        pending.append(callee)
+                    else:
+                        found.add(callee)
+            return sorted(found)
+
+        return {
+            'roots': sorted(roots),
+            'bound': bound,
+            'frontier': frontier,
+        }
+
+    def function_signature(self, fidx):
+        """Return the canonical type for an imported or defined function."""
+        if fidx < self.num_func_imports:
+            typeidx = self.import_func_types[fidx]
+        else:
+            local = fidx - self.num_func_imports
+            if local < 0 or local >= len(self.defined_func_types):
+                raise DecodeError(f'function index out of range: {fidx}')
+            typeidx = self.defined_func_types[local]
+        if typeidx >= len(self.types):
+            raise DecodeError(f'type index out of range: {typeidx}')
+        params, results = self.types[typeidx]
+        return {'typeIndex': typeidx, 'params': params, 'results': results}
+
+    def function_report(self, requested, property_context_roots=None):
+        """Bounded static evidence for specific candidate function indices."""
+        wanted = set(requested)
+        bodies = {
+            fidx: (start, end)
+            for start, end, fidx in self.funcs
+            if fidx in wanted
+        }
+        missing = sorted(wanted - set(bodies))
+        if missing:
+            raise DecodeError(
+                'requested function is imported or out of range: '
+                + ', '.join(str(value) for value in missing)
+            )
+
+        callees, callers, call_sites, failures = self.call_graph()
+        context = self.property_context_report(property_context_roots)
+
+        functions = []
+        for fidx in requested:
+            start, end = bodies[fidx]
+            functions.append({
+                'functionIndex': fidx,
+                'definedIndex': fidx - self.num_func_imports,
+                'signature': self.function_signature(fidx),
+                'body': {
+                    'start': start,
+                    'end': end,
+                    'size': end - start,
+                    'sha256': hashlib.sha256(self.d[start:end]).hexdigest(),
+                },
+                'tableSlot': self.table.get(fidx),
+                'directCallers': sorted(callers[fidx]),
+                'directCallees': sorted(callees[fidx]),
+                'directCalls': call_sites[fidx],
+                'propertyContextBound': fidx in context['bound'],
+                'contextFreeFrontier': context['frontier'](fidx)
+                    if fidx in context['bound'] else [],
+            })
+        return {
+            'module': self.path,
+            'functionImports': self.num_func_imports,
+            'definedFunctions': len(self.funcs),
+            'propertyContext': {
+                'roots': context['roots'],
+                'boundFunctions': len(context['bound']),
+            },
+            'functions': functions,
+            'decodeFailures': failures,
+        }
+
     # -- string lookup ----------------------------------------------------
 
     def find_strings(self, s, whole=True):
@@ -312,9 +506,65 @@ class WasmModule:
 # -------------------------------------------------------------------- cli
 
 def main():
-    wasm = sys.argv[1] if len(sys.argv) > 1 else \
-        '/path/to/gw_in_browser/dist/Gw.jspi.wasm'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('wasm')
+    parser.add_argument('queries', nargs='*')
+    parser.add_argument(
+        '--functions',
+        help='comma-separated function indices to report with signatures and calls',
+    )
+    parser.add_argument(
+        '--json',
+        action='store_true',
+        help='emit the --functions report as JSON',
+    )
+    parser.add_argument(
+        '--property-context-roots',
+        help=(
+            'comma-separated property-context root functions; defaults to '
+            'functions referencing the s_propContext assertion'
+        ),
+    )
+    args = parser.parse_args()
+    wasm = args.wasm
     m = WasmModule(wasm)
+    if args.functions:
+        requested = []
+        for value in args.functions.split(','):
+            try:
+                fidx = int(value.strip(), 0)
+            except ValueError as error:
+                parser.error(f'invalid function index {value!r}: {error}')
+            if fidx < 0:
+                parser.error(f'function index must be non-negative: {fidx}')
+            requested.append(fidx)
+        if not requested:
+            parser.error('--functions requires at least one index')
+        property_context_roots = None
+        if args.property_context_roots:
+            property_context_roots = []
+            for value in args.property_context_roots.split(','):
+                try:
+                    root = int(value.strip(), 0)
+                except ValueError as error:
+                    parser.error(
+                        f'invalid property-context root {value!r}: {error}'
+                    )
+                if root < 0:
+                    parser.error(
+                        f'property-context root must be non-negative: {root}'
+                    )
+                property_context_roots.append(root)
+        report = m.function_report(requested, property_context_roots)
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if not args.queries:
+            return
+    elif args.json:
+        parser.error('--json requires --functions')
+
     print(f'{wasm}')
     print(f'  func imports : {m.num_func_imports}')
     print(f'  defined funcs: {len(m.funcs)}')
@@ -325,7 +575,7 @@ def main():
           f'/{len(m.funcs)} functions')
     print(f'  data refs    : {len(m._ref_index):,} distinct addresses')
 
-    for q in sys.argv[2:]:
+    for q in args.queries:
         hits = m.find_use_of_string(q)
         if not hits:
             hits = m.find_use_of_string(m.normalize_path(q), whole=False)

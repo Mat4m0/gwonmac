@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
@@ -19,15 +19,29 @@ import {
   parseEnhancementObservations,
 } from "../src/tools/enhancement-observations.js";
 import {
+  countFunctionImports,
+  sectionById,
+  splitSections,
+} from "../src/main/core/wasm-binary.js";
+import {
+  HERO_MAPPING_FUNCTIONS,
   liveRunPlan,
   liveRunRefusal,
   scenarioContext,
-  waitForPlayable,
 } from "./enhancements-live/scenarios.js";
 import type { ObservationSample } from "./enhancements-live/scenarios.js";
+import { waitForPlayable } from "./enhancements-live/session.js";
+import {
+  createWasmBreakpointObserver,
+  parseBreakpointFunctions,
+} from "./enhancements-live/wasm-breakpoints.js";
 import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
+import {
+  assertMutationRecoveryClear,
+} from "./enhancements-live/mutation-journal.js";
+import { acquireLiveSession } from "./enhancements-live/live-session.js";
 import { projectLiveResult } from "./enhancements-live/result.js";
 
 type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
@@ -65,28 +79,47 @@ const observeArgument = process.argv.indexOf("--observe");
 const observations = parseEnhancementObservations(
   observeArgument >= 0 ? process.argv[observeArgument + 1] ?? null : null,
 );
+const breakFunctionsArgument = process.argv.indexOf("--break-functions");
+const breakpointFunctions = breakFunctionsArgument >= 0
+  ? parseBreakpointFunctions(process.argv[breakFunctionsArgument + 1] ?? null)
+  : plan.name === "hero-map"
+    ? [...HERO_MAPPING_FUNCTIONS]
+    : [];
+if (plan.name === "hero-trace" && breakpointFunctions.length === 0) {
+  console.error("hero-trace requires --break-functions index[,index]");
+  process.exit(2);
+}
 const preflight = await inspectEnhancementWorkspace(userData);
 const blocked = liveRunRefusal(plan, preflight, { cachedOnly: !allowUpdate });
 if (blocked) {
   console.error(JSON.stringify({ preflight, blocked }));
   process.exit(2);
 }
+if (plan.mutates) await assertMutationRecoveryClear();
 const expectedBuildId = preflight.client.buildId;
 if (expectedBuildId === null) {
   console.error(JSON.stringify({ preflight, blocked: "client-build-unknown" }));
   process.exit(2);
 }
 const failureDir = path.join(root, "test-results", "enhancements-live");
+const liveSession = await acquireLiveSession(userData, plan.name);
 
-const child = spawn(
-  electronBin,
-  [".", "--remote-debugging-port=0"],
-  {
-    cwd: root,
-    env: plan.env,
-    stdio: plan.stdio,
-  },
-);
+let child: ReturnType<typeof spawn>;
+try {
+  child = spawn(
+    electronBin,
+    [".", "--remote-debugging-port=0"],
+    {
+      cwd: root,
+      env: plan.env,
+      stdio: plan.stdio,
+    },
+  );
+  await liveSession.update({ childPid: child.pid ?? null });
+} catch (error) {
+  await liveSession.release();
+  throw error;
+}
 
 // The two piped streams the plan asked for. Every tier pipes both, so this is
 // a launch failure rather than a tier difference.
@@ -180,6 +213,7 @@ function waitForExit(): Promise<Shutdown> {
 }
 
 const endpoint = await debuggingEndpoint(stderr);
+await liveSession.update({ endpoint, state: "connected" });
 
 let browser: Browser | undefined;
 // The page the failure handler screenshots, which is the only reason a handle
@@ -193,22 +227,40 @@ let keepAlive = leaveOpen;
 // failed on.
 let failureResult: unknown = null;
 try {
+  await liveSession.update({ state: "running" });
   browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
   if (!context) throw new Error("Electron exposed no browser context");
   const page = context.pages()[0] ?? await context.waitForEvent("page");
   failurePage = page;
   const cdp = await context.newCDPSession(page);
+  const wasmBreakpoints = breakpointFunctions.length > 0
+    ? await (async () => {
+        const wasm = await readFile(
+          path.join(userData, "game", "artifacts", "Gw.jspi.wasm"),
+        );
+        const imports = sectionById(splitSections(wasm), 2);
+        return createWasmBreakpointObserver(
+          cdp,
+          countFunctionImports(imports),
+          breakpointFunctions,
+        );
+      })()
+    : null;
   await cdp.send("Performance.enable");
   page.on("console", (message) => {
     if (message.type() === "error") rendererErrors.push(message.text());
   });
   page.on("pageerror", (error) => rendererErrors.push(error.message));
   await page.waitForLoadState("domcontentloaded");
-  let loginInputs = await waitForPlayable(page, plan.tier);
+  let login = await waitForPlayable(page, plan.tier);
   if (plan.name === "reload") {
     await page.reload({ waitUntil: "domcontentloaded" });
-    loginInputs += await waitForPlayable(page, plan.tier);
+    const reloaded = await waitForPlayable(page, plan.tier);
+    login = {
+      inputs: login.inputs + reloaded.inputs,
+      checkpoints: [...login.checkpoints, ...reloaded.checkpoints],
+    };
   }
 
   const before = await page.evaluate(() => ({
@@ -239,6 +291,7 @@ try {
     sampleObservations: observations.length > 0
       ? () => sampleObservations(page)
       : null,
+    wasmBreakpoints,
   };
   // The tier decides both halves at once, so the automation capabilities cannot
   // reach an observation scenario even by mistake.
@@ -251,7 +304,7 @@ try {
   const result = {
     ...await projectLiveResult(page, cadence, plan.name),
     tier: plan.tier,
-    loginInputs,
+    login,
     ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
     ...(observations.length > 0
       ? {
@@ -275,8 +328,17 @@ try {
   });
   selectedScenario.validate(result);
   console.log(JSON.stringify(result));
+  if (plan.name === "hero-map") {
+    await mkdir(failureDir, { recursive: true });
+    await writeFile(
+      path.join(failureDir, "hero-mapping.json"),
+      `${JSON.stringify(result, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+  }
 
   if (leaveOpen) {
+    await liveSession.update({ state: "passed" });
     console.log("Enhancement live acceptance passed; leaving Electron open.");
     keepAlive = true;
   } else {
@@ -294,9 +356,11 @@ try {
       throw new Error(`unclean shutdown: ${JSON.stringify(shutdown)}`);
     }
     console.log(JSON.stringify({ shutdown: "clean" }));
+    await liveSession.release();
   }
 } catch (error) {
   keepAlive = true;
+  await liveSession.update({ state: "failed" });
   await mkdir(failureDir, { recursive: true });
   if (failurePage && !failurePage.isClosed()) {
     await failurePage
@@ -322,3 +386,4 @@ try {
 if (keepAlive && child.exitCode === null) {
   await waitForExit();
 }
+await liveSession.release();

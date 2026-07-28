@@ -145,6 +145,7 @@ const INIT: RendererInit = {
   enhancementSelection: {
     nativeCursor: false,
     targetReadout: true,
+    teamManagement: false,
   },
   templateFsTrace: true,
 };
@@ -164,6 +165,7 @@ test("a renderer with no readable init argument gets the production posture", ()
     enhancementSelection: {
       nativeCursor: false,
       targetReadout: false,
+      teamManagement: false,
     },
     templateFsTrace: false,
   };

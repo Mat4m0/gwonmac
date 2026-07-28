@@ -58,11 +58,14 @@ function selectedToolNames(selection: EnhancementSelection): string[] {
   return [
     selection.nativeCursor ? 'game cursor' : '',
     selection.targetReadout ? 'target readout' : '',
+    selection.teamManagement ? 'team management' : '',
   ].filter(Boolean);
 }
 
 function toolList(names: string[]): string {
-  return names.length === 2 ? `${names[0]} and ${names[1]}` : names[0] ?? '';
+  if (names.length < 2) return names[0] ?? '';
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names.at(-1)}`;
 }
 
 export function compatibilityReport(
@@ -92,7 +95,7 @@ export function compatibilityReport(
               requestedTools
             } ${selectedTools.length === 1 ? 'is' : 'are'} unavailable for this session.`
           : 'GWonMac Tools do not load on an uncertified build. The game cursor '
-            + 'and target readout remain available once this build is certified.',
+            + 'and optional tools remain available once this build is certified.',
         GAMEPLAY,
         RECOVERY,
         SEPARATION,

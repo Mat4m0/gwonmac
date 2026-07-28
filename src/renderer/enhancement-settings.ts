@@ -25,6 +25,11 @@
       noteId: 'data-choice-target-readout-note',
       noun: 'target readout',
     }),
+    teamManagement: Object.freeze({
+      launcherId: 'data-choice-team-management',
+      noteId: 'data-choice-team-management-note',
+      noun: 'team management',
+    }),
   });
 
   function createEnhancementSettings(options: ToolSettingsOptions) {

@@ -119,10 +119,11 @@ native updater/crash dumps, or DLL plugin ABI. Use the Electron lifecycle,
 renderer overlay, diagnostics, and an eventual explicit renderer/WASM plugin
 contract only after core features justify it.
 
-Next feature work should remain read-only: enrich validated agent snapshots,
-then port one high-value widget at a time. Add events only where polling the
-already-produced snapshot cannot meet a feature, and introduce game commands
-individually with explicit preconditions and failure tests.
+Read-only widgets should continue to reuse validated snapshots. The sole
+game-changing product surface is the explicit team Apply command: commands are
+introduced individually behind exact-build certification, fixed domain values,
+explicit preconditions, acknowledgement, timeout, and failure tests. There is
+still no generic command or plugin bridge.
 
 ## Analysis tools
 

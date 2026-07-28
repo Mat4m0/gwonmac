@@ -84,6 +84,7 @@ test.describe("Enhancement runtime selection", () => {
         enhancementSelection: {
           nativeCursor: false,
           targetReadout: false,
+          teamManagement: false,
         },
         templateFsTrace: false,
       });
