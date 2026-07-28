@@ -1,13 +1,18 @@
-import { chmod, readFile, unlink } from "node:fs/promises";
 import type { StoredCredentials } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
-import { writeAtomic } from "./atomic-file.js";
+import {
+  EncryptedJsonStore,
+  type EncryptedSecret,
+  type SafeStorageApi,
+} from "./encrypted-store.js";
 
-export interface SafeStorageApi {
-  isEncryptionAvailable(): boolean;
-  encryptString(value: string): Buffer;
-  decryptString(value: Buffer): string;
-}
+/**
+ * Re-exported from its new home so the credential store stays the one name
+ * callers need to know about. The interface itself belongs to
+ * `encrypted-store.ts` now, because saved credentials are no longer the only
+ * secret that keeps `safeStorage` at arm's length.
+ */
+export type { SafeStorageApi };
 
 /**
  * The one credential shape check. Called on two different inputs: whatever the
@@ -31,52 +36,25 @@ export function parseCredentials(value: unknown): StoredCredentials {
   return { username, password };
 }
 
-export class CredentialsStore {
-  private readonly path: string;
-  private readonly storage: SafeStorageApi;
+const CREDENTIALS: EncryptedSecret<StoredCredentials> = {
+  parse: parseCredentials,
+  unavailable: () =>
+    new AppError("credentials_unavailable", "credential encryption is unavailable"),
+  undecryptable: () =>
+    new AppError("credentials_corrupt", "saved credentials cannot be decrypted"),
+};
 
-  constructor(
-    path: string,
-    storage: SafeStorageApi,
-  ) {
-    this.path = path;
-    this.storage = storage;
-  }
-
-  async load(): Promise<StoredCredentials | null> {
-    let ciphertext: Buffer;
-    try {
-      ciphertext = await readFile(this.path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw error;
-    }
-    if (!this.storage.isEncryptionAvailable()) {
-      throw new AppError("credentials_unavailable", "credential encryption is unavailable");
-    }
-    try {
-      return parseCredentials(JSON.parse(this.storage.decryptString(ciphertext)));
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError("credentials_corrupt", "saved credentials cannot be decrypted");
-    }
-  }
-
-  async save(value: unknown): Promise<void> {
-    const cleaned = parseCredentials(value);
-    if (!this.storage.isEncryptionAvailable()) {
-      throw new AppError("credentials_unavailable", "credential encryption is unavailable");
-    }
-    const ciphertext = this.storage.encryptString(JSON.stringify(cleaned));
-    await writeAtomic(this.path, ciphertext, 0o600);
-    await chmod(this.path, 0o600);
-  }
-
-  async clear(): Promise<void> {
-    try {
-      await unlink(this.path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
+/**
+ * The saved login's one encrypted owner-only file.
+ *
+ * The encrypt / atomic-write / chmod / validate-both-ways mechanism moved to
+ * `EncryptedJsonStore` when the Steam session needed the same guarantees.
+ * Nothing about this store's behaviour moved with it: the shape rule above and
+ * the two error codes are unchanged, which is what
+ * `tests/unit/credentials.test.ts` proves by still passing untouched.
+ */
+export class CredentialsStore extends EncryptedJsonStore<StoredCredentials> {
+  constructor(path: string, storage: SafeStorageApi) {
+    super(path, storage, CREDENTIALS);
   }
 }

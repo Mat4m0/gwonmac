@@ -20,6 +20,7 @@ export interface GamePaths {
   settings: string;
   windowState: string;
   credentials: string;
+  steamSession: string;
   diagnostics: string;
   game: string;
   artifacts: string;
@@ -41,6 +42,7 @@ export function gamePaths(userData: string): GamePaths {
     settings: path.join(userData, "settings.json"),
     windowState: path.join(userData, "window-state.json"),
     credentials: path.join(userData, "credentials.bin"),
+    steamSession: path.join(userData, "steam-session.bin"),
     diagnostics: path.join(userData, "diagnostics"),
     game,
     artifacts,

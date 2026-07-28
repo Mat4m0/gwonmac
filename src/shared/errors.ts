@@ -60,6 +60,8 @@ export const ERROR_CODES = [
   "response_too_large",
   "secure_storage",
   "short_write",
+  "steam_session_corrupt",
+  "steam_session_unavailable",
   /** Anything this process did not raise itself: a Node errno, a DOM
    * exception, a thrown non-Error. Their identifiers are an open set we do not
    * control, so they collapse to one value rather than widening the union. */

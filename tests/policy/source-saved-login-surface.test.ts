@@ -16,11 +16,20 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
-// Every file a credential can pass through: the boundary, the store, both path
-// modules, the bridge, the contracts, and the renderer that asks for it.
+// Every file a credential can pass through: the boundary, the store, the
+// shared mechanism underneath it, both path modules, the bridge, the
+// contracts, and the renderer that asks for it.
+//
+// `encrypted-store.ts` is on this list because the encrypt / atomic-write /
+// chmod mechanism lives there now — `CredentialsStore` and `SteamSessionStore`
+// are both thin instances of it. `steam-session.ts` is here because the Steam
+// token is a second secret held to the same invariant, and a scan that only
+// looked at credentials would not notice a second store growing a weaker home.
 const surface = [
   "src/main/ipc.ts",
   "src/main/core/credentials.ts",
+  "src/main/core/encrypted-store.ts",
+  "src/main/core/steam-session.ts",
   "src/main/paths.ts",
   "src/main/core/paths.ts",
   "src/preload/preload.body.cjs",
@@ -33,6 +42,7 @@ const surface = [
 test("saved login has one encrypted owner-only persistence surface", () => {
   assert.match(surface, /safeStorage/);
   assert.match(surface, /credentials\.bin/);
+  assert.match(surface, /steam-session\.bin/);
   assert.match(surface, /encryptString/);
   assert.match(surface, /writeAtomic\(this\.path, ciphertext, 0o600\)/);
   assert.doesNotMatch(surface, /localStorage|sessionStorage/);
