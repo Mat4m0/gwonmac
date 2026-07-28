@@ -80,6 +80,18 @@ describe("the sign-in origin allowlist", () => {
     }
   });
 
+  it("rejects a trailing-dot host rather than resolving it to the same name", () => {
+    // `steamcommunity.com.` is the absolute-FQDN spelling of an allowed host,
+    // and `allowedName` in src/main/core/allowlists.ts *does* admit it — it
+    // strips the trailing dot before matching. This check deliberately does
+    // not, and does not delegate to that helper: widening a sign-in allowlist
+    // to a second spelling buys nothing (Steam never emits one) and the
+    // fail-closed direction is the safe one to be wrong in. Pinned so the
+    // difference between the two helpers is a decision, not a surprise.
+    assert.equal(isAllowedOrigin(STEAM_OAUTH, "https://steamcommunity.com./oauth/login"), false);
+    assert.equal(isAllowedOrigin(STEAM_OAUTH, "https://store.steampowered.com./"), false);
+  });
+
   it("answers from the config it is given, not a module-level list", () => {
     // The fixture config knows nothing about Steam, and the production config
     // knows nothing about the fixture's asset host.

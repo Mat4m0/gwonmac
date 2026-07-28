@@ -25,7 +25,11 @@ export interface StoredSteamSession {
   expiry: number | null;
 }
 
-const MAX_TOKEN_LENGTH = 4096;
+/**
+ * Shared with the IPC boundary parser in `src/main/ipc.ts`, which caps the
+ * client's storeback before it reaches this validator. One bound, named once.
+ */
+export const MAX_TOKEN_LENGTH = 4096;
 
 /**
  * The one Steam session shape check, run on both the value handed in and the

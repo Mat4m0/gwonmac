@@ -40,6 +40,7 @@ import { CredentialsStore, parseCredentials } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import {
+  MAX_TOKEN_LENGTH,
   refreshSteamExpiry,
   resolveSteamToken,
   SteamSessionStore,
@@ -282,7 +283,7 @@ const asSilentFlag = one((value: unknown): boolean => {
 const asSteamStoreback: Parser<{ token: string; expiry: number | null }> = (args) => {
   exact(args, 2);
   const [token, expiry] = args;
-  if (typeof token !== "string" || token.length > 4096) {
+  if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
     throw new ValidationError("steam token must be a string");
   }
   if (expiry !== null && (typeof expiry !== "number" || !Number.isFinite(expiry))) {
