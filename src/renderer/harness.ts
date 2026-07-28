@@ -148,10 +148,15 @@ const LOCAL_PROFILE_INDEX = '1';
  * request would let the launch-time probe open a Steam window, so an
  * unreadable argument is treated as the quiet one.
  */
-const isSilentRequest = (options: unknown): boolean =>
-  typeof options === 'object' &&
-  options !== null &&
-  (options as { silent?: unknown }).silent === true;
+const isSilentRequest = (options: unknown): boolean => {
+  if (typeof options !== 'object' || options === null) return true;
+  // Only an explicit `false` asks for a window. The observed client always
+  // passes `{ silent }`, so this default is unreachable there — and if a future
+  // build stops passing it, the failure is a Steam sign-in that refuses rather
+  // than one that opens a window the player did not ask for. Email and password
+  // still work either way, which makes that the cheaper way to be wrong.
+  return (options as { silent?: unknown }).silent !== false;
+};
 
 /**
  * The expiry the client hands back, as epoch milliseconds. It arrives as

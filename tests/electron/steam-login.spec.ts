@@ -169,6 +169,32 @@ test.describe("the Steam credential seam", () => {
     expect(await readStore(fixture.app)).toBe(null);
   });
 
+  test("reads a request with no options as the silent one", async () => {
+    // R4 / AE1 from the other direction. The observed client always passes
+    // `{ silent }`, so this is about a build that stops: refusing is recoverable
+    // -- email and password still work -- while opening a Steam window nobody
+    // asked for is the failure the requirement exists to prevent.
+    fixture = await launchOffline("gw-steam-no-options-");
+    const before = await windowCount(fixture.app);
+
+    const settled = await fixture.page.evaluate(async () => {
+      const login = (
+        globalThis as unknown as {
+          Module: { login: { getAuthToken(name: string): Promise<unknown> } };
+        }
+      ).Module.login;
+      try {
+        await login.getAuthToken("Steam");
+        return "resolved";
+      } catch {
+        return "rejected";
+      }
+    });
+
+    expect(settled).toBe("rejected");
+    expect(await windowCount(fixture.app)).toBe(before);
+  });
+
   test("vends a stored token in the shape the client destructures", async () => {
     // Covers AE5 / R3: `userId` is the client's local profile index, not the
     // SteamID, and `refreshToken` is empty. The client base64-encodes
