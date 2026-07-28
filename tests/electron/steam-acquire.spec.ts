@@ -148,8 +148,9 @@ interface AcquireRun {
 async function beginAcquire(
   app: OfflineFixture["app"],
   config: SteamOAuthConfig,
+  withParent = false,
 ): Promise<void> {
-  await app.evaluate(async (_electron, arg) => {
+  await app.evaluate(async ({ BrowserWindow }, arg) => {
     // Playwright evaluates this body with `eval`, which has no dynamic-import
     // callback, so `import()` is unavailable here. `createRequire` reaches the
     // same compiled module (Node's require-of-ESM handles it: no top-level
@@ -167,8 +168,9 @@ async function beginAcquire(
     scope.__steamEvents = [];
     scope.__steamRun = acquireSteamToken(arg.config, {
       record: (event: unknown) => scope.__steamEvents.push(event),
+      ...(arg.withParent ? { parent: BrowserWindow.getAllWindows()[0] } : {}),
     });
-  }, { modulePath: MODULE_PATH, config });
+  }, { modulePath: MODULE_PATH, config, withParent });
 }
 
 async function settleAcquire(app: OfflineFixture["app"]): Promise<AcquireRun> {
@@ -339,6 +341,41 @@ test.describe("acquiring a Steam token", () => {
 
     expect(run.events).toContainEqual({ k: "blocked", what: "navigation" });
     expect(run.result).toEqual({ ok: false, reason: "cancelled" });
+  });
+
+  test("opens as a contained modal sheet on its parent, not a full-screen child", async () => {
+    // This is the presentation that ships, and it was previously untested. A
+    // plain parented child of a game window restored to fullscreen gets promoted
+    // into that fullscreen space and sized to the whole screen — a full-screen
+    // Steam page instead of a sign-in sheet. `modal` is what keeps it contained,
+    // so it is pinned here rather than left to be rediscovered by hand.
+    server = await startFixture("hang");
+    fixture = await launchOffline("gw-steam-acquire-modal-");
+
+    await beginAcquire(fixture.app, configFor(server), true);
+    await waitForSignInWindow(fixture.app);
+
+    const presentation = await fixture.app.evaluate(({ BrowserWindow }) => {
+      const all = BrowserWindow.getAllWindows();
+      // By URL, not by index: window order is not specified once the sheet
+      // exists, and picking [0] can hand back the sheet itself.
+      const sheet = all.find((win) => win.webContents.getURL().includes("127.0.0.1"));
+      const game = all.find((win) => !win.webContents.getURL().includes("127.0.0.1"));
+      if (!game || !sheet) throw new Error("expected a game window and a sheet");
+      return {
+        modal: sheet.isModal(),
+        parented: sheet.getParentWindow()?.id === game.id,
+        width: sheet.getBounds().width,
+      };
+    });
+
+    expect(presentation.modal).toBe(true);
+    expect(presentation.parented).toBe(true);
+    // The requested width, not stretched to the display.
+    expect(presentation.width).toBe(520);
+
+    await closeSignInWindow(fixture.app);
+    await settleAcquire(fixture.app);
   });
 
   test("settles when the sign-in page's renderer crashes", async () => {

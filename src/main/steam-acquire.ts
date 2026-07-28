@@ -84,16 +84,20 @@ function createSignInWindow(
     height: 720,
     title: `Steam sign-in — ${new URL(config.authorizationBaseUrl).origin}`,
     show: false,
-    // Parented but deliberately *not* modal. On macOS a modal child is
-    // presented as a sheet attached to its parent, and a sheet draws no title
-    // bar — which is where R18 puts the live origin and where `docs/user-guide.md`
-    // tells the player to check it before typing a password. A modal window
-    // would make that anti-phishing affordance invisible in exactly the
-    // configuration that ships. The game window is sitting at a login screen,
-    // so leaving it interactive costs nothing.
+    // Modal, which on macOS means a sheet attached to the parent. This is
+    // load-bearing and was verified the hard way: dropping `modal` made the
+    // window a plain child of a parent that `src/main/window.ts` restores to
+    // fullscreen, so macOS promoted it into that fullscreen space and sized it
+    // to the whole screen — a full-screen Steam page instead of a contained
+    // sign-in sheet, and a full-screen blank one during teardown.
+    //
+    // A sheet draws no title bar, so the origin `showOrigin()` maintains is not
+    // visible in this configuration and R18's anti-phishing affordance needs a
+    // different home. See docs/residual-review-findings/feat-steam-login-unified.md.
+    //
     // Only a real parent may be passed under exactOptionalPropertyTypes; with
     // no game window yet this simply opens a top-level window.
-    ...(parent ? { parent } : {}),
+    ...(parent ? { parent, modal: true } : {}),
     webPreferences: {
       session: signIn,
       nodeIntegration: false,
@@ -133,6 +137,25 @@ export async function acquireSteamToken(
     let settled = false;
 
     /**
+     * Show the sheet once it has something to draw, and show it regardless if
+     * that never happens.
+     *
+     * `ready-to-show` alone is what the presentation wants — a sheet that
+     * appears already carrying the Steam page rather than blank. But a load that
+     * stalls forever never fires it, which would leave an invisible window the
+     * player cannot close while the client waits on a credential. The fallback
+     * is what keeps cancelling possible in that case (R2).
+     */
+    let shown = false;
+    const reveal = (): void => {
+      if (shown || win.isDestroyed()) return;
+      shown = true;
+      win.show();
+    };
+    const revealTimer = setTimeout(reveal, 4_000);
+    win.once("ready-to-show", reveal);
+
+    /**
      * Tear the partition down and only then answer. Clearing before resolving
      * is what makes R19 an observable guarantee rather than a hope: the caller
      * cannot see a token until every cookie, cache entry, and storage record
@@ -141,7 +164,13 @@ export async function acquireSteamToken(
     const finish = (result: SteamAcquireResult): void => {
       if (settled) return;
       settled = true;
+      clearTimeout(revealTimer);
       record({ k: "settled", outcome: result.ok ? "success" : result.reason });
+      // Hide first. The redirect that carries the token is cancelled rather than
+      // followed, so the page is blank from here on, and the partition clear
+      // below is awaited before the window is destroyed — leaving it on screen
+      // for that stretch is what reads as the app going black after sign-in.
+      if (!win.isDestroyed()) win.hide();
       void signIn
         .clearStorageData()
         .then(() => signIn.clearCache())
@@ -201,12 +230,6 @@ export async function acquireSteamToken(
       showOrigin();
     });
 
-    // Shown before the navigation, not on `ready-to-show`. A load that stalls
-    // forever never fires that event, which would leave an invisible window the
-    // player cannot close while the client waits on a credential — the hang R2
-    // exists to prevent. A brief empty window is the cost of always being
-    // cancellable.
-    win.show();
     // The player gave up. Resolving here is what keeps the client's credential
     // request from hanging forever (R2).
     win.on("closed", () => finish({ ok: false, reason: "cancelled" }));
