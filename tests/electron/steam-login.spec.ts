@@ -8,7 +8,11 @@
 // steamcommunity.com; that path is covered by tests/electron/steam-acquire.spec.ts
 // against an injected fixture config, and once by hand on a linked account.
 import { expect, test } from "@playwright/test";
+import { execFile } from "node:child_process";
+import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   closeOffline,
   launchOffline,
@@ -16,6 +20,8 @@ import {
   root,
   type OfflineFixture,
 } from "./fixtures.mts";
+
+const execFileAsync = promisify(execFile);
 
 const SESSION_MODULE = path.join(root, "build/main/core/steam-session.js");
 const PATHS_MODULE = path.join(root, "build/main/paths.js");
@@ -293,6 +299,93 @@ test.describe("the Steam credential seam", () => {
     // `null` is "no expiry known", which R9 treats as a token to be proved by
     // the login exchange -- not as one that expired at the epoch.
     expect(await readStore(fixture.app)).toEqual({ token: TOKEN, expiry: null });
+  });
+
+  test("exports diagnostics carrying outcomes and neither the token nor its expiry", async () => {
+    // Covers AE8 / R20, R21. The claim is about the exported bytes, not about a
+    // verdict the exporter wrote about itself: drive the whole seam, export,
+    // unzip, and read every file.
+    const DIAGNOSTIC_EXPIRY = 4_123_456_789_123;
+    fixture = await launchOffline("gw-steam-diagnostics-");
+    await seedStore(fixture.app, { token: TOKEN, expiry: DIAGNOSTIC_EXPIRY });
+
+    // Every Steam event this feature can record, in one session.
+    await getAuthToken(fixture, "Steam", true);
+    await fixture.page.evaluate(
+      async ({ token, expiry }) => {
+        const account = (
+          globalThis as unknown as {
+            Module: {
+              nativeAccount: {
+                storeAccountData(token: string, expiry: Date): Promise<void>;
+                clearAccountData(): Promise<void>;
+              };
+            };
+          }
+        ).Module.nativeAccount;
+        await account.storeAccountData(token, new Date(expiry));
+        await account.clearAccountData();
+      },
+      { token: TOKEN, expiry: DIAGNOSTIC_EXPIRY },
+    );
+    await getAuthToken(fixture, "Steam", true);
+
+    const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-steam-"));
+    const target = path.join(diagnosticRoot, "capture.gwdiag");
+    await fixture.app.evaluate(
+      async ({ app }, args) => {
+        const { createRequire } = process.getBuiltinModule("module");
+        const load = createRequire(args.modulePath);
+        const diagnostics = load(args.modulePath) as {
+          exportDiagnosticsZip(
+            target: string,
+            meta: Record<string, unknown>,
+          ): Promise<void>;
+        };
+        await diagnostics.exportDiagnosticsZip(args.target, {
+          appVersion: app.getVersion(),
+          electronVersions: { electron: process.versions.electron },
+          settings: {
+            renderScale: 1,
+            nativeCursor: false,
+            touchMode: "dbltap",
+            showDiagnostics: false,
+            dataStrategy: "quick",
+          },
+        });
+      },
+      { modulePath: path.join(root, "build/main/diagnostics.js"), target },
+    );
+
+    const extracted = path.join(diagnosticRoot, "extracted");
+    await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+
+    let everything = "";
+    for (const name of await readdir(extracted)) {
+      const file = path.join(extracted, name);
+      if (!(await stat(file)).isFile()) continue;
+      const body = await readFile(file, "latin1");
+      everything += body;
+      expect(body, `${name} leaked the token`).not.toContain(TOKEN);
+      expect(body, `${name} leaked the expiry`).not.toContain(
+        String(DIAGNOSTIC_EXPIRY),
+      );
+    }
+
+    // The outcomes did survive — an export that simply recorded nothing would
+    // pass the two assertions above for the wrong reason.
+    expect(everything).toContain("steam.tokenRequested");
+    expect(everything).toContain("steam.storeback");
+    expect(everything).toContain("steam.tokenCleared");
+
+    // Every app-authored record was certified against the closed schema, which
+    // is what makes "outcomes only" a property of the schema rather than of the
+    // events this test happened to produce.
+    const manifest = JSON.parse(
+      await readFile(path.join(extracted, "manifest.json"), "utf8"),
+    ) as { redaction: { records: number; schemaChecked: number } };
+    expect(manifest.redaction.records).toBeGreaterThan(0);
+    expect(manifest.redaction.schemaChecked).toBe(manifest.redaction.records);
   });
 
   test("forgets the token when the client signs out", async () => {

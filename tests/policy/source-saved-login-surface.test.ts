@@ -8,13 +8,23 @@
 // there is no test that a line of code was never written. This scan is that
 // test, and it is honest about being one.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+
+/** Every source file the application ships, repo-relative. */
+function shippedSources(directory = "src"): string[] {
+  return readdirSync(path.join(root, directory), { withFileTypes: true })
+    .flatMap((entry) => {
+      const child = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) return shippedSources(child);
+      return /\.(?:ts|mts|cjs|js)$/u.test(entry.name) ? [child] : [];
+    });
+}
 
 // Every file a credential can pass through: the boundary, the store, the
 // shared mechanism underneath it, both path modules, the bridge, the
@@ -51,6 +61,25 @@ test("saved login has one encrypted owner-only persistence surface", () => {
   assert.match(
     surface,
     /secureStorage:[\s\S]*getCredentials[\s\S]*storeCredentials[\s\S]*clearCredentials/,
+  );
+});
+
+test("no build seeds the Steam token from the environment", () => {
+  // R23 / AE11, and the reason this is a source scan rather than a launch: a
+  // test that starts the app with `GW_STEAM_TOKEN` set and observes nothing
+  // happen proves only that nothing happened *that time*. The claim is that no
+  // code reads it, and absence has no executable form.
+  //
+  // An earlier design shipped exactly this variable to bootstrap login before
+  // acquisition worked, as a documented security deviation. Acquisition is the
+  // acquisition path now, so the deviation is gone and this keeps it gone.
+  const readers = shippedSources().filter((file) =>
+    /GW_STEAM_TOKEN|process\.env\.[A-Za-z_]*STEAM/u.test(read(file)),
+  );
+  assert.deepEqual(
+    readers,
+    [],
+    "the Steam token has one home, the encrypted store — no environment variable may seed it",
   );
 });
 
