@@ -6,6 +6,7 @@
 // configuration (KTD7): point `authorizationBaseUrl` at 127.0.0.1 and the
 // window, the origin allowlist, and the redirect matcher all follow.
 import { expect, test } from "@playwright/test";
+import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -14,6 +15,7 @@ import {
   launchOffline,
   root,
   type OfflineFixture,
+  main,
 } from "./fixtures.mts";
 import type { SteamOAuthConfig } from "../../src/main/core/steam-oauth.js";
 
@@ -29,7 +31,14 @@ const TOKEN = "0123456789abcdef0123456789abcdef";
  */
 const RETURN_URL = "https://www.guildwars.test/app/live/auth";
 
-type FixtureMode = "redirect" | "wrong-state" | "no-token" | "hang" | "escape";
+type FixtureMode =
+  | "redirect"
+  | "wrong-state"
+  | "no-token"
+  | "hang"
+  | "escape"
+  | "popup"
+  | "download";
 
 interface Hit {
   path: string;
@@ -49,14 +58,28 @@ async function startFixture(mode: FixtureMode): Promise<Fixture> {
     hits.push({ path: url.pathname, cookie: request.headers.cookie });
     const nonce = url.searchParams.get("state") ?? "";
 
+    if (url.pathname === "/download") {
+      // Same origin, so navigation is allowed and the *download* guard is what
+      // has to stop it.
+      response.writeHead(200, {
+        "content-type": "application/octet-stream",
+        "content-disposition": 'attachment; filename="steam-not-a-token.bin"',
+      });
+      response.end("payload");
+      return;
+    }
+
     if (url.pathname === "/authorize") {
       // A second same-origin hop, so a cookie set here is offered back on the
       // next request — which is what makes the partition assertion meaningful.
-      if (mode === "hang" || mode === "escape") {
-        const body =
-          mode === "hang"
-            ? "<title>fixture</title>waiting"
-            : `<title>fixture</title><script>location.href="https://evil.example/";</script>`;
+      const pages: Partial<Record<FixtureMode, string>> = {
+        hang: "<title>fixture</title>waiting",
+        escape: `<title>fixture</title><script>location.href="https://evil.example/";</script>`,
+        popup: `<title>fixture</title><script>window.open("https://evil.example/");</script>`,
+        download: `<title>fixture</title><script>location.href="/download";</script>`,
+      };
+      const body = pages[mode];
+      if (body !== undefined) {
         response.writeHead(200, { "content-type": "text/html" });
         response.end(body);
         return;
@@ -87,11 +110,16 @@ async function startFixture(mode: FixtureMode): Promise<Fixture> {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
+  let closed = false;
   return {
     origin: `http://127.0.0.1:${port}`,
     hits,
+    // Idempotent: one test closes the server early to free its port, and
+    // afterEach closes every fixture unconditionally.
     close: () =>
       new Promise<void>((resolve) => {
+        if (closed) return resolve();
+        closed = true;
         server.close(() => resolve());
       }),
   };
@@ -166,6 +194,18 @@ async function windowCount(app: OfflineFixture["app"]): Promise<number> {
   return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
 }
 
+/** The events recorded so far by the in-flight acquisition. */
+async function recordedEvents(
+  app: OfflineFixture["app"],
+): Promise<{ k: string; what?: string; outcome?: string }[]> {
+  return app.evaluate(() => {
+    const scope = globalThis as unknown as {
+      __steamEvents: { k: string; what?: string; outcome?: string }[];
+    };
+    return scope.__steamEvents;
+  });
+}
+
 /** Windows currently showing the fixture server, identified by URL. */
 async function signInWindows(app: OfflineFixture["app"]): Promise<number> {
   return app.evaluate(
@@ -186,6 +226,21 @@ async function waitForSignInWindow(app: OfflineFixture["app"]): Promise<void> {
   await expect.poll(() => signInWindows(app), { timeout: 15_000 }).toBe(1);
 }
 
+/** Kill the sign-in window's renderer the way a real page crash would. */
+async function crashSignInWindow(app: OfflineFixture["app"]): Promise<void> {
+  const crashed = await app.evaluate(({ BrowserWindow }) => {
+    let count = 0;
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.webContents.getURL().includes("127.0.0.1")) {
+        win.webContents.forcefullyCrashRenderer();
+        count += 1;
+      }
+    }
+    return count;
+  });
+  expect(crashed).toBe(1);
+}
+
 async function closeSignInWindow(app: OfflineFixture["app"]): Promise<void> {
   const destroyed = await app.evaluate(({ BrowserWindow }) => {
     let count = 0;
@@ -201,6 +256,10 @@ async function closeSignInWindow(app: OfflineFixture["app"]): Promise<void> {
 }
 
 test.describe("acquiring a Steam token", () => {
+  // These drive compiled main-process code, so skip rather than error when the
+  // build has not run — the same guard tests/electron/sandbox.spec.ts uses.
+  test.skip(!existsSync(main), "run pnpm build before the electron tests");
+
   let fixture: OfflineFixture;
   let server: Fixture;
 
@@ -273,22 +332,76 @@ test.describe("acquiring a Steam token", () => {
     await beginAcquire(fixture.app, configFor(server));
     await waitForSignInWindow(fixture.app);
     await expect
-      .poll(
-        async () =>
-          (
-            await fixture.app.evaluate(() => {
-              const scope = globalThis as unknown as { __steamEvents: { k: string }[] };
-              return scope.__steamEvents;
-            })
-          ).some((event) => event.k === "blocked"),
-        { timeout: 15_000 },
-      )
-      .toBe(true);
+      .poll(() => recordedEvents(fixture.app), { timeout: 15_000 })
+      .toContainEqual({ k: "blocked", what: "navigation" });
     await closeSignInWindow(fixture.app);
     const run = await settleAcquire(fixture.app);
 
     expect(run.events).toContainEqual({ k: "blocked", what: "navigation" });
     expect(run.result).toEqual({ ok: false, reason: "cancelled" });
+  });
+
+  test("settles when the sign-in page's renderer crashes", async () => {
+    // R2: the client awaits this call, so a dead renderer must not leave it
+    // waiting on a credential that can no longer arrive. Steam's login page is
+    // external content pulling assets from several hosts, which makes a crash a
+    // real failure mode rather than a theoretical one.
+    server = await startFixture("hang");
+    fixture = await launchOffline("gw-steam-acquire-crash-");
+    const before = await windowCount(fixture.app);
+
+    await beginAcquire(fixture.app, configFor(server));
+    await waitForSignInWindow(fixture.app);
+    await crashSignInWindow(fixture.app);
+    const run = await settleAcquire(fixture.app);
+
+    expect(run.result).toEqual({ ok: false, reason: "failed" });
+    expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "failed" });
+    expect(await windowCount(fixture.app)).toBe(before);
+  });
+
+  test("denies a popup the sign-in page tries to open", async () => {
+    server = await startFixture("popup");
+    fixture = await launchOffline("gw-steam-acquire-popup-");
+    const before = await windowCount(fixture.app);
+
+    await beginAcquire(fixture.app, configFor(server));
+    await waitForSignInWindow(fixture.app);
+    await expect
+      .poll(() => recordedEvents(fixture.app), { timeout: 15_000 })
+      .toContainEqual({ k: "blocked", what: "popup" });
+    // The denial is the point: no third window appeared for it.
+    expect(await windowCount(fixture.app)).toBe(before + 1);
+    await closeSignInWindow(fixture.app);
+    await settleAcquire(fixture.app);
+  });
+
+  test("blocks a download the sign-in page starts", async () => {
+    server = await startFixture("download");
+    fixture = await launchOffline("gw-steam-acquire-download-");
+
+    await beginAcquire(fixture.app, configFor(server));
+    await waitForSignInWindow(fixture.app);
+    await expect
+      .poll(() => recordedEvents(fixture.app), { timeout: 15_000 })
+      .toContainEqual({ k: "blocked", what: "download" });
+    await closeSignInWindow(fixture.app);
+    await settleAcquire(fixture.app);
+  });
+
+  test("reports a sign-in page that will not load", async () => {
+    // Steam unreachable (R10). The fixture is started only to claim a port,
+    // then closed, so the authorize URL is guaranteed to refuse the connection.
+    server = await startFixture("redirect");
+    const config = configFor(server);
+    await server.close();
+    fixture = await launchOffline("gw-steam-acquire-unreachable-");
+    const before = await windowCount(fixture.app);
+
+    const run = await acquire(fixture.app, config);
+
+    expect(run.result).toEqual({ ok: false, reason: "failed" });
+    expect(await windowCount(fixture.app)).toBe(before);
   });
 
   test("leaves no cookie behind for the next sign-in", async () => {

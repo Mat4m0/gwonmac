@@ -201,6 +201,7 @@ dns.resolve
 secureStorage.getCredentials/storeCredentials/clearCredentials
 login.getAuthToken
 adProvider.showInterstitial
+ageSignals.check
 shop.initialize/inAppPurchase
 ```
 

@@ -73,6 +73,10 @@ describe("the sign-in origin allowlist", () => {
       "https://steampowered.com.attacker.net/",
       "https://user:pass@steamcommunity.com/", // embedded credentials
       "https://steamcommunity.com:8443/oauth/login", // off-port
+      // A nested-origin scheme reports the origin it wraps, so `URL.origin`
+      // alone would call this the authorize origin and skip the https check.
+      "blob:https://steamcommunity.com/8f2a-uuid",
+      "blob:https://login.steampowered.com/x",
       "not a url",
       "",
     ]) {
@@ -128,6 +132,9 @@ describe("the redirect target", () => {
       "https://evil.example/app/live/auth",
       "http://www.guildwars.com/app/live/auth",
       "https://return.example/app/live/auth", // the *fixture's* return URL
+      // Same name, different port is a different service, and it must not be
+      // trusted to supply the state-matching response.
+      "https://www.guildwars.com:8443/app/live/auth",
       "not a url",
     ]) {
       assert.equal(isRedirectTarget(STEAM_OAUTH, bad), false, bad);
@@ -150,6 +157,27 @@ describe("reading the token back", () => {
   it("accepts a query token as well as a fragment token", () => {
     const r = parseRedirect(`${RETURN}?access_token=q99&state=${STATE}`, STATE);
     assert.deepEqual(r, { ok: true, token: "q99" });
+  });
+
+  it("accepts a bare `token` key as well as `access_token`", () => {
+    // Both spellings are read, fragment first. Untested, a typo or wrong
+    // precedence here would only surface against a live server that happens to
+    // use the alternate name.
+    assert.deepEqual(parseRedirect(`${RETURN}#token=abc123&state=${STATE}`, STATE), {
+      ok: true,
+      token: "abc123",
+    });
+    assert.deepEqual(parseRedirect(`${RETURN}?token=q99&state=${STATE}`, STATE), {
+      ok: true,
+      token: "q99",
+    });
+  });
+
+  it("prefers access_token when a response carries both", () => {
+    assert.deepEqual(
+      parseRedirect(`${RETURN}#access_token=primary&token=secondary&state=${STATE}`, STATE),
+      { ok: true, token: "primary" },
+    );
   });
 
   it("rejects a response whose state does not match the attempt", () => {

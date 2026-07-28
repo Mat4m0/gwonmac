@@ -44,6 +44,7 @@ import {
   refreshSteamExpiry,
   resolveSteamToken,
   SteamSessionStore,
+  steamTokenOutcome,
 } from "./core/steam-session.js";
 import { acquireSteamToken } from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
@@ -400,11 +401,21 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   const steam = new SteamSessionStore(paths.steamSession, safeStorage);
 
   /**
+   * One sign-in at a time. Without this, anything running in the renderer's
+   * main world — which is where the downloaded game client's own code runs —
+   * can call the bridge in a loop and stack unbounded windows over the game,
+   * each reaching a third-party origin, with the last write winning. A second
+   * caller joins the attempt already open, which is what "the player clicked
+   * the button" means anyway.
+   */
+  let steamSignIn: Promise<string | null> | null = null;
+
+  /**
    * Run the Steam sign-in flow, reporting what the window did. Adapts the
    * window's result to the `string | null` that `resolveSteamToken` takes,
    * which is what keeps `src/main/core/**` free of Electron.
    */
-  const acquireSteam = async (win: BrowserWindow): Promise<string | null> => {
+  const runSteamSignIn = async (win: BrowserWindow): Promise<string | null> => {
     const result = await acquireSteamToken(STEAM_OAUTH, {
       parent: win,
       record: (event) => {
@@ -418,6 +429,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       },
     });
     return result.ok ? result.token : null;
+  };
+
+  const acquireSteam = (win: BrowserWindow): Promise<string | null> => {
+    steamSignIn ??= runSteamSignIn(win).finally(() => {
+      steamSignIn = null;
+    });
+    return steamSignIn;
   };
 
   /**
@@ -604,10 +622,14 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         if (note.note === "storeFailed") {
           logEvent({ k: "steam.tokenStoreFailed", code: note.code });
         }
+        // The window never got far enough to report its own outcome, so this is
+        // the only record that a sign-in was attempted and did not happen.
+        if (note.note === "acquireFailed") {
+          logEvent({ k: "steam.signInResult", outcome: "failed" });
+        }
       }
-      const acquired = resolution.notes.some((note) => note.note === "acquired");
       logEvent({ k: "steam.tokenRequested",
-        outcome: resolution.token ? (acquired ? "acquired" : "vended") : "absent",
+        outcome: steamTokenOutcome(resolution),
         silent,
       });
       return resolution.token;

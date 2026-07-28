@@ -1,4 +1,4 @@
-import { BrowserWindow, session } from "electron";
+import { BrowserWindow, session, type Session } from "electron";
 import { randomUUID } from "node:crypto";
 import {
   buildAuthUrl,
@@ -50,12 +50,18 @@ export interface SteamAcquireOptions {
  * Never throws into the caller: a player whose sign-in failed belongs back at
  * the client's login screen, not looking at an unhandled rejection.
  */
-export async function acquireSteamToken(
+/**
+ * Build the partition and the window together, so a failure to construct either
+ * is one thing the caller can catch. Separated out because everything here runs
+ * *before* the promise that owns the resolve-only contract below: a throw at
+ * this point would escape as a rejection, which is exactly what
+ * `acquireSteamToken` promises not to do.
+ */
+function createSignInWindow(
   config: SteamOAuthConfig,
-  options: SteamAcquireOptions = {},
-): Promise<SteamAcquireResult> {
-  const record = options.record ?? ((): void => undefined);
-  const state = newState();
+  parent: BrowserWindow | null | undefined,
+  record: (event: SteamAcquireEvent) => void,
+): { signIn: Session; win: BrowserWindow } {
   // No `persist:` prefix, so the partition lives in memory only and shares
   // nothing with the game session or with a previous attempt.
   const signIn = session.fromPartition(`steam-signin-${randomUUID()}`, {
@@ -73,15 +79,21 @@ export async function acquireSteamToken(
     record({ k: "blocked", what: "download" });
   });
 
-  const parent = options.parent;
   const win = new BrowserWindow({
     width: 520,
     height: 720,
-    title: "Steam sign-in",
+    title: `Steam sign-in — ${new URL(config.authorizationBaseUrl).origin}`,
     show: false,
+    // Parented but deliberately *not* modal. On macOS a modal child is
+    // presented as a sheet attached to its parent, and a sheet draws no title
+    // bar — which is where R18 puts the live origin and where `docs/user-guide.md`
+    // tells the player to check it before typing a password. A modal window
+    // would make that anti-phishing affordance invisible in exactly the
+    // configuration that ships. The game window is sitting at a login screen,
+    // so leaving it interactive costs nothing.
     // Only a real parent may be passed under exactOptionalPropertyTypes; with
     // no game window yet this simply opens a top-level window.
-    ...(parent ? { parent, modal: true } : {}),
+    ...(parent ? { parent } : {}),
     webPreferences: {
       session: signIn,
       nodeIntegration: false,
@@ -94,6 +106,28 @@ export async function acquireSteamToken(
       experimentalFeatures: false,
     },
   });
+  return { signIn, win };
+}
+
+export async function acquireSteamToken(
+  config: SteamOAuthConfig,
+  options: SteamAcquireOptions = {},
+): Promise<SteamAcquireResult> {
+  const record = options.record ?? ((): void => undefined);
+  const state = newState();
+
+  let created: { signIn: Session; win: BrowserWindow };
+  try {
+    created = createSignInWindow(config, options.parent, record);
+  } catch {
+    // A parent window destroyed mid-request is the realistic case — during app
+    // quit, or a fast close between the click and this call. Report it as a
+    // failed sign-in rather than rejecting, because every caller from here to
+    // the client's login screen is written against "this never throws".
+    record({ k: "settled", outcome: "failed" });
+    return { ok: false, reason: "failed" };
+  }
+  const { signIn, win } = created;
 
   return await new Promise<SteamAcquireResult>((resolve) => {
     let settled = false;
@@ -167,10 +201,25 @@ export async function acquireSteamToken(
       showOrigin();
     });
 
-    win.once("ready-to-show", () => win.show());
+    // Shown before the navigation, not on `ready-to-show`. A load that stalls
+    // forever never fires that event, which would leave an invisible window the
+    // player cannot close while the client waits on a credential — the hang R2
+    // exists to prevent. A brief empty window is the cost of always being
+    // cancellable.
+    win.show();
     // The player gave up. Resolving here is what keeps the client's credential
     // request from hanging forever (R2).
     win.on("closed", () => finish({ ok: false, reason: "cancelled" }));
+    // And the page died on its own. Steam's login page is external content that
+    // pulls assets from several hosts, so a renderer crash is a real failure
+    // mode — and without this the window sits there dead while the client waits
+    // on a credential that can no longer arrive. The game window
+    // (`src/main/window.ts`) and `src/main/renderer-commands.ts` both listen for
+    // exactly this so pending work settles instead of waiting on a dead
+    // renderer; this is the same rule for the same reason.
+    win.webContents.on("render-process-gone", () =>
+      finish({ ok: false, reason: "failed" }),
+    );
 
     record({ k: "opened" });
     void win

@@ -10,6 +10,7 @@ import {
   resolveSteamToken,
   STEAM_TOKEN_LIFETIME_MS,
   SteamSessionStore,
+  steamTokenOutcome,
   type SteamSessionReader,
   type StoredSteamSession,
 } from "../../src/main/core/steam-session.js";
@@ -276,6 +277,23 @@ describe("deciding which Steam token to vend", () => {
     assert.deepEqual(resolution.notes, [{ note: "acquired" }]);
   });
 
+  it("refuses an implausibly long token instead of handing it to the client", async () => {
+    // Persistence would reject it, but a failed store is tolerated by design —
+    // so without a check here the token would still reach the client and be
+    // copied into wasm memory.
+    const store = fakeStore(null);
+    const resolution = await resolveSteamToken(store, {
+      silent: false,
+      acquire: fakeAcquire("x".repeat(4097)),
+      now: NOW,
+    });
+    assert.equal(resolution.token, null);
+    assert.deepEqual(resolution.notes, [
+      { note: "acquireFailed", code: "steam_session_corrupt" },
+    ]);
+    assert.equal(store.held, null);
+  });
+
   it("reports a sign-in that did not complete without storing anything", async () => {
     const store = fakeStore(null);
     const resolution = await resolveSteamToken(store, {
@@ -359,9 +377,98 @@ describe("deciding which Steam token to vend", () => {
     });
 
     assert.equal(resolution.token, ACQUIRED);
+    // Both notes: a window opened *and* the write failed. `acquired` records
+    // where the token came from, so a diagnostics reader can still tell this
+    // from a token replayed off disk.
     assert.deepEqual(resolution.notes, [
+      { note: "acquired" },
       { note: "storeFailed", code: "steam_session_unavailable" },
     ]);
+  });
+});
+
+describe("keeping its promise never to throw", () => {
+  it("reports an acquisition that threw instead of letting it escape", async () => {
+    // `resolveSteamToken` is documented as never throwing, and the IPC handler
+    // is written against that. A window that fails to construct — a parent
+    // destroyed mid-request during quit — must not surface as a rejected IPC
+    // call with no diagnostic behind it.
+    const store = fakeStore(null);
+    const resolution = await resolveSteamToken(store, {
+      silent: false,
+      acquire: () => {
+        throw new AppError("not_ready", "the parent window is gone");
+      },
+      now: NOW,
+    });
+
+    assert.equal(resolution.token, null);
+    assert.deepEqual(resolution.notes, [
+      { note: "acquireFailed", code: "not_ready" },
+    ]);
+    assert.equal(store.held, null);
+  });
+
+  it("reports an acquisition that rejected asynchronously", async () => {
+    const store = fakeStore(null);
+    const resolution = await resolveSteamToken(store, {
+      silent: false,
+      acquire: async () => {
+        await Promise.resolve();
+        throw new Error("something Electron did");
+      },
+      now: NOW,
+    });
+    assert.equal(resolution.token, null);
+    assert.deepEqual(resolution.notes, [{ note: "acquireFailed", code: "unknown" }]);
+  });
+});
+
+describe("how a resolution reads in diagnostics", () => {
+  it("separates a replayed token from a freshly acquired one", () => {
+    assert.equal(steamTokenOutcome({ token: FRESH, notes: [] }), "vended");
+    assert.equal(
+      steamTokenOutcome({ token: ACQUIRED, notes: [{ note: "acquired" }] }),
+      "acquired",
+    );
+    assert.equal(steamTokenOutcome({ token: null, notes: [] }), "absent");
+  });
+
+  it("still calls it acquired when only persisting the token failed", () => {
+    // A window opened and a token was obtained; only the save failed. Reporting
+    // that as `vended` would point whoever reads a "Steam asks me to sign in
+    // every launch" export at the store instead of at the failed write. This is
+    // the note pair `resolveSteamToken` actually produces on that path.
+    assert.equal(
+      steamTokenOutcome({
+        token: ACQUIRED,
+        notes: [
+          { note: "acquired" },
+          { note: "storeFailed", code: "steam_session_unavailable" },
+        ],
+      }),
+      "acquired",
+    );
+  });
+
+  it("calls a failed acquisition absent, not acquired", () => {
+    assert.equal(
+      steamTokenOutcome({
+        token: null,
+        notes: [{ note: "acquireFailed", code: "unknown" }],
+      }),
+      "absent",
+    );
+  });
+
+  it("reads an expired-then-replaced token as acquired", () => {
+    assert.equal(
+      steamTokenOutcome({
+        token: ACQUIRED,
+        notes: [{ note: "expired" }, { note: "acquired" }],
+      }),
+      "acquired",
+    );
   });
 });
 
@@ -371,6 +478,41 @@ describe("the client handing a token back", () => {
     const outcome = await refreshSteamExpiry(store, FRESH, NOW + 5000);
     assert.equal(outcome, "refreshed");
     assert.deepEqual(store.held, { token: FRESH, expiry: NOW + 5000 });
+  });
+
+  it("refuses an expiry that has already passed", async () => {
+    // The storeback only runs after the account service accepted the token, so
+    // a past expiry contradicts itself. Writing one would make the next launch
+    // read the record as expired and *delete* it, costing the player a sign-in
+    // they were told was once-per-machine. `new Date(0)` is the likely accident;
+    // the same call is reachable from the renderer, which is the abuse.
+    const store = fakeStore({ token: FRESH, expiry: NOW });
+    for (const past of [0, -1, 1, Date.now() - 1_000]) {
+      assert.equal(await refreshSteamExpiry(store, FRESH, past), "ignored", String(past));
+      assert.deepEqual(store.held, { token: FRESH, expiry: NOW });
+    }
+  });
+
+  it("still accepts an expiry in the future", async () => {
+    const store = fakeStore({ token: FRESH, expiry: NOW });
+    const future = Date.now() + 60_000;
+    assert.equal(await refreshSteamExpiry(store, FRESH, future), "refreshed");
+    assert.deepEqual(store.held, { token: FRESH, expiry: future });
+  });
+
+  it("refuses to turn a known expiry back into an unknown one", async () => {
+    // Writing `null` over the flow's own one-year lifetime would leave a record
+    // that never self-expires, so the app would keep replaying a dead token
+    // rather than asking the player to sign in again.
+    const store = fakeStore({ token: FRESH, expiry: NOW + 60_000 });
+    assert.equal(await refreshSteamExpiry(store, FRESH, null), "ignored");
+    assert.deepEqual(store.held, { token: FRESH, expiry: NOW + 60_000 });
+  });
+
+  it("accepts no-expiry-yet when none is known either way", async () => {
+    const store = fakeStore({ token: FRESH, expiry: null });
+    assert.equal(await refreshSteamExpiry(store, FRESH, null), "refreshed");
+    assert.deepEqual(store.held, { token: FRESH, expiry: null });
   });
 
   it("ignores a storeback that is not the token it holds", async () => {

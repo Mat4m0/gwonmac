@@ -94,6 +94,7 @@ export type SteamResolutionNote =
   | { note: "loadFailed"; code: ErrorCode }
   | { note: "expired" }
   | { note: "acquired" }
+  | { note: "acquireFailed"; code: ErrorCode }
   | { note: "storeFailed"; code: ErrorCode };
 
 export interface SteamResolution {
@@ -154,18 +155,59 @@ export async function resolveSteamToken(
 
   if (options.silent) return { token: null, notes };
 
-  const acquired = await options.acquire();
+  let acquired: string | null;
+  try {
+    acquired = await options.acquire();
+  } catch (error) {
+    // `acquire` is documented as never throwing, and this is what makes that a
+    // guarantee rather than a hope: every other fallible call here is guarded,
+    // and leaving this one bare would let a construction failure escape the
+    // "nothing here throws" contract the IPC handler is written against.
+    notes.push({ note: "acquireFailed", code: errorCode(error) });
+    return { token: null, notes };
+  }
   if (!acquired) return { token: null, notes };
+  // Check the acquired token before anything is done with it. Persistence would
+  // reject an implausible one, but a `storeFailed` is tolerated by design — so
+  // without this an oversized token from a malformed OAuth response would fail
+  // to store and still be handed to the client and copied into wasm memory.
+  if (acquired.length > MAX_TOKEN_LENGTH) {
+    notes.push({ note: "acquireFailed", code: "steam_session_corrupt" });
+    return { token: null, notes };
+  }
 
+  // Recorded before the write, because it states where the token came from, not
+  // whether it was stored. A failed save then carries both notes, and a reader
+  // of the export can tell "a window opened" from "a token was replayed" even
+  // when persistence failed.
+  notes.push({ note: "acquired" });
   try {
     await store.save({ token: acquired, expiry: now + STEAM_TOKEN_LIFETIME_MS });
-    notes.push({ note: "acquired" });
   } catch (error) {
     // The token still authenticates this session; all that is lost is not
     // having to sign in again next launch.
     notes.push({ note: "storeFailed", code: errorCode(error) });
   }
   return { token: acquired, notes };
+}
+
+export type SteamTokenOutcome = "vended" | "absent" | "acquired";
+
+/**
+ * How a resolution reads in diagnostics: replayed from the store, freshly
+ * signed in for, or nothing to offer.
+ *
+ * `acquired` records provenance rather than persistence, so a sign-in whose
+ * token could not be written still reads as `acquired` — a window *did* open.
+ * Calling that `vended` would tell whoever reads the export that a stored token
+ * was replayed, which is the opposite of what happened and sends them looking
+ * in the wrong place for a "Steam asks me to sign in every launch" report.
+ */
+export function steamTokenOutcome(resolution: SteamResolution): SteamTokenOutcome {
+  if (!resolution.token) return "absent";
+  return resolution.notes.some((note) => note.note === "acquired")
+    ? "acquired"
+    : "vended";
 }
 
 export type SteamStorebackOutcome = "refreshed" | "ignored" | "failed";
@@ -194,6 +236,20 @@ export async function refreshSteamExpiry(
     return "failed";
   }
   if (!stored || !token || token !== stored.token) return "ignored";
+  // A storeback only happens *after* the account service accepted the token, so
+  // an expiry that has already passed contradicts itself — the credential
+  // demonstrably works. Persisting one would replace a year-long credential
+  // with a record the next launch reads as expired and deletes, costing the
+  // player the sign-in they were promised was once-per-machine. `new Date(0)`
+  // is a common "no date" encoding, and the same call is reachable from the
+  // renderer, so this refuses both the accident and the abuse.
+  if (expiry !== null && expiry <= Date.now()) return "ignored";
+  // Nor may a storeback turn a known expiry back into an unknown one. R9 honors
+  // the expiry the account service supplies "when a login returns one"; `null`
+  // is the absence of one, and writing it over the flow's own lifetime would
+  // leave a record that never self-expires and so keeps replaying a dead token
+  // instead of asking the player to sign in again.
+  if (expiry === null && stored.expiry !== null) return "ignored";
   try {
     await store.save({ token: stored.token, expiry });
     return "refreshed";

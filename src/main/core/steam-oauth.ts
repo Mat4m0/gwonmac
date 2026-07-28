@@ -83,7 +83,17 @@ export function isAllowedOrigin(config: SteamOAuthConfig, rawUrl: string): boole
   // walk straight in.
   if (u.username || u.password) return false;
   const authorize = parseUrl(config.authorizationBaseUrl);
-  if (authorize && u.origin === authorize.origin) return true;
+  // Scheme and host, not `origin`. A nested-origin scheme reports the origin it
+  // wraps — `new URL("blob:https://steamcommunity.com/x").origin` is
+  // `https://steamcommunity.com` — so comparing origins would admit a `blob:`
+  // URL and skip the https requirement below it entirely.
+  if (
+    authorize &&
+    u.protocol === authorize.protocol &&
+    u.host === authorize.host
+  ) {
+    return true;
+  }
   if (u.protocol !== "https:") return false;
   if (u.port !== "" && u.port !== "443") return false;
   const host = u.hostname.toLowerCase();
@@ -109,7 +119,10 @@ export function isRedirectTarget(config: SteamOAuthConfig, rawUrl: string): bool
     target !== null &&
     u.protocol === target.protocol &&
     u.protocol === "https:" &&
-    u.hostname.toLowerCase() === target.hostname.toLowerCase() &&
+    // `host`, not `hostname`: it carries the port, so a service on the same
+    // name at a different port is not the return target. `URL` normalises the
+    // default port away, so an explicit `:443` still matches.
+    u.host.toLowerCase() === target.host.toLowerCase() &&
     u.pathname === target.pathname
   );
 }

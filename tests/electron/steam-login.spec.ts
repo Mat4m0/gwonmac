@@ -8,6 +8,7 @@
 // steamcommunity.com; that path is covered by tests/electron/steam-acquire.spec.ts
 // against an injected fixture config, and once by hand on a linked account.
 import { expect, test } from "@playwright/test";
+import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,6 +20,7 @@ import {
   launchOfflineAt,
   root,
   type OfflineFixture,
+  main,
 } from "./fixtures.mts";
 
 const execFileAsync = promisify(execFile);
@@ -123,6 +125,10 @@ async function windowCount(app: OfflineFixture["app"]): Promise<number> {
 }
 
 test.describe("the Steam credential seam", () => {
+  // These drive compiled main-process code, so skip rather than error when the
+  // build has not run — the same guard tests/electron/sandbox.spec.ts uses.
+  test.skip(!existsSync(main), "run pnpm build before the electron tests");
+
   let fixture: OfflineFixture;
 
   test.afterEach(async () => {
@@ -302,7 +308,7 @@ test.describe("the Steam credential seam", () => {
     });
   });
 
-  test("relays an unusable expiry as no expiry rather than as a date", async () => {
+  test("leaves a working record alone when the expiry is unusable", async () => {
     fixture = await launchOffline("gw-steam-bad-date-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
 
@@ -322,9 +328,50 @@ test.describe("the Steam credential seam", () => {
       { token: TOKEN },
     );
 
-    // `null` is "no expiry known", which R9 treats as a token to be proved by
-    // the login exchange -- not as one that expired at the epoch.
-    expect(await readStore(fixture.app)).toEqual({ token: TOKEN, expiry: null });
+    // Two things at once. The harness turns an Invalid Date into "no expiry
+    // known" rather than into a date in 1970 -- and main then refuses to write
+    // that absence over an expiry it already knows, so the record a working
+    // sign-in depends on survives intact. Either failure alone would show up
+    // here as an expiry of 0 or null.
+    expect(await readStore(fixture.app)).toEqual({
+      token: TOKEN,
+      expiry: FAR_FUTURE,
+    });
+  });
+
+  test("survives a storeback poisoned with a past expiry", async () => {
+    // The renderer can read the token and hand it back with an expiry already
+    // in the past. Persisting that would make the next launch treat the record
+    // as expired and delete it, costing the player a sign-in they were told was
+    // once-per-machine -- so the stored expiry must not move, and the token must
+    // still be vended afterwards.
+    fixture = await launchOffline("gw-steam-poisoned-expiry-");
+    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
+
+    await fixture.page.evaluate(
+      async ({ token }) => {
+        const account = (
+          globalThis as unknown as {
+            Module: {
+              nativeAccount: {
+                storeAccountData(token: string, expiry: Date): Promise<void>;
+              };
+            };
+          }
+        ).Module.nativeAccount;
+        await account.storeAccountData(token, new Date(0));
+      },
+      { token: TOKEN },
+    );
+
+    expect(await readStore(fixture.app)).toEqual({
+      token: TOKEN,
+      expiry: FAR_FUTURE,
+    });
+    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
+      settled: "resolved",
+      value: { userId: "1", authCode: TOKEN, refreshToken: "" },
+    });
   });
 
   test("exports diagnostics carrying outcomes and neither the token nor its expiry", async () => {
