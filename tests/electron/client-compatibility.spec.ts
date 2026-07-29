@@ -286,8 +286,9 @@ test.describe("client compatibility", () => {
       },
     );
     try {
-      await fixture.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+      const applicationWindow = await fixture.app.browserWindow(fixture.page);
+      await applicationWindow.evaluate((win) => {
+        win.webContents.forcefullyCrashRenderer();
       });
       await expect
         .poll(() => pathExists(path.join(artifacts, "manifest.json")), {

@@ -333,12 +333,16 @@ test.describe("diagnostics", () => {
   test("a command to a renderer whose process is gone settles instead of waiting", async () => {
     const fixture = await launchOffline("gw-renderer-command-crash-e2e-");
     try {
+      const applicationWindow = await fixture.app.browserWindow(fixture.page);
+      const mainPid = await applicationWindow.evaluate(
+        (win) => win.webContents.getOSProcessId(),
+      );
       const outcome = await fixture.app.evaluate(
-        async ({ BrowserWindow }, modulePath) => {
+        async ({ BrowserWindow }, args) => {
           const load = process
             .getBuiltinModule("node:module")
-            .createRequire(modulePath);
-          const { sendRendererCommand } = load(modulePath);
+            .createRequire(args.modulePath);
+          const { sendRendererCommand } = load(args.modulePath);
           const settledWithin = (promise: Promise<unknown>, ms: number) =>
             Promise.race([
               promise,
@@ -360,10 +364,6 @@ test.describe("diagnostics", () => {
 
           // A probe that shared the application's renderer process would crash
           // the real window instead, and prove nothing about this one.
-          const [applicationWindow] = BrowserWindow.getAllWindows();
-          if (!applicationWindow) throw new Error("the application window is gone");
-          const mainPid = applicationWindow.webContents.getOSProcessId();
-
           // The process dies while a command is outstanding.
           const during = await probe();
           const outstanding = sendRendererCommand(during, { type: "input.reset" });
@@ -393,10 +393,14 @@ test.describe("diagnostics", () => {
             alreadyGone,
             timedOut,
             stillAlive,
-            ownProcesses: duringPid !== mainPid && afterPid !== mainPid,
+            ownProcesses:
+              duringPid !== args.mainPid && afterPid !== args.mainPid,
           };
         },
-        path.join(root, "build/main/renderer-commands.js"),
+        {
+          modulePath: path.join(root, "build/main/renderer-commands.js"),
+          mainPid,
+        },
       );
       expect(outcome).toEqual({
         whileWaiting: "failed",
@@ -656,8 +660,9 @@ test.describe("diagnostics", () => {
   test("recovers the sandbox after a renderer crash", async () => {
     const fixture = await launchOffline("gw-renderer-recovery-e2e-");
     try {
-      await fixture.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+      const applicationWindow = await fixture.app.browserWindow(fixture.page);
+      await applicationWindow.evaluate((win) => {
+        win.webContents.forcefullyCrashRenderer();
       });
       await expect
         .poll(

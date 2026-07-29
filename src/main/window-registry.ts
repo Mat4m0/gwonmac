@@ -31,6 +31,8 @@ interface Registered {
 
 export class WindowRegistry {
   private readonly byContentsId = new Map<number, Registered>();
+  private readonly registeredWindows = new WeakSet<BrowserWindow>();
+  private readonly recoveryClaimed = new WeakSet<BrowserWindow>();
   private readonly maxGameWindows: 1 | 2;
   private readonly releaseOwner: RendererOwnerRelease;
   private nextSlot = 1;
@@ -80,6 +82,7 @@ export class WindowRegistry {
     ) {
       throw new Error("window is not registrable");
     }
+    this.registeredWindows.add(window);
 
     const onNavigation = (
       details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
@@ -155,6 +158,17 @@ export class WindowRegistry {
       }
     }
     return null;
+  }
+
+  claimRendererRecovery(window: BrowserWindow): boolean {
+    if (
+      !this.registeredWindows.has(window)
+      || this.recoveryClaimed.has(window)
+    ) {
+      return false;
+    }
+    this.recoveryClaimed.add(window);
+    return true;
   }
 
   unregister(window: BrowserWindow): boolean {

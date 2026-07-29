@@ -617,8 +617,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       },
     ),
 
-    diagnosticsClockResult: channel(asClockResult, (_win, { offsetUs, rttUs }) => {
-      recordClockOffset(offsetUs, rttUs);
+    diagnosticsClockResult: channel(asClockResult, (win, { offsetUs, rttUs }) => {
+      recordClockOffset(win.webContents, offsetUs, rttUs);
     }),
 
     diagnosticsRendererMetrics: channel(asRendererMetrics, (_win, value) => {
@@ -631,8 +631,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     diagnosticsRendererMilestone: channel(
       asMilestone,
-      (_win, { name, rendererTimestampUs, fields }) => {
-        recordRendererMilestone(name, rendererTimestampUs, fields);
+      (win, { name, rendererTimestampUs, fields }) => {
+        recordRendererMilestone(
+          win.webContents,
+          name,
+          rendererTimestampUs,
+          fields,
+        );
       },
     ),
 

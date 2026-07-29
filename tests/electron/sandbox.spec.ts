@@ -132,9 +132,8 @@ test.describe("sandbox boundary", () => {
   test("the security posture holds on the real window, not only in the source", async () => {
     const fixture = await launchOffline("gw-security-posture-e2e-");
     try {
-      const applied = await fixture.app.evaluate(({ BrowserWindow }) => {
-        const [win] = BrowserWindow.getAllWindows();
-        if (!win) throw new Error("the application window is gone");
+      const applicationWindow = await fixture.app.browserWindow(fixture.page);
+      const applied = await applicationWindow.evaluate((win) => {
         // Electron 43 implements `webContents.getLastWebPreferences()` — it is
         // how the preferences Chromium actually applied are read back — but
         // omits it from its own declarations.

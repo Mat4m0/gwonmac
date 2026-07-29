@@ -87,11 +87,11 @@ test.describe("Electron application", () => {
     const userData = await mkdtemp(path.join(tmpdir(), "gw-single-instance-e2e-"));
     const app = await launch(userData, env);
     try {
-      await app.firstWindow({ timeout: 30_000 });
-      await app.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        win?.minimize();
-        win?.hide();
+      const page = await app.firstWindow({ timeout: 30_000 });
+      const applicationWindow = await app.browserWindow(page);
+      await applicationWindow.evaluate((win) => {
+        win.minimize();
+        win.hide();
       });
 
       const second = spawn(
@@ -113,17 +113,11 @@ test.describe("Electron application", () => {
 
       expect(exit).toEqual({ code: 0, signal: null });
       await expect
-        .poll(() =>
-          app.evaluate(({ BrowserWindow }) => {
-            const windows = BrowserWindow.getAllWindows();
-            return {
-              count: windows.length,
-              minimized: windows[0]?.isMinimized() ?? true,
-              visible: windows[0]?.isVisible() ?? false,
-            };
-          }),
-        )
-        .toEqual({ count: 1, minimized: false, visible: true });
+        .poll(() => applicationWindow.evaluate((win) => ({
+          minimized: win.isMinimized(),
+          visible: win.isVisible(),
+        })))
+        .toEqual({ minimized: false, visible: true });
     } finally {
       await app.close().catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
@@ -231,9 +225,9 @@ test.describe("Electron application", () => {
       const exited = new Promise<ProcessExit>((resolve) => {
         electronProcess.once("exit", (code, signal) => resolve({ code, signal }));
       });
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.close();
-      }).catch(() => undefined);
+      const applicationWindow = await app.browserWindow(page);
+      await applicationWindow.evaluate((win) => win.close())
+        .catch(() => undefined);
       const result = await exited;
       expect(result).toEqual({ code: 0, signal: null });
 
@@ -270,18 +264,18 @@ test.describe("Electron application", () => {
       const exited = new Promise<ProcessExit>((resolve) => {
         processHandle.once("exit", (code, signal) => resolve({ code, signal }));
       });
-      await runningApp.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.close();
-      }).catch(() => undefined);
+      const page = await runningApp.firstWindow({ timeout: 30_000 });
+      const applicationWindow = await runningApp.browserWindow(page);
+      await applicationWindow.evaluate((win) => win.close())
+        .catch(() => undefined);
       expect(await exited).toEqual({ code: 0, signal: null });
     };
 
     let app = await launch(userData, env);
     try {
-      await app.firstWindow({ timeout: 30_000 });
-      const normalBounds = await app.evaluate(async ({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        if (!win) throw new Error("window missing");
+      const firstPage = await app.firstWindow({ timeout: 30_000 });
+      const firstWindow = await app.browserWindow(firstPage);
+      const normalBounds = await firstWindow.evaluate(async (win) => {
         win.setBounds({ x: 120, y: 90, width: 960, height: 700 });
         await new Promise((resolve) => setTimeout(resolve, 400));
         const bounds = win.getBounds();
@@ -307,15 +301,12 @@ test.describe("Electron application", () => {
 
       app = await launch(userData, env);
       const resetPage = await app.firstWindow({ timeout: 30_000 });
+      const resetWindow = await app.browserWindow(resetPage);
       await expect
-        .poll(() =>
-          app.evaluate(({ BrowserWindow }) =>
-            BrowserWindow.getAllWindows()[0]?.isFullScreen()),
-        )
+        .poll(() => resetWindow.evaluate((win) => win.isFullScreen()))
         .toBe(true);
       expect(
-        await app.evaluate(({ BrowserWindow }) =>
-          BrowserWindow.getAllWindows()[0]?.getNormalBounds()),
+        await resetWindow.evaluate((win) => win.getNormalBounds()),
       ).toEqual(normalBounds);
 
       const expectedReset = await app.evaluate(({ screen }) => {
@@ -354,10 +345,8 @@ test.describe("Electron application", () => {
         .toBe(true);
       await expect
         .poll(() =>
-          app.evaluate(({ BrowserWindow }) => {
-            const win = BrowserWindow.getAllWindows()[0];
-            return win && !win.isFullScreen() ? win.getBounds() : null;
-          }),
+          resetWindow.evaluate((win) =>
+            !win.isFullScreen() ? win.getBounds() : null),
           { timeout: 15_000 },
         )
         .toEqual(expectedReset);

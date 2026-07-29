@@ -65,7 +65,6 @@ export interface WindowHost {
   prepareRendererRecovery: () => Promise<void>;
 }
 
-let rendererRecoveryUsed = false;
 let restoredWindowState: WindowState | null = null;
 let lastNormalBounds: WindowBounds | null = null;
 let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -362,11 +361,10 @@ export function createMainWindow(
     host.sockets.closeAll(rendererId);
     if (isQuitting()) return;
     if (
-      !rendererRecoveryUsed &&
       details.reason !== "clean-exit" &&
-      !win.isDestroyed()
+      !win.isDestroyed() &&
+      windows.claimRendererRecovery(win)
     ) {
-      rendererRecoveryUsed = true;
       logEvent({ k: "renderer.recoveryScheduled" });
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
@@ -400,7 +398,7 @@ export function createMainWindow(
     app.quit();
   });
 
-  installMenu(host, win);
+  installMenu(host, windows);
   void win.loadURL(RENDERER_URL);
   return win;
 }
@@ -438,10 +436,20 @@ export async function exportProblemReport(
   }
 }
 
-function installMenu(host: WindowHost, win: BrowserWindow): void {
+function menuGameWindow(windows: WindowRegistry): BrowserWindow | null {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && windows.contextForWindow(focused)?.kind === "game") {
+    return focused;
+  }
+  return windows.gameWindow();
+}
+
+function installMenu(host: WindowHost, windows: WindowRegistry): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
   const reportProblem = async (): Promise<void> => {
+    const win = menuGameWindow(windows);
+    if (!win) return;
     await resetGameInput(win);
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
@@ -483,6 +491,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
                 click: async () => {
+                  const win = menuGameWindow(windows);
+                  if (!win) return;
                   await resetGameInput(win);
                   await sendRendererCommand(win, { type: "settings.open" });
                 },
@@ -514,6 +524,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "reset-window-state",
           label: "Reset Window Size and Position",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             void resetWindowState(win).catch(() => {
               logEvent({ k: "window.stateResetFailed" });
@@ -524,6 +536,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
         {
           label: "Toggle Diagnostics",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             const cur = await host.getSettings();
             await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
@@ -534,6 +548,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "start-performance-capture",
           label: "Start Performance Capture",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             void host.startCapture(win, 1).catch((error) => {
               dialog.showErrorBox(
@@ -548,6 +564,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           label: "Mark Performance Problem",
           accelerator: "CmdOrCtrl+Shift+M",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             host.markPerformanceProblem(win);
           },
@@ -556,6 +574,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "start-chromium-trace",
           label: "Start Chromium Trace",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             void host.startCapture(win, 2).catch((error) => {
               dialog.showErrorBox(
@@ -569,6 +589,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "stop-capture",
           label: "Stop Capture",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             void host.stopCapture();
           },
@@ -577,6 +599,8 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           label: "Reload Game",
           accelerator: "CmdOrCtrl+R",
           click: async () => {
+            const win = menuGameWindow(windows);
+            if (!win) return;
             await resetGameInput(win);
             if (host.sockets.size(win.webContents.id) > 0) {
               const { response } = await dialog.showMessageBox(win, {

@@ -21,6 +21,7 @@ import {
   powerMonitor,
   screen,
   type BrowserWindow,
+  type WebContents,
 } from "electron";
 import type {
   AppSettings,
@@ -46,6 +47,7 @@ import { loadSettings } from "./core/settings.js";
 import { writeDiagnosticZip } from "./core/diagnostic-zip.js";
 import type { ProxyRoute } from "./core/proxy-routes.js";
 import { sendRendererCommand } from "./renderer-commands.js";
+import { RendererClocks } from "./renderer-clocks.js";
 import {
   FlightRecorder,
   runtimeVersions as versions,
@@ -87,8 +89,7 @@ let traceGuard: ReturnType<typeof setInterval> | null = null;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let captureStopPromise: Promise<void> | null = null;
 let captureStartPromise: Promise<void> | null = null;
-let rendererClockOffsetUs = 0;
-let rendererClockSynchronized = false;
+const rendererClocks = new RendererClocks<WebContents>();
 let previousMainCpu = process.cpuUsage();
 let previousMainCpuTimestampUs = 0;
 const eventLoop = monitorEventLoopDelay({ resolution: 5 });
@@ -97,6 +98,7 @@ let eventLoopWindowStartedUs = 0;
 let captureStoppedHandler: (() => void | Promise<void>) | null = null;
 let captureTarget: BrowserWindow | null = null;
 let captureTargetLost: (() => void) | null = null;
+let captureTargetGone = false;
 
 /**
  * The renderer half of a capture. `level` crosses as a number inside a typed
@@ -522,9 +524,12 @@ export function diagnosticTimestampUs(): number {
   return recorder.timestampUs();
 }
 
-export function recordClockOffset(offsetUs: number, rttUs: number): void {
-  rendererClockOffsetUs = offsetUs;
-  rendererClockSynchronized = true;
+export function recordClockOffset(
+  contents: WebContents,
+  offsetUs: number,
+  rttUs: number,
+): void {
+  rendererClocks.synchronize(contents, offsetUs);
   recorder.setLatest("renderer.clockOffsetUs", Math.round(offsetUs));
   recorder.setLatest("renderer.clockRttUs", Math.round(rttUs));
   logEvent({ k: "clock.synchronized",
@@ -534,20 +539,24 @@ export function recordClockOffset(offsetUs: number, rttUs: number): void {
 }
 
 export function recordRendererMilestone(
+  contents: WebContents,
   name: RendererMilestone,
   rendererTimestampUs: number,
   fields?: RendererMilestoneFields,
 ): void {
-  const timestampUs = rendererClockSynchronized
-    ? Math.max(0, Math.round(rendererTimestampUs + rendererClockOffsetUs))
-    : recorder.timestampUs();
+  const translated = rendererClocks.translate(
+    contents,
+    rendererTimestampUs,
+    recorder.timestampUs(),
+  );
+  const timestampUs = translated.timestampUs;
   recorder.setLatest(`milestone.${name}Us`, timestampUs);
   if (name === "build.info" && fields) {
     recorder.setLatest("client.programId", fields.programId);
     recorder.setLatest("client.buildId", fields.buildId);
   }
   recordEvent(
-    { k: name, clockSynchronized: rendererClockSynchronized },
+    { k: name, clockSynchronized: translated.synchronized },
     { timestampUs },
   );
 }
@@ -597,7 +606,9 @@ export function startDiagnosticCapture(
     return Promise.reject(new Error("diagnostics target is unavailable"));
   }
   captureTarget = target;
+  captureTargetGone = false;
   const targetLost = (): void => {
+    captureTargetGone = true;
     void stopDiagnosticCapture("target-lost");
   };
   captureTargetLost = targetLost;
@@ -608,10 +619,16 @@ export function startDiagnosticCapture(
     // must be deleted first; clearing only the pointer would orphan a file that
     // can contain Chromium process data.
     await discardTrace();
+    if (captureTargetGone) {
+      throw new Error("diagnostics target was lost during capture startup");
+    }
     await rendererCaptureCommand(target, {
       type: "diagnostics.capture",
       action: "reset",
     });
+    if (captureTargetGone) {
+      throw new Error("diagnostics target was lost during capture startup");
+    }
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
@@ -685,6 +702,7 @@ export function startDiagnosticCapture(
       target.webContents.off("render-process-gone", targetLost);
       if (captureTarget === target) captureTarget = null;
       if (captureTargetLost === targetLost) captureTargetLost = null;
+      captureTargetGone = false;
     }
   });
   return captureStartPromise;
@@ -740,6 +758,7 @@ export function stopDiagnosticCapture(
     }
     captureTarget = null;
     captureTargetLost = null;
+    captureTargetGone = false;
   });
   return captureStopPromise;
 }

@@ -147,3 +147,19 @@ test("closed windows, wrong roles, and cleared registries fail closed", () => {
   assert.equal(registry.gameWindow(), null);
   assert.equal(registry.contextForWindow(game), null);
 });
+
+test("renderer recovery is claimed once per exact registered window", () => {
+  const registry = new WindowRegistry(2);
+  const first = windowFor(31);
+  const second = windowFor(32);
+  registry.registerGame(first);
+  registry.registerGame(second);
+
+  assert.equal(registry.claimRendererRecovery(first), true);
+  assert.equal(registry.claimRendererRecovery(first), false);
+  assert.equal(registry.claimRendererRecovery(second), true);
+  assert.equal(registry.claimRendererRecovery(windowFor(33)), false);
+
+  first.webContents.emit("render-process-gone");
+  assert.equal(registry.claimRendererRecovery(first), false);
+});
