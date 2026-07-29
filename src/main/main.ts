@@ -3,19 +3,12 @@ import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
-  DEFAULT_SETTINGS,
-  IPC,
-  type AppSettings,
-  type AppSettingsPatch,
-  type DownloadProgress,
-  type PrefetchProgress,
   type EnhancementSelection,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
-import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
-import { loadSettings, saveSettings } from "./core/settings.js";
+import { loadSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import {
   count,
@@ -68,6 +61,7 @@ import {
   updateLongRunningTaskFeedback,
 } from "./window.js";
 import { WindowRegistry } from "./window-registry.js";
+import { AppRuntime, ownedGameWindow } from "./app-runtime.js";
 
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
@@ -90,15 +84,13 @@ if (!primaryInstance) {
   wireLifecycle();
 }
 
-const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
-let settingsWrite: Promise<void> = Promise.resolve();
 let secondInstanceRequested = false;
-let activeWindows: WindowRegistry | null = null;
+let activeRuntime: AppRuntime | null = null;
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
 
 function revealMainWindow(): void {
-  const win = activeWindows?.gameWindow() ?? null;
+  const win = ownedGameWindow(activeRuntime);
   if (!win || win.isDestroyed()) {
     secondInstanceRequested = true;
     return;
@@ -108,30 +100,6 @@ function revealMainWindow(): void {
   if (win.isMinimized()) win.restore();
   if (!win.isVisible()) win.show();
   win.focus();
-}
-
-function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
-  const operation = settingsWrite.then(async () => {
-    const settingsPath = gamePaths().settings;
-    const current = await loadSettings(settingsPath);
-    return saveSettings(settingsPath, { ...current, ...patch });
-  });
-  settingsWrite = operation.then(
-    () => undefined,
-    () => undefined,
-  );
-  return operation;
-}
-
-function resetAppSettings(): Promise<AppSettings> {
-  const operation = settingsWrite.then(() =>
-    saveSettings(gamePaths().settings, { ...DEFAULT_SETTINGS }),
-  );
-  settingsWrite = operation.then(
-    () => undefined,
-    () => undefined,
-  );
-  return operation;
 }
 
 function buildSocketManager(windows: WindowRegistry): SocketManager {
@@ -166,27 +134,6 @@ function buildSocketManager(windows: WindowRegistry): SocketManager {
         }
       : undefined,
   );
-}
-
-function setProgress(next: DownloadProgress): void {
-  updateLongRunningTaskFeedback(next, activeWindows?.gameWindow() ?? null);
-  sendToRenderer(IPC.progressEvent, next);
-}
-
-function setPrefetch(next: PrefetchProgress): void {
-  prefetch.completedChunks = next.completedChunks;
-  prefetch.totalChunks = next.totalChunks;
-  sendToRenderer(IPC.prefetchEvent, { ...prefetch });
-}
-
-function sendToRenderer(channel: string, value: unknown): void {
-  const win = activeWindows?.gameWindow() ?? null;
-  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
-  try {
-    win.webContents.send(channel, value);
-  } catch {
-    // Renderer teardown can race a native progress callback.
-  }
 }
 
 async function ensureDirs(): Promise<void> {
@@ -261,17 +208,16 @@ async function applyPendingGameStorageClear(): Promise<void> {
 }
 
 function buildWindowHost(
-  clientRuntime: ClientRuntime,
-  sockets: SocketManager,
-  windows: WindowRegistry,
+  runtime: AppRuntime<ClientRuntime, SocketManager>,
   enhancementSelection: EnhancementSelection,
 ): WindowHost {
+  const { client, sockets, windows } = runtime;
   return {
     sockets,
     enhancementSelection,
-    getProgress: () => clientRuntime.progress,
-    getSettings: () => loadSettings(gamePaths().settings),
-    updateSettings: updateAppSettings,
+    getProgress: () => client.progress,
+    getSettings: () => runtime.getSettings(),
+    updateSettings: (patch) => runtime.updateSettings(patch),
     exportDiagnostics: async () => {
       const win = windows.gameWindow();
       return win ? exportDiagnosticsForWindow(win) : "";
@@ -284,7 +230,7 @@ function buildWindowHost(
       void win.loadURL(RENDERER_URL);
     },
     prepareRendererRecovery: async () => {
-      await clientRuntime.recoverRendererCrash();
+      await client.recoverRendererCrash();
     },
   };
 }
@@ -340,22 +286,38 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const profileMatches =
     !expectedUserData ||
     path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
+  const runtimeOwner: {
+    current: AppRuntime<ClientRuntime, SocketManager> | null;
+  } = { current: null };
   const clientRuntime = new ClientRuntime({
     paths,
     hostVersion: app.getVersion(),
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementsEnabled: enhancementsEnabledFor(settings),
-    onProgress: setProgress,
-    onPrefetch: setPrefetch,
+    onProgress: (progress) => runtimeOwner.current?.publishProgress(progress),
+    onPrefetch: (progress) => runtimeOwner.current?.publishPrefetch(progress),
   });
   const socketOwner: { current: SocketManager | null } = { current: null };
   const windows = new WindowRegistry(1, (ownerId) => {
     socketOwner.current?.closeAll(ownerId);
   });
-  activeWindows = windows;
   const sockets = buildSocketManager(windows);
   socketOwner.current = sockets;
+  const runtime = new AppRuntime(
+    clientRuntime,
+    sockets,
+    windows,
+    paths.settings,
+    {
+      flushWindowState,
+      clearBrowserCookies: () => clearBrowserCookies("quit"),
+      stopDiagnostics,
+      updateLongRunningTaskFeedback,
+    },
+  );
+  runtimeOwner.current = runtime;
+  activeRuntime = runtime;
   powerMonitor.on("suspend", () => {
     if (!clientRuntime.isDownloading) return;
     logEvent({ k: "fullDownload.stoppedForSleep" });
@@ -372,9 +334,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     sockets,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
-    getSettings: () => loadSettings(gamePaths().settings),
-    updateSettings: updateAppSettings,
-    resetSettings: resetAppSettings,
+    getSettings: () => runtime.getSettings(),
+    updateSettings: (patch) => runtime.updateSettings(patch),
+    resetSettings: () => runtime.resetSettings(),
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
@@ -392,26 +354,14 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   onAppQuit(async () => {
-    await flushWindowState(windows);
-    sockets.closeAll();
-    updateLongRunningTaskFeedback({
-      ...INITIAL_PROGRESS,
-      phase: "ready",
-      label: "Quitting",
-    }, windows.gameWindow());
-    await clientRuntime.shutdown();
-    await clearBrowserCookies("quit");
-    await stopDiagnostics();
-    windows.clear();
-    if (activeWindows === windows) activeWindows = null;
+    await runtime.dispose();
+    if (activeRuntime === runtime) activeRuntime = null;
   });
 
-  const win = createMainWindow(buildWindowHost(
-    clientRuntime,
-    sockets,
+  const win = createMainWindow(
+    buildWindowHost(runtime, enhancementSelection),
     windows,
-    enhancementSelection,
-  ), windows);
+  );
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
@@ -451,13 +401,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
     void clientRuntime.requestUpdate();
   } else {
     logEvent({ k: "app.unexpectedUserData" });
-    setProgress({ phase: "error", errorCode: "wrong_profile" });
+    runtime.publishProgress({ phase: "error", errorCode: "wrong_profile" });
   }
 
   app.on("activate", () => {
     if (!windows.gameWindow()) {
       createMainWindow(
-        buildWindowHost(clientRuntime, sockets, windows, enhancementSelection),
+        buildWindowHost(runtime, enhancementSelection),
         windows,
       );
     }
