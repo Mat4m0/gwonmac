@@ -231,6 +231,10 @@ export function createMainWindow(
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
             host.windowState.detach(win);
+            // Keep the crashed window registered until this exact handoff so
+            // the manager cannot see a stopped profile and launch a duplicate
+            // while recovery is already pending.
+            windows.unregister(win);
             createMainWindow(host, windows);
             approvedGameCloses.add(win);
             win.destroy();

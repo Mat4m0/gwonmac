@@ -106,7 +106,7 @@ test("two-window mode allocates ephemeral slots and removes destroyed owners", (
   );
 });
 
-test("reload releases resources while crash and destruction remove ownership", () => {
+test("reload and crash release resources while destruction removes ownership", () => {
   const releases: Array<[number, string]> = [];
   const registry = new WindowRegistry(1, (id, reason) => {
     releases.push([id, reason]);
@@ -125,11 +125,14 @@ test("reload releases resources while crash and destruction remove ownership", (
   assert.deepEqual(releases, [[11, "reload"]]);
 
   reloaded.webContents.emit("render-process-gone");
-  assert.equal(registry.contextFor(reloaded.webContents), null);
+  assert.notEqual(registry.contextFor(reloaded.webContents), null);
   assert.deepEqual(releases, [
     [11, "reload"],
     [11, "crash"],
   ]);
+
+  reloaded.close();
+  assert.equal(registry.contextFor(reloaded.webContents), null);
 
   const destroyed = windowFor(12);
   registry.registerGame(destroyed, PROFILE);

@@ -94,7 +94,6 @@ export class WindowRegistry {
     };
     const onCrash = (): void => {
       this.releaseOwner(contents.id, "crash");
-      this.unregisterExact(contents);
     };
     const onDestroyed = (): void => {
       this.releaseOwner(contents.id, "destroyed");
