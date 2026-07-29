@@ -55,10 +55,16 @@ export interface OfflineFixture {
   readonly userData: string;
 }
 
-let activeFixtureOwner: Set<OfflineFixture> | null = null;
+interface OwnedProcess {
+  readonly process: FixtureProcess;
+  readonly userData?: string;
+  readonly app?: ElectronApplication;
+}
+
+let activeFixtureOwner: Set<OwnedProcess> | null = null;
 
 async function attachFailureEvidence(
-  fixture: OfflineFixture,
+  fixture: OwnedProcess & { app: ElectronApplication },
   index: number,
   outputPath: (name: string) => string,
   attach: (
@@ -127,24 +133,31 @@ export const test = base.extend<{ electronLifecycle: void }>({
     // Playwright requires fixture dependencies to use an object pattern.
     // eslint-disable-next-line no-empty-pattern
     async ({}, use, testInfo) => {
-      const owned = new Set<OfflineFixture>();
+      const owned = new Set<OwnedProcess>();
       let cleanupFailures: unknown[];
       activeFixtureOwner = owned;
       try {
         await use();
       } finally {
         const evidenceResults = await Promise.allSettled(
-          [...owned].map((fixture, index) =>
-            attachFailureEvidence(
-              fixture,
-              index,
-              (name) => testInfo.outputPath(name),
-              (name, options) => testInfo.attach(name, options),
+          [...owned]
+            .filter(
+              (
+                fixture,
+              ): fixture is OwnedProcess & { app: ElectronApplication } =>
+                fixture.app !== undefined,
+            )
+            .map((fixture, index) =>
+              attachFailureEvidence(
+                fixture,
+                index,
+                (name) => testInfo.outputPath(name),
+                (name, options) => testInfo.attach(name, options),
+              ),
             ),
-          ),
         );
         const results = await Promise.allSettled(
-          [...owned].reverse().map((fixture) => closeOffline(fixture)),
+          [...owned].reverse().map((fixture) => closeOwnedProcess(fixture)),
         );
         cleanupFailures = [...evidenceResults, ...results]
           .filter(
@@ -216,6 +229,21 @@ export async function launchOfflineAt(
   }
 }
 
+/** Register a direct Electron launch with the same bounded test owner. */
+export function ownElectronApplication(
+  app: ElectronApplication,
+  userData: string,
+): ElectronApplication {
+  activeFixtureOwner?.add({ app, process: app.process(), userData });
+  return app;
+}
+
+/** Register a raw lifecycle child so a failed assertion cannot orphan it. */
+export function ownChildProcess<T extends FixtureProcess>(process: T): T {
+  activeFixtureOwner?.add({ process });
+  return process;
+}
+
 function processExited(process: FixtureProcess): boolean {
   return process.exitCode !== null || process.signalCode !== null;
 }
@@ -278,4 +306,34 @@ export async function closeOffline(
   if (options.removeUserData === false) {
     activeFixtureOwner?.delete(fixture);
   }
+}
+
+async function closeOwnedProcess(fixture: OwnedProcess): Promise<void> {
+  await shutdownFixtureProcess(
+    fixture.process,
+    () => fixture.app?.close() ?? Promise.resolve(),
+  );
+  if (fixture.userData) {
+    await rm(fixture.userData, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+  }
+}
+
+/** Close a directly launched application through the bounded owner. */
+export async function closeOwnedApplication(
+  app: ElectronApplication,
+): Promise<void> {
+  const fixture = [...(activeFixtureOwner ?? [])].find(
+    (candidate) => candidate.app === app,
+  );
+  if (!fixture) {
+    await shutdownFixtureProcess(app.process(), () => app.close());
+    return;
+  }
+  await shutdownFixtureProcess(fixture.process, () => app.close());
+  activeFixtureOwner?.delete(fixture);
 }

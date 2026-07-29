@@ -1,5 +1,7 @@
-import { test, expect, _electron as electron } from "@playwright/test";
-import type { ElectronApplication } from "@playwright/test";
+import {
+  _electron as electron,
+  type ElectronApplication,
+} from "@playwright/test";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +17,13 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
 import { fitWindowStateToDisplays } from "../../src/main/core/window-state.js";
+import {
+  closeOwnedApplication,
+  expect,
+  ownChildProcess,
+  ownElectronApplication,
+  test,
+} from "./fixtures.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const electronBin = developmentElectronExecutable(root);
@@ -79,14 +88,20 @@ const launchEnv = (
  * The central Playwright preflight proves this executable exists before any
  * spec is collected.
  */
-const launch = (userData: string, env: Record<string, string>) =>
-  electron.launch({
-    cwd: root,
-    args: [".", `--user-data-dir=${userData}`],
-    chromiumSandbox: true,
-    env,
-    executablePath: electronBin,
-  });
+const launch = async (
+  userData: string,
+  env: Record<string, string>,
+): Promise<ElectronApplication> =>
+  ownElectronApplication(
+    await electron.launch({
+      cwd: root,
+      args: [".", `--user-data-dir=${userData}`],
+      chromiumSandbox: true,
+      env,
+      executablePath: electronBin,
+    }),
+    userData,
+  );
 
 const rawLaunchArgs = (userData: string): string[] => [
   ".",
@@ -109,10 +124,12 @@ test.describe("Electron application", () => {
         win.hide();
       });
 
-      const second = spawn(
-        electronBin,
-        rawLaunchArgs(userData),
-        { cwd: root, env, stdio: "ignore" },
+      const second = ownChildProcess(
+        spawn(
+          electronBin,
+          rawLaunchArgs(userData),
+          { cwd: root, env, stdio: "ignore" },
+        ),
       );
       const exit = await new Promise<ProcessExit>((resolve, reject) => {
         const timer = setTimeout(
@@ -134,7 +151,7 @@ test.describe("Electron application", () => {
         })))
         .toEqual({ minimized: false, visible: true });
     } finally {
-      await app.close().catch(() => undefined);
+      await closeOwnedApplication(app).catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
     }
   });
@@ -145,14 +162,16 @@ test.describe("Electron application", () => {
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
-    const failed = spawn(
-      electronBin,
-      rawLaunchArgs(userData),
-      {
-        cwd: root,
-        env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
-        stdio: "ignore",
-      },
+    const failed = ownChildProcess(
+      spawn(
+        electronBin,
+        rawLaunchArgs(userData),
+        {
+          cwd: root,
+          env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
+          stdio: "ignore",
+        },
+      ),
     );
     try {
       const exit = await new Promise<ProcessExit>((resolve, reject) => {
@@ -186,7 +205,7 @@ test.describe("Electron application", () => {
       try {
         await restarted.firstWindow({ timeout: 30_000 });
       } finally {
-        await restarted.close().catch(() => undefined);
+        await closeOwnedApplication(restarted).catch(() => undefined);
       }
     } finally {
       failed.kill();
@@ -261,7 +280,7 @@ test.describe("Electron application", () => {
       expect(events).not.toContain('"name":"renderer.recoveryScheduled"');
       expect(events).not.toContain("Object has been destroyed");
     } finally {
-      await app.close().catch(() => undefined);
+      await closeOwnedApplication(app).catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
@@ -402,7 +421,7 @@ test.describe("Electron application", () => {
       });
       await closeCleanly(app);
     } finally {
-      await app.close().catch(() => undefined);
+      await closeOwnedApplication(app).catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
     }
   });
@@ -495,7 +514,7 @@ test.describe("Electron application", () => {
       expect(result.summary.latest["socket.peakActiveWrites"]).toBeGreaterThanOrEqual(1);
       expect(result.summary.latest["socket.peakQueuedBytes"]).toBeGreaterThanOrEqual(21);
     } finally {
-      await app.close();
+      await closeOwnedApplication(app);
       await rm(userData, { recursive: true, force: true });
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
@@ -563,7 +582,7 @@ test.describe("Electron application", () => {
         ).toEqual({ state: "absent" });
         return;
       }
-      await app.close();
+      await closeOwnedApplication(app);
 
       app = await launch(userData, env);
       const relaunchedPage = await app.firstWindow({ timeout: 30_000 });
@@ -580,7 +599,7 @@ test.describe("Electron application", () => {
       });
       await relaunchedPage.evaluate(() => window.gwNative.credentials.clear());
     } finally {
-      await app.close().catch(() => {});
+      await closeOwnedApplication(app).catch(() => {});
       await rm(userData, { recursive: true, force: true });
     }
   });
@@ -633,7 +652,7 @@ test.describe("Electron application", () => {
         "protection",
       ]);
     } finally {
-      await app.close().catch(() => {});
+      await closeOwnedApplication(app).catch(() => {});
       await rm(userData, { recursive: true, force: true });
     }
   });
@@ -687,7 +706,7 @@ test.describe("Electron application", () => {
         )
         .toBe("quick");
     } finally {
-      await app.close();
+      await closeOwnedApplication(app);
       await rm(userData, { recursive: true, force: true });
     }
   });
