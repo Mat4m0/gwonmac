@@ -1,4 +1,11 @@
-import { app, dialog, powerMonitor, session } from "electron";
+import {
+  app,
+  dialog,
+  powerMonitor,
+  session,
+  shell,
+  type Session,
+} from "electron";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -38,7 +45,7 @@ import {
   discardObsoleteEnhancementCache,
   documentDirectories,
 } from "./core/paths.js";
-import { gamePaths } from "./paths.js";
+import { appPaths } from "./paths.js";
 import {
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementsEnabledFor,
@@ -62,6 +69,8 @@ import {
 } from "./window.js";
 import { WindowRegistry } from "./window-registry.js";
 import { AppRuntime, ownedGameWindow } from "./app-runtime.js";
+import { bootstrapProfiles } from "./profile-bootstrap.js";
+import type { ProfileRecord } from "./core/profiles.js";
 
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
@@ -137,7 +146,7 @@ function buildSocketManager(windows: WindowRegistry): SocketManager {
 }
 
 async function ensureDirs(): Promise<void> {
-  const paths = gamePaths();
+  const paths = appPaths();
   await mkdir(paths.game, { recursive: true });
   await mkdir(paths.chunks, { recursive: true });
   await mkdir(paths.diagnostics, { recursive: true });
@@ -148,9 +157,12 @@ async function ensureDirs(): Promise<void> {
   if (removed > 0) logEvent({ k: "orphanTemps.swept", removed });
 }
 
-async function clearBrowserCookies(phase: AppPhase): Promise<void> {
+async function clearBrowserCookies(
+  target: Session,
+  phase: AppPhase,
+): Promise<void> {
   try {
-    await session.defaultSession.clearStorageData({ storages: ["cookies"] });
+    await target.clearStorageData({ storages: ["cookies"] });
     logEvent({ k: "browserCookies.cleared", phase });
   } catch (error) {
     logEvent({
@@ -161,12 +173,12 @@ async function clearBrowserCookies(phase: AppPhase): Promise<void> {
   }
 }
 
-async function clearBrowserNetworkCache(): Promise<void> {
+async function clearBrowserNetworkCache(target: Session): Promise<void> {
   try {
     // Snapshot chunks are canonical in the native content-addressed store.
     // Chromium's HTTP cache would only duplicate them and can retain stale
     // same-URL client artifacts between exact-hash updates.
-    await session.defaultSession.clearCache();
+    await target.clearCache();
     logEvent({ k: "browserCache.cleared", phase: "startup" });
   } catch (error) {
     logEvent({
@@ -178,7 +190,7 @@ async function clearBrowserNetworkCache(): Promise<void> {
 }
 
 async function applyPendingCacheClear(): Promise<void> {
-  const paths = gamePaths();
+  const paths = appPaths();
   try {
     await stat(paths.cacheClearRequest);
   } catch {
@@ -190,25 +202,29 @@ async function applyPendingCacheClear(): Promise<void> {
   logEvent({ k: "cache.clearedAtStartup" });
 }
 
-async function applyPendingGameStorageClear(): Promise<void> {
-  const paths = gamePaths();
+async function applyPendingGameStorageClear(
+  profile: ProfileRecord,
+  target: Session,
+): Promise<void> {
   try {
-    await stat(paths.gameStorageClearRequest);
+    await stat(profile.paths.gameStorageClearRequest);
   } catch {
     return;
   }
   // Run before a renderer can mount IDBFS, otherwise auto-persisting game
   // writes can race the destructive clear and recreate entries before quit.
-  await session.defaultSession.clearStorageData({
+  await target.clearStorageData({
     origin: "gw://app",
     storages: ["indexdb"],
   });
-  await rm(paths.gameStorageClearRequest, { force: true });
+  await rm(profile.paths.gameStorageClearRequest, { force: true });
   logEvent({ k: "filesystem.resetCompleted" });
 }
 
 function buildWindowHost(
   runtime: AppRuntime<ClientRuntime, SocketManager>,
+  profile: ProfileRecord,
+  gameSession: Session,
   enhancementSelection: EnhancementSelection,
 ): WindowHost {
   const { client, sockets, windows } = runtime;
@@ -232,6 +248,9 @@ function buildWindowHost(
     prepareRendererRecovery: async () => {
       await client.recoverRendererCrash();
     },
+    windowStatePath: profile.paths.windowState,
+    profileId: profile.id,
+    gameSession,
   };
 }
 
@@ -252,11 +271,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
     website: EXTERNAL_URLS.github,
   });
   await applyPendingCacheClear();
-  await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
+  const paths = appPaths();
+  const profileBootstrap = await bootstrapProfiles({
+    userData: paths.userData,
+    profilesRoot: paths.profiles,
+    trashItem: (target) => shell.trashItem(target),
+  });
+  const profile = profileBootstrap.profile;
+  const gameSession = session.fromPath(profile.paths.browser, { cache: true });
+  await applyPendingGameStorageClear(profile, gameSession);
   const obsoleteCacheError = await discardObsoleteEnhancementCache(
-    gamePaths(),
+    appPaths(),
     rm,
   );
   if (obsoleteCacheError !== null) {
@@ -266,10 +293,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
       code: errorCode(obsoleteCacheError),
     });
   }
-  await clearBrowserCookies("startup");
-  await clearBrowserNetworkCache();
+  await clearBrowserCookies(gameSession, "startup");
+  await clearBrowserNetworkCache(gameSession);
   logEvent({ k: "electron.ready" });
-  const settings = await loadSettings(gamePaths().settings, async () => {
+  const settings = await loadSettings(appPaths().settings, async () => {
     logEvent({ k: "settings.corruptRecovered" });
     await dialog.showMessageBox({
       type: "warning",
@@ -280,8 +307,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   });
   const enhancementSelection = enhancementSelectionFor(settings);
-  await prepareWindowState();
-  const paths = gamePaths();
+  await prepareWindowState(profile.paths.windowState);
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =
     !expectedUserData ||
@@ -310,8 +336,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windows,
     paths.settings,
     {
-      flushWindowState,
-      clearBrowserCookies: () => clearBrowserCookies("quit"),
+      flushWindowState: () =>
+        flushWindowState(windows, profile.paths.windowState),
+      clearBrowserCookies: () => clearBrowserCookies(gameSession, "quit"),
       stopDiagnostics,
       updateLongRunningTaskFeedback,
     },
@@ -326,10 +353,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
   setProtocolDeps({
     getActiveClient: () => clientRuntime.active,
   });
-  installGameSession(session.defaultSession, windows, gameProtocolHandler);
+  installGameSession(gameSession, windows, gameProtocolHandler);
   logEvent({ k: "protocol.installed" });
 
   registerIpcHandlers({
+    profile,
+    gameSession,
     windows,
     sockets,
     getProgress: () => clientRuntime.progress,
@@ -359,7 +388,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   const win = createMainWindow(
-    buildWindowHost(runtime, enhancementSelection),
+    buildWindowHost(runtime, profile, gameSession, enhancementSelection),
     windows,
   );
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
@@ -407,7 +436,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   app.on("activate", () => {
     if (!windows.gameWindow()) {
       createMainWindow(
-        buildWindowHost(runtime, enhancementSelection),
+        buildWindowHost(runtime, profile, gameSession, enhancementSelection),
         windows,
       );
     }

@@ -13,7 +13,7 @@ import path from "node:path";
 // second source of truth Phase 0b removed from the tooling scripts, and the
 // reason `pnpm typecheck` can run before `pnpm build` in `pnpm verify`.
 import { prepareClientModule } from "../../src/main/core/client-module.js";
-import { gamePaths } from "../../src/main/core/paths.js";
+import { appPaths } from "../../src/main/core/paths.js";
 import { loadSettings } from "../../src/main/core/settings.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
 import { desktopPlatformFor } from "../../src/shared/contracts.js";
@@ -92,7 +92,7 @@ test.describe("Enhancement runtime selection", () => {
       const enhancementRequested =
         init.enhancementAutomation
         || Object.values(init.enhancementSelection).some(Boolean);
-      const paths = gamePaths(fixture.userData);
+      const paths = appPaths(fixture.userData);
       const settings = await loadSettings(paths.settings);
       expect(settings).toMatchObject(init.enhancementSelection);
       const selected = await prepareClientModule({

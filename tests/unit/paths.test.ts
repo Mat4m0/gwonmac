@@ -7,7 +7,7 @@ import {
   diagnosticFramesPath,
   discardObsoleteEnhancementCache,
   documentDirectories,
-  gamePaths,
+  appPaths,
   obsoleteEnhancementCachePath,
   snapshotMetadataPath,
 } from "../../src/main/core/paths.ts";
@@ -22,12 +22,11 @@ describe("resolved profile paths", () => {
   });
 
   it("constructs the common profile layout with native separators", () => {
-    assert.deepEqual(gamePaths(root), {
+    assert.deepEqual(appPaths(root), {
       userData: root,
       settings: path.join(root, "settings.json"),
-      windowState: path.join(root, "window-state.json"),
-      credentials: path.join(root, "credentials.bin"),
       diagnostics: path.join(root, "diagnostics"),
+      profiles: path.join(root, "profiles"),
       game: path.join(root, "game"),
       artifacts: path.join(root, "game", "artifacts"),
       previousArtifacts: path.join(root, "game", "artifacts.previous"),
@@ -37,17 +36,16 @@ describe("resolved profile paths", () => {
       chunks: path.join(root, "game", "chunks"),
       bootChunks: path.join(root, "game", "boot-chunks.json"),
       cacheClearRequest: path.join(root, "clear-cache-on-start"),
-      gameStorageClearRequest: path.join(root, "clear-game-storage-on-start"),
     });
   });
 
   it("sweeps every directory the profile publishes documents into", () => {
     // Pinned as literals beside the layout above on purpose: adding a directory
-    // to `gamePaths` already breaks that assertion, so whoever updates it lands
+    // to `appPaths` already breaks that assertion, so whoever updates it lands
     // here and has to decide whether the new directory receives `writeAtomic`
     // writes. A directory left off this list leaks abandoned temp files forever
     // — nothing else collects them.
-    assert.deepEqual(documentDirectories(gamePaths(root)), [
+    assert.deepEqual(documentDirectories(appPaths(root)), [
       root,
       path.join(root, "game"),
       path.join(root, "diagnostics"),
@@ -61,13 +59,13 @@ describe("resolved profile paths", () => {
 
   it("pins the obsolete beta cache selected for one-release cleanup", () => {
     assert.equal(
-      path.basename(obsoleteEnhancementCachePath(gamePaths(root))),
+      path.basename(obsoleteEnhancementCachePath(appPaths(root))),
       ["tool", "box"].join(""),
     );
   });
 
   it("discards the obsolete cache without making cleanup failure fatal", async () => {
-    const paths = gamePaths(root);
+    const paths = appPaths(root);
     const calls: unknown[][] = [];
     assert.equal(
       await discardObsoleteEnhancementCache(paths, async (...args) => {
@@ -92,7 +90,7 @@ describe("resolved profile paths", () => {
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {
     // Called out separately because this is the expensive one: it is the only
     // path in the table whose relocation costs a full re-download.
-    assert.equal(gamePaths(root).chunks, path.join(root, "game", "chunks"));
+    assert.equal(appPaths(root).chunks, path.join(root, "game", "chunks"));
   });
 
   it("pins the files published inside a client generation", () => {
@@ -124,7 +122,7 @@ describe("resolved profile paths", () => {
   });
 
   it("resolves a staged generation without escaping the game directory", () => {
-    const paths = gamePaths(root);
+    const paths = appPaths(root);
     assert.equal(clientManifestPath(`${paths.artifacts}.next`).startsWith(
       `${paths.game}${path.sep}`,
     ), true);

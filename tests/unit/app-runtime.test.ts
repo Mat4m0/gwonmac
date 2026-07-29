@@ -10,6 +10,9 @@ import type {
 } from "electron";
 import { AppRuntime } from "../../src/main/app-runtime.js";
 import { WindowRegistry } from "../../src/main/window-registry.js";
+import type { ProfileId } from "../../src/main/core/profiles.js";
+
+const PROFILE = "00112233445566778899aabbccddeeff" as ProfileId;
 
 class FakeContents extends EventEmitter {
   readonly id = 1;
@@ -41,7 +44,7 @@ test("AppRuntime serializes settings and broadcasts through owned games", async 
   const settingsPath = path.join(root, "settings.json");
   const windows = new WindowRegistry();
   const window = new FakeWindow() as FakeWindow & BrowserWindow;
-  windows.registerGame(window);
+  windows.registerGame(window, PROFILE);
   const runtime = new AppRuntime(
     { shutdown: async () => {} },
     { closeAll: () => {} },

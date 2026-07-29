@@ -20,6 +20,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const main = path.join(root, "build/main/main.js");
 const electronBin = developmentElectronExecutable(root);
 
+async function onlyProfileFile(
+  userData: string,
+  name: string,
+): Promise<string> {
+  const entries = (await readdir(path.join(userData, "profiles"))).filter(
+    (entry) => /^[0-9a-f]{32}$/u.test(entry),
+  );
+  if (entries.length !== 1) {
+    throw new Error(`expected one profile, found ${entries.length}`);
+  }
+  return path.join(userData, "profiles", entries[0]!, name);
+}
+
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
 
@@ -291,7 +304,7 @@ test.describe("Electron application", () => {
       });
       await closeCleanly(app);
 
-      const statePath = path.join(userData, "window-state.json");
+      const statePath = await onlyProfileFile(userData, "window-state.json");
       expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({
         formatVersion: 1,
         bounds: normalBounds,
@@ -516,11 +529,14 @@ test.describe("Electron application", () => {
       GW_BACKGROUND_LAUNCH: "1",
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-legacy-"));
-    const credentialsPath = path.join(userData, "credentials.bin");
     const app = await launch(userData, env);
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
+      const credentialsPath = await onlyProfileFile(
+        userData,
+        "credentials.bin",
+      );
       const legacyCiphertext = await app.evaluate(
         ({ safeStorage }, value) => [
           ...safeStorage.encryptString(JSON.stringify(value)),

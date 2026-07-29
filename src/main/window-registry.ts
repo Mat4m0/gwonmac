@@ -2,6 +2,7 @@ import type {
   BrowserWindow,
   WebContents,
 } from "electron";
+import type { ProfileId } from "./core/profiles.js";
 
 export type SenderContext =
   | {
@@ -11,7 +12,7 @@ export type SenderContext =
   | {
     readonly kind: "game";
     readonly window: BrowserWindow;
-    readonly profileId: null;
+    readonly profileId: ProfileId;
     readonly slot: number;
   };
 
@@ -45,14 +46,14 @@ export class WindowRegistry {
     this.releaseOwner = releaseOwner;
   }
 
-  registerGame(window: BrowserWindow): GameContext {
+  registerGame(window: BrowserWindow, profileId: ProfileId): GameContext {
     if (this.gameWindows().length >= this.maxGameWindows) {
       throw new Error("game window limit reached");
     }
     const context: GameContext = Object.freeze({
       kind: "game",
       window,
-      profileId: null,
+      profileId,
       slot: this.nextSlot,
     });
     this.nextSlot += 1;

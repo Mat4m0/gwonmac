@@ -54,7 +54,7 @@ import {
   peakGauge,
   startClientUpdateSpan,
 } from "./diagnostics.js";
-import type { GamePaths } from "./paths.js";
+import type { AppPaths } from "./paths.js";
 
 export type { ActiveClient } from "./core/active-client.js";
 
@@ -68,7 +68,7 @@ function digestOrNull(value: string | null | undefined): Digest | null {
 }
 
 interface ClientRuntimeOptions {
-  paths: GamePaths;
+  paths: AppPaths;
   hostVersion: string;
   cachedOnly: boolean;
   offlineShell: boolean;

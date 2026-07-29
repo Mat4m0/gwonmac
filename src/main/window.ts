@@ -7,6 +7,7 @@ import {
   screen,
   shell,
   type MenuItemConstructorOptions,
+  type Session,
 } from "electron";
 import path from "node:path";
 import type {
@@ -36,10 +37,11 @@ import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { sendRendererCommand } from "./renderer-commands.js";
 import { isQuitting } from "./lifecycle.js";
-import { gamePaths, preloadPath } from "./paths.js";
+import { preloadPath } from "./paths.js";
 import { ENHANCEMENT_AUTOMATION_ENABLED } from "./enhancement-policy.js";
 import { isDevBuild } from "./protocol.js";
 import type { WindowRegistry } from "./window-registry.js";
+import type { ProfileId } from "./core/profiles.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.
@@ -63,6 +65,9 @@ export interface WindowHost {
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
+  windowStatePath: string;
+  profileId: ProfileId;
+  gameSession: Session;
 }
 
 let restoredWindowState: WindowState | null = null;
@@ -101,8 +106,8 @@ function primaryWorkArea(): WindowBounds {
   return { ...screen.getPrimaryDisplay().workArea };
 }
 
-export async function prepareWindowState(): Promise<void> {
-  const loaded = await loadWindowState(gamePaths().windowState, () => {
+export async function prepareWindowState(windowStatePath: string): Promise<void> {
+  const loaded = await loadWindowState(windowStatePath, () => {
     logEvent({ k: "window.stateCorruptCleared" });
   });
   restoredWindowState = loaded
@@ -142,12 +147,13 @@ function currentWindowState(win: BrowserWindow): WindowState {
 async function persistWindowState(
   win: BrowserWindow,
   windows: WindowRegistry,
+  windowStatePath: string,
 ): Promise<void> {
   if (win.isDestroyed() || windows.contextForWindow(win)?.kind !== "game") return;
   const state = currentWindowState(win);
   restoredWindowState = state;
   const write = windowStateWrite.then(() =>
-    saveWindowState(gamePaths().windowState, state),
+    saveWindowState(windowStatePath, state),
   );
   windowStateWrite = write.catch(() => undefined);
   await write;
@@ -156,28 +162,35 @@ async function persistWindowState(
 function scheduleWindowStateSave(
   win: BrowserWindow,
   windows: WindowRegistry,
+  windowStatePath: string,
 ): void {
   if (windowStateTimer) clearTimeout(windowStateTimer);
   windowStateTimer = setTimeout(() => {
     windowStateTimer = null;
-    void persistWindowState(win, windows).catch(() => {
+    void persistWindowState(win, windows, windowStatePath).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
   }, 300);
 }
 
-export async function flushWindowState(windows: WindowRegistry): Promise<void> {
+export async function flushWindowState(
+  windows: WindowRegistry,
+  windowStatePath: string,
+): Promise<void> {
   if (windowStateTimer) {
     clearTimeout(windowStateTimer);
     windowStateTimer = null;
   }
   const win = windows.gameWindow();
   if (!win || win.isDestroyed()) return;
-  await persistWindowState(win, windows);
+  await persistWindowState(win, windows, windowStatePath);
   await windowStateWrite;
 }
 
-export async function resetWindowState(win: BrowserWindow | null): Promise<void> {
+export async function resetWindowState(
+  win: BrowserWindow | null,
+  windowStatePath: string,
+): Promise<void> {
   if (windowStateTimer) {
     clearTimeout(windowStateTimer);
     windowStateTimer = null;
@@ -209,7 +222,7 @@ export async function resetWindowState(win: BrowserWindow | null): Promise<void>
     win.setBounds(reset.bounds);
   }
   const write = windowStateWrite.then(() =>
-    saveWindowState(gamePaths().windowState, reset),
+    saveWindowState(windowStatePath, reset),
   );
   windowStateWrite = write.catch(() => undefined);
   await write;
@@ -263,6 +276,7 @@ export function createMainWindow(
       : {}),
     show: false,
     webPreferences: {
+      session: host.gameSession,
       preload: preloadPath(),
       additionalArguments: [rendererInitArgument(host)],
       nodeIntegration: false,
@@ -276,7 +290,7 @@ export function createMainWindow(
     },
   });
 
-  windows.registerGame(win);
+  windows.registerGame(win, host.profileId);
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
@@ -290,12 +304,12 @@ export function createMainWindow(
   const rememberNormalBounds = (): void => {
     if (win.isFullScreen() || win.isMaximized()) return;
     lastNormalBounds = { ...win.getBounds() };
-    scheduleWindowStateSave(win, windows);
+    scheduleWindowStateSave(win, windows, host.windowStatePath);
   };
   win.on("move", rememberNormalBounds);
   win.on("resize", rememberNormalBounds);
   const persistMode = (): void => {
-    void persistWindowState(win, windows).catch(() => {
+    void persistWindowState(win, windows, host.windowStatePath).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
   };
@@ -527,7 +541,7 @@ function installMenu(host: WindowHost, windows: WindowRegistry): void {
             const win = menuGameWindow(windows);
             if (!win) return;
             await resetGameInput(win);
-            void resetWindowState(win).catch(() => {
+            void resetWindowState(win, host.windowStatePath).catch(() => {
               logEvent({ k: "window.stateResetFailed" });
             });
           },

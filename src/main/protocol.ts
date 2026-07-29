@@ -27,7 +27,7 @@ import {
   startProxyRequestSpan,
   startSnapshotReadSpan,
 } from "./diagnostics.js";
-import { gamePaths, rendererRoot } from "./paths.js";
+import { appPaths, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -409,9 +409,9 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     const file =
       artifactName === "Gw.jspi.wasm"
         ? active?.wasmPath ??
-          clientArtifactPath(gamePaths().artifacts, "Gw.jspi.wasm")
+          clientArtifactPath(appPaths().artifacts, "Gw.jspi.wasm")
         : clientArtifactPath(
-            active?.artifactsDir ?? gamePaths().artifacts,
+            active?.artifactsDir ?? appPaths().artifacts,
             artifactName,
           );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";

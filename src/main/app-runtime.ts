@@ -19,7 +19,7 @@ interface OwnedSocketManager {
 
 export interface AppRuntimeCleanup {
   clearBrowserCookies: () => Promise<void>;
-  flushWindowState: (windows: WindowRegistry) => Promise<void>;
+  flushWindowState: () => Promise<void>;
   stopDiagnostics: () => Promise<void>;
   updateLongRunningTaskFeedback: (
     progress: DownloadProgress,
@@ -130,7 +130,7 @@ export class AppRuntime<
       }
     };
 
-    await attempt(() => this.cleanup.flushWindowState(this.windows));
+    await attempt(this.cleanup.flushWindowState);
     await attempt(() => this.settingsWrite);
     await attempt(() => this.sockets.closeAll());
     await attempt(() => {

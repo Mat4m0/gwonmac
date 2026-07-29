@@ -22,6 +22,7 @@ const surface = [
   "src/main/ipc.ts",
   "src/main/credential-provider.ts",
   "src/main/core/credentials.ts",
+  "src/main/core/profiles.ts",
   "src/main/paths.ts",
   "src/main/core/paths.ts",
   "src/preload/preload.body.cjs",

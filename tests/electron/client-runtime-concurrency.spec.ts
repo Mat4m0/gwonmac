@@ -28,11 +28,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { appPaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-abort-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = appPaths(root);
           await fs.mkdir(paths.game, { recursive: true });
           const progress: DownloadProgress[] = [];
           const runtime = new ClientRuntime({
@@ -124,11 +124,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { appPaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-shutdown-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = appPaths(root);
           await fs.mkdir(paths.game, { recursive: true });
           const runtime = new ClientRuntime({
             paths,
@@ -214,11 +214,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { appPaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-queued-abort-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = appPaths(root);
           await fs.mkdir(paths.game, { recursive: true });
           const runtime = new ClientRuntime({
             paths,
@@ -286,11 +286,11 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { appPaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-confirm-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = appPaths(root);
           await fs.mkdir(paths.artifacts, { recursive: true });
           await fs.mkdir(paths.previousArtifacts, { recursive: true });
           await fs.writeFile(
@@ -418,11 +418,11 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { appPaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-exact-token-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = appPaths(root);
           await fs.mkdir(paths.artifacts, { recursive: true });
           await fs.mkdir(paths.previousArtifacts, { recursive: true });
           await fs.writeFile(

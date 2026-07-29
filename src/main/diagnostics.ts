@@ -36,7 +36,7 @@ import type {
   RendererMilestoneFields,
   RendererMetrics,
 } from "../shared/diagnostics.js";
-import { gamePaths } from "./paths.js";
+import { appPaths } from "./paths.js";
 import {
   NATIVE_CAPABILITY_UNKNOWN,
   NATIVE_CAPABILITY_UNAVAILABLE,
@@ -661,7 +661,7 @@ export function startDiagnosticCapture(
       ];
       const included = wanted.filter((category) => available.has(category));
       tracePath = path.join(
-        gamePaths().diagnostics,
+        appPaths().diagnostics,
         `chromium-${recorder.sessionId}.json`,
       );
       await contentTracing.startRecording({
@@ -896,7 +896,7 @@ async function gpuEnvironment(): Promise<Record<string, unknown>> {
 }
 
 export async function startDiagnostics(): Promise<void> {
-  const diagnosticsDir = gamePaths().diagnostics;
+  const diagnosticsDir = appPaths().diagnostics;
   const staleCaptures = staleDiagnosticEntries(
     await readdir(diagnosticsDir).catch(() => []),
   ).map((name) => path.join(diagnosticsDir, name));
@@ -1063,7 +1063,7 @@ export async function exportDiagnosticsZip(
 ): Promise<string> {
   if (captureLevel !== 0) await stopDiagnosticCapture("export");
   await recorder.flush();
-  const dir = gamePaths().diagnostics;
+  const dir = appPaths().diagnostics;
   const staging = path.join(dir, `export-${randomUUID()}`);
   const zipPath = /\.(gwdiag|zip)$/i.test(targetPath) ? targetPath : `${targetPath}.gwdiag`;
   const zipPart = path.join(
@@ -1248,6 +1248,6 @@ export async function exportDiagnosticsForWindow(win: BrowserWindow): Promise<st
   return exportDiagnosticsZip(filePath, {
     appVersion: app.getVersion(),
     electronVersions: versions(),
-    settings: await loadSettings(gamePaths().settings),
+    settings: await loadSettings(appPaths().settings),
   });
 }

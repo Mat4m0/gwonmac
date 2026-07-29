@@ -5,6 +5,7 @@ import {
   shell,
   app,
   safeStorage,
+  type Session,
 } from "electron";
 import { writeFile } from "node:fs/promises";
 import type {
@@ -55,14 +56,17 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { gamePaths } from "./paths.js";
+import { appPaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { resetGameInput, resetWindowState } from "./window.js";
 import type { WindowRegistry } from "./window-registry.js";
+import type { ProfileId, ProfileRecord } from "./core/profiles.js";
 
 export interface IpcContext {
+  profile: ProfileRecord;
+  gameSession: Session;
   windows: WindowRegistry;
   sockets: SocketManager;
   getProgress: () => DownloadProgress;
@@ -81,10 +85,16 @@ export interface IpcContext {
 function assertSender(
   event: Electron.IpcMainInvokeEvent,
   windows: WindowRegistry,
+  profileId: ProfileId,
 ): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
   const context = windows.contextFor(event.sender);
-  if (!win || context?.kind !== "game" || context.window !== win) {
+  if (
+    !win
+    || context?.kind !== "game"
+    || context.window !== win
+    || context.profileId !== profileId
+  ) {
     throw new AllowlistError("unowned ipc sender");
   }
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
@@ -371,9 +381,9 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 }
 
 export function registerIpcHandlers(ctx: IpcContext): void {
-  const paths = gamePaths();
+  const paths = appPaths();
   const credentials = new CredentialsStore(
-    paths.credentials,
+    ctx.profile.paths.credentials,
     createCredentialProvider(process.platform, safeStorage),
   );
 
@@ -493,7 +503,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         if (response !== 0) return null;
         const settings = await ctx.resetSettings();
         try {
-          await resetWindowState(win);
+          await resetWindowState(win, ctx.profile.paths.windowState);
         } catch {
           // The settings file is already durably reset. Window geometry is a
           // separate document, so its failure must not turn that committed
@@ -594,7 +604,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       });
       if (response !== 0) return false;
       try {
-        await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
+        await writeFile(ctx.profile.paths.gameStorageClearRequest, "", {
+          mode: 0o600,
+        });
         logEvent({ k: "filesystem.resetRequested" });
         app.relaunch();
         app.quit();
@@ -677,7 +689,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     const def = definition as ChannelDef<unknown, unknown>;
     const name = key as InvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(event, ctx.windows);
+      const win = assertSender(event, ctx.windows, ctx.profile.id);
       let input: unknown;
       try {
         input = def.parse(args);

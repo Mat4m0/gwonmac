@@ -6,6 +6,9 @@ import type {
   WebContents,
 } from "electron";
 import { WindowRegistry } from "../../src/main/window-registry.js";
+import type { ProfileId } from "../../src/main/core/profiles.js";
+
+const PROFILE = "00112233445566778899aabbccddeeff" as ProfileId;
 
 class FakeContents extends EventEmitter {
   readonly id: number;
@@ -56,7 +59,7 @@ function windowFor(id: number): FakeWindow & BrowserWindow {
 test("the registry owns exact WebContents objects, not reusable numeric IDs", () => {
   const registry = new WindowRegistry();
   const first = windowFor(7);
-  const registered = registry.registerGame(first);
+  const registered = registry.registerGame(first, PROFILE);
   const impostor = contents(7);
 
   assert.equal(registry.contextFor(first.webContents), registered);
@@ -71,22 +74,25 @@ test("single-window mode enforces exact game and control role limits", () => {
   const registry = new WindowRegistry(1);
   const game = windowFor(1);
   const control = windowFor(2);
-  assert.equal(registry.registerGame(game).slot, 1);
+  assert.equal(registry.registerGame(game, PROFILE).slot, 1);
   assert.equal(registry.registerControl(control).kind, "control");
-  assert.throws(() => registry.registerGame(windowFor(3)), /limit reached/u);
+  assert.throws(
+    () => registry.registerGame(windowFor(3), PROFILE),
+    /limit reached/u,
+  );
   assert.throws(
     () => registry.registerControl(windowFor(4)),
     /already registered/u,
   );
-  assert.throws(() => registry.registerGame(game), /limit reached/u);
+  assert.throws(() => registry.registerGame(game, PROFILE), /limit reached/u);
 });
 
 test("two-window mode allocates ephemeral slots and removes destroyed owners", () => {
   const registry = new WindowRegistry(2);
   const first = windowFor(1);
   const second = windowFor(2);
-  assert.equal(registry.registerGame(first).slot, 1);
-  assert.equal(registry.registerGame(second).slot, 2);
+  assert.equal(registry.registerGame(first, PROFILE).slot, 1);
+  assert.equal(registry.registerGame(second, PROFILE).slot, 2);
   assert.deepEqual(
     registry.gameWindows().map((context) => context.slot),
     [1, 2],
@@ -106,7 +112,7 @@ test("reload releases resources while crash and destruction remove ownership", (
     releases.push([id, reason]);
   });
   const reloaded = windowFor(11);
-  registry.registerGame(reloaded);
+  registry.registerGame(reloaded, PROFILE);
   reloaded.webContents.emit("did-start-navigation", {
     isMainFrame: true,
     isSameDocument: true,
@@ -126,7 +132,7 @@ test("reload releases resources while crash and destruction remove ownership", (
   ]);
 
   const destroyed = windowFor(12);
-  registry.registerGame(destroyed);
+  registry.registerGame(destroyed, PROFILE);
   destroyed.webContents.destroy();
   assert.equal(registry.contextFor(destroyed.webContents), null);
   assert.deepEqual(releases.at(-1), [12, "destroyed"]);
@@ -136,7 +142,7 @@ test("closed windows, wrong roles, and cleared registries fail closed", () => {
   const registry = new WindowRegistry();
   const game = windowFor(21);
   const control = windowFor(22);
-  registry.registerGame(game);
+  registry.registerGame(game, PROFILE);
   registry.registerControl(control);
   assert.equal(registry.contextForWindow(game)?.kind, "game");
   assert.equal(registry.contextForWindow(control)?.kind, "control");
@@ -152,8 +158,8 @@ test("renderer recovery is claimed once per exact registered window", () => {
   const registry = new WindowRegistry(2);
   const first = windowFor(31);
   const second = windowFor(32);
-  registry.registerGame(first);
-  registry.registerGame(second);
+  registry.registerGame(first, PROFILE);
+  registry.registerGame(second, PROFILE);
 
   assert.equal(registry.claimRendererRecovery(first), true);
   assert.equal(registry.claimRendererRecovery(first), false);

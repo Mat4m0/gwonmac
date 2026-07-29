@@ -8,6 +8,9 @@ import type {
 } from "electron";
 import { installGameSession } from "../../src/main/game-session.js";
 import type { WindowRegistry } from "../../src/main/window-registry.js";
+import type { ProfileId } from "../../src/main/core/profiles.js";
+
+const PROFILE = "00112233445566778899aabbccddeeff" as ProfileId;
 
 interface InstalledHandlers {
   permissionCheck?: (
@@ -74,7 +77,7 @@ function fixture() {
   const windows = {
     contextFor: (candidate: WebContents) =>
       owned && candidate === contents
-        ? { kind: "game", window, profileId: null, slot: 1 }
+        ? { kind: "game", window, profileId: PROFILE, slot: 1 }
         : null,
   } as WindowRegistry;
   return {
