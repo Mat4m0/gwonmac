@@ -2,6 +2,7 @@
 
 Status: active execution ledger; checked work is current
 Specification: [spec.md](spec.md)
+Native CI recovery: [ci-stabilization-plan.md](ci-stabilization-plan.md)
 Repository rules: [AGENTS.md](../../AGENTS.md)
 Prepared: 2026-07-29
 
@@ -445,8 +446,11 @@ Tasks:
 - [x] Replace the reusable macOS-only verifier with a native matrix workflow.
 - [x] Run shared static work once and native build/unit/integration/Electron/
   package/packaged tests on every OS.
-- [x] Use Xvfb/X11 with a working Electron sandbox on Linux. Never add
-  `--no-sandbox`.
+- [ ] Use Xvfb/X11 with a working Electron sandbox on Linux. Never add
+  `--no-sandbox`. The original check was reopened after the
+  [native CI audit](ci-stabilization-plan.md#51-prove-the-real-linux-chromium-sandbox)
+  found that Playwright disables Chromium's Linux sandbox unless explicitly
+  configured.
 - [x] Assert the runner's actual platform/architecture before naming an
   artifact.
 - [x] Keep Playwright workers at one.
@@ -457,6 +461,9 @@ Tasks:
   the macOS ZIP/DEB without privilege and installs Squirrel in a disposable
   Windows user profile; clean-machine DEB installation remains a native
   release qualification.
+- [ ] Build once, make once, test the unpacked application produced by that
+  make, and launch the exact installed or extracted final payload as defined by
+  the [native CI recovery plan](ci-stabilization-plan.md#52-test-the-exact-package-that-becomes-the-artifact).
 - [x] Update PR, main-snapshot, tester, and release callers in the same hard
   cutover; delete the old one-target workflow.
 
