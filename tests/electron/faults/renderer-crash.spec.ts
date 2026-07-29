@@ -6,10 +6,11 @@ import {
 
 test("recovers the sandbox after a real renderer crash", async () => {
   const fixture = await launchOffline("gw-renderer-recovery-fault-");
-  const crash = await fixture.app.evaluate(async ({ BrowserWindow }) => {
+  const crash = await fixture.app.evaluate(async ({ BrowserWindow, app }) => {
     const windows = BrowserWindow.getAllWindows();
     const [window] = windows;
     if (!window) throw new Error("fault probe found no game window");
+    const oldRendererId = window.webContents.id;
     const oldRendererPid = window.webContents.getOSProcessId();
     const otherWindowSharesRenderer = windows.some(
       (candidate) =>
@@ -17,9 +18,16 @@ test("recovers the sandbox after a real renderer crash", async () => {
         && candidate.webContents.getOSProcessId() === oldRendererPid,
     );
     const gone = new Promise<Electron.RenderProcessGoneDetails>((resolve) => {
-      window.webContents.once("render-process-gone", (_event, details) => {
+      const onGone = (
+        _event: Electron.Event,
+        contents: Electron.WebContents,
+        details: Electron.RenderProcessGoneDetails,
+      ): void => {
+        if (contents.id !== oldRendererId) return;
+        app.off("render-process-gone", onGone);
         resolve(details);
-      });
+      };
+      app.on("render-process-gone", onGone);
     });
     window.webContents.forcefullyCrashRenderer();
     const details = await gone;
