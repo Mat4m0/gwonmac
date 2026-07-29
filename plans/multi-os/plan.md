@@ -308,15 +308,15 @@ Tasks:
 Specification: section 14.1
 Acceptance: supports MOS-C02 and MOS-M01
 
-- [ ] Implement the Phase 0 atomic-file contract without changing the public
+- [x] Implement the Phase 0 atomic-file contract without changing the public
   `writeAtomic` semantics.
-- [ ] Keep same-directory exclusive partial creation, file sync, close, and
+- [x] Keep same-directory exclusive partial creation, file sync, close, and
   atomic replace.
-- [ ] Apply mode and directory fsync only where they are meaningful and tested.
-- [ ] Add bounded Windows retries only for the approved transient error codes.
-- [ ] Replace POSIX-signal assumptions in crash tests with a
+- [x] Apply mode and directory fsync only where they are meaningful and tested.
+- [x] Add bounded Windows retries only for the approved transient error codes.
+- [x] Replace POSIX-signal assumptions in crash tests with a
   platform-native force-termination barrier.
-- [ ] Add native fault tests proving the old or new complete value always
+- [x] Add native fault tests proving the old or new complete value always
   survives.
 
 ### WP-1.4 — portable `.gwdiag`

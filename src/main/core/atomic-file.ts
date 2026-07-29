@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { setTimeout as wait } from "node:timers/promises";
 import { AppError } from "../../shared/errors.js";
 
 /**
@@ -8,6 +9,8 @@ import { AppError } from "../../shared/errors.js";
  * a temp file abandoned by a dead process from one a live process still owns.
  */
 const TEMP_NAME = /\.(\d+)\.[0-9a-f]{8}\.tmp$/;
+const WINDOWS_REPLACE_DELAYS_MS = [10, 25, 50, 100, 200] as const;
+const WINDOWS_TRANSIENT_REPLACE_ERRORS = new Set(["EACCES", "EBUSY", "EPERM"]);
 
 function tempPath(target: string): string {
   const suffix = randomBytes(4).toString("hex");
@@ -65,6 +68,34 @@ async function syncDirectory(dir: string): Promise<void> {
   }
 }
 
+export function windowsReplaceRetryDelay(
+  error: unknown,
+  attempt: number,
+): number | null {
+  if (attempt < 0 || attempt >= WINDOWS_REPLACE_DELAYS_MS.length) return null;
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code === undefined || !WINDOWS_TRANSIENT_REPLACE_ERRORS.has(code)) {
+    return null;
+  }
+  return WINDOWS_REPLACE_DELAYS_MS[attempt] ?? null;
+}
+
+async function replacePath(from: string, to: string): Promise<void> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      if (process.platform !== "win32") throw error;
+      const delay = windowsReplaceRetryDelay(error, attempt);
+      if (delay === null) throw error;
+      attempt += 1;
+      await wait(delay);
+    }
+  }
+}
+
 export async function writeAtomic(
   path: string,
   data: string | Uint8Array,
@@ -76,17 +107,25 @@ export async function writeAtomic(
   const bytes = typeof data === "string" ? Buffer.from(data, "utf8") : data;
   try {
     // `wx` so a name collision fails instead of overwriting another writer.
-    const handle = await open(tmp, "wx", mode);
+    const handle = await open(
+      tmp,
+      "wx",
+      process.platform === "win32" ? undefined : mode,
+    );
     try {
       await writeAll(handle, bytes);
       // The creation mode is masked by umask; chmod is not.
-      if (mode !== undefined) await handle.chmod(mode);
+      if (mode !== undefined && process.platform !== "win32") {
+        await handle.chmod(mode);
+      }
       await handle.sync();
     } finally {
       await handle.close();
     }
-    await rename(tmp, path);
-    await syncDirectory(dir);
+    await replacePath(tmp, path);
+    // Windows does not expose a directory fsync contract through Node. The
+    // replacement itself remains atomic; POSIX additionally persists its name.
+    if (process.platform !== "win32") await syncDirectory(dir);
   } catch (error) {
     await unlink(tmp).catch(() => undefined);
     throw error;
