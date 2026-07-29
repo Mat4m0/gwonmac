@@ -286,6 +286,8 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.match(workflow, /runs-on: ubuntu-latest/);
   assert.match(workflow, /run: pnpm test:website/);
   assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
+  assert.match(workflow, /release-targets\.json/);
+  assert.match(workflow, /src\/shared\/release-targets\.ts/);
   assert.match(workflow, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(workflow, /contents: write|id-token: write|issues: write/);
   assert.doesNotMatch(script("verify"), /test:website/);

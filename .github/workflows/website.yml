@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "apps/website/**"
+      - "release-targets.json"
+      - "src/shared/release-targets.ts"
       - "tests/website-smoke.ts"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -12,6 +14,8 @@ on:
   pull_request:
     paths:
       - "apps/website/**"
+      - "release-targets.json"
+      - "src/shared/release-targets.ts"
       - "tests/website-smoke.ts"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"

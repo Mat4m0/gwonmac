@@ -3,7 +3,12 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import releaseTargetsJson from "./release-targets.json" with { type: "json" };
 import { macOSBundleVersions } from "./scripts/macos-version.js";
+import {
+  parseReleaseTargets,
+  releaseTargetById,
+} from "./src/shared/release-targets.js";
 
 const packageVersion = (
   JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
@@ -11,6 +16,8 @@ const packageVersion = (
   }
 ).version;
 const macOSVersion = macOSBundleVersions(packageVersion);
+const releaseTargets = parseReleaseTargets(releaseTargetsJson);
+const macOSReleaseTarget = releaseTargetById(releaseTargets, "macos-arm64");
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -67,7 +74,7 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   // Distribution is the zipped .app; no DMG.
-  makers: [new MakerZIP({}, ["darwin"])],
+  makers: [new MakerZIP({}, [macOSReleaseTarget.platform])],
   hooks: {
     packageAfterCopy: async (_config, resourcesPath, _version, platform, arch) => {
       if (platform !== "darwin") return;

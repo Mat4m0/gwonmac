@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "targets": [
+    {
+      "id": "macos-arm64",
+      "platform": "darwin",
+      "arch": "arm64",
+      "format": "zip",
+      "filenameTemplate": "Guild Wars-darwin-arm64-{version}.zip",
+      "availability": "public-preview"
+    },
+    {
+      "id": "windows-x64",
+      "platform": "win32",
+      "arch": "x64",
+      "format": "squirrel",
+      "filenameTemplate": "Guild-Wars-{version}-Windows-x64-Setup.exe",
+      "availability": "ci-preview"
+    },
+    {
+      "id": "linux-x64",
+      "platform": "linux",
+      "arch": "x64",
+      "format": "deb",
+      "filenameTemplate": "Guild-Wars-{version}-Linux-x64.deb",
+      "availability": "ci-preview"
+    }
+  ]
+}

@@ -386,14 +386,14 @@ packaged security/runtime boundary before publishing them.
 Specification: section 16
 Acceptance: MOS-B01
 
-- [ ] Add `release-targets.json` with the exact target/format set from the
+- [x] Add `release-targets.json` with the exact target/format set from the
   specification.
-- [ ] Add one TypeScript parser/validator used by Forge/build/release tests and
+- [x] Add one TypeScript parser/validator used by Forge/build/release tests and
   website asset selection.
-- [ ] Make the CI setup job emit its matrix from that document.
-- [ ] Reject duplicate target IDs, filenames, and ambiguous asset matches.
-- [ ] Keep `package.json` as the sole application-version source.
-- [ ] Add platform version derivation tests for macOS, Squirrel, and Debian
+- [x] Make the CI setup job emit its matrix from that document.
+- [x] Reject duplicate target IDs, filenames, and ambiguous asset matches.
+- [x] Keep `package.json` as the sole application-version source.
+- [x] Add platform version derivation tests for macOS, Squirrel, and Debian
   without copying version regexes.
 
 ### WP-2.2 — Forge makers, icons, and Squirrel startup

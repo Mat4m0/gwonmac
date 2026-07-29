@@ -21,7 +21,25 @@ permissions:
   contents: read
 
 jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Resolve canonical native target matrix
+        id: targets
+        run: |
+          matrix="$(node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/release-matrix.ts)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   verify:
+    needs: setup
     runs-on: macos-15
     timeout-minutes: 45
     steps:
