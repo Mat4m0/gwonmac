@@ -44,9 +44,9 @@ const packageVersion = JSON.parse(
 // decorates each path with its pack state when the flag is on — and these are
 // compared against archive-rooted paths.
 const actualPackageFiles = new Set(
-  listPackage(layout.asar, { isPack: false }).filter(
-    (file) => !("files" in statFile(layout.asar, file.slice(1))),
-  ),
+  listPackage(layout.asar, { isPack: false })
+    .filter((file) => !("files" in statFile(layout.asar, file.slice(1))))
+    .map((file) => file.replaceAll("\\", "/")),
 );
 const ignore = forgeConfig.packagerConfig?.ignore;
 const expectedPackageFiles = new Set(forgePackageFiles(root, ignore));
