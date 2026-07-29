@@ -203,7 +203,7 @@ test("manager isolates profiles and preserves visible-window lifecycle", async (
   }
 });
 
-test("Level 2 tracing removes profile labels and restores the manager", async () => {
+test("Level 2 capture restores the manager without closing the game", async () => {
   const fixture = await launchOffline(
     "gw-profile-trace-e2e-",
     { GW_TEST_DIRECT_GAME: "0" },
