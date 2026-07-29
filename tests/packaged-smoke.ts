@@ -59,7 +59,10 @@ assertRequiredPackageFiles(actualPackageFiles);
 assertNoDeveloperPackageFiles(actualPackageFiles);
 
 const asarText = (file: string) =>
-  extractFile(layout.asar, file.slice(1)).toString("utf8");
+  extractFile(
+    layout.asar,
+    file.slice(1).replaceAll("/", path.sep),
+  ).toString("utf8");
 const packagedManifest = JSON.parse(asarText("/package.json"));
 const packagedRendererIndex = "/build/renderer/index.html";
 const packagedClosure = relativeEsmClosure({
