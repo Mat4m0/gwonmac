@@ -1,9 +1,38 @@
 # Native CI stabilization and test architecture plan
 
-Status: proposed execution plan
+Status: implemented; same-SHA cross-target soak in progress
 Baseline: `feat/windows-linux-support` at `70f901d`, 2026-07-29
 Scope: native Windows, Linux, and macOS verification
 Owners: implementation agent plus reviewing maintainer
+
+Implementation checkpoint: the retry-free stable selection now contains 61
+non-live tests, the fault selection contains exactly one real renderer crash,
+and the live selection contains one explicit opt-in smoke. Five client-runtime
+coordination invariants and the removed native timing branches now run under
+controlled Node clocks/collaborators. The complete stable suite and three fresh
+fault invocations pass locally on macOS; Windows and Linux confidence remains a
+CI result, not a local claim.
+
+The hard cutovers are complete:
+
+- one bounded owner covers ordinary Electron fixtures, direct application
+  launches, raw lifecycle children, closes, and profile cleanup;
+- stable and fault runs emit separate closed 0600 summaries, and CI derives one
+  bounded failure manifest and job summary without copying error text;
+- the stable suite has no `maxFailures` truncation, no retries, and no real
+  renderer crash;
+- Chromium sandbox, fail-closed generic Linux credentials, and the dedicated
+  GNOME Secret Service qualification are separate proofs;
+- CI builds once, makes once, tests the unpacked output of that make, and
+  compares the shipped payload's `app.asar` byte-for-byte;
+- native dependency audit has one owner, and JavaScript actions use current
+  Node-24-backed full-SHA pins;
+- successful and failed artifacts are run-attempt qualified.
+
+The only unfinished acceptance item in this document is the external soak:
+the unchanged pushed commit must pass Windows, macOS, generic Linux, and Linux
+keyring CI repeatedly. A platform-specific failure discovered there reopens
+the owning work packet; it does not justify retries or relaxed assertions.
 
 This document is the focused recovery plan for the native verification work in
 the broader [multi-OS delivery plan](plan.md). The product contract remains the
@@ -362,7 +391,7 @@ All new and migrated tests follow these rules:
 
 ## 7. Full Electron portfolio decision
 
-The current suite has 89 tests across 15 files, about 6,692 lines, and roughly
+The baseline suite had 89 tests across 15 files, about 6,692 lines, and roughly
 94 Electron launches on Windows and Linux. Applying the ownership rule is
 forecast to leave approximately 40–50 stable native tests, one isolated fault
 test, and one opt-in live test. That range is never an implementation target:
