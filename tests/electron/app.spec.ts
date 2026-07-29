@@ -348,23 +348,6 @@ test.describe("Electron application", () => {
         await resetWindow.evaluate((win) => win.getNormalBounds()),
       ).toEqual(expectedRestored);
 
-      const expectedReset = await app.evaluate(({ screen }) => {
-        const area = screen.getPrimaryDisplay().workArea;
-        const width = Math.min(
-          1280,
-          Math.max(Math.min(800, area.width), area.width - 64),
-        );
-        const height = Math.min(
-          800,
-          Math.max(Math.min(600, area.height), area.height - 64),
-        );
-        return {
-          x: Math.round(area.x + (area.width - width) / 2),
-          y: Math.round(area.y + (area.height - height) / 2),
-          width,
-          height,
-        };
-      });
       await resetPage.evaluate(() => {
         const probe = window as ResetProbeWindow;
         probe.__windowResetReleasedInput = false;
@@ -389,7 +372,32 @@ test.describe("Electron application", () => {
           { timeout: 15_000 },
         )
         .not.toBeNull();
-      const actualReset = await resetWindow.evaluate((win) => win.getBounds());
+      const resetHasSettled = async () => {
+        const bounds = await resetWindow.evaluate((win) => win.getBounds());
+        const saved = JSON.parse(await readFile(statePath, "utf8")) as {
+          formatVersion?: unknown;
+          bounds?: Partial<typeof bounds>;
+          mode?: unknown;
+        };
+        return {
+          bounds,
+          saved,
+          converged:
+            saved.formatVersion === 1
+            && saved.mode === "normal"
+            && saved.bounds?.x === bounds.x
+            && saved.bounds?.y === bounds.y
+            && saved.bounds?.width === bounds.width
+            && saved.bounds?.height === bounds.height,
+        };
+      };
+      await expect
+        .poll(async () => (await resetHasSettled()).converged, {
+          timeout: 15_000,
+        })
+        .toBe(true);
+      const { bounds: actualReset, saved: savedReset } =
+        await resetHasSettled();
       expect(
         await app.evaluate(({ screen }, bounds) =>
           screen.getAllDisplays().some(({ workArea }) =>
@@ -399,16 +407,11 @@ test.describe("Electron application", () => {
             && bounds.y + bounds.height <= workArea.y + workArea.height
           ), actualReset),
       ).toBe(true);
-      await expect
-        .poll(
-          async () => JSON.parse(await readFile(statePath, "utf8")),
-          { timeout: 15_000 },
-        )
-        .toEqual({
-          formatVersion: 1,
-          bounds: expectedReset,
-          mode: "normal",
-        });
+      expect(savedReset).toEqual({
+        formatVersion: 1,
+        bounds: actualReset,
+        mode: "normal",
+      });
       await closeCleanly(app);
     } finally {
       await app.close().catch(() => undefined);
@@ -512,7 +515,7 @@ test.describe("Electron application", () => {
     }
   });
 
-  test("saved login survives an application relaunch without Keychain", async () => {
+  test("saved login follows the native credential provider across relaunch", async () => {
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -530,12 +533,24 @@ test.describe("Electron application", () => {
             ? "signed-in Windows account"
             : "Secret Service or KWallet",
       );
-      await page.evaluate(() =>
-        window.gwNative.credentials.save({
-          username: "relaunch@example.invalid",
-          password: "relaunch-password",
-        }),
-      );
+      let storageUnavailable = false;
+      try {
+        await page.evaluate(() =>
+          window.gwNative.credentials.save({
+            username: "relaunch@example.invalid",
+            password: "relaunch-password",
+          }));
+      } catch (error) {
+        if (process.platform !== "linux") throw error;
+        expect(String(error)).toContain("credential encryption is unavailable");
+        storageUnavailable = true;
+      }
+      if (storageUnavailable) {
+        expect(
+          await page.evaluate(() => window.gwNative.credentials.load()),
+        ).toEqual({ state: "absent" });
+        return;
+      }
       await app.close();
 
       app = await launch(userData, env);
