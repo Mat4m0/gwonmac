@@ -423,15 +423,15 @@ Tasks:
 Specification: section 14.3
 Acceptance: MOS-S01
 
-- [ ] Replace the Darwin-only fuse hook with one central Forge fuse
+- [x] Replace the Darwin-only fuse hook with one central Forge fuse
   configuration that receives the target platform.
-- [ ] Apply the specified fuse set before signing.
-- [ ] Reset ad-hoc signatures only where the Forge/Electron contract requires
+- [x] Apply the specified fuse set before signing.
+- [x] Reset ad-hoc signatures only where the Forge/Electron contract requires
   it.
-- [ ] Read and assert actual fuse bytes from macOS, Windows, and Linux packaged
+- [x] Read and assert actual fuse bytes from macOS, Windows, and Linux packaged
   executables.
-- [ ] Assert ASAR integrity only on platforms where Electron enforces it.
-- [ ] Delete the obsolete Darwin-only hook and source-literal-only proof.
+- [x] Assert ASAR integrity only on platforms where Electron enforces it.
+- [x] Delete the obsolete Darwin-only hook and source-literal-only proof.
 
 ### WP-2.4 — native verification workflow
 

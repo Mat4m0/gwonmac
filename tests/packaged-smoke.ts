@@ -135,15 +135,11 @@ for (const option of [
 ]) {
   assert.equal(fuses[option], FuseState.ENABLE);
 }
-for (const option of [
-  FuseV1Options.EnableEmbeddedAsarIntegrityValidation,
-  FuseV1Options.OnlyLoadAppFromAsar,
-]) {
-  assert.equal(
-    fuses[option],
-    process.platform === "linux" ? FuseState.DISABLE : FuseState.ENABLE,
-  );
-}
+assert.equal(
+  fuses[FuseV1Options.EnableEmbeddedAsarIntegrityValidation],
+  process.platform === "linux" ? FuseState.DISABLE : FuseState.ENABLE,
+);
+assert.equal(fuses[FuseV1Options.OnlyLoadAppFromAsar], FuseState.ENABLE);
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];

@@ -2,11 +2,15 @@ import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
+import { flipFuses } from "@electron/fuses";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import releaseTargetsJson from "./release-targets.json" with { type: "json" };
 import { macOSBundleVersions } from "./scripts/macos-version.js";
+import {
+  packageFuseConfig,
+  packageFuseExecutable,
+} from "./scripts/package-fuses.js";
 import { platformPackageVersions } from "./scripts/platform-version.js";
 import {
   parseReleaseTargets,
@@ -129,24 +133,10 @@ const config: ForgeConfig = {
     ),
   ],
   hooks: {
-    packageAfterCopy: async (_config, resourcesPath, _version, platform, arch) => {
-      if (platform !== "darwin") return;
+    packageAfterCopy: async (_config, copiedAppPath, _version, platform, arch) => {
       await flipFuses(
-        path.resolve(resourcesPath, "../..", "MacOS", "Electron"),
-        {
-          version: FuseVersion.V1,
-          resetAdHocDarwinSignature: arch === "arm64",
-          strictlyRequireAllFuses: true,
-          [FuseV1Options.RunAsNode]: false,
-          [FuseV1Options.EnableCookieEncryption]: true,
-          [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
-          [FuseV1Options.EnableNodeCliInspectArguments]: false,
-          [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-          [FuseV1Options.OnlyLoadAppFromAsar]: true,
-          [FuseV1Options.LoadBrowserProcessSpecificV8Snapshot]: false,
-          [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
-          [FuseV1Options.WasmTrapHandlers]: true,
-        },
+        packageFuseExecutable(copiedAppPath, platform),
+        packageFuseConfig(platform, arch),
       );
     },
     postPackage: async (_config, result) => {

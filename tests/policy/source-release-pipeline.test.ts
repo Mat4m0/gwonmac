@@ -25,6 +25,7 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 // which would erase the checking of every assertion below; naming the fields
 // keeps them checked without pretending to describe the whole file.
 type Manifest = {
+  main?: string;
   productName?: string;
   license?: string;
   repository?: { url?: string };
