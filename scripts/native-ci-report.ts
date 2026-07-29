@@ -60,10 +60,15 @@ function emptyCounts(): TestCounts {
 }
 
 function safeString(value: unknown, pattern: RegExp): value is string {
-  return typeof value === "string" && pattern.test(value);
+  return (
+    typeof value === "string"
+    && pattern.test(value)
+    && !/(?:access|refresh)[_-]?token|authorization|bearer|cookie/iu.test(value)
+    && !/(?:[A-Za-z]:\\|\/Users\/|\/home\/)/u.test(value)
+  );
 }
 
-async function readClosedSummary(
+export async function readClosedSummary(
   root: string,
   suite: "stable" | "fault",
 ): Promise<ClosedTestSummary | undefined> {

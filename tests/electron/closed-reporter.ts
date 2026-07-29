@@ -34,7 +34,9 @@ export default class ClosedReporter implements Reporter {
   onTestEnd(test: TestCase, result: TestResult): void {
     this.results.push({
       title: test.titlePath().filter((part) => part.length > 0).join(" › "),
-      source: `${path.relative(process.cwd(), test.location.file)}:${test.location.line}`,
+      source:
+        `${path.relative(process.cwd(), test.location.file).split(path.sep).join("/")}`
+        + `:${test.location.line}`,
       attempt: result.retry,
       durationMs: result.duration,
       status: closedStatus(result.status),
