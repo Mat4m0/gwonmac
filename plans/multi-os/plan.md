@@ -786,6 +786,11 @@ On all native preview packages:
 pnpm verify
 ```
 
+The macOS arm64 result is recorded in
+[evidence/macos-sequential-profile-gate.md](evidence/macos-sequential-profile-gate.md).
+Windows and Linux remain open until their native jobs produce equivalent
+evidence.
+
 Manual/native scenarios:
 
 - [ ] Migrate a synthetic legacy profile with fault injection.
