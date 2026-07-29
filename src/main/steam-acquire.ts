@@ -7,6 +7,7 @@ import {
   newState,
   type SteamOAuthConfig,
 } from "./core/steam-oauth.js";
+import { waitForSignInCleanup } from "./core/steam-cleanup.js";
 
 export type SteamAcquireResult =
   | { ok: true; token: string }
@@ -32,8 +33,6 @@ export interface SteamAcquireOptions {
   parent?: BrowserWindow | null;
   record?: (event: SteamAcquireEvent) => void;
 }
-
-const SIGN_IN_CLEANUP_DEADLINE_MS = 5_000;
 
 /**
  * Open a hardened window the main process owns, run the Steam OAuth2 implicit
@@ -177,17 +176,9 @@ export async function acquireSteamToken(
       if (!win.isDestroyed()) win.hide();
       const cleanup = signIn
         .clearStorageData()
-        .then(() => signIn.clearCache())
-        .catch(() => undefined);
-      let cleanupDeadline: ReturnType<typeof setTimeout> | undefined;
-      void Promise.race([
-        cleanup,
-        new Promise<void>((resolveDeadline) => {
-          cleanupDeadline = setTimeout(resolveDeadline, SIGN_IN_CLEANUP_DEADLINE_MS);
-        }),
-      ])
+        .then(() => signIn.clearCache());
+      void waitForSignInCleanup(cleanup)
         .finally(() => {
-          if (cleanupDeadline) clearTimeout(cleanupDeadline);
           if (!win.isDestroyed()) win.destroy();
           resolve(result);
         });

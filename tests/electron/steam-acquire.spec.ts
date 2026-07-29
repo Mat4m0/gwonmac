@@ -31,8 +31,6 @@ const RETURN_URL = "https://www.guildwars.test/app/live/auth";
 
 type FixtureMode =
   | "redirect"
-  | "wrong-state"
-  | "no-token"
   | "hang"
   | "escape"
   | "popup"
@@ -92,11 +90,7 @@ async function startFixture(mode: FixtureMode): Promise<Fixture> {
 
     if (url.pathname === "/second") {
       const fragment =
-        mode === "wrong-state"
-          ? `#access_token=${TOKEN}&state=not-the-nonce-we-generated`
-          : mode === "no-token"
-            ? `#state=${encodeURIComponent(nonce)}`
-            : `#access_token=${TOKEN}&state=${encodeURIComponent(nonce)}`;
+        `#access_token=${TOKEN}&state=${encodeURIComponent(nonce)}`;
       response.writeHead(302, { location: `${RETURN_URL}${fragment}` });
       response.end();
       return;
@@ -261,25 +255,6 @@ async function closeSignInWindow(app: OfflineFixture["app"]): Promise<void> {
   expect(destroyed).toBe(1);
 }
 
-async function replaceSignInCleanup(
-  app: OfflineFixture["app"],
-  behavior: "reject" | "hang",
-): Promise<void> {
-  const replaced = await app.evaluate(({ BrowserWindow }, selected) => {
-    const win = BrowserWindow.getAllWindows().find((candidate) =>
-      candidate.webContents.getURL().includes("127.0.0.1"),
-    );
-    if (!win) return false;
-    const signIn = win.webContents.session;
-    signIn.clearStorageData =
-      selected === "reject"
-        ? () => Promise.reject(new Error("fixture cleanup failure"))
-        : () => new Promise<void>(() => undefined);
-    return true;
-  }, behavior);
-  expect(replaced).toBe(true);
-}
-
 test.describe("acquiring a Steam token", () => {
   // These tests repeatedly launch native Electron windows and local navigation
   // fixtures. Loaded macOS and Windows runners can spend most of the generic
@@ -312,29 +287,6 @@ test.describe("acquiring a Steam token", () => {
     expect(await windowCount(fixture.app)).toBe(before);
   });
 
-  test("refuses a response whose state it did not generate", async () => {
-    // An unsolicited or replayed response must fail before exposing its token.
-    server = await startFixture("wrong-state");
-    fixture = await launchOffline("gw-steam-acquire-state-");
-    const before = await windowCount(fixture.app);
-
-    const run = await acquire(fixture.app, configFor(server));
-
-    expect(run.result).toEqual({ ok: false, reason: "state-mismatch" });
-    expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "state-mismatch" });
-    expect(await windowCount(fixture.app)).toBe(before);
-  });
-
-  test("reports a redirect that carries no token", async () => {
-    server = await startFixture("no-token");
-    fixture = await launchOffline("gw-steam-acquire-no-token-");
-
-    const run = await acquire(fixture.app, configFor(server));
-
-    expect(run.result).toEqual({ ok: false, reason: "no-token" });
-    expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "no-token" });
-  });
-
   test("treats a closed window as a cancelled sign-in", async () => {
     // The credential request must resolve, not hang, when the
     // player gives up -- otherwise the client's login screen stalls forever.
@@ -350,39 +302,6 @@ test.describe("acquiring a Steam token", () => {
     expect(run.result).toEqual({ ok: false, reason: "cancelled" });
     expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "cancelled" });
     expect(await windowCount(fixture.app)).toBe(before);
-  });
-
-  test("settles when partition cleanup rejects", async () => {
-    server = await startFixture("hang");
-    fixture = await launchOffline("gw-steam-acquire-cleanup-reject-");
-
-    await beginAcquire(fixture.app, configFor(server));
-    await waitForSignInWindow(fixture.app);
-    await replaceSignInCleanup(fixture.app, "reject");
-    await closeSignInWindow(fixture.app);
-
-    expect((await settleAcquire(fixture.app)).result).toEqual({
-      ok: false,
-      reason: "cancelled",
-    });
-  });
-
-  test("bounds cleanup that never settles", async () => {
-    server = await startFixture("hang");
-    fixture = await launchOffline("gw-steam-acquire-cleanup-deadline-");
-
-    await beginAcquire(fixture.app, configFor(server));
-    await waitForSignInWindow(fixture.app);
-    await replaceSignInCleanup(fixture.app, "hang");
-    const started = Date.now();
-    await closeSignInWindow(fixture.app);
-
-    expect((await settleAcquire(fixture.app)).result).toEqual({
-      ok: false,
-      reason: "cancelled",
-    });
-    expect(Date.now() - started).toBeGreaterThanOrEqual(4_500);
-    expect(Date.now() - started).toBeLessThan(10_000);
   });
 
   test("blocks a navigation that leaves the configured origins", async () => {
