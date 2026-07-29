@@ -611,7 +611,9 @@ the stable suite:
 2. close unrelated windows or prove no other `WebContents` shares the target
    renderer OS process ID;
 3. subscribe to the real `render-process-gone` event before the action;
-4. crash the target renderer;
+4. terminate the target renderer with the native primitive that reliably kills
+   that exact isolated process: Electron's crash API on macOS/Windows and
+   `SIGKILL` on Linux;
 5. record the exact reason, assert it belongs to Electron's closed non-clean
    reason set, and assert the old renderer process is gone;
 6. assert the application's real recovery path creates a different renderer OS
@@ -628,6 +630,13 @@ renderer-gone event” from “recovers from a real renderer process crash.”
 Electron warns that force-crashing a `WebContents` may also crash other
 `WebContents` sharing the renderer. Isolation is therefore part of the
 invariant, not only a convenience.
+
+Hosted Linux/Xvfb qualification found that Chromium's self-crash path can log
+its fatal assertion and then hang in crashpad without terminating. That is a
+harness failure, not application recovery evidence. Linux therefore sends
+`SIGKILL` to the already-proved unique renderer OS PID. This remains a real
+process-death proof and retains the same app-level `render-process-gone`,
+new-PID, sandbox, bridge-ready, and clean-exit acceptance criteria.
 
 Use separate commands backed by the same configuration, for example:
 
@@ -982,6 +991,8 @@ Acceptance:
 - stable suite contains zero `forcefullyCrashRenderer` calls;
 - fault suite contains exactly one;
 - the one crash call is tagged and located only in the fault spec;
+- Linux kills the exact proved-isolated renderer PID instead of invoking
+  Chromium's hosted-Xvfb crashpad path;
 - fault failure cannot poison a later stable test;
 - the crash reason is a member of Electron's non-clean set rather than one
   hard-coded platform value;
