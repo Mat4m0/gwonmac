@@ -64,7 +64,7 @@ test("profile manager serializes switching and derives lifecycle status", async 
     });
 
     const switching = manager.launch(b.id);
-    await new Promise(setImmediate);
+    while (notifications.length === 0) await new Promise(setImmediate);
     assert.deepEqual(
       (await manager.list()).map(({ label, status }) => ({ label, status })),
       [
