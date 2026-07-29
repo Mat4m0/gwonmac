@@ -14,6 +14,7 @@ export type DiagnosticSubsystem =
   | "proxy"
   | "settings"
   | "credentials"
+  | "steam"
   | "filesystem"
   | "release";
 

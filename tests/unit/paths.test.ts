@@ -27,6 +27,7 @@ describe("resolved profile paths", () => {
       settings: `${root}/settings.json`,
       windowState: `${root}/window-state.json`,
       credentials: `${root}/credentials.bin`,
+      steamSession: `${root}/steam-session.bin`,
       diagnostics: `${root}/diagnostics`,
       game: `${root}/game`,
       artifacts: `${root}/game/artifacts`,

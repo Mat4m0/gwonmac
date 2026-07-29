@@ -51,7 +51,25 @@ type GwGameModule = {
     storeCredentials(username: unknown, password: unknown): Promise<void>;
     clearCredentials(): Promise<void>;
   };
-  login: { hasProvider(name: unknown): boolean };
+  login: {
+    hasProvider(name: unknown): boolean;
+    /**
+     * The client copies exactly these three strings into wasm memory. It is
+     * awaited, and the wait covers a whole Steam round trip.
+     */
+    getAuthToken(
+      name: unknown,
+      options: unknown,
+    ): Promise<{ userId: string; authCode: string; refreshToken: string }>;
+  };
+  /**
+   * `storeAccountData` and `clearAccountData` exist only here, never on
+   * `login`, so the two objects are one seam and both have to be present.
+   */
+  nativeAccount: {
+    storeAccountData(refreshToken: unknown, expirationDate: unknown): Promise<void>;
+    clearAccountData(): Promise<void>;
+  };
   getPatchMode(): Promise<'onDemand'>;
   // The client passes four trailing values whose meaning depends on the stage.
   setStartupProgress(
@@ -108,6 +126,49 @@ type GwClientRuntime = GwGameModule & {
   HEAPU8: Uint8Array;
 };
 const clientRuntime = () => Module as GwClientRuntime;
+
+/**
+ * The one federated provider this host answers for. The client probes
+ * Apple and Google too; neither has an acquisition surface here, so both are
+ * answered no rather than advertised and then failed.
+ */
+const STEAM_PROVIDER = 'steam';
+const isSteamProvider = (name: unknown): boolean =>
+  typeof name === 'string' && name.toLowerCase() === STEAM_PROVIDER;
+
+/**
+ * `userId` as the client's local profile index. The captured `login.xml`
+ * exchange sends `<LoginName>1</LoginName>` and the account service answers
+ * with the real `<steamid>@steam`, so this is a slot number, not an identity.
+ */
+const LOCAL_PROFILE_INDEX = '1';
+
+/**
+ * Read `{ silent }` off whatever the client passed. Defaulting to a non-silent
+ * request would let the launch-time probe open a Steam window, so an
+ * unreadable argument is treated as the quiet one.
+ */
+const isSilentRequest = (options: unknown): boolean => {
+  if (typeof options !== 'object' || options === null) return true;
+  // Only an explicit `false` asks for a window. The observed client always
+  // passes `{ silent }`, so this default is unreachable there — and if a future
+  // build stops passing it, the failure is a Steam sign-in that refuses rather
+  // than one that opens a window the player did not ask for. Email and password
+  // still work either way, which makes that the cheaper way to be wrong.
+  return (options as { silent?: unknown }).silent !== false;
+};
+
+/**
+ * The expiry the client hands back, as epoch milliseconds. It arrives as
+ * `new Date(expirationDate)`, which is an Invalid Date when the account service
+ * supplied nothing usable — `null` says "no expiry known", which is a token the
+ * login exchange proves rather than one that expired at the epoch.
+ */
+const toEpochMilliseconds = (value: unknown): number | null => {
+  if (!(value instanceof Date)) return null;
+  const ms = value.getTime();
+  return Number.isFinite(ms) ? ms : null;
+};
 
 const LOG_LINES = 400;
 const logBuf: string[] = [];
@@ -335,12 +396,67 @@ Module = {
     },
   },
 
-  // No federated auth: reporting no providers falls back to email/password.
-  // getAuthToken is absent and nativeAccount is left undefined on purpose.
+  // Steam is the one federated provider this host answers for. Saying yes is
+  // what makes the client render its "Sign in with Steam" button; the ArenaNet
+  // email/password form renders beside it, unchanged.
   login: {
     hasProvider(name) {
-      log(`login.hasProvider(${name}) -> false (no federated auth in this harness)`);
-      return false;
+      const offered = isSteamProvider(name);
+      log(`login.hasProvider(${name}) -> ${offered}`);
+      return offered;
+    },
+
+    /**
+     * Hand the client a credential to redeem in `login.xml`, or refuse.
+     *
+     * `authCode` carries the Steam OAuth token, which the client base64-encodes
+     * into `<PasswordToken>`. `userId` is the client's own local profile index
+     * — not the SteamID, which the account service derives itself — and
+     * `refreshToken` is empty because this flow has no refresh step.
+     *
+     * Fetched from main on demand and never kept here, mirroring
+     * `secureStorage.getCredentials()`: the token exists in this process only
+     * for as long as it takes to hand over.
+     *
+     * Refusing is a normal outcome, not an error to dress up. The client
+     * rebuilds its own login screen from a rejection, which is the screen
+     * gwonmac does not own and must not draw over.
+     */
+    async getAuthToken(name, options) {
+      if (!isSteamProvider(name)) {
+        log(`login.getAuthToken(${name}) -> refused, provider not offered`);
+        throw new Error('provider not offered');
+      }
+      const silent = isSilentRequest(options);
+      const token = await native().steam.getToken(silent);
+      if (!token) {
+        log(`login.getAuthToken(silent=${silent}) -> no token`);
+        throw new Error('no Steam token available');
+      }
+      // Never the value: the token must not reach this log, which is bounded
+      // and read back into diagnostics.
+      log(`login.getAuthToken(silent=${silent}) -> token vended`);
+      return { userId: LOCAL_PROFILE_INDEX, authCode: token, refreshToken: '' };
+    },
+  },
+
+  nativeAccount: {
+    /**
+     * What the account service handed back after a successful login. Main
+     * refreshes the stored expiry only when this matches the token it already
+     * holds, so a value that cannot be replayed is ignored rather than written
+     * over a working credential.
+     */
+    async storeAccountData(refreshToken, expirationDate) {
+      const token = typeof refreshToken === 'string' ? refreshToken : '';
+      await native().steam.store(token, toEpochMilliseconds(expirationDate));
+      log('nativeAccount.storeAccountData -> relayed');
+    },
+
+    /** Sign-out. The local copy goes; the account link is ArenaNet's to undo. */
+    async clearAccountData() {
+      await native().steam.clear();
+      log('nativeAccount.clearAccountData -> cleared');
     },
   },
 

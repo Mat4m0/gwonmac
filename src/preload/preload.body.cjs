@@ -162,6 +162,11 @@ const api = {
     save: (value) => ipcRenderer.invoke(IPC.credentialsSave, value),
     clear: () => ipcRenderer.invoke(IPC.credentialsClear),
   },
+  steam: {
+    getToken: (silent) => ipcRenderer.invoke(IPC.steamToken, silent),
+    store: (token, expiry) => ipcRenderer.invoke(IPC.steamStore, token, expiry),
+    clear: () => ipcRenderer.invoke(IPC.steamClear),
+  },
   cache: {
     info: () => ipcRenderer.invoke(IPC.cacheInfo),
     clearAndRestart: () => ipcRenderer.invoke(IPC.cacheClear),

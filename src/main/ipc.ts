@@ -38,6 +38,16 @@ import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore, parseCredentials } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
+import {
+  MAX_TOKEN_LENGTH,
+  SteamSessionCoordinator,
+  SteamSessionStore,
+  steamTokenOutcome,
+} from "./core/steam-session.js";
+import type {
+  SteamAcquireEvent,
+  SteamAcquireResult,
+} from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
@@ -73,7 +83,13 @@ export interface IpcContext {
   retryClient: () => Promise<void>;
   checkReleaseNotice: () => Promise<ReleaseNotice>;
   getClientSession: () => ClientSession;
+  acquireSteamToken: (
+    parent: BrowserWindow,
+    record: (event: SteamAcquireEvent) => void,
+  ) => Promise<SteamAcquireResult>;
 }
+
+type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
 
 function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -260,6 +276,29 @@ const asRendererFrames = one((value: unknown): RendererFrameBatch => {
   }
   return value;
 });
+
+const asSilentFlag = one((value: unknown): boolean => {
+  if (typeof value !== "boolean") throw new ValidationError("silent must be a boolean");
+  return value;
+});
+
+/**
+ * The client's storeback. An empty or wrong-shaped token is *not* refused here:
+ * `refreshSteamExpiry` ignores anything that is not the token already held, and
+ * ignoring is the documented outcome rather than an error the client has
+ * to handle. Only genuinely malformed arguments are rejected.
+ */
+const asSteamStoreback: Parser<{ token: string; expiry: number | null }> = (args) => {
+  exact(args, 2);
+  const [token, expiry] = args;
+  if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
+    throw new ValidationError("steam token must be a string");
+  }
+  if (expiry !== null && (typeof expiry !== "number" || !Number.isFinite(expiry))) {
+    throw new ValidationError("steam token expiry must be a finite number or null");
+  }
+  return { token, expiry };
+};
 
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   if (
@@ -645,8 +684,15 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     clientSession: channel(nothing, () => ctx.getClientSession()),
 
     releaseNoticeCheck: channel(nothing, () => ctx.checkReleaseNotice()),
-  } satisfies Record<InvokeChannel, AnyChannelDef>;
+  } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
+  registerChannelDefinitions(handlers);
+  registerSteamIpcHandlers(ctx.acquireSteamToken);
+}
+
+function registerChannelDefinitions(
+  handlers: Partial<Record<InvokeChannel, AnyChannelDef>>,
+): void {
   // One registration, uniform and total: `assertSender` first, then the
   // channel's own parser, then its run. The cast is the erasure `satisfies`
   // left behind — `parse` produced exactly what `run` takes when `channel()`
@@ -673,6 +719,75 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       return def.run(win, input);
     });
   }
+}
+
+export function registerSteamIpcHandlers(
+  acquireSteamToken: IpcContext["acquireSteamToken"],
+): void {
+  const paths = gamePaths();
+  const steam = new SteamSessionCoordinator(
+    new SteamSessionStore(paths.steamSession, safeStorage),
+  );
+
+  const runSteamSignIn = async (win: BrowserWindow): Promise<string | null> => {
+    const result = await acquireSteamToken(win, (event) => {
+      if (event.k === "opened") logEvent({ k: "steam.signInOpened" });
+      if (event.k === "blocked") {
+        logEvent({ k: "steam.signInBlocked", what: event.what });
+      }
+      if (event.k === "settled") {
+        logEvent({ k: "steam.signInResult", outcome: event.outcome });
+      }
+    });
+    return result.ok ? result.token : null;
+  };
+
+  const handlers = {
+    // The seam that may open a Steam window — and only for a non-silent
+    // request. It answers `null` rather than throwing, because the client
+    // rebuilds its own login screen from a refused credential and a rejection
+    // here would only turn "no token" into a launch failure.
+    steamToken: channel(asSilentFlag, async (win, silent) => {
+      const resolution = await steam.resolve({
+        silent,
+        acquire: () => runSteamSignIn(win),
+      });
+      for (const note of resolution.notes) {
+        if (note.note === "loadFailed") {
+          logEvent({ k: "steam.tokenLoadFailed", code: note.code });
+        }
+        if (note.note === "expired") logEvent({ k: "steam.tokenExpired" });
+        if (note.note === "storeFailed") {
+          logEvent({ k: "steam.tokenStoreFailed", code: note.code });
+        }
+        if (note.note === "acquireFailed") {
+          logEvent({ k: "steam.signInResult", outcome: "failed" });
+        }
+      }
+      logEvent({ k: "steam.tokenRequested",
+        outcome: steamTokenOutcome(resolution),
+        silent,
+      });
+      return resolution.token;
+    }),
+
+    steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
+      const outcome = await steam.refresh(token, expiry);
+      logEvent({ k: "steam.storeback", outcome });
+    }),
+
+    steamClear: channel(nothing, async () => {
+      try {
+        await steam.clear();
+        logEvent({ k: "steam.tokenCleared" });
+      } catch (error) {
+        logEvent({ k: "steam.tokenClearFailed", code: errorCode(error) });
+        throw error;
+      }
+    }),
+  } satisfies Record<SteamInvokeChannel, AnyChannelDef>;
+
+  registerChannelDefinitions(handlers);
 }
 
 function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {

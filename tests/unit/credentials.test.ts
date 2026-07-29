@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CredentialsStore, type SafeStorageApi } from "../../src/main/core/credentials.js";
+import { CredentialsStore } from "../../src/main/core/credentials.js";
+import type { SafeStorageApi } from "../../src/main/core/encrypted-store.js";
 import { AppError } from "../../src/shared/errors.js";
 
 function fakeStorage(): SafeStorageApi {

@@ -63,6 +63,8 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
+import { STEAM_OAUTH } from "./core/steam-oauth.js";
+import { acquireSteamToken } from "./steam-acquire.js";
 
 // Ad-hoc builds have no stable code identity, so Chromium's profile encryption
 // repeatedly asks for access to "<app> Safe Storage". The mock provider avoids
@@ -371,6 +373,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
       compatibility: clientRuntime.compatibility,
       healthToken: clientRuntime.healthToken,
     }),
+    acquireSteamToken: (parent, record) =>
+      acquireSteamToken(STEAM_OAUTH, { parent, record }),
   });
 
   onAppQuit(async () => {
