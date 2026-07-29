@@ -141,6 +141,7 @@ export function createImageSource({
   const prefetchQueue: ChunkTask[] = [];
   let activeDemand = 0;
   let activePrefetch = 0;
+  let drainScheduled = false;
   let stopped = false;
 
   const handles = new Set<number>();
@@ -198,36 +199,86 @@ export function createImageSource({
     diagnostics?.scheduler('promotion');
   }
 
+  function takeDemandBatch(capacity: number): ChunkTask[] {
+    const first = demandQueue.shift();
+    if (!first) return [];
+    const tasks = [first];
+    while (tasks.length < Math.min(capacity, MAX_CHUNK_REQUESTS)) {
+      const nextIndex = tasks[tasks.length - 1]!.index + 1;
+      const queuedIndex = demandQueue.findIndex((task) => task.index === nextIndex);
+      if (queuedIndex < 0) break;
+      const [next] = demandQueue.splice(queuedIndex, 1);
+      tasks.push(next!);
+    }
+    return tasks;
+  }
+
+  function startChunkTasks(tasks: ChunkTask[]) {
+    const priority = tasks[0]!.priority;
+    for (const task of tasks) task.state = 'active';
+    if (priority === 'demand') activeDemand += tasks.length;
+    else activePrefetch += tasks.length;
+
+    const firstIndex = tasks[0]!.index;
+    const lastIndex = tasks[tasks.length - 1]!.index;
+    const start = firstIndex * chunkSize;
+    const end = Math.min((lastIndex + 1) * chunkSize, size);
+    void fetchRange(start, end - start, priority).then((buf) => {
+      if (buf.length !== end - start) {
+        throw new Error(`snapshot range ${start}+${end - start}: received ${buf.length}`);
+      }
+      for (const task of tasks) {
+        const chunkStart = task.index * chunkSize;
+        const length = Math.min(chunkStart + chunkSize, size) - chunkStart;
+        const offset = chunkStart - start;
+        // A subarray would keep the whole batched response alive after sibling
+        // chunks were evicted and make the byte-budgeted LRU undercount memory.
+        const chunk = tasks.length === 1
+          ? buf
+          : buf.slice(offset, offset + length);
+        cachePut(task.index, chunk);
+        markResident(task.index);
+        stats.fromNative++;
+        diagnostics?.cache('native');
+        task.resolve(chunk);
+      }
+    }).catch((error) => {
+      lastError = error instanceof Error ? error.message : String(error);
+      for (const task of tasks) task.reject(error);
+    }).finally(() => {
+      for (const task of tasks) inflight.delete(task.index);
+      if (priority === 'demand') activeDemand -= tasks.length;
+      else activePrefetch -= tasks.length;
+      drainChunkQueue();
+    });
+  }
+
   function drainChunkQueue() {
     while (activeDemand + activePrefetch < MAX_CHUNK_REQUESTS) {
-      const task = demandQueue.shift() || prefetchQueue.shift();
+      const capacity = MAX_CHUNK_REQUESTS - activeDemand - activePrefetch;
+      const demand = takeDemandBatch(capacity);
+      if (demand.length) {
+        startChunkTasks(demand);
+        continue;
+      }
+      const task = prefetchQueue.shift();
       if (!task) return;
-      if (stopped && task.priority === 'prefetch') {
+      if (stopped) {
         task.reject(new Error('background download stopped'));
         inflight.delete(task.index);
         continue;
       }
-      task.state = 'active';
-      if (task.priority === 'demand') activeDemand++;
-      else activePrefetch++;
-      const start = task.index * chunkSize;
-      const length = Math.min(start + chunkSize, size) - start;
-      void fetchRange(start, length, task.priority).then((buf) => {
-        cachePut(task.index, buf);
-        markResident(task.index);
-        stats.fromNative++;
-        diagnostics?.cache('native');
-        task.resolve(buf);
-      }).catch((error) => {
-        lastError = error instanceof Error ? error.message : String(error);
-        task.reject(error);
-      }).finally(() => {
-        inflight.delete(task.index);
-        if (task.priority === 'demand') activeDemand--;
-        else activePrefetch--;
-        drainChunkQueue();
-      });
+      startChunkTasks([task]);
     }
+  }
+
+  function scheduleChunkDrain() {
+    if (drainScheduled) return;
+    drainScheduled = true;
+    queueMicrotask(() => {
+      drainScheduled = false;
+      drainChunkQueue();
+    });
   }
 
   function chunkBytes(i: number, priority: Priority): Promise<Uint8Array> {
@@ -252,7 +303,7 @@ export function createImageSource({
     const task: ChunkTask = { index: i, priority, state: 'queued', promise, resolve, reject };
     inflight.set(i, task);
     (priority === 'demand' ? demandQueue : prefetchQueue).push(task);
-    drainChunkQueue();
+    scheduleChunkDrain();
     return promise;
   }
 
@@ -268,10 +319,12 @@ export function createImageSource({
     last: number,
     progress: ((bytes: number) => void) | undefined,
   ) {
-    for (let i = first; i <= last; i++) {
-      const buf = await chunkBytes(i, 'prefetch');
-      if (progress) progress(buf.length);
-    }
+    await Promise.all(
+      Array.from({ length: last - first + 1 }, (_, n) =>
+        chunkBytes(first + n, 'prefetch').then((buf) => {
+          if (progress) progress(buf.length);
+        })),
+    );
   }
 
   function assembleRange(
@@ -313,7 +366,8 @@ export function createImageSource({
     burstTimer = setTimeout(() => {
       burstTimer = null;
       if (burstBytes > BURST_LOG_BYTES) {
-        log(`image: read ${(burstBytes / 1048576).toFixed(1)}MB (mem ${stats.fromMemory}, ` +
+        log(`image: completed ${(burstBytes / 1048576).toFixed(1)}MB read burst ` +
+            `(mem ${stats.fromMemory}, ` +
             `native ${stats.fromNative} chunks)`);
       }
       burstBytes = 0;

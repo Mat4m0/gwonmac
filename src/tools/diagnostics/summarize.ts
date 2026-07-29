@@ -21,7 +21,8 @@ if (!input) {
       (c[sum] ?? 0) / Math.max(1, c[samples] ?? 0);
     const cacheTotal =
       (c["cache.memoryHits"] ?? 0) +
-      (c["cache.nativeHits"] ?? 0);
+      (c["cache.nativeHits"] ?? 0) +
+      (c["cache.coalesced"] ?? 0);
 
     console.log(`Session       ${manifest.sessionId}`);
     console.log(`App           ${manifest.applicationVersion}`);
@@ -104,7 +105,9 @@ if (!input) {
     console.log(`  initial cache     ${summary.latest["cache.initialResidentChunks"] ?? 0} / ${summary.latest["cache.totalChunks"] ?? 0} chunks`);
     console.log(`  reads / bytes    ${c["snapshot.reads"] ?? 0} / ${c["snapshot.bytes"] ?? 0}`);
     console.log(`  read p95/max     ${milliseconds(h["snapshot.rendererRead"]?.p95Us)} / ${milliseconds(h["snapshot.rendererRead"]?.maxUs)}`);
-    console.log(`  memory hit ratio ${ratio(c["cache.memoryHits"] ?? 0, cacheTotal)}`);
+    console.log(`  reads from memory ${ratio(c["snapshot.readsFromMemory"] ?? 0, c["snapshot.reads"] ?? 0)} of reads`);
+    console.log(`  chunks from memory ${ratio(c["cache.memoryHits"] ?? 0, cacheTotal)} of chunk resolutions`);
+    console.log(`  read amplification ${multiple(c["protocol.snapshotBytes"] ?? 0, c["snapshot.bytes"] ?? 0)} (bytes served / bytes read)`);
     console.log(`  disk p95         ${milliseconds(h["cache.diskRead"]?.p95Us)}`);
     console.log(
       `  demand queue p95 ${milliseconds(
