@@ -29,7 +29,14 @@ test("recovers the sandbox after a real renderer crash", async () => {
       };
       app.on("render-process-gone", onGone);
     });
-    window.webContents.forcefullyCrashRenderer();
+    if (process.platform === "linux") {
+      // Chromium's self-crash path can hang under hosted Xvfb after logging its
+      // fatal assertion. Killing this exact, non-shared renderer proves the
+      // same real process-death boundary without depending on crashpad.
+      process.kill(oldRendererPid, "SIGKILL");
+    } else {
+      window.webContents.forcefullyCrashRenderer();
+    }
     const details = await gone;
     return {
       oldRendererPid,
