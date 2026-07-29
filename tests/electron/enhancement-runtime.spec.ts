@@ -16,6 +16,7 @@ import { prepareClientModule } from "../../src/main/core/client-module.js";
 import { gamePaths } from "../../src/main/core/paths.js";
 import { loadSettings } from "../../src/main/core/settings.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
+import { desktopPlatformFor } from "../../src/shared/contracts.js";
 import {
   closeOffline,
   launchOffline,
@@ -80,6 +81,7 @@ test.describe("Enhancement runtime selection", () => {
     try {
       const init = await fixture.page.evaluate(() => window.gwNative.init);
       expect(init).toEqual({
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
           nativeCursor: false,

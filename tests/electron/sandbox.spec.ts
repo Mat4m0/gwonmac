@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { desktopPlatformFor } from "../../src/shared/contracts.js";
 import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 
 test.describe("sandbox boundary", () => {
@@ -30,6 +31,7 @@ test.describe("sandbox boundary", () => {
         search: "",
         // The game cursor ships on, so a default launch asks for it here.
         init: {
+          desktopPlatform: desktopPlatformFor(process.platform),
           enhancementAutomation: false,
           enhancementSelection: {
             nativeCursor: true,
@@ -204,6 +206,7 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: true,
         enhancementSelection: {
           nativeCursor: true,
@@ -226,6 +229,7 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
           nativeCursor: true,

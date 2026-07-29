@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { desktopPlatformFor } from "../../src/shared/contracts.js";
 import { closeOffline, launchOffline, main } from "./fixtures.mjs";
 
 /** One cursor region header, as the kernel would publish it. */
@@ -334,6 +335,7 @@ test.describe("enhancement cursor presentation", () => {
           search: globalThis.location.search,
         })),
       ).toEqual({
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
           nativeCursor: true,
