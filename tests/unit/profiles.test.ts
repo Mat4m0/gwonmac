@@ -200,6 +200,23 @@ describe("directory-backed ProfileStore", () => {
     assert.equal((await stat(profile.paths.trashOnStart)).isFile(), true);
   });
 
+  it("honours an exact trash marker even if profile metadata became corrupt", async () => {
+    const { root } = await tempProfiles();
+    const store = new ProfileStore(root, () => ID_A);
+    const profile = await store.create("Alpha");
+    await store.requestTrash(profile.id, () => false);
+    await writeFile(profile.paths.document, "{broken");
+    const trashed: string[] = [];
+
+    assert.deepEqual(
+      await store.trashMarked(async (target) => {
+        trashed.push(target);
+      }),
+      { trashed: 1, failed: 0 },
+    );
+    assert.deepEqual(trashed, [profile.paths.root]);
+  });
+
   it("cleans only recognised create stages and leaves unknown content", async () => {
     const { root, store } = await tempProfiles();
     const stage = path.join(root, `.create-${ID_A}.stage`);

@@ -256,12 +256,19 @@ export class ProfileStore {
   async trashMarked(
     trashItem: (profileRoot: string) => Promise<void>,
   ): Promise<{ trashed: number; failed: number }> {
-    const { profiles } = await this.scan();
+    const entries = await readdir(this.root, { withFileTypes: true }).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return [];
+        throw error;
+      },
+    );
     let trashed = 0;
     let failed = 0;
-    for (const profile of profiles) {
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !PROFILE_ID.test(entry.name)) continue;
+      const paths = profilePaths(this.root, parseProfileId(entry.name));
       try {
-        const marker = await stat(profile.paths.trashOnStart);
+        const marker = await stat(paths.trashOnStart);
         if (!marker.isFile() || marker.size !== 0) {
           failed += 1;
           continue;
@@ -272,7 +279,7 @@ export class ProfileStore {
         continue;
       }
       try {
-        await trashItem(profile.paths.root);
+        await trashItem(paths.root);
         trashed += 1;
       } catch {
         failed += 1;

@@ -584,6 +584,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
         () => windows.gameWindow(),
       )
     : createControlWindow(controlSession, windows);
+  if (profileBootstrap.trashFailures > 0 && initialWindow) {
+    initialWindow.once("ready-to-show", () => {
+      void dialog.showMessageBox(initialWindow, {
+        type: "warning",
+        buttons: ["OK"],
+        message: "A profile could not be moved to Trash",
+        detail:
+          "The profile and its recovery marker were left intact. Restart the app to try again.",
+      });
+    });
+  }
   if (secondInstanceRequested) {
     initialWindow?.once("ready-to-show", revealMainWindow);
   }
