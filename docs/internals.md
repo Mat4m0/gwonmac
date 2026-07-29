@@ -238,9 +238,10 @@ the SteamID, which the account service derives itself and returns as
 `<steamid>@steam`. The token is long-lived (the flow grants a year), portable
 across devices, and replayed on every login until it expires.
 
-So `login.getAuthToken` has two paths and no others. It replays a stored token,
-or — only when the request is not the client's silent launch-time probe — it
-runs acquisition. `src/main/core/steam-oauth.ts` holds the flow as
+So `login.getAuthToken` has two paths and no others. A silent launch-time probe
+may replay a stored token. An explicit request discards a readable stored token
+that already failed to get the player past the login screen and runs fresh
+acquisition. `src/main/core/steam-oauth.ts` holds the flow as
 configuration plus pure functions (authorize-URL construction, a fail-closed
 origin allowlist, redirect matching, `state` verification, token extraction), so
 all of it is unit-testable and the whole flow can be pointed at a local fixture
@@ -249,15 +250,18 @@ server offline.
 Acquisition opens a `BrowserWindow` the main process owns and tears down. It has
 its own in-memory session partition shared with nothing, no preload and no Node,
 deny-by-default permission and download handlers, no popups and no webviews, and
-navigation confined to the derived allowlist. The redirect carrying the token is
-intercepted *before it is fetched* — so the return URL is never requested and
-needs no proxy allowlist entry — and its `state` nonce is checked against the
-value generated for that attempt, which is what makes an unsolicited or replayed
-response fail rather than hand over a token. The partition is cleared and the
-window destroyed however sign-in ends: success, refusal, or cancellation. The
-window is hidden the moment an attempt settles, because the token-carrying
-redirect is cancelled rather than followed and the clear is awaited before
-destroy — leaving it visible for that stretch reads as the app going black.
+top-level navigation confined to the derived allowlist. Subframes and resources
+are not described by that navigation guarantee: Steam may embed third-party
+content, and Chromium governs it with the sandbox, origin isolation, disabled
+Node/preload, denied permissions, and popup/download denial. A subframe cannot
+complete the top-level redirect event. That redirect is intercepted *before it
+is fetched* — so the return URL is never requested and needs no proxy allowlist
+entry — and its exact HTTPS host, port, and path plus its `state` nonce are
+validated in one parser. The partition is cleared and the window destroyed
+however sign-in ends: success, refusal, or cancellation. Cleanup has a fixed
+deadline, after which destroying the unique in-memory partition remains the
+final bound. The window is hidden the moment an attempt settles so cleanup
+cannot present a blank page as a black application window.
 
 **The window is a modal child, and the origin is not visible in it.** `modal` is
 load-bearing: `src/main/window.ts` restores the game window to fullscreen, and a
@@ -272,7 +276,8 @@ the page renaming it — are **not visible in the configuration that ships**. Bo
 are kept because a parentless window (no game window yet) is an ordinary titled
 window where they do apply, but the player cannot verify the origin by eye during
 a normal sign-in. This is accepted rather than solved: what constrains the window
-is the fail-closed allowlist, not the player's inspection.
+is the top-level allowlist plus the sandbox controls, not the player's
+inspection.
 `docs/user-guide.md` says so plainly instead of asking them to check a title bar
 that is not there, and
 `docs/residual-review-findings/feat-steam-login-unified.md` records the decision.
@@ -281,8 +286,9 @@ The token persists in `steam-session.bin` as `{ token, expiry }`, under the same
 `EncryptedJsonStore` mechanism as `credentials.bin` — `safeStorage` encryption,
 atomic write, mode `0600` — with its own validator, so the credential store's
 shape rule is untouched. It is the token's only persistent home; **no
-environment variable seeds it in any build**. Resolution prefers a stored
-unexpired token, then acquisition, then nothing. An expired token is discarded;
+environment variable seeds it in any build**. Silent resolution returns a
+stored unexpired token or nothing; explicit resolution reacquires. An expired
+token is discarded;
 an unreadable one is treated as absent but deliberately kept, because encryption
 can be momentarily unavailable and deleting on that would throw away a
 credential that still works. Neither failure fails the launch — both return the

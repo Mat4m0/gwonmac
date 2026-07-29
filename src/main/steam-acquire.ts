@@ -41,12 +41,13 @@ const SIGN_IN_CLEANUP_DEADLINE_MS = 5_000;
  *
  * The window matches or beats the game window's posture (KTD8): its own
  * in-memory session partition, no preload and no Node, deny-by-default
- * permission and download handlers, no popups and no webviews, and navigation
- * confined to the fail-closed allowlist derived from `config`. The redirect
- * that carries the token is intercepted *before it is fetched*, its `state` is
- * checked against the value generated for this attempt, and the window and its
- * whole partition are destroyed the moment sign-in ends — success, refusal, or
- * cancellation alike (R19).
+ * permission and download handlers, no popups and no webviews, and top-level
+ * navigation confined to the fail-closed allowlist derived from `config`.
+ * Chromium owns subframe and resource isolation; neither can deliver the
+ * top-level redirect. That redirect is intercepted *before it is fetched*, its
+ * `state` is checked against the value generated for this attempt, and the
+ * window and its whole partition are destroyed the moment sign-in ends —
+ * success, refusal, or cancellation alike (R19).
  *
  * Never throws into the caller: a player whose sign-in failed belongs back at
  * the client's login screen, not looking at an unhandled rejection.
@@ -94,8 +95,9 @@ function createSignInWindow(
     //
     // A sheet draws no title bar, so the origin `showOrigin()` maintains is not
     // visible here — confirmed by live test, and accepted: what confines this
-    // window is the fail-closed allowlist, not the player's inspection. The docs
-    // say so rather than asking anyone to check a title bar that is not there.
+    // window is the top-level allowlist plus the sandbox controls, not the
+    // player's inspection. The docs say so rather than asking anyone to check a
+    // title bar that is not there.
     // See docs/residual-review-findings/feat-steam-login-unified.md.
     //
     // Only a real parent may be passed under exactOptionalPropertyTypes; with

@@ -149,14 +149,16 @@ macOS presents it as a sheet attached to the game window, and a sheet draws no
 title bar, so **there is no address bar or origin label for you to check** — you
 cannot verify by eye that the page is Steam's.
 
-What protects you instead is that the window is not free to go anywhere. It may
-only load Steam- and Valve-owned addresses; a navigation to anything else is
-blocked outright rather than shown to you. It runs in a throwaway browser
-session of its own with no access to the game or to this application, and the
-sign-in result is read by the application itself rather than by loading whatever
-page the redirect points at. If the sheet ever renders empty or broken, close it
-and use the email and password fields instead of typing your Steam password into
-it.
+What protects you instead is that the sheet's top-level page may only navigate
+to Steam- and Valve-owned addresses; a top-level navigation anywhere else is
+blocked outright. Like an ordinary browser, Steam may embed resources or frames
+from other providers. They remain inside Chromium's sandbox with no Node,
+preload, application permissions, popups, or downloads, and cannot complete the
+top-level sign-in redirect. The window runs in a throwaway browser session of
+its own with no access to the game or to this application, and the sign-in
+result is read by the application itself rather than by loading whatever page
+the redirect points at. If the sheet ever renders empty or broken, close it and
+use the email and password fields instead of typing your Steam password into it.
 
 Once you finish signing in, the window closes by itself and the game continues to
 character select. Everything that window stored while it was open, cookies

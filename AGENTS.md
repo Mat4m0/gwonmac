@@ -111,18 +111,21 @@ not only happy paths.
   never enters logs, diagnostics, browser storage, or macOS Keychain.
 - Steam sign-in renders in a window the main process owns, never in the game
   renderer: its own in-memory session partition destroyed with the window,
-  no preload and no Node, deny-by-default permissions and downloads, navigation
-  confined to a fail-closed allowlist derived from the OAuth config, and the
-  redirect carrying the token intercepted before it is fetched with its `state`
-  nonce checked. gwonmac logs in an existing Steam↔Guild Wars link and never
-  creates one.
+  no preload and no Node, deny-by-default permissions and downloads, and
+  top-level navigation confined to a fail-closed allowlist derived from the
+  OAuth config. Subframes and resources remain subject to Chromium's sandbox,
+  origin isolation, disabled Node/preload, permission denial, and popup/download
+  denial; they cannot complete the top-level redirect. That redirect is
+  intercepted before it is fetched with its `state` nonce checked. gwonmac logs
+  in an existing Steam↔Guild Wars link and never creates one.
 - That window is `modal` on its parent, and must stay so: the game window can be
   restored to fullscreen, and a non-modal parented child gets promoted into that
   fullscreen space and sized to the whole display. A macOS sheet draws no title
-  bar, so **the sign-in origin is not visible to the player** — the allowlist is
-  what confines the window, not the player's inspection. Do not write docs or
-  UI that tell a player to verify the origin. `docs/internals.md` owns the
-  reasoning; `tests/electron/steam-acquire.spec.ts` pins the presentation.
+  bar, so **the sign-in origin is not visible to the player** — the top-level
+  allowlist and the sandbox controls above confine the window, not the player's
+  inspection. Do not write docs or UI that tell a player to verify the origin.
+  `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
+  pins the presentation.
 - Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
   and clear browser cookies at startup and quit. The switch prevents OS
   prompts but gives saved login weaker same-user protection than Keychain. The
