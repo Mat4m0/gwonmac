@@ -65,7 +65,7 @@ const STEAM_SESSION: EncryptedSecret<StoredSteamSession> = {
     new AppError("steam_session_corrupt", "the stored Steam session cannot be decrypted"),
 };
 
-/** The Steam token's one persistent home (R6, R23). */
+/** The Steam token's one persistent home. */
 export class SteamSessionStore extends EncryptedJsonStore<StoredSteamSession> {
   constructor(path: string, storage: SafeStorageApi) {
     super(path, storage, STEAM_SESSION);
@@ -106,7 +106,7 @@ export interface SteamResolutionOptions {
   /**
    * Whether this is the client's launch-time probe. A silent request may only
    * read what is already stored — it must never put a Steam window in front of
-   * a player who did not ask for one (R4).
+   * a player who did not ask for one.
    */
   silent: boolean;
   /** Runs the sign-in flow. Resolves to `null` when it did not complete. */
@@ -116,12 +116,12 @@ export interface SteamResolutionOptions {
 
 /**
  * Which token to vend: the stored one while it is still good, otherwise a newly
- * acquired one, otherwise none (KTD4). There is no third source — no
- * environment variable seeds this at any tier (KD4, R23).
+ * acquired one, otherwise none. There is no third source — no environment
+ * variable seeds this at any tier.
  *
  * Nothing here throws. A player whose stored token is expired, revoked, or
  * unreadable belongs back at the login screen with both sign-in buttons on it,
- * not looking at a launch that died because a file would not decrypt (R8).
+ * not looking at a launch that died because a file would not decrypt.
  */
 export async function resolveSteamToken(
   store: SteamSessionReader,
@@ -227,7 +227,7 @@ export type SteamStorebackOutcome = "refreshed" | "ignored" | "failed";
 
 /**
  * Take the expiry the account service supplied through the client's storeback,
- * and only for the token already held (KTD5, R9).
+ * and only for the token already held.
  *
  * Which value the client actually passes back after a Steam token replay has
  * never been isolated: the candidates are the empty refresh token this host
@@ -258,8 +258,8 @@ export async function refreshSteamExpiry(
   // is a common "no date" encoding, and the same call is reachable from the
   // renderer, so this refuses both the accident and the abuse.
   if (expiry !== null && expiry <= now) return "ignored";
-  // Nor may a storeback turn a known expiry back into an unknown one. R9 honors
-  // the expiry the account service supplies "when a login returns one"; `null`
+  // Nor may a storeback turn a known expiry back into an unknown one. Honor the
+  // expiry the account service supplies when a login returns one; `null`
   // is the absence of one, and writing it over the flow's own lifetime would
   // leave a record that never self-expires and so keeps replaying a dead token
   // instead of asking the player to sign in again.

@@ -66,7 +66,7 @@ test("saved login has one encrypted owner-only persistence surface", () => {
 });
 
 test("no build seeds the Steam token from the environment", () => {
-  // R23 / AE11, and the reason this is a source scan rather than a launch: a
+  // This is a source scan rather than a launch because a
   // test that starts the app with `GW_STEAM_TOKEN` set and observes nothing
   // happen proves only that nothing happened *that time*. The claim is that no
   // code reads it, and absence has no executable form.

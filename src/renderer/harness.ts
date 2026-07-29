@@ -128,7 +128,7 @@ type GwClientRuntime = GwGameModule & {
 const clientRuntime = () => Module as GwClientRuntime;
 
 /**
- * The one federated provider this host answers for (KD8). The client probes
+ * The one federated provider this host answers for. The client probes
  * Apple and Google too; neither has an acquisition surface here, so both are
  * answered no rather than advertised and then failed.
  */
@@ -162,7 +162,7 @@ const isSilentRequest = (options: unknown): boolean => {
  * The expiry the client hands back, as epoch milliseconds. It arrives as
  * `new Date(expirationDate)`, which is an Invalid Date when the account service
  * supplied nothing usable — `null` says "no expiry known", which is a token the
- * login exchange proves rather than one that expired at the epoch (R9).
+ * login exchange proves rather than one that expired at the epoch.
  */
 const toEpochMilliseconds = (value: unknown): number | null => {
   if (!(value instanceof Date)) return null;
@@ -398,7 +398,7 @@ Module = {
 
   // Steam is the one federated provider this host answers for. Saying yes is
   // what makes the client render its "Sign in with Steam" button; the ArenaNet
-  // email/password form renders beside it, unchanged (R1, R11).
+  // email/password form renders beside it, unchanged.
   login: {
     hasProvider(name) {
       const offered = isSteamProvider(name);
@@ -420,7 +420,7 @@ Module = {
      *
      * Refusing is a normal outcome, not an error to dress up. The client
      * rebuilds its own login screen from a rejection, which is the screen
-     * gwonmac does not own and must not draw over (R10).
+     * gwonmac does not own and must not draw over.
      */
     async getAuthToken(name, options) {
       if (!isSteamProvider(name)) {
@@ -434,7 +434,7 @@ Module = {
         throw new Error('no Steam token available');
       }
       // Never the value: the token must not reach this log, which is bounded
-      // and read back into diagnostics (R20).
+      // and read back into diagnostics.
       log(`login.getAuthToken(silent=${silent}) -> token vended`);
       return { userId: LOCAL_PROFILE_INDEX, authCode: token, refreshToken: '' };
     },

@@ -166,8 +166,8 @@ const proxyRoute: FieldGuard<ProxyRoute> = (
 ): value is ProxyRoute =>
   typeof value === "string" && isProxyRoute(value);
 // Steam sign-in reports outcomes and nothing else. There is deliberately no
-// field here that could carry a Steam identifier, a token, or an expiry (R20,
-// R21) — the closed schema is what makes that a build-time guarantee.
+// field here that could carry a Steam identifier, a token, or an expiry — the
+// closed schema is what makes that a build-time guarantee.
 const steamTokenOutcome = literal(["vended", "absent", "acquired"] as const);
 const steamBlocked = literal([
   "navigation",

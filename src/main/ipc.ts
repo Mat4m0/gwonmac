@@ -285,7 +285,7 @@ const asSilentFlag = one((value: unknown): boolean => {
 /**
  * The client's storeback. An empty or wrong-shaped token is *not* refused here:
  * `refreshSteamExpiry` ignores anything that is not the token already held, and
- * ignoring is the documented outcome (KTD5) rather than an error the client has
+ * ignoring is the documented outcome rather than an error the client has
  * to handle. Only genuinely malformed arguments are rejected.
  */
 const asSteamStoreback: Parser<{ token: string; expiry: number | null }> = (args) => {
@@ -746,7 +746,7 @@ export function registerSteamIpcHandlers(
     // The seam that may open a Steam window — and only for a non-silent
     // request. It answers `null` rather than throwing, because the client
     // rebuilds its own login screen from a refused credential and a rejection
-    // here would only turn "no token" into a launch failure (R8).
+    // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
       const resolution = await steam.resolve({
         silent,

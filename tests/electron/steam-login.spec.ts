@@ -263,7 +263,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("advertises Steam and nothing else", async () => {
-    // Covers AE7 / R1, R11: the client renders its Steam button beside the
+    // The client renders its Steam button beside the
     // unchanged ArenaNet email/password form.
     fixture = await launchOffline("gw-steam-providers-");
     const answers = await fixture.page.evaluate(() => {
@@ -290,7 +290,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("refuses a silent request with no stored token, opening no window", async () => {
-    // Covers AE1 / R4. This is the launch-time probe: a player who never signed
+    // This is the launch-time probe: a player who never signed
     // in with Steam must not be shown a Steam window for it.
     fixture = await launchOffline("gw-steam-none-");
     const before = await windowCount(fixture.app);
@@ -354,7 +354,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("reads a request with no options as the silent one", async () => {
-    // R4 / AE1 from the other direction. The observed client always passes
+    // Check the launch-time behavior from the other direction. The observed client always passes
     // `{ silent }`, so this is about a build that stops: refusing is recoverable
     // -- email and password still work -- while opening a Steam window nobody
     // asked for is the failure the requirement exists to prevent.
@@ -380,7 +380,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("vends a stored token in the shape the client destructures", async () => {
-    // Covers AE5 / R3: `userId` is the client's local profile index, not the
+    // `userId` is the client's local profile index, not the
     // SteamID, and `refreshToken` is empty. The client base64-encodes
     // `authCode` into <PasswordToken> for login.xml.
     fixture = await launchOffline("gw-steam-stored-");
@@ -404,7 +404,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("replays the stored token across a relaunch", async () => {
-    // Covers AE5 end to end: the token survives the process, which is the whole
+    // The token survives the process, which is the whole
     // point of persisting it.
     fixture = await launchOffline("gw-steam-relaunch-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
@@ -419,7 +419,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("treats an expired stored token as absent", async () => {
-    // Covers R8: back to the login screen, not a failed launch.
+    // Return to the login screen, not a failed launch.
     fixture = await launchOffline("gw-steam-expired-");
     await seedStore(fixture.app, { token: TOKEN, expiry: 1 });
 
@@ -430,7 +430,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("relays the account storeback as an expiry refresh", async () => {
-    // R9 / KTD5: the expiry moves, the token does not, and only for the token
+    // The expiry moves, the token does not, and only for the token
     // already held.
     fixture = await launchOffline("gw-steam-storeback-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
@@ -554,7 +554,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("exports diagnostics carrying outcomes and neither the token nor its expiry", async () => {
-    // Covers AE8 / R20, R21. The claim is about the exported bytes, not about a
+    // The claim is about the exported bytes, not about a
     // verdict the exporter wrote about itself: drive the whole seam, export,
     // unzip, and read every file.
     const DIAGNOSTIC_EXPIRY = 4_123_456_789_123;
@@ -641,7 +641,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("forgets the token when the client signs out", async () => {
-    // Covers AE9 / R7.
+    // Exercise the shipped sign-out boundary.
     fixture = await launchOffline("gw-steam-signout-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
 

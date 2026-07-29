@@ -17,7 +17,7 @@ export type SteamAcquireResult =
  *
  * Handed out rather than logged here so this module owns no diagnostics
  * vocabulary, and so a test can assert on what happened instead of on a spy.
- * Nothing in here carries a token, an identifier, or an expiry (R20).
+ * Nothing in here carries a token, an identifier, or an expiry.
  */
 export type SteamAcquireEvent =
   | { k: "opened" }
@@ -39,7 +39,7 @@ const SIGN_IN_CLEANUP_DEADLINE_MS = 5_000;
  * Open a hardened window the main process owns, run the Steam OAuth2 implicit
  * flow in it, and return the access token it yields.
  *
- * The window matches or beats the game window's posture (KTD8): its own
+ * The window matches or beats the game window's posture: its own
  * in-memory session partition, no preload and no Node, deny-by-default
  * permission and download handlers, no popups and no webviews, and top-level
  * navigation confined to the fail-closed allowlist derived from `config`.
@@ -47,7 +47,7 @@ const SIGN_IN_CLEANUP_DEADLINE_MS = 5_000;
  * top-level redirect. That redirect is intercepted *before it is fetched*, its
  * `state` is checked against the value generated for this attempt, and the
  * window and its whole partition are destroyed the moment sign-in ends —
- * success, refusal, or cancellation alike (R19).
+ * success, refusal, or cancellation alike.
  *
  * Never throws into the caller: a player whose sign-in failed belongs back at
  * the client's login screen, not looking at an unhandled rejection.
@@ -71,7 +71,7 @@ function createSignInWindow(
   });
 
   // Deny-by-default, matching the game window: no permission is granted, no
-  // permission check passes, and no download is allowed to start (R16).
+  // permission check passes, and no download is allowed to start.
   signIn.setPermissionRequestHandler((_contents, _permission, callback) =>
     callback(false),
   );
@@ -98,7 +98,6 @@ function createSignInWindow(
     // window is the top-level allowlist plus the sandbox controls, not the
     // player's inspection. The docs say so rather than asking anyone to check a
     // title bar that is not there.
-    // See docs/residual-review-findings/feat-steam-login-unified.md.
     //
     // Only a real parent may be passed under exactOptionalPropertyTypes; with
     // no game window yet this simply opens a top-level window.
@@ -149,7 +148,7 @@ export async function acquireSteamToken(
      * appears already carrying the Steam page rather than blank. But a load that
      * stalls forever never fires it, which would leave an invisible window the
      * player cannot close while the client waits on a credential. The fallback
-     * is what keeps cancelling possible in that case (R2).
+     * is what keeps cancelling possible in that case.
      */
     let shown = false;
     const reveal = (): void => {
@@ -162,7 +161,7 @@ export async function acquireSteamToken(
 
     /**
      * Tear the partition down and only then answer. Clearing before resolving
-     * is what makes R19 an observable guarantee rather than a hope: the caller
+     * makes cleanup an observable guarantee rather than a hope: the caller
      * cannot see a token until every cookie, cache entry, and storage record
      * from this attempt is gone.
      */
@@ -227,7 +226,7 @@ export async function acquireSteamToken(
 
     // Keeps the live origin in the title bar and stops the page renaming it.
     // Visible only when this window has no parent (no game window yet) — the
-    // shipped presentation is a sheet with no title bar, so R18's affordance is
+    // shipped presentation is a sheet with no title bar, so the origin label is
     // nominal there. Kept because the parentless case is real, not as a claim
     // that a player can read it during a normal sign-in.
     const showOrigin = (): void => {
@@ -248,7 +247,7 @@ export async function acquireSteamToken(
     });
 
     // The player gave up. Resolving here is what keeps the client's credential
-    // request from hanging forever (R2).
+    // request from hanging forever.
     win.on("closed", () => finish({ ok: false, reason: "cancelled" }));
     // And the page died on its own. Steam's login page is external content that
     // pulls assets from several hosts, so a renderer crash is a real failure

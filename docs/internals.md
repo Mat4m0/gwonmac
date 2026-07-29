@@ -270,7 +270,7 @@ display, so sign-in fills the screen instead of appearing as a contained sheet.
 `tests/electron/steam-acquire.spec.ts` pins the modal, parented, requested-width
 presentation for that reason.
 
-The cost is R18. A macOS sheet draws no title bar, so the live origin
+The cost is that a macOS sheet draws no title bar, so the live origin
 `showOrigin()` writes — and the `page-title-updated` `preventDefault` that stops
 the page renaming it — are **not visible in the configuration that ships**. Both
 are kept because a parentless window (no game window yet) is an ordinary titled
@@ -279,8 +279,7 @@ a normal sign-in. This is accepted rather than solved: what constrains the windo
 is the top-level allowlist plus the sandbox controls, not the player's
 inspection.
 `docs/user-guide.md` says so plainly instead of asking them to check a title bar
-that is not there, and
-`docs/residual-review-findings/feat-steam-login-unified.md` records the decision.
+that is not there.
 
 The token persists in `steam-session.bin` as `{ token, expiry }`, under the same
 `EncryptedJsonStore` mechanism as `credentials.bin` — `safeStorage` encryption,

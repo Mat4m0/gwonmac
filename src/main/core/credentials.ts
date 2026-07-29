@@ -7,14 +7,6 @@ import {
 } from "./encrypted-store.js";
 
 /**
- * Re-exported from its new home so the credential store stays the one name
- * callers need to know about. The interface itself belongs to
- * `encrypted-store.ts` now, because saved credentials are no longer the only
- * secret that keeps `safeStorage` at arm's length.
- */
-export type { SafeStorageApi };
-
-/**
  * The one credential shape check. Called on two different inputs: whatever the
  * renderer sent, at the IPC boundary, and whatever was on disk, after
  * decryption. Exported so the boundary uses this rule rather than a second one.
@@ -47,11 +39,11 @@ const CREDENTIALS: EncryptedSecret<StoredCredentials> = {
 /**
  * The saved login's one encrypted owner-only file.
  *
- * The encrypt / atomic-write / chmod / validate-both-ways mechanism moved to
+ * The encrypt / atomic-write / validate-both-ways mechanism moved to
  * `EncryptedJsonStore` when the Steam session needed the same guarantees.
  * Nothing about this store's behaviour moved with it: the shape rule above and
  * the two error codes are unchanged, which is what
- * `tests/unit/credentials.test.ts` proves by still passing untouched.
+ * `tests/unit/credentials.test.ts` proves.
  */
 export class CredentialsStore extends EncryptedJsonStore<StoredCredentials> {
   constructor(path: string, storage: SafeStorageApi) {

@@ -65,7 +65,7 @@ function parseUrl(rawUrl: string): URL | null {
 
 /**
  * Whether the sign-in window may load this URL. Fail-closed: anything this
- * does not recognise is blocked (R15).
+ * does not recognise is blocked.
  *
  * Two ways in, and no others. A suffix match must be https on the default
  * port with no embedded credentials — the posture `rewriteProxyRedirect` holds

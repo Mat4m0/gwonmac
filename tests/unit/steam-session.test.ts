@@ -52,7 +52,7 @@ describe("the Steam session store", () => {
   });
 
   it("keeps a record whose expiry the account service has not supplied", async () => {
-    // R9: an acquired token is stored before any server expiry is known. `null`
+    // An acquired token is stored before any server expiry is known. `null`
     // is that state, and it must survive the round-trip rather than being read
     // back as a token that expired at the epoch.
     const { store } = await storeIn("gw-steam-null-expiry-");
@@ -164,7 +164,7 @@ describe("the Steam session shape check", () => {
  * A store standing in for the encrypted file, so token resolution can be
  * exercised without Electron. It validates on save exactly as the real one
  * does, and it counts clears — because "treated as absent" and "deleted" are
- * different outcomes and R8 turns on which one happens.
+ * different outcomes and launch behavior turns on which one happens.
  */
 function fakeStore(
   initial: StoredSteamSession | null,
@@ -216,7 +216,7 @@ const ACQUIRED = "fedcba9876543210fedcba9876543210";
 
 describe("deciding which Steam token to vend", () => {
   it("replays a stored token that has not expired, without opening a window", async () => {
-    // Covers AE5: a relaunch reaches the game with no Steam prompt.
+    // A relaunch reaches the game with no Steam prompt.
     const store = fakeStore({ token: FRESH, expiry: NOW + 1000 });
     const acquire = fakeAcquire(ACQUIRED);
 
@@ -242,7 +242,7 @@ describe("deciding which Steam token to vend", () => {
   });
 
   it("answers a silent request with nothing rather than opening a window", async () => {
-    // Covers AE1 / R4. This is the launch-time request: it must never put a
+    // This is the launch-time request: it must never put a
     // Steam window in front of a player who did not ask for one.
     const store = fakeStore(null);
     const acquire = fakeAcquire(ACQUIRED);
@@ -259,7 +259,7 @@ describe("deciding which Steam token to vend", () => {
   });
 
   it("acquires on a non-silent request and stores what it got", async () => {
-    // Covers R5: the button click is what may open a window.
+    // The button click is what may open a window.
     const store = fakeStore(null);
     const acquire = fakeAcquire(ACQUIRED);
 
@@ -374,7 +374,7 @@ describe("deciding which Steam token to vend", () => {
   });
 
   it("treats an unreadable store as absent and keeps the file", async () => {
-    // Covers AE6 / R8. Encryption can be momentarily unavailable, and deleting
+    // Encryption can be momentarily unavailable, and deleting
     // on that would throw away a credential that still works. The launch must
     // survive it, and the file must not.
     const failure = new AppError("steam_session_corrupt", "unreadable");
@@ -707,7 +707,7 @@ describe("the client handing a token back", () => {
   });
 
   it("ignores a storeback that is not the token it holds", async () => {
-    // KTD5. The client's storeback has never been observed carrying the Steam
+    // The client's storeback has never been observed carrying the Steam
     // token itself, and persisting a session-resume token in its place would
     // overwrite a working credential with one that fails at the login screen.
     const store = fakeStore({ token: FRESH, expiry: NOW });

@@ -11,7 +11,7 @@ import {
 
 /**
  * A second, deliberately non-Steam configuration. Every helper takes its
- * config as a parameter (KTD7), and these tests prove that by asking the same
+ * config as a parameter, and these tests prove that by asking the same
  * function two different questions — which is also what lets the acquisition
  * spec drive the real window against a local fixture server.
  */
@@ -159,7 +159,7 @@ describe("reading the token back", () => {
   });
 
   it("rejects a response whose state does not match the attempt", () => {
-    // AE10 / R17: an unsolicited or replayed response fails before the token
+    // An unsolicited or replayed response fails before the token
     // is read, so a token that arrives unasked-for is never trusted.
     const r = inspectRedirect(
       STEAM_OAUTH,

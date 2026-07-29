@@ -3,7 +3,7 @@
 // interception. No network, no Steam, no token that ever existed.
 //
 // The whole flow is reachable offline because every Steam-specific value is
-// configuration (KTD7): point `authorizationBaseUrl` at 127.0.0.1 and the
+// configuration: point `authorizationBaseUrl` at 127.0.0.1 and the
 // window, the origin allowlist, and the redirect matcher all follow.
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
@@ -290,7 +290,8 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("lifts the token out of the redirect and tears the window down", async () => {
-    // Covers AE2.
+    // A successful request returns the token only after the window and its
+    // isolated session have been torn down.
     server = await startFixture("redirect");
     fixture = await launchOffline("gw-steam-acquire-ok-");
     const before = await windowCount(fixture.app);
@@ -307,7 +308,7 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("refuses a response whose state it did not generate", async () => {
-    // Covers AE10.
+    // An unsolicited or replayed response must fail before exposing its token.
     server = await startFixture("wrong-state");
     fixture = await launchOffline("gw-steam-acquire-state-");
     const before = await windowCount(fixture.app);
@@ -330,7 +331,7 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("treats a closed window as a cancelled sign-in", async () => {
-    // Covers AE3: the credential request must resolve, not hang, when the
+    // The credential request must resolve, not hang, when the
     // player gives up -- otherwise the client's login screen stalls forever.
     server = await startFixture("hang");
     fixture = await launchOffline("gw-steam-acquire-cancel-");
@@ -431,7 +432,7 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("settles when the sign-in page's renderer crashes", async () => {
-    // R2: the client awaits this call, so a dead renderer must not leave it
+    // The client awaits this call, so a dead renderer must not leave it
     // waiting on a credential that can no longer arrive. Steam's login page is
     // external content pulling assets from several hosts, which makes a crash a
     // real failure mode rather than a theoretical one.
@@ -479,7 +480,7 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("reports a sign-in page that will not load", async () => {
-    // Steam unreachable (R10). The fixture is started only to claim a port,
+    // Steam is unreachable. The fixture is started only to claim a port,
     // then closed, so the authorize URL is guaranteed to refuse the connection.
     server = await startFixture("redirect");
     const config = configFor(server);
@@ -494,7 +495,7 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("leaves no cookie behind for the next sign-in", async () => {
-    // R19: the partition dies with the window. The fixture sets a cookie on the
+    // The partition dies with the window. The fixture sets a cookie on the
     // first hop and offers proof it works by seeing it returned on the second --
     // so a second acquisition arriving cookie-less is a real observation, not a
     // server that never set one.

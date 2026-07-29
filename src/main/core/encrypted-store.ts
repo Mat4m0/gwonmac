@@ -1,4 +1,4 @@
-import { chmod, readFile, unlink } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { AppError } from "../../shared/errors.js";
 import { writeAtomic } from "./atomic-file.js";
 
@@ -35,11 +35,11 @@ export interface EncryptedSecret<T> {
  *
  * This is the mechanism saved credentials have always used, lifted out so the
  * Steam session can have the same guarantees without a second copy of it:
- * `safeStorage` encryption, an atomic write at mode `0600`, an explicit
- * `chmod` behind it, and a validator run on both directions of the boundary.
- * The type parameter and the injected `EncryptedSecret` are what let two
- * different records share it while keeping their own shape rules — notably,
- * `parseCredentials` stays exactly the rule it was.
+ * `safeStorage` encryption, an atomic write at mode `0600`, and a validator run
+ * on both directions of the boundary. The type parameter and the injected
+ * `EncryptedSecret` are what let two different records share it while keeping
+ * their own shape rules — notably, `parseCredentials` stays exactly the rule it
+ * was.
  *
  * Electron-free by construction: `safeStorage` arrives as `SafeStorageApi`, so
  * `src/main/core/**` keeps its no-Electron boundary and a test can execute the
@@ -87,7 +87,6 @@ export class EncryptedJsonStore<T> {
     }
     const ciphertext = this.storage.encryptString(JSON.stringify(cleaned));
     await writeAtomic(this.path, ciphertext, 0o600);
-    await chmod(this.path, 0o600);
   }
 
   async clear(): Promise<void> {
