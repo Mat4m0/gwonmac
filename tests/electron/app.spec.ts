@@ -15,6 +15,7 @@ import {
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
+import { fitWindowStateToDisplays } from "../../src/main/core/window-state.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const main = path.join(root, "build/main/main.js");
@@ -317,12 +318,23 @@ test.describe("Electron application", () => {
       app = await launch(userData, env);
       const resetPage = await app.firstWindow({ timeout: 30_000 });
       const resetWindow = await app.browserWindow(resetPage);
+      const displays = await app.evaluate(({ screen }) => ({
+        primary: { ...screen.getPrimaryDisplay().workArea },
+        workAreas: screen.getAllDisplays().map(({ workArea }) => ({
+          ...workArea,
+        })),
+      }));
+      const expectedRestored = fitWindowStateToDisplays(
+        { bounds: normalBounds, mode: "fullscreen" },
+        displays.workAreas,
+        displays.primary,
+      ).bounds;
       await expect
         .poll(() => resetWindow.evaluate((win) => win.isFullScreen()))
         .toBe(true);
       expect(
         await resetWindow.evaluate((win) => win.getNormalBounds()),
-      ).toEqual(normalBounds);
+      ).toEqual(expectedRestored);
 
       const expectedReset = await app.evaluate(({ screen }) => {
         const area = screen.getPrimaryDisplay().workArea;
