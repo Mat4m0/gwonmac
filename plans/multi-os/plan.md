@@ -588,13 +588,13 @@ a second window. This phase changes ownership, not product multiplicity.
 Specification: sections 4 and 8
 Acceptance: MOS-A01 and MOS-D01
 
-- [ ] Create one explicit `AppRuntime` owner for client, chunks, sockets,
+- [x] Create one explicit `AppRuntime` owner for client, chunks, sockets,
   settings, diagnostics, progress, and window registry.
-- [ ] Pass concrete dependencies; do not add a container/service locator.
-- [ ] Keep one `ClientRuntime` and one global scheduler.
-- [ ] Move boot/shutdown ordering from scattered module globals into direct
+- [x] Pass concrete dependencies; do not add a container/service locator.
+- [x] Keep one `ClientRuntime` and one global scheduler.
+- [x] Move boot/shutdown ordering from scattered module globals into direct
   lifecycle methods.
-- [ ] Prove `dispose()` is idempotent and waits for current settings/window/
+- [x] Prove `dispose()` is idempotent and waits for current settings/window/
   recorder writes.
 
 ### WP-4.2 — `WindowRegistry`
@@ -602,15 +602,15 @@ Acceptance: MOS-A01 and MOS-D01
 Specification: section 6.2
 Acceptance: MOS-A02 and MOS-R02
 
-- [ ] Add exact object+ID registry ownership and closed sender contexts.
-- [ ] Register the current one game window as a game role without fabricating a
+- [x] Add exact object+ID registry ownership and closed sender contexts.
+- [x] Register the current one game window as a game role without fabricating a
   profile ID. Phase 5 adds the final profile binding when `ProfileStore`
   becomes canonical.
-- [ ] Remove record/resource ownership on reload, crash, and destruction.
-- [ ] Replace `getMainWindow()` authorization and
+- [x] Remove record/resource ownership on reload, crash, and destruction.
+- [x] Replace `getMainWindow()` authorization and
   `BrowserWindow.getAllWindows()[0]` behaviour.
-- [ ] Make progress broadcast iterate explicit eligible registry records.
-- [ ] Add stale ID/object reuse, destroyed sender, wrong role, wrong frame, and
+- [x] Make progress broadcast iterate explicit eligible registry records.
+- [x] Add stale ID/object reuse, destroyed sender, wrong role, wrong frame, and
   wrong URL tests.
 
 ### WP-4.3 — explicit commands, menu, and diagnostics target
@@ -618,12 +618,12 @@ Acceptance: MOS-A02 and MOS-R02
 Specification: sections 6 and 11
 Acceptance: MOS-X01
 
-- [ ] Delete `canonicalRendererWindow()` and require an explicit target.
-- [ ] Make menu handlers resolve the focused/owned record at click time.
-- [ ] Make renderer recovery state per registry record.
-- [ ] Maintain renderer clocks by `WebContents`.
-- [ ] Target diagnostics at one explicit slot; terminate cleanly if it dies.
-- [ ] Replace tests that depend on window array order with exact Page/window
+- [x] Delete `canonicalRendererWindow()` and require an explicit target.
+- [x] Make menu handlers resolve the focused/owned record at click time.
+- [x] Make renderer recovery state per registry record.
+- [x] Maintain renderer clocks by `WebContents`.
+- [x] Target diagnostics at one explicit slot; terminate cleanly if it dies.
+- [x] Replace tests that depend on window array order with exact Page/window
   ownership.
 
 ### WP-4.4 — session installer
@@ -631,21 +631,21 @@ Acceptance: MOS-X01
 Specification: section 6.1
 Acceptance: MOS-S01
 
-- [ ] Extract one direct session-hardening/protocol installation function.
-- [ ] Apply permission, navigation, CSP, user-agent, download, and `gw`
+- [x] Extract one direct session-hardening/protocol installation function.
+- [x] Apply permission, navigation, CSP, user-agent, download, and `gw`
   protocol rules once to the current session.
-- [ ] Make repeat installation a detected programming error, not silently
+- [x] Make repeat installation a detected programming error, not silently
   stacked handlers.
-- [ ] Prove pointer-lock permission is tied to the exact registered game
+- [x] Prove pointer-lock permission is tied to the exact registered game
   window.
 
 ### WP-4.5 — single-window lifecycle preservation
 
-- [ ] Keep current red-X/quitting behaviour in this phase.
-- [ ] Preserve renderer recovery, window-state restore, power blocker,
+- [x] Keep current red-X/quitting behaviour in this phase.
+- [x] Preserve renderer recovery, window-state restore, power blocker,
   settings, update policy, and clean socket close.
-- [ ] Extend the GitHub-zero-request test through the new registry/runtime.
-- [ ] Delete old singleton state after all callers use the new owners.
+- [x] Extend the GitHub-zero-request test through the new registry/runtime.
+- [x] Delete old singleton state after all callers use the new owners.
 
 ### Phase 4 gate
 
@@ -655,9 +655,9 @@ pnpm verify
 
 - [ ] All existing one-window behaviour passes on the three native preview
   packages.
-- [ ] Source search finds no arbitrary first-window targeting.
-- [ ] Composition tests prove one shared client/cache/socket/recorder.
-- [ ] No public profile manager exists yet.
+- [x] Source search finds no arbitrary first-window targeting.
+- [x] Composition tests prove one shared client/cache/socket/recorder.
+- [x] No public profile manager exists yet.
 
 ## 10. Phase 5 — isolated profiles and sequential manager
 
