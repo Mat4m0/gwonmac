@@ -339,11 +339,16 @@ test.describe("acquiring a Steam token", () => {
       const sheet = all.find((win) => win.webContents.getURL().includes("127.0.0.1"));
       const game = all.find((win) => !win.webContents.getURL().includes("127.0.0.1"));
       if (!game || !sheet) throw new Error("expected a game window and a sheet");
-      return {
+      const result = {
         modal: sheet.isModal(),
         parented: sheet.getParentWindow()?.id === game.id,
         width: sheet.getBounds().width,
       };
+      // Inspect and dismiss the native modal in one main-process operation.
+      // On Windows, leaving a modal open between automation commands can close
+      // Playwright's Electron connection while the application remains alive.
+      sheet.destroy();
+      return result;
     });
 
     expect(presentation.modal).toBe(true);
@@ -351,7 +356,6 @@ test.describe("acquiring a Steam token", () => {
     // The requested width, not stretched to the display.
     expect(presentation.width).toBe(520);
 
-    await closeSignInWindow(fixture.app);
     await settleAcquire(fixture.app);
   });
 
