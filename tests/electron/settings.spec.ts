@@ -34,7 +34,8 @@ test.describe("settings experience", () => {
       expect(
         await app.evaluate(({ Menu }) => {
           const item = Menu.getApplicationMenu()
-            ?.items[0]?.submenu?.items.find(
+            ?.items.flatMap((menu) => menu.submenu?.items ?? [])
+            .find(
               (candidate) => candidate.label === "Settings…",
             );
           item?.click();

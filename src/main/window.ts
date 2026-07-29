@@ -351,6 +351,17 @@ function installMenu(host: WindowHost, windows: WindowRegistry): void {
     }
   };
 
+  const settingsMenuItem: MenuItemConstructorOptions = {
+    label: "Settings…",
+    accelerator: "CmdOrCtrl+,",
+    click: async () => {
+      const win = menuGameWindow(windows);
+      if (!win) return;
+      await resetGameInput(win);
+      await sendRendererCommand(win, { type: "settings.open" });
+    },
+  };
+
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
       ? [
@@ -359,16 +370,7 @@ function installMenu(host: WindowHost, windows: WindowRegistry): void {
             submenu: [
               { role: "about" as const },
               { type: "separator" as const },
-              {
-                label: "Settings…",
-                accelerator: "CmdOrCtrl+,",
-                click: async () => {
-                  const win = menuGameWindow(windows);
-                  if (!win) return;
-                  await resetGameInput(win);
-                  await sendRendererCommand(win, { type: "settings.open" });
-                },
-              },
+              settingsMenuItem,
               { type: "separator" as const },
               { role: "hide" as const },
               { role: "hideOthers" as const },
@@ -382,6 +384,12 @@ function installMenu(host: WindowHost, windows: WindowRegistry): void {
     {
       label: "Edit",
       submenu: [
+        ...(!isMac
+          ? [
+              settingsMenuItem,
+              { type: "separator" as const },
+            ]
+          : []),
         { role: "cut" },
         { role: "copy" },
         { role: "paste" },
