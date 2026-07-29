@@ -76,6 +76,8 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-label")).toContainText(
         "Chromium trace",
       );
+      // Chromium tracing is an external native recorder with no ready event.
+      // This is capture warm-up, not a timing or performance assertion.
       await page.waitForTimeout(500);
       await page.evaluate(async () => {
         window.gwDiagnostics.snapshot(100, 4096, "memory");

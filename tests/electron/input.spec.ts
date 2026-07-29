@@ -189,6 +189,8 @@ test.describe("renderer input", () => {
         mouse("mouseup", 1);
         mouse("mousedown", 2);
         mouse("mouseup", 2);
+        // These cross the renderer's real synthetic-touch cancellation timers.
+        // The assertion is event order, never elapsed runner performance.
         await new Promise((resolve) => setTimeout(resolve, 30));
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
         await new Promise((resolve) => setTimeout(resolve, 60));
@@ -511,6 +513,8 @@ test.describe("renderer input", () => {
 
         mouse("mousedown", 2);
         mouse("mouseup", 2);
+        // Exercise the real renderer timer boundary; only emitted touch
+        // semantics are asserted, not how quickly the hosted runner wakes.
         await new Promise((resolve) => setTimeout(resolve, 30));
         mouse("mousedown", 3);
         mouse("mouseup", 3);
