@@ -363,6 +363,10 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("bounds cleanup that never settles", async () => {
+    // This deliberately spends five seconds on the cleanup deadline. Native
+    // Windows startup can consume most of the default 30-second test budget
+    // before the assertion begins.
+    test.slow();
     server = await startFixture("hang");
     fixture = await launchOffline("gw-steam-acquire-cleanup-deadline-");
 
