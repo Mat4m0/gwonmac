@@ -335,6 +335,7 @@ test.describe("enhancement cursor presentation", () => {
           search: globalThis.location.search,
         })),
       ).toEqual({
+        rendererRole: "game",
         desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {

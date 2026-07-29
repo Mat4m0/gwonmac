@@ -174,6 +174,7 @@ test.describe("diagnostics", () => {
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
     try {
       await clickMenu(fixture.app, "start-chromium-trace");
+      await expect(fixture.page.locator("#capture-status")).toBeVisible();
       const target = path.join(diagnosticRoot, "capture.gwdiag");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       const contractsPath = path.join(root, "build/shared/contracts.js");

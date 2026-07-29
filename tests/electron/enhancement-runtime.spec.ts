@@ -81,6 +81,7 @@ test.describe("Enhancement runtime selection", () => {
     try {
       const init = await fixture.page.evaluate(() => window.gwNative.init);
       expect(init).toEqual({
+        rendererRole: "game",
         desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
