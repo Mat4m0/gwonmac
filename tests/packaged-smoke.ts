@@ -8,6 +8,7 @@ import {
   rm,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
@@ -16,6 +17,7 @@ import {
   getCurrentFuseWire,
 } from "@electron/fuses";
 import { extractFile, listPackage, statFile } from "@electron/asar";
+import { chromium, type Browser } from "playwright";
 import forgeConfig from "../forge.config.ts";
 import { macOSBundleVersions } from "../scripts/macos-version.js";
 import {
@@ -143,7 +145,22 @@ assert.equal(fuses[FuseV1Options.OnlyLoadAppFromAsar], FuseState.ENABLE);
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
-const child = spawn(layout.executable, [`--user-data-dir=${userData}`], {
+const debugServer = createServer();
+await new Promise<void>((resolve, reject) => {
+  debugServer.once("error", reject);
+  debugServer.listen(0, "127.0.0.1", resolve);
+});
+const debugAddress = debugServer.address();
+assert.ok(debugAddress && typeof debugAddress === "object");
+const debugPort = debugAddress.port;
+await new Promise<void>((resolve, reject) => {
+  debugServer.close((error) => error ? reject(error) : resolve());
+});
+const child = spawn(layout.executable, [
+  `--user-data-dir=${userData}`,
+  `--remote-debugging-port=${debugPort}`,
+  "--remote-debugging-address=127.0.0.1",
+], {
   cwd: root,
   env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
   stdio: ["ignore", "pipe", "pipe"],
@@ -185,9 +202,44 @@ async function recordedEvents(): Promise<RecordedLine[]> {
 }
 
 let events: RecordedLine[] = [];
+let browser: Browser | undefined;
 try {
   const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline && child.exitCode === null) {
+    try {
+      browser = await chromium.connectOverCDP(
+        `http://127.0.0.1:${debugPort}`,
+      );
+      break;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  assert.ok(browser, "packaged app did not expose its test debugging endpoint");
+  let launchRequested = false;
   while (Date.now() < deadline) {
+    for (const context of browser.contexts()) {
+      const control = context.pages().find((page) =>
+        page.url().startsWith("gw://control/"));
+      if (control && !launchRequested) {
+        launchRequested = true;
+        await control.waitForLoadState("domcontentloaded");
+        await control.evaluate(async () => {
+          const api = (globalThis as typeof globalThis & {
+            gwControl?: {
+              profiles: {
+                list(): Promise<readonly { id: string }[]>;
+                launch(id: string): Promise<void>;
+              };
+            };
+          }).gwControl;
+          if (!api) throw new Error("control preload exposed no profile API");
+          const [profile] = await api.profiles.list();
+          if (!profile) throw new Error("profile registry has no default");
+          await api.profiles.launch(profile.id);
+        });
+      }
+    }
     events = await recordedEvents();
     if (events.some((event) => event.name === "clock.synchronized")) break;
     if (child.exitCode !== null) break;
@@ -208,6 +260,7 @@ try {
   assert.ok(started, "the packaged app recorded no diagnostics.started event");
   assert.equal(started.fields?.appVersion, packageVersion);
 } finally {
+  await browser?.close().catch(() => undefined);
   await terminateTestChild(child);
   await rm(userData, { recursive: true, force: true });
 }

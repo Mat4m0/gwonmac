@@ -201,8 +201,33 @@ async function rendererPage(
   output: string[],
 ) {
   const deadline = Date.now() + 30_000;
+  let launchRequested = false;
   while (Date.now() < deadline && child.exitCode === null) {
     for (const context of browser.contexts()) {
+      const control = context.pages().find((candidate) =>
+        candidate.url().startsWith("gw://control/"));
+      if (control && !launchRequested) {
+        launchRequested = true;
+        await control.waitForLoadState("domcontentloaded");
+        await control.evaluate(async () => {
+          const api = (globalThis as typeof globalThis & {
+            gwControl?: {
+              profiles: {
+                list(): Promise<readonly { id: string }[]>;
+                launch(id: string): Promise<void>;
+              };
+            };
+          }).gwControl;
+          if (!api) {
+            throw new Error("packaged control preload exposed no profile API");
+          }
+          const [profile] = await api.profiles.list();
+          if (!profile) {
+            throw new Error("packaged profile registry has no default profile");
+          }
+          await api.profiles.launch(profile.id);
+        });
+      }
       const page = context.pages().find((candidate) =>
         candidate.url().startsWith("gw://app/"));
       if (page) {
@@ -405,6 +430,7 @@ async function assertPackagedOffSession() {
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init),
       {
+        rendererRole: "game",
         desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
