@@ -2,10 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildAuthUrl,
+  inspectRedirect,
   isAllowedOrigin,
-  isRedirectTarget,
   newState,
-  parseRedirect,
   STEAM_OAUTH,
   type SteamOAuthConfig,
 } from "../../src/main/core/steam-oauth.js";
@@ -106,107 +105,118 @@ describe("the sign-in origin allowlist", () => {
   });
 });
 
-describe("the redirect target", () => {
-  it("matches only the exact configured return host and path", () => {
-    assert.equal(
-      isRedirectTarget(
-        STEAM_OAUTH,
-        "https://www.guildwars.com/app/live/auth#access_token=x&state=y",
-      ),
-      true,
-    );
-    assert.equal(
-      isRedirectTarget(STEAM_OAUTH, "https://www.guildwars.com/app/live/auth?access_token=x"),
-      true,
-    );
-    assert.equal(
-      isRedirectTarget(FIXTURE, "https://return.example/app/live/auth#access_token=x"),
-      true,
-    );
-  });
-
-  it("does not match a different path, host, or scheme", () => {
-    for (const bad of [
-      "https://www.guildwars.com/app/live/auth/evil",
-      "https://www.guildwars.com/app/live/authorize",
-      "https://evil.example/app/live/auth",
-      "http://www.guildwars.com/app/live/auth",
-      "https://return.example/app/live/auth", // the *fixture's* return URL
-      // Same name, different port is a different service, and it must not be
-      // trusted to supply the state-matching response.
-      "https://www.guildwars.com:8443/app/live/auth",
-      "not a url",
-    ]) {
-      assert.equal(isRedirectTarget(STEAM_OAUTH, bad), false, bad);
-    }
-  });
-});
-
 describe("reading the token back", () => {
   const STATE = "the-generated-nonce";
   const RETURN = "https://www.guildwars.com/app/live/auth";
 
   it("accepts a fragment token whose state matches", () => {
-    const r = parseRedirect(
+    const r = inspectRedirect(
+      STEAM_OAUTH,
       `${RETURN}#access_token=abc123&state=${STATE}&token_type=bearer`,
       STATE,
     );
-    assert.deepEqual(r, { ok: true, token: "abc123" });
+    assert.deepEqual(r, {
+      kind: "redirect",
+      result: { ok: true, token: "abc123" },
+    });
   });
 
   it("accepts a query token as well as a fragment token", () => {
-    const r = parseRedirect(`${RETURN}?access_token=q99&state=${STATE}`, STATE);
-    assert.deepEqual(r, { ok: true, token: "q99" });
+    const r = inspectRedirect(
+      STEAM_OAUTH,
+      `${RETURN}?access_token=q99&state=${STATE}`,
+      STATE,
+    );
+    assert.deepEqual(r, {
+      kind: "redirect",
+      result: { ok: true, token: "q99" },
+    });
   });
 
   it("accepts a bare `token` key as well as `access_token`", () => {
     // Both spellings are read, fragment first. Untested, a typo or wrong
     // precedence here would only surface against a live server that happens to
     // use the alternate name.
-    assert.deepEqual(parseRedirect(`${RETURN}#token=abc123&state=${STATE}`, STATE), {
-      ok: true,
-      token: "abc123",
+    assert.deepEqual(inspectRedirect(STEAM_OAUTH, `${RETURN}#token=abc123&state=${STATE}`, STATE), {
+      kind: "redirect",
+      result: { ok: true, token: "abc123" },
     });
-    assert.deepEqual(parseRedirect(`${RETURN}?token=q99&state=${STATE}`, STATE), {
-      ok: true,
-      token: "q99",
+    assert.deepEqual(inspectRedirect(STEAM_OAUTH, `${RETURN}?token=q99&state=${STATE}`, STATE), {
+      kind: "redirect",
+      result: { ok: true, token: "q99" },
     });
   });
 
   it("prefers access_token when a response carries both", () => {
     assert.deepEqual(
-      parseRedirect(`${RETURN}#access_token=primary&token=secondary&state=${STATE}`, STATE),
-      { ok: true, token: "primary" },
+      inspectRedirect(
+        STEAM_OAUTH,
+        `${RETURN}#access_token=primary&token=secondary&state=${STATE}`,
+        STATE,
+      ),
+      { kind: "redirect", result: { ok: true, token: "primary" } },
     );
   });
 
   it("rejects a response whose state does not match the attempt", () => {
     // AE10 / R17: an unsolicited or replayed response fails before the token
     // is read, so a token that arrives unasked-for is never trusted.
-    const r = parseRedirect(`${RETURN}#access_token=abc123&state=someone-elses`, STATE);
-    assert.deepEqual(r, { ok: false, reason: "state-mismatch" });
+    const r = inspectRedirect(
+      STEAM_OAUTH,
+      `${RETURN}#access_token=abc123&state=someone-elses`,
+      STATE,
+    );
+    assert.deepEqual(r, {
+      kind: "redirect",
+      result: { ok: false, reason: "state-mismatch" },
+    });
   });
 
   it("rejects a response carrying no state at all", () => {
-    const r = parseRedirect(`${RETURN}#access_token=abc123`, STATE);
-    assert.deepEqual(r, { ok: false, reason: "state-mismatch" });
+    const r = inspectRedirect(STEAM_OAUTH, `${RETURN}#access_token=abc123`, STATE);
+    assert.deepEqual(r, {
+      kind: "redirect",
+      result: { ok: false, reason: "state-mismatch" },
+    });
   });
 
   it("rejects a matching-state response that carries no token", () => {
-    const r = parseRedirect(`${RETURN}#state=${STATE}`, STATE);
-    assert.deepEqual(r, { ok: false, reason: "no-token" });
+    const r = inspectRedirect(STEAM_OAUTH, `${RETURN}#state=${STATE}`, STATE);
+    assert.deepEqual(r, {
+      kind: "redirect",
+      result: { ok: false, reason: "no-token" },
+    });
   });
 
   it("rejects a matching-state response whose token is empty", () => {
-    const r = parseRedirect(`${RETURN}#access_token=&state=${STATE}`, STATE);
-    assert.deepEqual(r, { ok: false, reason: "no-token" });
+    const r = inspectRedirect(
+      STEAM_OAUTH,
+      `${RETURN}#access_token=&state=${STATE}`,
+      STATE,
+    );
+    assert.deepEqual(r, {
+      kind: "redirect",
+      result: { ok: false, reason: "no-token" },
+    });
   });
 
-  it("rejects something that is not a URL", () => {
-    assert.deepEqual(parseRedirect("not a url", STATE), {
-      ok: false,
-      reason: "state-mismatch",
-    });
+  it("does not treat a matching state on another URL as the redirect", () => {
+    for (const bad of [
+      `https://www.guildwars.com/app/live/auth/evil#access_token=x&state=${STATE}`,
+      `https://www.guildwars.com/app/live/authorize#access_token=x&state=${STATE}`,
+      `https://evil.example/app/live/auth#access_token=x&state=${STATE}`,
+      `http://www.guildwars.com/app/live/auth#access_token=x&state=${STATE}`,
+      `https://return.example/app/live/auth#access_token=x&state=${STATE}`,
+      `https://www.guildwars.com:8443/app/live/auth#access_token=x&state=${STATE}`,
+      `https://user:pass@www.guildwars.com/app/live/auth#access_token=x&state=${STATE}`,
+      "not a url",
+    ]) {
+      assert.deepEqual(
+        inspectRedirect(STEAM_OAUTH, bad, STATE),
+        { kind: "not-redirect" },
+        bad,
+      );
+    }
   });
 });
 

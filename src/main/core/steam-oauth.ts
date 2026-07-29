@@ -102,31 +102,6 @@ export function isAllowedOrigin(config: SteamOAuthConfig, rawUrl: string): boole
   );
 }
 
-/**
- * Whether a navigation is the OAuth redirect carrying the result. Matched by
- * exact host and path so a look-alike path on the same host cannot stand in.
- * The query and fragment (which carry the token) are deliberately ignored
- * here; `parseRedirect` reads them.
- *
- * This URL is never fetched — the caller intercepts the navigation before it
- * leaves — so it needs no allowlist entry of its own.
- */
-export function isRedirectTarget(config: SteamOAuthConfig, rawUrl: string): boolean {
-  const u = parseUrl(rawUrl);
-  const target = parseUrl(config.redirectUrl);
-  return (
-    u !== null &&
-    target !== null &&
-    u.protocol === target.protocol &&
-    u.protocol === "https:" &&
-    // `host`, not `hostname`: it carries the port, so a service on the same
-    // name at a different port is not the return target. `URL` normalises the
-    // default port away, so an explicit `:443` still matches.
-    u.host.toLowerCase() === target.host.toLowerCase() &&
-    u.pathname === target.pathname
-  );
-}
-
 /** A fresh, unguessable nonce for one sign-in attempt. */
 export function newState(): string {
   return randomUUID();
@@ -145,28 +120,54 @@ export type SteamRedirectResult =
   | { ok: true; token: string }
   | { ok: false; reason: "no-token" | "state-mismatch" };
 
+export type SteamRedirectInspection =
+  | { kind: "not-redirect" }
+  | { kind: "redirect"; result: SteamRedirectResult };
+
 /**
- * Extract the access token from the OAuth redirect, and only when the `state`
- * we generated comes back unchanged (R17).
+ * Recognise the configured OAuth redirect and extract its token only when the
+ * `state` generated for this attempt comes back unchanged.
  *
  * An implicit flow returns the token in the fragment; some servers use the
  * query, so both are read, fragment first. The `state` is checked before any
- * token is looked at, which is what makes an unsolicited or replayed response
- * fail rather than hand over a token nobody asked for. A URL that will not
- * even parse is reported the same way for the same reason: it proved no state.
+ * token is looked at. Target recognition and token parsing are deliberately
+ * one operation so no caller can accept a matching nonce from the wrong host,
+ * port, scheme, or path.
  */
-export function parseRedirect(rawUrl: string, expectedState: string): SteamRedirectResult {
+export function inspectRedirect(
+  config: SteamOAuthConfig,
+  rawUrl: string,
+  expectedState: string,
+): SteamRedirectInspection {
   const u = parseUrl(rawUrl);
-  if (!u) return { ok: false, reason: "state-mismatch" };
+  const target = parseUrl(config.redirectUrl);
+  if (
+    !u ||
+    !target ||
+    u.username ||
+    u.password ||
+    u.protocol !== "https:" ||
+    target.protocol !== "https:" ||
+    u.host.toLowerCase() !== target.host.toLowerCase() ||
+    u.pathname !== target.pathname
+  ) {
+    return { kind: "not-redirect" };
+  }
+
   const fragment = new URLSearchParams(u.hash.replace(/^#/, ""));
   const carrier =
     fragment.has("access_token") || fragment.has("token") || fragment.has("state")
       ? fragment
       : u.searchParams;
   if (carrier.get("state") !== expectedState) {
-    return { ok: false, reason: "state-mismatch" };
+    return {
+      kind: "redirect",
+      result: { ok: false, reason: "state-mismatch" },
+    };
   }
   const token = carrier.get("access_token") ?? carrier.get("token");
-  if (!token) return { ok: false, reason: "no-token" };
-  return { ok: true, token };
+  if (!token) {
+    return { kind: "redirect", result: { ok: false, reason: "no-token" } };
+  }
+  return { kind: "redirect", result: { ok: true, token } };
 }

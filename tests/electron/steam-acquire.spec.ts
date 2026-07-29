@@ -257,6 +257,25 @@ async function closeSignInWindow(app: OfflineFixture["app"]): Promise<void> {
   expect(destroyed).toBe(1);
 }
 
+async function replaceSignInCleanup(
+  app: OfflineFixture["app"],
+  behavior: "reject" | "hang",
+): Promise<void> {
+  const replaced = await app.evaluate(({ BrowserWindow }, selected) => {
+    const win = BrowserWindow.getAllWindows().find((candidate) =>
+      candidate.webContents.getURL().includes("127.0.0.1"),
+    );
+    if (!win) return false;
+    const signIn = win.webContents.session;
+    signIn.clearStorageData =
+      selected === "reject"
+        ? () => Promise.reject(new Error("fixture cleanup failure"))
+        : () => new Promise<void>(() => undefined);
+    return true;
+  }, behavior);
+  expect(replaced).toBe(true);
+}
+
 test.describe("acquiring a Steam token", () => {
   // These drive compiled main-process code, so skip rather than error when the
   // build has not run — the same guard tests/electron/sandbox.spec.ts uses.
@@ -325,6 +344,39 @@ test.describe("acquiring a Steam token", () => {
     expect(run.result).toEqual({ ok: false, reason: "cancelled" });
     expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "cancelled" });
     expect(await windowCount(fixture.app)).toBe(before);
+  });
+
+  test("settles when partition cleanup rejects", async () => {
+    server = await startFixture("hang");
+    fixture = await launchOffline("gw-steam-acquire-cleanup-reject-");
+
+    await beginAcquire(fixture.app, configFor(server));
+    await waitForSignInWindow(fixture.app);
+    await replaceSignInCleanup(fixture.app, "reject");
+    await closeSignInWindow(fixture.app);
+
+    expect((await settleAcquire(fixture.app)).result).toEqual({
+      ok: false,
+      reason: "cancelled",
+    });
+  });
+
+  test("bounds cleanup that never settles", async () => {
+    server = await startFixture("hang");
+    fixture = await launchOffline("gw-steam-acquire-cleanup-deadline-");
+
+    await beginAcquire(fixture.app, configFor(server));
+    await waitForSignInWindow(fixture.app);
+    await replaceSignInCleanup(fixture.app, "hang");
+    const started = Date.now();
+    await closeSignInWindow(fixture.app);
+
+    expect((await settleAcquire(fixture.app)).result).toEqual({
+      ok: false,
+      reason: "cancelled",
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(4_500);
+    expect(Date.now() - started).toBeLessThan(10_000);
   });
 
   test("blocks a navigation that leaves the configured origins", async () => {
