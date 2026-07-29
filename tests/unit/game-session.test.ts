@@ -23,6 +23,11 @@ interface InstalledHandlers {
     details: { isMainFrame: boolean },
   ) => void;
   protocol?: (request: Request) => Promise<Response>;
+  request?: (
+    details: { resourceType: string; url: string },
+    callback: (response: { cancel?: boolean }) => void,
+  ) => void;
+  userAgent?: string;
 }
 
 function fixture() {
@@ -37,6 +42,16 @@ function fixture() {
         assert.equal(scheme, "gw");
         handlers.protocol = handler;
       },
+    },
+    webRequest: {
+      onBeforeRequest(
+        handler: NonNullable<InstalledHandlers["request"]>,
+      ) {
+        handlers.request = handler;
+      },
+    },
+    setUserAgent(value: string) {
+      handlers.userAgent = value;
     },
     setPermissionRequestHandler(
       handler: NonNullable<InstalledHandlers["permissionRequest"]>,
@@ -81,6 +96,10 @@ test("the game session installs its protocol and refuses repeat installation", (
   const target = fixture();
   installGameSession(target.session, target.windows, async () => new Response());
   assert.equal(typeof target.handlers.protocol, "function");
+  assert.equal(
+    target.handlers.userAgent,
+    "gwonmac (Guild Wars interoperability client)",
+  );
   assert.throws(
     () => installGameSession(
       target.session,
@@ -139,4 +158,21 @@ test("permission requests and downloads fail closed", () => {
     },
   });
   assert.equal(prevented, true);
+});
+
+test("session navigation permits only the canonical game main frame", () => {
+  const target = fixture();
+  installGameSession(target.session, target.windows, async () => new Response());
+  const request = target.handlers.request!;
+  const cancelled: boolean[] = [];
+  const check = (resourceType: string, url: string) => {
+    request({ resourceType, url }, (response) => {
+      cancelled.push(response.cancel ?? false);
+    });
+  };
+
+  check("mainFrame", "gw://app/");
+  check("mainFrame", "https://example.invalid/");
+  check("xhr", "https://example.invalid/");
+  assert.deepEqual(cancelled, [false, true, false]);
 });

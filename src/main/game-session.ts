@@ -1,4 +1,5 @@
 import type { Session } from "electron";
+import { UA } from "./core/access-key.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import type { WindowRegistry } from "./window-registry.js";
 
@@ -13,7 +14,15 @@ export function installGameSession(
     throw new Error("game session already installed");
   }
   installedSessions.add(target);
+  target.setUserAgent(UA);
   target.protocol.handle("gw", handleRequest);
+  target.webRequest.onBeforeRequest((details, callback) => {
+    callback({
+      cancel:
+        details.resourceType === "mainFrame"
+        && !isCanonicalRendererUrl(details.url),
+    });
+  });
 
   const mayLockPointer = (
     webContents: Electron.WebContents | null,
