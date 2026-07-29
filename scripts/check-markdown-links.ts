@@ -2,8 +2,9 @@
 //
 // Scope is deliberately narrow: local file targets only. External URLs are not
 // fetched, and in-document anchors are not resolved. Only files git knows about
-// are read, so gitignored scratch (plans/, build output, worktrees) is skipped
-// without maintaining a second ignore list.
+// are read, so gitignored scratch and build output are skipped without
+// maintaining a second ignore list. Tracked plans are durable documentation
+// and therefore belong in the scan.
 
 import { execFileSync } from "node:child_process";
 import {

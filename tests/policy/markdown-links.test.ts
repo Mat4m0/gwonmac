@@ -217,14 +217,20 @@ test("code blocks, code spans, URLs and bare anchors are not treated as links", 
   assert.deepEqual(targets, ["yes.md"]);
 });
 
-test("the file list covers tracked docs and excludes gitignored scratch", () => {
+test("the file list covers tracked plans and excludes gitignored scratch", () => {
   const files = listMarkdownFiles(root);
 
   assert.ok(files.includes("README.md"));
   assert.ok(files.includes("PRODUCT.md"));
   assert.ok(files.includes("docs/internals.md"));
+  assert.ok(files.includes("plans/multi-os/spec.md"));
+  assert.ok(files.includes("plans/multi-os/plan.md"));
   assert.ok(
-    files.every((file) => !file.startsWith("plans/") && !file.startsWith("node_modules/")),
+    files.every(
+      (file) =>
+        !file.startsWith(".worktrees/") &&
+        !file.startsWith("node_modules/"),
+    ),
     "gitignored paths must not be scanned",
   );
 });
