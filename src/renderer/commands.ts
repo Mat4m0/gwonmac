@@ -17,6 +17,32 @@
     window.dispatchEvent(new window.CustomEvent(name));
   };
 
+  async function flushFilesystem() {
+    const runtime = globalThis as typeof globalThis & {
+      FS?: {
+        syncfs(
+          populate: boolean,
+          callback: (error?: unknown) => void,
+        ): void;
+      };
+    };
+    // A close can arrive while the launcher is still in front of the game.
+    // Before Emscripten publishes FS there is no mounted IDBFS and therefore
+    // nothing profile-owned to flush.
+    if (!runtime.FS) return;
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error('game filesystem flush timed out')),
+        30_000,
+      );
+      runtime.FS!.syncfs(false, (error) => {
+        window.clearTimeout(timeout);
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+
   async function capture(command: CaptureCommand) {
     const diagnostics = window.gwDiagnostics;
     if (!diagnostics) throw new Error('renderer diagnostics are unavailable');
@@ -43,6 +69,9 @@
     switch (command.type) {
       case 'input.reset':
         dispatch('gw:input-reset');
+        break;
+      case 'filesystem.flush':
+        await flushFilesystem();
         break;
       case 'settings.open':
         dispatch('gw:settings');

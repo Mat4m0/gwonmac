@@ -41,6 +41,7 @@ import type { ProfileId } from "./core/profiles.js";
 // on every launch. Focus-dependent specs leave the flag unset.
 const BACKGROUND_LAUNCH =
   !app.isPackaged && process.env.GW_BACKGROUND_LAUNCH === "1";
+const approvedGameCloses = new WeakSet<BrowserWindow>();
 
 const BUG_REPORT_URL =
   `${EXTERNAL_URLS.github}/issues/new?template=bug-report.yml`;
@@ -59,6 +60,7 @@ export interface WindowHost {
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
+  closeGame: (win: BrowserWindow) => Promise<void>;
   windowState: WindowStateOwner;
   profileId: ProfileId;
   gameSession: Session;
@@ -228,7 +230,9 @@ export function createMainWindow(
           })
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
+            host.windowState.detach(win);
             createMainWindow(host, windows);
+            approvedGameCloses.add(win);
             win.destroy();
             logEvent({ k: "renderer.recovered" });
           });
@@ -241,16 +245,30 @@ export function createMainWindow(
     }
   });
 
+  let closePending = false;
   win.on("close", (event) => {
-    if (isQuitting()) return;
+    if (isQuitting() || approvedGameCloses.has(win)) return;
     event.preventDefault();
+    if (closePending) return;
+    closePending = true;
     logEvent({ k: "window.closeRequested" });
-    app.quit();
+    void host.closeGame(win).catch(() => {
+      closePending = false;
+      dialog.showErrorBox(
+        "Guild Wars could not close safely",
+        "The saved game files could not be flushed. Try closing the window again.",
+      );
+    });
   });
 
   installMenu(host, windows);
   void win.loadURL(RENDERER_URL);
   return win;
+}
+
+export function destroyGameWindow(win: BrowserWindow): void {
+  approvedGameCloses.add(win);
+  win.destroy();
 }
 
 export async function resetGameInput(win: BrowserWindow): Promise<void> {

@@ -417,6 +417,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
+  | { type: "filesystem.flush" }
   | { type: "settings.open" }
   | { type: "diagnostics.toggle" }
   | {

@@ -83,6 +83,7 @@ function harness(argv: string[]) {
   // The renderer half: the real router, over the real preload object.
   const dispatched: string[] = [];
   const capture: CaptureCall[] = [];
+  const filesystemSyncs: boolean[] = [];
   let releaseFlush = (): void => {};
   const flushed = new Promise<void>((resolve) => {
     releaseFlush = resolve;
@@ -114,8 +115,19 @@ function harness(argv: string[]) {
     dispatchEvent(event: { type: string }) {
       dispatched.push(event.type);
     },
+    setTimeout,
+    clearTimeout,
   };
-  const context: Record<string, unknown> = { console, window };
+  const context: Record<string, unknown> = {
+    console,
+    window,
+    FS: {
+      syncfs(populate: boolean, callback: () => void) {
+        filesystemSyncs.push(populate);
+        callback();
+      },
+    },
+  };
   context.globalThis = context;
   vm.runInNewContext(routerSource, context);
 
@@ -136,6 +148,7 @@ function harness(argv: string[]) {
     dispatched,
     acknowledgements,
     releaseFlush,
+    filesystemSyncs,
     window,
   };
 }
@@ -198,6 +211,14 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [2, "completed"],
     [3, "completed"],
   ]);
+});
+
+test("profile close explicitly flushes the mounted game filesystem", async () => {
+  const fixture = harness(ARGV);
+  fixture.deliver(9, { type: "filesystem.flush" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.filesystemSyncs, [false]);
+  assert.deepEqual(fixture.acknowledgements(), [[9, "completed"]]);
 });
 
 test("a capture level crosses as a number, not as interpolated source", async () => {

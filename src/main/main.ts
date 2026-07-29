@@ -4,6 +4,7 @@ import {
   powerMonitor,
   session,
   shell,
+  type BrowserWindow,
   type Session,
 } from "electron";
 import { mkdir, rm, stat } from "node:fs/promises";
@@ -52,6 +53,7 @@ import {
   enhancementSelectionFor,
 } from "./enhancement-policy.js";
 import {
+  controlProtocolHandler,
   gameProtocolHandler,
   registerGwScheme,
   setProtocolDeps,
@@ -59,6 +61,7 @@ import {
 import { installGameSession } from "./game-session.js";
 import {
   createMainWindow,
+  destroyGameWindow,
   exportProblemReport,
   RENDERER_URL,
   resetGameInput,
@@ -70,6 +73,14 @@ import { AppRuntime, ownedGameWindow } from "./app-runtime.js";
 import { bootstrapProfiles } from "./profile-bootstrap.js";
 import type { ProfileRecord } from "./core/profiles.js";
 import { WindowStateOwner } from "./window-state-owner.js";
+import { sendRendererCommand } from "./renderer-commands.js";
+import { installControlSession } from "./control-session.js";
+import {
+  createControlWindow,
+  notifyProfilesChanged,
+} from "./control-window.js";
+import { ProfileManager } from "./profile-manager.js";
+import { registerControlIpcHandlers } from "./control-ipc.js";
 
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
@@ -98,7 +109,8 @@ const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
 
 function revealMainWindow(): void {
-  const win = ownedGameWindow(activeRuntime);
+  const win =
+    activeRuntime?.windows.controlWindow() ?? ownedGameWindow(activeRuntime);
   if (!win || win.isDestroyed()) {
     secondInstanceRequested = true;
     return;
@@ -226,6 +238,7 @@ function buildWindowHost(
   gameSession: Session,
   windowState: WindowStateOwner,
   enhancementSelection: EnhancementSelection,
+  closeGame: (win: BrowserWindow) => Promise<void>,
 ): WindowHost {
   const { client, sockets, windows } = runtime;
   return {
@@ -248,6 +261,7 @@ function buildWindowHost(
     prepareRendererRecovery: async () => {
       await client.recoverRendererCrash();
     },
+    closeGame,
     windowState,
     profileId: profile.id,
     gameSession,
@@ -279,9 +293,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     profilesRoot: paths.profiles,
     trashItem: (target) => shell.trashItem(target),
   });
-  const profile = profileBootstrap.profile;
-  const gameSession = session.fromPath(profile.paths.browser, { cache: true });
-  await applyPendingGameStorageClear(profile, gameSession);
   const obsoleteCacheError = await discardObsoleteEnhancementCache(
     appPaths(),
     rm,
@@ -293,8 +304,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       code: errorCode(obsoleteCacheError),
     });
   }
-  await clearBrowserCookies(gameSession, "startup");
-  await clearBrowserNetworkCache(gameSession);
   logEvent({ k: "electron.ready" });
   const settings = await loadSettings(appPaths().settings, async () => {
     logEvent({ k: "settings.corruptRecovered" });
@@ -307,8 +316,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   });
   const enhancementSelection = enhancementSelectionFor(settings);
-  const windowState = new WindowStateOwner(profile.paths.windowState);
-  await windowState.prepare();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =
     !expectedUserData ||
@@ -331,14 +338,28 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const sockets = buildSocketManager(windows);
   socketOwner.current = sockets;
+  interface LoadedProfile {
+    readonly record: ProfileRecord;
+    readonly gameSession: Session;
+    readonly windowState: WindowStateOwner;
+  }
+  const loadedProfiles = new Map<ProfileRecord["id"], LoadedProfile>();
   const runtime = new AppRuntime(
     clientRuntime,
     sockets,
     windows,
     paths.settings,
     {
-      flushWindowState: () => windowState.flush(),
-      clearBrowserCookies: () => clearBrowserCookies(gameSession, "quit"),
+      flushWindowState: async () => {
+        for (const loaded of loadedProfiles.values()) {
+          await loaded.windowState.flush();
+        }
+      },
+      clearBrowserCookies: async () => {
+        for (const loaded of loadedProfiles.values()) {
+          await clearBrowserCookies(loaded.gameSession, "quit");
+        }
+      },
       stopDiagnostics,
       updateLongRunningTaskFeedback,
     },
@@ -353,25 +374,115 @@ if (primaryInstance) void app.whenReady().then(async () => {
   setProtocolDeps({
     getActiveClient: () => clientRuntime.active,
   });
-  installGameSession(gameSession, windows, gameProtocolHandler);
+
+  const getProfile = async (
+    id: ProfileRecord["id"],
+  ): Promise<ProfileRecord> => {
+    const found = (await profileBootstrap.store.scan()).profiles.find(
+      (candidate) => candidate.id === id,
+    );
+    if (!found) throw new Error("profile no longer exists");
+    return found;
+  };
+  const loadProfile = async (
+    profile: ProfileRecord,
+  ): Promise<LoadedProfile> => {
+    const existing = loadedProfiles.get(profile.id);
+    if (existing) return existing;
+    const gameSession = session.fromPath(profile.paths.browser, { cache: true });
+    await applyPendingGameStorageClear(profile, gameSession);
+    await clearBrowserCookies(gameSession, "startup");
+    await clearBrowserNetworkCache(gameSession);
+    installGameSession(gameSession, windows, gameProtocolHandler);
+    const windowState = new WindowStateOwner(profile.paths.windowState);
+    await windowState.prepare();
+    const loaded = Object.freeze({ record: profile, gameSession, windowState });
+    loadedProfiles.set(profile.id, loaded);
+    return loaded;
+  };
+  const closeGame = async (win: BrowserWindow): Promise<void> => {
+    const context = windows.contextForWindow(win);
+    if (context?.kind !== "game") return;
+    const loaded = loadedProfiles.get(context.profileId);
+    if (!loaded) throw new Error("profile runtime is unavailable");
+    if (!win.webContents.isCrashed()) {
+      const outcome = await sendRendererCommand(win, {
+        type: "filesystem.flush",
+      });
+      if (outcome !== "completed") {
+        throw new Error("game filesystem flush failed");
+      }
+    }
+    sockets.closeAll(win.webContents.id);
+    await loaded.windowState.flush();
+    await loaded.gameSession.flushStorageData();
+    loaded.windowState.detach(win);
+    destroyGameWindow(win);
+  };
+  const launchProfile = async (profile: ProfileRecord): Promise<void> => {
+    const loaded = await loadProfile(profile);
+    createMainWindow(
+      buildWindowHost(
+        runtime,
+        loaded.record,
+        loaded.gameSession,
+        loaded.windowState,
+        enhancementSelection,
+        closeGame,
+      ),
+      windows,
+    );
+    logEvent({ k: "window.created" });
+  };
+  const controlSession = session.fromPartition("gw-control", { cache: false });
+  installControlSession(controlSession, controlProtocolHandler);
   logEvent({ k: "protocol.installed" });
+
+  const profiles = new ProfileManager({
+    store: profileBootstrap.store,
+    windows,
+    launch: launchProfile,
+    close: closeGame,
+    confirmSwitch: async () => {
+      const control = windows.controlWindow();
+      if (!control) return false;
+      const { response } = await dialog.showMessageBox(control, {
+        type: "warning",
+        buttons: ["Close and Launch", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "Switch profiles?",
+        detail:
+          "The running Guild Wars client will close after its saved files finish writing.",
+      });
+      return response === 0;
+    },
+    restart: () => {
+      app.relaunch();
+      app.quit();
+    },
+    notify: () => notifyProfilesChanged(windows),
+  });
 
   registerIpcHandlers({
     windows,
     sockets,
-    getProfile: async (id) => {
-      const found = (await profileBootstrap.store.scan()).profiles.find(
-        (candidate) => candidate.id === id,
-      );
-      if (!found) throw new Error("profile no longer exists");
-      return found;
-    },
+    getProfile,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
     getSettings: () => runtime.getSettings(),
     updateSettings: (patch) => runtime.updateSettings(patch),
     resetSettings: () => runtime.resetSettings(),
-    resetWindowState: (win) => windowState.reset(win),
+    resetWindowState: async (win) => {
+      const context = windows.contextForWindow(win);
+      if (context?.kind !== "game") {
+        throw new Error("profile runtime is unavailable");
+      }
+      const loaded = loadedProfiles.get(context.profileId);
+      if (!loaded) throw new Error("profile runtime is unavailable");
+      await loaded.windowState.reset(win);
+    },
+    closeGame,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
@@ -387,23 +498,23 @@ if (primaryInstance) void app.whenReady().then(async () => {
       healthToken: clientRuntime.healthToken,
     }),
   });
+  registerControlIpcHandlers({ windows, profiles });
 
   onAppQuit(async () => {
     await runtime.dispose();
     if (activeRuntime === runtime) activeRuntime = null;
   });
 
-  const win = createMainWindow(
-    buildWindowHost(
-      runtime,
-      profile,
-      gameSession,
-      windowState,
-      enhancementSelection,
-    ),
-    windows,
-  );
-  if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
+  const directGame =
+    !app.isPackaged && process.env.GW_TEST_DIRECT_GAME === "1";
+  const initialWindow = directGame
+    ? await launchProfile(profileBootstrap.profile).then(
+        () => windows.gameWindow(),
+      )
+    : createControlWindow(controlSession, windows);
+  if (secondInstanceRequested) {
+    initialWindow?.once("ready-to-show", revealMainWindow);
+  }
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
@@ -437,7 +548,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       }
     });
   }
-  logEvent({ k: "window.created" });
   if (profileMatches) {
     void clientRuntime.requestUpdate();
   } else {
@@ -446,17 +556,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (!windows.gameWindow()) {
-      createMainWindow(
-        buildWindowHost(
-          runtime,
-          profile,
-          gameSession,
-          windowState,
-          enhancementSelection,
-        ),
-        windows,
-      );
+    if (directGame) {
+      if (!windows.gameWindow()) {
+        void profiles.launch(profileBootstrap.profile.id);
+      }
+    } else if (!windows.controlWindow()) {
+      createControlWindow(controlSession, windows);
     }
   });
   app.on("child-process-gone", (_event, details) => {

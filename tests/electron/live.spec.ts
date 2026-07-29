@@ -70,7 +70,7 @@ const launchEnv = (): Record<string, string> => {
       env[name] = value;
     }
   }
-  return env;
+  return { ...env, GW_TEST_DIRECT_GAME: "1" };
 };
 
 test.describe("live client", () => {

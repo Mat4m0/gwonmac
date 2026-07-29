@@ -95,6 +95,15 @@ export class WindowStateOwner {
     });
   }
 
+  detach(win: BrowserWindow): void {
+    if (this.window !== win) return;
+    this.window = null;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
+
   async flush(): Promise<void> {
     if (this.timer) {
       clearTimeout(this.timer);

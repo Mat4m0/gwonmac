@@ -31,6 +31,7 @@ test.describe("sandbox boundary", () => {
         search: "",
         // The game cursor ships on, so a default launch asks for it here.
         init: {
+          rendererRole: "game",
           desktopPlatform: desktopPlatformFor(process.platform),
           enhancementAutomation: false,
           enhancementSelection: {
@@ -205,6 +206,7 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
+        rendererRole: "game",
         desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: true,
         enhancementSelection: {
@@ -228,6 +230,7 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
+        rendererRole: "game",
         desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {

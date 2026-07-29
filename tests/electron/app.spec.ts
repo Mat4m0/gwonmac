@@ -73,7 +73,7 @@ const launchEnv = (
       inherited[name] = value;
     }
   }
-  return { ...inherited, ...overrides };
+  return { ...inherited, GW_TEST_DIRECT_GAME: "1", ...overrides };
 };
 
 /**

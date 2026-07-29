@@ -47,6 +47,7 @@ export async function launchOfflineAt(
   }
   Object.assign(env, {
     GW_OFFLINE_SHELL: "1",
+    GW_TEST_DIRECT_GAME: "1",
     // Launch without taking keyboard focus. Specs that assert on real OS focus
     // (document.hasFocus, pointer lock, fullscreen) pass GW_BACKGROUND_LAUNCH: "0".
     GW_BACKGROUND_LAUNCH: "1",

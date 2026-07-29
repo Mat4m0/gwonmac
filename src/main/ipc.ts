@@ -73,6 +73,7 @@ export interface IpcContext {
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
   resetWindowState: (win: BrowserWindow) => Promise<void>;
+  closeGame: (win: BrowserWindow) => Promise<void>;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -679,9 +680,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       await shell.openExternal(EXTERNAL_URLS[kind]);
     }),
 
-    appRequestQuit: channel(nothing, () => {
-      app.quit();
-    }),
+    appRequestQuit: channel(nothing, (win) => ctx.closeGame(win)),
 
     clientRetry: channel(nothing, () => ctx.retryClient()),
 
