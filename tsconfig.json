@@ -25,5 +25,5 @@
   // was invisible while the renderer was JavaScript, because this project sets
   // no `allowJs` and so could not read it; the first renderer `.ts` made it a
   // second compilation of the same files under a lib that has no `Document`.
-  "exclude": ["node_modules", "out", "src/renderer"]
+  "exclude": ["node_modules", "out", "src/renderer", "src/control"]
 }

@@ -67,7 +67,7 @@ export function assertNoDeveloperPackageFiles(inventory: PackageInventory): void
 
   for (const file of inventory) {
     if (
-      !/^\/(?:build\/(?:main|shared|renderer|preload)\/|node_modules\/@zip\.js\/zip\.js\/(?:index\.js|LICENSE|package\.json|lib\/)|package\.json$)/u.test(
+      !/^\/(?:build\/(?:main|shared|renderer|control|preload)\/|node_modules\/@zip\.js\/zip\.js\/(?:index\.js|LICENSE|package\.json|lib\/)|package\.json$)/u.test(
         file,
       )
     ) {

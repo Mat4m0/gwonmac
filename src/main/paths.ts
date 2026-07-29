@@ -15,6 +15,10 @@ export function rendererRoot(): string {
   return path.join(app.getAppPath(), "build", "renderer");
 }
 
+export function controlRoot(): string {
+  return path.join(app.getAppPath(), "build", "control");
+}
+
 export function preloadPath(): string {
   // Sandboxed preload must be CommonJS (.cjs); ESM graphs are not executed.
   return path.join(app.getAppPath(), "build", "preload", "preload.cjs");

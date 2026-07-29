@@ -6,12 +6,12 @@ const TRUSTED_PATHS = new Set(["/", "/index.html"]);
  * `RENDERER_INIT_ARGUMENT`, so a security boundary no longer has to know what a
  * cursor preference is.
  */
-export function isCanonicalRendererUrl(raw: string): boolean {
+function isCanonicalRendererUrlFor(raw: string, hostname: string): boolean {
   try {
     const url = new URL(raw);
     return (
       url.protocol === "gw:"
-      && url.hostname === "app"
+      && url.hostname === hostname
       && !url.port
       && !url.username
       && !url.password
@@ -22,4 +22,12 @@ export function isCanonicalRendererUrl(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function isCanonicalRendererUrl(raw: string): boolean {
+  return isCanonicalRendererUrlFor(raw, "app");
+}
+
+export function isCanonicalControlRendererUrl(raw: string): boolean {
+  return isCanonicalRendererUrlFor(raw, "control");
 }

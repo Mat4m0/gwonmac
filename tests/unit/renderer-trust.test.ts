@@ -1,11 +1,28 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isCanonicalRendererUrl } from "../../src/main/core/renderer-trust.js";
+import {
+  isCanonicalControlRendererUrl,
+  isCanonicalRendererUrl,
+} from "../../src/main/core/renderer-trust.js";
 
 describe("canonical renderer URL", () => {
   it("allows the launcher document and nothing else", () => {
     for (const url of ["gw://app/", "gw://app/index.html"]) {
       assert.equal(isCanonicalRendererUrl(url), true, url);
+    }
+  });
+
+  it("keeps the control document on its own exact origin", () => {
+    for (const url of ["gw://control/", "gw://control/index.html"]) {
+      assert.equal(isCanonicalControlRendererUrl(url), true, url);
+      assert.equal(isCanonicalRendererUrl(url), false, url);
+    }
+    for (const url of [
+      "gw://control/?profile=a",
+      "gw://control/control.js",
+      "gw://app/",
+    ]) {
+      assert.equal(isCanonicalControlRendererUrl(url), false, url);
     }
   });
 

@@ -28,9 +28,10 @@ const ART_CREDIT =
 
 const src = path.resolve("src/renderer");
 // No rmSync: scripts/build.mjs removes build/ once, at the start, and this
-// script now runs before the renderer is compiled into the same directory.
+// script now runs before TypeScript emits into the same directories.
 const dest = path.resolve("build/renderer");
 copyAssets(src, dest);
+copyAssets(path.resolve("src/control"), path.resolve("build/control"));
 
 const imagesDir = path.join(dest, "images");
 if (fs.existsSync(imagesDir)) {

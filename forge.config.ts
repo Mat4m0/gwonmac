@@ -74,6 +74,8 @@ const config: ForgeConfig = {
       }
       if (p === "/build/renderer") return false;
       if (p.startsWith("/build/renderer/")) return p.endsWith(".d.ts");
+      if (p === "/build/control") return false;
+      if (p.startsWith("/build/control/")) return p.endsWith(".d.ts");
       if (p === "/build/preload" || p === "/build/preload/preload.cjs") return false;
       if (
         p === "/node_modules" ||

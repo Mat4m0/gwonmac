@@ -43,6 +43,9 @@ function rendererCheckout(): string {
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/bg1.webp", "webp");
+  write("src/control/index.html", "<!doctype html><title>Profiles</title>\n");
+  write("src/control/control.css", "body {}\n");
+  write("src/control/control.ts", "export {};\n");
   return root;
 }
 
@@ -74,6 +77,10 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/fonts/COPYING-QUALITYPE"), "utf8"),
       "licence",
+    );
+    assert.equal(
+      readFileSync(path.join(root, "build/control/index.html"), "utf8"),
+      "<!doctype html><title>Profiles</title>\n",
     );
     assert.deepEqual(
       JSON.parse(
