@@ -91,6 +91,14 @@ jobs:
       - name: Test Electron
         if: matrix.platform != 'linux'
         run: pnpm test:electron
+      - name: Upload native test failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-test-results-${{ matrix.targetId }}
+          path: test-results/**
+          if-no-files-found: warn
+          retention-days: 3
       - run: pnpm test:release
       - run: pnpm package
       - name: Test unpacked package on Linux
