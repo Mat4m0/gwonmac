@@ -58,6 +58,16 @@ test.describe("client compatibility", () => {
           canvas.height = 32;
           const module: ArenaNetGraphicsModule = { canvas };
           let frames = 0;
+          let presentations = 0;
+          let bitmapsClosed = 0;
+          canvas.getContext = ((contextId: string) =>
+            contextId === "bitmaprenderer"
+              ? {
+                  transferFromImageBitmap: () => {
+                    presentations += 1;
+                  },
+                }
+              : null) as typeof canvas.getContext;
           // Every member is present here, so none of them is optional: the spec
           // calls all four back after `installGraphics` has replaced them.
           const env: ArenaNetEglImports & {
@@ -68,10 +78,7 @@ test.describe("client compatibility", () => {
               height: number,
             ) => unknown;
           } = {
-            eglCreateContext: () => {
-              module.canvas.getContext("webgl");
-              return 1;
-            },
+            eglCreateContext: () => 1,
             eglSwapBuffers: () => 1,
             emscripten_get_device_pixel_ratio: () => 1,
             emscripten_set_canvas_element_size: () => 0,
@@ -86,14 +93,22 @@ test.describe("client compatibility", () => {
             log: () => undefined,
           });
           env.eglCreateContext();
-          env.emscripten_set_canvas_element_size(null, 64, 64);
-          env.eglSwapBuffers();
-          env.eglSwapBuffers();
           if (!canvas.offscreen) {
             throw new Error("installGraphics attached no offscreen canvas");
           }
+          canvas.offscreen.transferToImageBitmap = () =>
+            ({
+              close: () => {
+                bitmapsClosed += 1;
+              },
+            }) as ImageBitmap;
+          env.emscripten_set_canvas_element_size(null, 64, 64);
+          env.eglSwapBuffers();
+          env.eglSwapBuffers();
           return {
             frames,
+            presentations,
+            bitmapsClosed,
             density: env.emscripten_get_device_pixel_ratio(),
             visibleRestored: module.canvas === canvas,
             offscreen: [canvas.offscreen.width, canvas.offscreen.height],
@@ -101,6 +116,8 @@ test.describe("client compatibility", () => {
         }),
       ).toEqual({
         frames: 1,
+        presentations: 2,
+        bitmapsClosed: 2,
         density: 2,
         visibleRestored: true,
         offscreen: [64, 64],
