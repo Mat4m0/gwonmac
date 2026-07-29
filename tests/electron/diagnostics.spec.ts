@@ -169,6 +169,62 @@ test.describe("diagnostics", () => {
     }
   });
 
+  test("redacts OAuth redirect tokens from a Level 2 export", async () => {
+    const fixture = await launchOffline("gw-trace-oauth-redaction-");
+    const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-oauth-trace-"));
+    const fragmentSecret = "FRAGMENTSECRET123";
+    const querySecret = "QUERYSECRET456";
+    try {
+      const { app, page } = fixture;
+      await clickMenu(app, "start-chromium-trace");
+      await expect(page.locator("#capture-status")).toBeVisible();
+      await page.evaluate(
+        ({ fragment, query }) => {
+          performance.mark(
+            `https://www.guildwars.test/app/live/auth#access_token=${fragment}&state=nonce`,
+          );
+          performance.mark(
+            `https://www.guildwars.test/app/live/auth?access_token=${query}&state=nonce`,
+          );
+        },
+        { fragment: fragmentSecret, query: querySecret },
+      );
+      await clickMenu(app, "stop-capture");
+      await expect(page.locator("#capture-status")).toBeHidden();
+
+      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      await app.evaluate(async ({ app: electronApp }, args) => {
+        const load = process
+          .getBuiltinModule("node:module")
+          .createRequire(args.modulePath);
+        const diagnostics = load(args.modulePath);
+        const { DEFAULT_SETTINGS } = load(args.contractsPath);
+        await diagnostics.exportDiagnosticsZip(args.target, {
+          appVersion: electronApp.getVersion(),
+          electronVersions: { electron: process.versions.electron },
+          settings: DEFAULT_SETTINGS,
+        });
+      }, {
+        modulePath: path.join(root, "build/main/diagnostics.js"),
+        contractsPath: path.join(root, "build/shared/contracts.js"),
+        target,
+      });
+
+      const extracted = path.join(diagnosticRoot, "extracted");
+      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      const trace = await readFile(
+        path.join(extracted, "chromium-trace.json"),
+        "utf8",
+      );
+      expect(trace).not.toContain(fragmentSecret);
+      expect(trace).not.toContain(querySecret);
+      expect(() => JSON.parse(trace)).not.toThrow();
+    } finally {
+      await closeOffline(fixture);
+      await rm(diagnosticRoot, { recursive: true, force: true });
+    }
+  });
+
   test("downgrades a failed Chromium stop to an exportable Level 1 capture", async () => {
     const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));

@@ -81,6 +81,8 @@ import {
 } from "./control-window.js";
 import { ProfileManager } from "./profile-manager.js";
 import { registerControlIpcHandlers } from "./control-ipc.js";
+import { STEAM_OAUTH } from "./core/steam-oauth.js";
+import { acquireSteamToken } from "./steam-acquire.js";
 
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
@@ -541,6 +543,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
       compatibility: clientRuntime.compatibility,
       healthToken: clientRuntime.healthToken,
     }),
+    acquireSteamToken: (parent, record) =>
+      acquireSteamToken(STEAM_OAUTH, { parent, record }),
   });
   registerControlIpcHandlers({
     windows,

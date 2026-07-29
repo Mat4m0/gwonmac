@@ -67,10 +67,12 @@ not only happy paths.
 
 - `Module` must be declared with `var`; generated glue redeclares it.
 - `Gw.jspi.js` asks for `Gw.wasm`; `locateFile` must select `Gw.jspi.wasm`.
-- Nine host calls are awaited and must return promises:
+- Ten host calls are awaited and must return promises:
   `image.cacheAsync`, `dns.resolve`, the three `secureStorage` methods,
-  `adProvider.showInterstitial`, `ageSignals.check`, `shop.initialize`, and
-  `shop.inAppPurchase`.
+  `login.getAuthToken`, `adProvider.showInterstitial`, `ageSignals.check`,
+  `shop.initialize`, and `shop.inAppPurchase`. The client's wait on
+  `getAuthToken` is long enough to cover a whole Steam sign-in, so that call may
+  open a window and keep the client waiting on the player.
 - `image.fileSize` is synchronous, so snapshot metadata loads before glue.
 - Renderer `preRun` owns the single `app:` IDBFS mount. Restore it, create both
   template directories, and change into it before releasing the run dependency;
@@ -106,14 +108,40 @@ not only happy paths.
   is atomic and mode `0600` on POSIX; credentials never enter logs,
   diagnostics, browser storage, profile metadata, or command lines. Reads
   never replace ciphertext after provider, parse, decrypt, or I/O failure.
+- The profile-owned Steam login token is a second secret with the same native
+  provider policy and its own validator and error codes. `steam-session.bin`
+  holds `{ token, expiry }` beneath that profile and is the token's sole
+  persistent home: no environment variable seeds it in any build. The token
+  never enters logs, diagnostics, browser storage, profile metadata, or
+  command lines.
 - Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
   and clear browser cookies at startup and quit. The switch prevents OS
-  prompts but gives saved login weaker same-user protection than Keychain.
+  prompts but gives saved login and Steam tokens weaker same-user protection
+  than Keychain.
 - Windows saved login uses asynchronous user-scoped OS safe storage. Linux
   accepts only an inspected Secret Service/KWallet backend and refuses
   `basic_text`, `unknown`, locked, or unavailable storage. macOS and Windows
   use the asynchronous safe-storage contract; Linux alone uses the inspected
   synchronous API behind the promise-based application boundary.
+- Steam sign-in renders in a window the main process owns, never in the game
+  renderer: its own in-memory session partition destroyed with the window,
+  no preload and no Node, deny-by-default permissions and downloads, and
+  top-level navigation confined to a fail-closed allowlist derived from the
+  OAuth config. Subframes and resources remain subject to Chromium's sandbox,
+  origin isolation, disabled Node/preload, permission denial, and popup/download
+  denial; they cannot complete the top-level redirect. That redirect is
+  intercepted before it is fetched with its `state` nonce checked. gwonmac logs
+  in an existing Steam↔Guild Wars link and never creates one.
+- That window is `modal` on its parent, and must stay so: the game window can be
+  restored to fullscreen, and a non-modal parented child gets promoted into that
+  fullscreen space and sized to the whole display. A macOS sheet draws no title
+  bar, so **the sign-in origin is not visible to the player** — the top-level
+  allowlist and the sandbox controls above confine the window, not the player's
+  inspection. Do not write docs or UI that tell a player to verify the origin.
+  `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
+  pins the presentation.
+- The Steam token is longer-lived and higher-value than the password it
+  replaces.
 - The app makes no network request the user did not ask for. `autoCheckUpdates`
   (default `false`) governs **every** automatic release check without
   exception, including the one on an unrecognised client build; with it off, a

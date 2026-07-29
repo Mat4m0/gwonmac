@@ -203,7 +203,9 @@ Awaited host calls always return promises:
 image.cacheAsync
 dns.resolve
 secureStorage.getCredentials/storeCredentials/clearCredentials
+login.getAuthToken
 adProvider.showInterstitial
+ageSignals.check
 shop.initialize/inAppPurchase
 ```
 
@@ -236,11 +238,92 @@ displaying provider error text; a later explicit save is the only ordinary
 replacement path.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
-No federated provider is advertised, allowing the client’s username/password
-flow to own the UI. Properly guarded browser, analytics, age-signal, and
-federated-auth namespaces are absent. The two namespaces with defective
-absence guards (`adProvider` and `shop`) are narrow plain objects whose
-unavailable operations reject with the promise shapes expected by the client.
+Steam is advertised as a federated provider; Apple and Google are not. The
+client probes each one while it builds its login screen, and answering yes for
+Steam is what makes it render a Steam button beside the unchanged ArenaNet
+email/password form. Properly guarded browser, analytics, and age-signal
+namespaces remain absent. The two namespaces with defective absence guards
+(`adProvider` and `shop`) are narrow plain objects whose unavailable operations
+reject with the promise shapes expected by the client.
+
+### Steam login
+
+The Steam credential is a **Steam OAuth2 access token**. There is no ArenaNet
+token-issuance endpoint: the official client (Guild Wars Reforged, a Capacitor
+app using Ionic Auth Connect) runs a standard OAuth2 implicit flow against
+Steam, and the token Steam returns is handed straight to the game client, which
+base64-encodes it into `<PasswordToken>` for `webgate/users/login.xml`. The
+account service validates it there and maps it to the linked Guild Wars account.
+`<LoginName>` on that request is the client's local profile index — `1` — not
+the SteamID, which the account service derives itself and returns as
+`<steamid>@steam`. The token is long-lived (the flow grants a year), portable
+across devices, and replayed on every login until it expires.
+
+So `login.getAuthToken` has two paths and no others. A silent launch-time probe
+may replay a stored token. An explicit request discards a readable stored token
+that already failed to get the player past the login screen and runs fresh
+acquisition. `src/main/core/steam-oauth.ts` holds the flow as
+configuration plus pure functions (authorize-URL construction, a fail-closed
+origin allowlist, redirect matching, `state` verification, token extraction), so
+all of it is unit-testable and the whole flow can be pointed at a local fixture
+server offline.
+
+Acquisition opens a `BrowserWindow` the main process owns and tears down. It has
+its own in-memory session partition shared with nothing, no preload and no Node,
+deny-by-default permission and download handlers, no popups and no webviews, and
+top-level navigation confined to the derived allowlist. Subframes and resources
+are not described by that navigation guarantee: Steam may embed third-party
+content, and Chromium governs it with the sandbox, origin isolation, disabled
+Node/preload, denied permissions, and popup/download denial. A subframe cannot
+complete the top-level redirect event. That redirect is intercepted *before it
+is fetched* — so the return URL is never requested and needs no proxy allowlist
+entry — and its exact HTTPS host, port, and path plus its `state` nonce are
+validated in one parser. The partition is cleared and the window destroyed
+however sign-in ends: success, refusal, or cancellation. Cleanup has a fixed
+deadline, after which destroying the unique in-memory partition remains the
+final bound. The window is hidden the moment an attempt settles so cleanup
+cannot present a blank page as a black application window.
+
+**The window is a modal child, and the origin is not visible in it.** `modal` is
+load-bearing: `src/main/window.ts` restores the game window to fullscreen, and a
+plain parented child is promoted into that fullscreen space and sized to the whole
+display, so sign-in fills the screen instead of appearing as a contained sheet.
+`tests/electron/steam-acquire.spec.ts` pins the modal, parented, requested-width
+presentation for that reason.
+
+The cost is that a macOS sheet draws no title bar, so the live origin
+`showOrigin()` writes — and the `page-title-updated` `preventDefault` that stops
+the page renaming it — are **not visible in the configuration that ships**. Both
+are kept because a parentless window (no game window yet) is an ordinary titled
+window where they do apply, but the player cannot verify the origin by eye during
+a normal sign-in. This is accepted rather than solved: what constrains the window
+is the top-level allowlist plus the sandbox controls, not the player's
+inspection.
+`docs/user-guide.md` says so plainly instead of asking them to check a title bar
+that is not there.
+
+The token persists in the selected profile's `steam-session.bin` as
+`{ token, expiry }`. It uses the same OS-aware provider policy as
+`credentials.bin`, a versioned envelope, atomic write, and mode `0600`, with its
+own validator so the credential store's shape rule is untouched. It is the
+token's only persistent home; **no environment variable seeds it in any
+build**. Silent resolution returns a stored unexpired token or nothing;
+explicit resolution reacquires. An expired token is discarded;
+an unreadable one is treated as absent but deliberately kept, because encryption
+can be momentarily unavailable and deleting on that would throw away a
+credential that still works. Neither failure fails the launch — both return the
+player to the client's own login screen. The client's `storeAccountData`
+storeback refreshes the stored expiry only when the value matches the token
+already held, since which value it actually passes back has never been isolated
+and persisting a session-resume token in place of the link token would overwrite
+a working credential. Sign-out clears the local copy only; the account link is
+managed on ArenaNet's surfaces.
+
+Diagnostics for all of this are outcomes: token requested (`vended` / `absent` /
+`acquired`), sign-in opened, sign-in blocked (`navigation` / `popup` /
+`download` / `webview`), sign-in result (`success` / `cancelled` / `failed` /
+`state-mismatch` / `no-token`), and the storeback outcome. The closed schema has
+no field that could carry a Steam identifier, a token, or an expiry.
 
 The renderer owns one persistent game filesystem initialization before the
 official client enters `main()`. It mounts and restores Emscripten IDBFS at
@@ -556,6 +639,19 @@ move against every twenty-fifth on an 1866px one. Both halves of that cost the
 smaller window: the released button interrupts the client's drag, and until the
 leftover delta was spent in the same task rather than the next animation frame,
 each recycle also froze the camera for a frame.
+
+That roam runs outward only. The client integrates a move whose coordinates sit
+past the far edge of the canvas, but ignores one whose client coordinates are
+negative, and resumes only once they come back — so the near side of the budget
+is bounded by the window edge rather than by the sixteen canvases. Without that
+bound a canvas flush against the window, which is how the game canvas is laid
+out, spent half a canvas of leftward travel inside the window and the remaining
+sixteen in a range the client discards: rotating right ran indefinitely while
+rotating left froze after one flick and stayed frozen, because the re-anchor
+that would have restored it sits sixteen canvases beyond where a hand ever
+drags. Bounded at the window edge, the near side recycles about every half
+canvas of travel — far more often than the far side, and the cost of keeping
+every coordinate in the range the client accepts.
 
 The client identifies a key by `KeyboardEvent.key`, so its held-key state is
 character state, not physical state. macOS makes Option a text modifier, which

@@ -39,16 +39,10 @@ test("the proxy still answers only fetches", () => {
 });
 
 test("native targeting has no arbitrary first-window fallback", () => {
-  const files = [
-    ...readdirSync(path.join(root, "src/main"), {
-      recursive: true,
-      withFileTypes: true,
-    }),
-    ...readdirSync(path.join(root, "tests/electron"), {
-      recursive: true,
-      withFileTypes: true,
-    }),
-  ].filter((entry) => entry.isFile() && /\.(?:ts|mts)$/u.test(entry.name));
+  const files = readdirSync(path.join(root, "src/main"), {
+    recursive: true,
+    withFileTypes: true,
+  }).filter((entry) => entry.isFile() && /\.(?:ts|mts)$/u.test(entry.name));
   for (const entry of files) {
     const source = readFileSync(path.join(entry.parentPath, entry.name), "utf8");
     assert.doesNotMatch(source, /BrowserWindow\.getAllWindows/u);

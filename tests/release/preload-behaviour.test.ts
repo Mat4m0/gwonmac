@@ -229,6 +229,13 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.credentialsSave,
   },
   { path: "credentials.clear", args: [], channel: IPC.credentialsClear },
+  { path: "steam.getToken", args: [true], channel: IPC.steamToken },
+  {
+    path: "steam.store",
+    args: ["0123456789abcdef0123456789abcdef", 1_800_000_000_000],
+    channel: IPC.steamStore,
+  },
+  { path: "steam.clear", args: [], channel: IPC.steamClear },
   { path: "cache.info", args: [], channel: IPC.cacheInfo },
   { path: "cache.clearAndRestart", args: [], channel: IPC.cacheClear },
   { path: "cache.downloadAll", args: [], channel: IPC.cacheDownloadAll },

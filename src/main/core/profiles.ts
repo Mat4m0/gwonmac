@@ -12,6 +12,7 @@ export interface ProfilePaths {
   readonly root: string;
   readonly document: string;
   readonly credentials: string;
+  readonly steamSession: string;
   readonly windowState: string;
   readonly browser: string;
   readonly gameStorageClearRequest: string;
@@ -89,6 +90,7 @@ export function profilePaths(
     root,
     document: path.join(root, "profile.json"),
     credentials: path.join(root, "credentials.bin"),
+    steamSession: path.join(root, "steam-session.bin"),
     windowState: path.join(root, "window-state.json"),
     browser: path.join(root, "browser"),
     gameStorageClearRequest: path.join(root, "clear-game-storage-on-start"),

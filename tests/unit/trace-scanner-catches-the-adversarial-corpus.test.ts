@@ -70,6 +70,20 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
     leaks: ["alice", "hunter2"],
   },
   {
+    what: "an OAuth token in a redirect fragment",
+    input:
+      '{"url":"https://www.guildwars.test/app/live/auth' +
+      '#access_token=FRAGMENTSECRET123&state=nonce"}',
+    leaks: ["FRAGMENTSECRET123", "nonce"],
+  },
+  {
+    what: "an OAuth token in a redirect query",
+    input:
+      '{"url":"https://www.guildwars.test/app/live/auth' +
+      '?access_token=QUERYSECRET456&state=nonce"}',
+    leaks: ["QUERYSECRET456", "nonce"],
+  },
+  {
     what: "a bearer token",
     input: "authorization header was Bearer abc.def.ghi",
     leaks: ["abc.def.ghi"],

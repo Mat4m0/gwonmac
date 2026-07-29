@@ -450,6 +450,9 @@ export const IPC = {
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
+  steamToken: "gw:steam:token",
+  steamStore: "gw:steam:store",
+  steamClear: "gw:steam:clear",
   cacheInfo: "gw:cache:info",
   cacheClear: "gw:cache:clear",
   cacheDownloadAll: "gw:cache:downloadAll",
@@ -602,6 +605,35 @@ export interface GwNativeApi {
   credentials: {
     load(): Promise<CredentialRead>;
     save(value: StoredCredentials): Promise<void>;
+    clear(): Promise<void>;
+  };
+  /**
+   * The Steam login token, which the game client redeems in `login.xml`.
+   *
+   * Deliberately a sibling of `credentials` rather than part of it: the two
+   * secrets have different shapes and different validators, and `credentials`
+   * is the one the saved-login invariant is written about.
+   *
+   * Fetched on demand and never cached in the renderer, so the token exists
+   * there only for as long as it takes to hand to the client.
+   */
+  steam: {
+    /**
+     * The token to log in with, or `null` when there is none to offer.
+     *
+     * `silent` is the client's launch-time probe: it may only read what is
+     * already stored. A non-silent request is the player having clicked the
+     * button, and is the only thing that may open a Steam sign-in window.
+     */
+    getToken(silent: boolean): Promise<string | null>;
+    /**
+     * Hand back what the account service returned. Refreshes the stored
+     * expiry only when the token matches the one already held; anything else
+     * is ignored, because overwriting a working credential with a value that
+     * cannot be replayed would cost the player their next login.
+     */
+    store(token: string, expiry: number | null): Promise<void>;
+    /** Forget the stored token. Signing out here does not unlink the account. */
     clear(): Promise<void>;
   };
   cache: {

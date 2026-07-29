@@ -162,6 +162,51 @@ prompts normally; it is never silently deleted. Leave **Remember Password** off
 if that tradeoff is not acceptable. Browser cookies are cleared at startup and
 quit.
 
+## Signing in with Steam
+
+If you bought Guild Wars on Steam you have no ArenaNet email or password, so the
+login screen also offers **Sign in with Steam** beside the email and password
+fields. Use whichever matches how you bought the game; adding Steam takes
+nothing away from the email and password route.
+
+Choosing Steam opens a separate Steam sign-in window that this application owns.
+macOS presents it as a sheet attached to the game window, and a sheet draws no
+title bar, so **there is no address bar or origin label for you to check** — you
+cannot verify by eye that the page is Steam's.
+
+What protects you instead is that the sheet's top-level page may only navigate
+to Steam- and Valve-owned addresses; a top-level navigation anywhere else is
+blocked outright. Like an ordinary browser, Steam may embed resources or frames
+from other providers. They remain inside Chromium's sandbox with no Node,
+preload, application permissions, popups, or downloads, and cannot complete the
+top-level sign-in redirect. The window runs in a throwaway browser session of
+its own with no access to the game or to this application, and the sign-in
+result is read by the application itself rather than by loading whatever page
+the redirect points at. If the sheet ever renders empty or broken, close it and
+use the email and password fields instead of typing your Steam password into it.
+
+Once you finish signing in, the window closes by itself and the game continues to
+character select. Everything that window stored while it was open, cookies
+included, is destroyed with it.
+
+You only do this once per machine. The sign-in is remembered in an encrypted,
+owner-only local file and replayed on later launches, so no Steam window appears
+again until it expires or you sign out. It carries the same tradeoff as the saved
+password above: it is not in macOS Keychain, and on an unsigned build software
+running as your macOS user may be able to recover it. If the file cannot be read,
+or the sign-in has expired or been revoked, you are simply returned to the login
+screen — the application does not fail to start.
+
+Signing out in the game forgets the local copy. It does not unlink your accounts.
+
+**This signs you in to a Steam account that is already linked to a Guild Wars
+account — it cannot create that link.** If Steam authenticates you but the
+account service reports that no Guild Wars account matches, the login is
+refused and you are returned to the login screen. Linking is managed by
+ArenaNet, not here: see the Guild Wars support site at
+<https://help.guildwars.com/> for how Steam and Guild Wars accounts are
+connected.
+
 ## Report a problem
 
 Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
