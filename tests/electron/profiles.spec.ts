@@ -68,6 +68,25 @@ async function readSentinel(page: Page): Promise<string | null> {
   });
 }
 
+async function saveCredentials(
+  page: Page,
+  username: string,
+  password: string,
+): Promise<boolean> {
+  try {
+    await page.evaluate(
+      (value) =>
+        (window as unknown as GameWindow).gwNative.credentials.save(value),
+      { username, password },
+    );
+    return true;
+  } catch (error) {
+    if (process.platform !== "linux") throw error;
+    expect(String(error)).toContain("credential encryption is unavailable");
+    return false;
+  }
+}
+
 test("manager isolates profiles and preserves visible-window lifecycle", async () => {
   const fixture = await launchOffline(
     "gw-profiles-e2e-",
@@ -107,11 +126,10 @@ test("manager isolates profiles and preserves visible-window lifecycle", async (
         () => typeof (window as unknown as Partial<ControlWindow>).gwControl,
       ),
     ).toBe("undefined");
-    await game.evaluate(() =>
-      (window as unknown as GameWindow).gwNative.credentials.save({
-        username: "profile-a",
-        password: "secret-a",
-      }),
+    const credentialPersistenceAvailable = await saveCredentials(
+      game,
+      "profile-a",
+      "secret-a",
     );
     await writeSentinel(game, "profile-a");
     expect((await profiles(control)).find(({ id }) => id === first.id)?.status)
@@ -130,12 +148,9 @@ test("manager isolates profiles and preserves visible-window lifecycle", async (
       ),
     ).toEqual({ state: "absent" });
     expect(await readSentinel(game)).toBeNull();
-    await game.evaluate(() =>
-      (window as unknown as GameWindow).gwNative.credentials.save({
-        username: "profile-b",
-        password: "secret-b",
-      }),
-    );
+    expect(
+      await saveCredentials(game, "profile-b", "secret-b"),
+    ).toBe(credentialPersistenceAvailable);
     await writeSentinel(game, "profile-b");
 
     gameClosed = game.waitForEvent("close");
@@ -149,10 +164,14 @@ test("manager isolates profiles and preserves visible-window lifecycle", async (
       await game.evaluate(
         () => (window as unknown as GameWindow).gwNative.credentials.load(),
       ),
-    ).toEqual({
-      state: "available",
-      credentials: { username: "profile-a", password: "secret-a" },
-    });
+    ).toEqual(
+      credentialPersistenceAvailable
+        ? {
+            state: "available",
+            credentials: { username: "profile-a", password: "secret-a" },
+          }
+        : { state: "absent" },
+    );
     expect(await readSentinel(game)).toBe("profile-a");
 
     const gameWindow = await fixture.app.browserWindow(game);
