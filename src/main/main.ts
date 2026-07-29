@@ -357,10 +357,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
   logEvent({ k: "protocol.installed" });
 
   registerIpcHandlers({
-    profile,
-    gameSession,
     windows,
     sockets,
+    getProfile: async (id) => {
+      const found = (await profileBootstrap.store.scan()).profiles.find(
+        (candidate) => candidate.id === id,
+      );
+      if (!found) throw new Error("profile no longer exists");
+      return found;
+    },
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
     getSettings: () => runtime.getSettings(),

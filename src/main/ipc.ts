@@ -5,7 +5,6 @@ import {
   shell,
   app,
   safeStorage,
-  type Session,
 } from "electron";
 import { writeFile } from "node:fs/promises";
 import type {
@@ -65,10 +64,9 @@ import type { WindowRegistry } from "./window-registry.js";
 import type { ProfileId, ProfileRecord } from "./core/profiles.js";
 
 export interface IpcContext {
-  profile: ProfileRecord;
-  gameSession: Session;
   windows: WindowRegistry;
   sockets: SocketManager;
+  getProfile: (id: ProfileId) => Promise<ProfileRecord>;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
@@ -86,7 +84,6 @@ export interface IpcContext {
 function assertSender(
   event: Electron.IpcMainInvokeEvent,
   windows: WindowRegistry,
-  profileId: ProfileId,
 ): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
   const context = windows.contextFor(event.sender);
@@ -94,7 +91,6 @@ function assertSender(
     !win
     || context?.kind !== "game"
     || context.window !== win
-    || context.profileId !== profileId
   ) {
     throw new AllowlistError("unowned ipc sender");
   }
@@ -383,10 +379,32 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 
 export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = appPaths();
-  const credentials = new CredentialsStore(
-    ctx.profile.paths.credentials,
-    createCredentialProvider(process.platform, safeStorage),
+  const credentialProvider = createCredentialProvider(
+    process.platform,
+    safeStorage,
   );
+  const credentials = new Map<ProfileId, CredentialsStore>();
+  const profileFor = async (win: BrowserWindow): Promise<ProfileRecord> => {
+    const context = ctx.windows.contextForWindow(win);
+    if (context?.kind !== "game") {
+      throw new AllowlistError("game profile owner disappeared");
+    }
+    return ctx.getProfile(context.profileId);
+  };
+  const credentialsFor = async (
+    win: BrowserWindow,
+  ): Promise<CredentialsStore> => {
+    const profile = await profileFor(win);
+    let store = credentials.get(profile.id);
+    if (!store) {
+      store = new CredentialsStore(
+        profile.paths.credentials,
+        credentialProvider,
+      );
+      credentials.set(profile.id, store);
+    }
+    return store;
+  };
 
   /**
    * Every channel main answers, with the parser that turns its arguments into
@@ -523,9 +541,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       }
     }),
 
-    credentialsLoad: channel(nothing, async () => {
+    credentialsLoad: channel(nothing, async (win) => {
       try {
-        return await credentials.load();
+        return await (await credentialsFor(win)).load();
       } catch (error) {
         logEvent({ k: "credentials.loadFailed" });
         throw error;
@@ -536,9 +554,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     // is that rule, so the boundary is validated without a second opinion.
     credentialsSave: channel(
       one(parseCredentials),
-      async (_win, value: StoredCredentials) => {
+      async (win, value: StoredCredentials) => {
         try {
-          await credentials.save(value);
+          await (await credentialsFor(win)).save(value);
         } catch (error) {
           logEvent({ k: "credentials.saveFailed" });
           throw error;
@@ -546,9 +564,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       },
     ),
 
-    credentialsClear: channel(nothing, async () => {
+    credentialsClear: channel(nothing, async (win) => {
       try {
-        await credentials.clear();
+        await (await credentialsFor(win)).clear();
       } catch (error) {
         logEvent({ k: "credentials.clearFailed" });
         throw error;
@@ -605,7 +623,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       });
       if (response !== 0) return false;
       try {
-        await writeFile(ctx.profile.paths.gameStorageClearRequest, "", {
+        const profile = await profileFor(win);
+        await writeFile(profile.paths.gameStorageClearRequest, "", {
           mode: 0o600,
         });
         logEvent({ k: "filesystem.resetRequested" });
@@ -690,7 +709,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     const def = definition as ChannelDef<unknown, unknown>;
     const name = key as GameInvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(event, ctx.windows, ctx.profile.id);
+      const win = assertSender(event, ctx.windows);
       let input: unknown;
       try {
         input = def.parse(args);
