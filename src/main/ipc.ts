@@ -18,7 +18,7 @@ import type {
   ExternalLinkKind,
   FullDownloadOutcome,
   GraphicsDiagnostics,
-  InvokeChannel,
+  GameInvokeChannel,
   ReleaseNotice,
   SocketEvent,
   StoredCredentials,
@@ -673,7 +673,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     clientSession: channel(nothing, () => ctx.getClientSession()),
 
     releaseNoticeCheck: channel(nothing, () => ctx.checkReleaseNotice()),
-  } satisfies Record<InvokeChannel, AnyChannelDef>;
+  } satisfies Record<GameInvokeChannel, AnyChannelDef>;
 
   // One registration, uniform and total: `assertSender` first, then the
   // channel's own parser, then its run. The cast is the erasure `satisfies`
@@ -688,7 +688,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   // instead of nothing.
   for (const [key, definition] of Object.entries(handlers)) {
     const def = definition as ChannelDef<unknown, unknown>;
-    const name = key as InvokeChannel;
+    const name = key as GameInvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
       const win = assertSender(event, ctx.windows, ctx.profile.id);
       let input: unknown;

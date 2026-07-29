@@ -141,6 +141,7 @@ function harness(argv: string[]) {
 }
 
 const INIT: RendererInit = {
+  rendererRole: "game",
   desktopPlatform: "macos",
   enhancementAutomation: true,
   enhancementSelection: {
@@ -159,8 +160,9 @@ test("launch configuration arrives as a preload argument, not as a URL", () => {
   assert.deepEqual(plainInit(harness(ARGV).api.init), INIT);
 });
 
-test("a renderer with no readable init argument gets the production posture", () => {
+test("invalid optional init fields get the production posture", () => {
   const missing: RendererInit = {
+    rendererRole: "game",
     desktopPlatform: null,
     enhancementAutomation: false,
     enhancementSelection: {
@@ -169,16 +171,11 @@ test("a renderer with no readable init argument gets the production posture", ()
     },
     templateFsTrace: false,
   };
-  assert.deepEqual(plainInit(harness([]).api.init), missing);
-  assert.deepEqual(
-    plainInit(harness([`${RENDERER_INIT_ARGUMENT}{not json`]).api.init),
-    missing,
-  );
   // A parameter that is present but not a boolean is not an opt-in.
   assert.deepEqual(
     plainInit(
       harness([
-        `${RENDERER_INIT_ARGUMENT}{"enhancementAutomation":"1","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
+        `${RENDERER_INIT_ARGUMENT}{"rendererRole":"game","enhancementAutomation":"1","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
       ]).api.init,
     ),
     missing,

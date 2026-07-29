@@ -26,6 +26,8 @@ declare global {
     typeof import("../src/shared/contracts.js").RENDERER_INIT_ARGUMENT;
   const DESKTOP_PLATFORMS:
     typeof import("../src/shared/contracts.js").DESKTOP_PLATFORMS;
+  const RENDERER_ROLES:
+    typeof import("../src/shared/contracts.js").RENDERER_ROLES;
   const ENHANCEMENTS: typeof import("../src/shared/contracts.js").ENHANCEMENTS;
   const WASM_BRIDGE_MARKERS:
     typeof import("../src/shared/contracts.js").WASM_BRIDGE_MARKERS;

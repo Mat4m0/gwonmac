@@ -101,6 +101,7 @@ export function rendererInitArgument(options: {
   enhancementSelection: EnhancementSelection;
 }): string {
   const init: RendererInit = {
+    rendererRole: "game",
     desktopPlatform: desktopPlatformFor(process.platform),
     enhancementAutomation: ENHANCEMENT_AUTOMATION_ENABLED,
     enhancementSelection: options.enhancementSelection,

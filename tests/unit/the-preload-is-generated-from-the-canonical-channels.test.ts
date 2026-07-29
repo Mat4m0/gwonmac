@@ -19,9 +19,11 @@ import {
 } from "../../scripts/generate-preload.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const GAME_ARG =
+  contracts.RENDERER_INIT_ARGUMENT + JSON.stringify({ rendererRole: "game" });
 
 /** Loads a generated preload and returns what it exposed, plus what it called. */
-function run(source: string, argv: string[] = []) {
+function run(source: string, argv: string[] = [GAME_ARG]) {
   const invoked: { channel: string; args: unknown[] }[] = [];
   const listened: string[] = [];
   let api: GwNativeApi | undefined;
@@ -53,11 +55,6 @@ function run(source: string, argv: string[] = []) {
   assert.ok(api, "the generated preload exposed nothing");
   return { api, invoked, listened };
 }
-
-const plainInit = (value: GwNativeApi["init"]): GwNativeApi["init"] => ({
-  ...value,
-  enhancementSelection: { ...value.enhancementSelection },
-});
 
 test("the exposed method invokes the channel the contracts name", async () => {
   const { api, invoked, listened } = run(preloadSource(contracts, root));
@@ -122,15 +119,16 @@ test("the launch argument prefix comes from the contracts too", () => {
 
   // The old prefix is no longer recognised, so the flags default off — which is
   // the production posture, not a developer one.
-  let api: GwNativeApi | undefined;
-  const load = (argv: string[]) => {
+  const exposed: { api?: GwNativeApi } = {};
+  const load = (argv: string[]): GwNativeApi | undefined => {
+    delete exposed.api;
     vm.runInNewContext(source, {
       console,
       process: { argv },
       require: () => ({
         contextBridge: {
           exposeInMainWorld(_name: string, value: GwNativeApi) {
-            api = value;
+            exposed.api = value;
           },
         },
         ipcRenderer: {
@@ -141,35 +139,31 @@ test("the launch argument prefix comes from the contracts too", () => {
         },
       }),
     });
-    return api!;
+    return exposed.api;
   };
 
-  // `{ ...init }` because the object was constructed in the vm's realm, so it
-  // does not share this one's Object.prototype.
-  assert.deepEqual(
-    plainInit(
-      load([
-        contracts.RENDERER_INIT_ARGUMENT +
-          JSON.stringify({
-            enhancementSelection: { nativeCursor: true, targetReadout: true },
-          }),
-      ]).init,
-    ),
-    {
-      desktopPlatform: null,
-      enhancementAutomation: false,
-      enhancementSelection: { nativeCursor: false, targetReadout: false },
-      templateFsTrace: false,
-    },
+  assert.equal(
+    load([
+      contracts.RENDERER_INIT_ARGUMENT +
+        JSON.stringify({
+          rendererRole: "game",
+          enhancementSelection: { nativeCursor: true, targetReadout: true },
+        }),
+    ]),
+    undefined,
+    "an unrecognised init argument must expose no privileged bridge",
   );
+  const renamed = load([
+    prefix +
+      JSON.stringify({
+        rendererRole: "game",
+        enhancementSelection: { nativeCursor: true, targetReadout: true },
+      }),
+  ]);
+  assert.ok(renamed);
   assert.deepEqual(
     {
-      ...load([
-        prefix +
-          JSON.stringify({
-            enhancementSelection: { nativeCursor: true, targetReadout: true },
-          }),
-      ]).init.enhancementSelection,
+      ...renamed.init.enhancementSelection,
     },
     { nativeCursor: true, targetReadout: true },
   );
@@ -187,6 +181,7 @@ test("every canonical Enhancement tool crosses without another field list", () =
   const { api } = run(source, [
     contracts.RENDERER_INIT_ARGUMENT +
       JSON.stringify({
+        rendererRole: "game",
         enhancementSelection: {
           nativeCursor: false,
           targetReadout: false,
@@ -209,6 +204,7 @@ test("a contracts export the body needs but does not have fails the build", () =
     "IPC",
     "RENDERER_INIT_ARGUMENT",
     "DESKTOP_PLATFORMS",
+    "RENDERER_ROLES",
     "ENHANCEMENTS",
     "WASM_BRIDGE_MARKERS",
   ]);

@@ -10,7 +10,7 @@
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
 // binding the preload may read. The spliced constants are declared for the
 // type checker in scripts/preload-injected-constants.mts.
-/* global IPC, RENDERER_INIT_ARGUMENT, DESKTOP_PLATFORMS, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
+/* global IPC, RENDERER_INIT_ARGUMENT, DESKTOP_PLATFORMS, RENDERER_ROLES, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -72,7 +72,17 @@ function rendererInit() {
         parsed.desktopPlatform
       )
     : null;
+  const rendererRole = RENDERER_ROLES.includes(
+    /** @type {import("../shared/contracts.js").RendererRole} */ (
+      parsed.rendererRole
+    ),
+  )
+    ? /** @type {import("../shared/contracts.js").RendererRole} */ (
+        parsed.rendererRole
+      )
+    : null;
   return Object.freeze({
+    rendererRole,
     desktopPlatform,
     enhancementAutomation: parsed.enhancementAutomation === true,
     enhancementSelection,
@@ -104,22 +114,9 @@ function listen(eventChannel, callback) {
  * ) => void | Promise<void>) | null}
  */
 let rendererCommandHandler = null;
-ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
-  const handler = rendererCommandHandler;
-  if (!handler) {
-    ipcRenderer.send(IPC.rendererCommandDone, id, "failed");
-    return;
-  }
-  void Promise.resolve()
-    .then(() => handler(command))
-    .then(
-      () => ipcRenderer.send(IPC.rendererCommandDone, id, "completed"),
-      () => ipcRenderer.send(IPC.rendererCommandDone, id, "failed"),
-    );
-});
 
 /** @type {import("../shared/contracts.js").GwNativeApi} */
-const api = {
+const gameApi = {
   init: rendererInit(),
   // A constant, not a capability: the derived client's dirfd markers, which the
   // sandboxed renderer cannot import from src/shared and must not re-type.
@@ -213,7 +210,42 @@ const api = {
     check: () => ipcRenderer.invoke(IPC.releaseNoticeCheck),
   },
 };
-for (const namespace of Object.values(api)) Object.freeze(namespace);
-Object.freeze(api);
 
-contextBridge.exposeInMainWorld("gwNative", api);
+/** @type {import("../shared/contracts.js").GwControlApi} */
+const controlApi = {
+  init: rendererInit(),
+  profiles: {
+    list: () => ipcRenderer.invoke(IPC.profilesList),
+    create: (label) => ipcRenderer.invoke(IPC.profilesCreate, label),
+    rename: (id, label) => ipcRenderer.invoke(IPC.profilesRename, id, label),
+    launch: (id) => ipcRenderer.invoke(IPC.profilesLaunch, id),
+    close: (id) => ipcRenderer.invoke(IPC.profilesClose, id),
+    forgetSavedLogin: (id) =>
+      ipcRenderer.invoke(IPC.profilesForgetLogin, id),
+    moveToTrash: (id) => ipcRenderer.invoke(IPC.profilesTrash, id),
+    onChange: (callback) => listen(IPC.profilesChanged, callback),
+  },
+};
+
+if (gameApi.init.rendererRole === "game") {
+  ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
+    const handler = rendererCommandHandler;
+    if (!handler) {
+      ipcRenderer.send(IPC.rendererCommandDone, id, "failed");
+      return;
+    }
+    void Promise.resolve()
+      .then(() => handler(command))
+      .then(
+        () => ipcRenderer.send(IPC.rendererCommandDone, id, "completed"),
+        () => ipcRenderer.send(IPC.rendererCommandDone, id, "failed"),
+      );
+  });
+  for (const namespace of Object.values(gameApi)) Object.freeze(namespace);
+  Object.freeze(gameApi);
+  contextBridge.exposeInMainWorld("gwNative", gameApi);
+} else if (controlApi.init.rendererRole === "control") {
+  for (const namespace of Object.values(controlApi)) Object.freeze(namespace);
+  Object.freeze(controlApi);
+  contextBridge.exposeInMainWorld("gwControl", controlApi);
+}
