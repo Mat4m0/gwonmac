@@ -1,8 +1,12 @@
-import { expect, test } from "@playwright/test";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 /**
  * `gw-native.d.ts` declares the graphics half of ArenaNet's `Module`; the

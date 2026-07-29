@@ -1,4 +1,3 @@
-import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import {
   mkdir,
@@ -18,7 +17,9 @@ import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
 import { desktopPlatformFor } from "../../src/shared/contracts.js";
 import {
   closeOffline,
+  expect,
   launchOffline,
+  test,
 } from "./fixtures.mjs";
 
 // A real, canonical WebAssembly module with one empty function. An empty

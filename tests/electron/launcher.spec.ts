@@ -1,11 +1,12 @@
-import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeOffline,
+  expect,
   launchOffline,
   launchOfflineAt,
+  test,
 } from "./fixtures.mjs";
 
 /** The reply this spec holds open on `gw:cache:downloadAll`. */
@@ -228,7 +229,7 @@ test.describe("launcher recovery", () => {
             };
           }),
       );
-      await fixture.app.close();
+      await closeOffline(fixture, { removeUserData: false });
       await writeFile(
         path.join(userData, "clear-game-storage-on-start"),
         "",

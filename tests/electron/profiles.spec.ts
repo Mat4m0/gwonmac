@@ -1,10 +1,15 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import type {
   GwControlApi,
   GwNativeApi,
   ProfileSummary,
 } from "../../src/shared/contracts.js";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 type ControlWindow = Window & { gwControl: GwControlApi };
 type GameWindow = Window & { gwNative: GwNativeApi };

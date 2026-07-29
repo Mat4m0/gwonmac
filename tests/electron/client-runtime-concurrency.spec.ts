@@ -1,10 +1,11 @@
-import { expect, test } from "@playwright/test";
 import path from "node:path";
 import type { DownloadProgress } from "../../src/shared/contracts.js";
 import {
   closeOffline,
+  expect,
   launchOffline,
   root,
+  test,
 } from "./fixtures.mjs";
 
 const clientRuntimeModule = path.join(root, "build/main/client-runtime.js");

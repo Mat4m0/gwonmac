@@ -1,6 +1,10 @@
-import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 /**
  * What a listener installed by one `page.evaluate` recorded, read back by a

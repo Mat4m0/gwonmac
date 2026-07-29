@@ -1,8 +1,13 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { desktopPlatformFor } from "../../src/shared/contracts.js";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 /** One cursor region header, as the kernel would publish it. */
 interface CursorPublication {

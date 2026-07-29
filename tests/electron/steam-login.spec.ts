@@ -8,7 +8,6 @@
 // boundary with a local OAuth fixture. The renderer, frozen preload bridge,
 // validated IPC handler, coordinator, encrypted store, and BrowserWindow remain
 // the real implementations, and the suite never reaches Steam production.
-import { expect, test } from "@playwright/test";
 import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
 import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -16,9 +15,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   closeOffline,
+  expect,
   launchOffline,
   launchOfflineAt,
   root,
+  test,
   type OfflineFixture,
 } from "./fixtures.mts";
 import { extractZipNatively } from "../helpers/native-zip.js";
@@ -320,7 +321,6 @@ test.describe("the Steam credential seam", () => {
   let oauth: IpcOAuthFixture | undefined;
 
   test.afterEach(async () => {
-    if (fixture) await closeOffline(fixture);
     if (oauth) await oauth.close();
   });
 
@@ -386,7 +386,7 @@ test.describe("the Steam credential seam", () => {
     fixture = await launchSteamFixture("gw-steam-relaunch-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
     const userData = fixture.userData;
-    await fixture.app.close();
+    await closeOffline(fixture, { removeUserData: false });
 
     fixture = await launchSteamFixtureAt(userData);
     expect(await getAuthToken(fixture, "Steam", true)).toEqual({

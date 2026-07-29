@@ -5,14 +5,14 @@
 // The whole flow is reachable offline because every Steam-specific value is
 // configuration: point `authorizationBaseUrl` at 127.0.0.1 and the
 // window, the origin allowlist, and the redirect matcher all follow.
-import { expect, test } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import {
-  closeOffline,
+  expect,
   launchOffline,
   root,
+  test,
   type OfflineFixture,
 } from "./fixtures.mts";
 import type { SteamOAuthConfig } from "../../src/main/core/steam-oauth.js";
@@ -285,7 +285,6 @@ test.describe("acquiring a Steam token", () => {
   let server: Fixture;
 
   test.afterEach(async () => {
-    if (fixture) await closeOffline(fixture);
     if (server) await server.close();
   });
 

@@ -1,7 +1,11 @@
-import { expect, test } from "@playwright/test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 declare global {
   // The main-process probe that records what the reset dialog was asked and

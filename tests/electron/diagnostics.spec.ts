@@ -1,4 +1,3 @@
-import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -16,8 +15,10 @@ import { promisify } from "node:util";
 import type { ElectronApplication } from "@playwright/test";
 import {
   closeOffline,
+  expect,
   launchOffline,
   root,
+  test,
 } from "./fixtures.mjs";
 import { extractZipNatively } from "../helpers/native-zip.js";
 

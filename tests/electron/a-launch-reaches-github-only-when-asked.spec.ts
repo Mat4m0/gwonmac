@@ -11,8 +11,12 @@
 // `#loading-update-when` — the launcher renders it from `action.restore(...)`
 // one line before the gate, so once it is on screen the gate has either fired
 // or decided not to.
-import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 declare global {
   // The counter the stub below keeps in the main process, read back through

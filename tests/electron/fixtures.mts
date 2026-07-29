@@ -1,8 +1,11 @@
 import {
   _electron as electron,
+  expect,
+  test as base,
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -52,6 +55,43 @@ export interface OfflineFixture {
   readonly userData: string;
 }
 
+const fixtureOwner = new AsyncLocalStorage<Set<OfflineFixture>>();
+
+export { expect };
+
+export const test = base.extend<{ electronLifecycle: void }>({
+  electronLifecycle: [
+    // Playwright requires fixture dependencies to use an object pattern.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const owned = new Set<OfflineFixture>();
+      let cleanupFailures: unknown[] = [];
+      await fixtureOwner.run(owned, async () => {
+        try {
+          await use();
+        } finally {
+          const results = await Promise.allSettled(
+            [...owned].reverse().map((fixture) => closeOffline(fixture)),
+          );
+          cleanupFailures = results
+            .filter(
+              (result): result is PromiseRejectedResult =>
+                result.status === "rejected",
+            )
+            .map((result) => result.reason);
+        }
+      });
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          cleanupFailures,
+          `${cleanupFailures.length} Electron fixture cleanup(s) failed`,
+        );
+      }
+    },
+    { auto: true, timeout: 25_000 },
+  ],
+});
+
 export async function launchOffline(
   prefix: string,
   environment: Record<string, string> = {},
@@ -89,9 +129,18 @@ export async function launchOfflineAt(
     env,
     executablePath: electronBin,
   });
-  const page = await app.firstWindow({ timeout: 30_000 });
-  await page.waitForLoadState("domcontentloaded");
-  return { app, page, process: app.process(), userData };
+  const childProcess = app.process();
+  try {
+    const page = await app.firstWindow({ timeout: 30_000 });
+    await page.waitForLoadState("domcontentloaded");
+    const fixture = { app, page, process: childProcess, userData };
+    fixtureOwner.getStore()?.add(fixture);
+    return fixture;
+  } catch (error) {
+    await shutdownFixtureProcess(childProcess, () => app.close()).catch(() => undefined);
+    await rm(userData, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 function processExited(process: FixtureProcess): boolean {
@@ -140,12 +189,18 @@ export async function shutdownFixtureProcess(
   );
 }
 
-export async function closeOffline(fixture: OfflineFixture): Promise<void> {
+export async function closeOffline(
+  fixture: OfflineFixture,
+  options: { removeUserData?: boolean } = {},
+): Promise<void> {
   await shutdownFixtureProcess(fixture.process, () => fixture.app.close());
-  await rm(fixture.userData, {
-    recursive: true,
-    force: true,
-    maxRetries: 5,
-    retryDelay: 100,
-  });
+  if (options.removeUserData !== false) {
+    await rm(fixture.userData, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+  }
+  fixtureOwner.getStore()?.delete(fixture);
 }

@@ -1,6 +1,10 @@
-import { expect, test } from "@playwright/test";
 import { desktopPlatformFor } from "../../src/shared/contracts.js";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 test.describe("sandbox boundary", () => {
   test("exposes only the frozen application capabilities", async () => {
