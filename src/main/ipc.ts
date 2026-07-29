@@ -41,8 +41,7 @@ import { resolveDns } from "./core/dns.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import {
   MAX_TOKEN_LENGTH,
-  refreshSteamExpiry,
-  resolveSteamToken,
+  SteamSessionCoordinator,
   SteamSessionStore,
   steamTokenOutcome,
 } from "./core/steam-session.js";
@@ -398,17 +397,9 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = gamePaths();
   const credentials = new CredentialsStore(paths.credentials, safeStorage);
-  const steam = new SteamSessionStore(paths.steamSession, safeStorage);
-
-  /**
-   * One sign-in at a time. Without this, anything running in the renderer's
-   * main world — which is where the downloaded game client's own code runs —
-   * can call the bridge in a loop and stack unbounded windows over the game,
-   * each reaching a third-party origin, with the last write winning. A second
-   * caller joins the attempt already open, which is what "the player clicked
-   * the button" means anyway.
-   */
-  let steamSignIn: Promise<string | null> | null = null;
+  const steam = new SteamSessionCoordinator(
+    new SteamSessionStore(paths.steamSession, safeStorage),
+  );
 
   /**
    * Run the Steam sign-in flow, reporting what the window did. Adapts the
@@ -429,13 +420,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       },
     });
     return result.ok ? result.token : null;
-  };
-
-  const acquireSteam = (win: BrowserWindow): Promise<string | null> => {
-    steamSignIn ??= runSteamSignIn(win).finally(() => {
-      steamSignIn = null;
-    });
-    return steamSignIn;
   };
 
   /**
@@ -610,9 +594,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     // rebuilds its own login screen from a refused credential and a rejection
     // here would only turn "no token" into a launch failure (R8).
     steamToken: channel(asSilentFlag, async (win, silent) => {
-      const resolution = await resolveSteamToken(steam, {
+      const resolution = await steam.resolve({
         silent,
-        acquire: () => acquireSteam(win),
+        acquire: () => runSteamSignIn(win),
       });
       for (const note of resolution.notes) {
         if (note.note === "loadFailed") {
@@ -636,7 +620,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }),
 
     steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
-      const outcome = await refreshSteamExpiry(steam, token, expiry);
+      const outcome = await steam.refresh(token, expiry);
       logEvent({ k: "steam.storeback", outcome });
     }),
 

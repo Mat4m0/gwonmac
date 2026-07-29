@@ -257,3 +257,56 @@ export async function refreshSteamExpiry(
     return "failed";
   }
 }
+
+/**
+ * Owns ordering across complete Steam-session operations.
+ *
+ * Serialising individual file calls would still allow a load/save operation to
+ * straddle `clear()`. The coordinator queues the whole resolution or storeback
+ * transaction, so when clear returns every older operation is finished and no
+ * stale write can restore the token. Interactive callers additionally share
+ * the one resolution already in flight, which preserves the one-window
+ * invariant without putting Electron knowledge in this module.
+ */
+export class SteamSessionCoordinator {
+  private tail: Promise<void> = Promise.resolve();
+  private interactiveResolution: Promise<SteamResolution> | null = null;
+  private readonly store: SteamSessionReader;
+
+  constructor(store: SteamSessionReader) {
+    this.store = store;
+  }
+
+  resolve(options: SteamResolutionOptions): Promise<SteamResolution> {
+    if (options.silent) {
+      return this.enqueue(() => resolveSteamToken(this.store, options));
+    }
+    if (this.interactiveResolution) return this.interactiveResolution;
+
+    const pending = this.enqueue(() => resolveSteamToken(this.store, options));
+    const joined = pending.finally(() => {
+      if (this.interactiveResolution === joined) {
+        this.interactiveResolution = null;
+      }
+    });
+    this.interactiveResolution = joined;
+    return joined;
+  }
+
+  refresh(token: string, expiry: number | null): Promise<SteamStorebackOutcome> {
+    return this.enqueue(() => refreshSteamExpiry(this.store, token, expiry));
+  }
+
+  clear(): Promise<void> {
+    return this.enqueue(() => this.store.clear());
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.tail.then(operation, operation);
+    this.tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+}

@@ -9,6 +9,7 @@ import {
   refreshSteamExpiry,
   resolveSteamToken,
   STEAM_TOKEN_LIFETIME_MS,
+  SteamSessionCoordinator,
   SteamSessionStore,
   steamTokenOutcome,
   type SteamSessionReader,
@@ -421,6 +422,129 @@ describe("keeping its promise never to throw", () => {
     });
     assert.equal(resolution.token, null);
     assert.deepEqual(resolution.notes, [{ note: "acquireFailed", code: "unknown" }]);
+  });
+});
+
+describe("ordering complete Steam session operations", () => {
+  it("makes clear final when acquisition was already in flight", async () => {
+    const store = fakeStore(null);
+    const steam = new SteamSessionCoordinator(store);
+    let finishAcquire!: (token: string | null) => void;
+    const acquired = new Promise<string | null>((resolve) => {
+      finishAcquire = resolve;
+    });
+
+    const resolution = steam.resolve({
+      silent: false,
+      acquire: () => acquired,
+      now: NOW,
+    });
+    await Promise.resolve();
+    const cleared = steam.clear();
+
+    finishAcquire(ACQUIRED);
+    assert.equal((await resolution).token, ACQUIRED);
+    await cleared;
+    assert.equal(store.held, null);
+  });
+
+  it("makes clear final when storeback was already in flight", async () => {
+    let held: StoredSteamSession | null = { token: FRESH, expiry: NOW + 1_000 };
+    let finishLoad!: (value: StoredSteamSession | null) => void;
+    const loaded = new Promise<StoredSteamSession | null>((resolve) => {
+      finishLoad = resolve;
+    });
+    const store: SteamSessionReader = {
+      load: () => loaded,
+      save: async (value) => {
+        held = parseSteamSession(value);
+      },
+      clear: async () => {
+        held = null;
+      },
+    };
+    const steam = new SteamSessionCoordinator(store);
+
+    const refreshed = steam.refresh(FRESH, Date.now() + 60_000);
+    await Promise.resolve();
+    const cleared = steam.clear();
+    finishLoad(held);
+
+    assert.equal(await refreshed, "refreshed");
+    await cleared;
+    assert.equal(held, null);
+  });
+
+  it("does not let an older storeback overwrite a newer resolution", async () => {
+    let held: StoredSteamSession | null = { token: FRESH, expiry: NOW - 1 };
+    let finishFirstLoad!: (value: StoredSteamSession | null) => void;
+    const firstLoad = new Promise<StoredSteamSession | null>((resolve) => {
+      finishFirstLoad = resolve;
+    });
+    let loads = 0;
+    const store: SteamSessionReader = {
+      load: () => {
+        loads += 1;
+        return loads === 1 ? firstLoad : Promise.resolve(held);
+      },
+      save: async (value) => {
+        held = parseSteamSession(value);
+      },
+      clear: async () => {
+        held = null;
+      },
+    };
+    const steam = new SteamSessionCoordinator(store);
+
+    const refreshed = steam.refresh(FRESH, Date.now() + 60_000);
+    await Promise.resolve();
+    const resolution = steam.resolve({
+      silent: false,
+      acquire: fakeAcquire(ACQUIRED),
+      now: NOW,
+    });
+    finishFirstLoad(held);
+
+    assert.equal(await refreshed, "refreshed");
+    assert.equal((await resolution).token, ACQUIRED);
+    assert.equal(held?.token, ACQUIRED);
+  });
+
+  it("continues after a queued operation rejects", async () => {
+    let clears = 0;
+    const steam = new SteamSessionCoordinator({
+      load: async () => null,
+      save: async () => undefined,
+      clear: async () => {
+        clears += 1;
+        if (clears === 1) throw new Error("transient unlink failure");
+      },
+    });
+
+    await assert.rejects(steam.clear(), /transient unlink failure/u);
+    await steam.clear();
+    assert.equal(clears, 2);
+  });
+
+  it("coalesces concurrent interactive resolutions", async () => {
+    const store = fakeStore(null);
+    const steam = new SteamSessionCoordinator(store);
+    let finishAcquire!: (token: string | null) => void;
+    let calls = 0;
+    const acquired = new Promise<string | null>((resolve) => {
+      finishAcquire = resolve;
+    });
+    const acquire = (): Promise<string | null> => {
+      calls += 1;
+      return acquired;
+    };
+
+    const first = steam.resolve({ silent: false, acquire, now: NOW });
+    const second = steam.resolve({ silent: false, acquire, now: NOW });
+    finishAcquire(ACQUIRED);
+
+    assert.deepEqual(await first, await second);
+    assert.equal(calls, 1);
   });
 });
 
