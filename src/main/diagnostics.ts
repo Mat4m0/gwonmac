@@ -36,6 +36,12 @@ import type {
   RendererMetrics,
 } from "../shared/diagnostics.js";
 import { gamePaths } from "./paths.js";
+import {
+  NATIVE_CAPABILITY_UNKNOWN,
+  NATIVE_CAPABILITY_UNAVAILABLE,
+  nativePowerCapabilities,
+  readNativeCapability,
+} from "./core/power-capabilities.js";
 import { loadSettings } from "./core/settings.js";
 import { writeDiagnosticZip } from "./core/diagnostic-zip.js";
 import type { ProxyRoute } from "./core/proxy-routes.js";
@@ -868,35 +874,60 @@ export async function startDiagnostics(): Promise<void> {
     startedAt: recorder.startedWall,
   };
   logEvent({ k: "diagnostics.started", appVersion: asAppVersion(app.getVersion()) });
-  recorder.setLatest("system.thermalState", powerMonitor.getCurrentThermalState());
-  recorder.setLatest("system.onBattery", powerMonitor.isOnBatteryPower());
-  powerMonitor.on("on-battery", () => {
-    recorder.setLatest("system.onBattery", true);
-    logEvent({ k: "power.onBattery" });
-  });
-  powerMonitor.on("on-ac", () => {
-    recorder.setLatest("system.onBattery", false);
-    logEvent({ k: "power.onAc" });
-  });
+  const powerCapabilities = nativePowerCapabilities(process.platform);
+  recorder.setLatest(
+    "system.thermalState",
+    readNativeCapability(
+      powerCapabilities.thermalState,
+      () => powerMonitor.getCurrentThermalState(),
+    ),
+  );
+  recorder.setLatest(
+    "system.onBattery",
+    readNativeCapability(
+      powerCapabilities.batteryState,
+      () => powerMonitor.isOnBatteryPower(),
+    ),
+  );
+  recorder.setLatest(
+    "system.cpuSpeedLimitPercent",
+    powerCapabilities.cpuSpeedLimitEvents
+      ? NATIVE_CAPABILITY_UNKNOWN
+      : NATIVE_CAPABILITY_UNAVAILABLE,
+  );
+  if (powerCapabilities.batteryEvents) {
+    powerMonitor.on("on-battery", () => {
+      recorder.setLatest("system.onBattery", true);
+      logEvent({ k: "power.onBattery" });
+    });
+    powerMonitor.on("on-ac", () => {
+      recorder.setLatest("system.onBattery", false);
+      logEvent({ k: "power.onAc" });
+    });
+  }
   powerMonitor.on("suspend", () => logEvent({ k: "power.suspend" }));
   powerMonitor.on("resume", () => logEvent({ k: "power.resume" }));
-  powerMonitor.on("thermal-state-change", ({ state }) => {
-    recorder.setLatest("system.thermalState", state);
-    logEvent({
-      k:
-        state === "serious" || state === "critical"
-          ? "thermal.pressure"
-          : "thermal.changed",
-      state,
+  if (powerCapabilities.thermalState) {
+    powerMonitor.on("thermal-state-change", ({ state }) => {
+      recorder.setLatest("system.thermalState", state);
+      logEvent({
+        k:
+          state === "serious" || state === "critical"
+            ? "thermal.pressure"
+            : "thermal.changed",
+        state,
+      });
     });
-  });
-  powerMonitor.on("speed-limit-change", ({ limit }) => {
-    recorder.setLatest("system.cpuSpeedLimitPercent", limit);
-    logEvent({
-      k: limit < 100 ? "cpuSpeedLimit.reduced" : "cpuSpeedLimit.restored",
-      limit,
+  }
+  if (powerCapabilities.cpuSpeedLimitEvents) {
+    powerMonitor.on("speed-limit-change", ({ limit }) => {
+      recorder.setLatest("system.cpuSpeedLimitPercent", limit);
+      logEvent({
+        k: limit < 100 ? "cpuSpeedLimit.reduced" : "cpuSpeedLimit.restored",
+        limit,
+      });
     });
-  });
+  }
   sampler = setInterval(() => {
     sampleProcesses();
     sampleEventLoop();

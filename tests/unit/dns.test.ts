@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { allowedName } from "../../src/main/core/allowlists.js";
-import { normalizeDnsName, resolveDns } from "../../src/main/core/dns.js";
+import {
+  fallbackDnsServers,
+  normalizeDnsName,
+  resolveDns,
+} from "../../src/main/core/dns.js";
 import { AllowlistError, ValidationError } from "../../src/shared/errors.js";
 
 describe("dns suffix matching", () => {
@@ -24,5 +28,16 @@ describe("dns suffix matching", () => {
 
   it("rejects names outside the allowlist without contacting the network", async () => {
     await assert.rejects(() => resolveDns("evil.example"), AllowlistError);
+  });
+
+  it("uses Node's platform resolver list without assuming resolv.conf", () => {
+    assert.deepEqual(
+      fallbackDnsServers([
+        "192.0.2.53",
+        "2001:db8::53",
+        "8.8.8.8",
+      ]),
+      ["192.0.2.53", "8.8.8.8", "1.1.1.1"],
+    );
   });
 });

@@ -432,12 +432,12 @@ export async function exportProblemReport(
     logEvent({ k: "diagnostics.exported" });
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
-      buttons: ["Open Bug Report", "Reveal in Finder", "Done"],
+      buttons: ["Open Bug Report", "Show in Folder", "Done"],
       defaultId: 0,
       cancelId: 2,
       message: "Problem report ready",
       detail:
-        "Diagnostics are optional. To attach this report on GitHub, compress the .gwdiag file to a .zip in Finder first. It is redacted and contains no credentials.",
+        "Diagnostics are optional. GitHub accepts the report after a copy is renamed from .gwdiag to .zip. It is redacted and contains no credentials.",
     });
     if (response === 0) await shell.openExternal(BUG_REPORT_URL);
     if (response === 1) shell.showItemInFolder(saved);
@@ -467,7 +467,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
       cancelId: 2,
       message: "Report a problem",
       detail:
-        "Export immediately for crashes, startup, downloads, or general bugs. For stutter, record the problem, press Cmd+Shift+M when it happens, then stop the capture.",
+        `Export immediately for crashes, startup, downloads, or general bugs. For stutter, record the problem, press ${isMac ? "Cmd" : "Ctrl"}+Shift+M when it happens, then stop the capture.`,
     });
     if (response === 0) {
       await exportProblemReport(win, host.exportDiagnostics);

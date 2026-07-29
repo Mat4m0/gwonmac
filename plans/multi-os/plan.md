@@ -340,14 +340,14 @@ Acceptance: MOS-X02
 
 ### WP-1.5 — remaining platform-neutral cleanup
 
-- [ ] Replace Finder/Command-only menu wording with `CmdOrCtrl` or explicit
+- [x] Replace Finder/Command-only menu wording with `CmdOrCtrl` or explicit
   native branches.
-- [ ] Make common path tests use `path.join`; retain a literal test that pins
+- [x] Make common path tests use `path.join`; retain a literal test that pins
   the existing macOS legacy layout for migration.
-- [ ] Prove DNS fallback on Windows rather than assuming `/etc/resolv.conf`.
-- [ ] Treat unavailable thermal/power APIs as closed capability states.
-- [ ] Update issue-template field wording only after corresponding targets
-  exist; do not advertise an unbuilt package.
+- [x] Prove DNS fallback on Windows rather than assuming `/etc/resolv.conf`.
+- [x] Treat unavailable thermal/power APIs as closed capability states.
+- [x] Keep issue-template platform fields unchanged until corresponding
+  targets exist; do not advertise an unbuilt package.
 
 ### Phase 1 gate
 

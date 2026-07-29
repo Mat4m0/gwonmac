@@ -45,8 +45,8 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics (optional)
-      description: If you have a `.gwdiag`, Control-click it in Finder, choose **Compress**, then drag the resulting `.zip` here. GitHub does not accept `.gwdiag` files directly.
-      placeholder: Drag the .zip file here, or leave this blank.
+      description: If you have a `.gwdiag`, make a copy, rename that copy to end in `.zip`, then drag it here. GitHub does not accept the `.gwdiag` extension.
+      placeholder: Drag the renamed .zip copy here, or leave this blank.
   - type: input
     id: mac
     attributes:

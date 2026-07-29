@@ -1,7 +1,6 @@
 import { createSocket } from "node:dgram";
 import { promises as dns } from "node:dns";
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { AllowlistError, AppError, ValidationError } from "../../shared/errors.js";
 import { ALLOWED_DOMAINS, allowedName } from "./allowlists.js";
@@ -83,13 +82,13 @@ export async function rawDnsQuery(
   throw new AppError("dns_no_a", "no A record");
 }
 
-async function systemResolvers(): Promise<string[]> {
-  try {
-    const text = await readFile("/etc/resolv.conf", "utf8");
-    return [...text.matchAll(/^nameserver\s+([0-9.]+)/gm)].map((m) => m[1]!);
-  } catch {
-    return [];
-  }
+export function fallbackDnsServers(
+  configured: readonly string[] = dns.getServers(),
+): string[] {
+  return [...new Set([
+    ...configured.filter((server) => isIP(server) === 4),
+    ...FALLBACK_DNS,
+  ])];
 }
 
 export async function resolveDns(
@@ -115,8 +114,7 @@ export async function resolveDns(
     tried.push(`lookup:${e instanceof Error ? e.message : String(e)}`);
   }
 
-  const servers = [...(await systemResolvers()), ...FALLBACK_DNS];
-  for (const server of servers) {
+  for (const server of fallbackDnsServers()) {
     try {
       return await rawDnsQuery(host, server);
     } catch (e) {

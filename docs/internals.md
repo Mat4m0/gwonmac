@@ -119,7 +119,7 @@ against ArenaNet’s production service. Individual patch requests have a
 Full-image progress uses one time-weighted rate average after a short warm-up;
 the same value drives the displayed transfer rate and ETA. The main process
 derives native task feedback from the canonical `image` progress phase: the
-Dock shows determinate or indeterminate progress and
+application icon or taskbar shows determinate or indeterminate progress and
 `prevent-app-suspension` remains active until the download completes, pauses,
 or fails. There is no renderer-owned download or power state.
 
@@ -429,7 +429,9 @@ The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on
 reload, renderer loss, or quit. DNS accepts only approved ArenaNet/Guild Wars
 suffixes and retains the raw DNS fallback needed for the `0.0.1.2` datacenter
-sentinel.
+sentinel. The fallback reads Node's platform resolver list, filters it to the
+IPv4 transport the raw query implements, then tries the two pinned public
+fallbacks. It never reads a Unix-specific resolver file.
 
 Three ceilings bound one renderer: 64 sockets, 4 MiB queued on any single
 socket, and 16 MiB queued across all of them together. The aggregate one is the
@@ -573,6 +575,12 @@ Level 0 is always active:
 - GPU, power, thermal, lifecycle, crash, and context-loss signals;
 - window focus, minimize, hide, and resize/move brackets, plus a per-batch
   renderer `focused` flag.
+
+Native power telemetry is capability-gated. Thermal state is macOS-only;
+battery change events and CPU speed-limit events are macOS/Windows-only.
+Unsupported or throwing APIs publish the closed `unavailable` state, while a
+supported event stream that has not emitted yet is `unknown`. Diagnostics
+never turn absence into a nominal thermal state or a 100% CPU limit.
 
 Window state is load-bearing for stall attribution. An unfocused, occluded, or
 mid-resize window stops being composited, which stops `requestAnimationFrame`

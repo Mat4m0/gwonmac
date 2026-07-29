@@ -54,9 +54,9 @@ full download continue in the background.
 
 The displayed transfer rate is a short moving average, so chunk-completion
 bursts do not make the number jump between unrealistic highs and lows. While a
-full download is active, progress also appears on the application’s Dock icon.
-macOS may turn the display off, but the app prevents download suspension until
-the task finishes or is paused.
+full download is active, progress also appears on the application icon or
+taskbar. The operating system may turn the display off, but the app prevents
+download suspension until the task finishes or is paused.
 
 To schedule the complete game from a running session:
 
