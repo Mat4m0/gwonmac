@@ -141,7 +141,7 @@ export async function resolveSteamToken(
     notes.push({ note: "loadFailed", code: errorCode(error) });
   }
 
-  if (stored) {
+  if (stored && options.silent) {
     // `expiry: null` means no expiry is known yet, not one that already passed;
     // the login exchange is what proves such a token.
     if (stored.expiry === null || stored.expiry > now) {
@@ -154,6 +154,19 @@ export async function resolveSteamToken(
   }
 
   if (options.silent) return { token: null, notes };
+
+  // A non-silent request is the player choosing Steam on the login screen.
+  // Replaying the same locally unexpired token here can trap a server-revoked
+  // credential in a year-long loop. A readable stored token has already failed
+  // to get the player past that screen, so explicit intent discards it and
+  // starts a fresh OAuth flow. An unreadable record is retained until a new
+  // token can replace it, preserving the transient-read-failure guarantee.
+  if (stored) {
+    if (stored.expiry !== null && stored.expiry <= now) {
+      notes.push({ note: "expired" });
+    }
+    await store.clear().catch(() => undefined);
+  }
 
   let acquired: string | null;
   try {

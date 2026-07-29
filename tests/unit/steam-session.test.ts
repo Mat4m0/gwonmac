@@ -278,6 +278,39 @@ describe("deciding which Steam token to vend", () => {
     assert.deepEqual(resolution.notes, [{ note: "acquired" }]);
   });
 
+  it("replaces a locally valid token on an explicit request", async () => {
+    const store = fakeStore({ token: FRESH, expiry: NOW + 1_000 });
+    const acquire = fakeAcquire(ACQUIRED);
+
+    const resolution = await resolveSteamToken(store, {
+      silent: false,
+      acquire,
+      now: NOW,
+    });
+
+    assert.equal(resolution.token, ACQUIRED);
+    assert.equal(acquire.calls, 1);
+    assert.equal(store.clears, 1);
+    assert.deepEqual(store.held, {
+      token: ACQUIRED,
+      expiry: NOW + STEAM_TOKEN_LIFETIME_MS,
+    });
+  });
+
+  it("does not replay a rejected token when explicit reauthentication is cancelled", async () => {
+    const store = fakeStore({ token: FRESH, expiry: NOW + 1_000 });
+
+    const resolution = await resolveSteamToken(store, {
+      silent: false,
+      acquire: fakeAcquire(null),
+      now: NOW,
+    });
+
+    assert.equal(resolution.token, null);
+    assert.equal(store.held, null);
+    assert.equal(store.clears, 1);
+  });
+
   it("refuses an implausibly long token instead of handing it to the client", async () => {
     // Persistence would reject it, but a failed store is tolerated by design —
     // so without a check here the token would still reach the client and be
