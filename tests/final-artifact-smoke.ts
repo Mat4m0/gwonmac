@@ -130,33 +130,34 @@ try {
       (await lstat(path.join(temporary, "usr", "bin", "guild-wars"))).isSymbolicLink(),
     );
   } else if (process.platform === "win32") {
-    const userProfile = path.join(temporary, "profile");
-    const localAppData = path.join(userProfile, "AppData", "Local");
-    const appData = path.join(userProfile, "AppData", "Roaming");
-    const environment = {
-      ...process.env,
-      USERPROFILE: userProfile,
-      LOCALAPPDATA: localAppData,
-      APPDATA: appData,
-    };
-    await execFileAsync(artifact, ["--silent"], { env: environment });
+    // Squirrel resolves Windows' LocalApplicationData known folder rather than
+    // honoring an overridden LOCALAPPDATA environment variable. Native CI runs
+    // as an ephemeral user, while this guard makes a local invocation refuse
+    // to touch an installation the developer already has.
+    const localAppData = process.env.LOCALAPPDATA;
+    assert.ok(localAppData, "Windows did not provide LOCALAPPDATA");
     const application = path.join(localAppData, "GuildWars");
-    const versions = (await readdir(application)).filter((entry) =>
-      entry.startsWith("app-")
+    await assert.rejects(
+      access(application),
+      (error: NodeJS.ErrnoException) => error.code === "ENOENT",
+      "refusing to replace an existing Guild Wars installation",
     );
-    assert.equal(versions.length, 1, "Squirrel installed an ambiguous app version");
-    const installed = path.join(application, versions[0]!);
     try {
+      await execFileAsync(artifact, ["--silent"]);
+      const versions = (await readdir(application)).filter((entry) =>
+        entry.startsWith("app-")
+      );
+      assert.equal(versions.length, 1, "Squirrel installed an ambiguous app version");
+      const installed = path.join(application, versions[0]!);
       await assertPackagedRuntime(
         path.join(installed, "Guild Wars.exe"),
         path.join(installed, "resources"),
       );
     } finally {
-      await execFileAsync(
-        path.join(application, "Update.exe"),
-        ["--uninstall", "--silent"],
-        { env: environment },
-      );
+      const updater = path.join(application, "Update.exe");
+      if (await access(updater).then(() => true, () => false)) {
+        await execFileAsync(updater, ["--uninstall", "--silent"]);
+      }
     }
   } else {
     assert.fail(`unsupported final artifact platform: ${process.platform}`);
