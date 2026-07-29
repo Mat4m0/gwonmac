@@ -178,3 +178,37 @@ test("manager isolates profiles and preserves visible-window lifecycle", async (
     await closeOffline(fixture);
   }
 });
+
+test("Level 2 tracing removes profile labels and restores the manager", async () => {
+  const fixture = await launchOffline(
+    "gw-profile-trace-e2e-",
+    { GW_TEST_DIRECT_GAME: "0" },
+  );
+  try {
+    const control = fixture.page;
+    const [profile] = await profiles(control);
+    expect(profile).toBeDefined();
+    const gameOpened = fixture.app.waitForEvent("window");
+    await launch(control, profile!.id);
+    const game = await gameOpened;
+    await game.waitForLoadState("domcontentloaded");
+
+    const controlClosed = control.waitForEvent("close");
+    await fixture.app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById("start-chromium-trace")?.click();
+    });
+    await controlClosed;
+    await expect(game.locator("#capture-status")).toBeVisible();
+
+    const controlReopened = fixture.app.waitForEvent("window");
+    await fixture.app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById("stop-capture")?.click();
+    });
+    const restored = await controlReopened;
+    await restored.waitForLoadState("domcontentloaded");
+    await expect(restored).toHaveURL("gw://control/");
+    await expect(game.locator("#capture-status")).toBeHidden();
+  } finally {
+    await closeOffline(fixture);
+  }
+});

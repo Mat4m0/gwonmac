@@ -242,6 +242,8 @@ function buildWindowHost(
   windowState: WindowStateOwner,
   enhancementSelection: EnhancementSelection,
   closeGame: (win: BrowserWindow) => Promise<void>,
+  startCapture: (win: BrowserWindow, level: 1 | 2) => Promise<void>,
+  stopCapture: () => Promise<void>,
 ): WindowHost {
   const { client, sockets, windows } = runtime;
   return {
@@ -255,8 +257,8 @@ function buildWindowHost(
       return win ? exportDiagnosticsForWindow(win) : "";
     },
     markPerformanceProblem: (win) => markPerformanceProblem(win),
-    startCapture: (win, level) => startDiagnosticCapture(win, level),
-    stopCapture: stopDiagnosticCapture,
+    startCapture,
+    stopCapture,
     reloadGame: (win) => {
       sockets.closeAll(win.webContents.id);
       void win.loadURL(RENDERER_URL);
@@ -422,6 +424,47 @@ if (primaryInstance) void app.whenReady().then(async () => {
     loaded.windowState.detach(win);
     destroyGameWindow(win);
   };
+  const controlSession = session.fromPartition("gw-control", { cache: false });
+  installControlSession(controlSession, controlProtocolHandler);
+  logEvent({ k: "protocol.installed" });
+  const ensureControlWindow = (): BrowserWindow =>
+    windows.controlWindow() ?? createControlWindow(controlSession, windows);
+  let recreateControlAfterCapture = false;
+  const restoreControlAfterCapture = (): void => {
+    if (!recreateControlAfterCapture) return;
+    recreateControlAfterCapture = false;
+    ensureControlWindow();
+  };
+  const startProfileCapture = async (
+    win: BrowserWindow,
+    level: 1 | 2,
+  ): Promise<void> => {
+    if (level === 2) {
+      const control = windows.controlWindow();
+      if (control) {
+        control.destroy();
+        if (!control.isDestroyed() || windows.controlWindow()) {
+          throw new Error("profile manager could not close for tracing");
+        }
+        recreateControlAfterCapture = true;
+      }
+    }
+    try {
+      await startDiagnosticCapture(win, level);
+      if (level === 2) {
+        const targetLost = (): void => restoreControlAfterCapture();
+        win.once("closed", targetLost);
+        win.webContents.once("render-process-gone", targetLost);
+      }
+    } catch (error) {
+      restoreControlAfterCapture();
+      throw error;
+    }
+  };
+  const stopProfileCapture = async (): Promise<void> => {
+    await stopDiagnosticCapture();
+    restoreControlAfterCapture();
+  };
   const launchProfile = async (profile: ProfileRecord): Promise<void> => {
     const loaded = await loadProfile(profile);
     createMainWindow(
@@ -432,15 +475,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
         loaded.windowState,
         enhancementSelection,
         closeGame,
+        startProfileCapture,
+        stopProfileCapture,
       ),
       windows,
     );
     logEvent({ k: "window.created" });
   };
-  const controlSession = session.fromPartition("gw-control", { cache: false });
-  installControlSession(controlSession, controlProtocolHandler);
-  logEvent({ k: "protocol.installed" });
-
   const profiles = new ProfileManager({
     store: profileBootstrap.store,
     windows,
@@ -536,8 +577,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const directGame =
     !app.isPackaged && process.env.GW_TEST_DIRECT_GAME === "1";
   if (!directGame) {
-    secondInstanceWindow = () =>
-      windows.controlWindow() ?? createControlWindow(controlSession, windows);
+    secondInstanceWindow = ensureControlWindow;
   }
   const initialWindow = directGame
     ? await launchProfile(profileBootstrap.profile).then(
@@ -564,6 +604,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   } else {
     setDiagnosticCaptureStoppedHandler(async () => {
+      restoreControlAfterCapture();
       const win = windows.gameWindow();
       if (!win || win.isDestroyed()) return;
       await resetGameInput(win);
