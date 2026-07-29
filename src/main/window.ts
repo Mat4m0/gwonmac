@@ -4,7 +4,6 @@ import {
   dialog,
   Menu,
   powerSaveBlocker,
-  screen,
   shell,
   type MenuItemConstructorOptions,
   type Session,
@@ -26,13 +25,8 @@ import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
 import {
-  defaultWindowState,
-  fitWindowStateToDisplays,
-  loadWindowState,
-  saveWindowState,
-  type WindowBounds,
-  type WindowState,
-} from "./core/window-state.js";
+  type WindowStateOwner,
+} from "./window-state-owner.js";
 import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { sendRendererCommand } from "./renderer-commands.js";
@@ -65,15 +59,11 @@ export interface WindowHost {
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
-  windowStatePath: string;
+  windowState: WindowStateOwner;
   profileId: ProfileId;
   gameSession: Session;
 }
 
-let restoredWindowState: WindowState | null = null;
-let lastNormalBounds: WindowBounds | null = null;
-let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
-let windowStateWrite: Promise<void> = Promise.resolve();
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -96,140 +86,6 @@ export function updateLongRunningTaskFeedback(
   if (!win || win.isDestroyed()) return preventingAppSuspension;
   win.setProgressBar(feedback.dockProgress);
   return preventingAppSuspension;
-}
-
-function workAreas(): WindowBounds[] {
-  return screen.getAllDisplays().map((display) => ({ ...display.workArea }));
-}
-
-function primaryWorkArea(): WindowBounds {
-  return { ...screen.getPrimaryDisplay().workArea };
-}
-
-export async function prepareWindowState(windowStatePath: string): Promise<void> {
-  const loaded = await loadWindowState(windowStatePath, () => {
-    logEvent({ k: "window.stateCorruptCleared" });
-  });
-  restoredWindowState = loaded
-    ? fitWindowStateToDisplays(loaded, workAreas(), primaryWorkArea())
-    : null;
-  lastNormalBounds = restoredWindowState?.bounds ?? null;
-  if (restoredWindowState) {
-    logEvent({ k: "window.stateRestored",
-      mode: restoredWindowState.mode,
-      width: restoredWindowState.bounds.width,
-      height: restoredWindowState.bounds.height,
-    });
-  }
-}
-
-function currentWindowState(win: BrowserWindow): WindowState {
-  const mode = win.isFullScreen()
-    ? "fullscreen"
-    : win.isMaximized()
-      ? "maximized"
-      : "normal";
-  if (mode === "normal") {
-    lastNormalBounds = { ...win.getBounds() };
-  }
-  return {
-    bounds:
-      lastNormalBounds ??
-      fitWindowStateToDisplays(
-        defaultWindowState(primaryWorkArea()),
-        workAreas(),
-        primaryWorkArea(),
-      ).bounds,
-    mode,
-  };
-}
-
-async function persistWindowState(
-  win: BrowserWindow,
-  windows: WindowRegistry,
-  windowStatePath: string,
-): Promise<void> {
-  if (win.isDestroyed() || windows.contextForWindow(win)?.kind !== "game") return;
-  const state = currentWindowState(win);
-  restoredWindowState = state;
-  const write = windowStateWrite.then(() =>
-    saveWindowState(windowStatePath, state),
-  );
-  windowStateWrite = write.catch(() => undefined);
-  await write;
-}
-
-function scheduleWindowStateSave(
-  win: BrowserWindow,
-  windows: WindowRegistry,
-  windowStatePath: string,
-): void {
-  if (windowStateTimer) clearTimeout(windowStateTimer);
-  windowStateTimer = setTimeout(() => {
-    windowStateTimer = null;
-    void persistWindowState(win, windows, windowStatePath).catch(() => {
-      logEvent({ k: "window.stateSaveFailed" });
-    });
-  }, 300);
-}
-
-export async function flushWindowState(
-  windows: WindowRegistry,
-  windowStatePath: string,
-): Promise<void> {
-  if (windowStateTimer) {
-    clearTimeout(windowStateTimer);
-    windowStateTimer = null;
-  }
-  const win = windows.gameWindow();
-  if (!win || win.isDestroyed()) return;
-  await persistWindowState(win, windows, windowStatePath);
-  await windowStateWrite;
-}
-
-export async function resetWindowState(
-  win: BrowserWindow | null,
-  windowStatePath: string,
-): Promise<void> {
-  if (windowStateTimer) {
-    clearTimeout(windowStateTimer);
-    windowStateTimer = null;
-  }
-  const reset = defaultWindowState(primaryWorkArea());
-  restoredWindowState = reset;
-  lastNormalBounds = reset.bounds;
-  if (win && !win.isDestroyed()) {
-    if (win.isFullScreen()) {
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(resolve, 5_000);
-        win.once("leave-full-screen", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-        win.setFullScreen(false);
-      });
-    }
-    if (win.isMaximized()) {
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(resolve, 5_000);
-        win.once("unmaximize", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-        win.unmaximize();
-      });
-    }
-    win.setBounds(reset.bounds);
-  }
-  const write = windowStateWrite.then(() =>
-    saveWindowState(windowStatePath, reset),
-  );
-  windowStateWrite = write.catch(() => undefined);
-  await write;
-  logEvent({ k: "window.stateReset",
-    width: reset.bounds.width,
-    height: reset.bounds.height,
-  });
 }
 
 /** The only renderer URL, and it carries no configuration. */
@@ -258,13 +114,7 @@ export function createMainWindow(
   host: WindowHost,
   windows: WindowRegistry,
 ): BrowserWindow {
-  const initialState = restoredWindowState
-    ? fitWindowStateToDisplays(
-        restoredWindowState,
-        workAreas(),
-        primaryWorkArea(),
-      )
-    : null;
+  const initialState = host.windowState.initialState();
   if (BACKGROUND_LAUNCH) app.dock?.hide();
   const win = new BrowserWindow({
     ...(initialState?.bounds ?? { width: 1280, height: 800 }),
@@ -301,22 +151,7 @@ export function createMainWindow(
     if (initialState?.mode === "fullscreen") win.setFullScreen(true);
   });
 
-  const rememberNormalBounds = (): void => {
-    if (win.isFullScreen() || win.isMaximized()) return;
-    lastNormalBounds = { ...win.getBounds() };
-    scheduleWindowStateSave(win, windows, host.windowStatePath);
-  };
-  win.on("move", rememberNormalBounds);
-  win.on("resize", rememberNormalBounds);
-  const persistMode = (): void => {
-    void persistWindowState(win, windows, host.windowStatePath).catch(() => {
-      logEvent({ k: "window.stateSaveFailed" });
-    });
-  };
-  win.on("maximize", persistMode);
-  win.on("unmaximize", persistMode);
-  win.on("enter-full-screen", persistMode);
-  win.on("leave-full-screen", persistMode);
+  host.windowState.attach(win);
 
   // A window that is unfocused, occluded, minimized, or mid-resize stops
   // being composited, which stops requestAnimationFrame with no CPU spent
@@ -541,7 +376,7 @@ function installMenu(host: WindowHost, windows: WindowRegistry): void {
             const win = menuGameWindow(windows);
             if (!win) return;
             await resetGameInput(win);
-            void resetWindowState(win, host.windowStatePath).catch(() => {
+            void host.windowState.reset(win).catch(() => {
               logEvent({ k: "window.stateResetFailed" });
             });
           },

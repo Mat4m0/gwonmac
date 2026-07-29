@@ -60,7 +60,7 @@ import { appPaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
-import { resetGameInput, resetWindowState } from "./window.js";
+import { resetGameInput } from "./window.js";
 import type { WindowRegistry } from "./window-registry.js";
 import type { ProfileId, ProfileRecord } from "./core/profiles.js";
 
@@ -74,6 +74,7 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
+  resetWindowState: (win: BrowserWindow) => Promise<void>;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -503,7 +504,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         if (response !== 0) return null;
         const settings = await ctx.resetSettings();
         try {
-          await resetWindowState(win, ctx.profile.paths.windowState);
+          await ctx.resetWindowState(win);
         } catch {
           // The settings file is already durably reset. Window geometry is a
           // separate document, so its failure must not turn that committed

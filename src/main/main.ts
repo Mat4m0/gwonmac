@@ -60,8 +60,6 @@ import { installGameSession } from "./game-session.js";
 import {
   createMainWindow,
   exportProblemReport,
-  flushWindowState,
-  prepareWindowState,
   RENDERER_URL,
   resetGameInput,
   type WindowHost,
@@ -71,6 +69,7 @@ import { WindowRegistry } from "./window-registry.js";
 import { AppRuntime, ownedGameWindow } from "./app-runtime.js";
 import { bootstrapProfiles } from "./profile-bootstrap.js";
 import type { ProfileRecord } from "./core/profiles.js";
+import { WindowStateOwner } from "./window-state-owner.js";
 
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
@@ -225,6 +224,7 @@ function buildWindowHost(
   runtime: AppRuntime<ClientRuntime, SocketManager>,
   profile: ProfileRecord,
   gameSession: Session,
+  windowState: WindowStateOwner,
   enhancementSelection: EnhancementSelection,
 ): WindowHost {
   const { client, sockets, windows } = runtime;
@@ -248,7 +248,7 @@ function buildWindowHost(
     prepareRendererRecovery: async () => {
       await client.recoverRendererCrash();
     },
-    windowStatePath: profile.paths.windowState,
+    windowState,
     profileId: profile.id,
     gameSession,
   };
@@ -307,7 +307,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   });
   const enhancementSelection = enhancementSelectionFor(settings);
-  await prepareWindowState(profile.paths.windowState);
+  const windowState = new WindowStateOwner(profile.paths.windowState);
+  await windowState.prepare();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =
     !expectedUserData ||
@@ -336,8 +337,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windows,
     paths.settings,
     {
-      flushWindowState: () =>
-        flushWindowState(windows, profile.paths.windowState),
+      flushWindowState: () => windowState.flush(),
       clearBrowserCookies: () => clearBrowserCookies(gameSession, "quit"),
       stopDiagnostics,
       updateLongRunningTaskFeedback,
@@ -366,6 +366,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => runtime.getSettings(),
     updateSettings: (patch) => runtime.updateSettings(patch),
     resetSettings: () => runtime.resetSettings(),
+    resetWindowState: (win) => windowState.reset(win),
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
@@ -388,7 +389,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   const win = createMainWindow(
-    buildWindowHost(runtime, profile, gameSession, enhancementSelection),
+    buildWindowHost(
+      runtime,
+      profile,
+      gameSession,
+      windowState,
+      enhancementSelection,
+    ),
     windows,
   );
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
@@ -436,7 +443,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
   app.on("activate", () => {
     if (!windows.gameWindow()) {
       createMainWindow(
-        buildWindowHost(runtime, profile, gameSession, enhancementSelection),
+        buildWindowHost(
+          runtime,
+          profile,
+          gameSession,
+          windowState,
+          enhancementSelection,
+        ),
         windows,
       );
     }
