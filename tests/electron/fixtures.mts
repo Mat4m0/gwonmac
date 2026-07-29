@@ -139,23 +139,27 @@ export const test = base.extend<{ electronLifecycle: void }>({
       try {
         await use();
       } finally {
-        const evidenceResults = await Promise.allSettled(
-          [...owned]
-            .filter(
-              (
-                fixture,
-              ): fixture is OwnedProcess & { app: ElectronApplication } =>
-                fixture.app !== undefined,
-            )
-            .map((fixture, index) =>
-              attachFailureEvidence(
-                fixture,
-                index,
-                (name) => testInfo.outputPath(name),
-                (name, options) => testInfo.attach(name, options),
-              ),
-            ),
-        );
+        const evidenceResults =
+          testInfo.status === testInfo.expectedStatus
+            ? []
+            : await Promise.allSettled(
+                [...owned]
+                  .filter(
+                    (
+                      fixture,
+                    ): fixture is OwnedProcess & {
+                      app: ElectronApplication;
+                    } => fixture.app !== undefined,
+                  )
+                  .map((fixture, index) =>
+                    attachFailureEvidence(
+                      fixture,
+                      index,
+                      (name) => testInfo.outputPath(name),
+                      (name, options) => testInfo.attach(name, options),
+                    ),
+                  ),
+              );
         const results = await Promise.allSettled(
           [...owned].reverse().map((fixture) => closeOwnedProcess(fixture)),
         );
