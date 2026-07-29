@@ -124,18 +124,18 @@ the evidence against which later refactors are judged.
 Specification: sections 2, 3, and 18
 Acceptance: MOS-P01
 
-- [ ] Rewrite [PRODUCT.md](../../PRODUCT.md) so Windows/Linux and named
+- [x] Rewrite [PRODUCT.md](../../PRODUCT.md) so Windows/Linux and named
   profiles are goals, sequential switching is allowed, simultaneous play is
   conditional, and automation remains permanently excluded.
-- [ ] Update the overview/non-goal wording in [README.md](../../README.md) and
+- [x] Update the overview/non-goal wording in [README.md](../../README.md) and
   the load-bearing constraints in [AGENTS.md](../../AGENTS.md).
-- [ ] Add proposed user claims and proof rows to
+- [x] Add proposed user claims and proof rows to
   [docs/internals.md](../../docs/internals.md); mark unimplemented claims as
   non-public rather than “proof: none.”
-- [ ] Record the exact initial support matrix and primary package per OS.
-- [ ] Record that the Windows WASM build is an alternative, not a
+- [x] Record the exact initial support matrix and primary package per OS.
+- [x] Record that the Windows WASM build is an alternative, not a
   faster-than-DirectX claim.
-- [ ] Add the permanent no-input-broadcast/no-DLL-injection product language.
+- [x] Add the permanent no-input-broadcast/no-DLL-injection product language.
 
 Verification:
 

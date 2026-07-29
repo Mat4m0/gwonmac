@@ -793,6 +793,26 @@ two that read _none_ today are recorded rather than quietly kept.
 | "The client's available graphics settings, plus selectable render scale" | website capability facts | Narrowed in P3.22 from "every in-game quality option, fully available", which was wrong — the official WebGL client may offer only `None` for antialiasing. `tests/website-smoke.ts` executes the served page and fails if it promises every quality option again; the render-scale half is the row above |
 | "Up to 4K" | website capability facts | **none.** Render scale is proved; a 4K backing resolution on a specific display is not |
 
+### Approved multi-OS claims that are not public yet
+
+Windows, Linux, and named profiles are approved product targets, not current
+behaviour. The [`multi-OS specification`](../plans/multi-os/spec.md) owns their
+acceptance catalogue. None of these candidate claims may move into the website,
+user guide, download CTA, or in-app copy until its complete proof is green:
+
+| Candidate claim | Required proof before publication |
+| --- | --- |
+| Windows 11 x64 is supported | `MOS-B01`, `MOS-B02`, `MOS-C01`, `MOS-S01`, `MOS-U01`, and `MOS-F01` against the final signed installer |
+| Ubuntu 24.04 x64 is supported | The same acceptance set against the final `.deb`, including secure-keyring and no-keyring jobs |
+| Profiles isolate saved login and game state | `MOS-R01`, `MOS-R02`, `MOS-C02`, and `MOS-M01` across unit, integration, Electron, and packaged relaunch tests |
+| Two profiles can run independently | Current written Guild Wars 1 policy clarification plus `MOS-D01`, `MOS-D02`, `MOS-S02`, and `MOS-F02` |
+| Native game data is shared between profiles | `MOS-D01` proves only the native verified chunks; IDBFS/`Gw.dat` duplication is measured and disclosed rather than hidden by this wording |
+| A notarized macOS build uses Keychain | `MOS-B02` and `MOS-C01` against the Developer ID signed, notarized, stapled artifact with `use-mock-keychain` absent |
+
+The `README.md` roadmap says only that these targets are approved and not yet
+supported downloads. That is a planning statement, not one of the claims
+above.
+
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
 cache coalescing, hash validation, insufficient-disk rejection, interrupted
 full-download resume, smoothed rates, native task-state derivation, and

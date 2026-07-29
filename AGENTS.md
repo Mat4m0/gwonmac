@@ -19,8 +19,11 @@ bug.
 ## What this is
 
 Guild Wars is an Emscripten/JSPI WebAssembly client. This repository
-hosts ArenaNet’s official client in a sandboxed macOS Electron application and
-supplies its platform services through a narrow `Module` object.
+hosts ArenaNet’s official client in a sandboxed Electron application and
+supplies its platform services through a narrow `Module` object. The current
+public build is macOS-only; the approved Windows/Linux and profile work is
+specified in `plans/multi-os/spec.md` and sequenced in
+`plans/multi-os/plan.md`. A target is not public until its native gate passes.
 
 The retired Python/browser runtime must not return. Electron is the only
 production path.
@@ -112,6 +115,13 @@ not only happy paths.
   "up to date". Application replacement is manual; ArenaNet client updates
   remain automatic. `docs/internals.md` owns the mechanism and
   `docs/user-guide.md` owns what the player is told.
+- Multi-OS work keeps one application-global `ClientRuntime`, active client,
+  chunk store, eight-request ArenaNet ceiling, socket manager, settings store,
+  and diagnostic recorder. A renderer never selects its profile identity.
+- Sequential profile switching precedes simultaneous windows. Production
+  simultaneous launch is absent until the IDBFS/performance gates and current
+  written ArenaNet clarification for Guild Wars 1 pass. Input broadcasting,
+  global input hooks, and packaged automation remain forbidden.
 
 ## Diagnostics and privacy
 

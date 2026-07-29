@@ -15,6 +15,22 @@ or endorsed by ArenaNet or NCSoft, and it ships **no game binaries** — the app
 downloads ArenaNet's official WebAssembly client and game data directly from
 ArenaNet, verifies it, and hosts it in a sandboxed Chromium process.
 
+## Platform roadmap
+
+The current downloadable product is still the Apple Silicon macOS application
+documented below. Windows 11 x64 and Ubuntu 24.04 x64 are approved targets, not
+yet supported downloads. Their native packaging, credential protection,
+profile isolation, and release evidence are specified in the
+[multi-OS architecture](plans/multi-os/spec.md) and implemented in the
+[phased plan](plans/multi-os/plan.md).
+
+The planned profile manager stores a private display label, not account
+credentials; the official game login remains the only credential-entry
+surface. Sequential switching comes first. Simultaneous clients remain
+conditional on measured IDBFS/performance results and current Guild Wars 1
+policy clarification. Input broadcasting and automation remain permanent
+non-goals.
+
 ## Install
 
 **You need:** an Apple Silicon Mac, and a Guild Wars account. This app does not
