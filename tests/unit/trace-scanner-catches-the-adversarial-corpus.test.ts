@@ -30,6 +30,11 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
     leaks: ["/Users/x/Documents", "account-recovery.txt"],
   },
   {
+    what: "a Windows absolute path",
+    input: String.raw`cache is C:\Users\alice\Application Support\gwonmac\secret.txt`,
+    leaks: [String.raw`C:\Users\alice`, "Application Support", "secret.txt"],
+  },
+  {
     what: "a multiline stack trace",
     input: [
       "Error: connect ECONNREFUSED",

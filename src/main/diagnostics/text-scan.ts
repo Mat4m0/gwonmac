@@ -31,6 +31,15 @@ import { homedir } from "node:os";
 const ABSOLUTE_PATH =
   /(?<![^\s"'(=:])\/(?!\/)[^/\s"',;)}\]]+(?: +(?=[^\s"',;)}\]]*\/)[^/\s"',;)}\]]+)*(?:\/[^/\s"',;)}\]]+(?: +(?=[^\s"',;)}\]]*\/)[^/\s"',;)}\]]+)*)*/g;
 
+/** Windows drive and UNC paths, with the same bounded segment rules. */
+const WINDOWS_PATH_SEGMENT =
+  String.raw`[^\\\s"',;)}\]]+(?: +(?=[^\s"',;)}\]]*\\)[^\\\s"',;)}\]]+)*`;
+const WINDOWS_ABSOLUTE_PATH = new RegExp(
+  String.raw`(?<![^\s"'(=:])(?:[A-Za-z]:\\|\\\\${WINDOWS_PATH_SEGMENT}\\)`
+    + `${WINDOWS_PATH_SEGMENT}(?:\\\\${WINDOWS_PATH_SEGMENT})*`,
+  "g",
+);
+
 /**
  * The one sensitive-key vocabulary, and the only one. `redactFields` in
  * `../diagnostic-recorder.ts` drops a field whose *name* contains one of these
@@ -115,6 +124,7 @@ export function redactDiagnosticText(value: string): string {
       /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
       "[redacted-email]",
     )
+    .replace(WINDOWS_ABSOLUTE_PATH, "[redacted-path]")
     .replace(ABSOLUTE_PATH, "[redacted-path]")
     // Last, not first. Replacing the home directory before the path rule left
     // the tail of every path under the *exporting user's own* home behind:
