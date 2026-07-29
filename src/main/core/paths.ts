@@ -15,13 +15,11 @@ import { clientGenerationPaths } from "./client-compatibility.js";
  * and so the pinning test can execute it. The Electron-rooted entry point is
  * `src/main/paths.ts`.
  */
-export interface GamePaths {
+export interface AppPaths {
   userData: string;
   settings: string;
-  windowState: string;
-  credentials: string;
-  steamSession: string;
   diagnostics: string;
+  profiles: string;
   game: string;
   artifacts: string;
   previousArtifacts: string;
@@ -31,19 +29,16 @@ export interface GamePaths {
   chunks: string;
   bootChunks: string;
   cacheClearRequest: string;
-  gameStorageClearRequest: string;
 }
 
-export function gamePaths(userData: string): GamePaths {
+export function appPaths(userData: string): AppPaths {
   const game = path.join(userData, "game");
   const artifacts = path.join(game, "artifacts");
   return {
     userData,
     settings: path.join(userData, "settings.json"),
-    windowState: path.join(userData, "window-state.json"),
-    credentials: path.join(userData, "credentials.bin"),
-    steamSession: path.join(userData, "steam-session.bin"),
     diagnostics: path.join(userData, "diagnostics"),
+    profiles: path.join(userData, "profiles"),
     game,
     artifacts,
     previousArtifacts: clientGenerationPaths(artifacts).previous,
@@ -53,7 +48,6 @@ export function gamePaths(userData: string): GamePaths {
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),
-    gameStorageClearRequest: path.join(userData, "clear-game-storage-on-start"),
   };
 }
 
@@ -67,7 +61,7 @@ export function gamePaths(userData: string): GamePaths {
  * need to distinguish those state machines and could delete a file while its
  * owner is validating it.
  */
-export function documentDirectories(paths: GamePaths): string[] {
+export function documentDirectories(paths: AppPaths): string[] {
   return [
     paths.userData,
     paths.game,
@@ -84,12 +78,12 @@ export function documentDirectories(paths: GamePaths): string[] {
  * Derived cache written by 2026.7.0-beta.1. Remove this after the next release;
  * its contents are never migrated because transform ABI 4 cannot consume them.
  */
-export function obsoleteEnhancementCachePath(paths: GamePaths): string {
+export function obsoleteEnhancementCachePath(paths: AppPaths): string {
   return path.join(paths.game, "toolbox");
 }
 
 export async function discardObsoleteEnhancementCache(
-  paths: GamePaths,
+  paths: AppPaths,
   remove: (
     directory: string,
     options: { recursive: true; force: true },

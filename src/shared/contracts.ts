@@ -219,6 +219,14 @@ export interface StoredCredentials {
   password: string;
 }
 
+export type CredentialRead =
+  | { readonly state: "absent" }
+  | {
+    readonly state: "available";
+    readonly credentials: StoredCredentials;
+  }
+  | { readonly state: "temporarily-unavailable" };
+
 export type ExternalLinkKind =
   | "github"
   | "discord"
@@ -333,6 +341,22 @@ export interface ClientSession {
   healthToken: ClientHealthToken | null;
 }
 
+export const DESKTOP_PLATFORMS = ["macos", "windows", "linux"] as const;
+export type DesktopPlatform = (typeof DESKTOP_PLATFORMS)[number];
+export const RENDERER_ROLES = ["game", "control"] as const;
+export type RendererRole = (typeof RENDERER_ROLES)[number];
+
+export function isDesktopPlatform(value: unknown): value is DesktopPlatform {
+  return DESKTOP_PLATFORMS.some((platform) => platform === value);
+}
+
+export function desktopPlatformFor(value: string): DesktopPlatform {
+  if (value === "darwin") return "macos";
+  if (value === "win32") return "windows";
+  if (value === "linux") return "linux";
+  throw new Error(`unsupported desktop platform: ${value}`);
+}
+
 /**
  * Everything the renderer must know before its first script runs. It used to
  * ride on the renderer URL as query parameters, which forced the trust root to
@@ -341,6 +365,13 @@ export interface ClientSession {
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {
+  /** Main-owned renderer role. Invalid or absent values expose no bridge. */
+  rendererRole: RendererRole | null;
+  /**
+   * Main-derived operating system. `null` is the fail-closed preload result
+   * when the trusted argument is missing or malformed.
+   */
+  desktopPlatform: DesktopPlatform | null;
   /** Enhancement automation tier. Unpackaged builds only. */
   enhancementAutomation: boolean;
   /** The independently selected Enhancement tools for this launch. */
@@ -348,6 +379,14 @@ export interface RendererInit {
   /** Template filesystem syscall trace. Unpackaged builds only. */
   templateFsTrace: boolean;
 }
+
+/**
+ * Main-to-preload transport may carry one closed offline-test probe that is
+ * deliberately omitted from the public renderer `init` object.
+ */
+export type RendererInitArgument = RendererInit & {
+  sandboxProbe?: true;
+};
 
 /**
  * Prefix of the single `webPreferences.additionalArguments` entry that carries
@@ -386,6 +425,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
+  | { type: "filesystem.flush" }
   | { type: "settings.open" }
   | { type: "diagnostics.toggle" }
   | {
@@ -446,6 +486,16 @@ export const IPC = {
   // Named for its trigger: the renderer asks for a check, it does not read a
   // status the main process was already keeping.
   releaseNoticeCheck: "gw:releaseNotice:check",
+  profilesList: "gw:profiles:list",
+  profilesCreate: "gw:profiles:create",
+  profilesRename: "gw:profiles:rename",
+  profilesLaunch: "gw:profiles:launch",
+  profilesClose: "gw:profiles:close",
+  profilesForgetLogin: "gw:profiles:forgetLogin",
+  profilesResetStorage: "gw:profiles:resetStorage",
+  profilesTrash: "gw:profiles:trash",
+  controlCacheClear: "gw:control:cacheClear",
+  profilesChanged: "gw:profiles:changed",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -466,12 +516,60 @@ export const EVENT_CHANNELS = [
   "socketEvent",
   "rendererCommand",
   "rendererCommandDone",
+  "profilesChanged",
 ] as const;
 
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
 /** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
 export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
+
+export const CONTROL_INVOKE_CHANNELS = [
+  "profilesList",
+  "profilesCreate",
+  "profilesRename",
+  "profilesLaunch",
+  "profilesClose",
+  "profilesForgetLogin",
+  "profilesResetStorage",
+  "profilesTrash",
+  "controlCacheClear",
+] as const satisfies readonly InvokeChannel[];
+
+export type ControlInvokeChannel =
+  (typeof CONTROL_INVOKE_CHANNELS)[number];
+export type GameInvokeChannel = Exclude<InvokeChannel, ControlInvokeChannel>;
+
+export type ProfileRuntimeStatus =
+  | "stopped"
+  | "starting"
+  | "running"
+  | "closing";
+
+export interface ProfileSummary {
+  readonly id: string;
+  readonly label: string;
+  readonly status: ProfileRuntimeStatus;
+}
+
+export interface GwControlApi {
+  /** Launch-time configuration, available before the first control script. */
+  readonly init: RendererInit;
+  readonly profiles: {
+    list(): Promise<readonly ProfileSummary[]>;
+    create(label: string): Promise<void>;
+    rename(id: string, label: string): Promise<void>;
+    launch(id: string): Promise<void>;
+    close(id: string): Promise<void>;
+    forgetSavedLogin(id: string): Promise<void>;
+    resetSavedFiles(id: string): Promise<void>;
+    moveToTrash(id: string): Promise<void>;
+    onChange(callback: () => void): () => void;
+  };
+  readonly cache: {
+    clearAndRestart(): Promise<boolean>;
+  };
+}
 
 export interface GwNativeApi {
   /** Launch-time configuration, available before the first renderer script. */
@@ -513,7 +611,7 @@ export interface GwNativeApi {
     reset(): Promise<AppSettings | null>;
   };
   credentials: {
-    load(): Promise<StoredCredentials | null>;
+    load(): Promise<CredentialRead>;
     save(value: StoredCredentials): Promise<void>;
     clear(): Promise<void>;
   };

@@ -7,17 +7,25 @@ One page of decisions. Behaviour is documented elsewhere:
 
 ## What this is
 
-A sandboxed macOS host for ArenaNet's official Guild Wars WebAssembly client.
-It downloads the official client, verifies it, supplies the platform services
-the client asks for, and stays out of the way. It ships no game binaries.
-Where the client is broken on this platform, the app derives a separate patched
-copy, verifies it by hash, and falls back to the untouched official module the
-moment anything about that fails.
+A sandboxed desktop host for ArenaNet's official Guild Wars WebAssembly client.
+The public product is currently macOS-only. Windows 11 x64 and Ubuntu 24.04 x64
+are approved targets, but they become public products only after their native
+package and verification gates pass. The host downloads the official client,
+verifies it, supplies the platform services the client asks for, and stays out
+of the way. It ships no game binaries. Where the client is broken on a
+certified platform, the app derives a separate patched copy, verifies it by
+hash, and falls back to the untouched official module the moment anything
+about that fails.
 
 ## Who it is for
 
-**Guild Wars players on a Mac** who want the official client without Windows,
-Wine, or a browser tab.
+**Guild Wars players on macOS or Linux** who want the official client without
+a Windows installation, Wine, or a browser tab.
+
+**Windows players who value the same sandbox, diagnostics, and isolated
+profiles across their computers.** ArenaNet's DirectX 9 client remains the
+Windows compatibility and single-account performance baseline. This project
+does not claim that its WebAssembly client is faster or more compatible.
 
 **The first GWonMac Tools user is a returning player who used GWToolbox++ on
 Windows.**
@@ -48,13 +56,22 @@ to generalise in advance.
 
 Refusals, not a backlog.
 
-- **No Windows or Linux build.**
+- **No unproved platform support.** A target is not advertised until its final
+  native artifact passes the package, credential, lifecycle, and hardware gates
+  in [`plans/multi-os/spec.md`](plans/multi-os/spec.md).
 - **No modification of ArenaNet's client.** The downloaded artifact stays
   canonical and is never redistributed.
 - **No automation, ever.** The app sends no game input and takes no action on a
   player's behalf. The development-only automation tier cannot be reached by a
   packaged build at all — a gate in code, not a promise.
-- **No account features.** No bots, macros, multiboxing help, or trading tools.
+- **No credential catalog.** Named profiles may isolate browser state and the
+  game's own Remember Password data, but the manager never asks for or stores
+  an account email or password.
+- **No input broadcasting or multibox automation.** Sequential named profiles
+  are approved. At most two independently controlled game windows may ship
+  only after the storage/performance gates and current written ArenaNet
+  clarification for Guild Wars 1 pass. One physical input reaches one focused
+  game window.
 - **No telemetry.** Nothing leaves the machine unless the player attaches a
   diagnostics file to a bug report themselves.
 - **No plugin ABI, and no port of the Windows one.** Native injection, GWCA

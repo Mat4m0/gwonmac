@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
@@ -15,7 +14,6 @@ import {
 import { arch, cpus, platform, release, totalmem } from "node:os";
 import path from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
-import { promisify } from "node:util";
 import {
   app,
   contentTracing,
@@ -23,6 +21,7 @@ import {
   powerMonitor,
   screen,
   type BrowserWindow,
+  type WebContents,
 } from "electron";
 import type {
   AppSettings,
@@ -37,13 +36,18 @@ import type {
   RendererMilestoneFields,
   RendererMetrics,
 } from "../shared/diagnostics.js";
-import { gamePaths } from "./paths.js";
-import { loadSettings } from "./core/settings.js";
-import type { ProxyRoute } from "./core/proxy-routes.js";
+import { appPaths } from "./paths.js";
 import {
-  canonicalRendererWindow,
-  sendRendererCommand,
-} from "./renderer-commands.js";
+  NATIVE_CAPABILITY_UNKNOWN,
+  NATIVE_CAPABILITY_UNAVAILABLE,
+  nativePowerCapabilities,
+  readNativeCapability,
+} from "./core/power-capabilities.js";
+import { loadSettings } from "./core/settings.js";
+import { writeDiagnosticZip } from "./core/diagnostic-zip.js";
+import type { ProxyRoute } from "./core/proxy-routes.js";
+import { sendRendererCommand } from "./renderer-commands.js";
+import { RendererClocks } from "./renderer-clocks.js";
 import {
   FlightRecorder,
   runtimeVersions as versions,
@@ -68,7 +72,6 @@ import {
   redactTraceStream,
 } from "./diagnostics/text-scan.js";
 
-const execFileAsync = promisify(execFile);
 const SAMPLE_INTERVAL_MS = 1_000;
 const PROCESS_SAMPLE_INTERVAL = 5;
 
@@ -86,14 +89,16 @@ let traceGuard: ReturnType<typeof setInterval> | null = null;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let captureStopPromise: Promise<void> | null = null;
 let captureStartPromise: Promise<void> | null = null;
-let rendererClockOffsetUs = 0;
-let rendererClockSynchronized = false;
+const rendererClocks = new RendererClocks<WebContents>();
 let previousMainCpu = process.cpuUsage();
 let previousMainCpuTimestampUs = 0;
 const eventLoop = monitorEventLoopDelay({ resolution: 5 });
 let previousEventLoopUtilization = performance.eventLoopUtilization();
 let eventLoopWindowStartedUs = 0;
 let captureStoppedHandler: (() => void | Promise<void>) | null = null;
+let captureTarget: BrowserWindow | null = null;
+let captureTargetLost: (() => void) | null = null;
+let captureTargetGone = false;
 
 /**
  * The renderer half of a capture. `level` crosses as a number inside a typed
@@ -101,9 +106,10 @@ let captureStoppedHandler: (() => void | Promise<void>) | null = null;
  * is chosen by the same trust test the inbound direction uses.
  */
 const rendererCaptureCommand = (
+  target: BrowserWindow | null,
   command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
 ): Promise<void> =>
-  sendRendererCommand(canonicalRendererWindow(), command).then((outcome) => {
+  sendRendererCommand(target, command).then((outcome) => {
     if (outcome !== "completed") {
       logEvent({
         k: "renderer.commandIncomplete",
@@ -153,9 +159,9 @@ export function peakGauge(name: string, value: number): void {
   recorder.setPeak(name, value);
 }
 
-export function markPerformanceProblem(): void {
+export function markPerformanceProblem(target: BrowserWindow): void {
   logEvent({ k: "performance.problemMarked" });
-  void rendererCaptureCommand({
+  void rendererCaptureCommand(target, {
     type: "diagnostics.capture",
     action: "problem-marked",
   });
@@ -518,9 +524,12 @@ export function diagnosticTimestampUs(): number {
   return recorder.timestampUs();
 }
 
-export function recordClockOffset(offsetUs: number, rttUs: number): void {
-  rendererClockOffsetUs = offsetUs;
-  rendererClockSynchronized = true;
+export function recordClockOffset(
+  contents: WebContents,
+  offsetUs: number,
+  rttUs: number,
+): void {
+  rendererClocks.synchronize(contents, offsetUs);
   recorder.setLatest("renderer.clockOffsetUs", Math.round(offsetUs));
   recorder.setLatest("renderer.clockRttUs", Math.round(rttUs));
   logEvent({ k: "clock.synchronized",
@@ -530,20 +539,24 @@ export function recordClockOffset(offsetUs: number, rttUs: number): void {
 }
 
 export function recordRendererMilestone(
+  contents: WebContents,
   name: RendererMilestone,
   rendererTimestampUs: number,
   fields?: RendererMilestoneFields,
 ): void {
-  const timestampUs = rendererClockSynchronized
-    ? Math.max(0, Math.round(rendererTimestampUs + rendererClockOffsetUs))
-    : recorder.timestampUs();
+  const translated = rendererClocks.translate(
+    contents,
+    rendererTimestampUs,
+    recorder.timestampUs(),
+  );
+  const timestampUs = translated.timestampUs;
   recorder.setLatest(`milestone.${name}Us`, timestampUs);
   if (name === "build.info" && fields) {
     recorder.setLatest("client.programId", fields.programId);
     recorder.setLatest("client.buildId", fields.buildId);
   }
   recordEvent(
-    { k: name, clockSynchronized: rendererClockSynchronized },
+    { k: name, clockSynchronized: translated.synchronized },
     { timestampUs },
   );
 }
@@ -578,22 +591,50 @@ async function stopTrace(): Promise<boolean> {
   }
 }
 
-export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
+export function startDiagnosticCapture(
+  target: BrowserWindow,
+  level: 1 | 2,
+): Promise<void> {
   if (captureLevel !== 0 || captureStopPromise || captureStartPromise) {
     return Promise.reject(new Error("a diagnostics capture is already active"));
   }
+  if (
+    target.isDestroyed()
+    || target.webContents.isDestroyed()
+    || target.webContents.isCrashed()
+  ) {
+    return Promise.reject(new Error("diagnostics target is unavailable"));
+  }
+  captureTarget = target;
+  captureTargetGone = false;
+  const targetLost = (): void => {
+    captureTargetGone = true;
+    void stopDiagnosticCapture("target-lost");
+  };
+  captureTargetLost = targetLost;
+  target.webContents.once("destroyed", targetLost);
+  target.webContents.once("render-process-gone", targetLost);
   const operation = (async () => {
     // Beginning a capture replaces the previous capture result. Its raw trace
     // must be deleted first; clearing only the pointer would orphan a file that
     // can contain Chromium process data.
     await discardTrace();
-    await rendererCaptureCommand({ type: "diagnostics.capture", action: "reset" });
+    if (captureTargetGone) {
+      throw new Error("diagnostics target was lost during capture startup");
+    }
+    await rendererCaptureCommand(target, {
+      type: "diagnostics.capture",
+      action: "reset",
+    });
+    if (captureTargetGone) {
+      throw new Error("diagnostics target was lost during capture startup");
+    }
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
     eventLoopWindowStartedUs = recorder.timestampUs();
     captureLevel = level;
-    await rendererCaptureCommand({
+    await rendererCaptureCommand(target, {
       type: "diagnostics.capture",
       action: "started",
       level,
@@ -620,7 +661,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       ];
       const included = wanted.filter((category) => available.has(category));
       tracePath = path.join(
-        gamePaths().diagnostics,
+        appPaths().diagnostics,
         `chromium-${recorder.sessionId}.json`,
       );
       await contentTracing.startRecording({
@@ -640,7 +681,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       if (captureTimer) clearTimeout(captureTimer);
       captureTimer = null;
       captureLevel = 0;
-      await rendererCaptureCommand({
+      await rendererCaptureCommand(target, {
         type: "diagnostics.capture",
         action: "stopped",
       });
@@ -656,6 +697,13 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
   })();
   captureStartPromise = operation.finally(() => {
     captureStartPromise = null;
+    if (captureLevel === 0) {
+      target.webContents.off("destroyed", targetLost);
+      target.webContents.off("render-process-gone", targetLost);
+      if (captureTarget === target) captureTarget = null;
+      if (captureTargetLost === targetLost) captureTargetLost = null;
+      captureTargetGone = false;
+    }
   });
   return captureStartPromise;
 }
@@ -672,10 +720,14 @@ export function stopDiagnosticCapture(
   }
   if (captureLevel === 0) return Promise.resolve();
   const stoppedLevel = captureLevel;
+  const target = captureTarget;
   captureStopPromise = (async () => {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
-    await rendererCaptureCommand({ type: "diagnostics.capture", action: "flush" });
+    await rendererCaptureCommand(target, {
+      type: "diagnostics.capture",
+      action: "flush",
+    });
     const traceCompleted = await stopTrace();
     const completedLevel =
       stoppedLevel === 2 && !traceCompleted ? 1 : stoppedLevel;
@@ -686,7 +738,7 @@ export function stopDiagnosticCapture(
     });
     recorder.endCapture(completedLevel, reason);
     captureLevel = 0;
-    await rendererCaptureCommand({
+    await rendererCaptureCommand(target, {
         type: "diagnostics.capture",
         action: "stopped",
       });
@@ -700,6 +752,13 @@ export function stopDiagnosticCapture(
     }
   })().finally(() => {
     captureStopPromise = null;
+    if (target && captureTargetLost) {
+      target.webContents.off("destroyed", captureTargetLost);
+      target.webContents.off("render-process-gone", captureTargetLost);
+    }
+    captureTarget = null;
+    captureTargetLost = null;
+    captureTargetGone = false;
   });
   return captureStopPromise;
 }
@@ -837,7 +896,7 @@ async function gpuEnvironment(): Promise<Record<string, unknown>> {
 }
 
 export async function startDiagnostics(): Promise<void> {
-  const diagnosticsDir = gamePaths().diagnostics;
+  const diagnosticsDir = appPaths().diagnostics;
   const staleCaptures = staleDiagnosticEntries(
     await readdir(diagnosticsDir).catch(() => []),
   ).map((name) => path.join(diagnosticsDir, name));
@@ -870,35 +929,60 @@ export async function startDiagnostics(): Promise<void> {
     startedAt: recorder.startedWall,
   };
   logEvent({ k: "diagnostics.started", appVersion: asAppVersion(app.getVersion()) });
-  recorder.setLatest("system.thermalState", powerMonitor.getCurrentThermalState());
-  recorder.setLatest("system.onBattery", powerMonitor.isOnBatteryPower());
-  powerMonitor.on("on-battery", () => {
-    recorder.setLatest("system.onBattery", true);
-    logEvent({ k: "power.onBattery" });
-  });
-  powerMonitor.on("on-ac", () => {
-    recorder.setLatest("system.onBattery", false);
-    logEvent({ k: "power.onAc" });
-  });
+  const powerCapabilities = nativePowerCapabilities(process.platform);
+  recorder.setLatest(
+    "system.thermalState",
+    readNativeCapability(
+      powerCapabilities.thermalState,
+      () => powerMonitor.getCurrentThermalState(),
+    ),
+  );
+  recorder.setLatest(
+    "system.onBattery",
+    readNativeCapability(
+      powerCapabilities.batteryState,
+      () => powerMonitor.isOnBatteryPower(),
+    ),
+  );
+  recorder.setLatest(
+    "system.cpuSpeedLimitPercent",
+    powerCapabilities.cpuSpeedLimitEvents
+      ? NATIVE_CAPABILITY_UNKNOWN
+      : NATIVE_CAPABILITY_UNAVAILABLE,
+  );
+  if (powerCapabilities.batteryEvents) {
+    powerMonitor.on("on-battery", () => {
+      recorder.setLatest("system.onBattery", true);
+      logEvent({ k: "power.onBattery" });
+    });
+    powerMonitor.on("on-ac", () => {
+      recorder.setLatest("system.onBattery", false);
+      logEvent({ k: "power.onAc" });
+    });
+  }
   powerMonitor.on("suspend", () => logEvent({ k: "power.suspend" }));
   powerMonitor.on("resume", () => logEvent({ k: "power.resume" }));
-  powerMonitor.on("thermal-state-change", ({ state }) => {
-    recorder.setLatest("system.thermalState", state);
-    logEvent({
-      k:
-        state === "serious" || state === "critical"
-          ? "thermal.pressure"
-          : "thermal.changed",
-      state,
+  if (powerCapabilities.thermalState) {
+    powerMonitor.on("thermal-state-change", ({ state }) => {
+      recorder.setLatest("system.thermalState", state);
+      logEvent({
+        k:
+          state === "serious" || state === "critical"
+            ? "thermal.pressure"
+            : "thermal.changed",
+        state,
+      });
     });
-  });
-  powerMonitor.on("speed-limit-change", ({ limit }) => {
-    recorder.setLatest("system.cpuSpeedLimitPercent", limit);
-    logEvent({
-      k: limit < 100 ? "cpuSpeedLimit.reduced" : "cpuSpeedLimit.restored",
-      limit,
+  }
+  if (powerCapabilities.cpuSpeedLimitEvents) {
+    powerMonitor.on("speed-limit-change", ({ limit }) => {
+      recorder.setLatest("system.cpuSpeedLimitPercent", limit);
+      logEvent({
+        k: limit < 100 ? "cpuSpeedLimit.reduced" : "cpuSpeedLimit.restored",
+        limit,
+      });
     });
-  });
+  }
   sampler = setInterval(() => {
     sampleProcesses();
     sampleEventLoop();
@@ -979,7 +1063,7 @@ export async function exportDiagnosticsZip(
 ): Promise<string> {
   if (captureLevel !== 0) await stopDiagnosticCapture("export");
   await recorder.flush();
-  const dir = gamePaths().diagnostics;
+  const dir = appPaths().diagnostics;
   const staging = path.join(dir, `export-${randomUUID()}`);
   const zipPath = /\.(gwdiag|zip)$/i.test(targetPath) ? targetPath : `${targetPath}.gwdiag`;
   const zipPart = path.join(
@@ -1140,7 +1224,7 @@ export async function exportDiagnosticsZip(
       await writeFile(file, text, { mode: 0o600 });
       await chmod(file, 0o600);
     }
-    await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
+    await writeDiagnosticZip(staging, zipPart);
     await chmod(zipPart, 0o600);
     await rename(zipPart, zipPath);
     // The trace deliberately survives the export. `recordedCaptureLevel` stays
@@ -1164,6 +1248,6 @@ export async function exportDiagnosticsForWindow(win: BrowserWindow): Promise<st
   return exportDiagnosticsZip(filePath, {
     appVersion: app.getVersion(),
     electronVersions: versions(),
-    settings: await loadSettings(gamePaths().settings),
+    settings: await loadSettings(appPaths().settings),
   });
 }

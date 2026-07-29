@@ -1,7 +1,10 @@
 // Renderer-owned game input. The Emscripten host installs this once before its
 // glue loads; native interruptions all converge on releaseAll().
 
-import type { AppSettings } from '../shared/contracts.js';
+import type {
+  AppSettings,
+  DesktopPlatform,
+} from '../shared/contracts.js';
 
 // Canvases a held drag may wander from the one it started on. The client keeps
 // integrating mouse moves whose coordinates fall outside the canvas, so a drag
@@ -55,6 +58,7 @@ type HeldButton = {
 type GameInputOptions = {
   canvas: HTMLCanvasElement;
   initialSettings: AppSettings;
+  platform: DesktopPlatform | null;
   diagnostics?: GameInputDiagnostics;
   log(...values: unknown[]): void;
 };
@@ -62,6 +66,7 @@ type GameInputOptions = {
 export const installGameInput = ({
   canvas,
   initialSettings,
+  platform,
   diagnostics,
   log,
 }: GameInputOptions): GameInputController => {
@@ -203,8 +208,10 @@ export const installGameInput = ({
   // movement keys down for good. The physical key is in `code`; ask the OS
   // what that key produces unmodified, and restate the event before the
   // client (or our own held-key registry) sees it.
+  const repairsMacInput = platform === 'macos';
   let layoutKeys = new Map<string, string>();
   const readLayoutKeys = () => {
+    if (!repairsMacInput) return;
     const layout = navigator.keyboard?.getLayoutMap?.();
     if (!layout) {
       log('[warn] keyboard layout unavailable; Option-held keys may stick');
@@ -232,7 +239,7 @@ export const installGameInput = ({
    */
   const layoutKey = (event: KeyboardEvent) => {
     const target = event.target;
-    if (!event.altKey || !target) return event.key;
+    if (!repairsMacInput || !event.altKey || !target) return event.key;
     const key = layoutKeys.get(event.code);
     if (!key || key.toUpperCase() === event.key.toUpperCase()) return event.key;
     // One event per physical transition: the rewritten one must not also
@@ -357,7 +364,10 @@ export const installGameInput = ({
     if (!event.isTrusted) return;
     layoutKey(event);
     heldKeys.delete(event.code);
-    if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
+    if (
+      repairsMacInput &&
+      (event.code === 'MetaLeft' || event.code === 'MetaRight')
+    ) {
       releaseKeys((code) =>
         code !== 'MetaLeft' &&
         code !== 'MetaRight' &&

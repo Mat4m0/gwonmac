@@ -15,6 +15,22 @@ or endorsed by ArenaNet or NCSoft, and it ships **no game binaries** — the app
 downloads ArenaNet's official WebAssembly client and game data directly from
 ArenaNet, verifies it, and hosts it in a sandboxed Chromium process.
 
+## Platform roadmap
+
+The current downloadable product is still the Apple Silicon macOS application
+documented below. Windows 11 x64 and Ubuntu 24.04 x64 are approved targets, not
+yet supported downloads. Their native packaging, credential protection,
+profile isolation, and release evidence are specified in the
+[multi-OS architecture](plans/multi-os/spec.md) and implemented in the
+[phased plan](plans/multi-os/plan.md).
+
+The profile manager stores a private display label, not account credentials;
+the official game login remains the only credential-entry surface. It launches
+one isolated profile at a time. Simultaneous clients remain
+conditional on measured IDBFS/performance results and current Guild Wars 1
+policy clarification. Input broadcasting and automation remain permanent
+non-goals.
+
 ## Install
 
 **You need:** an Apple Silicon Mac, and a Guild Wars account. This app does not
@@ -42,7 +58,8 @@ how recent a release is and nothing about which game client build it certifies:
 
 ## How it works
 
-On first launch the app asks how you want game data downloaded, and waits for your choice.
+On first launch, select the generated **Default** profile. The profile's game
+launcher then asks how you want game data downloaded and waits for your choice.
 The two modes are:
 
 | Mode                            | What happens                                                                                |
@@ -60,7 +77,8 @@ mid-download with _Play Now Instead_.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
 - Guild Wars' own **Remember Password** writes one encrypted, owner-only local
-  file. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
+  file inside the selected profile. Profiles cannot read each other's saved
+  login. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
   encryption, so software running as your macOS user could recover it. Leave
   Remember Password off if that tradeoff isn't acceptable.
 - **The app does not poll for updates.** It asks GitHub whether a newer release
@@ -92,17 +110,18 @@ The first online run fetches the small JSPI client artifacts.
 | Command                                                                  | Purpose                                     |
 | ------------------------------------------------------------------------ | ------------------------------------------- |
 | `pnpm dev`                                                               | Build and launch the app via Electron Forge |
-| `pnpm package`                                                           | Build a local `.app` under `out/`           |
-| `pnpm make`                                                              | Build the distributable `.zip`              |
+| `pnpm package`                                                           | Build the native unpacked app under `out/`   |
+| `pnpm make`                                                              | Build the native final installer/archive     |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
 | `pnpm check`                                                             | Fast inner loop: static checks and policy   |
 | `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites (run `pnpm build` first)        |
 | `pnpm test:website`                                                      | The `apps/website` suite                    |
-| `pnpm verify`                                                            | The complete local gate                     |
+| `pnpm verify`                                                            | Complete native gate, including final artifact |
 
-`pnpm test:electron` launches a real macOS application process, so it needs
+`pnpm test:electron` launches a real native application process, so it needs
 permission to open GUI applications. Those launches run in the background and
-do not take keyboard focus. The networked smoke test is opt-in:
+do not take keyboard focus. Linux CI supplies Xvfb without disabling Electron's
+sandbox. The networked smoke test is opt-in:
 
 ```bash
 pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron

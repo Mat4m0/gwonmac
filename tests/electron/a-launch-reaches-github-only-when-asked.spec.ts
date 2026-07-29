@@ -11,9 +11,12 @@
 // `#loading-update-when` — the launcher renders it from `action.restore(...)`
 // one line before the gate, so once it is on screen the gate has either fired
 // or decided not to.
-import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 declare global {
   // The counter the stub below keeps in the main process, read back through
@@ -47,7 +50,6 @@ function countGithubRequests() {
 }
 
 test.describe("release check network policy", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
 
   test("zero requests with the default settings, one when the user opted in", async () => {
     const fixture = await launchOffline("gw-release-check-policy-e2e-");

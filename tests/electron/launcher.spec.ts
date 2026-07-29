@@ -1,12 +1,12 @@
-import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeOffline,
+  expect,
   launchOffline,
   launchOfflineAt,
-  main,
+  test,
 } from "./fixtures.mjs";
 
 /** The reply this spec holds open on `gw:cache:downloadAll`. */
@@ -26,7 +26,6 @@ declare global {
 }
 
 test.describe("launcher recovery", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
   test("keeps verified data and offers one retry after an interrupted download", async () => {
     const fixture = await launchOffline("gw-launcher-e2e-", {
@@ -230,7 +229,7 @@ test.describe("launcher recovery", () => {
             };
           }),
       );
-      await fixture.app.close();
+      await closeOffline(fixture, { removeUserData: false });
       await writeFile(
         path.join(userData, "clear-game-storage-on-start"),
         "",

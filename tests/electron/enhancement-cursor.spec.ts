@@ -1,8 +1,13 @@
-import { expect, type Page, test } from "@playwright/test";
-import { existsSync } from "node:fs";
+import type { Page } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { desktopPlatformFor } from "../../src/shared/contracts.js";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 /** One cursor region header, as the kernel would publish it. */
 interface CursorPublication {
@@ -182,7 +187,6 @@ async function driveCursor(
 }
 
 test.describe("enhancement cursor presentation", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
   test("renders the game cursor as a 32 px image-set and hands back the plain pointer", async () => {
     const fixture = await launchOffline("gw-enhancement-cursor-e2e-");
@@ -334,6 +338,8 @@ test.describe("enhancement cursor presentation", () => {
           search: globalThis.location.search,
         })),
       ).toEqual({
+        rendererRole: "game",
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
           nativeCursor: true,

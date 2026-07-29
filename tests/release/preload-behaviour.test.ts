@@ -20,6 +20,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import type {
+  GwControlApi,
   GwNativeApi,
   RendererCommand,
   RendererInit,
@@ -41,6 +42,8 @@ const {
 }: typeof import("../../src/shared/contracts.ts") = await import(
   new URL("../../build/shared/contracts.js", import.meta.url).href
 );
+const GAME_ARG =
+  RENDERER_INIT_ARGUMENT + JSON.stringify({ rendererRole: "game" });
 const source = await readFile(path.join(root, ARTIFACT), "utf8");
 
 /** One recorded `ipcRenderer.invoke` or `.send`. */
@@ -64,7 +67,7 @@ type IpcListener = (event: unknown, ...args: unknown[]) => void;
  * meet, not something the load proves. The coverage test below executes that
  * requirement against what the artifact really exposed.
  */
-function load(argv: string[] = []) {
+function load(argv: string[] = [GAME_ARG]) {
   const invoked: Recorded[] = [];
   const sent: Recorded[] = [];
   const listeners = new Map<string, IpcListener[]>();
@@ -120,6 +123,46 @@ function load(argv: string[] = []) {
   };
 }
 
+function loadControl() {
+  const invoked: Recorded[] = [];
+  const listeners = new Map<string, IpcListener[]>();
+  const exposed: { worldName?: string; api?: GwControlApi } = {};
+  vm.runInNewContext(source, {
+    console,
+    process: {
+      argv: [
+        RENDERER_INIT_ARGUMENT + JSON.stringify({ rendererRole: "control" }),
+      ],
+    },
+    require: () => ({
+      contextBridge: {
+        exposeInMainWorld(worldName: string, value: GwControlApi) {
+          exposed.worldName = worldName;
+          exposed.api = value;
+        },
+      },
+      ipcRenderer: {
+        invoke(channel: string, ...args: unknown[]) {
+          invoked.push({ channel, args });
+          return Promise.resolve();
+        },
+        on(channel: string, handler: IpcListener) {
+          listeners.set(channel, [...(listeners.get(channel) ?? []), handler]);
+        },
+        removeListener() {},
+        send() {},
+      },
+    }),
+  });
+  assert.equal(exposed.worldName, "gwControl");
+  assert.ok(exposed.api);
+  return {
+    api: exposed.api,
+    invoked,
+    handlers: (channel: string): IpcListener[] => listeners.get(channel) ?? [],
+  };
+}
+
 /** Every function the bridge exposes, as dotted paths. */
 function methodPaths(value: object, prefix = ""): string[] {
   const paths: string[] = [];
@@ -145,7 +188,7 @@ type Capability = (...args: unknown[]) => unknown;
 const isCapability = (value: unknown): value is Capability =>
   typeof value === "function";
 
-function call(api: GwNativeApi, dotted: string): Capability {
+function call(api: object, dotted: string): Capability {
   let owner: unknown = api;
   for (const key of dotted.split(".")) {
     if (owner === null || typeof owner !== "object") break;
@@ -237,6 +280,46 @@ const INVOCATIONS: Invocation[] = [
   { path: "releaseNotice.check", args: [], channel: IPC.releaseNoticeCheck },
 ];
 
+const CONTROL_INVOCATIONS: Invocation[] = [
+  { path: "profiles.list", args: [], channel: IPC.profilesList },
+  { path: "profiles.create", args: ["Alt"], channel: IPC.profilesCreate },
+  {
+    path: "profiles.rename",
+    args: ["a".repeat(32), "Main"],
+    channel: IPC.profilesRename,
+  },
+  {
+    path: "profiles.launch",
+    args: ["a".repeat(32)],
+    channel: IPC.profilesLaunch,
+  },
+  {
+    path: "profiles.close",
+    args: ["a".repeat(32)],
+    channel: IPC.profilesClose,
+  },
+  {
+    path: "profiles.forgetSavedLogin",
+    args: ["a".repeat(32)],
+    channel: IPC.profilesForgetLogin,
+  },
+  {
+    path: "profiles.resetSavedFiles",
+    args: ["a".repeat(32)],
+    channel: IPC.profilesResetStorage,
+  },
+  {
+    path: "profiles.moveToTrash",
+    args: ["a".repeat(32)],
+    channel: IPC.profilesTrash,
+  },
+  {
+    path: "cache.clearAndRestart",
+    args: [],
+    channel: IPC.controlCacheClear,
+  },
+];
+
 /** The main→renderer streams, which subscribe instead of invoking. */
 interface Subscription {
   path: string;
@@ -309,9 +392,35 @@ test("the renderer can reach every channel main is required to answer", () => {
     .filter(([key]) => !EVENT_CHANNELS.some((event) => event === key))
     .map(([, channel]) => channel);
   assert.deepEqual(
-    [...new Set(INVOCATIONS.map((one) => one.channel))].sort(),
+    [
+      ...new Set(
+        [...INVOCATIONS, ...CONTROL_INVOCATIONS].map((one) => one.channel),
+      ),
+    ].sort(),
     invokeChannels.sort(),
   );
+});
+
+test("the control role exposes only its frozen profile namespace", async () => {
+  const { api, invoked, handlers } = loadControl();
+  assert.deepEqual(
+    methodPaths(api).sort(),
+    [
+      ...CONTROL_INVOCATIONS.map((one) => one.path),
+      "profiles.onChange",
+    ].sort(),
+  );
+  for (const invocation of CONTROL_INVOCATIONS) {
+    await call(api, invocation.path)(...invocation.args);
+  }
+  api.profiles.onChange(() => undefined);
+  assert.deepEqual(
+    invoked.map((one) => one.channel),
+    CONTROL_INVOCATIONS.map((one) => one.channel),
+  );
+  assert.equal(handlers(IPC.profilesChanged).length, 1);
+  assert.equal(Object.isFrozen(api), true);
+  assert.equal(Object.isFrozen(api.profiles), true);
 });
 
 test("an oversized or shapeless packet is refused in the renderer, without IPC", async () => {
@@ -468,6 +577,8 @@ test("the launch configuration is read from argv, and defaults to production", (
     enhancementSelection: { ...value.enhancementSelection },
   });
   assert.deepEqual(plainInit(load().api.init), {
+    rendererRole: "game",
+    desktopPlatform: null,
     enhancementAutomation: false,
     enhancementSelection: { nativeCursor: false, targetReadout: false },
     templateFsTrace: false,
@@ -478,6 +589,8 @@ test("the launch configuration is read from argv, and defaults to production", (
         "--irrelevant",
         RENDERER_INIT_ARGUMENT +
           JSON.stringify({
+            rendererRole: "game",
+            desktopPlatform: "linux",
             enhancementSelection: {
               nativeCursor: true,
               targetReadout: false,
@@ -487,6 +600,8 @@ test("the launch configuration is read from argv, and defaults to production", (
       ]).api.init,
     ),
     {
+      rendererRole: "game",
+      desktopPlatform: "linux",
       enhancementAutomation: false,
       enhancementSelection: { nativeCursor: true, targetReadout: false },
       templateFsTrace: true,
@@ -495,12 +610,14 @@ test("the launch configuration is read from argv, and defaults to production", (
   // Anything that is not the exact boolean `true`, and anything unparseable,
   // is off.
   for (const malformed of [
-    '{"enhancementSelection":{"nativeCursor":"yes"}',
-    '{"enhancementSelection":{"nativeCursor":1}}',
+    '{"rendererRole":"game","enhancementSelection":{"nativeCursor":"yes"}}',
+    '{"rendererRole":"game","enhancementSelection":{"nativeCursor":1}}',
   ]) {
     assert.deepEqual(
       plainInit(load([RENDERER_INIT_ARGUMENT + malformed]).api.init),
       {
+        rendererRole: "game",
+        desktopPlatform: null,
         enhancementAutomation: false,
         enhancementSelection: { nativeCursor: false, targetReadout: false },
         templateFsTrace: false,

@@ -1,7 +1,10 @@
-import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { existsSync } from "node:fs";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 /**
  * What a listener installed by one `page.evaluate` recorded, read back by a
@@ -62,7 +65,6 @@ async function startGameInput(page: Page) {
 }
 
 test.describe("renderer input", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
   test("keeps game text entry native-assistance free without blurring the game", async () => {
     const fixture = await launchOffline("gw-text-input-e2e-");
@@ -187,6 +189,8 @@ test.describe("renderer input", () => {
         mouse("mouseup", 1);
         mouse("mousedown", 2);
         mouse("mouseup", 2);
+        // These cross the renderer's real synthetic-touch cancellation timers.
+        // The assertion is event order, never elapsed runner performance.
         await new Promise((resolve) => setTimeout(resolve, 30));
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
         await new Promise((resolve) => setTimeout(resolve, 60));
@@ -203,7 +207,7 @@ test.describe("renderer input", () => {
     }
   });
 
-  test("restates keys macOS rewrites while Option is held", async () => {
+  test("uses the native platform's Option or Alt semantics", async () => {
     const fixture = await launchOffline("gw-option-key-e2e-");
     try {
       const { page } = fixture;
@@ -259,14 +263,21 @@ test.describe("renderer input", () => {
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")),
       );
 
+      const macKeys = [
+        "keydown:w:87",
+        "keyup:w:87",
+        "keydown:w:87",
+        "keyup:w:87",
+      ];
+      const nativeAltKeys = [
+        "keydown:w:87",
+        "keyup:∑:87",
+        "keydown:∑:87",
+        "keyup:∑:87",
+      ];
       expect(
         await page.evaluate(() => (window as InputTestWindow).__gameKeys),
-      ).toEqual([
-        "keydown:w:87",
-        "keyup:w:87",
-        "keydown:w:87",
-        "keyup:w:87",
-      ]);
+      ).toEqual(process.platform === "darwin" ? macKeys : nativeAltKeys);
 
       // The client relays key events from its own text fields to the canvas,
       // so a rewritten release strands a key there too. Restating must not
@@ -296,7 +307,13 @@ test.describe("renderer input", () => {
             typed: text.value,
           };
         }),
-      ).toEqual({ keys: ["keydown:w:87", "keyup:w:87"], typed: "∑" });
+      ).toEqual({
+        keys:
+          process.platform === "darwin"
+            ? ["keydown:w:87", "keyup:w:87"]
+            : ["keydown:∑:87", "keyup:w:87"],
+        typed: "∑",
+      });
     } finally {
       await closeOffline(fixture);
     }
@@ -496,6 +513,8 @@ test.describe("renderer input", () => {
 
         mouse("mousedown", 2);
         mouse("mouseup", 2);
+        // Exercise the real renderer timer boundary; only emitted touch
+        // semantics are asserted, not how quickly the hosted runner wakes.
         await new Promise((resolve) => setTimeout(resolve, 30));
         mouse("mousedown", 3);
         mouse("mouseup", 3);

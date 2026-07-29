@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   verify:
-    uses: ./.github/workflows/macos-verify.yml
+    uses: ./.github/workflows/native-verify.yml
     with:
       artifact-name: snapshot-assets-${{ github.run_id }}
       artifact-retention-days: 1
@@ -28,7 +28,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-snapshot.yml
     with:
-      artifact-name: snapshot-assets-${{ github.run_id }}
+      artifact-name: snapshot-assets-${{ github.run_id }}-macos-arm64-${{ github.run_attempt }}
       commit-sha: ${{ github.sha }}
       run-number: ${{ github.run_number }}
       require-current-main: true

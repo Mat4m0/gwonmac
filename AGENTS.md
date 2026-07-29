@@ -19,8 +19,11 @@ bug.
 ## What this is
 
 Guild Wars is an Emscripten/JSPI WebAssembly client. This repository
-hosts ArenaNet’s official client in a sandboxed macOS Electron application and
-supplies its platform services through a narrow `Module` object.
+hosts ArenaNet’s official client in a sandboxed Electron application and
+supplies its platform services through a narrow `Module` object. The current
+public build is macOS-only; the approved Windows/Linux and profile work is
+specified in `plans/multi-os/spec.md` and sequenced in
+`plans/multi-os/plan.md`. A target is not public until its native gate passes.
 
 The retired Python/browser runtime must not return. Electron is the only
 production path.
@@ -52,6 +55,7 @@ not only happy paths.
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                     |
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
+| `src/control/`            | lightweight profile-manager presentation                      |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
@@ -93,22 +97,32 @@ not only happy paths.
 - WASM packet views must be compacted before crossing `contextBridge`.
 - The main process owns TCP handles, backpressure, destination/port checks,
   owner cleanup, and final close semantics.
-- Red X means a clean application quit, not a hidden headless process.
+- Closing a game flushes only that profile. Closing the manager leaves a
+  visible game running; closing the last visible window exits cleanly with no
+  hidden headless process.
 - Main owns atomic owner-only window state. Persist the last normal bounds
   beneath maximized/fullscreen mode, validate against connected display work
   areas, never restore minimized, and keep the View-menu recovery action.
 - The three game-facing `secureStorage` methods use the single native
-  `CredentialsStore`. Its encrypted `credentials.bin` is atomic and mode
-  `0600`; credentials never enter logs, diagnostics, browser storage, or
-  macOS Keychain.
-- The Steam login token is a second secret with the same guarantees and its own
-  shape. `EncryptedJsonStore` is the one mechanism underneath both; each secret
-  supplies its own validator and error codes, so `parseCredentials` — the rule
-  the credential IPC boundary runs — is never loosened for a payload it was not
-  written for. `steam-session.bin` holds `{ token, expiry }` and is the token's
-  sole persistent home: **no environment variable seeds it in any build**, and
-  `tests/policy/source-saved-login-surface.test.ts` scans for one. The token
-  never enters logs, diagnostics, browser storage, or macOS Keychain.
+  promise-based `CredentialsStore`. Its versioned encrypted `credentials.bin`
+  is atomic and mode `0600` on POSIX; credentials never enter logs,
+  diagnostics, browser storage, profile metadata, or command lines. Reads
+  never replace ciphertext after provider, parse, decrypt, or I/O failure.
+- The profile-owned Steam login token is a second secret with the same native
+  provider policy and its own validator and error codes. `steam-session.bin`
+  holds `{ token, expiry }` beneath that profile and is the token's sole
+  persistent home: no environment variable seeds it in any build. The token
+  never enters logs, diagnostics, browser storage, profile metadata, or
+  command lines.
+- Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
+  and clear browser cookies at startup and quit. The switch prevents OS
+  prompts but gives saved login and Steam tokens weaker same-user protection
+  than Keychain.
+- Windows saved login uses asynchronous user-scoped OS safe storage. Linux
+  accepts only an inspected Secret Service/KWallet backend and refuses
+  `basic_text`, `unknown`, locked, or unavailable storage. macOS and Windows
+  use the asynchronous safe-storage contract; Linux alone uses the inspected
+  synchronous API behind the promise-based application boundary.
 - Steam sign-in renders in a window the main process owns, never in the game
   renderer: its own in-memory session partition destroyed with the window,
   no preload and no Node, deny-by-default permissions and downloads, and
@@ -126,11 +140,8 @@ not only happy paths.
   inspection. Do not write docs or UI that tell a player to verify the origin.
   `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
   pins the presentation.
-- Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
-  and clear browser cookies at startup and quit. The switch prevents OS
-  prompts but gives saved login weaker same-user protection than Keychain. The
-  Steam token is longer-lived and higher-value than the password it replaces
-  and inherits that same weaker-than-Keychain posture.
+- The Steam token is longer-lived and higher-value than the password it
+  replaces.
 - The app makes no network request the user did not ask for. `autoCheckUpdates`
   (default `false`) governs **every** automatic release check without
   exception, including the one on an unrecognised client build; with it off, a
@@ -141,6 +152,13 @@ not only happy paths.
   "up to date". Application replacement is manual; ArenaNet client updates
   remain automatic. `docs/internals.md` owns the mechanism and
   `docs/user-guide.md` owns what the player is told.
+- Multi-OS work keeps one application-global `ClientRuntime`, active client,
+  chunk store, eight-request ArenaNet ceiling, socket manager, settings store,
+  and diagnostic recorder. A renderer never selects its profile identity.
+- Sequential profile switching precedes simultaneous windows. Production
+  simultaneous launch is absent until the IDBFS/performance gates and current
+  written ArenaNet clarification for Guild Wars 1 pass. Input broadcasting,
+  global input hooks, and packaged automation remain forbidden.
 
 ## Diagnostics and privacy
 
@@ -208,18 +226,23 @@ pnpm lint
 pnpm check:links
 pnpm test:unit
 pnpm test:integration
-pnpm test:electron
+pnpm test:electron:stable
+pnpm test:electron:fault
 pnpm test:policy
 pnpm test:release
-pnpm package
+pnpm make:prepared
 pnpm test:packaged
+pnpm test:artifact
+pnpm test:artifact
 ```
 
 `pnpm test:policy` holds the repository invariants that need no build: import
 boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
 artifacts, and documentation links.
 
-`pnpm verify` runs that gate end to end, and CI runs it on every pull request.
+`pnpm verify` runs that gate end to end. CI runs the shared static checks once,
+then the native build, unit, integration, Electron, package, packaged, make,
+and final-artifact checks on macOS arm64, Windows x64, and Linux x64.
 The website is not part of it: `apps/website` has its own path-filtered
 workflow, and `pnpm test:website` runs that suite locally.
 

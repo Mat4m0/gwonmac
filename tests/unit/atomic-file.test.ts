@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   mkdir,
@@ -14,7 +14,7 @@ import {
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   sweepOrphanDirectories,
   sweepOrphans,
@@ -22,8 +22,10 @@ import {
   writeAtomic,
   writeAtomicInDir,
   writeAtomicJson,
+  windowsReplaceRetryDelay,
 } from "../../src/main/core/atomic-file.js";
-import { documentDirectories, gamePaths } from "../../src/main/core/paths.js";
+import { appPaths, documentDirectories } from "../../src/main/core/paths.js";
+import { terminateTestChild } from "../../scripts/electron-layout.js";
 
 async function scratch(): Promise<string> {
   return mkdtemp(join(tmpdir(), "gw-atomic-"));
@@ -109,7 +111,9 @@ describe("atomic-file", () => {
     const dir = await scratch();
     const path = join(dir, "secret.bin");
     await writeAtomic(path, new Uint8Array([9]), 0o600);
-    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    if (process.platform !== "win32") {
+      assert.equal((await stat(path)).mode & 0o777, 0o600);
+    }
   });
 
   it("writes large payloads through writeAtomicInDir", async () => {
@@ -181,7 +185,12 @@ describe("atomic-file durability", () => {
     const events = await recordSyncs(target, () =>
       writeAtomic(target, new Uint8Array([1, 2, 3])),
     );
-    assert.deepEqual(events, ["file:before-rename", "dir:after-rename"]);
+    assert.deepEqual(
+      events,
+      process.platform === "win32"
+        ? ["file:before-rename"]
+        : ["file:before-rename", "dir:after-rename"],
+    );
   });
 
   it("leaves no temp file behind when the rename fails", async () => {
@@ -195,6 +204,25 @@ describe("atomic-file durability", () => {
 
     assert.deepEqual(await readdir(dir), ["occupied"]);
     assert.equal(await readFile(join(target, "kept"), "utf8"), "intact");
+  });
+});
+
+describe("atomic-file Windows replacement policy", () => {
+  it("retries only bounded sharing and antivirus-shaped failures", () => {
+    for (const code of ["EACCES", "EBUSY", "EPERM"]) {
+      assert.deepEqual(
+        Array.from(
+          { length: 6 },
+          (_, attempt) => windowsReplaceRetryDelay({ code }, attempt),
+        ),
+        [10, 25, 50, 100, 200, null],
+      );
+    }
+    for (const code of ["EEXIST", "ENOENT", "ENOSPC", "UNKNOWN"]) {
+      assert.equal(windowsReplaceRetryDelay({ code }, 0), null);
+    }
+    assert.equal(windowsReplaceRetryDelay(new Error("foreign"), 0), null);
+    assert.equal(windowsReplaceRetryDelay({ code: "EPERM" }, -1), null);
   });
 });
 
@@ -229,36 +257,49 @@ describe("atomic-file orphan sweep", () => {
     assert.equal(await readFile(target, "utf8"), "{}");
   });
 
-  it("sweeps the orphan a SIGKILLed writer left, with the old document intact", async () => {
+  it("sweeps an orphan from a force-terminated writer, with the old document intact", async () => {
     const dir = await scratch();
     const target = join(dir, "doc.json");
+    const ready = join(dir, "writer.ready");
     await writeAtomic(target, '{"kept":true}');
 
     // A real process, really killed between the temp write and the rename.
     // Every other case here hand-writes the artefact of a crash and so pins
     // the temp-file naming to itself; this one reads it off the disk a dead
     // writer left, which is what couples `writeAtomic` to `sweepOrphans`.
-    const child = spawnSync(
+    const child = spawn(
       process.execPath,
       [
         "--import",
-        fileURLToPath(new URL("../../scripts/ts-hook.mjs", import.meta.url)),
+        pathToFileURL(
+          fileURLToPath(new URL("../../scripts/ts-hook.mjs", import.meta.url)),
+        ).href,
         "--experimental-strip-types",
-        fileURLToPath(new URL("../fixtures/kill-mid-atomic-write.ts", import.meta.url)),
+        fileURLToPath(new URL("../fixtures/pause-mid-atomic-write.ts", import.meta.url)),
         target,
+        ready,
       ],
       { stdio: "ignore" },
     );
-    assert.equal(child.signal, "SIGKILL", "the child must die before the rename");
+    const deadline = Date.now() + 10_000;
+    while (!existsSync(ready) && Date.now() < deadline) {
+      if (child.exitCode !== null || child.signalCode !== null) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(existsSync(ready), true, "the writer never reached the barrier");
+    await terminateTestChild(child);
+    assert.ok(child.exitCode !== null || child.signalCode !== null);
 
-    const abandoned = (await readdir(dir)).filter((name) => name !== "doc.json");
+    const abandoned = (await readdir(dir)).filter(
+      (name) => name !== "doc.json" && name !== "writer.ready",
+    );
     assert.equal(abandoned.length, 1, `expected one orphan, saw ${abandoned.join(", ")}`);
     assert.match(abandoned[0]!, /^doc\.json\.\d+\.[0-9a-f]{8}\.tmp$/);
     // The half-written replacement never became the document.
     assert.equal(await readFile(target, "utf8"), '{"kept":true}');
 
     assert.equal(await sweepOrphans(dir), 1);
-    assert.deepEqual(await readdir(dir), ["doc.json"]);
+    assert.deepEqual((await readdir(dir)).sort(), ["doc.json", "writer.ready"]);
     assert.equal(await readFile(target, "utf8"), '{"kept":true}');
   });
 
@@ -272,7 +313,7 @@ describe("atomic-file orphan sweep", () => {
     // the diagnostics log all publish through the same `writeAtomic` and so
     // leak the same temp files — they were collected by nothing at all.
     const root = await scratch();
-    const dirs = documentDirectories(gamePaths(root));
+    const dirs = documentDirectories(appPaths(root));
     for (const dir of dirs) {
       await mkdir(dir, { recursive: true });
       await writeFile(join(dir, `doc.json.${process.pid + 1}.0badcafe.tmp`), "abandoned");

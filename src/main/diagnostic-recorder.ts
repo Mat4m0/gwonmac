@@ -26,7 +26,7 @@ import {
   type CaptureStopReason,
   type DiagnosticEvent,
 } from "./diagnostics/schema.js";
-import { gamePaths } from "./paths.js";
+import { appPaths } from "./paths.js";
 
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -250,7 +250,7 @@ export class FlightRecorder {
   async beginCapture(): Promise<void> {
     await this.flush();
     await rm(
-      diagnosticFramesPath(gamePaths().diagnostics, this.sessionId),
+      diagnosticFramesPath(appPaths().diagnostics, this.sessionId),
       { force: true },
     );
     this.framesReady = false;
@@ -362,7 +362,7 @@ export class FlightRecorder {
     completeFromStart: boolean;
   }> {
     await this.flush();
-    const directory = gamePaths().diagnostics;
+    const directory = appPaths().diagnostics;
     const prefix = `session-${this.sessionId}`;
     const files = (await readdir(directory))
       .filter((name) => name.startsWith(prefix) && name.endsWith(".jsonl"))
@@ -399,7 +399,7 @@ export class FlightRecorder {
     this.writes = this.writes.then(async () => {
       await this.ensureFile();
       const file = diagnosticFramesPath(
-        gamePaths().diagnostics,
+        appPaths().diagnostics,
         this.sessionId,
       );
       if (!this.framesReady) {
@@ -422,14 +422,14 @@ export class FlightRecorder {
 
   framePath(): string | null {
     return this.framesReady
-      ? diagnosticFramesPath(gamePaths().diagnostics, this.sessionId)
+      ? diagnosticFramesPath(appPaths().diagnostics, this.sessionId)
       : null;
   }
 
   private async ensureFile(): Promise<void> {
     if (!this.ready) {
       this.ready = (async () => {
-        const directory = gamePaths().diagnostics;
+        const directory = appPaths().diagnostics;
         await mkdir(directory, { recursive: true, mode: 0o700 });
         await this.pruneFiles(MAX_FILES - 1);
         this.currentFile = path.join(
@@ -456,7 +456,7 @@ export class FlightRecorder {
   }
 
   private async roll(): Promise<void> {
-    const directory = gamePaths().diagnostics;
+    const directory = appPaths().diagnostics;
     const stamped = path.join(
       directory,
       `session-${this.sessionId}-${Date.now()}.jsonl`,
@@ -471,7 +471,7 @@ export class FlightRecorder {
   }
 
   private async pruneFiles(keep: number): Promise<void> {
-    const directory = gamePaths().diagnostics;
+    const directory = appPaths().diagnostics;
     const files = (await readdir(directory))
       .filter((name) => name.endsWith(".jsonl"))
       .map((name) => path.join(directory, name));

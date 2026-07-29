@@ -2,8 +2,8 @@ import { AppError, errorCode, type ErrorCode } from "../../shared/errors.js";
 import {
   EncryptedJsonStore,
   type EncryptedSecret,
-  type SafeStorageApi,
 } from "./encrypted-store.js";
+import type { CredentialProvider } from "./credentials.js";
 
 /**
  * The Steam OAuth access token that authenticates a Steam login, and when it
@@ -67,8 +67,8 @@ const STEAM_SESSION: EncryptedSecret<StoredSteamSession> = {
 
 /** The Steam token's one persistent home. */
 export class SteamSessionStore extends EncryptedJsonStore<StoredSteamSession> {
-  constructor(path: string, storage: SafeStorageApi) {
-    super(path, storage, STEAM_SESSION);
+  constructor(path: string, provider: CredentialProvider) {
+    super(path, provider, STEAM_SESSION);
   }
 }
 

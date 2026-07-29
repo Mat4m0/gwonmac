@@ -337,10 +337,12 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
     main,
     /applyPendingGameStorageClear[\s\S]*origin:\s*"gw:\/\/app"[\s\S]*storages:\s*\["indexdb"\]/,
   );
-  const firstWindow = main.indexOf("createMainWindow(buildWindowHost(");
+  const firstWindow = main.indexOf("createMainWindow(");
   assert.notEqual(firstWindow, -1, "no window is created from a window host");
   assert.ok(
-    main.indexOf("await applyPendingGameStorageClear()") < firstWindow,
+    main.indexOf(
+      "await applyPendingGameStorageClear(profile, gameSession)",
+    ) < firstWindow,
     "the pending IndexedDB clear must run before the first window exists",
   );
 });

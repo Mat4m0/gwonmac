@@ -22,7 +22,9 @@ describe("window state", () => {
     };
     await saveWindowState(path, value);
     assert.deepEqual(await loadWindowState(path), value);
-    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    if (process.platform !== "win32") {
+      assert.equal((await stat(path)).mode & 0o777, 0o600);
+    }
     assert.throws(
       () => parseWindowState({ ...value, mode: "minimized" }),
       AppError,

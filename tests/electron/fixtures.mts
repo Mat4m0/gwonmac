@@ -1,13 +1,16 @@
 import {
   _electron as electron,
+  expect,
+  test as base,
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
-import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import type { ChildProcess } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -15,16 +18,169 @@ export const root = path.resolve(
 );
 export const main = path.join(root, "build/main/main.js");
 
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const electronBin = developmentElectronExecutable(root);
+const diagnosticsModule = path.join(root, "build/main/diagnostics.js");
+
+interface FixtureProcess {
+  readonly pid?: number | undefined;
+  readonly exitCode: number | null;
+  readonly signalCode: NodeJS.Signals | null;
+  once(
+    event: "exit",
+    listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+  ): unknown;
+  off(
+    event: "exit",
+    listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+  ): unknown;
+  kill(signal?: NodeJS.Signals | number): boolean;
+}
+
+interface ShutdownDeadlines {
+  readonly graceful: number;
+  readonly terminate: number;
+  readonly kill: number;
+}
+
+const SHUTDOWN_DEADLINES: ShutdownDeadlines = {
+  graceful: 10_000,
+  terminate: 5_000,
+  kill: 5_000,
+};
 
 export interface OfflineFixture {
   readonly app: ElectronApplication;
   readonly page: Page;
+  readonly process: ChildProcess;
   readonly userData: string;
 }
+
+interface OwnedProcess {
+  readonly process: FixtureProcess;
+  readonly userData?: string;
+  readonly app?: ElectronApplication;
+}
+
+let activeFixtureOwner: Set<OwnedProcess> | null = null;
+
+async function attachFailureEvidence(
+  fixture: OwnedProcess & { app: ElectronApplication },
+  index: number,
+  outputPath: (name: string) => string,
+  attach: (
+    name: string,
+    options: { path: string; contentType: string },
+  ) => Promise<void>,
+): Promise<void> {
+  let main:
+    | {
+      reachable: true;
+      windows: Array<{ crashed: boolean; destroyed: boolean }>;
+      summary: unknown;
+    }
+    | { reachable: false };
+  try {
+    main = await fixture.app.evaluate(
+      ({ BrowserWindow }, modulePath) => {
+        const { createRequire } = process.getBuiltinModule("node:module");
+        const load = createRequire(modulePath);
+        const { diagnosticSummary } = load(modulePath) as {
+          diagnosticSummary(): unknown;
+        };
+        return {
+          reachable: true as const,
+          windows: BrowserWindow.getAllWindows().map((window) => ({
+            crashed: window.webContents.isCrashed(),
+            destroyed: window.isDestroyed(),
+          })),
+          summary: diagnosticSummary(),
+        };
+      },
+      diagnosticsModule,
+    );
+  } catch {
+    main = { reachable: false };
+  }
+  const name = `electron-evidence-${index}.json`;
+  const evidencePath = outputPath(name);
+  await writeFile(
+    evidencePath,
+    JSON.stringify(
+      {
+        formatVersion: 1,
+        process: {
+          exited: processExited(fixture.process),
+          exitCode: fixture.process.exitCode,
+          signalCode: fixture.process.signalCode,
+        },
+        main,
+      },
+      null,
+      2,
+    ),
+    { encoding: "utf8", mode: 0o600 },
+  );
+  await attach(name, {
+    path: evidencePath,
+    contentType: "application/json",
+  });
+}
+
+export { expect };
+
+export const test = base.extend<{ electronLifecycle: void }>({
+  electronLifecycle: [
+    // Playwright requires fixture dependencies to use an object pattern.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use, testInfo) => {
+      const owned = new Set<OwnedProcess>();
+      let cleanupFailures: unknown[];
+      activeFixtureOwner = owned;
+      try {
+        await use();
+      } finally {
+        const evidenceResults =
+          testInfo.status === testInfo.expectedStatus
+            ? []
+            : await Promise.allSettled(
+                [...owned]
+                  .filter(
+                    (
+                      fixture,
+                    ): fixture is OwnedProcess & {
+                      app: ElectronApplication;
+                    } => fixture.app !== undefined,
+                  )
+                  .map((fixture, index) =>
+                    attachFailureEvidence(
+                      fixture,
+                      index,
+                      (name) => testInfo.outputPath(name),
+                      (name, options) => testInfo.attach(name, options),
+                    ),
+                  ),
+              );
+        const results = await Promise.allSettled(
+          [...owned].reverse().map((fixture) => closeOwnedProcess(fixture)),
+        );
+        cleanupFailures = [...evidenceResults, ...results]
+          .filter(
+            (result): result is PromiseRejectedResult =>
+              result.status === "rejected",
+          )
+          .map((result) => result.reason);
+        activeFixtureOwner = null;
+      }
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          cleanupFailures,
+          `${cleanupFailures.length} Electron fixture cleanup(s) failed`,
+        );
+      }
+    },
+    { auto: true, timeout: 25_000 },
+  ],
+});
 
 export async function launchOffline(
   prefix: string,
@@ -49,6 +205,7 @@ export async function launchOfflineAt(
   }
   Object.assign(env, {
     GW_OFFLINE_SHELL: "1",
+    GW_TEST_DIRECT_GAME: "1",
     // Launch without taking keyboard focus. Specs that assert on real OS focus
     // (document.hasFocus, pointer lock, fullscreen) pass GW_BACKGROUND_LAUNCH: "0".
     GW_BACKGROUND_LAUNCH: "1",
@@ -58,17 +215,129 @@ export async function launchOfflineAt(
   const app = await electron.launch({
     cwd: root,
     args: [".", `--user-data-dir=${userData}`],
+    chromiumSandbox: true,
     env,
-    // Omitted rather than passed as `undefined`: a tree without the downloaded
-    // binary falls back to Playwright's own resolution.
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
+    executablePath: electronBin,
   });
-  const page = await app.firstWindow({ timeout: 30_000 });
-  await page.waitForLoadState("domcontentloaded");
-  return { app, page, userData };
+  const childProcess = app.process();
+  try {
+    const page = await app.firstWindow({ timeout: 30_000 });
+    await page.waitForLoadState("domcontentloaded");
+    const fixture = { app, page, process: childProcess, userData };
+    activeFixtureOwner?.add(fixture);
+    return fixture;
+  } catch (error) {
+    await shutdownFixtureProcess(childProcess, () => app.close()).catch(() => undefined);
+    await rm(userData, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
-export async function closeOffline(fixture: OfflineFixture): Promise<void> {
-  await fixture.app.close().catch(() => undefined);
-  await rm(fixture.userData, { recursive: true, force: true });
+/** Register a direct Electron launch with the same bounded test owner. */
+export function ownElectronApplication(
+  app: ElectronApplication,
+  userData: string,
+): ElectronApplication {
+  activeFixtureOwner?.add({ app, process: app.process(), userData });
+  return app;
+}
+
+/** Register a raw lifecycle child so a failed assertion cannot orphan it. */
+export function ownChildProcess<T extends FixtureProcess>(process: T): T {
+  activeFixtureOwner?.add({ process });
+  return process;
+}
+
+function processExited(process: FixtureProcess): boolean {
+  return process.exitCode !== null || process.signalCode !== null;
+}
+
+async function waitForProcessExit(
+  process: FixtureProcess,
+  timeout: number,
+): Promise<boolean> {
+  if (processExited(process)) return true;
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => finish(processExited(process)), timeout);
+    const finish = (exited: boolean): void => {
+      clearTimeout(timer);
+      process.off("exit", onExit);
+      resolve(exited);
+    };
+    const onExit = (): void => finish(true);
+    process.once("exit", onExit);
+    // Close the check/listener race without leaving another turn in which an
+    // already-dead process can strand this promise.
+    if (processExited(process)) {
+      finish(true);
+      return;
+    }
+  });
+}
+
+export async function shutdownFixtureProcess(
+  process: FixtureProcess,
+  requestClose: () => Promise<void>,
+  deadlines: ShutdownDeadlines = SHUTDOWN_DEADLINES,
+): Promise<"graceful" | "terminated" | "killed"> {
+  void requestClose().catch(() => undefined);
+  if (await waitForProcessExit(process, deadlines.graceful)) return "graceful";
+
+  process.kill("SIGTERM");
+  if (await waitForProcessExit(process, deadlines.terminate)) return "terminated";
+
+  process.kill("SIGKILL");
+  if (await waitForProcessExit(process, deadlines.kill)) return "killed";
+
+  throw new Error(
+    `Electron fixture process${process.pid ? ` ${process.pid}` : ""} did not exit`,
+  );
+}
+
+export async function closeOffline(
+  fixture: OfflineFixture,
+  options: { removeUserData?: boolean } = {},
+): Promise<void> {
+  await shutdownFixtureProcess(fixture.process, () => fixture.app.close());
+  if (options.removeUserData !== false) {
+    await rm(fixture.userData, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+  }
+  if (options.removeUserData === false) {
+    activeFixtureOwner?.delete(fixture);
+  }
+}
+
+async function closeOwnedProcess(fixture: OwnedProcess): Promise<void> {
+  await shutdownFixtureProcess(
+    fixture.process,
+    () => fixture.app?.close() ?? Promise.resolve(),
+  );
+  if (fixture.userData) {
+    await rm(fixture.userData, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+  }
+}
+
+/** Close a directly launched application through the bounded owner. */
+export async function closeOwnedApplication(
+  app: ElectronApplication,
+): Promise<void> {
+  const fixture = [...(activeFixtureOwner ?? [])].find(
+    (candidate) => candidate.app === app,
+  );
+  if (!fixture) {
+    await shutdownFixtureProcess(app.process(), () => app.close());
+    return;
+  }
+  await shutdownFixtureProcess(fixture.process, () => app.close());
+  activeFixtureOwner?.delete(fixture);
 }

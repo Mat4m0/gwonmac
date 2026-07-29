@@ -9,7 +9,7 @@
 // that admits what they are, rather than deleted — a call site nothing checks
 // is exactly how a guard gets dropped in a refactor and noticed in an incident.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -36,4 +36,17 @@ test("the proxy still answers only fetches", () => {
     read("src/main/protocol.ts"),
     /if \(!isProxyFetchDestination\(destination\)\)/u,
   );
+});
+
+test("native targeting has no arbitrary first-window fallback", () => {
+  const files = readdirSync(path.join(root, "src/main"), {
+    recursive: true,
+    withFileTypes: true,
+  }).filter((entry) => entry.isFile() && /\.(?:ts|mts)$/u.test(entry.name));
+  for (const entry of files) {
+    const source = readFileSync(path.join(entry.parentPath, entry.name), "utf8");
+    assert.doesNotMatch(source, /BrowserWindow\.getAllWindows/u);
+    assert.doesNotMatch(source, /\bgetMainWindow\b/u);
+    assert.doesNotMatch(source, /\bcanonicalRendererWindow\b/u);
+  }
 });

@@ -1,41 +1,56 @@
-// Packaging policy: the nine Electron fuses AGENTS.md names as load-bearing are
-// set explicitly in forge.config.ts, and `strictlyRequireAllFuses` makes a
-// missing one a packaging failure rather than a silent default.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import {
+  packageFuseConfig,
+  packageFuseExecutable,
+} from "../../scripts/package-fuses.ts";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
+const COMMON_FUSES = new Map<FuseV1Options, boolean>([
+  [FuseV1Options.RunAsNode, false],
+  [FuseV1Options.EnableCookieEncryption, true],
+  [FuseV1Options.EnableNodeOptionsEnvironmentVariable, false],
+  [FuseV1Options.EnableNodeCliInspectArguments, false],
+  [FuseV1Options.OnlyLoadAppFromAsar, true],
+  [FuseV1Options.LoadBrowserProcessSpecificV8Snapshot, false],
+  [FuseV1Options.GrantFileProtocolExtraPrivileges, false],
+  [FuseV1Options.WasmTrapHandlers, true],
+]);
 
-const FUSES = {
-  RunAsNode: false,
-  EnableCookieEncryption: true,
-  EnableNodeOptionsEnvironmentVariable: false,
-  EnableNodeCliInspectArguments: false,
-  EnableEmbeddedAsarIntegrityValidation: true,
-  OnlyLoadAppFromAsar: true,
-  LoadBrowserProcessSpecificV8Snapshot: false,
-  GrantFileProtocolExtraPrivileges: false,
-  WasmTrapHandlers: true,
-};
-
-test("release fuses keep Node, inspection and file-protocol privileges disabled", () => {
-  for (const [name, value] of Object.entries(FUSES)) {
-    assert.match(
-      forge,
-      new RegExp(`\\[FuseV1Options\\.${name}\\]: ${value}`),
-      `FuseV1Options.${name} must be ${value}`,
+for (const platform of ["darwin", "win32", "linux"] as const) {
+  test(`${platform} has the complete central fuse policy`, () => {
+    const config = packageFuseConfig(platform, platform === "darwin" ? "arm64" : "x64");
+    assert.equal(config.version, FuseVersion.V1);
+    assert.equal(config.strictlyRequireAllFuses, true);
+    for (const [fuse, value] of COMMON_FUSES) {
+      assert.equal(config[fuse], value, FuseV1Options[fuse]);
+    }
+    assert.equal(
+      config[FuseV1Options.EnableEmbeddedAsarIntegrityValidation],
+      platform !== "linux",
     );
-  }
-  assert.match(forge, /strictlyRequireAllFuses: true/);
-});
+    assert.equal(
+      config.resetAdHocDarwinSignature,
+      platform === "darwin" ? true : undefined,
+    );
+  });
+}
 
-test("no fuse is left to its default", () => {
-  const configured = [...forge.matchAll(/\[FuseV1Options\.(\w+)\]/g)].map(
-    (match) => match[1],
+test("the pre-rename executable path is resolved once for every packager layout", () => {
+  assert.equal(
+    packageFuseExecutable("/tmp/Guild Wars.app/Contents/Resources/app", "darwin"),
+    "/tmp/Guild Wars.app/Contents/MacOS/Electron",
   );
-  assert.deepEqual(configured.sort(), Object.keys(FUSES).sort());
+  assert.equal(
+    packageFuseExecutable("C:\\staging\\resources\\app", "win32"),
+    "C:\\staging\\electron.exe",
+  );
+  assert.equal(
+    packageFuseExecutable("/tmp/guild-wars/resources/app", "linux"),
+    "/tmp/guild-wars/electron",
+  );
+  assert.throws(
+    () => packageFuseExecutable("/tmp/resources", "freebsd"),
+    /unsupported package fuse platform/u,
+  );
 });

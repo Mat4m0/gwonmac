@@ -1,18 +1,22 @@
 import { app } from "electron";
 import path from "node:path";
-import { gamePaths as resolveGamePaths } from "./core/paths.js";
-import type { GamePaths } from "./core/paths.js";
+import { appPaths as resolveAppPaths } from "./core/paths.js";
+import type { AppPaths } from "./core/paths.js";
 
-export type { GamePaths } from "./core/paths.js";
+export type { AppPaths } from "./core/paths.js";
 
 /** The path table rooted at Electron's per-user data directory. */
-export function gamePaths(userData = app.getPath("userData")): GamePaths {
-  return resolveGamePaths(userData);
+export function appPaths(userData = app.getPath("userData")): AppPaths {
+  return resolveAppPaths(userData);
 }
 
 export function rendererRoot(): string {
   // Dev and packaged: compiled assets live under build/ next to main.
   return path.join(app.getAppPath(), "build", "renderer");
+}
+
+export function controlRoot(): string {
+  return path.join(app.getAppPath(), "build", "control");
 }
 
 export function preloadPath(): string {

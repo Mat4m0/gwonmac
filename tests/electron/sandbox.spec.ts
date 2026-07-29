@@ -1,10 +1,12 @@
-import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { desktopPlatformFor } from "../../src/shared/contracts.js";
+import {
+  closeOffline,
+  expect,
+  launchOffline,
+  test,
+} from "./fixtures.mjs";
 
 test.describe("sandbox boundary", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("exposes only the frozen application capabilities", async () => {
     const fixture = await launchOffline("gw-sandbox-e2e-");
     try {
@@ -30,6 +32,8 @@ test.describe("sandbox boundary", () => {
         search: "",
         // The game cursor ships on, so a default launch asks for it here.
         init: {
+          rendererRole: "game",
+          desktopPlatform: desktopPlatformFor(process.platform),
           enhancementAutomation: false,
           enhancementSelection: {
             nativeCursor: true,
@@ -81,7 +85,7 @@ test.describe("sandbox boundary", () => {
         await fixture.app.evaluate(({ app }) =>
           app.commandLine.hasSwitch("use-mock-keychain"),
         ),
-      ).toBe(true);
+      ).toBe(process.platform === "darwin");
       const snapshotResponse = await fixture.page.evaluate(async () => {
         const response = await window.fetch("Gw.snapshot", {
           headers: { Range: "bytes=0-0" },
@@ -99,8 +103,9 @@ test.describe("sandbox boundary", () => {
       await fixture.page.evaluate(() => {
         globalThis.location.assign("gw://app/account/login");
       });
-      await fixture.page.waitForTimeout(100);
-      expect(new URL(fixture.page.url()).pathname).toBe("/");
+      await expect
+        .poll(() => new URL(fixture.page.url()).pathname)
+        .toBe("/");
 
       const oversizedSocketError = await fixture.page.evaluate(async () => {
         try {
@@ -131,9 +136,8 @@ test.describe("sandbox boundary", () => {
   test("the security posture holds on the real window, not only in the source", async () => {
     const fixture = await launchOffline("gw-security-posture-e2e-");
     try {
-      const applied = await fixture.app.evaluate(({ BrowserWindow }) => {
-        const [win] = BrowserWindow.getAllWindows();
-        if (!win) throw new Error("the application window is gone");
+      const applicationWindow = await fixture.app.browserWindow(fixture.page);
+      const applied = await applicationWindow.evaluate((win) => {
         // Electron 43 implements `webContents.getLastWebPreferences()` — it is
         // how the preferences Chromium actually applied are read back — but
         // omits it from its own declarations.
@@ -165,6 +169,15 @@ test.describe("sandbox boundary", () => {
         experimentalFeatures: false,
         webviewGuards: 1,
       });
+      expect(
+        await fixture.app.evaluate(({ app }) =>
+          app.commandLine.hasSwitch("no-sandbox"),
+        ),
+      ).toBe(false);
+      await expect(fixture.page.locator("html")).toHaveAttribute(
+        "data-gw-renderer-sandboxed",
+        "true",
+      );
 
       // The policy the renderer is actually served, read out of the response
       // its own protocol handler produced.
@@ -205,6 +218,8 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
+        rendererRole: "game",
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: true,
         enhancementSelection: {
           nativeCursor: true,
@@ -227,6 +242,8 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
+        rendererRole: "game",
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
           nativeCursor: true,

@@ -83,6 +83,7 @@ function harness(argv: string[]) {
   // The renderer half: the real router, over the real preload object.
   const dispatched: string[] = [];
   const capture: CaptureCall[] = [];
+  const filesystemSyncs: boolean[] = [];
   let releaseFlush = (): void => {};
   const flushed = new Promise<void>((resolve) => {
     releaseFlush = resolve;
@@ -114,8 +115,19 @@ function harness(argv: string[]) {
     dispatchEvent(event: { type: string }) {
       dispatched.push(event.type);
     },
+    setTimeout,
+    clearTimeout,
   };
-  const context: Record<string, unknown> = { console, window };
+  const context: Record<string, unknown> = {
+    console,
+    window,
+    FS: {
+      syncfs(populate: boolean, callback: () => void) {
+        filesystemSyncs.push(populate);
+        callback();
+      },
+    },
+  };
   context.globalThis = context;
   vm.runInNewContext(routerSource, context);
 
@@ -136,11 +148,14 @@ function harness(argv: string[]) {
     dispatched,
     acknowledgements,
     releaseFlush,
+    filesystemSyncs,
     window,
   };
 }
 
 const INIT: RendererInit = {
+  rendererRole: "game",
+  desktopPlatform: "macos",
   enhancementAutomation: true,
   enhancementSelection: {
     nativeCursor: false,
@@ -158,8 +173,10 @@ test("launch configuration arrives as a preload argument, not as a URL", () => {
   assert.deepEqual(plainInit(harness(ARGV).api.init), INIT);
 });
 
-test("a renderer with no readable init argument gets the production posture", () => {
+test("invalid optional init fields get the production posture", () => {
   const missing: RendererInit = {
+    rendererRole: "game",
+    desktopPlatform: null,
     enhancementAutomation: false,
     enhancementSelection: {
       nativeCursor: false,
@@ -167,16 +184,11 @@ test("a renderer with no readable init argument gets the production posture", ()
     },
     templateFsTrace: false,
   };
-  assert.deepEqual(plainInit(harness([]).api.init), missing);
-  assert.deepEqual(
-    plainInit(harness([`${RENDERER_INIT_ARGUMENT}{not json`]).api.init),
-    missing,
-  );
   // A parameter that is present but not a boolean is not an opt-in.
   assert.deepEqual(
     plainInit(
       harness([
-        `${RENDERER_INIT_ARGUMENT}{"enhancementAutomation":"1","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
+        `${RENDERER_INIT_ARGUMENT}{"rendererRole":"game","enhancementAutomation":"1","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
       ]).api.init,
     ),
     missing,
@@ -199,6 +211,14 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [2, "completed"],
     [3, "completed"],
   ]);
+});
+
+test("profile close explicitly flushes the mounted game filesystem", async () => {
+  const fixture = harness(ARGV);
+  fixture.deliver(9, { type: "filesystem.flush" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.filesystemSyncs, [false]);
+  assert.deepEqual(fixture.acknowledgements(), [[9, "completed"]]);
 });
 
 test("a capture level crosses as a number, not as interpolated source", async () => {

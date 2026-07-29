@@ -17,7 +17,7 @@ import type {
   ExternalLinkKind,
   FullDownloadOutcome,
   GraphicsDiagnostics,
-  InvokeChannel,
+  GameInvokeChannel,
   ReleaseNotice,
   SocketEvent,
   StoredCredentials,
@@ -36,7 +36,12 @@ import {
 import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
-import { CredentialsStore, parseCredentials } from "./core/credentials.js";
+import {
+  CredentialsStore,
+  parseCredentials,
+  type CredentialProvider,
+} from "./core/credentials.js";
+import { createCredentialProvider } from "./credential-provider.js";
 import { resolveDns } from "./core/dns.js";
 import {
   MAX_TOKEN_LENGTH,
@@ -64,19 +69,24 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
-import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
+import { resetGameInput } from "./window.js";
+import type { WindowRegistry } from "./window-registry.js";
+import type { ProfileId, ProfileRecord } from "./core/profiles.js";
 
 export interface IpcContext {
+  windows: WindowRegistry;
   sockets: SocketManager;
+  getProfile: (id: ProfileId) => Promise<ProfileRecord>;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
+  resetWindowState: (win: BrowserWindow) => Promise<void>;
+  closeGame: (win: BrowserWindow) => Promise<void>;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -91,9 +101,17 @@ export interface IpcContext {
 
 type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
 
-function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+function assertSender(
+  event: Electron.IpcMainInvokeEvent,
+  windows: WindowRegistry,
+): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win || win !== getMainWindow()) {
+  const context = windows.contextFor(event.sender);
+  if (
+    !win
+    || context?.kind !== "game"
+    || context.window !== win
+  ) {
     throw new AllowlistError("unowned ipc sender");
   }
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
@@ -403,8 +421,32 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 }
 
 export function registerIpcHandlers(ctx: IpcContext): void {
-  const paths = gamePaths();
-  const credentials = new CredentialsStore(paths.credentials, safeStorage);
+  const credentialProvider = createCredentialProvider(
+    process.platform,
+    safeStorage,
+  );
+  const credentials = new Map<ProfileId, CredentialsStore>();
+  const profileFor = async (win: BrowserWindow): Promise<ProfileRecord> => {
+    const context = ctx.windows.contextForWindow(win);
+    if (context?.kind !== "game") {
+      throw new AllowlistError("game profile owner disappeared");
+    }
+    return ctx.getProfile(context.profileId);
+  };
+  const credentialsFor = async (
+    win: BrowserWindow,
+  ): Promise<CredentialsStore> => {
+    const profile = await profileFor(win);
+    let store = credentials.get(profile.id);
+    if (!store) {
+      store = new CredentialsStore(
+        profile.paths.credentials,
+        credentialProvider,
+      );
+      credentials.set(profile.id, store);
+    }
+    return store;
+  };
 
   /**
    * Every channel main answers, with the parser that turns its arguments into
@@ -522,7 +564,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         if (response !== 0) return null;
         const settings = await ctx.resetSettings();
         try {
-          await resetWindowState(win);
+          await ctx.resetWindowState(win);
         } catch {
           // The settings file is already durably reset. Window geometry is a
           // separate document, so its failure must not turn that committed
@@ -541,9 +583,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       }
     }),
 
-    credentialsLoad: channel(nothing, async () => {
+    credentialsLoad: channel(nothing, async (win) => {
       try {
-        return await credentials.load();
+        return await (await credentialsFor(win)).load();
       } catch (error) {
         logEvent({ k: "credentials.loadFailed" });
         throw error;
@@ -554,9 +596,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     // is that rule, so the boundary is validated without a second opinion.
     credentialsSave: channel(
       one(parseCredentials),
-      async (_win, value: StoredCredentials) => {
+      async (win, value: StoredCredentials) => {
         try {
-          await credentials.save(value);
+          await (await credentialsFor(win)).save(value);
         } catch (error) {
           logEvent({ k: "credentials.saveFailed" });
           throw error;
@@ -564,9 +606,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       },
     ),
 
-    credentialsClear: channel(nothing, async () => {
+    credentialsClear: channel(nothing, async (win) => {
       try {
-        await credentials.clear();
+        await (await credentialsFor(win)).clear();
       } catch (error) {
         logEvent({ k: "credentials.clearFailed" });
         throw error;
@@ -584,26 +626,14 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     cacheClear: channel(nothing, async (win) => {
       await resetGameInput(win);
-      const { response } = await dialog.showMessageBox(win, {
-        type: "warning",
-        buttons: ["Clear and Restart", "Cancel"],
-        defaultId: 1,
-        cancelId: 1,
-        message: "Clear downloaded game data?",
+      await dialog.showMessageBox(win, {
+        type: "info",
+        buttons: ["OK"],
+        message: "Close Guild Wars first",
         detail:
-          "The app will restart. Client files stay installed, but game data will download again.",
+          "Downloaded game data is shared by every profile. Clear it from the profile manager when no game is running.",
       });
-      if (response !== 0) return false;
-      try {
-        await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
-        logEvent({ k: "cache.clearRequested" });
-        app.relaunch();
-        app.quit();
-        return true;
-      } catch (error) {
-        logEvent({ k: "cache.clearRequestFailed", code: errorCode(error) });
-        throw error;
-      }
+      return false;
     }),
 
     cacheDownloadAll: channel(nothing, () => ctx.downloadFullGame()),
@@ -623,7 +653,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       });
       if (response !== 0) return false;
       try {
-        await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
+        const profile = await profileFor(win);
+        await writeFile(profile.paths.gameStorageClearRequest, "", {
+          mode: 0o600,
+        });
         logEvent({ k: "filesystem.resetRequested" });
         app.relaunch();
         app.quit();
@@ -646,8 +679,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       },
     ),
 
-    diagnosticsClockResult: channel(asClockResult, (_win, { offsetUs, rttUs }) => {
-      recordClockOffset(offsetUs, rttUs);
+    diagnosticsClockResult: channel(asClockResult, (win, { offsetUs, rttUs }) => {
+      recordClockOffset(win.webContents, offsetUs, rttUs);
     }),
 
     diagnosticsRendererMetrics: channel(asRendererMetrics, (_win, value) => {
@@ -660,8 +693,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     diagnosticsRendererMilestone: channel(
       asMilestone,
-      (_win, { name, rendererTimestampUs, fields }) => {
-        recordRendererMilestone(name, rendererTimestampUs, fields);
+      (win, { name, rendererTimestampUs, fields }) => {
+        recordRendererMilestone(
+          win.webContents,
+          name,
+          rendererTimestampUs,
+          fields,
+        );
       },
     ),
 
@@ -671,9 +709,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       await shell.openExternal(EXTERNAL_URLS[kind]);
     }),
 
-    appRequestQuit: channel(nothing, () => {
-      app.quit();
-    }),
+    appRequestQuit: channel(nothing, (win) => ctx.closeGame(win)),
 
     clientRetry: channel(nothing, () => ctx.retryClient()),
 
@@ -684,14 +720,15 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     clientSession: channel(nothing, () => ctx.getClientSession()),
 
     releaseNoticeCheck: channel(nothing, () => ctx.checkReleaseNotice()),
-  } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
+  } satisfies Record<Exclude<GameInvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
-  registerChannelDefinitions(handlers);
-  registerSteamIpcHandlers(ctx.acquireSteamToken);
+  registerChannelDefinitions(handlers, ctx.windows);
+  registerSteamIpcHandlers(ctx, credentialProvider);
 }
 
 function registerChannelDefinitions(
-  handlers: Partial<Record<InvokeChannel, AnyChannelDef>>,
+  handlers: Partial<Record<GameInvokeChannel, AnyChannelDef>>,
+  windows: WindowRegistry,
 ): void {
   // One registration, uniform and total: `assertSender` first, then the
   // channel's own parser, then its run. The cast is the erasure `satisfies`
@@ -706,9 +743,9 @@ function registerChannelDefinitions(
   // instead of nothing.
   for (const [key, definition] of Object.entries(handlers)) {
     const def = definition as ChannelDef<unknown, unknown>;
-    const name = key as InvokeChannel;
+    const name = key as GameInvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(event);
+      const win = assertSender(event, windows);
       let input: unknown;
       try {
         input = def.parse(args);
@@ -722,15 +759,28 @@ function registerChannelDefinitions(
 }
 
 export function registerSteamIpcHandlers(
-  acquireSteamToken: IpcContext["acquireSteamToken"],
+  ctx: IpcContext,
+  credentialProvider: CredentialProvider,
 ): void {
-  const paths = gamePaths();
-  const steam = new SteamSessionCoordinator(
-    new SteamSessionStore(paths.steamSession, safeStorage),
-  );
+  const coordinators = new Map<ProfileId, SteamSessionCoordinator>();
+  const steamFor = async (win: BrowserWindow): Promise<SteamSessionCoordinator> => {
+    const context = ctx.windows.contextForWindow(win);
+    if (context?.kind !== "game") {
+      throw new AllowlistError("game profile owner disappeared");
+    }
+    const profile = await ctx.getProfile(context.profileId);
+    let coordinator = coordinators.get(profile.id);
+    if (!coordinator) {
+      coordinator = new SteamSessionCoordinator(
+        new SteamSessionStore(profile.paths.steamSession, credentialProvider),
+      );
+      coordinators.set(profile.id, coordinator);
+    }
+    return coordinator;
+  };
 
   const runSteamSignIn = async (win: BrowserWindow): Promise<string | null> => {
-    const result = await acquireSteamToken(win, (event) => {
+    const result = await ctx.acquireSteamToken(win, (event) => {
       if (event.k === "opened") logEvent({ k: "steam.signInOpened" });
       if (event.k === "blocked") {
         logEvent({ k: "steam.signInBlocked", what: event.what });
@@ -748,6 +798,7 @@ export function registerSteamIpcHandlers(
     // rebuilds its own login screen from a refused credential and a rejection
     // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
+      const steam = await steamFor(win);
       const resolution = await steam.resolve({
         silent,
         acquire: () => runSteamSignIn(win),
@@ -771,13 +822,15 @@ export function registerSteamIpcHandlers(
       return resolution.token;
     }),
 
-    steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
+    steamStore: channel(asSteamStoreback, async (win, { token, expiry }) => {
+      const steam = await steamFor(win);
       const outcome = await steam.refresh(token, expiry);
       logEvent({ k: "steam.storeback", outcome });
     }),
 
-    steamClear: channel(nothing, async () => {
+    steamClear: channel(nothing, async (win) => {
       try {
+        const steam = await steamFor(win);
         await steam.clear();
         logEvent({ k: "steam.tokenCleared" });
       } catch (error) {
@@ -787,7 +840,7 @@ export function registerSteamIpcHandlers(
     }),
   } satisfies Record<SteamInvokeChannel, AnyChannelDef>;
 
-  registerChannelDefinitions(handlers);
+  registerChannelDefinitions(handlers, ctx.windows);
 }
 
 function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
@@ -841,11 +894,14 @@ function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
   );
 }
 
-export function emitSocketEvent(ownerId: number, event: SocketEvent): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
-    if (win.webContents.id === ownerId) {
-      sendIfLive(win, IPC.socketEvent, toWireSocketEvent(event));
-    }
-  }
+export function emitSocketEvent(
+  windows: WindowRegistry,
+  ownerId: number,
+  event: SocketEvent,
+): void {
+  const context = windows.gameWindows().find(
+    (candidate) => candidate.window.webContents.id === ownerId,
+  );
+  if (!context) return;
+  sendIfLive(context.window, IPC.socketEvent, toWireSocketEvent(event));
 }

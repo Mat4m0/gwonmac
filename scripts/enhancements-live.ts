@@ -29,6 +29,7 @@ import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
 import { projectLiveResult } from "./enhancements-live/result.js";
+import { developmentElectronExecutable } from "./electron-layout.js";
 
 type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
 
@@ -38,10 +39,7 @@ if (process.env.GW_LIVE_SMOKE !== "1") {
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const electronBin = developmentElectronExecutable(root);
 const userData = defaultGuildWarsProfile();
 const leaveOpen = process.argv.includes("--leave-open");
 const allowUpdate = process.argv.includes("--allow-update");

@@ -376,12 +376,12 @@ Module = {
   secureStorage: {
     async getCredentials() {
       const stored = await native().credentials.load();
-      if (!stored) {
+      if (stored.state !== 'available') {
         log('secureStorage: no saved credentials — the module should prompt');
         throw new Error('no stored credentials');
       }
       log('secureStorage: returning saved credentials');
-      return stored;
+      return stored.credentials;
     },
     async storeCredentials(username, password) {
       if (typeof username !== 'string' || typeof password !== 'string') {
@@ -672,6 +672,7 @@ function loadGlue() {
   inputHost = host.installGameInput({
     canvas: c,
     initialSettings: appSettings,
+    platform: window.gwNative?.init.desktopPlatform ?? null,
     diagnostics: window.gwDiagnostics,
     log,
   });
@@ -751,7 +752,13 @@ function loadGlue() {
     };
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
-    Object.assign(Module, unavailablePlatformCapabilities(log));
+    Object.assign(
+      Module,
+      unavailablePlatformCapabilities(
+        window.gwNative.init.desktopPlatform,
+        log,
+      ),
+    );
     const socketHost = createSocketHost({
       native: native().sockets,
       diagnostics: window.gwDiagnostics,

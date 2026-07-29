@@ -1,4 +1,8 @@
-import { app, protocol, net } from "electron";
+import {
+  app,
+  protocol,
+  net,
+} from "electron";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -23,7 +27,7 @@ import {
   startProxyRequestSpan,
   startSnapshotReadSpan,
 } from "./diagnostics.js";
-import { gamePaths, rendererRoot } from "./paths.js";
+import { appPaths, controlRoot, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -44,6 +48,10 @@ const CSP =
   "font-src 'self' gw:; connect-src 'self' gw:; worker-src 'self' gw: blob:; " +
   "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
   "frame-ancestors 'none'";
+const CONTROL_CSP =
+  "default-src 'self' gw:; script-src 'self' gw:; style-src 'self' gw:; " +
+  "img-src 'self' gw: data:; object-src 'none'; base-uri 'none'; " +
+  "frame-src 'none'; form-action 'none'; frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 
 export interface ProtocolDeps {
@@ -81,8 +89,8 @@ export function registerGwScheme(): void {
   ]);
 }
 
-export function installGwProtocolHandler(): void {
-  protocol.handle("gw", (request) => handleGwRequest(request));
+export function gameProtocolHandler(request: Request): Promise<Response> {
+  return handleGwRequest(request);
 }
 
 function headers(extra: Record<string, string> = {}): Headers {
@@ -114,15 +122,22 @@ async function fileResponse(
   filePath: string,
   request: Request,
   mime: string,
+  csp = CSP,
 ): Promise<Response> {
   let st;
   try {
     st = await stat(filePath);
   } catch {
-    return new Response("not found", { status: 404, headers: headers() });
+    return new Response("not found", {
+      status: 404,
+      headers: headers({ "Content-Security-Policy": csp }),
+    });
   }
   if (!st.isFile()) {
-    return new Response("not found", { status: 404, headers: headers() });
+    return new Response("not found", {
+      status: 404,
+      headers: headers({ "Content-Security-Policy": csp }),
+    });
   }
 
   const range = parseRangeHeader(request.headers.get("range"), st.size);
@@ -130,6 +145,7 @@ async function fileResponse(
     return new Response(null, {
       status: 416,
       headers: headers({
+        "Content-Security-Policy": csp,
         "Content-Range": `bytes */${st.size}`,
         "Accept-Ranges": "bytes",
       }),
@@ -145,6 +161,7 @@ async function fileResponse(
     return new Response(webStream, {
       status: 206,
       headers: headers({
+        "Content-Security-Policy": csp,
         "Content-Type": mime,
         "Accept-Ranges": "bytes",
         "Content-Range": `bytes ${range.start}-${range.end}/${st.size}`,
@@ -158,6 +175,7 @@ async function fileResponse(
   return new Response(webStream, {
     status: 200,
     headers: headers({
+      "Content-Security-Policy": csp,
       "Content-Type": mime,
       "Accept-Ranges": "bytes",
       "Content-Length": String(st.size),
@@ -405,9 +423,9 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     const file =
       artifactName === "Gw.jspi.wasm"
         ? active?.wasmPath ??
-          clientArtifactPath(gamePaths().artifacts, "Gw.jspi.wasm")
+          clientArtifactPath(appPaths().artifacts, "Gw.jspi.wasm")
         : clientArtifactPath(
-            active?.artifactsDir ?? gamePaths().artifacts,
+            active?.artifactsDir ?? appPaths().artifacts,
             artifactName,
           );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
@@ -441,6 +459,33 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   }
 
   return new Response("not found", { status: 404, headers: headers() });
+}
+
+export async function controlProtocolHandler(
+  request: Request,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (
+    url.hostname !== "control"
+    || url.search
+    || url.hash
+    || (request.method !== "GET" && request.method !== "HEAD")
+  ) {
+    return new Response("forbidden", {
+      status: 403,
+      headers: headers({ "Content-Security-Policy": CONTROL_CSP }),
+    });
+  }
+  const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+  const file = safeUnder(controlRoot(), pathname);
+  if (!file) {
+    return new Response("not found", {
+      status: 404,
+      headers: headers({ "Content-Security-Policy": CONTROL_CSP }),
+    });
+  }
+  const mime = MIME[path.extname(file)] ?? "application/octet-stream";
+  return fileResponse(file, request, mime, CONTROL_CSP);
 }
 
 export function isDevBuild(): boolean {

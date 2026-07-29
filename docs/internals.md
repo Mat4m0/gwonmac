@@ -119,7 +119,7 @@ against ArenaNet’s production service. Individual patch requests have a
 Full-image progress uses one time-weighted rate average after a short warm-up;
 the same value drives the displayed transfer rate and ETA. The main process
 derives native task feedback from the canonical `image` progress phase: the
-Dock shows determinate or indeterminate progress and
+application icon or taskbar shows determinate or indeterminate progress and
 `prevent-app-suspension` remains active until the download completes, pauses,
 or fails. There is no renderer-owned download or power state.
 
@@ -210,15 +210,32 @@ shop.initialize/inAppPurchase
 ```
 
 The generated glue requires all three credential methods. They cross a narrow
-IPC boundary to one native `CredentialsStore`, which writes encrypted
-`credentials.bin` atomically with mode `0600`. Because ad-hoc builds have no
-stable signing identity, the main process enables Chromium's
-`use-mock-keychain` provider before ready. Electron `safeStorage` therefore
-uses a local mock profile key rather than macOS Keychain: it prevents recurring
-OS prompts and casual plaintext disclosure, but does not defend the saved
-login from software running as the same user. An unreadable ciphertext is never
-deleted by a read; the failure is recorded without credential content and the
-game prompts again. A later explicit save atomically replaces it.
+IPC boundary to one promise-based native `CredentialsStore`. It writes a
+closed, versioned envelope to `credentials.bin` atomically, with mode `0600`
+on POSIX. The envelope contains only its format, protection ID, and base64
+ciphertext. Reads are bounded before decoding or decrypting, distinguish an
+invalid envelope, wrong provider, decrypt failure, invalid plaintext, and I/O
+failure, and never delete or replace ciphertext after failure.
+
+macOS and Windows use Electron's asynchronous safe-storage API, including its
+key-rotation result. A rotation decrypts once, validates the returned
+plaintext, re-encrypts it, and atomically publishes the replacement. Linux
+uses the synchronous API behind the same promise contract because only that
+path exposes the selected backend: `gnome_libsecret`, `kwallet`, `kwallet5`,
+and `kwallet6` are accepted; `basic_text`, `unknown`, and unavailable/locked
+storage return the closed temporarily-unavailable state and nothing is saved.
+Windows protection is user-scoped DPAPI; it does not claim protection from
+other software running as the signed-in user.
+
+Because ad-hoc macOS builds have no stable signing identity, the main process
+enables Chromium's `use-mock-keychain` provider before ready. That local mock
+profile key prevents recurring OS prompts and casual plaintext disclosure, but
+does not defend the saved login from software running as the same user.
+Existing raw macOS preview ciphertext is decrypted once and rewritten into
+the envelope only after a successful load. An unreadable legacy file is
+preserved. Any unavailable read makes the game prompt normally without
+displaying provider error text; a later explicit save is the only ordinary
+replacement path.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 Steam is advertised as a federated provider; Apple and Google are not. The
@@ -285,13 +302,13 @@ inspection.
 `docs/user-guide.md` says so plainly instead of asking them to check a title bar
 that is not there.
 
-The token persists in `steam-session.bin` as `{ token, expiry }`, under the same
-`EncryptedJsonStore` mechanism as `credentials.bin` — `safeStorage` encryption,
-atomic write, mode `0600` — with its own validator, so the credential store's
-shape rule is untouched. It is the token's only persistent home; **no
-environment variable seeds it in any build**. Silent resolution returns a
-stored unexpired token or nothing; explicit resolution reacquires. An expired
-token is discarded;
+The token persists in the selected profile's `steam-session.bin` as
+`{ token, expiry }`. It uses the same OS-aware provider policy as
+`credentials.bin`, a versioned envelope, atomic write, and mode `0600`, with its
+own validator so the credential store's shape rule is untouched. It is the
+token's only persistent home; **no environment variable seeds it in any
+build**. Silent resolution returns a stored unexpired token or nothing;
+explicit resolution reacquires. An expired token is discarded;
 an unreadable one is treated as absent but deliberately kept, because encryption
 can be momentarily unavailable and deleting on that would throw away a
 credential that still works. Neither failure fails the launch — both return the
@@ -512,7 +529,9 @@ The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on
 reload, renderer loss, or quit. DNS accepts only approved ArenaNet/Guild Wars
 suffixes and retains the raw DNS fallback needed for the `0.0.1.2` datacenter
-sentinel.
+sentinel. The fallback reads Node's platform resolver list, filters it to the
+IPv4 transport the raw query implements, then tries the two pinned public
+fallbacks. It never reads a Unix-specific resolver file.
 
 Three ceilings bound one renderer: 64 sockets, 4 MiB queued on any single
 socket, and 16 MiB queued across all of them together. The aggregate one is the
@@ -558,18 +577,21 @@ patch the official glue speculatively: `Gw.dat` is persistent client state and
 removing it can turn memory pressure into repeated reconstruction and snapshot
 I/O.
 
-Closing the single game window is an application quit. The close event is
-converted to `app.quit()` before the renderer is destroyed, cleanup closes
-sockets and background work, diagnostics flush their final lifecycle events,
-and the process exits with status zero. Main-to-renderer events are dropped
-once either the window or its `webContents` is destroyed. Renderer recovery is
-reserved for unexpected loss while the application is not quitting.
+The profile manager and at most one sequential game window are owned by the
+single Electron process. Closing a game flushes its IDBFS and Electron session,
+closes only its sockets, and destroys only that window. Closing the manager
+while the game remains visible does not hide or stop the game. Closing the last
+visible window starts normal application cleanup and exits with status zero.
+Main-to-renderer events are dropped once either the window or its
+`webContents` is destroyed. A crashed game keeps its registry reservation
+until its one automatic replacement is created, so the manager cannot launch a
+duplicate during recovery.
 
 The process acquires Electron's single-instance lock before it reads or sweeps
 profile-owned files. A second launch exits and asks the primary process to
-restore, show, and focus its existing window. That lock is what makes startup
-cleanup of atomic-write temporary files safe: another live app process cannot
-still own a foreign-PID temporary file in the same profile.
+restore, show, and focus—or recreate—the profile manager. That lock is what
+makes startup cleanup of atomic-write temporary files safe: another live app
+process cannot still own a foreign-PID temporary file in the same profile.
 
 ## Rendering and input
 
@@ -669,6 +691,12 @@ Level 0 is always active:
 - GPU, power, thermal, lifecycle, crash, and context-loss signals;
 - window focus, minimize, hide, and resize/move brackets, plus a per-batch
   renderer `focused` flag.
+
+Native power telemetry is capability-gated. Thermal state is macOS-only;
+battery change events and CPU speed-limit events are macOS/Windows-only.
+Unsupported or throwing APIs publish the closed `unavailable` state, while a
+supported event stream that has not emitted yet is `unknown`. Diagnostics
+never turn absence into a nominal thermal state or a 100% CPU limit.
 
 Window state is load-bearing for stall attribution. An unfocused, occluded, or
 mid-resize window stops being composited, which stops `requestAnimationFrame`
@@ -889,6 +917,28 @@ two that read _none_ today are recorded rather than quietly kept.
 | "The client's available graphics settings, plus selectable render scale" | website capability facts | Narrowed in P3.22 from "every in-game quality option, fully available", which was wrong — the official WebGL client may offer only `None` for antialiasing. `tests/website-smoke.ts` executes the served page and fails if it promises every quality option again; the render-scale half is the row above |
 | "Up to 4K" | website capability facts | **none.** Render scale is proved; a 4K backing resolution on a specific display is not |
 
+### Approved multi-OS claims that are not public yet
+
+Windows and Linux remain approved targets rather than supported downloads.
+Sequential named-profile behaviour is implemented and documented, but its
+release claim remains gated on legacy migration and native packaged evidence.
+The [`multi-OS specification`](../plans/multi-os/spec.md) owns the acceptance
+catalogue. Candidate support claims may not move into the website or download
+CTA until their complete proof is green:
+
+| Candidate claim | Required proof before publication |
+| --- | --- |
+| Windows 11 x64 is supported | `MOS-B01`, `MOS-B02`, `MOS-C01`, `MOS-S01`, `MOS-U01`, and `MOS-F01` against the final signed installer |
+| Ubuntu 24.04 x64 is supported | The same acceptance set against the final `.deb`, including secure-keyring and no-keyring jobs |
+| Profiles isolate saved login and game state | `MOS-R01`, `MOS-R02`, `MOS-C02`, and `MOS-M01` across unit, integration, Electron, and packaged relaunch tests |
+| Two profiles can run independently | Current written Guild Wars 1 policy clarification plus `MOS-D01`, `MOS-D02`, `MOS-S02`, and `MOS-F02` |
+| Native game data is shared between profiles | `MOS-D01` proves only the native verified chunks; IDBFS/`Gw.dat` duplication is measured and disclosed rather than hidden by this wording |
+| A notarized macOS build uses Keychain | `MOS-B02` and `MOS-C01` against the Developer ID signed, notarized, stapled artifact with `use-mock-keychain` absent |
+
+The `README.md` roadmap says only that these targets are approved and not yet
+supported downloads. That is a planning statement, not one of the claims
+above.
+
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
 cache coalescing, hash validation, insufficient-disk rejection, interrupted
 full-download resume, smoothed rates, native task-state derivation, and
@@ -933,13 +983,25 @@ Enhancement development uses the layered, cached-safe workflow in
 WASM unchanged, and a live Enhancement run cannot update the client unless update
 permission is explicit.
 
+The application has one direct runtime dependency:
+`@zip.js/zip.js` 2.8.34. It is BSD-3-Clause, has no transitive dependencies,
+and supplies the bounded streaming `.gwdiag` reader/writer on every operating
+system. Its licence is reproduced in `THIRD-PARTY-NOTICES.md` and its package
+licence is included in the ASAR. A release policy test permits this exact
+dependency and no other runtime package.
+
+The Windows `.ico` and Linux 512 px PNG release icons are mechanical
+derivatives of the repository's existing `assets/AppIcon.png`; they introduce
+no third-party artwork. Policy tests pin their dimensions, container shape,
+hashes, and Forge wiring so a stale or placeholder conversion cannot pass as a
+native package icon.
+
 The dependency audit has one explicit exception for
 `GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
 reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and
 upstream published the memory-bound fix only for the API-incompatible 5.x
 line. The compatible 5.x edge is pinned to 5.0.8. No game, renderer, preload,
-main-process runtime, or packaged dependency accepts these development glob
-patterns. A release invariant forbids production dependencies in either
-workspace package while the exception exists, preventing it from masking a
-shipped vulnerable edge. Remove the exception as soon as the upstream parents
-adopt patched compatible dependencies.
+main-process runtime or packaged dependency accepts these development glob
+patterns. The exact runtime-dependency allowlist prevents the exception from
+masking another shipped edge. Remove the exception as soon as the upstream
+parents adopt patched compatible dependencies.

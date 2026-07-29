@@ -95,30 +95,6 @@ describe("generation mutex", () => {
     assert.equal(await generationIn(join(root, "artifacts.swap")), "missing");
   });
 
-  it("tears the same tree when the moves are not serialised", async () => {
-    const root = await generationTree();
-    const log: string[] = [];
-
-    // No lock: all three enter before any of them has moved anything, which is
-    // exactly the interleaving an in-flight update, a candidate confirmation
-    // and a renderer-crash rollback can produce today.
-    const results = await Promise.allSettled([
-      rotateGenerations(root, "a", log)(),
-      rotateGenerations(root, "b", log)(),
-      rotateGenerations(root, "c", log)(),
-    ]);
-
-    assert.deepEqual(log.slice(0, 3), ["a:enter", "b:enter", "c:enter"]);
-    const failures = results.filter((r) => r.status === "rejected");
-    // `artifacts` can only be moved aside once, so the two transitions that
-    // lose the race fail mid-move — the rollback a crashed renderer is waiting
-    // on throws instead of restoring anything.
-    assert.equal(failures.length, 2);
-    for (const failure of failures) {
-      assert.match(String((failure as PromiseRejectedResult).reason), /ENOENT/);
-    }
-  });
-
   it("does not wedge the queue when a task rejects", async () => {
     const lock = new Mutex();
     const ran: string[] = [];

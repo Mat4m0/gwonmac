@@ -9,6 +9,7 @@
 // checked by the project that can actually see its dependencies, and it is why
 // the extensions below are explicit: this module still loads under plain `node`.
 import { EXTERNAL_URLS, RELEASE_REPO } from "../../../../src/shared/contracts.ts";
+import releaseTargetsJson from "../../../../release-targets.json" with { type: "json" };
 import {
   compareReleaseVersions,
   formatReleaseVersion,
@@ -16,12 +17,19 @@ import {
   parseReleaseVersion,
   type ReleaseVersion,
 } from "../../../../src/shared/release.ts";
+import {
+  parseReleaseTargets,
+  releaseTargetById,
+  releaseTargetFilename,
+} from "../../../../src/shared/release-targets.ts";
 
 export const RELEASES_FALLBACK_URL = EXTERNAL_URLS.releases;
 // Snapshot tags are not release versions and are ignored below. Fetch the API
 // maximum so a temporarily failed snapshot-pruning run cannot hide the latest
 // valid versioned release behind a page of snapshots.
 const API_URL = `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=100`;
+const RELEASE_TARGETS = parseReleaseTargets(releaseTargetsJson);
+const WEBSITE_TARGET = releaseTargetById(RELEASE_TARGETS, "macos-arm64");
 
 type WebsiteReleaseChannel = "stable" | "preview";
 
@@ -39,20 +47,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The one asset this site promises: a zipped Apple Silicon build. An asset that
- * does not name the architecture is not one the download button can claim, so a
- * release carrying only checksums and an SBOM is skipped rather than offered.
+ * The one asset this site currently promises comes from the canonical target
+ * document. Exact matching refuses checksums, SBOMs, and lookalike filenames.
  */
-function appleSiliconZip(release: Record<string, unknown>): string | null {
+function targetAsset(
+  release: Record<string, unknown>,
+  version: string,
+): string | null {
   const assets = release.assets;
   if (!Array.isArray(assets)) return null;
+  const expectedName = releaseTargetFilename(WEBSITE_TARGET, version);
+  let answer: string | null = null;
   for (const asset of assets) {
     if (!isRecord(asset)) continue;
     const { name, browser_download_url: downloadUrl } = asset;
     if (typeof name !== "string" || typeof downloadUrl !== "string") continue;
-    if (/arm64.*\.zip$/i.test(name)) return downloadUrl;
+    if (name !== expectedName) continue;
+    if (answer) return null;
+    answer = downloadUrl;
   }
-  return null;
+  return answer;
 }
 
 /**
@@ -86,7 +100,8 @@ export function selectWebsiteDownload(
     ) {
       continue;
     }
-    const url = appleSiliconZip(release);
+    const version = formatReleaseVersion(parsed);
+    const url = targetAsset(release, version);
     if (!url) continue;
     if (
       !selected

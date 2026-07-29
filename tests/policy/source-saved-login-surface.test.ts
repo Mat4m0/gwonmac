@@ -37,7 +37,9 @@ function shippedSources(directory = "src"): string[] {
 // looked at credentials would not notice a second store growing a weaker home.
 const persistenceOwners = [
   "src/main/ipc.ts",
+  "src/main/credential-provider.ts",
   "src/main/core/credentials.ts",
+  "src/main/core/profiles.ts",
   "src/main/core/encrypted-store.ts",
   "src/main/core/steam-session.ts",
   "src/main/paths.ts",
@@ -54,15 +56,28 @@ test("saved login has one encrypted owner-only persistence surface", () => {
   assert.match(persistenceOwners, /safeStorage/);
   assert.match(persistenceOwners, /credentials\.bin/);
   assert.match(persistenceOwners, /steam-session\.bin/);
-  assert.match(persistenceOwners, /encryptString/);
-  assert.match(persistenceOwners, /writeAtomic\(this\.path, ciphertext, 0o600\)/);
+  assert.match(persistenceOwners, /encryptStringAsync/);
+  assert.match(persistenceOwners, /writeAtomic/);
+  assert.match(persistenceOwners, /0o600/);
+  assert.match(persistenceOwners, /CredentialEnvelopeV1/);
   assert.doesNotMatch(shippedApplication, /localStorage|sessionStorage/);
-  assert.doesNotMatch(shippedApplication, /plaintext|fallbackKey|masterPassword/);
+  assert.doesNotMatch(shippedApplication, /fallbackKey|masterPassword/);
   // The three game-facing methods reach the one store, and no fourth path.
   assert.match(
     persistenceOwners,
     /secureStorage:[\s\S]*getCredentials[\s\S]*storeCredentials[\s\S]*clearCredentials/,
   );
+});
+
+test("credential values have no persistence or diagnostics schema outside the store", () => {
+  const forbiddenSchemas = [
+    "src/main/diagnostics/schema.ts",
+    "src/shared/diagnostics.ts",
+    "src/main/core/settings.ts",
+  ]
+    .map(read)
+    .join("\n");
+  assert.doesNotMatch(forbiddenSchemas, /\busername\b|\bpassword\b/);
 });
 
 test("no build seeds the Steam token from the environment", () => {

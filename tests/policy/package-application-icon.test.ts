@@ -4,6 +4,7 @@
 // file the packager will embed is a usable icon. A truncated or placeholder
 // .icns produces an application with a generic Finder icon and a green build.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -48,4 +49,31 @@ test("the bundled application icon carries every representation macOS renders", 
     assert.ok(size !== undefined, `application icon has no ${type} representation`);
     assert.ok(size > 0, `application icon's ${type} entry is empty`);
   }
+});
+
+test("generated Windows and Linux icons are pinned release assets", () => {
+  const linux = readFileSync(path.join(root, "assets/AppIcon-linux.png"));
+  assert.equal(linux.subarray(1, 4).toString("ascii"), "PNG");
+  assert.equal(linux.readUInt32BE(16), 512);
+  assert.equal(linux.readUInt32BE(20), 512);
+  assert.equal(
+    createHash("sha256").update(linux).digest("hex"),
+    "9f63144576505559a0d8845ca5a4c9b3fa4f6c7ef5f7068429bdf462c94ccd42",
+  );
+
+  const windows = readFileSync(path.join(root, "assets/AppIcon.ico"));
+  assert.equal(windows.readUInt16LE(0), 0);
+  assert.equal(windows.readUInt16LE(2), 1);
+  assert.equal(windows.readUInt16LE(4), 1);
+  // ICO encodes a 256-pixel side as zero.
+  assert.equal(windows.readUInt8(6), 0);
+  assert.equal(windows.readUInt8(7), 0);
+  assert.equal(
+    createHash("sha256").update(windows).digest("hex"),
+    "910b4f9f2270cb06b6468495132d00bc75fc121b3fb88edb3023dd301ffd767b",
+  );
+
+  const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
+  assert.match(forge, /setupIcon: path\.resolve\("assets\/AppIcon\.ico"\)/);
+  assert.match(forge, /icon: path\.resolve\("assets\/AppIcon-linux\.png"\)/);
 });

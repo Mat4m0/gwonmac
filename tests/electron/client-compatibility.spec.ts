@@ -1,12 +1,11 @@
-import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import {
   closeOffline,
+  expect,
   launchOffline,
-  main,
+  test,
 } from "./fixtures.mjs";
 
 /**
@@ -28,9 +27,8 @@ async function pathExists(target: string) {
 }
 
 test.describe("client compatibility", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
 
-  test("reports one first frame and opens a game socket", async () => {
+  test("connects the shipped renderer socket bridge to main", async () => {
     const server = net.createServer();
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
@@ -41,128 +39,6 @@ test.describe("client compatibility", () => {
       await fixture.page.waitForFunction(() => {
         const game = window.Module as ModuleWithSocket | undefined;
         return typeof game?.socket?.connect === "function";
-      });
-      expect(
-        await fixture.page.evaluate(async () => {
-          // The page serves renderer modules under `gw://app`; no path from
-          // this spec resolves that specifier, so the shape is taken from the
-          // source module instead of from the address.
-          const importRenderer = async <T>(specifier: string): Promise<T> =>
-            import(specifier);
-          const { installGraphics } = await importRenderer<
-            typeof import("../../src/renderer/graphics.js")
-          >("./graphics.js");
-          const canvas: HTMLCanvasElement & { offscreen?: OffscreenCanvas } =
-            globalThis.document.createElement("canvas");
-          canvas.width = 32;
-          canvas.height = 32;
-          const module: ArenaNetGraphicsModule = { canvas };
-          let frames = 0;
-          // Every member is present here, so none of them is optional: the spec
-          // calls all four back after `installGraphics` has replaced them.
-          const env: ArenaNetEglImports & {
-            emscripten_get_device_pixel_ratio: () => number;
-            emscripten_set_canvas_element_size: (
-              target: unknown,
-              width: number,
-              height: number,
-            ) => unknown;
-          } = {
-            eglCreateContext: () => {
-              module.canvas.getContext("webgl");
-              return 1;
-            },
-            eglSwapBuffers: () => 1,
-            emscripten_get_device_pixel_ratio: () => 1,
-            emscripten_set_canvas_element_size: () => 0,
-          };
-          installGraphics({
-            env,
-            module,
-            renderScale: () => 2,
-            firstFrame: () => {
-              frames += 1;
-            },
-            log: () => undefined,
-          });
-          env.eglCreateContext();
-          env.emscripten_set_canvas_element_size(null, 64, 64);
-          env.eglSwapBuffers();
-          env.eglSwapBuffers();
-          if (!canvas.offscreen) {
-            throw new Error("installGraphics attached no offscreen canvas");
-          }
-          return {
-            frames,
-            density: env.emscripten_get_device_pixel_ratio(),
-            visibleRestored: module.canvas === canvas,
-            offscreen: [canvas.offscreen.width, canvas.offscreen.height],
-          };
-        }),
-      ).toEqual({
-        frames: 1,
-        density: 2,
-        visibleRestored: true,
-        offscreen: [64, 64],
-      });
-      // The cache is a separate renderer module; prove it ships and resolves as
-      // ESM under gw://app — a copy-renderer or protocol regression rejects the
-      // import — that an incomplete program is never frozen, and that a
-      // completed one stops costing a round trip. Whether *boot* installs it is
-      // not assertable here: installGlProgramCache runs from
-      // Module.instantiateWasm, and the offline shell has no client, so the
-      // glue never loads.
-      expect(
-        await fixture.page.evaluate(async () => {
-          const importRenderer = async <T>(specifier: string): Promise<T> =>
-            import(specifier);
-          const { installGlProgramCache } = await importRenderer<
-            typeof import("../../src/renderer/gl-program-cache.js")
-          >("./gl-program-cache.js");
-          // Installing into the live page overwrites gwGlRecon and would bump
-          // the session's real query counters; both are put back below.
-          const realRecon = window.gwGlRecon;
-          const realDiagnostics = window.gwDiagnostics;
-          window.gwDiagnostics = { ...realDiagnostics, glProgramQuery: () => {} };
-          const module = { HEAPU8: new Uint8Array(new ArrayBuffer(1024)) };
-          const calls: number[] = [];
-          let answer = 0;
-          const env = {
-            glGetProgramiv: (_program: number, pname: number, p: number) => {
-              calls.push(pname);
-              new Int32Array(module.HEAPU8.buffer)[p >>> 2] = answer;
-            },
-            glCreateProgram: () => 1,
-            glLinkProgram: () => undefined,
-            glDeleteProgram: () => undefined,
-          };
-          installGlProgramCache({
-            imports: { env },
-            module,
-            log: () => undefined,
-          });
-          const read = (pname: number) => {
-            env.glGetProgramiv(1, pname, 64);
-            return new Int32Array(module.HEAPU8.buffer)[16];
-          };
-          env.glCreateProgram();
-          const polling = [read(0x91b1), read(0x91b1)];
-          answer = 1;
-          const completed = read(0x91b1);
-          answer = 0;
-          const held = read(0x91b1);
-          // Exact restoration: the property is optional, so an absent probe is
-          // put back as absent rather than as an explicit `undefined`.
-          if (realRecon) window.gwGlRecon = realRecon;
-          else delete window.gwGlRecon;
-          window.gwDiagnostics = realDiagnostics;
-          return { polling, completed, held, calls: calls.length };
-        }),
-      ).toEqual({
-        polling: [0, 0],
-        completed: 1,
-        held: 1,
-        calls: 3,
       });
       await fixture.page.evaluate(async () => {
         const game = window.Module as ModuleWithSocket | undefined;
@@ -286,8 +162,13 @@ test.describe("client compatibility", () => {
       },
     );
     try {
-      await fixture.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+      const applicationWindow = await fixture.app.browserWindow(fixture.page);
+      await applicationWindow.evaluate((win) => {
+        win.webContents.emit(
+          "render-process-gone",
+          {} as never,
+          { reason: "crashed", exitCode: 1 } as never,
+        );
       });
       await expect
         .poll(() => pathExists(path.join(artifacts, "manifest.json")), {

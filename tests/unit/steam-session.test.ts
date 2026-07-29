@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SafeStorageApi } from "../../src/main/core/encrypted-store.js";
+import type { CredentialProvider } from "../../src/main/core/credentials.js";
 import {
   parseSteamSession,
   refreshSteamExpiry,
@@ -18,18 +18,26 @@ import {
 import { AppError } from "../../src/shared/errors.js";
 
 /** The same reversible stand-in `tests/unit/credentials.test.ts` uses. */
-function fakeStorage(): SafeStorageApi {
+function fakeProvider(
+  overrides: Partial<CredentialProvider> = {},
+): CredentialProvider {
   return {
-    isEncryptionAvailable: () => true,
-    encryptString: (value) => Buffer.from([...value].reverse().join(""), "utf8"),
-    decryptString: (value) => [...value.toString("utf8")].reverse().join(""),
+    protection: "mac-preview-mock-v1",
+    acceptsLegacyRawCiphertext: true,
+    available: async () => true,
+    encrypt: async (value) => Buffer.from([...value].reverse().join(""), "utf8"),
+    decrypt: async (value) => ({
+      plaintext: [...value.toString("utf8")].reverse().join(""),
+      shouldReEncrypt: false,
+    }),
+    ...overrides,
   };
 }
 
 async function storeIn(prefix: string): Promise<{ path: string; store: SteamSessionStore }> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
   const path = join(dir, "steam-session.bin");
-  return { path, store: new SteamSessionStore(path, fakeStorage()) };
+  return { path, store: new SteamSessionStore(path, fakeProvider()) };
 }
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
@@ -45,7 +53,9 @@ describe("the Steam session store", () => {
 
     const raw = await readFile(path);
     assert.equal(raw.includes(Buffer.from(TOKEN)), false, "the token must not sit in the file");
-    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    if (process.platform !== "win32") {
+      assert.equal((await stat(path)).mode & 0o777, 0o600);
+    }
 
     await store.clear();
     assert.equal(await store.load(), null);
@@ -67,10 +77,10 @@ describe("the Steam session store", () => {
 
   it("refuses unavailable encryption the way the credential store does", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-steam-unavailable-"));
-    const store = new SteamSessionStore(join(dir, "steam-session.bin"), {
-      ...fakeStorage(),
-      isEncryptionAvailable: () => false,
-    });
+    const store = new SteamSessionStore(
+      join(dir, "steam-session.bin"),
+      fakeProvider({ available: async () => false }),
+    );
     await assert.rejects(
       store.save({ token: TOKEN, expiry: null }),
       (error: unknown) =>
@@ -84,12 +94,11 @@ describe("the Steam session store", () => {
     // must not throw away a credential that still works.
     const { path, store } = await storeIn("gw-steam-corrupt-");
     await store.save({ token: TOKEN, expiry: null });
-    const wrongKey = new SteamSessionStore(path, {
-      ...fakeStorage(),
-      decryptString: () => {
+    const wrongKey = new SteamSessionStore(path, fakeProvider({
+      decrypt: async () => {
         throw new Error("wrong key");
       },
-    });
+    }));
     await assert.rejects(
       wrongKey.load(),
       (error: unknown) => error instanceof AppError && error.code === "steam_session_corrupt",

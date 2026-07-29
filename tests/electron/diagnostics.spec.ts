@@ -1,7 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -17,10 +15,12 @@ import { promisify } from "node:util";
 import type { ElectronApplication } from "@playwright/test";
 import {
   closeOffline,
+  expect,
   launchOffline,
-  main,
   root,
+  test,
 } from "./fixtures.mjs";
+import { extractZipNatively } from "../helpers/native-zip.js";
 
 declare global {
   interface Window {
@@ -38,7 +38,6 @@ const clickMenu = (app: ElectronApplication, id: string) =>
   }, id);
 
 test.describe("diagnostics", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
   test("serializes capture lifecycle and exposes an unmistakable marker", async () => {
     const fixture = await launchOffline("gw-capture-e2e-");
@@ -77,6 +76,8 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-label")).toContainText(
         "Chromium trace",
       );
+      // Chromium tracing is an external native recorder with no ready event.
+      // This is capture warm-up, not a timing or performance assertion.
       await page.waitForTimeout(500);
       await page.evaluate(async () => {
         window.gwDiagnostics.snapshot(100, 4096, "memory");
@@ -114,55 +115,21 @@ test.describe("diagnostics", () => {
       const traceNames = new Set(trace.traceEvents.map((event) => event.name));
       expect(traceNames.has("gw.snapshot.resolve")).toBe(true);
       expect(traceNames.has("gw.frame.submit")).toBe(true);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
-  test("discards a completed Chromium trace before the next capture and at shutdown", async () => {
-    const fixture = await launchOffline("gw-trace-lifecycle-e2e-");
-    try {
-      const { app, page, userData } = fixture;
-      const diagnosticsDirectory = path.join(userData, "diagnostics");
-      const traceNames = async () =>
-        (await readdir(diagnosticsDirectory)).filter(
-          (name) => name.startsWith("chromium-") && name.endsWith(".json"),
-        );
-      await app.evaluate(({ dialog }) => {
-        dialog.showMessageBox = async () => ({
-          response: 1,
-          checkboxChecked: false,
-        });
-      });
-
-      await clickMenu(app, "start-chromium-trace");
-      await expect(page.locator("#capture-status")).toBeVisible();
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
-      await expect.poll(traceNames).toHaveLength(1);
-
-      // Beginning Level 1 replaces the completed Level 2 result. The raw
-      // Chromium file has to be gone before that reset happens.
+      // Beginning another capture discards the unexported raw trace. This is
+      // the one native ownership edge; schema and export inventory live below
+      // Electron.
       await clickMenu(app, "start-performance-capture");
       await expect(page.locator("#capture-status")).toBeVisible();
-      await expect.poll(traceNames).toEqual([]);
+      await expect
+        .poll(() =>
+          stat(path.join(diagnosticsDirectory, traceName)).then(
+            () => true,
+            () => false,
+          ),
+        )
+        .toBe(false);
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
-
-      // The same ownership rule applies when no later capture replaces it:
-      // quit cleanup deletes an unexported completed trace.
-      await clickMenu(app, "start-chromium-trace");
-      await expect(page.locator("#capture-status")).toBeVisible();
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
-      await expect.poll(traceNames).toHaveLength(1);
-      await app.evaluate(async (_, modulePath) => {
-        const load = process
-          .getBuiltinModule("node:module")
-          .createRequire(modulePath);
-        await load(modulePath).stopDiagnostics();
-      }, path.join(root, "build/main/diagnostics.js"));
-      await expect.poll(traceNames).toEqual([]);
     } finally {
       await closeOffline(fixture);
     }
@@ -210,7 +177,7 @@ test.describe("diagnostics", () => {
       });
 
       const extracted = path.join(diagnosticRoot, "extracted");
-      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      await extractZipNatively(target, extracted);
       const trace = await readFile(
         path.join(extracted, "chromium-trace.json"),
         "utf8",
@@ -228,6 +195,8 @@ test.describe("diagnostics", () => {
     const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
     try {
+      await clickMenu(fixture.app, "start-chromium-trace");
+      await expect(fixture.page.locator("#capture-status")).toBeVisible();
       const target = path.join(diagnosticRoot, "capture.gwdiag");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       const contractsPath = path.join(root, "build/shared/contracts.js");
@@ -238,8 +207,6 @@ test.describe("diagnostics", () => {
             .createRequire(args.modulePath);
           const diagnostics = load(args.modulePath);
           const { DEFAULT_SETTINGS } = load(args.contractsPath);
-          await diagnostics.startDiagnosticCapture(2);
-
           const originalStopRecording = contentTracing.stopRecording;
           let attemptedTarget = "";
           contentTracing.stopRecording = async (traceTarget) => {
@@ -277,7 +244,7 @@ test.describe("diagnostics", () => {
       ).toEqual([]);
 
       const extracted = path.join(diagnosticRoot, "extracted");
-      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      await extractZipNatively(target, extracted);
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
@@ -381,88 +348,32 @@ test.describe("diagnostics", () => {
     }
   });
 
-  // Stopping a capture on the quit path awaits a renderer acknowledgement, so a
-  // renderer that cannot answer must settle the wait rather than hold it. A
-  // renderer whose process is gone is exactly as unable to answer as a
-  // destroyed one, and after a second crash the window, its webContents and its
-  // URL are all still there — nothing else in the settle set fires.
-  test("a command to a renderer whose process is gone settles instead of waiting", async () => {
+  // The controlled broker tests own process loss, navigation, completion, and
+  // timeout branches. This keeps only the Electron WebContents wiring.
+  test("refuses a command when Electron reports the renderer gone", async () => {
     const fixture = await launchOffline("gw-renderer-command-crash-e2e-");
     try {
       const outcome = await fixture.app.evaluate(
-        async ({ BrowserWindow }, modulePath) => {
+        async ({ BrowserWindow }, args) => {
           const load = process
             .getBuiltinModule("node:module")
-            .createRequire(modulePath);
-          const { sendRendererCommand } = load(modulePath);
-          const settledWithin = (promise: Promise<unknown>, ms: number) =>
-            Promise.race([
-              promise,
-              new Promise((resolve) => setTimeout(() => resolve("waiting"), ms)),
-            ]);
-          const probe = async () => {
-            const win = new BrowserWindow({ show: false });
-            await win.loadURL("about:blank");
-            return win;
-          };
-          const crash = async (win: Electron.BrowserWindow) => {
-            const pid = win.webContents.getOSProcessId();
-            const gone = new Promise((resolve) =>
-              win.webContents.once("render-process-gone", resolve));
-            win.webContents.forcefullyCrashRenderer();
-            await gone;
-            return pid;
-          };
-
-          // A probe that shared the application's renderer process would crash
-          // the real window instead, and prove nothing about this one.
-          const [applicationWindow] = BrowserWindow.getAllWindows();
-          if (!applicationWindow) throw new Error("the application window is gone");
-          const mainPid = applicationWindow.webContents.getOSProcessId();
-
-          // The process dies while a command is outstanding.
-          const during = await probe();
-          const outstanding = sendRendererCommand(during, { type: "input.reset" });
-          const duringPid = await crash(during);
-          const whileWaiting = await settledWithin(outstanding, 5_000);
-
-          // The process is already gone when the command is sent: the state a
-          // second crash leaves behind, and the one the quit path meets.
-          const after = await probe();
-          const afterPid = await crash(after);
-          const alreadyGone = await settledWithin(
-            sendRendererCommand(after, { type: "input.reset" }),
-            5_000,
-          );
-          // A live page with no preload handler is bounded too. Destruction
-          // would settle this for another reason, so leave it untouched until
-          // the command's own deadline answers.
-          const unresponsive = await probe();
-          const timedOut = await settledWithin(
-            sendRendererCommand(unresponsive, { type: "input.reset" }),
-            7_000,
-          );
-          const stillAlive = !after.isDestroyed() && !after.webContents.isDestroyed();
-          for (const win of [during, after, unresponsive]) win.destroy();
-          return {
-            whileWaiting,
-            alreadyGone,
-            timedOut,
-            stillAlive,
-            ownProcesses: duringPid !== mainPid && afterPid !== mainPid,
-          };
+            .createRequire(args.modulePath);
+          const { sendRendererCommand } = load(args.modulePath);
+          const window = new BrowserWindow({ show: false });
+          Object.defineProperty(window.webContents, "isCrashed", {
+            value: () => true,
+          });
+          const result = await sendRendererCommand(window, {
+            type: "input.reset",
+          });
+          window.destroy();
+          return result;
         },
-        path.join(root, "build/main/renderer-commands.js"),
+        {
+          modulePath: path.join(root, "build/main/renderer-commands.js"),
+        },
       );
-      expect(outcome).toEqual({
-        whileWaiting: "failed",
-        alreadyGone: "failed",
-        timedOut: "timed-out",
-        // The window that could not answer is neither destroyed nor closed —
-        // that is what made this state unreachable for the other listeners.
-        stillAlive: true,
-        ownProcesses: true,
-      });
+      expect(outcome).toBe("failed");
       // The application's own renderer was never touched.
       expect(await fixture.page.evaluate(() => 1 + 1)).toBe(2);
     } finally {
@@ -609,7 +520,7 @@ test.describe("diagnostics", () => {
       );
 
       const extracted = path.join(diagnosticRoot, "extracted");
-      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      await extractZipNatively(target, extracted);
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
@@ -705,35 +616,6 @@ test.describe("diagnostics", () => {
       expect(validated.stdout).toContain("valid capture");
     } finally {
       await rm(diagnosticRoot, { recursive: true, force: true });
-      await closeOffline(fixture);
-    }
-  });
-
-  test("recovers the sandbox after a renderer crash", async () => {
-    const fixture = await launchOffline("gw-renderer-recovery-e2e-");
-    try {
-      await fixture.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
-      });
-      await expect
-        .poll(
-          async () => {
-            const [firstWindow] = fixture.app.windows();
-            if (!firstWindow) return false;
-            try {
-              return await firstWindow.evaluate(
-                () =>
-                  globalThis.location.protocol === "gw:" &&
-                  typeof window.gwNative === "object",
-              );
-            } catch {
-              return false;
-            }
-          },
-          { timeout: 15_000 },
-        )
-        .toBe(true);
-    } finally {
       await closeOffline(fixture);
     }
   });

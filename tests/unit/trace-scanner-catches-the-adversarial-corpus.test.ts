@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   redactDiagnosticText,
@@ -27,6 +28,11 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
     what: "a file: URL",
     input: 'source: "file:///Users/x/Documents/account-recovery.txt"',
     leaks: ["/Users/x/Documents", "account-recovery.txt"],
+  },
+  {
+    what: "a Windows absolute path",
+    input: String.raw`cache is C:\Users\alice\Application Support\gwonmac\secret.txt`,
+    leaks: [String.raw`C:\Users\alice`, "Application Support", "secret.txt"],
   },
   {
     what: "a multiline stack trace",
@@ -100,8 +106,8 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
   },
   {
     what: "the user's home directory",
-    input: `cache root is ${homedir()}/Library/Caches`,
-    leaks: [homedir(), "Library/Caches"],
+    input: `cache root is ${join(homedir(), "Library", "Caches")}`,
+    leaks: [homedir(), join("Library", "Caches")],
   },
   {
     // Replacing the home directory *first* left this whole tail behind:
@@ -109,7 +115,7 @@ const CORPUS: { what: string; input: string; leaks: string[] }[] = [
     // preceded by `]`. The same path under any other user was redacted whole,
     // and this is the form a trace on the exporting user's own machine takes.
     what: "a path under the exporting user's own home directory",
-    input: `${homedir()}/Downloads/my-account-recovery-codes.txt`,
+    input: join(homedir(), "Downloads", "my-account-recovery-codes.txt"),
     leaks: [homedir(), "Downloads", "my-account-recovery-codes.txt"],
   },
 ];

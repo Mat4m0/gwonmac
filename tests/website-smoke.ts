@@ -75,6 +75,13 @@ assert.deepEqual(selectWebsiteDownload([PRERELEASE]), {
   url: PRERELEASE_ARM64_ZIP.browser_download_url,
   version: "0.0.4-alpha.1",
 });
+assert.equal(
+  selectWebsiteDownload([{
+    ...PRERELEASE,
+    assets: [PRERELEASE_ARM64_ZIP, PRERELEASE_ARM64_ZIP],
+  }]),
+  null,
+);
 
 // Snapshots are public GitHub prereleases but never application versions. A
 // failed cleanup can put more than one old API page ahead of the beta without

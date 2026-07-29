@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guild Wars</title>
+    <link rel="stylesheet" href="control.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Guild Wars</p>
+        <h1>Profiles</h1>
+        <p class="intro">Keep each saved login and game workspace separate.</p>
+      </header>
+      <form id="add-profile">
+        <label for="profile-label">New profile label</label>
+        <div class="add-row">
+          <input id="profile-label" name="label" maxlength="40" required
+            autocomplete="off">
+          <button type="submit">Add</button>
+        </div>
+      </form>
+      <p id="message" role="status" aria-live="polite"></p>
+      <section id="profiles" aria-label="Profiles"></section>
+      <section aria-label="Shared game data">
+        <h2>Shared game data</h2>
+        <p>Downloaded game data is shared by every profile.</p>
+        <button type="button" id="clear-cache" class="danger">
+          Clear Downloaded Game Data…
+        </button>
+      </section>
+    </main>
+    <template id="profile-template">
+      <article class="profile">
+        <div>
+          <h2 class="profile-label"></h2>
+          <p class="profile-status"></p>
+        </div>
+        <div class="actions">
+          <button type="button" data-action="launch"></button>
+          <button type="button" data-action="close">Close</button>
+          <button type="button" data-action="rename">Rename</button>
+          <button type="button" data-action="forget">Forget Saved Login</button>
+          <button type="button" data-action="reset">Reset Saved Files</button>
+          <button type="button" data-action="trash" class="danger">Move to Trash</button>
+        </div>
+      </article>
+    </template>
+    <script type="module" src="control.js"></script>
+  </body>
+</html>

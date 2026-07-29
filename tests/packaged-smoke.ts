@@ -8,6 +8,7 @@ import {
   rm,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
@@ -16,6 +17,7 @@ import {
   getCurrentFuseWire,
 } from "@electron/fuses";
 import { extractFile, listPackage, statFile } from "@electron/asar";
+import { chromium, type Browser } from "playwright";
 import forgeConfig from "../forge.config.ts";
 import { macOSBundleVersions } from "../scripts/macos-version.js";
 import {
@@ -26,31 +28,25 @@ import {
   PRELOAD_ENTRY,
   relativeEsmClosure,
 } from "./helpers/package-inventory.ts";
+import {
+  packagedElectronLayout,
+  terminateTestChild,
+} from "../scripts/electron-layout.js";
 
 const root = path.resolve(import.meta.dirname, "..");
-const appBundle = path.join(
-  root,
-  `out/Guild Wars-darwin-${process.arch}/Guild Wars.app`,
-);
-const executable = path.join(
-  appBundle,
-  "Contents/MacOS/Guild Wars",
-);
+const layout = packagedElectronLayout(root);
 const execFileAsync = promisify(execFile);
-const resources = path.join(appBundle, "Contents/Resources");
-const asarPath = path.join(resources, "app.asar");
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 ).version;
-const macOSVersion = macOSBundleVersions(packageVersion);
 
 // `isPack: false` is what the omitted argument already meant — asar only
 // decorates each path with its pack state when the flag is on — and these are
 // compared against archive-rooted paths.
 const actualPackageFiles = new Set(
-  listPackage(asarPath, { isPack: false }).filter(
-    (file) => !("files" in statFile(asarPath, file.slice(1))),
-  ),
+  listPackage(layout.asar, { isPack: false })
+    .filter((file) => !("files" in statFile(layout.asar, file.slice(1))))
+    .map((file) => file.replaceAll("\\", "/")),
 );
 const ignore = forgeConfig.packagerConfig?.ignore;
 const expectedPackageFiles = new Set(forgePackageFiles(root, ignore));
@@ -62,13 +58,18 @@ assert.deepEqual(
 assertRequiredPackageFiles(actualPackageFiles);
 assertNoDeveloperPackageFiles(actualPackageFiles);
 
-const asarText = (file: string) => extractFile(asarPath, file.slice(1)).toString("utf8");
+const asarText = (file: string) =>
+  extractFile(
+    layout.asar,
+    file.slice(1).replaceAll("/", path.sep),
+  ).toString("utf8");
 const packagedManifest = JSON.parse(asarText("/package.json"));
 const packagedRendererIndex = "/build/renderer/index.html";
 const packagedClosure = relativeEsmClosure({
   entryPoints: [
     packagedManifest.main,
     PRELOAD_ENTRY,
+    "/node_modules/@zip.js/zip.js/index.js",
     ...htmlScriptEntryPoints(
       packagedRendererIndex,
       asarText(packagedRendererIndex),
@@ -80,42 +81,50 @@ const packagedClosure = relativeEsmClosure({
 assert.ok(packagedClosure.has("/build/main/core/enhancement-builds.js"));
 assert.ok(packagedClosure.has("/build/renderer/enhancement-readout.js"));
 
-const { stdout: bundleInfo } = await execFileAsync("plutil", [
-  "-p",
-  path.join(appBundle, "Contents/Info.plist"),
-]);
-assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
-assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
+if (process.platform === "darwin") {
+  const macOSVersion = macOSBundleVersions(packageVersion);
+  const { stdout: bundleInfo } = await execFileAsync("plutil", [
+    "-p",
+    path.join(layout.application, "Contents", "Info.plist"),
+  ]);
+  assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
+  assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
+  assert.match(
+    bundleInfo,
+    new RegExp(
+      `"CFBundleShortVersionString" => "${macOSVersion.appVersion.replaceAll(".", "\\.")}"`,
+    ),
+  );
+  assert.match(
+    bundleInfo,
+    new RegExp(
+      `"CFBundleVersion" => "${macOSVersion.buildVersion.replaceAll(".", "\\.")}"`,
+    ),
+  );
+  assert.deepEqual(
+    await readFile(path.join(layout.resources, "electron.icns")),
+    await readFile(path.join(root, "assets/AppIcon.icns")),
+  );
+  await execFileAsync("codesign", [
+    "--verify",
+    "--deep",
+    "--strict",
+    layout.application,
+  ]);
+}
 assert.match(
-  bundleInfo,
-  new RegExp(
-    `"CFBundleShortVersionString" => "${macOSVersion.appVersion.replaceAll(".", "\\.")}"`,
-  ),
-);
-assert.match(
-  bundleInfo,
-  new RegExp(
-    `"CFBundleVersion" => "${macOSVersion.buildVersion.replaceAll(".", "\\.")}"`,
-  ),
-);
-assert.deepEqual(
-  await readFile(path.join(resources, "electron.icns")),
-  await readFile(path.join(root, "assets/AppIcon.icns")),
-);
-assert.match(
-  await readFile(path.join(resources, "LICENSE"), "utf8"),
+  await readFile(path.join(layout.resources, "LICENSE"), "utf8"),
   /GNU GENERAL PUBLIC LICENSE[\s\S]*Version 3/,
 );
 assert.match(
-  await readFile(path.join(resources, "THIRD-PARTY-NOTICES.md"), "utf8"),
+  await readFile(path.join(layout.resources, "THIRD-PARTY-NOTICES.md"), "utf8"),
   /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/,
 );
 assert.match(
-  await readFile(path.join(resources, "COPYING-QUALITYPE"), "utf8"),
+  await readFile(path.join(layout.resources, "COPYING-QUALITYPE"), "utf8"),
   /SIL OPEN FONT LICENSE[\s\S]*Version 1\.1/,
 );
-await execFileAsync("codesign", ["--verify", "--deep", "--strict", appBundle]);
-const fuses = await getCurrentFuseWire(executable);
+const fuses = await getCurrentFuseWire(layout.executable);
 for (const option of [
   FuseV1Options.RunAsNode,
   FuseV1Options.EnableNodeOptionsEnvironmentVariable,
@@ -127,16 +136,34 @@ for (const option of [
 }
 for (const option of [
   FuseV1Options.EnableCookieEncryption,
-  FuseV1Options.EnableEmbeddedAsarIntegrityValidation,
-  FuseV1Options.OnlyLoadAppFromAsar,
   FuseV1Options.WasmTrapHandlers,
 ]) {
   assert.equal(fuses[option], FuseState.ENABLE);
 }
+assert.equal(
+  fuses[FuseV1Options.EnableEmbeddedAsarIntegrityValidation],
+  process.platform === "linux" ? FuseState.DISABLE : FuseState.ENABLE,
+);
+assert.equal(fuses[FuseV1Options.OnlyLoadAppFromAsar], FuseState.ENABLE);
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
-const child = spawn(executable, [`--user-data-dir=${userData}`], {
+const debugServer = createServer();
+await new Promise<void>((resolve, reject) => {
+  debugServer.once("error", reject);
+  debugServer.listen(0, "127.0.0.1", resolve);
+});
+const debugAddress = debugServer.address();
+assert.ok(debugAddress && typeof debugAddress === "object");
+const debugPort = debugAddress.port;
+await new Promise<void>((resolve, reject) => {
+  debugServer.close((error) => error ? reject(error) : resolve());
+});
+const child = spawn(layout.executable, [
+  `--user-data-dir=${userData}`,
+  `--remote-debugging-port=${debugPort}`,
+  "--remote-debugging-address=127.0.0.1",
+], {
   cwd: root,
   env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
   stdio: ["ignore", "pipe", "pipe"],
@@ -178,9 +205,44 @@ async function recordedEvents(): Promise<RecordedLine[]> {
 }
 
 let events: RecordedLine[] = [];
+let browser: Browser | undefined;
 try {
   const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline && child.exitCode === null) {
+    try {
+      browser = await chromium.connectOverCDP(
+        `http://127.0.0.1:${debugPort}`,
+      );
+      break;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  assert.ok(browser, "packaged app did not expose its test debugging endpoint");
+  let launchRequested = false;
   while (Date.now() < deadline) {
+    for (const context of browser.contexts()) {
+      const control = context.pages().find((page) =>
+        page.url().startsWith("gw://control/"));
+      if (control && !launchRequested) {
+        launchRequested = true;
+        await control.waitForLoadState("domcontentloaded");
+        await control.evaluate(async () => {
+          const api = (globalThis as typeof globalThis & {
+            gwControl?: {
+              profiles: {
+                list(): Promise<readonly { id: string }[]>;
+                launch(id: string): Promise<void>;
+              };
+            };
+          }).gwControl;
+          if (!api) throw new Error("control preload exposed no profile API");
+          const [profile] = await api.profiles.list();
+          if (!profile) throw new Error("profile registry has no default");
+          await api.profiles.launch(profile.id);
+        });
+      }
+    }
     events = await recordedEvents();
     if (events.some((event) => event.name === "clock.synchronized")) break;
     if (child.exitCode !== null) break;
@@ -201,11 +263,7 @@ try {
   assert.ok(started, "the packaged app recorded no diagnostics.started event");
   assert.equal(started.fields?.appVersion, packageVersion);
 } finally {
-  if (child.exitCode === null) child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("close", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await browser?.close().catch(() => undefined);
+  await terminateTestChild(child);
   await rm(userData, { recursive: true, force: true });
 }

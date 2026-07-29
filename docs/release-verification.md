@@ -52,11 +52,14 @@ checks it.
 
 Guild Wars for macOS releases are ad-hoc signed and are not notarized by
 Apple. The project deliberately does not require a paid Apple Developer
-membership. Each GitHub release instead publishes three independently useful
+membership. Each GitHub release instead publishes five independently useful
 pieces of evidence:
 
 - the application ZIP;
-- `SHA256SUMS.txt`, covering the ZIP and SBOM;
+- its `.manifest.json`, binding the artifact hash to the source commit,
+  application/Electron versions, target, signing posture, and CI run;
+- `SOURCE_COMMIT.txt`, containing that same full source commit;
+- `SHA256SUMS.txt`, covering every other published file;
 - an SPDX SBOM describing the packaged application.
 
 GitHub also stores signed build-provenance and SBOM attestations for the ZIP.
@@ -66,14 +69,15 @@ untrusted repository safe.
 
 ## Verify the downloaded files
 
-Download the ZIP, `SHA256SUMS.txt`, and the `.spdx.json` file from the same
-GitHub release into one folder. In Terminal, change to that folder and run:
+Download the ZIP, `SHA256SUMS.txt`, `SOURCE_COMMIT.txt`, the `.manifest.json`,
+and the `.spdx.json` file from the same GitHub release into one folder. In
+Terminal, change to that folder and run:
 
 ```bash
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
-Both entries must report `OK`. A mismatch means the files do not belong
+Every entry must report `OK`. A mismatch means the files do not belong
 together or were changed; delete them and download the release again.
 
 If the [GitHub CLI](https://cli.github.com/) is installed, also verify the

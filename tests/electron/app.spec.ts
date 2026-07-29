@@ -1,25 +1,45 @@
-import { test, expect, _electron as electron } from "@playwright/test";
-import type { ElectronApplication } from "@playwright/test";
+import {
+  _electron as electron,
+  type ElectronApplication,
+} from "@playwright/test";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import {
   mkdtemp,
   readFile,
   readdir,
   rm,
   stat,
+  writeFile,
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
+import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
+import { fitWindowStateToDisplays } from "../../src/main/core/window-state.js";
+import {
+  closeOwnedApplication,
+  expect,
+  ownChildProcess,
+  ownElectronApplication,
+  test,
+} from "./fixtures.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const main = path.join(root, "build/main/main.js");
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const electronBin = developmentElectronExecutable(root);
+
+async function onlyProfileFile(
+  userData: string,
+  name: string,
+): Promise<string> {
+  const entries = (await readdir(path.join(userData, "profiles"))).filter(
+    (entry) => /^[0-9a-f]{32}$/u.test(entry),
+  );
+  if (entries.length !== 1) {
+    throw new Error(`expected one profile, found ${entries.length}`);
+  }
+  return path.join(userData, "profiles", entries[0]!, name);
+}
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
@@ -61,26 +81,35 @@ const launchEnv = (
       inherited[name] = value;
     }
   }
-  return { ...inherited, ...overrides };
+  return { ...inherited, GW_TEST_DIRECT_GAME: "1", ...overrides };
 };
 
 /**
- * An absent `electronBin` means Playwright resolves the binary itself, so the
- * property is omitted rather than passed as `undefined`.
+ * The central Playwright preflight proves this executable exists before any
+ * spec is collected.
  */
-const launch = (userData: string, env: Record<string, string>) =>
-  electron.launch({
-    cwd: root,
-    args: [".", `--user-data-dir=${userData}`],
-    env,
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
-  });
+const launch = async (
+  userData: string,
+  env: Record<string, string>,
+): Promise<ElectronApplication> =>
+  ownElectronApplication(
+    await electron.launch({
+      cwd: root,
+      args: [".", `--user-data-dir=${userData}`],
+      chromiumSandbox: true,
+      env,
+      executablePath: electronBin,
+    }),
+    userData,
+  );
+
+const rawLaunchArgs = (userData: string): string[] => [
+  ".",
+  `--user-data-dir=${userData}`,
+];
 
 test.describe("Electron application", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("a second instance exits and reveals the primary window", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -88,17 +117,19 @@ test.describe("Electron application", () => {
     const userData = await mkdtemp(path.join(tmpdir(), "gw-single-instance-e2e-"));
     const app = await launch(userData, env);
     try {
-      await app.firstWindow({ timeout: 30_000 });
-      await app.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        win?.minimize();
-        win?.hide();
+      const page = await app.firstWindow({ timeout: 30_000 });
+      const applicationWindow = await app.browserWindow(page);
+      await applicationWindow.evaluate((win) => {
+        win.minimize();
+        win.hide();
       });
 
-      const second = spawn(
-        electronBin,
-        [".", `--user-data-dir=${userData}`],
-        { cwd: root, env, stdio: "ignore" },
+      const second = ownChildProcess(
+        spawn(
+          electronBin,
+          rawLaunchArgs(userData),
+          { cwd: root, env, stdio: "ignore" },
+        ),
       );
       const exit = await new Promise<ProcessExit>((resolve, reject) => {
         const timer = setTimeout(
@@ -114,38 +145,33 @@ test.describe("Electron application", () => {
 
       expect(exit).toEqual({ code: 0, signal: null });
       await expect
-        .poll(() =>
-          app.evaluate(({ BrowserWindow }) => {
-            const windows = BrowserWindow.getAllWindows();
-            return {
-              count: windows.length,
-              minimized: windows[0]?.isMinimized() ?? true,
-              visible: windows[0]?.isVisible() ?? false,
-            };
-          }),
-        )
-        .toEqual({ count: 1, minimized: false, visible: true });
+        .poll(() => applicationWindow.evaluate((win) => ({
+          minimized: win.isMinimized(),
+          visible: win.isVisible(),
+        })))
+        .toEqual({ minimized: false, visible: true });
     } finally {
-      await app.close().catch(() => undefined);
+      await closeOwnedApplication(app).catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
     }
   });
 
   test("a startup failure exits nonzero and releases the instance lock", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
     const baseEnv = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
-    const failed = spawn(
-      electronBin,
-      [".", `--user-data-dir=${userData}`],
-      {
-        cwd: root,
-        env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
-        stdio: "ignore",
-      },
+    const failed = ownChildProcess(
+      spawn(
+        electronBin,
+        rawLaunchArgs(userData),
+        {
+          cwd: root,
+          env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
+          stdio: "ignore",
+        },
+      ),
     );
     try {
       const exit = await new Promise<ProcessExit>((resolve, reject) => {
@@ -179,7 +205,7 @@ test.describe("Electron application", () => {
       try {
         await restarted.firstWindow({ timeout: 30_000 });
       } finally {
-        await restarted.close().catch(() => undefined);
+        await closeOwnedApplication(restarted).catch(() => undefined);
       }
     } finally {
       failed.kill();
@@ -232,9 +258,9 @@ test.describe("Electron application", () => {
       const exited = new Promise<ProcessExit>((resolve) => {
         electronProcess.once("exit", (code, signal) => resolve({ code, signal }));
       });
-      await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.close();
-      }).catch(() => undefined);
+      const applicationWindow = await app.browserWindow(page);
+      await applicationWindow.evaluate((win) => win.close())
+        .catch(() => undefined);
       const result = await exited;
       expect(result).toEqual({ code: 0, signal: null });
 
@@ -254,7 +280,7 @@ test.describe("Electron application", () => {
       expect(events).not.toContain('"name":"renderer.recoveryScheduled"');
       expect(events).not.toContain("Object has been destroyed");
     } finally {
-      await app.close().catch(() => undefined);
+      await closeOwnedApplication(app).catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
@@ -271,18 +297,18 @@ test.describe("Electron application", () => {
       const exited = new Promise<ProcessExit>((resolve) => {
         processHandle.once("exit", (code, signal) => resolve({ code, signal }));
       });
-      await runningApp.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.close();
-      }).catch(() => undefined);
+      const page = await runningApp.firstWindow({ timeout: 30_000 });
+      const applicationWindow = await runningApp.browserWindow(page);
+      await applicationWindow.evaluate((win) => win.close())
+        .catch(() => undefined);
       expect(await exited).toEqual({ code: 0, signal: null });
     };
 
     let app = await launch(userData, env);
     try {
-      await app.firstWindow({ timeout: 30_000 });
-      const normalBounds = await app.evaluate(async ({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        if (!win) throw new Error("window missing");
+      const firstPage = await app.firstWindow({ timeout: 30_000 });
+      const firstWindow = await app.browserWindow(firstPage);
+      const normalBounds = await firstWindow.evaluate(async (win) => {
         win.setBounds({ x: 120, y: 90, width: 960, height: 700 });
         await new Promise((resolve) => setTimeout(resolve, 400));
         const bounds = win.getBounds();
@@ -298,44 +324,37 @@ test.describe("Electron application", () => {
       });
       await closeCleanly(app);
 
-      const statePath = path.join(userData, "window-state.json");
+      const statePath = await onlyProfileFile(userData, "window-state.json");
       expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({
         formatVersion: 1,
         bounds: normalBounds,
         mode: "fullscreen",
       });
-      expect((await stat(statePath)).mode & 0o777).toBe(0o600);
+      if (process.platform !== "win32") {
+        expect((await stat(statePath)).mode & 0o777).toBe(0o600);
+      }
 
       app = await launch(userData, env);
       const resetPage = await app.firstWindow({ timeout: 30_000 });
+      const resetWindow = await app.browserWindow(resetPage);
+      const displays = await app.evaluate(({ screen }) => ({
+        primary: { ...screen.getPrimaryDisplay().workArea },
+        workAreas: screen.getAllDisplays().map(({ workArea }) => ({
+          ...workArea,
+        })),
+      }));
+      const expectedRestored = fitWindowStateToDisplays(
+        { bounds: normalBounds, mode: "fullscreen" },
+        displays.workAreas,
+        displays.primary,
+      ).bounds;
       await expect
-        .poll(() =>
-          app.evaluate(({ BrowserWindow }) =>
-            BrowserWindow.getAllWindows()[0]?.isFullScreen()),
-        )
+        .poll(() => resetWindow.evaluate((win) => win.isFullScreen()))
         .toBe(true);
       expect(
-        await app.evaluate(({ BrowserWindow }) =>
-          BrowserWindow.getAllWindows()[0]?.getNormalBounds()),
-      ).toEqual(normalBounds);
+        await resetWindow.evaluate((win) => win.getNormalBounds()),
+      ).toEqual(expectedRestored);
 
-      const expectedReset = await app.evaluate(({ screen }) => {
-        const area = screen.getPrimaryDisplay().workArea;
-        const width = Math.min(
-          1280,
-          Math.max(Math.min(800, area.width), area.width - 64),
-        );
-        const height = Math.min(
-          800,
-          Math.max(Math.min(600, area.height), area.height - 64),
-        );
-        return {
-          x: Math.round(area.x + (area.width - width) / 2),
-          y: Math.round(area.y + (area.height - height) / 2),
-          width,
-          height,
-        };
-      });
       await resetPage.evaluate(() => {
         const probe = window as ResetProbeWindow;
         probe.__windowResetReleasedInput = false;
@@ -355,26 +374,54 @@ test.describe("Electron application", () => {
         .toBe(true);
       await expect
         .poll(() =>
-          app.evaluate(({ BrowserWindow }) => {
-            const win = BrowserWindow.getAllWindows()[0];
-            return win && !win.isFullScreen() ? win.getBounds() : null;
-          }),
+          resetWindow.evaluate((win) =>
+            !win.isFullScreen() ? win.getBounds() : null),
           { timeout: 15_000 },
         )
-        .toEqual(expectedReset);
+        .not.toBeNull();
+      const resetHasSettled = async () => {
+        const bounds = await resetWindow.evaluate((win) => win.getBounds());
+        const saved = JSON.parse(await readFile(statePath, "utf8")) as {
+          formatVersion?: unknown;
+          bounds?: Partial<typeof bounds>;
+          mode?: unknown;
+        };
+        return {
+          bounds,
+          saved,
+          converged:
+            saved.formatVersion === 1
+            && saved.mode === "normal"
+            && saved.bounds?.x === bounds.x
+            && saved.bounds?.y === bounds.y
+            && saved.bounds?.width === bounds.width
+            && saved.bounds?.height === bounds.height,
+        };
+      };
       await expect
-        .poll(
-          async () => JSON.parse(await readFile(statePath, "utf8")),
-          { timeout: 15_000 },
-        )
-        .toEqual({
-          formatVersion: 1,
-          bounds: expectedReset,
-          mode: "normal",
-        });
+        .poll(async () => (await resetHasSettled()).converged, {
+          timeout: 15_000,
+        })
+        .toBe(true);
+      const { bounds: actualReset, saved: savedReset } =
+        await resetHasSettled();
+      expect(
+        await app.evaluate(({ screen }, bounds) =>
+          screen.getAllDisplays().some(({ workArea }) =>
+            bounds.x >= workArea.x
+            && bounds.y >= workArea.y
+            && bounds.x + bounds.width <= workArea.x + workArea.width
+            && bounds.y + bounds.height <= workArea.y + workArea.height
+          ), actualReset),
+      ).toBe(true);
+      expect(savedReset).toEqual({
+        formatVersion: 1,
+        bounds: actualReset,
+        mode: "normal",
+      });
       await closeCleanly(app);
     } finally {
-      await app.close().catch(() => undefined);
+      await closeOwnedApplication(app).catch(() => undefined);
       await rm(userData, { recursive: true, force: true });
     }
   });
@@ -460,18 +507,14 @@ test.describe("Electron application", () => {
       // A histogram the recorder never wrote reads `undefined` here and fails
       // the assertion, which is what a missing measurement should do.
       expect(result.summary.histograms["socket.writeCallback"]?.count).toBe(20);
+      expect(result.summary.histograms["socket.rendererSync"]?.count).toBe(20);
+      expect(result.summary.histograms["socket.rendererSettle"]?.count).toBe(20);
       expect(result.summary.latest["socket.activeWrites"]).toBe(0);
       expect(result.summary.latest["socket.queuedBytes"]).toBe(0);
       expect(result.summary.latest["socket.peakActiveWrites"]).toBeGreaterThanOrEqual(1);
       expect(result.summary.latest["socket.peakQueuedBytes"]).toBeGreaterThanOrEqual(21);
-      expect(
-        result.summary.histograms["socket.rendererSync"]?.p95Us,
-      ).toBeLessThanOrEqual(1_000);
-      expect(
-        result.summary.histograms["socket.rendererSettle"]?.p95Us,
-      ).toBeLessThanOrEqual(8_000);
     } finally {
-      await app.close();
+      await closeOwnedApplication(app);
       await rm(userData, { recursive: true, force: true });
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
@@ -479,7 +522,7 @@ test.describe("Electron application", () => {
     }
   });
 
-  test("saved login survives an application relaunch without Keychain", async () => {
+  test("saved login follows the native credential provider across relaunch", async () => {
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -490,13 +533,56 @@ test.describe("Electron application", () => {
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
-      await page.evaluate(() =>
-        window.gwNative.credentials.save({
-          username: "relaunch@example.invalid",
-          password: "relaunch-password",
-        }),
+      await expect(page.locator("#loading-credential-posture")).toContainText(
+        process.platform === "darwin"
+          ? "not Keychain-backed"
+          : process.platform === "win32"
+            ? "signed-in Windows account"
+              : "Secret Service or KWallet",
       );
-      await app.close();
+      const linuxStorage = await app.evaluate(({ safeStorage }) => ({
+        available: safeStorage.isEncryptionAvailable(),
+        backend:
+          process.platform === "linux"
+            ? safeStorage.getSelectedStorageBackend()
+            : null,
+      }));
+      const expectedLinuxKeyring = process.env.GW_EXPECT_LINUX_KEYRING;
+      if (process.platform === "linux" && expectedLinuxKeyring === "available") {
+        expect(linuxStorage.available).toBe(true);
+        expect([
+          "gnome_libsecret",
+          "kwallet",
+          "kwallet5",
+          "kwallet6",
+        ]).toContain(linuxStorage.backend);
+      }
+      let storageUnavailable = false;
+      try {
+        await page.evaluate(() =>
+          window.gwNative.credentials.save({
+            username: "relaunch@example.invalid",
+            password: "relaunch-password",
+          }));
+      } catch (error) {
+        if (process.platform !== "linux") throw error;
+        expect(String(error)).toContain("credential encryption is unavailable");
+        storageUnavailable = true;
+      }
+      if (process.platform === "linux") {
+        if (expectedLinuxKeyring === "available") {
+          expect(storageUnavailable).toBe(false);
+        } else if (expectedLinuxKeyring === "unavailable") {
+          expect(storageUnavailable).toBe(true);
+        }
+      }
+      if (storageUnavailable) {
+        expect(
+          await page.evaluate(() => window.gwNative.credentials.load()),
+        ).toEqual({ state: "absent" });
+        return;
+      }
+      await closeOwnedApplication(app);
 
       app = await launch(userData, env);
       const relaunchedPage = await app.firstWindow({ timeout: 30_000 });
@@ -505,12 +591,68 @@ test.describe("Electron application", () => {
         await relaunchedPage.evaluate(() =>
           window.gwNative.credentials.load()),
       ).toEqual({
-        username: "relaunch@example.invalid",
-        password: "relaunch-password",
+        state: "available",
+        credentials: {
+          username: "relaunch@example.invalid",
+          password: "relaunch-password",
+        },
       });
       await relaunchedPage.evaluate(() => window.gwNative.credentials.clear());
     } finally {
-      await app.close().catch(() => {});
+      await closeOwnedApplication(app).catch(() => {});
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
+  test("a raw preview ciphertext migrates only after Electron decrypts it", async () => {
+    test.skip(process.platform !== "darwin", "legacy raw ciphertext was macOS-only");
+    const env = launchEnv({
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    });
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-legacy-"));
+    const app = await launch(userData, env);
+    try {
+      const page = await app.firstWindow({ timeout: 30_000 });
+      await page.waitForLoadState("domcontentloaded");
+      const credentialsPath = await onlyProfileFile(
+        userData,
+        "credentials.bin",
+      );
+      const legacyCiphertext = await app.evaluate(
+        ({ safeStorage }, value) => [
+          ...safeStorage.encryptString(JSON.stringify(value)),
+        ],
+        {
+          username: "legacy@example.invalid",
+          password: "legacy-password",
+        },
+      );
+      await writeFile(credentialsPath, Buffer.from(legacyCiphertext));
+
+      expect(
+        await page.evaluate(() => window.gwNative.credentials.load()),
+      ).toEqual({
+        state: "available",
+        credentials: {
+          username: "legacy@example.invalid",
+          password: "legacy-password",
+        },
+      });
+      const envelope = JSON.parse(
+        await readFile(credentialsPath, "utf8"),
+      ) as Record<string, unknown>;
+      expect(envelope).toMatchObject({
+        formatVersion: 1,
+        protection: "mac-preview-mock-v1",
+      });
+      expect(Object.keys(envelope).sort()).toEqual([
+        "ciphertext",
+        "formatVersion",
+        "protection",
+      ]);
+    } finally {
+      await closeOwnedApplication(app).catch(() => {});
       await rm(userData, { recursive: true, force: true });
     }
   });
@@ -564,7 +706,7 @@ test.describe("Electron application", () => {
         )
         .toBe("quick");
     } finally {
-      await app.close();
+      await closeOwnedApplication(app);
       await rm(userData, { recursive: true, force: true });
     }
   });

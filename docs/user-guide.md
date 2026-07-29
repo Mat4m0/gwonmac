@@ -29,12 +29,32 @@ The app then:
 
 1. checks the official game client;
 2. prepares the files needed to start;
-3. starts Guild Wars;
-4. downloads additional areas only when the game asks for them.
+3. opens the profile manager;
+4. starts Guild Wars when you launch a profile;
+5. downloads additional areas only when the game asks for them.
 
 The first start needs an internet connection and takes longer than later
 starts. The ArenaNet client updater and game-data cache always use at most eight
 concurrent ArenaNet requests.
+
+## Profiles
+
+The profile manager creates one **Default** profile on first launch. A profile
+owns its saved login, browser storage, Guild Wars saved files, and window
+position. The verified native game-data cache and launcher settings remain
+shared by the application.
+
+Choose **Add** to create another profile using a private display label. Account
+names and passwords are entered only in Guild Wars itself. Exactly one game
+profile runs at a time. Launching another profile asks before flushing and
+closing the current game; launching the current profile focuses it.
+
+Rename, Forget Saved Login, Reset Saved Files, and Move to Trash are available
+only while that profile is stopped. Move to Trash restarts the application and
+uses the operating system Trash on the next start; a failed Trash operation
+leaves the profile intact. Closing the manager while a game is visible leaves
+the game running. Launching the application again recreates or focuses the
+manager. Closing the last visible window exits the process.
 
 ## Quick Start and the full game
 
@@ -54,9 +74,9 @@ full download continue in the background.
 
 The displayed transfer rate is a short moving average, so chunk-completion
 bursts do not make the number jump between unrealistic highs and lows. While a
-full download is active, progress also appears on the application’s Dock icon.
-macOS may turn the display off, but the app prevents download suspension until
-the task finishes or is paused.
+full download is active, progress also appears on the application icon or
+taskbar. The operating system may turn the display off, but the app prevents
+download suspension until the task finishes or is paused.
 
 To schedule the complete game from a running session:
 
@@ -73,8 +93,10 @@ The full download is optional. It requires enough free disk space for all
 missing chunks plus a safety margin. It improves offline area availability,
 but login and online play still require ArenaNet’s services.
 
-Use **Clear Game Data…** only when you want to remove downloaded game data.
-The app confirms the action and restarts. Small client files stay installed.
+Use **Clear Downloaded Game Data…** in the profile manager only when every
+profile is stopped and you want to remove the shared downloaded game data.
+The app confirms the action and restarts. Small client files, profiles, saved
+logins, and profile-owned saved files stay installed.
 
 ## Settings
 
@@ -129,13 +151,16 @@ fullscreen mode. If a saved monitor is disconnected, the window is clamped and
 centered on the primary display instead of opening off-screen. Choose **View →
 Reset Window Size and Position** for an immediate window-only reset.
 
-Guild Wars' **Remember Password** checkbox controls saved login. The password
-is encrypted in an owner-only local file and is not placed in macOS Keychain,
-so the application does not show a Keychain prompt. Because unsigned builds
-use Chromium's local mock encryption provider, this is weaker than Keychain:
-software running as your macOS user may be able to recover it. Leave
-**Remember Password** off if that tradeoff is not acceptable. Browser cookies
-are cleared at startup and quit.
+Guild Wars' **Remember Password** checkbox controls the selected profile's
+saved login. The password is encrypted in a versioned, owner-only local file
+and is not placed in macOS
+Keychain, so the application does not show a Keychain prompt. Because unsigned
+builds use Chromium's local mock encryption provider, this is weaker than
+Keychain: software running as your macOS user may be able to recover it.
+Unreadable or temporarily unavailable saved login is preserved and the game
+prompts normally; it is never silently deleted. Leave **Remember Password** off
+if that tradeoff is not acceptable. Browser cookies are cleared at startup and
+quit.
 
 ## Signing in with Steam
 
@@ -225,10 +250,11 @@ public, so review the bug form’s privacy notice as well.
 - When there is not enough disk space, the download stops before fetching more
   data. Free space, then resume.
 - Corrupt cached chunks are discarded and fetched again automatically.
-- If Guild Wars saved files cannot be opened, choose **Reset Saved Files…**.
-  After confirmation, this removes local game preferences, build templates,
-  screenshots, and chat logs, then restarts. Downloaded game data and the
-  saved login stay untouched.
+- If Guild Wars saved files cannot be opened, close that profile and choose
+  **Reset Saved Files** in the profile manager. On its next launch this removes
+  only that profile's local game preferences, build templates, screenshots,
+  and chat logs. Shared downloaded game data and the saved login stay
+  untouched.
 - The first unexpected renderer crash is recovered automatically. If it
   repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
 

@@ -5,7 +5,8 @@
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",
-  "description": "Guild Wars for macOS",
+  "description": "A sandboxed desktop host for ArenaNet's official Guild Wars WebAssembly client",
+  "author": "gwonmac contributors",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -14,7 +15,7 @@
   "bugs": {
     "url": "https://github.com/Mat4m0/gwonmac/issues"
   },
-  "main": "build/main/main.js",
+  "main": "build/main/entry.js",
   "engines": {
     "node": ">=22.6"
   },
@@ -27,8 +28,11 @@
     "check:links": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/check-markdown-links.ts",
     "test:unit": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/unit/*.ts",
     "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/integration/*.ts",
-    "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
+    "test:electron": "pnpm test:electron:stable && pnpm test:electron:fault",
+    "test:electron:stable": "playwright test --config=tests/electron/playwright.config.ts",
+    "test:electron:fault": "playwright test --config=tests/electron/playwright.fault.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",
+    "test:artifact": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/final-artifact-smoke.ts",
     "test:policy": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/policy/*.ts",
     "test:release": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/release/*.ts",
     "enhancements:live": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-live.ts",
@@ -41,17 +45,21 @@
     "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website generate && pnpm --filter gw-website build && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/website-smoke.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test:unit && pnpm test:policy",
     "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron",
-    "package": "pnpm build && node scripts/clean-output.mjs && electron-forge package",
-    "make": "pnpm build && node scripts/clean-output.mjs && electron-forge make",
+    "package": "pnpm build && pnpm package:prepared",
+    "package:prepared": "node scripts/clean-output.mjs && electron-forge package",
+    "make": "pnpm build && pnpm make:prepared",
+    "make:prepared": "node scripts/clean-output.mjs && electron-forge make",
     "diagnostics:validate": "tsc && node build/tools/diagnostics/validate.js",
     "diagnostics:summarize": "tsc && node build/tools/diagnostics/summarize.js",
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
-    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
+    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron:stable && pnpm test:electron:fault && pnpm test:policy && pnpm test:release && pnpm make:prepared && pnpm test:packaged && pnpm test:artifact"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/maker-deb": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
     "@electron/asar": "^3.4.1",
     "@electron/fuses": "^2.1.3",
@@ -67,5 +75,8 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.43.0",
     "vue-eslint-parser": "^10.4.1"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "2.8.34"
   }
 }
