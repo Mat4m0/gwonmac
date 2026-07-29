@@ -68,6 +68,19 @@ export async function launchOfflineAt(
 }
 
 export async function closeOffline(fixture: OfflineFixture): Promise<void> {
+  const electronProcess = fixture.app.process();
+  const exited =
+    electronProcess.exitCode !== null || electronProcess.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          electronProcess.once("exit", () => resolve());
+        });
   await fixture.app.close().catch(() => undefined);
-  await rm(fixture.userData, { recursive: true, force: true });
+  await exited;
+  await rm(fixture.userData, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100,
+  });
 }
