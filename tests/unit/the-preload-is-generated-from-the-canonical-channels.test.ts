@@ -156,6 +156,7 @@ test("the launch argument prefix comes from the contracts too", () => {
       ]).init,
     ),
     {
+      desktopPlatform: null,
       enhancementAutomation: false,
       enhancementSelection: { nativeCursor: false, targetReadout: false },
       templateFsTrace: false,
@@ -207,6 +208,7 @@ test("a contracts export the body needs but does not have fails the build", () =
   assert.deepEqual(PRELOAD_CONSTANTS, [
     "IPC",
     "RENDERER_INIT_ARGUMENT",
+    "DESKTOP_PLATFORMS",
     "ENHANCEMENTS",
     "WASM_BRIDGE_MARKERS",
   ]);

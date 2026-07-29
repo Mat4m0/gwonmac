@@ -29,6 +29,7 @@ export const OUTPUT = "build/preload/preload.cjs";
 export const PRELOAD_CONSTANTS = [
   "IPC",
   "RENDERER_INIT_ARGUMENT",
+  "DESKTOP_PLATFORMS",
   "ENHANCEMENTS",
   "WASM_BRIDGE_MARKERS",
 ];

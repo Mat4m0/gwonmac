@@ -137,12 +137,20 @@ window.gwLoading = (function (): LoadingController {
     .catch(() => {});
 
   // The running version, in the footer, on every launch. It used to live only
-  // in the macOS About panel, which means a bug report had to go hunting for
+  // in the native About panel, which means a bug report had to go hunting for
   // it — and under CalVer the number doubles as a staleness signal.
   window.gwNative?.client.session().then((session) => {
+    const platform = window.gwNative?.init.desktopPlatform;
+    const platformName = platform
+      ? {
+          macos: 'macOS',
+          windows: 'Windows',
+          linux: 'Linux',
+        }[platform]
+      : 'Desktop';
     const version = document.createElement('p');
     version.id = 'loading-version';
-    version.textContent = `Guild Wars for macOS ${session.appVersion}`;
+    version.textContent = `Guild Wars for ${platformName} ${session.appVersion}`;
     el('loading-legal').prepend(version);
   }).catch(() => {});
 

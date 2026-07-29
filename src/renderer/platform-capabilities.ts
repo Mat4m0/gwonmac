@@ -3,6 +3,8 @@
 // before checking it. Keep only those two namespaces, with explicit unavailable
 // semantics. Properly guarded optional namespaces are intentionally absent.
 
+import type { DesktopPlatform } from '../shared/contracts.js';
+
 /**
  * The shop namespace ArenaNet's glue expects to find. The four callbacks are
  * assigned by the glue before `initialize()`, so they are declared here — as
@@ -21,11 +23,19 @@ type UnavailableShop = {
 };
 
 export function unavailablePlatformCapabilities(
+  platform: DesktopPlatform | null,
   log: (...values: unknown[]) => void,
 ) {
+  const platformName = platform
+    ? {
+        macos: 'macOS',
+        windows: 'Windows',
+        linux: 'Linux',
+      }[platform]
+    : 'this desktop platform';
   const unavailable = (name: string): Promise<never> => {
     log(`[platform] ${name} unavailable`);
-    return Promise.reject(new Error(`${name} is unavailable on macOS`));
+    return Promise.reject(new Error(`${name} is unavailable on ${platformName}`));
   };
 
   const shop: UnavailableShop = {

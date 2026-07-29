@@ -333,6 +333,20 @@ export interface ClientSession {
   healthToken: ClientHealthToken | null;
 }
 
+export const DESKTOP_PLATFORMS = ["macos", "windows", "linux"] as const;
+export type DesktopPlatform = (typeof DESKTOP_PLATFORMS)[number];
+
+export function isDesktopPlatform(value: unknown): value is DesktopPlatform {
+  return DESKTOP_PLATFORMS.some((platform) => platform === value);
+}
+
+export function desktopPlatformFor(value: string): DesktopPlatform {
+  if (value === "darwin") return "macos";
+  if (value === "win32") return "windows";
+  if (value === "linux") return "linux";
+  throw new Error(`unsupported desktop platform: ${value}`);
+}
+
 /**
  * Everything the renderer must know before its first script runs. It used to
  * ride on the renderer URL as query parameters, which forced the trust root to
@@ -341,6 +355,11 @@ export interface ClientSession {
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {
+  /**
+   * Main-derived operating system. `null` is the fail-closed preload result
+   * when the trusted argument is missing or malformed.
+   */
+  desktopPlatform: DesktopPlatform | null;
   /** Enhancement automation tier. Unpackaged builds only. */
   enhancementAutomation: boolean;
   /** The independently selected Enhancement tools for this launch. */

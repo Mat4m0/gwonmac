@@ -8,9 +8,9 @@
 // here may start with the gw channel prefix — tests/policy asserts that.
 // `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
-// binding the preload may read. The four spliced constants are declared for the
+// binding the preload may read. The spliced constants are declared for the
 // type checker in scripts/preload-injected-constants.mts.
-/* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
+/* global IPC, RENDERER_INIT_ARGUMENT, DESKTOP_PLATFORMS, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -63,11 +63,21 @@ function rendererInit() {
     enhancementSelection[tool] = selected[tool] === true;
   }
   Object.freeze(enhancementSelection);
-  return {
+  const desktopPlatform = DESKTOP_PLATFORMS.includes(
+    /** @type {import("../shared/contracts.js").DesktopPlatform} */ (
+      parsed.desktopPlatform
+    ),
+  )
+    ? /** @type {import("../shared/contracts.js").DesktopPlatform} */ (
+        parsed.desktopPlatform
+      )
+    : null;
+  return Object.freeze({
+    desktopPlatform,
     enhancementAutomation: parsed.enhancementAutomation === true,
     enhancementSelection,
     templateFsTrace: parsed.templateFsTrace === true,
-  };
+  });
 }
 
 /**

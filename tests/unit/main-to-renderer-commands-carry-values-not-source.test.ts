@@ -141,6 +141,7 @@ function harness(argv: string[]) {
 }
 
 const INIT: RendererInit = {
+  desktopPlatform: "macos",
   enhancementAutomation: true,
   enhancementSelection: {
     nativeCursor: false,
@@ -160,6 +161,7 @@ test("launch configuration arrives as a preload argument, not as a URL", () => {
 
 test("a renderer with no readable init argument gets the production posture", () => {
   const missing: RendererInit = {
+    desktopPlatform: null,
     enhancementAutomation: false,
     enhancementSelection: {
       nativeCursor: false,

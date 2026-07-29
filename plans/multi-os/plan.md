@@ -266,16 +266,16 @@ Primary files:
 
 Tasks:
 
-- [ ] Add and validate `DesktopPlatform` in the canonical renderer-init
+- [x] Add and validate `DesktopPlatform` in the canonical renderer-init
   contract.
-- [ ] Pass it through the existing additional-argument/preload path and freeze
+- [x] Pass it through the existing additional-argument/preload path and freeze
   it.
-- [ ] Gate only the proven macOS input repairs; preserve common input code.
-- [ ] Replace unconditional “macOS” runtime wording with closed
+- [x] Gate only the proven macOS input repairs; preserve common input code.
+- [x] Replace unconditional “macOS” runtime wording with closed
   platform-specific copy.
-- [ ] Add unit tests for invalid init values and per-platform unavailable
+- [x] Add unit tests for invalid init values and per-platform unavailable
   capability wording.
-- [ ] Add Electron input cases for Windows/Linux semantics on their native
+- [x] Add Electron input cases for Windows/Linux semantics on their native
   jobs; keep mac-specific cases explicit.
 
 Do not use user-agent parsing or a renderer-supplied platform.

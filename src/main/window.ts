@@ -15,7 +15,11 @@ import type {
   RendererInit,
   EnhancementSelection,
 } from "../shared/contracts.js";
-import { EXTERNAL_URLS, RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
+import {
+  desktopPlatformFor,
+  EXTERNAL_URLS,
+  RENDERER_INIT_ARGUMENT,
+} from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
@@ -226,6 +230,7 @@ export function rendererInitArgument(options: {
   enhancementSelection: EnhancementSelection;
 }): string {
   const init: RendererInit = {
+    desktopPlatform: desktopPlatformFor(process.platform),
     enhancementAutomation: ENHANCEMENT_AUTOMATION_ENABLED,
     enhancementSelection: options.enhancementSelection,
     templateFsTrace:

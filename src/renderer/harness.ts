@@ -556,6 +556,7 @@ function loadGlue() {
   inputHost = host.installGameInput({
     canvas: c,
     initialSettings: appSettings,
+    platform: window.gwNative?.init.desktopPlatform ?? null,
     diagnostics: window.gwDiagnostics,
     log,
   });
@@ -635,7 +636,13 @@ function loadGlue() {
     };
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
-    Object.assign(Module, unavailablePlatformCapabilities(log));
+    Object.assign(
+      Module,
+      unavailablePlatformCapabilities(
+        window.gwNative.init.desktopPlatform,
+        log,
+      ),
+    );
     const socketHost = createSocketHost({
       native: native().sockets,
       diagnostics: window.gwDiagnostics,

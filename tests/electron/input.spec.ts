@@ -203,7 +203,7 @@ test.describe("renderer input", () => {
     }
   });
 
-  test("restates keys macOS rewrites while Option is held", async () => {
+  test("uses the native platform's Option or Alt semantics", async () => {
     const fixture = await launchOffline("gw-option-key-e2e-");
     try {
       const { page } = fixture;
@@ -259,14 +259,21 @@ test.describe("renderer input", () => {
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")),
       );
 
+      const macKeys = [
+        "keydown:w:87",
+        "keyup:w:87",
+        "keydown:w:87",
+        "keyup:w:87",
+      ];
+      const nativeAltKeys = [
+        "keydown:w:87",
+        "keyup:∑:87",
+        "keydown:∑:87",
+        "keyup:∑:87",
+      ];
       expect(
         await page.evaluate(() => (window as InputTestWindow).__gameKeys),
-      ).toEqual([
-        "keydown:w:87",
-        "keyup:w:87",
-        "keydown:w:87",
-        "keyup:w:87",
-      ]);
+      ).toEqual(process.platform === "darwin" ? macKeys : nativeAltKeys);
 
       // The client relays key events from its own text fields to the canvas,
       // so a rewritten release strands a key there too. Restating must not
@@ -296,7 +303,13 @@ test.describe("renderer input", () => {
             typed: text.value,
           };
         }),
-      ).toEqual({ keys: ["keydown:w:87", "keyup:w:87"], typed: "∑" });
+      ).toEqual({
+        keys:
+          process.platform === "darwin"
+            ? ["keydown:w:87", "keyup:w:87"]
+            : ["keydown:∑:87", "keyup:w:87"],
+        typed: "∑",
+      });
     } finally {
       await closeOffline(fixture);
     }

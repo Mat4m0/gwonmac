@@ -1,6 +1,6 @@
 // What generate-preload.ts splices above the preload body.
 //
-// `PRELOAD_CONSTANTS` names four canonical exports and the generator emits one
+// `PRELOAD_CONSTANTS` names the canonical exports and the generator emits one
 // `const` per name at the top of build/preload/preload.cjs, so the body reads
 // them as ordinary file-scope bindings it must never declare — a second
 // declaration would be a redeclaration SyntaxError in the generated file.
@@ -24,6 +24,8 @@ declare global {
   const IPC: typeof import("../src/shared/contracts.js").IPC;
   const RENDERER_INIT_ARGUMENT:
     typeof import("../src/shared/contracts.js").RENDERER_INIT_ARGUMENT;
+  const DESKTOP_PLATFORMS:
+    typeof import("../src/shared/contracts.js").DESKTOP_PLATFORMS;
   const ENHANCEMENTS: typeof import("../src/shared/contracts.js").ENHANCEMENTS;
   const WASM_BRIDGE_MARKERS:
     typeof import("../src/shared/contracts.js").WASM_BRIDGE_MARKERS;
