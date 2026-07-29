@@ -103,6 +103,7 @@ const RENDERER_METRIC_FIELDS = {
     "snapshotTotalUs",
     "snapshotMinUs",
     "snapshotMaxUs",
+    "snapshotMemoryReads",
     "memoryHits",
     "nativeHits",
     "coalesced",
@@ -349,6 +350,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "swapCount",
     "snapshotReads",
     "snapshotBytes",
+    "snapshotMemoryReads",
     "memoryHits",
     "nativeHits",
     "coalesced",
@@ -389,6 +391,7 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     counters.every((key) => Number.isSafeInteger(record[key])) &&
     (record.rafOver50 as number) <= (record.rafOver33 as number) &&
     (record.rafOver33 as number) <= (record.rafCount as number) &&
+    (record.snapshotMemoryReads as number) <= (record.snapshotReads as number) &&
     (record.presentationFailures as number) <= (record.swapCount as number)
   );
 }

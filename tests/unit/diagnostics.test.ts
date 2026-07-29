@@ -50,6 +50,7 @@ function metrics(): RendererMetrics {
     snapshotTotalUs: 20_000,
     snapshotMinUs: 5_000,
     snapshotMaxUs: 15_000,
+    snapshotMemoryReads: 1,
     memoryHits: 1,
     nativeHits: 1,
     coalesced: 0,
@@ -119,6 +120,10 @@ describe("renderer diagnostics boundary", () => {
     delete missing.swapCount;
     assert.equal(isRendererMetrics(missing), false);
     assert.equal(isRendererMetrics({ ...metrics(), snapshotBytes: -1 }), false);
+    assert.equal(
+      isRendererMetrics({ ...metrics(), snapshotMemoryReads: 3 }),
+      false,
+    );
     assert.equal(isRendererMetrics({ ...metrics(), rafMaxUs: Number.NaN }), false);
     assert.equal(
       isRendererMetrics({ ...metrics(), socketCompactBytes: 64 * 1024 * 1024 }),

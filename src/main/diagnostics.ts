@@ -315,6 +315,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("renderer.presentationFailures", value.presentationFailures);
   recorder.count("snapshot.reads", value.snapshotReads);
   recorder.count("snapshot.bytes", value.snapshotBytes);
+  recorder.count("snapshot.readsFromMemory", value.snapshotMemoryReads);
   recorder.count("cache.memoryHits", value.memoryHits);
   recorder.count("cache.nativeHits", value.nativeHits);
   recorder.count("cache.coalesced", value.coalesced);
