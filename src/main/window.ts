@@ -8,6 +8,7 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from "electron";
+import path from "node:path";
 import type {
   AppSettings,
   AppSettingsPatch,
@@ -253,6 +254,9 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     minWidth: 800,
     minHeight: 600,
     title: "Guild Wars",
+    ...(process.platform === "linux"
+      ? { icon: path.join(process.resourcesPath, "AppIcon-linux.png") }
+      : {}),
     show: false,
     webPreferences: {
       preload: preloadPath(),

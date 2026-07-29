@@ -872,6 +872,12 @@ system. Its licence is reproduced in `THIRD-PARTY-NOTICES.md` and its package
 licence is included in the ASAR. A release policy test permits this exact
 dependency and no other runtime package.
 
+The Windows `.ico` and Linux 512 px PNG release icons are mechanical
+derivatives of the repository's existing `assets/AppIcon.png`; they introduce
+no third-party artwork. Policy tests pin their dimensions, container shape,
+hashes, and Forge wiring so a stale or placeholder conversion cannot pass as a
+native package icon.
+
 The dependency audit has one explicit exception for
 `GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
 reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and

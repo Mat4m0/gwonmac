@@ -64,6 +64,10 @@ import {
   updateLongRunningTaskFeedback,
 } from "./window.js";
 
+if (process.platform === "win32") {
+  app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
+}
+
 // Ad-hoc builds have no stable code identity, so Chromium's profile encryption
 // repeatedly asks for access to "<app> Safe Storage". The mock provider avoids
 // that OS prompt. The same provider encrypts the owner-only saved-login file;

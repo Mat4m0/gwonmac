@@ -48,7 +48,8 @@ test("macOS identity uses the Guild Wars name and the configured application ico
   const forge = read("forge.config.ts");
   assert.match(forge, /name: "Guild Wars"/);
   assert.match(forge, /executableName: "Guild Wars"/);
-  assert.match(forge, /icon: path\.resolve\("assets\/AppIcon\.icns"\)/);
+  assert.match(forge, /const packageIcon = path\.resolve\(/);
+  assert.match(forge, /"assets\/AppIcon\.icns"/);
 });
 
 test("package metadata identifies the GPL project and canonical repository", () => {
@@ -82,6 +83,22 @@ test("the packaged bundle takes its version numbers from the package version", (
 
 test("the host has one manual application replacement path", () => {
   assert.doesNotMatch(read("src/main/main.ts"), /startAppUpdater|autoUpdater/);
+  assert.doesNotMatch(read("src/main/entry.ts"), /startAppUpdater|autoUpdater/);
+});
+
+test("native makers use one early Windows installer path and no extra ZIP", () => {
+  const forge = read("forge.config.ts");
+  const pkg = json("package.json");
+  assert.equal(pkg.main, "build/main/entry.js");
+  assert.match(forge, /new MakerZIP\(\{\}, \[macOSReleaseTarget\.platform\]\)/);
+  assert.match(forge, /new MakerSquirrel\(/);
+  assert.match(forge, /\[windowsReleaseTarget\.platform\]/);
+  assert.match(forge, /new MakerDeb\(/);
+  assert.match(forge, /\[linuxReleaseTarget\.platform\]/);
+  assert.match(forge, /section: "games"/);
+  assert.match(forge, /categories: \["Game"\]/);
+  assert.match(read("src/main/entry.ts"), /handleSquirrelStartup\(\)/);
+  assert.match(read("src/main/entry.ts"), /await import\("\.\/main\.js"\)/);
 });
 
 test("official releases have one honest ad-hoc signing path", () => {

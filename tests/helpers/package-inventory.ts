@@ -24,6 +24,7 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/build/main/core/client-module.js",
   "/build/main/core/enhancement-builds.js",
   "/build/main/enhancement-policy.js",
+  "/build/main/entry.js",
   "/build/main/main.js",
   PRELOAD_ENTRY,
   "/build/renderer/index.html",

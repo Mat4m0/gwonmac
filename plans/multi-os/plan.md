@@ -406,17 +406,17 @@ Primary files:
 
 Tasks:
 
-- [ ] Add the approved Forge makers for Squirrel.Windows and Debian.
-- [ ] Keep ZIP as the macOS public artifact; use a Windows ZIP only as an
+- [x] Add the approved Forge makers for Squirrel.Windows and Debian.
+- [x] Keep ZIP as the macOS public artifact; use a Windows ZIP only as an
   internal preview diagnostic if a test requires it.
-- [ ] Add properly licensed/generated `.ico` and Linux PNG assets derived from
+- [x] Add properly licensed/generated `.ico` and Linux PNG assets derived from
   the project's existing artwork.
-- [ ] Add required Debian metadata, desktop entry, categories, executable
+- [x] Add required Debian metadata, desktop entry, categories, executable
   permissions, and dependencies.
-- [ ] Handle Squirrel install/update/uninstall/obsolete startup arguments in
+- [x] Handle Squirrel install/update/uninstall/obsolete startup arguments in
   one direct early function before normal composition; add argument tests.
-- [ ] Do not add `autoUpdater`.
-- [ ] Preserve exact ASAR inventory and font licence resources on every target.
+- [x] Do not add `autoUpdater`.
+- [x] Preserve exact ASAR inventory and font licence resources on every target.
 
 ### WP-2.3 — fuses on every final executable
 
