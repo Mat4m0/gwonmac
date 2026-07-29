@@ -1,6 +1,7 @@
 import {
   app,
   dialog,
+  net,
   powerMonitor,
   session,
   shell,
@@ -16,6 +17,8 @@ import {
 import { errorCode } from "../shared/errors.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
+import { PATCH_REQUEST_TIMEOUT_MS } from "./core/access-key.js";
+import { createBoundedPatchFetch } from "./core/patch-transport.js";
 import { loadSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import {
@@ -27,6 +30,7 @@ import {
   observe,
   peakGauge,
   setDiagnosticCaptureStoppedHandler,
+  startClientUpdateSpan,
   startDiagnosticCapture,
   startDiagnostics,
   stopDiagnosticCapture,
@@ -336,6 +340,18 @@ if (primaryInstance) void app.whenReady().then(async () => {
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementsEnabled: enhancementsEnabledFor(settings),
+    patchFetch: createBoundedPatchFetch(
+      (url, init) => net.fetch(url, init),
+      PATCH_REQUEST_TIMEOUT_MS,
+    ),
+    diagnostics: {
+      count,
+      gauge,
+      logEvent,
+      observe,
+      peakGauge,
+      startClientUpdateSpan,
+    },
     onProgress: (progress) => runtimeOwner.current?.publishProgress(progress),
     onPrefetch: (progress) => runtimeOwner.current?.publishPrefetch(progress),
   });

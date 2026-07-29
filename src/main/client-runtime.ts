@@ -1,4 +1,3 @@
-import { net } from "electron";
 import type {
   ClientCompatibility,
   ClientHealthToken,
@@ -7,20 +6,17 @@ import type {
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
+import type { DiagnosticEvent } from "./diagnostics/schema.js";
 import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { certifyClientBuild } from "./client-certification.js";
 import {
   PATCH_REQUEST_HEADERS,
-  PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
 } from "./core/access-key.js";
-import {
-  ActiveClientSlot,
-  type ActiveClient,
-} from "./core/active-client.js";
+import { ActiveClientSlot, type ActiveClient } from "./core/active-client.js";
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
@@ -34,11 +30,7 @@ import { sha256File } from "./core/derived-wasm.js";
 import type { Manifest } from "./core/manifest.js";
 import { Mutex } from "./core/mutex.js";
 import { PatchClient } from "./core/patch-client.js";
-import {
-  createBoundedPatchFetch,
-  fetchPatchBytes,
-  type PatchFetch,
-} from "./core/patch-transport.js";
+import { fetchPatchBytes, type PatchFetch } from "./core/patch-transport.js";
 import { clientArtifactPath, clientManifestPath } from "./core/paths.js";
 import {
   migrateLegacyPublishedClientManifest,
@@ -46,15 +38,11 @@ import {
 } from "./core/published-client.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
 import { ENHANCEMENT_TRANSFORM_ABI } from "./core/enhancement-transform.js";
-import {
-  count,
-  gauge,
-  logEvent,
-  observe,
-  peakGauge,
-  startClientUpdateSpan,
+import type {
+  ClientUpdateSpanOutcome,
+  ClosedDiagnosticSpan,
 } from "./diagnostics.js";
-import type { AppPaths } from "./paths.js";
+import type { AppPaths } from "./core/paths.js";
 
 export type { ActiveClient } from "./core/active-client.js";
 
@@ -75,9 +63,20 @@ interface ClientRuntimeOptions {
   enhancementsEnabled: boolean;
   onProgress: (progress: DownloadProgress) => void;
   onPrefetch: (progress: PrefetchProgress) => void;
+  patchFetch: PatchFetch;
+  diagnostics: {
+    count(name: string, delta?: number): void;
+    observe(name: string, durationUs: number): void;
+    gauge(name: string, value: string | number | boolean | null): void;
+    peakGauge(name: string, value: number): void;
+    logEvent(event: DiagnosticEvent): void;
+    startClientUpdateSpan(): ClosedDiagnosticSpan<ClientUpdateSpanOutcome>;
+  };
 }
 
 export class ClientRuntime {
+  private readonly options: ClientRuntimeOptions;
+  private readonly diagnostics: ClientRuntimeOptions["diagnostics"];
   private readonly activeSlot = new ActiveClientSlot();
   /** Held by every operation that moves a generation directory. */
   private readonly generationLock = new Mutex();
@@ -103,13 +102,9 @@ export class ClientRuntime {
   private compatibilityValue: ClientCompatibility | null = null;
   /** Exact candidate identity captured by a renderer before it loads glue. */
   private candidateHealthToken: ClientHealthToken | null = null;
-  private readonly patchFetch: PatchFetch;
-
-  constructor(private readonly options: ClientRuntimeOptions) {
-    this.patchFetch = createBoundedPatchFetch(
-      (url, init) => net.fetch(url, init),
-      PATCH_REQUEST_TIMEOUT_MS,
-    );
+  constructor(options: ClientRuntimeOptions) {
+    this.options = options;
+    this.diagnostics = options.diagnostics;
   }
 
   get active(): ActiveClient | null {
@@ -140,12 +135,12 @@ export class ClientRuntime {
   private cdnChunkFetcher(compression: "none" | "gzip") {
     return async (hash: string, expectedLength: number) =>
       fetchPatchBytes({
-        fetch: this.patchFetch,
+        fetch: this.options.patchFetch,
         url: `${PATCH_ROOT}/${hash}.bin`,
         headers: PATCH_REQUEST_HEADERS,
         maxBytes: encodedChunkLimit(expectedLength, compression),
         onAttempt: (durationMs) =>
-          observe("cache.networkWire", durationMs * 1_000),
+          this.diagnostics.observe("cache.networkWire", durationMs * 1_000),
       });
   }
 
@@ -167,7 +162,12 @@ export class ClientRuntime {
             throw new Error("cached live probe cannot download missing chunks");
           }
         : this.cdnChunkFetcher(compression),
-      metrics: { count, observe, gauge, peak: peakGauge },
+      metrics: {
+        count: this.diagnostics.count,
+        observe: this.diagnostics.observe,
+        gauge: this.diagnostics.gauge,
+        peak: this.diagnostics.peakGauge,
+      },
     });
   }
 
@@ -185,9 +185,10 @@ export class ClientRuntime {
     } catch (error) {
       // Nothing can be certified without the hash, so nothing is transformed.
       this.compatibilityValue = null;
-      gauge("wasm.templateSaveCompatible", false);
-      gauge("enhancement.supportedBuild", false);
-      logEvent({ k: "wasm.clientHashUnavailable",
+      this.diagnostics.gauge("wasm.templateSaveCompatible", false);
+      this.diagnostics.gauge("enhancement.supportedBuild", false);
+      this.diagnostics.logEvent({
+        k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
       return { wasmPath: officialWasm, build: null };
@@ -208,35 +209,45 @@ export class ClientRuntime {
       clientSha256: officialSha256,
       enhancementActive: prepared.enhancementBuild !== null,
     };
-    gauge("client.buildCertification", state);
-    gauge("wasm.templateSaveCompatible", state !== "uncertified");
+    this.diagnostics.gauge("client.buildCertification", state);
+    this.diagnostics.gauge(
+      "wasm.templateSaveCompatible",
+      state !== "uncertified",
+    );
 
     if (prepared.failure?.stage === "template-save") {
-      logEvent({ k: "wasm.templateSavePrepareFailed",
+      this.diagnostics.logEvent({
+        k: "wasm.templateSavePrepareFailed",
         code: errorCode(prepared.failure.error),
       });
     } else {
-      logEvent({
-        k: state === "uncertified"
-          ? "wasm.templateSaveUnsupported"
-          : "wasm.templateSavePrepared",
+      this.diagnostics.logEvent({
+        k:
+          state === "uncertified"
+            ? "wasm.templateSaveUnsupported"
+            : "wasm.templateSavePrepared",
       });
     }
 
     if (prepared.failure?.stage === "enhancement") {
-      logEvent({ k: "enhancement.prepareFailed",
+      this.diagnostics.logEvent({
+        k: "enhancement.prepareFailed",
         code: errorCode(prepared.failure.error),
       });
     }
     if (prepared.enhancementBuild) {
-      logEvent({ k: "enhancement.clientPrepared",
+      this.diagnostics.logEvent({
+        k: "enhancement.clientPrepared",
         buildId: prepared.enhancementBuild.buildId,
         transformAbi: ENHANCEMENT_TRANSFORM_ABI,
       });
     } else if (this.options.enhancementsEnabled && state !== "certified") {
-      logEvent({ k: "enhancement.uncertifiedClientBlocked" });
+      this.diagnostics.logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
-    gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);
+    this.diagnostics.gauge(
+      "enhancement.supportedBuild",
+      prepared.enhancementBuild !== null,
+    );
     return { wasmPath: prepared.wasmPath, build: prepared.enhancementBuild };
   }
 
@@ -252,13 +263,16 @@ export class ClientRuntime {
       (total, index) => total + store.chunkByteLength(index),
       0,
     );
-    gauge("cache.residentChunks", residentIndices.length);
-    gauge("cache.residentBytes", residentBytes);
-    gauge("cache.totalChunks", store.hashes.length);
-    gauge("cache.totalBytes", store.size);
+    this.diagnostics.gauge("cache.residentChunks", residentIndices.length);
+    this.diagnostics.gauge("cache.residentBytes", residentBytes);
+    this.diagnostics.gauge("cache.totalChunks", store.hashes.length);
+    this.diagnostics.gauge("cache.totalBytes", store.size);
     if (!this.initialResidencyRecorded) {
-      gauge("cache.initialResidentChunks", residentIndices.length);
-      gauge("cache.initialResidentBytes", residentBytes);
+      this.diagnostics.gauge(
+        "cache.initialResidentChunks",
+        residentIndices.length,
+      );
+      this.diagnostics.gauge("cache.initialResidentBytes", residentBytes);
       this.initialResidencyRecorded = true;
     }
     return meta;
@@ -362,13 +376,14 @@ export class ClientRuntime {
         ),
       });
       if (removed.files > 0) {
-        logEvent({ k: "cache.staleChunksRemoved",
+        this.diagnostics.logEvent({
+          k: "cache.staleChunksRemoved",
           files: removed.files,
           bytes: removed.bytes,
         });
       }
     } catch (error) {
-      logEvent({
+      this.diagnostics.logEvent({
         k: "cache.staleChunkCleanupSkipped",
         code: errorCode(error),
       });
@@ -394,7 +409,10 @@ export class ClientRuntime {
       })
       .then(() => this.refreshSnapshot(active.generation))
       .catch((error) =>
-        logEvent({ k: "prefetch.failed", code: errorCode(error) }),
+        this.diagnostics.logEvent({
+          k: "prefetch.failed",
+          code: errorCode(error),
+        }),
       );
   }
 
@@ -419,7 +437,7 @@ export class ClientRuntime {
         await this.activatePublishedAndReady(
           "Live probe is using the existing cached client.",
         );
-        gauge("update.usingCachedClient", true);
+        this.diagnostics.gauge("update.usingCachedClient", true);
       } catch (error) {
         this.publishProgress({ phase: "error", errorCode: errorCode(error) });
       }
@@ -429,10 +447,10 @@ export class ClientRuntime {
     const patchClient = new PatchClient({
       artifactsDir: this.options.paths.artifacts,
       chunksDir: this.options.paths.chunks,
-      fetch: this.patchFetch,
+      fetch: this.options.patchFetch,
       onProgress: (progress) => this.publishProgress(progress),
     });
-    const updateSpan = startClientUpdateSpan();
+    const updateSpan = this.diagnostics.startClientUpdateSpan();
     try {
       const rollback = await restoreUnconfirmedClient({
         artifacts: this.options.paths.artifacts,
@@ -440,7 +458,7 @@ export class ClientRuntime {
         hostVersion: this.options.hostVersion,
       });
       if (rollback) {
-        logEvent({
+        this.diagnostics.logEvent({
           k: "client.candidateRolledBack",
           fingerprint: digestOrNull(rollback.fingerprint),
         });
@@ -450,13 +468,13 @@ export class ClientRuntime {
           this.options.paths.artifacts,
         );
         if (migrated) {
-          logEvent({
+          this.diagnostics.logEvent({
             k: "client.integrityMetadataReady",
             fingerprint: digestOrNull(migrated.clientFingerprint),
           });
         }
       } catch (error) {
-        logEvent({
+        this.diagnostics.logEvent({
           k: "client.integrityMigrationSkipped",
           code: errorCode(error),
         });
@@ -471,7 +489,7 @@ export class ClientRuntime {
         await this.activatePublishedAndReady(
           "A newer game client did not start successfully, so the last working client is being used.",
         );
-        gauge("update.usingCachedClient", true);
+        this.diagnostics.gauge("update.usingCachedClient", true);
         updateSpan.end({
           status: "rejectedCandidateSkipped",
           code: null,
@@ -506,8 +524,8 @@ export class ClientRuntime {
         await this.activatePublishedAndReady(
           "The game client update failed, so the previous client was restored.",
         );
-        logEvent({ k: "patch.updateFallback", code });
-        gauge("update.usingCachedClient", true);
+        this.diagnostics.logEvent({ k: "patch.updateFallback", code });
+        this.diagnostics.gauge("update.usingCachedClient", true);
         updateSpan.end({
           status: "cachedFallback",
           code,
@@ -515,7 +533,7 @@ export class ClientRuntime {
         });
         return;
       } catch (fallbackError) {
-        logEvent({
+        this.diagnostics.logEvent({
           k: "patch.updateFailed",
           code,
           fallbackCode: errorCode(fallbackError),
@@ -560,7 +578,7 @@ export class ClientRuntime {
       return Promise.resolve({ status: "failed", errorCode: "not_ready" });
     }
     active.store.resume();
-    logEvent({ k: "fullDownload.started" });
+    this.diagnostics.logEvent({ k: "fullDownload.started" });
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "image",
@@ -582,7 +600,8 @@ export class ClientRuntime {
           const now = Date.now();
           if (now - lastProgressLogAt >= 5_000) {
             lastProgressLogAt = now;
-            logEvent({ k: "fullDownload.progress",
+            this.diagnostics.logEvent({
+              k: "fullDownload.progress",
               received: value.received,
               total: value.total,
               bytesPerSecond: value.bytesPerSecond,
@@ -593,7 +612,7 @@ export class ClientRuntime {
       })
       .then(async (complete): Promise<FullDownloadOutcome> => {
         await this.refreshSnapshot(active.generation);
-        logEvent({
+        this.diagnostics.logEvent({
           k: complete ? "fullDownload.completed" : "fullDownload.stopped",
         });
         if (this.activeSlot.current?.generation === active.generation) {
@@ -607,7 +626,7 @@ export class ClientRuntime {
       })
       .catch((error): FullDownloadOutcome => {
         const code = errorCode(error);
-        logEvent({ k: "fullDownload.failed", code });
+        this.diagnostics.logEvent({ k: "fullDownload.failed", code });
         if (this.activeSlot.current?.generation === active.generation) {
           this.publishProgress({
             ...INITIAL_PROGRESS,
@@ -627,7 +646,7 @@ export class ClientRuntime {
   stopDownload(): void {
     const download = this.fullDownload;
     if (!download) return;
-    logEvent({ k: "fullDownload.stopRequested" });
+    this.diagnostics.logEvent({ k: "fullDownload.stopRequested" });
     download.store.stop();
   }
 
@@ -652,7 +671,7 @@ export class ClientRuntime {
       }
       if (fingerprint) {
         await this.pruneChunkCache();
-        logEvent({
+        this.diagnostics.logEvent({
           k: "client.candidatePromoted",
           fingerprint: digestOrNull(fingerprint),
         });
@@ -696,7 +715,7 @@ export class ClientRuntime {
         return;
       }
       await this.activatePublishedAndReady();
-      logEvent({
+      this.diagnostics.logEvent({
         k: "client.candidateRolledBackAfterRendererCrash",
         fingerprint: digestOrNull(rollback.fingerprint),
       });
