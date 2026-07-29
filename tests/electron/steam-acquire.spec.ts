@@ -363,6 +363,11 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("bounds cleanup that never settles", async () => {
+    // This deliberately spends five seconds on the cleanup deadline. A loaded
+    // Windows runner can consume most of the normal native-test budget before
+    // that clock starts, so only this time-based failure-path test gets the
+    // extended Playwright budget.
+    test.slow();
     server = await startFixture("hang");
     fixture = await launchOffline("gw-steam-acquire-cleanup-deadline-");
 
