@@ -279,6 +279,11 @@ jobs:
             mkdir -p "$keyring_runtime"
             chmod 700 "$keyring_runtime"
             export XDG_RUNTIME_DIR="$keyring_runtime"
+            # Chromium selects libsecret only for a desktop environment that
+            # actually advertises Secret Service support. This qualifies the
+            # GNOME path instead of forcing a password-store test override.
+            export XDG_CURRENT_DESKTOP=GNOME
+            export DESKTOP_SESSION=gnome
             eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
             gdbus call --session \
               --dest org.freedesktop.secrets \
