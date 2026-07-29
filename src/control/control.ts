@@ -7,6 +7,7 @@ const list = document.querySelector<HTMLElement>("#profiles")!;
 const template = document.querySelector<HTMLTemplateElement>(
   "#profile-template",
 )!;
+const clearCache = document.querySelector<HTMLButtonElement>("#clear-cache")!;
 
 function report(error: unknown): void {
   message.textContent =
@@ -98,6 +99,18 @@ form.addEventListener("submit", (event) => {
     await window.gwControl.profiles.create(label);
     input.value = "";
   });
+});
+
+clearCache.addEventListener("click", () => {
+  if (
+    window.confirm(
+      "Clear downloaded game data and restart? Every profile will need to download it again.",
+    )
+  ) {
+    void act(async () => {
+      await window.gwControl.cache.clearAndRestart();
+    });
+  }
 });
 
 window.gwControl.profiles.onChange(() => void refresh().catch(report));

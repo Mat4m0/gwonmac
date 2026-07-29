@@ -297,9 +297,19 @@ const CONTROL_INVOCATIONS: Invocation[] = [
     channel: IPC.profilesForgetLogin,
   },
   {
+    path: "profiles.resetSavedFiles",
+    args: ["a".repeat(32)],
+    channel: IPC.profilesResetStorage,
+  },
+  {
     path: "profiles.moveToTrash",
     args: ["a".repeat(32)],
     channel: IPC.profilesTrash,
+  },
+  {
+    path: "cache.clearAndRestart",
+    args: [],
+    channel: IPC.controlCacheClear,
   },
 ];
 

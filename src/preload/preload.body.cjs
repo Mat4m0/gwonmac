@@ -227,6 +227,9 @@ const controlApi = {
     moveToTrash: (id) => ipcRenderer.invoke(IPC.profilesTrash, id),
     onChange: (callback) => listen(IPC.profilesChanged, callback),
   },
+  cache: {
+    clearAndRestart: () => ipcRenderer.invoke(IPC.controlCacheClear),
+  },
 };
 
 if (gameApi.init.rendererRole === "game") {

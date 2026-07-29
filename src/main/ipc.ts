@@ -55,7 +55,6 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { appPaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
@@ -379,7 +378,6 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 }
 
 export function registerIpcHandlers(ctx: IpcContext): void {
-  const paths = appPaths();
   const credentialProvider = createCredentialProvider(
     process.platform,
     safeStorage,
@@ -585,26 +583,14 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     cacheClear: channel(nothing, async (win) => {
       await resetGameInput(win);
-      const { response } = await dialog.showMessageBox(win, {
-        type: "warning",
-        buttons: ["Clear and Restart", "Cancel"],
-        defaultId: 1,
-        cancelId: 1,
-        message: "Clear downloaded game data?",
+      await dialog.showMessageBox(win, {
+        type: "info",
+        buttons: ["OK"],
+        message: "Close Guild Wars first",
         detail:
-          "The app will restart. Client files stay installed, but game data will download again.",
+          "Downloaded game data is shared by every profile. Clear it from the profile manager when no game is running.",
       });
-      if (response !== 0) return false;
-      try {
-        await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
-        logEvent({ k: "cache.clearRequested" });
-        app.relaunch();
-        app.quit();
-        return true;
-      } catch (error) {
-        logEvent({ k: "cache.clearRequestFailed", code: errorCode(error) });
-        throw error;
-      }
+      return false;
     }),
 
     cacheDownloadAll: channel(nothing, () => ctx.downloadFullGame()),

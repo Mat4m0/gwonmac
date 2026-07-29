@@ -7,7 +7,7 @@ import {
   type BrowserWindow,
   type Session,
 } from "electron";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -498,7 +498,32 @@ if (primaryInstance) void app.whenReady().then(async () => {
       healthToken: clientRuntime.healthToken,
     }),
   });
-  registerControlIpcHandlers({ windows, profiles });
+  registerControlIpcHandlers({
+    windows,
+    profiles,
+    clearDownloadedData: async () => {
+      if (windows.gameWindows().length > 0) {
+        throw new Error("all profiles must be stopped");
+      }
+      const control = windows.controlWindow();
+      if (!control) throw new Error("profile manager is unavailable");
+      const { response } = await dialog.showMessageBox(control, {
+        type: "warning",
+        buttons: ["Clear and Restart", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "Clear downloaded game data?",
+        detail:
+          "Every profile will need to download game data again. Client files and saved logins stay installed.",
+      });
+      if (response !== 0) return false;
+      await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
+      logEvent({ k: "cache.clearRequested" });
+      app.relaunch();
+      app.quit();
+      return true;
+    },
+  });
 
   onAppQuit(async () => {
     await runtime.dispose();

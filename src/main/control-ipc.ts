@@ -17,6 +17,7 @@ import type { WindowRegistry } from "./window-registry.js";
 interface ControlIpcContext {
   readonly windows: WindowRegistry;
   readonly profiles: ProfileManager;
+  readonly clearDownloadedData: () => Promise<boolean>;
 }
 
 type Parser<In> = (args: readonly unknown[]) => In;
@@ -96,6 +97,10 @@ export function registerControlIpcHandlers(ctx: ControlIpcContext): void {
       (value) => ctx.profiles.resetSavedFiles(value),
     ),
     profilesTrash: channel(id, (value) => ctx.profiles.moveToTrash(value)),
+    controlCacheClear: channel(
+      nothing,
+      () => ctx.clearDownloadedData(),
+    ),
   } satisfies Record<ControlInvokeChannel, AnyChannelDef>;
 
   for (const [key, definition] of Object.entries(handlers)) {
