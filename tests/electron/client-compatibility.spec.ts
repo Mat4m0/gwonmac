@@ -305,7 +305,11 @@ test.describe("client compatibility", () => {
     try {
       const applicationWindow = await fixture.app.browserWindow(fixture.page);
       await applicationWindow.evaluate((win) => {
-        win.webContents.forcefullyCrashRenderer();
+        win.webContents.emit(
+          "render-process-gone",
+          {} as never,
+          { reason: "crashed", exitCode: 1 } as never,
+        );
       });
       await expect
         .poll(() => pathExists(path.join(artifacts, "manifest.json")), {
