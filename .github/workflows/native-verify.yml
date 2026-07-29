@@ -1,0 +1,136 @@
+name: Reusable native verification
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: Empty disables tested preview artifact handoff.
+        required: false
+        type: string
+        default: ""
+      artifact-retention-days:
+        required: false
+        type: number
+        default: 1
+      dependency-review:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Review dependency changes
+        if: inputs.dependency-review
+        uses: actions/dependency-review-action@cc4f6536e38d1126c5e3b0683d469a14f23bfea4 # v3.1.5
+        with:
+          fail-on-severity: high
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.13.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
+      - name: Resolve canonical native target matrix
+        id: targets
+        run: |
+          matrix="$(node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/release-matrix.ts)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm check:links
+      - run: pnpm test:policy
+
+  native:
+    needs: static
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.static.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.13.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - name: Install Linux packaging and display tools
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes fakeroot xvfb
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
+      - name: Assert native runner identity
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/assert-native-target.ts ${{ matrix.targetId }}
+      - run: pnpm build
+      - run: pnpm test:unit
+      - run: pnpm test:integration
+      - name: Test Electron on Linux
+        if: matrix.platform == 'linux'
+        run: xvfb-run --auto-servernum pnpm test:electron
+      - name: Test Electron
+        if: matrix.platform != 'linux'
+        run: pnpm test:electron
+      - run: pnpm test:release
+      - run: pnpm package
+      - name: Test unpacked package on Linux
+        if: matrix.platform == 'linux'
+        run: xvfb-run --auto-servernum pnpm test:packaged
+      - name: Test unpacked package
+        if: matrix.platform != 'linux'
+        run: pnpm test:packaged
+      - run: pnpm make
+      - run: pnpm test:artifact
+
+      - name: Prepare tested preview artifact
+        if: inputs.artifact-name != ''
+        id: preview
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/prepare-preview-artifact.ts ${{ matrix.targetId }}
+
+      - name: Generate macOS preview SBOM
+        if: inputs.artifact-name != '' && matrix.platform == 'darwin'
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: ${{ steps.preview.outputs.application }}
+          format: spdx-json
+          output-file: ${{ steps.preview.outputs.sbom }}
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Finalize preview checksums
+        if: inputs.artifact-name != ''
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/finalize-preview-checksums.ts
+
+      - name: Upload tested preview artifact
+        if: inputs.artifact-name != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.artifact-name }}-${{ matrix.targetId }}
+          path: distribution/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact-retention-days }}
+          compression-level: 0

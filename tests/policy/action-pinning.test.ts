@@ -20,8 +20,8 @@ test("every workflow action is pinned to a full commit SHA", () => {
     workflows.sort(),
     [
       "client-canary.yml",
-      "macos-verify.yml",
       "main-snapshot.yml",
+      "native-verify.yml",
       "pr-package.yml",
       "publish-snapshot.yml",
       "release.yml",

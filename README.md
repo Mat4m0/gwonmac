@@ -108,17 +108,18 @@ The first online run fetches the small JSPI client artifacts.
 | Command                                                                  | Purpose                                     |
 | ------------------------------------------------------------------------ | ------------------------------------------- |
 | `pnpm dev`                                                               | Build and launch the app via Electron Forge |
-| `pnpm package`                                                           | Build a local `.app` under `out/`           |
-| `pnpm make`                                                              | Build the distributable `.zip`              |
+| `pnpm package`                                                           | Build the native unpacked app under `out/`   |
+| `pnpm make`                                                              | Build the native final installer/archive     |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
 | `pnpm check`                                                             | Fast inner loop: static checks and policy   |
 | `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites (run `pnpm build` first)        |
 | `pnpm test:website`                                                      | The `apps/website` suite                    |
-| `pnpm verify`                                                            | The complete local gate                     |
+| `pnpm verify`                                                            | Complete native gate, including final artifact |
 
-`pnpm test:electron` launches a real macOS application process, so it needs
+`pnpm test:electron` launches a real native application process, so it needs
 permission to open GUI applications. Those launches run in the background and
-do not take keyboard focus. The networked smoke test is opt-in:
+do not take keyboard focus. Linux CI supplies Xvfb without disabling Electron's
+sandbox. The networked smoke test is opt-in:
 
 ```bash
 pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron

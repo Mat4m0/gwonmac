@@ -115,9 +115,9 @@ test("official releases have one honest ad-hoc signing path", () => {
 
 test("release workflow publishes one tested, attested package version", () => {
   const workflow = read(".github/workflows/release.yml");
-  const verification = read(".github/workflows/macos-verify.yml");
-  assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
-  assert.match(verification, /runs-on: macos-15/);
+  const verification = read(".github/workflows/native-verify.yml");
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/native-verify\.yml/);
+  assert.match(verification, /runs-on: \$\{\{ matrix\.runner \}\}/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
@@ -161,7 +161,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   const release = read(".github/workflows/release.yml");
   const pullRequest = read(".github/workflows/pr-package.yml");
   const main = read(".github/workflows/main-snapshot.yml");
-  const verification = read(".github/workflows/macos-verify.yml");
+  const verification = read(".github/workflows/native-verify.yml");
   const publisher = read(".github/workflows/publish-snapshot.yml");
   const manual = read(".github/workflows/tester-build.yml");
   const retention = read("scripts/snapshot-retention.ts");
@@ -176,13 +176,28 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     verification,
     /contents: write|attestations: write|id-token: write/,
   );
-  assert.match(verification, /run: pnpm verify/);
-  assert.match(verification, /codesign --verify --deep --strict/);
-  assert.match(verification, /Signature=adhoc/);
-  assert.match(verification, /ditto -c -k --sequesterRsrc --keepParent/);
+  assert.match(verification, /fromJSON\(needs\.static\.outputs\.matrix\)/);
+  assert.match(verification, /runs-on: \$\{\{ matrix\.runner \}\}/);
+  assert.match(verification, /scripts\/assert-native-target\.ts/);
+  assert.match(verification, /xvfb-run --auto-servernum pnpm test:electron/);
+  assert.doesNotMatch(verification, /--no-sandbox/);
+  for (const command of [
+    "pnpm build",
+    "pnpm test:unit",
+    "pnpm test:integration",
+    "pnpm test:electron",
+    "pnpm test:release",
+    "pnpm package",
+    "pnpm test:packaged",
+    "pnpm make",
+    "pnpm test:artifact",
+  ]) {
+    assert.match(verification, new RegExp(command.replaceAll(":", "\\:")));
+  }
   assert.match(verification, /format: spdx-json/);
-  assert.match(verification, /SOURCE_COMMIT\.txt/);
-  assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
+  assert.match(verification, /scripts\/prepare-preview-artifact\.ts/);
+  assert.match(verification, /scripts\/finalize-preview-checksums\.ts/);
+  assert.match(verification, /inputs\.artifact-name \}\}-\$\{\{ matrix\.targetId/);
   assert.match(verification, /retention-days: \$\{\{ inputs\.artifact-retention-days \}\}/);
 
   assert.match(pullRequest, /on:\n {2}pull_request:/);
@@ -203,6 +218,10 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(main, /artifact-retention-days: 1/);
   assert.match(
     main,
+    /publish:[\s\S]*artifact-name: snapshot-assets-\$\{\{ github\.run_id \}\}-macos-arm64/,
+  );
+  assert.match(
+    main,
     /publish:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
   );
 
@@ -218,6 +237,10 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
   assert.doesNotMatch(manual, /schedule:|release-build|package\.json'\)\.version/);
   assert.match(manual, /artifact-retention-days: 1/);
+  assert.match(
+    manual,
+    /publish:[\s\S]*artifact-name: snapshot-assets-\$\{\{ github\.run_id \}\}-macos-arm64/,
+  );
   assert.match(manual, /publish:\n {4}needs: verify/);
   assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
 

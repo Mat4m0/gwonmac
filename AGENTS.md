@@ -194,13 +194,17 @@ pnpm test:policy
 pnpm test:release
 pnpm package
 pnpm test:packaged
+pnpm make
+pnpm test:artifact
 ```
 
 `pnpm test:policy` holds the repository invariants that need no build: import
 boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
 artifacts, and documentation links.
 
-`pnpm verify` runs that gate end to end, and CI runs it on every pull request.
+`pnpm verify` runs that gate end to end. CI runs the shared static checks once,
+then the native build, unit, integration, Electron, package, packaged, make,
+and final-artifact checks on macOS arm64, Windows x64, and Linux x64.
 The website is not part of it: `apps/website` has its own path-filtered
 workflow, and `pnpm test:website` runs that suite locally.
 

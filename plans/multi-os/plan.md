@@ -437,27 +437,27 @@ Acceptance: MOS-S01
 
 Primary files:
 
-- [.github/workflows/macos-verify.yml](../../.github/workflows/macos-verify.yml)
+- [.github/workflows/native-verify.yml](../../.github/workflows/native-verify.yml)
 - [.github/workflows/release.yml](../../.github/workflows/release.yml)
 
 Tasks:
 
-- [ ] Replace the reusable macOS-only verifier with a native matrix workflow.
-- [ ] Run shared static work once and native build/unit/integration/Electron/
+- [x] Replace the reusable macOS-only verifier with a native matrix workflow.
+- [x] Run shared static work once and native build/unit/integration/Electron/
   package/packaged tests on every OS.
-- [ ] Use Xvfb/X11 with a working Electron sandbox on Linux. Never add
+- [x] Use Xvfb/X11 with a working Electron sandbox on Linux. Never add
   `--no-sandbox`.
-- [ ] Assert the runner's actual platform/architecture before naming an
+- [x] Assert the runner's actual platform/architecture before naming an
   artifact.
-- [ ] Keep Playwright workers at one.
-- [ ] Upload only short-lived tested preview artifacts and non-sensitive test
+- [x] Keep Playwright workers at one.
+- [x] Upload only short-lived tested preview artifacts and non-sensitive test
   evidence.
-- [ ] Extend `pnpm verify` to run Forge `make` and a new final-artifact smoke
+- [x] Extend `pnpm verify` to run Forge `make` and a new final-artifact smoke
   after the existing unpacked-package smoke. The final-artifact smoke extracts
   the macOS ZIP/DEB without privilege and installs Squirrel in a disposable
   Windows user profile; clean-machine DEB installation remains a native
   release qualification.
-- [ ] Update PR, main-snapshot, tester, and release callers in the same hard
+- [x] Update PR, main-snapshot, tester, and release callers in the same hard
   cutover; delete the old one-target workflow.
 
 ### WP-2.5 — artifact manifests and immutable handoff

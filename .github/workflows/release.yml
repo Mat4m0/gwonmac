@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   verify:
-    uses: ./.github/workflows/macos-verify.yml
+    uses: ./.github/workflows/native-verify.yml
     with:
       artifact-name: ""
 
