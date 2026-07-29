@@ -45,6 +45,11 @@ function render(profile: ProfileSummary): DocumentFragment {
   launch.addEventListener("click", () => {
     void act(() => window.gwControl.profiles.launch(profile.id));
   });
+  const close = button(fragment, "close");
+  close.disabled = profile.status !== "running";
+  close.addEventListener("click", () => {
+    void act(() => window.gwControl.profiles.close(profile.id));
+  });
   const rename = button(fragment, "rename");
   rename.disabled = profile.status !== "stopped";
   rename.addEventListener("click", () => {
