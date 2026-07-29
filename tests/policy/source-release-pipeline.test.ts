@@ -347,6 +347,31 @@ test("native tests keep Chromium sandboxed and fail when their build is missing"
   }
 });
 
+test("stable Electron failures carry closed evidence and isolate the real crash", () => {
+  const stable = read("tests/electron/playwright.config.ts");
+  const fault = read("tests/electron/playwright.fault.config.ts");
+  const fixture = read("tests/electron/fixtures.mts");
+  const electronFiles = filesUnder("tests/electron");
+  const crashCalls = electronFiles.flatMap((file) =>
+    [...read(file).matchAll(/forcefullyCrashRenderer\(\)/g)].map(() => file),
+  );
+
+  assert.deepEqual(crashCalls, [
+    "tests/electron/faults/renderer-crash.spec.ts",
+  ]);
+  assert.match(stable, /testIgnore: \/faults\\/);
+  assert.match(fault, /testMatch: \/faults\\/);
+  assert.match(script("test:electron:fault"), /playwright\.fault\.config\.ts/);
+  assert.match(fixture, /diagnosticSummary\(\)/);
+  assert.match(fixture, /electron-evidence-/);
+  assert.match(fixture, /mode: 0o600/);
+  assert.doesNotMatch(
+    fixture,
+    /console|page\.content|textContent/,
+    "failure evidence must not copy open renderer text",
+  );
+});
+
 test("the application ships only the reviewed portable ZIP dependency", () => {
   assert.deepEqual(json("package.json").dependencies, {
     "@zip.js/zip.js": "2.8.34",

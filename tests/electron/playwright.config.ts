@@ -27,6 +27,7 @@ if (missingInputs.length > 0) {
 export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts$/,
+  testIgnore: /faults\/.*\.spec\.ts$/,
   reporter: "list",
   timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),

@@ -5,9 +5,8 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { ChildProcess } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +19,7 @@ export const root = path.resolve(
 export const main = path.join(root, "build/main/main.js");
 
 const electronBin = developmentElectronExecutable(root);
+const diagnosticsModule = path.join(root, "build/main/diagnostics.js");
 
 interface FixtureProcess {
   readonly pid?: number | undefined;
@@ -55,7 +55,70 @@ export interface OfflineFixture {
   readonly userData: string;
 }
 
-const fixtureOwner = new AsyncLocalStorage<Set<OfflineFixture>>();
+let activeFixtureOwner: Set<OfflineFixture> | null = null;
+
+async function attachFailureEvidence(
+  fixture: OfflineFixture,
+  index: number,
+  outputPath: (name: string) => string,
+  attach: (
+    name: string,
+    options: { path: string; contentType: string },
+  ) => Promise<void>,
+): Promise<void> {
+  let main:
+    | {
+      reachable: true;
+      windows: Array<{ crashed: boolean; destroyed: boolean }>;
+      summary: unknown;
+    }
+    | { reachable: false };
+  try {
+    main = await fixture.app.evaluate(
+      ({ BrowserWindow }, modulePath) => {
+        const { createRequire } = process.getBuiltinModule("node:module");
+        const load = createRequire(modulePath);
+        const { diagnosticSummary } = load(modulePath) as {
+          diagnosticSummary(): unknown;
+        };
+        return {
+          reachable: true as const,
+          windows: BrowserWindow.getAllWindows().map((window) => ({
+            crashed: window.webContents.isCrashed(),
+            destroyed: window.isDestroyed(),
+          })),
+          summary: diagnosticSummary(),
+        };
+      },
+      diagnosticsModule,
+    );
+  } catch {
+    main = { reachable: false };
+  }
+  const name = `electron-evidence-${index}.json`;
+  const evidencePath = outputPath(name);
+  await writeFile(
+    evidencePath,
+    JSON.stringify(
+      {
+        formatVersion: 1,
+        process: {
+          exited: processExited(fixture.process),
+          exitCode: fixture.process.exitCode,
+          signalCode: fixture.process.signalCode,
+        },
+        main,
+      },
+      null,
+      2,
+    ),
+    { encoding: "utf8", mode: 0o600 },
+  );
+  await attach(name, {
+    path: evidencePath,
+    contentType: "application/json",
+  });
+}
 
 export { expect };
 
@@ -63,24 +126,34 @@ export const test = base.extend<{ electronLifecycle: void }>({
   electronLifecycle: [
     // Playwright requires fixture dependencies to use an object pattern.
     // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({}, use, testInfo) => {
       const owned = new Set<OfflineFixture>();
-      let cleanupFailures: unknown[] = [];
-      await fixtureOwner.run(owned, async () => {
-        try {
-          await use();
-        } finally {
-          const results = await Promise.allSettled(
-            [...owned].reverse().map((fixture) => closeOffline(fixture)),
-          );
-          cleanupFailures = results
-            .filter(
-              (result): result is PromiseRejectedResult =>
-                result.status === "rejected",
-            )
-            .map((result) => result.reason);
-        }
-      });
+      let cleanupFailures: unknown[];
+      activeFixtureOwner = owned;
+      try {
+        await use();
+      } finally {
+        const evidenceResults = await Promise.allSettled(
+          [...owned].map((fixture, index) =>
+            attachFailureEvidence(
+              fixture,
+              index,
+              (name) => testInfo.outputPath(name),
+              (name, options) => testInfo.attach(name, options),
+            ),
+          ),
+        );
+        const results = await Promise.allSettled(
+          [...owned].reverse().map((fixture) => closeOffline(fixture)),
+        );
+        cleanupFailures = [...evidenceResults, ...results]
+          .filter(
+            (result): result is PromiseRejectedResult =>
+              result.status === "rejected",
+          )
+          .map((result) => result.reason);
+        activeFixtureOwner = null;
+      }
       if (cleanupFailures.length > 0) {
         throw new AggregateError(
           cleanupFailures,
@@ -134,7 +207,7 @@ export async function launchOfflineAt(
     const page = await app.firstWindow({ timeout: 30_000 });
     await page.waitForLoadState("domcontentloaded");
     const fixture = { app, page, process: childProcess, userData };
-    fixtureOwner.getStore()?.add(fixture);
+    activeFixtureOwner?.add(fixture);
     return fixture;
   } catch (error) {
     await shutdownFixtureProcess(childProcess, () => app.close()).catch(() => undefined);
@@ -202,5 +275,7 @@ export async function closeOffline(
       retryDelay: 100,
     });
   }
-  fixtureOwner.getStore()?.delete(fixture);
+  if (options.removeUserData === false) {
+    activeFixtureOwner?.delete(fixture);
+  }
 }

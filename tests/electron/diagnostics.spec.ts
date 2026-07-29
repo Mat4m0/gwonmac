@@ -695,34 +695,4 @@ test.describe("diagnostics", () => {
       await closeOffline(fixture);
     }
   });
-
-  test("recovers the sandbox after a renderer crash", async () => {
-    const fixture = await launchOffline("gw-renderer-recovery-e2e-");
-    try {
-      const applicationWindow = await fixture.app.browserWindow(fixture.page);
-      await applicationWindow.evaluate((win) => {
-        win.webContents.forcefullyCrashRenderer();
-      });
-      await expect
-        .poll(
-          async () => {
-            const [firstWindow] = fixture.app.windows();
-            if (!firstWindow) return false;
-            try {
-              return await firstWindow.evaluate(
-                () =>
-                  globalThis.location.protocol === "gw:" &&
-                  typeof window.gwNative === "object",
-              );
-            } catch {
-              return false;
-            }
-          },
-          { timeout: 15_000 },
-        )
-        .toBe(true);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
 });

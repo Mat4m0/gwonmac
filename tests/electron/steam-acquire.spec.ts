@@ -226,13 +226,19 @@ async function waitForSignInWindow(app: OfflineFixture["app"]): Promise<void> {
   await expect.poll(() => signInWindows(app), { timeout: 15_000 }).toBe(1);
 }
 
-/** Kill the sign-in window's renderer the way a real page crash would. */
-async function crashSignInWindow(app: OfflineFixture["app"]): Promise<void> {
+/** Deliver Electron's crash event without destabilising Chromium itself. */
+async function reportCrashedSignInWindow(
+  app: OfflineFixture["app"],
+): Promise<void> {
   const crashed = await app.evaluate(({ BrowserWindow }) => {
     let count = 0;
     for (const win of BrowserWindow.getAllWindows()) {
       if (win.webContents.getURL().includes("127.0.0.1")) {
-        win.webContents.forcefullyCrashRenderer();
+        win.webContents.emit(
+          "render-process-gone",
+          {} as never,
+          { reason: "crashed", exitCode: 1 } as never,
+        );
         count += 1;
       }
     }
@@ -441,7 +447,7 @@ test.describe("acquiring a Steam token", () => {
 
     await beginAcquire(fixture.app, configFor(server));
     await waitForSignInWindow(fixture.app);
-    await crashSignInWindow(fixture.app);
+    await reportCrashedSignInWindow(fixture.app);
     const run = await settleAcquire(fixture.app);
 
     expect(run.result).toEqual({ ok: false, reason: "failed" });
