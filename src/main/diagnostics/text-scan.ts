@@ -110,7 +110,7 @@ export function redactDiagnosticText(value: string): string {
     // it and the streaming scanner emitted verbatim what the whole-document
     // scan redacted (see `flushBoundary`). A comma inside a query *key* is now
     // left alone by both, which is the trade the boundary is worth.
-    .replace(/([?&][^=\s"',&]+)=([^&#\s"',}]+)/g, "$1=[redacted]")
+    .replace(/([?&#][^=\s"',&]+)=([^&#\s"',}]+)/g, "$1=[redacted]")
     .replace(
       /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
       "[redacted-email]",

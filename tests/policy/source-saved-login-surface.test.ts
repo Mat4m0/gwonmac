@@ -22,7 +22,7 @@ function shippedSources(directory = "src"): string[] {
     .flatMap((entry) => {
       const child = `${directory}/${entry.name}`;
       if (entry.isDirectory()) return shippedSources(child);
-      return /\.(?:ts|mts|cjs|js)$/u.test(entry.name) ? [child] : [];
+      return /\.(?:ts|mts|mjs|tsx|cjs|js|jsx)$/u.test(entry.name) ? [child] : [];
     });
 }
 
@@ -35,7 +35,7 @@ function shippedSources(directory = "src"): string[] {
 // are both thin instances of it. `steam-session.ts` is here because the Steam
 // token is a second secret held to the same invariant, and a scan that only
 // looked at credentials would not notice a second store growing a weaker home.
-const surface = [
+const persistenceOwners = [
   "src/main/ipc.ts",
   "src/main/core/credentials.ts",
   "src/main/core/encrypted-store.ts",
@@ -48,18 +48,19 @@ const surface = [
 ]
   .map(read)
   .join("\n");
+const shippedApplication = shippedSources().map(read).join("\n");
 
 test("saved login has one encrypted owner-only persistence surface", () => {
-  assert.match(surface, /safeStorage/);
-  assert.match(surface, /credentials\.bin/);
-  assert.match(surface, /steam-session\.bin/);
-  assert.match(surface, /encryptString/);
-  assert.match(surface, /writeAtomic\(this\.path, ciphertext, 0o600\)/);
-  assert.doesNotMatch(surface, /localStorage|sessionStorage/);
-  assert.doesNotMatch(surface, /plaintext|fallbackKey|masterPassword/);
+  assert.match(persistenceOwners, /safeStorage/);
+  assert.match(persistenceOwners, /credentials\.bin/);
+  assert.match(persistenceOwners, /steam-session\.bin/);
+  assert.match(persistenceOwners, /encryptString/);
+  assert.match(persistenceOwners, /writeAtomic\(this\.path, ciphertext, 0o600\)/);
+  assert.doesNotMatch(shippedApplication, /localStorage|sessionStorage/);
+  assert.doesNotMatch(shippedApplication, /plaintext|fallbackKey|masterPassword/);
   // The three game-facing methods reach the one store, and no fourth path.
   assert.match(
-    surface,
+    persistenceOwners,
     /secureStorage:[\s\S]*getCredentials[\s\S]*storeCredentials[\s\S]*clearCredentials/,
   );
 });
