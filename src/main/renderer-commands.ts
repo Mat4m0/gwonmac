@@ -2,9 +2,12 @@ import { ipcMain, type BrowserWindow } from "electron";
 import {
   IPC,
   type RendererCommand,
-  type RendererCommandCompletion,
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
+import {
+  RendererCommandBroker,
+  type RendererCommandWindow,
+} from "./core/renderer-command-broker.js";
 
 /**
  * Main→renderer commands, and the single owner of "which window is the
@@ -13,26 +16,14 @@ import {
  * traffic coming the other way — and built the command as JavaScript source.
  */
 
-interface Pending {
-  webContentsId: number;
-  settle: (outcome: RendererCommandOutcome) => void;
-}
-
-const pending = new Map<number, Pending>();
-let lastCommandId = 0;
 export const RENDERER_COMMAND_TIMEOUT_MS = 5_000;
+const broker = new RendererCommandBroker(
+  IPC.rendererCommand,
+  RENDERER_COMMAND_TIMEOUT_MS,
+);
 
 ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
-  if (
-    typeof id !== "number"
-    || (outcome !== "completed" && outcome !== "failed")
-  ) {
-    return;
-  }
-  const entry = pending.get(id);
-  // Only the renderer the command was sent to may complete it.
-  if (!entry || entry.webContentsId !== event.sender.id) return;
-  entry.settle(outcome as RendererCommandCompletion);
+  broker.complete(event.sender.id, id, outcome);
 });
 
 /**
@@ -57,48 +48,8 @@ export function sendRendererCommand(
   win: BrowserWindow | null,
   command: RendererCommand,
 ): Promise<RendererCommandOutcome> {
-  if (
-    !win
-    || win.isDestroyed()
-    || win.webContents.isDestroyed()
-    || win.webContents.isCrashed()
-  ) {
-    return Promise.resolve("failed");
-  }
-  const contents = win.webContents;
-  const id = (lastCommandId += 1);
-  return new Promise<RendererCommandOutcome>((resolve) => {
-    let settled = false;
-    const timer = setTimeout(
-      () => settle("timed-out"),
-      RENDERER_COMMAND_TIMEOUT_MS,
-    );
-    const settle = (outcome: RendererCommandOutcome): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      pending.delete(id);
-      contents.off("destroyed", failed);
-      contents.off("render-process-gone", failed);
-      contents.off("did-finish-load", failed);
-      contents.off("did-start-navigation", abandon);
-      resolve(outcome);
-    };
-    const failed = (): void => settle("failed");
-    const abandon = (
-      details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
-    ): void => {
-      if (details.isMainFrame && !details.isSameDocument) failed();
-    };
-    pending.set(id, { webContentsId: contents.id, settle });
-    contents.once("destroyed", failed);
-    contents.once("render-process-gone", failed);
-    contents.once("did-finish-load", failed);
-    contents.on("did-start-navigation", abandon);
-    try {
-      contents.send(IPC.rendererCommand, id, command);
-    } catch {
-      failed();
-    }
-  });
+  return broker.send(
+    win as unknown as RendererCommandWindow | null,
+    command,
+  );
 }

@@ -113,55 +113,21 @@ test.describe("diagnostics", () => {
       const traceNames = new Set(trace.traceEvents.map((event) => event.name));
       expect(traceNames.has("gw.snapshot.resolve")).toBe(true);
       expect(traceNames.has("gw.frame.submit")).toBe(true);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
-  test("discards a completed Chromium trace before the next capture and at shutdown", async () => {
-    const fixture = await launchOffline("gw-trace-lifecycle-e2e-");
-    try {
-      const { app, page, userData } = fixture;
-      const diagnosticsDirectory = path.join(userData, "diagnostics");
-      const traceNames = async () =>
-        (await readdir(diagnosticsDirectory)).filter(
-          (name) => name.startsWith("chromium-") && name.endsWith(".json"),
-        );
-      await app.evaluate(({ dialog }) => {
-        dialog.showMessageBox = async () => ({
-          response: 1,
-          checkboxChecked: false,
-        });
-      });
-
-      await clickMenu(app, "start-chromium-trace");
-      await expect(page.locator("#capture-status")).toBeVisible();
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
-      await expect.poll(traceNames).toHaveLength(1);
-
-      // Beginning Level 1 replaces the completed Level 2 result. The raw
-      // Chromium file has to be gone before that reset happens.
+      // Beginning another capture discards the unexported raw trace. This is
+      // the one native ownership edge; schema and export inventory live below
+      // Electron.
       await clickMenu(app, "start-performance-capture");
       await expect(page.locator("#capture-status")).toBeVisible();
-      await expect.poll(traceNames).toEqual([]);
+      await expect
+        .poll(() =>
+          stat(path.join(diagnosticsDirectory, traceName)).then(
+            () => true,
+            () => false,
+          ),
+        )
+        .toBe(false);
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
-
-      // The same ownership rule applies when no later capture replaces it:
-      // quit cleanup deletes an unexported completed trace.
-      await clickMenu(app, "start-chromium-trace");
-      await expect(page.locator("#capture-status")).toBeVisible();
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
-      await expect.poll(traceNames).toHaveLength(1);
-      await app.evaluate(async (_, modulePath) => {
-        const load = process
-          .getBuiltinModule("node:module")
-          .createRequire(modulePath);
-        await load(modulePath).stopDiagnostics();
-      }, path.join(root, "build/main/diagnostics.js"));
-      await expect.poll(traceNames).toEqual([]);
     } finally {
       await closeOffline(fixture);
     }
@@ -380,9 +346,9 @@ test.describe("diagnostics", () => {
     }
   });
 
-  // Stopping a capture on the quit path awaits a renderer acknowledgement, so a
-  // renderer that cannot answer must settle the wait rather than hold it.
-  test("a command to a renderer whose process is gone settles instead of waiting", async () => {
+  // The controlled broker tests own process loss, navigation, completion, and
+  // timeout branches. This keeps only the Electron WebContents wiring.
+  test("refuses a command when Electron reports the renderer gone", async () => {
     const fixture = await launchOffline("gw-renderer-command-crash-e2e-");
     try {
       const outcome = await fixture.app.evaluate(
@@ -391,65 +357,21 @@ test.describe("diagnostics", () => {
             .getBuiltinModule("node:module")
             .createRequire(args.modulePath);
           const { sendRendererCommand } = load(args.modulePath);
-          const settledWithin = (promise: Promise<unknown>, ms: number) =>
-            Promise.race([
-              promise,
-              new Promise((resolve) => setTimeout(() => resolve("waiting"), ms)),
-            ]);
-          const probe = async () => {
-            const win = new BrowserWindow({ show: false });
-            await win.loadURL("about:blank");
-            return win;
-          };
-
-          // The process dies while a command is outstanding.
-          const during = await probe();
-          const outstanding = sendRendererCommand(during, { type: "input.reset" });
-          during.webContents.emit(
-            "render-process-gone",
-            {} as never,
-            { reason: "crashed", exitCode: 1 } as never,
-          );
-          const whileWaiting = await settledWithin(outstanding, 5_000);
-
-          // The process is already gone when the command is sent.
-          const after = await probe();
-          Object.defineProperty(after.webContents, "isCrashed", {
+          const window = new BrowserWindow({ show: false });
+          Object.defineProperty(window.webContents, "isCrashed", {
             value: () => true,
           });
-          const alreadyGone = await settledWithin(
-            sendRendererCommand(after, { type: "input.reset" }),
-            5_000,
-          );
-          // A live page with no preload handler is bounded too. Destruction
-          // would settle this for another reason, so leave it untouched until
-          // the command's own deadline answers.
-          const unresponsive = await probe();
-          const timedOut = await settledWithin(
-            sendRendererCommand(unresponsive, { type: "input.reset" }),
-            7_000,
-          );
-          const stillAlive = !after.isDestroyed() && !after.webContents.isDestroyed();
-          for (const win of [during, after, unresponsive]) win.destroy();
-          return {
-            whileWaiting,
-            alreadyGone,
-            timedOut,
-            stillAlive,
-          };
+          const result = await sendRendererCommand(window, {
+            type: "input.reset",
+          });
+          window.destroy();
+          return result;
         },
         {
           modulePath: path.join(root, "build/main/renderer-commands.js"),
         },
       );
-      expect(outcome).toEqual({
-        whileWaiting: "failed",
-        alreadyGone: "failed",
-        timedOut: "timed-out",
-        // The window that could not answer is neither destroyed nor closed —
-        // that is what made this state unreachable for the other listeners.
-        stillAlive: true,
-      });
+      expect(outcome).toBe("failed");
       // The application's own renderer was never touched.
       expect(await fixture.page.evaluate(() => 1 + 1)).toBe(2);
     } finally {
