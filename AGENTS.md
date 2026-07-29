@@ -226,12 +226,13 @@ pnpm lint
 pnpm check:links
 pnpm test:unit
 pnpm test:integration
-pnpm test:electron
+pnpm test:electron:stable
+pnpm test:electron:fault
 pnpm test:policy
 pnpm test:release
-pnpm package
+pnpm make:prepared
 pnpm test:packaged
-pnpm make
+pnpm test:artifact
 pnpm test:artifact
 ```
 

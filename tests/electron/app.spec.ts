@@ -519,8 +519,25 @@ test.describe("Electron application", () => {
           ? "not Keychain-backed"
           : process.platform === "win32"
             ? "signed-in Windows account"
-            : "Secret Service or KWallet",
+              : "Secret Service or KWallet",
       );
+      const linuxStorage = await app.evaluate(({ safeStorage }) => ({
+        available: safeStorage.isEncryptionAvailable(),
+        backend:
+          process.platform === "linux"
+            ? safeStorage.getSelectedStorageBackend()
+            : null,
+      }));
+      const expectedLinuxKeyring = process.env.GW_EXPECT_LINUX_KEYRING;
+      if (process.platform === "linux" && expectedLinuxKeyring === "available") {
+        expect(linuxStorage.available).toBe(true);
+        expect([
+          "gnome_libsecret",
+          "kwallet",
+          "kwallet5",
+          "kwallet6",
+        ]).toContain(linuxStorage.backend);
+      }
       let storageUnavailable = false;
       try {
         await page.evaluate(() =>
@@ -532,6 +549,13 @@ test.describe("Electron application", () => {
         if (process.platform !== "linux") throw error;
         expect(String(error)).toContain("credential encryption is unavailable");
         storageUnavailable = true;
+      }
+      if (process.platform === "linux") {
+        if (expectedLinuxKeyring === "available") {
+          expect(storageUnavailable).toBe(false);
+        } else if (expectedLinuxKeyring === "unavailable") {
+          expect(storageUnavailable).toBe(true);
+        }
       }
       if (storageUnavailable) {
         expect(

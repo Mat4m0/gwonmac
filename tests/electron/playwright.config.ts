@@ -26,6 +26,7 @@ if (missingInputs.length > 0) {
 
 export default defineConfig({
   testDir: ".",
+  outputDir: path.join(root, "test-results/electron-stable"),
   testMatch: /.*\.spec\.ts$/,
   testIgnore: /faults\/.*\.spec\.ts$/,
   reporter: "list",

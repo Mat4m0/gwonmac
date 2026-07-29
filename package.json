@@ -28,7 +28,8 @@
     "check:links": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/check-markdown-links.ts",
     "test:unit": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/unit/*.ts",
     "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/integration/*.ts",
-    "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
+    "test:electron": "pnpm test:electron:stable && pnpm test:electron:fault",
+    "test:electron:stable": "playwright test --config=tests/electron/playwright.config.ts",
     "test:electron:fault": "playwright test --config=tests/electron/playwright.fault.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",
     "test:artifact": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/final-artifact-smoke.ts",
@@ -46,14 +47,14 @@
     "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron",
     "package": "pnpm build && pnpm package:prepared",
     "package:prepared": "node scripts/clean-output.mjs && electron-forge package",
-    "make": "pnpm build && pnpm package:prepared && pnpm make:prepared",
-    "make:prepared": "node scripts/clean-make-output.mjs && electron-forge make --skip-package",
+    "make": "pnpm build && pnpm make:prepared",
+    "make:prepared": "node scripts/clean-output.mjs && electron-forge make",
     "diagnostics:validate": "tsc && node build/tools/diagnostics/validate.js",
     "diagnostics:summarize": "tsc && node build/tools/diagnostics/summarize.js",
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
-    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged && pnpm make && pnpm test:artifact"
+    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron:stable && pnpm test:electron:fault && pnpm test:policy && pnpm test:release && pnpm make:prepared && pnpm test:packaged && pnpm test:artifact"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

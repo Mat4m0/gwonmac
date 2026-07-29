@@ -192,17 +192,24 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(verification, /fromJSON\(needs\.static\.outputs\.matrix\)/);
   assert.match(verification, /runs-on: \$\{\{ matrix\.runner \}\}/);
   assert.match(verification, /scripts\/assert-native-target\.ts/);
-  assert.match(verification, /xvfb-run --auto-servernum pnpm test:electron/);
+  assert.match(
+    verification,
+    /xvfb-run --auto-servernum pnpm test:electron:stable/,
+  );
+  assert.match(
+    verification,
+    /xvfb-run --auto-servernum pnpm test:electron:fault/,
+  );
   assert.doesNotMatch(verification, /--no-sandbox/);
   for (const command of [
     "pnpm build",
     "pnpm test:unit",
     "pnpm test:integration",
-    "pnpm test:electron",
+    "pnpm test:electron:stable",
+    "pnpm test:electron:fault",
     "pnpm test:release",
-    "pnpm package",
+    "pnpm make:prepared",
     "pnpm test:packaged",
-    "pnpm make",
     "pnpm test:artifact",
   ]) {
     assert.match(verification, new RegExp(command.replaceAll(":", "\\:")));
@@ -372,6 +379,30 @@ test("stable Electron failures carry closed evidence and isolate the real crash"
   );
 });
 
+test("Linux CI proves both keyring policy states without a plaintext fallback", () => {
+  const workflow = read(".github/workflows/native-verify.yml");
+  const application = read("tests/electron/app.spec.ts");
+  assert.match(
+    workflow,
+    /Test Electron on Linux[\s\S]*GW_EXPECT_LINUX_KEYRING: unavailable/,
+  );
+  assert.match(workflow, /\n {2}linux-keyring:\n/);
+  assert.match(workflow, /dbus-run-session/);
+  assert.match(workflow, /gnome-keyring-daemon --unlock --components=secrets/);
+  assert.match(workflow, /org\.freedesktop\.secrets/);
+  assert.match(workflow, /GW_EXPECT_LINUX_KEYRING: available/);
+  assert.match(application, /expectedLinuxKeyring === "available"/);
+  for (const backend of [
+    "gnome_libsecret",
+    "kwallet",
+    "kwallet5",
+    "kwallet6",
+  ]) {
+    assert.match(application, new RegExp(`"${backend}"`));
+  }
+  assert.doesNotMatch(workflow, /password-store=basic|basic_text/);
+});
+
 test("the application ships only the reviewed portable ZIP dependency", () => {
   assert.deepEqual(json("package.json").dependencies, {
     "@zip.js/zip.js": "2.8.34",
@@ -392,13 +423,21 @@ test("packaging builds once and makers consume the tested package", () => {
   assert.match(script("package:prepared"), /scripts\/clean-output\.mjs/);
   assert.match(
     script("make"),
-    /pnpm build && pnpm package:prepared && pnpm make:prepared/,
+    /pnpm build && pnpm make:prepared/,
   );
-  assert.match(script("make:prepared"), /make --skip-package/);
-  assert.match(script("make:prepared"), /scripts\/clean-make-output\.mjs/);
+  assert.match(script("make:prepared"), /scripts\/clean-output\.mjs/);
+  assert.match(script("make:prepared"), /electron-forge make/);
   assert.match(
     read(".github/workflows/native-verify.yml"),
-    /pnpm package:prepared[\s\S]*pnpm test:packaged[\s\S]*pnpm make:prepared[\s\S]*pnpm test:artifact/,
+    /pnpm make:prepared[\s\S]*pnpm test:packaged[\s\S]*pnpm test:artifact/,
+  );
+  assert.doesNotMatch(
+    read(".github/workflows/native-verify.yml"),
+    /pnpm package:prepared/,
+  );
+  assert.match(
+    script("verify"),
+    /pnpm build[\s\S]*pnpm make:prepared[\s\S]*pnpm test:packaged[\s\S]*pnpm test:artifact/,
   );
   assert.match(
     read("tests/final-artifact-smoke.ts"),
