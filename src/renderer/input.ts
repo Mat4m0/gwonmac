@@ -7,7 +7,9 @@ import type { AppSettings } from '../shared/contracts.js';
 // integrating mouse moves whose coordinates fall outside the canvas, so a drag
 // need not stop at the edge — it only needs to stop somewhere, or the
 // coordinates of a long drag grow without limit. Sixteen of them put a
-// re-anchor several camera revolutions apart at any window size.
+// re-anchor several camera revolutions apart at any window size. Only outward:
+// the window edge bounds the near side, because the client ignores a move whose
+// client coordinates are negative.
 const POINTER_ROAM = 16;
 
 // Re-anchors a single mouse move may spend before the leftover delta is
@@ -526,16 +528,25 @@ export const installGameInput = ({
     const rect = canvas.getBoundingClientRect();
     const roamX = rect.width * POINTER_ROAM;
     const roamY = rect.height * POINTER_ROAM;
+    // Roam is free past the far edges and worthless past the near ones: the
+    // client stops integrating a drag whose client coordinates go negative, and
+    // resumes only once they come back. A canvas flush against the window — this
+    // one fills it — therefore has sixteen canvases of room rightward and half a
+    // canvas leftward, which is why rotating right ran forever while rotating
+    // left froze within one flick and stayed frozen: the re-anchor that would
+    // have rescued it is sixteen canvases further out than a hand ever drags.
+    const nearX = Math.max(-roamX, -rect.left);
+    const nearY = Math.max(-roamY, -rect.top);
     let restX = movementX;
     let restY = movementY;
     // Each re-anchor buys another budget, so a bounded few consume any delta a
     // hand can produce. The bound also ends the loop on a zero-area canvas.
     for (let regrab = 0; ; regrab += 1) {
       const stepX =
-        Math.max(-roamX, Math.min(rect.width + roamX, virtualCursor.x + restX)) -
+        Math.max(nearX, Math.min(rect.width + roamX, virtualCursor.x + restX)) -
         virtualCursor.x;
       const stepY =
-        Math.max(-roamY, Math.min(rect.height + roamY, virtualCursor.y + restY)) -
+        Math.max(nearY, Math.min(rect.height + roamY, virtualCursor.y + restY)) -
         virtualCursor.y;
       virtualCursor.x += stepX;
       virtualCursor.y += stepY;
