@@ -30,6 +30,7 @@
     "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/integration/*.ts",
     "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",
+    "test:artifact": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/final-artifact-smoke.ts",
     "test:policy": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/policy/*.ts",
     "test:release": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/release/*.ts",
     "enhancements:live": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-live.ts",
@@ -49,7 +50,7 @@
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
-    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
+    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged && pnpm make && pnpm test:artifact"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

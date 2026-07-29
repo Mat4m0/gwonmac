@@ -11,6 +11,7 @@ import {
   packageFuseConfig,
   packageFuseExecutable,
 } from "./scripts/package-fuses.js";
+import { finalizeMakeArtifacts } from "./scripts/finalize-make-artifacts.js";
 import { platformPackageVersions } from "./scripts/platform-version.js";
 import {
   parseReleaseTargets,
@@ -152,6 +153,8 @@ const config: ForgeConfig = {
         if (signed.status !== 0) throw new Error("ad-hoc app signing failed");
       }
     },
+    postMake: async (_config, results) =>
+      finalizeMakeArtifacts(results, releaseTargets, packageVersion),
   },
 };
 
