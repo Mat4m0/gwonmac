@@ -160,6 +160,17 @@ test("manager isolates profiles and preserves visible-window lifecycle", async (
     await controlWindow.evaluate((win) => win.close());
     await control.waitForEvent("close");
     expect(game.isClosed()).toBe(false);
+    const reopenedControl = fixture.app.waitForEvent("window");
+    await fixture.app.evaluate(({ app }) => {
+      app.emit("second-instance", {} as never, [], "");
+    });
+    const controlAgain = await reopenedControl;
+    await controlAgain.waitForLoadState("domcontentloaded");
+    await expect(controlAgain).toHaveURL("gw://control/");
+    expect(game.isClosed()).toBe(false);
+    await (await fixture.app.browserWindow(controlAgain)).evaluate((win) =>
+      win.close());
+    await controlAgain.waitForEvent("close");
     const appClosed = fixture.app.waitForEvent("close");
     await gameWindow.evaluate((win) => win.close());
     await appClosed;

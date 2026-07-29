@@ -105,12 +105,15 @@ if (!primaryInstance) {
 
 let secondInstanceRequested = false;
 let activeRuntime: AppRuntime | null = null;
+let secondInstanceWindow: (() => BrowserWindow | null) | null = null;
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
 
 function revealMainWindow(): void {
   const win =
-    activeRuntime?.windows.controlWindow() ?? ownedGameWindow(activeRuntime);
+    secondInstanceWindow?.()
+    ?? activeRuntime?.windows.controlWindow()
+    ?? ownedGameWindow(activeRuntime);
   if (!win || win.isDestroyed()) {
     secondInstanceRequested = true;
     return;
@@ -532,6 +535,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   const directGame =
     !app.isPackaged && process.env.GW_TEST_DIRECT_GAME === "1";
+  if (!directGame) {
+    secondInstanceWindow = () =>
+      windows.controlWindow() ?? createControlWindow(controlSession, windows);
+  }
   const initialWindow = directGame
     ? await launchProfile(profileBootstrap.profile).then(
         () => windows.gameWindow(),
@@ -586,7 +593,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         void profiles.launch(profileBootstrap.profile.id);
       }
     } else if (!windows.controlWindow()) {
-      createControlWindow(controlSession, windows);
+      secondInstanceWindow?.();
     }
   });
   app.on("child-process-gone", (_event, details) => {
