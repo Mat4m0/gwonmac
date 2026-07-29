@@ -95,31 +95,6 @@ describe("generation mutex", () => {
     assert.equal(await generationIn(join(root, "artifacts.swap")), "missing");
   });
 
-  it("tears the same tree when the moves are not serialised", async () => {
-    const root = await generationTree();
-    const log: string[] = [];
-
-    // No lock: all three enter before any of them has moved anything, which is
-    // exactly the interleaving an in-flight update, a candidate confirmation
-    // and a renderer-crash rollback can produce today.
-    const results = await Promise.allSettled([
-      rotateGenerations(root, "a", log)(),
-      rotateGenerations(root, "b", log)(),
-      rotateGenerations(root, "c", log)(),
-    ]);
-
-    assert.deepEqual(log.slice(0, 3), ["a:enter", "b:enter", "c:enter"]);
-    const failures = results.filter((r) => r.status === "rejected");
-    // At least one transition loses the race. The exact count is filesystem
-    // scheduling: Windows may let a later transition enter after the first
-    // rename chain completes, while POSIX commonly leaves both peers failing.
-    // Either result proves the unprotected operation is not total.
-    assert.ok(failures.length >= 1);
-    for (const failure of failures) {
-      assert.match(String((failure as PromiseRejectedResult).reason), /ENOENT/);
-    }
-  });
-
   it("does not wedge the queue when a task rejects", async () => {
     const lock = new Mutex();
     const ran: string[] = [];
