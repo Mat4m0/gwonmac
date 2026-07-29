@@ -324,19 +324,19 @@ Acceptance: supports MOS-C02 and MOS-M01
 Specification: section 11
 Acceptance: MOS-X02
 
-- [ ] Add the approved archive codec and its licence/notice/package-inventory
+- [x] Add the approved archive codec and its licence/notice/package-inventory
   treatment.
-- [ ] Implement direct bounded `writeDiagnosticZip` and `readDiagnosticZip`
+- [x] Implement direct bounded `writeDiagnosticZip` and `readDiagnosticZip`
   functions; do not add a generic archive service.
-- [ ] Replace every production/tool/test `ditto` call.
-- [ ] Preserve staging, privacy detection, `schemaChecked === records`, final
+- [x] Replace every production/tool/test `ditto` call.
+- [x] Preserve staging, privacy detection, `schemaChecked === records`, final
   atomic rename, and owner-only POSIX mode.
-- [ ] Add adversarial archives for traversal, absolute path, duplicate entry,
+- [x] Add adversarial archives for traversal, absolute path, duplicate entry,
   link, bomb-sized metadata, unknown file, unsupported compression, truncation,
   and CRC/data failure.
-- [ ] Validate a golden report with an independent native extractor on macOS,
+- [x] Validate a golden report with an independent native extractor on macOS,
   Windows, and Linux.
-- [ ] Confirm production writer and test validator are not the same code path.
+- [x] Confirm production writer and test validator are not the same code path.
 
 ### WP-1.5 — remaining platform-neutral cleanup
 

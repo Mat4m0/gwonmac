@@ -64,6 +64,7 @@ const packagedClosure = relativeEsmClosure({
   entryPoints: [
     packagedManifest.main,
     PRELOAD_ENTRY,
+    "/node_modules/@zip.js/zip.js/index.js",
     ...htmlScriptEntryPoints(
       packagedRendererIndex,
       asarText(packagedRendererIndex),

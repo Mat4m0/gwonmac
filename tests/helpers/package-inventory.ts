@@ -1,5 +1,5 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -28,6 +28,9 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   PRELOAD_ENTRY,
   "/build/renderer/index.html",
   "/build/renderer/images/index.json",
+  "/node_modules/@zip.js/zip.js/index.js",
+  "/node_modules/@zip.js/zip.js/LICENSE",
+  "/node_modules/@zip.js/zip.js/package.json",
   "/package.json",
 ]);
 
@@ -62,7 +65,11 @@ export function assertNoDeveloperPackageFiles(inventory: PackageInventory): void
   }
 
   for (const file of inventory) {
-    if (!/^\/(?:build\/(?:main|shared|renderer|preload)\/|package\.json$)/u.test(file)) {
+    if (
+      !/^\/(?:build\/(?:main|shared|renderer|preload)\/|node_modules\/@zip\.js\/zip\.js\/(?:index\.js|LICENSE|package\.json|lib\/)|package\.json$)/u.test(
+        file,
+      )
+    ) {
       throw new Error(`${file} is outside the packaged runtime trees`);
     }
   }
@@ -79,8 +86,9 @@ export function forgePackageFiles(root: string, ignore: PackagerIgnore): string[
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const name = `${prefix}/${entry.name}`;
       if (ignore(name)) continue;
-      if (entry.isDirectory()) {
-        files.push(...walk(path.join(directory, entry.name), name));
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory() || (entry.isSymbolicLink() && statSync(entryPath).isDirectory())) {
+        files.push(...walk(entryPath, name));
       } else {
         files.push(name);
       }

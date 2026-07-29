@@ -56,6 +56,7 @@ test("every relative ESM dependency reachable from a shipped entry point is pack
     entryPoints: [
       manifest.main,
       PRELOAD_ENTRY,
+      "/node_modules/@zip.js/zip.js/index.js",
       ...htmlScriptEntryPoints(rendererIndex, shippedText(rendererIndex)),
     ],
     inventory: packaged,

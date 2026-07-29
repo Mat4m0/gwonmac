@@ -15,6 +15,7 @@ const macOSVersion = macOSBundleVersions(packageVersion);
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    derefSymlinks: true,
     name: "Guild Wars",
     executableName: "Guild Wars",
     appVersion: macOSVersion.appVersion,
@@ -45,6 +46,22 @@ const config: ForgeConfig = {
       if (p === "/build/renderer") return false;
       if (p.startsWith("/build/renderer/")) return p.endsWith(".d.ts");
       if (p === "/build/preload" || p === "/build/preload/preload.cjs") return false;
+      if (
+        p === "/node_modules" ||
+        p === "/node_modules/@zip.js" ||
+        p === "/node_modules/@zip.js/zip.js"
+      ) {
+        return false;
+      }
+      if (p.startsWith("/node_modules/@zip.js/zip.js/")) {
+        return !(
+          p === "/node_modules/@zip.js/zip.js/LICENSE" ||
+          p === "/node_modules/@zip.js/zip.js/package.json" ||
+          p === "/node_modules/@zip.js/zip.js/index.js" ||
+          p === "/node_modules/@zip.js/zip.js/lib" ||
+          p.startsWith("/node_modules/@zip.js/zip.js/lib/")
+        );
+      }
       return true;
     },
   },

@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
@@ -15,7 +14,6 @@ import {
 import { arch, cpus, platform, release, totalmem } from "node:os";
 import path from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
-import { promisify } from "node:util";
 import {
   app,
   contentTracing,
@@ -39,6 +37,7 @@ import type {
 } from "../shared/diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { loadSettings } from "./core/settings.js";
+import { writeDiagnosticZip } from "./core/diagnostic-zip.js";
 import type { ProxyRoute } from "./core/proxy-routes.js";
 import {
   canonicalRendererWindow,
@@ -68,7 +67,6 @@ import {
   redactTraceStream,
 } from "./diagnostics/text-scan.js";
 
-const execFileAsync = promisify(execFile);
 const SAMPLE_INTERVAL_MS = 1_000;
 const PROCESS_SAMPLE_INTERVAL = 5;
 
@@ -1140,7 +1138,7 @@ export async function exportDiagnosticsZip(
       await writeFile(file, text, { mode: 0o600 });
       await chmod(file, 0o600);
     }
-    await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
+    await writeDiagnosticZip(staging, zipPart);
     await chmod(zipPart, 0o600);
     await rename(zipPart, zipPath);
     // The trace deliberately survives the export. `recordedCaptureLevel` stays

@@ -253,9 +253,15 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(feedback, /id: diagnostics[\s\S]*?required: false/);
 });
 
-test("the application ships with no runtime dependency to audit", () => {
-  assert.equal(json("package.json").dependencies, undefined);
+test("the application ships only the reviewed portable ZIP dependency", () => {
+  assert.deepEqual(json("package.json").dependencies, {
+    "@zip.js/zip.js": "2.8.34",
+  });
   assert.equal(json("apps/website/package.json").dependencies, undefined);
+  assert.match(
+    read("THIRD-PARTY-NOTICES.md"),
+    /zip\.js[\s\S]*BSD 3-Clause\s+License/,
+  );
   assert.match(
     read("pnpm-workspace.yaml"),
     /auditConfig:\n {2}ignoreGhsas:\n {4}- GHSA-mh99-v99m-4gvg\n$/,

@@ -857,13 +857,19 @@ Enhancement development uses the layered, cached-safe workflow in
 WASM unchanged, and a live Enhancement run cannot update the client unless update
 permission is explicit.
 
+The application has one direct runtime dependency:
+`@zip.js/zip.js` 2.8.34. It is BSD-3-Clause, has no transitive dependencies,
+and supplies the bounded streaming `.gwdiag` reader/writer on every operating
+system. Its licence is reproduced in `THIRD-PARTY-NOTICES.md` and its package
+licence is included in the ASAR. A release policy test permits this exact
+dependency and no other runtime package.
+
 The dependency audit has one explicit exception for
 `GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
 reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and
 upstream published the memory-bound fix only for the API-incompatible 5.x
 line. The compatible 5.x edge is pinned to 5.0.8. No game, renderer, preload,
-main-process runtime, or packaged dependency accepts these development glob
-patterns. A release invariant forbids production dependencies in either
-workspace package while the exception exists, preventing it from masking a
-shipped vulnerable edge. Remove the exception as soon as the upstream parents
-adopt patched compatible dependencies.
+main-process runtime or packaged dependency accepts these development glob
+patterns. The exact runtime-dependency allowlist prevents the exception from
+masking another shipped edge. Remove the exception as soon as the upstream
+parents adopt patched compatible dependencies.

@@ -1,8 +1,7 @@
-import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
+import { readDiagnosticZip } from "../../main/core/diagnostic-zip.js";
 import {
   inspectEventLog,
   type RedactionResult,
@@ -13,8 +12,6 @@ import type {
 } from "../../shared/diagnostics.js";
 export type { DiagnosticReport } from "../../shared/diagnostics.js";
 export type { RedactionResult } from "../../main/diagnostics/detector.js";
-
-const execFileAsync = promisify(execFile);
 
 interface ManifestFields {
   applicationVersion: string;
@@ -213,7 +210,7 @@ export async function withCapture<T>(
 ): Promise<T> {
   const root = await mkdtemp(path.join(tmpdir(), "gwdiag-"));
   try {
-    await execFileAsync("ditto", ["-x", "-k", capturePath, root]);
+    await readDiagnosticZip(capturePath, root);
     const capture: Capture = {
       manifest: await parseJson(path.join(root, "manifest.json")),
       summary: await parseJson(path.join(root, "summary.json")),

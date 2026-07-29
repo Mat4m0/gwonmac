@@ -21,6 +21,7 @@ import {
   main,
   root,
 } from "./fixtures.mjs";
+import { extractZipNatively } from "../helpers/native-zip.js";
 
 declare global {
   interface Window {
@@ -221,7 +222,7 @@ test.describe("diagnostics", () => {
       ).toEqual([]);
 
       const extracted = path.join(diagnosticRoot, "extracted");
-      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      await extractZipNatively(target, extracted);
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
@@ -553,7 +554,7 @@ test.describe("diagnostics", () => {
       );
 
       const extracted = path.join(diagnosticRoot, "extracted");
-      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      await extractZipNatively(target, extracted);
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
