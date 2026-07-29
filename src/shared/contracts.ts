@@ -381,6 +381,14 @@ export interface RendererInit {
 }
 
 /**
+ * Main-to-preload transport may carry one closed offline-test probe that is
+ * deliberately omitted from the public renderer `init` object.
+ */
+export type RendererInitArgument = RendererInit & {
+  sandboxProbe?: true;
+};
+
+/**
  * Prefix of the single `webPreferences.additionalArguments` entry that carries
  * a JSON `RendererInit`. The preload is the only reader.
  */

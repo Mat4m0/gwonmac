@@ -81,6 +81,25 @@ function rendererInit() {
         parsed.rendererRole
       )
     : null;
+  if (
+    parsed.sandboxProbe === true &&
+    typeof globalThis.addEventListener === "function"
+  ) {
+    const sandboxed =
+      typeof process !== "undefined" && process.sandboxed === true;
+    globalThis.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        const document = globalThis.document;
+        if (document?.documentElement) {
+          document.documentElement.dataset.gwRendererSandboxed = String(
+            sandboxed,
+          );
+        }
+      },
+      { once: true },
+    );
+  }
   return Object.freeze({
     rendererRole,
     desktopPlatform,

@@ -3,7 +3,6 @@ import type { ElectronApplication } from "@playwright/test";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import {
   mkdtemp,
   readFile,
@@ -18,7 +17,6 @@ import { developmentElectronExecutable } from "../../scripts/electron-layout.js"
 import { fitWindowStateToDisplays } from "../../src/main/core/window-state.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const main = path.join(root, "build/main/main.js");
 const electronBin = developmentElectronExecutable(root);
 
 async function onlyProfileFile(
@@ -78,34 +76,25 @@ const launchEnv = (
 };
 
 /**
- * An absent `electronBin` means Playwright resolves the binary itself, so the
- * property is omitted rather than passed as `undefined`.
+ * The central Playwright preflight proves this executable exists before any
+ * spec is collected.
  */
 const launch = (userData: string, env: Record<string, string>) =>
   electron.launch({
     cwd: root,
     args: [".", `--user-data-dir=${userData}`],
+    chromiumSandbox: true,
     env,
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
+    executablePath: electronBin,
   });
 
-/**
- * Playwright launches the downloaded Linux development binary with
- * `--no-sandbox`: its chrome-sandbox helper is not installed setuid-root.
- * Raw child launches in this spec must match that test harness or Chromium
- * aborts with SIGTRAP before Electron can exercise the application contract.
- */
 const rawLaunchArgs = (userData: string): string[] => [
-  ...(process.platform === "linux" ? ["--no-sandbox"] : []),
   ".",
   `--user-data-dir=${userData}`,
 ];
 
 test.describe("Electron application", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("a second instance exits and reveals the primary window", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -151,7 +140,6 @@ test.describe("Electron application", () => {
   });
 
   test("a startup failure exits nonzero and releases the instance lock", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
     const baseEnv = launchEnv({
       GW_OFFLINE_SHELL: "1",

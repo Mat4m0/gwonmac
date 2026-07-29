@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { desktopPlatformFor } from "../../src/shared/contracts.js";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 test.describe("sandbox boundary", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("exposes only the frozen application capabilities", async () => {
     const fixture = await launchOffline("gw-sandbox-e2e-");
     try {
@@ -102,8 +99,9 @@ test.describe("sandbox boundary", () => {
       await fixture.page.evaluate(() => {
         globalThis.location.assign("gw://app/account/login");
       });
-      await fixture.page.waitForTimeout(100);
-      expect(new URL(fixture.page.url()).pathname).toBe("/");
+      await expect
+        .poll(() => new URL(fixture.page.url()).pathname)
+        .toBe("/");
 
       const oversizedSocketError = await fixture.page.evaluate(async () => {
         try {
@@ -167,6 +165,15 @@ test.describe("sandbox boundary", () => {
         experimentalFeatures: false,
         webviewGuards: 1,
       });
+      expect(
+        await fixture.app.evaluate(({ app }) =>
+          app.commandLine.hasSwitch("no-sandbox"),
+        ),
+      ).toBe(false);
+      await expect(fixture.page.locator("html")).toHaveAttribute(
+        "data-gw-renderer-sandboxed",
+        "true",
+      );
 
       // The policy the renderer is actually served, read out of the response
       // its own protocol handler produced.

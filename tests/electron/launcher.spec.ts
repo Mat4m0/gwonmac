@@ -6,7 +6,6 @@ import {
   closeOffline,
   launchOffline,
   launchOfflineAt,
-  main,
 } from "./fixtures.mjs";
 
 /** The reply this spec holds open on `gw:cache:downloadAll`. */
@@ -26,7 +25,6 @@ declare global {
 }
 
 test.describe("launcher recovery", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
   test("keeps verified data and offers one retry after an interrupted download", async () => {
     const fixture = await launchOffline("gw-launcher-e2e-", {

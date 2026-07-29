@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 declare global {
   // The main-process probe that records what the reset dialog was asked and
@@ -17,7 +16,6 @@ declare global {
 }
 
 test.describe("settings experience", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
   // P5.1: the menu item used to run a string of JavaScript in the renderer.
   // It now sends a typed command, and this is the only caller of `settings.open`

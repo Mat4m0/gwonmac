@@ -76,6 +76,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes fakeroot xvfb
+          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          test "$(sysctl -n kernel.unprivileged_userns_clone)" = "1"
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=high
       - name: Assert native runner identity

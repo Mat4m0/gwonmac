@@ -1,11 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import type { DownloadProgress } from "../../src/shared/contracts.js";
 import {
   closeOffline,
   launchOffline,
-  main,
   root,
 } from "./fixtures.mjs";
 
@@ -14,7 +12,6 @@ const patchClientModule = path.join(root, "build/main/core/patch-client.js");
 const pathsModule = path.join(root, "build/main/core/paths.js");
 
 test.describe("client generation coordination", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
 
   test("interrupts a slow update before renderer crash recovery takes the lock", async () => {
     const fixture = await launchOffline("gw-runtime-update-abort-e2e-");

@@ -4,7 +4,6 @@ import {
   type Page,
 } from "@playwright/test";
 import type { ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -86,10 +85,9 @@ export async function launchOfflineAt(
   const app = await electron.launch({
     cwd: root,
     args: [".", `--user-data-dir=${userData}`],
+    chromiumSandbox: true,
     env,
-    // Omitted rather than passed as `undefined`: a tree without the downloaded
-    // binary falls back to Playwright's own resolution.
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
+    executablePath: electronBin,
   });
   const page = await app.firstWindow({ timeout: 30_000 });
   await page.waitForLoadState("domcontentloaded");

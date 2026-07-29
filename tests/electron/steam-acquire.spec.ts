@@ -6,7 +6,6 @@
 // configuration: point `authorizationBaseUrl` at 127.0.0.1 and the
 // window, the origin allowlist, and the redirect matcher all follow.
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -15,7 +14,6 @@ import {
   launchOffline,
   root,
   type OfflineFixture,
-  main,
 } from "./fixtures.mts";
 import type { SteamOAuthConfig } from "../../src/main/core/steam-oauth.js";
 
@@ -282,10 +280,6 @@ test.describe("acquiring a Steam token", () => {
   // budget before an assertion begins; keep the larger allowance scoped to
   // this native-window group.
   test.describe.configure({ timeout: 120_000 });
-
-  // These drive compiled main-process code, so skip rather than error when the
-  // build has not run — the same guard tests/electron/sandbox.spec.ts uses.
-  test.skip(!existsSync(main), "run pnpm build before the electron tests");
 
   let fixture: OfflineFixture;
   let server: Fixture;

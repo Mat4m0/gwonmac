@@ -13,13 +13,20 @@
 // a real window in tests/electron/sandbox.spec.ts), and the three assertions
 // that still need the compiled build (tests/release/).
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+const filesUnder = (directory: string): string[] =>
+  readdirSync(path.join(root, directory), { withFileTypes: true }).flatMap(
+    (entry) => {
+      const relative = path.join(directory, entry.name);
+      return entry.isDirectory() ? filesUnder(relative) : [relative];
+    },
+  );
 
 // Only the manifest fields these assertions read. `JSON.parse` returns `any`,
 // which would erase the checking of every assertion below; naming the fields
@@ -299,6 +306,45 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     assert.match(feedback, new RegExp(`id: ${id}[\\s\\S]*?required: true`));
   }
   assert.match(feedback, /id: diagnostics[\s\S]*?required: false/);
+});
+
+test("native tests keep Chromium sandboxed and fail when their build is missing", () => {
+  const config = read("tests/electron/playwright.config.ts");
+  const fixture = read("tests/electron/fixtures.mts");
+  const application = read("tests/electron/app.spec.ts");
+  const workflow = read(".github/workflows/native-verify.yml");
+  assert.match(config, /build\/main\/main\.js/);
+  assert.match(config, /build\/preload\/preload\.cjs/);
+  assert.match(config, /build\/renderer\/index\.html/);
+  assert.match(config, /developmentElectronExecutable\(root\)/);
+  assert.match(config, /Electron test prerequisites are missing/);
+  assert.match(fixture, /chromiumSandbox: true/);
+  assert.match(application, /chromiumSandbox: true/);
+  assert.match(workflow, /kernel\.unprivileged_userns_clone/);
+
+  const launchSurfaces = [
+    ...filesUnder("tests/electron"),
+    "tests/packaged-smoke.ts",
+    "tests/final-artifact-smoke.ts",
+    "scripts/electron-layout.ts",
+    ".github/workflows/native-verify.yml",
+  ];
+  for (const file of launchSurfaces) {
+    assert.doesNotMatch(
+      read(file),
+      /--no-sandbox/,
+      `${file} disables Chromium's sandbox`,
+    );
+  }
+  for (const file of filesUnder("tests/electron").filter((name) =>
+    name.endsWith(".spec.ts"),
+  )) {
+    assert.doesNotMatch(
+      read(file),
+      /test\.skip\(!existsSync\((?:main|electronBin)\)/,
+      `${file} turns a missing required build into a skip`,
+    );
+  }
 });
 
 test("the application ships only the reviewed portable ZIP dependency", () => {

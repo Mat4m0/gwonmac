@@ -13,7 +13,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   DownloadProgress,
-  RendererInit,
+  RendererInitArgument,
   EnhancementSelection,
 } from "../shared/contracts.js";
 import {
@@ -102,13 +102,16 @@ export const RENDERER_URL = "gw://app/";
 export function rendererInitArgument(options: {
   enhancementSelection: EnhancementSelection;
 }): string {
-  const init: RendererInit = {
+  const init: RendererInitArgument = {
     rendererRole: "game",
     desktopPlatform: desktopPlatformFor(process.platform),
     enhancementAutomation: ENHANCEMENT_AUTOMATION_ENABLED,
     enhancementSelection: options.enhancementSelection,
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
+    ...(process.env.GW_OFFLINE_SHELL === "1"
+      ? { sandboxProbe: true }
+      : {}),
   };
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }

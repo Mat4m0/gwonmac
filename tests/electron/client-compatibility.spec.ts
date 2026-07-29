@@ -1,13 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
-import {
-  closeOffline,
-  launchOffline,
-  main,
-} from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 /**
  * `gw-native.d.ts` declares the graphics half of ArenaNet's `Module`; the
@@ -28,7 +23,6 @@ async function pathExists(target: string) {
 }
 
 test.describe("client compatibility", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
 
   test("reports one first frame and opens a game socket", async () => {
     const server = net.createServer();

@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
 import {
   mkdir,
   readFile,
@@ -20,7 +19,6 @@ import { desktopPlatformFor } from "../../src/shared/contracts.js";
 import {
   closeOffline,
   launchOffline,
-  main,
 } from "./fixtures.mjs";
 
 // A real, canonical WebAssembly module with one empty function. An empty
@@ -43,7 +41,6 @@ if (!CERTIFIED_ENHANCEMENT_BUILD) {
 }
 
 test.describe("Enhancement runtime selection", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
 
   test("all tools off removes the cache and selects an unmodified module", async () => {
     const fixture = await launchOffline(

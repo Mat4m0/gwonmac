@@ -7,7 +7,7 @@ import {
   desktopPlatformFor,
   IPC,
   RENDERER_INIT_ARGUMENT,
-  type RendererInit,
+  type RendererInitArgument,
 } from "../shared/contracts.js";
 import { isCanonicalControlRendererUrl } from "./core/renderer-trust.js";
 import { logEvent } from "./diagnostics.js";
@@ -17,7 +17,7 @@ import type { WindowRegistry } from "./window-registry.js";
 export const CONTROL_RENDERER_URL = "gw://control/";
 
 function controlRendererInitArgument(): string {
-  const init: RendererInit = {
+  const init: RendererInitArgument = {
     rendererRole: "control",
     desktopPlatform: desktopPlatformFor(process.platform),
     enhancementAutomation: false,
@@ -26,6 +26,9 @@ function controlRendererInitArgument(): string {
       targetReadout: false,
     },
     templateFsTrace: false,
+    ...(process.env.GW_OFFLINE_SHELL === "1"
+      ? { sandboxProbe: true }
+      : {}),
   };
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }
