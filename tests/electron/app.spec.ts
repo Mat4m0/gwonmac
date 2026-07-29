@@ -10,6 +10,7 @@ import {
   readdir,
   rm,
   stat,
+  writeFile,
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -488,6 +489,9 @@ test.describe("Electron application", () => {
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
+      await expect(page.locator("#loading-credential-posture")).toContainText(
+        "not Keychain-backed",
+      );
       await page.evaluate(() =>
         window.gwNative.credentials.save({
           username: "relaunch@example.invalid",
@@ -503,10 +507,63 @@ test.describe("Electron application", () => {
         await relaunchedPage.evaluate(() =>
           window.gwNative.credentials.load()),
       ).toEqual({
-        username: "relaunch@example.invalid",
-        password: "relaunch-password",
+        state: "available",
+        credentials: {
+          username: "relaunch@example.invalid",
+          password: "relaunch-password",
+        },
       });
       await relaunchedPage.evaluate(() => window.gwNative.credentials.clear());
+    } finally {
+      await app.close().catch(() => {});
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
+  test("a raw preview ciphertext migrates only after Electron decrypts it", async () => {
+    test.skip(process.platform !== "darwin", "legacy raw ciphertext was macOS-only");
+    const env = launchEnv({
+      GW_OFFLINE_SHELL: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    });
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-legacy-"));
+    const credentialsPath = path.join(userData, "credentials.bin");
+    const app = await launch(userData, env);
+    try {
+      const page = await app.firstWindow({ timeout: 30_000 });
+      await page.waitForLoadState("domcontentloaded");
+      const legacyCiphertext = await app.evaluate(
+        ({ safeStorage }, value) => [
+          ...safeStorage.encryptString(JSON.stringify(value)),
+        ],
+        {
+          username: "legacy@example.invalid",
+          password: "legacy-password",
+        },
+      );
+      await writeFile(credentialsPath, Buffer.from(legacyCiphertext));
+
+      expect(
+        await page.evaluate(() => window.gwNative.credentials.load()),
+      ).toEqual({
+        state: "available",
+        credentials: {
+          username: "legacy@example.invalid",
+          password: "legacy-password",
+        },
+      });
+      const envelope = JSON.parse(
+        await readFile(credentialsPath, "utf8"),
+      ) as Record<string, unknown>;
+      expect(envelope).toMatchObject({
+        formatVersion: 1,
+        protection: "mac-preview-mock-v1",
+      });
+      expect(Object.keys(envelope).sort()).toEqual([
+        "ciphertext",
+        "formatVersion",
+        "protection",
+      ]);
     } finally {
       await app.close().catch(() => {});
       await rm(userData, { recursive: true, force: true });

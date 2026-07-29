@@ -315,12 +315,12 @@ Module = {
   secureStorage: {
     async getCredentials() {
       const stored = await native().credentials.load();
-      if (!stored) {
+      if (stored.state !== 'available') {
         log('secureStorage: no saved credentials — the module should prompt');
         throw new Error('no stored credentials');
       }
       log('secureStorage: returning saved credentials');
-      return stored;
+      return stored.credentials;
     },
     async storeCredentials(username, password) {
       if (typeof username !== 'string' || typeof password !== 'string') {

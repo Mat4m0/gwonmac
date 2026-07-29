@@ -130,12 +130,14 @@ centered on the primary display instead of opening off-screen. Choose **View →
 Reset Window Size and Position** for an immediate window-only reset.
 
 Guild Wars' **Remember Password** checkbox controls saved login. The password
-is encrypted in an owner-only local file and is not placed in macOS Keychain,
-so the application does not show a Keychain prompt. Because unsigned builds
-use Chromium's local mock encryption provider, this is weaker than Keychain:
-software running as your macOS user may be able to recover it. Leave
-**Remember Password** off if that tradeoff is not acceptable. Browser cookies
-are cleared at startup and quit.
+is encrypted in a versioned, owner-only local file and is not placed in macOS
+Keychain, so the application does not show a Keychain prompt. Because unsigned
+builds use Chromium's local mock encryption provider, this is weaker than
+Keychain: software running as your macOS user may be able to recover it.
+Unreadable or temporarily unavailable saved login is preserved and the game
+prompts normally; it is never silently deleted. Leave **Remember Password** off
+if that tradeoff is not acceptable. Browser cookies are cleared at startup and
+quit.
 
 ## Report a problem
 

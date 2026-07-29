@@ -518,30 +518,30 @@ Primary files:
 
 Tasks:
 
-- [ ] Introduce the exact credential envelope and one parser.
-- [ ] Change store operations to the closed promise-based read contract.
-- [ ] Preserve the awaited game-facing `Module.secureStorage` contract.
-- [ ] Implement atomic key-rotation rewrite from returned plaintext.
-- [ ] Preserve prior ciphertext for provider unavailable, decrypt failure,
+- [x] Introduce the exact credential envelope and one parser.
+- [x] Change store operations to the closed promise-based read contract.
+- [x] Preserve the awaited game-facing `Module.secureStorage` contract.
+- [x] Implement atomic key-rotation rewrite from returned plaintext.
+- [x] Preserve prior ciphertext for provider unavailable, decrypt failure,
   invalid replacement, write failure, or wrong provider.
-- [ ] Read current raw mock ciphertext once and rewrite it only after successful
+- [x] Read current raw mock ciphertext once and rewrite it only after successful
   decryption.
-- [ ] Add size bounds before base64 allocation/decryption.
+- [x] Add size bounds before base64 allocation/decryption.
 
 ### WP-3.2 — OS provider policy
 
 Specification: sections 10.2 and 10.3
 Acceptance: MOS-C01
 
-- [ ] macOS preview: retain `use-mock-keychain` before ready and assert it at
+- [x] macOS preview: retain `use-mock-keychain` before ready and assert it at
   runtime/package policy.
-- [ ] Windows: use async safe storage/DPAPI and document its user boundary
+- [x] Windows: use async safe storage/DPAPI and document its user boundary
   accurately.
-- [ ] Linux: wrap the inspected synchronous backend in the promise API and
+- [x] Linux: wrap the inspected synchronous backend in the promise API and
   refuse `basic_text`, unknown-before-ready, or unavailable state.
-- [ ] Render closed “Remember Login unavailable” behaviour without showing
+- [x] Render closed “Remember Login unavailable” behaviour without showing
   provider error text.
-- [ ] Never place credentials in browser storage, logs, diagnostics, crash
+- [x] Never place credentials in browser storage, logs, diagnostics, crash
   reports, command lines, profile metadata, or manager state.
 
 ### WP-3.3 — native credential matrix
@@ -553,8 +553,8 @@ Acceptance: MOS-C01
 - [ ] Linux secure keyring works; missing/`basic_text` disables persistence.
 - [ ] Windows copy to another OS user fails; same-user limitation is documented
   rather than overclaimed.
-- [ ] macOS preview UI says it is not Keychain-backed.
-- [ ] Detector/policy tests reject secret vocabulary or account fields in every
+- [x] macOS preview UI says it is not Keychain-backed.
+- [x] Detector/policy tests reject secret vocabulary or account fields in every
   new persistence/diagnostics schema.
 
 ### Phase 3 gate

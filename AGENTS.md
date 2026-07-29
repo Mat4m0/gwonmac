@@ -99,12 +99,18 @@ not only happy paths.
   beneath maximized/fullscreen mode, validate against connected display work
   areas, never restore minimized, and keep the View-menu recovery action.
 - The three game-facing `secureStorage` methods use the single native
-  `CredentialsStore`. Its encrypted `credentials.bin` is atomic and mode
-  `0600`; credentials never enter logs, diagnostics, browser storage, or
-  macOS Keychain.
+  promise-based `CredentialsStore`. Its versioned encrypted `credentials.bin`
+  is atomic and mode `0600` on POSIX; credentials never enter logs,
+  diagnostics, browser storage, profile metadata, or command lines. Reads
+  never replace ciphertext after provider, parse, decrypt, or I/O failure.
 - Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
   and clear browser cookies at startup and quit. The switch prevents OS
   prompts but gives saved login weaker same-user protection than Keychain.
+- Windows saved login uses asynchronous user-scoped OS safe storage. Linux
+  accepts only an inspected Secret Service/KWallet backend and refuses
+  `basic_text`, `unknown`, locked, or unavailable storage. macOS and Windows
+  use the asynchronous safe-storage contract; Linux alone uses the inspected
+  synchronous API behind the promise-based application boundary.
 - The app makes no network request the user did not ask for. `autoCheckUpdates`
   (default `false`) governs **every** automatic release check without
   exception, including the one on an unrecognised client build; with it off, a

@@ -139,8 +139,10 @@ window.gwLoading = (function (): LoadingController {
   // The running version, in the footer, on every launch. It used to live only
   // in the native About panel, which means a bug report had to go hunting for
   // it — and under CalVer the number doubles as a staleness signal.
-  window.gwNative?.client.session().then((session) => {
+  window.gwNative?.client.session().then(async (session) => {
     const platform = window.gwNative?.init.desktopPlatform;
+    const { credentialProtectionCopy } =
+      await import('./credential-copy.js');
     const platformName = platform
       ? {
           macos: 'macOS',
@@ -152,6 +154,10 @@ window.gwLoading = (function (): LoadingController {
     version.id = 'loading-version';
     version.textContent = `Guild Wars for ${platformName} ${session.appVersion}`;
     el('loading-legal').prepend(version);
+    const credentialPosture = document.createElement('p');
+    credentialPosture.id = 'loading-credential-posture';
+    credentialPosture.textContent = credentialProtectionCopy(platform ?? null);
+    version.after(credentialPosture);
   }).catch(() => {});
 
   // A failed boot gets a one-click retry, same as View → Reload Game.

@@ -20,6 +20,7 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 // modules, the bridge, the contracts, and the renderer that asks for it.
 const surface = [
   "src/main/ipc.ts",
+  "src/main/credential-provider.ts",
   "src/main/core/credentials.ts",
   "src/main/paths.ts",
   "src/main/core/paths.ts",
@@ -33,15 +34,28 @@ const surface = [
 test("saved login has one encrypted owner-only persistence surface", () => {
   assert.match(surface, /safeStorage/);
   assert.match(surface, /credentials\.bin/);
-  assert.match(surface, /encryptString/);
-  assert.match(surface, /writeAtomic\(this\.path, ciphertext, 0o600\)/);
+  assert.match(surface, /encryptStringAsync/);
+  assert.match(surface, /writeEnvelope/);
+  assert.match(surface, /0o600/);
+  assert.match(surface, /CredentialEnvelopeV1/);
   assert.doesNotMatch(surface, /localStorage|sessionStorage/);
-  assert.doesNotMatch(surface, /plaintext|fallbackKey|masterPassword/);
+  assert.doesNotMatch(surface, /fallbackKey|masterPassword/);
   // The three game-facing methods reach the one store, and no fourth path.
   assert.match(
     surface,
     /secureStorage:[\s\S]*getCredentials[\s\S]*storeCredentials[\s\S]*clearCredentials/,
   );
+});
+
+test("credential values have no persistence or diagnostics schema outside the store", () => {
+  const forbiddenSchemas = [
+    "src/main/diagnostics/schema.ts",
+    "src/shared/diagnostics.ts",
+    "src/main/core/settings.ts",
+  ]
+    .map(read)
+    .join("\n");
+  assert.doesNotMatch(forbiddenSchemas, /\busername\b|\bpassword\b/);
 });
 
 test("the ad-hoc build's mock keychain is installed before Electron is ready", () => {

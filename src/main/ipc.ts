@@ -37,6 +37,7 @@ import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { CredentialsStore, parseCredentials } from "./core/credentials.js";
+import { createCredentialProvider } from "./credential-provider.js";
 import { resolveDns } from "./core/dns.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
@@ -365,7 +366,10 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
 
 export function registerIpcHandlers(ctx: IpcContext): void {
   const paths = gamePaths();
-  const credentials = new CredentialsStore(paths.credentials, safeStorage);
+  const credentials = new CredentialsStore(
+    paths.credentials,
+    createCredentialProvider(process.platform, safeStorage),
+  );
 
   /**
    * Every channel main answers, with the parser that turns its arguments into

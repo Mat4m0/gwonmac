@@ -219,6 +219,14 @@ export interface StoredCredentials {
   password: string;
 }
 
+export type CredentialRead =
+  | { readonly state: "absent" }
+  | {
+    readonly state: "available";
+    readonly credentials: StoredCredentials;
+  }
+  | { readonly state: "temporarily-unavailable" };
+
 export type ExternalLinkKind =
   | "github"
   | "discord"
@@ -529,7 +537,7 @@ export interface GwNativeApi {
     reset(): Promise<AppSettings | null>;
   };
   credentials: {
-    load(): Promise<StoredCredentials | null>;
+    load(): Promise<CredentialRead>;
     save(value: StoredCredentials): Promise<void>;
     clear(): Promise<void>;
   };

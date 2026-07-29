@@ -208,15 +208,32 @@ shop.initialize/inAppPurchase
 ```
 
 The generated glue requires all three credential methods. They cross a narrow
-IPC boundary to one native `CredentialsStore`, which writes encrypted
-`credentials.bin` atomically with mode `0600`. Because ad-hoc builds have no
-stable signing identity, the main process enables Chromium's
-`use-mock-keychain` provider before ready. Electron `safeStorage` therefore
-uses a local mock profile key rather than macOS Keychain: it prevents recurring
-OS prompts and casual plaintext disclosure, but does not defend the saved
-login from software running as the same user. An unreadable ciphertext is never
-deleted by a read; the failure is recorded without credential content and the
-game prompts again. A later explicit save atomically replaces it.
+IPC boundary to one promise-based native `CredentialsStore`. It writes a
+closed, versioned envelope to `credentials.bin` atomically, with mode `0600`
+on POSIX. The envelope contains only its format, protection ID, and base64
+ciphertext. Reads are bounded before decoding or decrypting, distinguish an
+invalid envelope, wrong provider, decrypt failure, invalid plaintext, and I/O
+failure, and never delete or replace ciphertext after failure.
+
+macOS and Windows use Electron's asynchronous safe-storage API, including its
+key-rotation result. A rotation decrypts once, validates the returned
+plaintext, re-encrypts it, and atomically publishes the replacement. Linux
+uses the synchronous API behind the same promise contract because only that
+path exposes the selected backend: `gnome_libsecret`, `kwallet`, `kwallet5`,
+and `kwallet6` are accepted; `basic_text`, `unknown`, and unavailable/locked
+storage return the closed temporarily-unavailable state and nothing is saved.
+Windows protection is user-scoped DPAPI; it does not claim protection from
+other software running as the signed-in user.
+
+Because ad-hoc macOS builds have no stable signing identity, the main process
+enables Chromium's `use-mock-keychain` provider before ready. That local mock
+profile key prevents recurring OS prompts and casual plaintext disclosure, but
+does not defend the saved login from software running as the same user.
+Existing raw macOS preview ciphertext is decrypted once and rewritten into
+the envelope only after a successful load. An unreadable legacy file is
+preserved. Any unavailable read makes the game prompt normally without
+displaying provider error text; a later explicit save is the only ordinary
+replacement path.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 No federated provider is advertised, allowing the client’s username/password
