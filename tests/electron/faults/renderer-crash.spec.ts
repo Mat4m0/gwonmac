@@ -56,7 +56,15 @@ test("recovers the sandbox after a real renderer crash", async () => {
       ).__gwFaultProbe;
       const windows = BrowserWindow.getAllWindows();
       const [window] = windows;
-      if (!state || windows.length !== 1 || !window) return null;
+      if (
+        !state
+        || state.reason === null
+        || state.exitCode === null
+        || windows.length !== 1
+        || !window
+      ) {
+        return null;
+      }
       const contents = window.webContents;
       if (contents.isCrashed() || contents.isDestroyed()) return null;
       const preferences = (
