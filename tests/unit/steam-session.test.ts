@@ -652,9 +652,43 @@ describe("the client handing a token back", () => {
 
   it("still accepts an expiry in the future", async () => {
     const store = fakeStore({ token: FRESH, expiry: NOW });
-    const future = Date.now() + 60_000;
-    assert.equal(await refreshSteamExpiry(store, FRESH, future), "refreshed");
+    const future = NOW + 60_000;
+    assert.equal(await refreshSteamExpiry(store, FRESH, future, NOW), "refreshed");
     assert.deepEqual(store.held, { token: FRESH, expiry: future });
+  });
+
+  it("never extends persistence beyond the OAuth lifetime", async () => {
+    for (const supplied of [
+      NOW + STEAM_TOKEN_LIFETIME_MS + 1,
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_VALUE,
+    ]) {
+      const store = fakeStore({ token: FRESH, expiry: NOW + 1 });
+      assert.equal(
+        await refreshSteamExpiry(store, FRESH, supplied, NOW),
+        "refreshed",
+      );
+      assert.deepEqual(store.held, {
+        token: FRESH,
+        expiry: NOW + STEAM_TOKEN_LIFETIME_MS,
+      });
+    }
+  });
+
+  it("keeps an expiry exactly at the maximum boundary", async () => {
+    const store = fakeStore({ token: FRESH, expiry: NOW + 1 });
+    const maximum = NOW + STEAM_TOKEN_LIFETIME_MS;
+    assert.equal(
+      await refreshSteamExpiry(store, FRESH, maximum, NOW),
+      "refreshed",
+    );
+    assert.deepEqual(store.held, { token: FRESH, expiry: maximum });
+  });
+
+  it("rejects an expiry at the current instant", async () => {
+    const store = fakeStore({ token: FRESH, expiry: NOW + 1 });
+    assert.equal(await refreshSteamExpiry(store, FRESH, NOW, NOW), "ignored");
+    assert.deepEqual(store.held, { token: FRESH, expiry: NOW + 1 });
   });
 
   it("refuses to turn a known expiry back into an unknown one", async () => {

@@ -241,6 +241,7 @@ export async function refreshSteamExpiry(
   store: SteamSessionReader,
   token: string,
   expiry: number | null,
+  now = Date.now(),
 ): Promise<SteamStorebackOutcome> {
   let stored: StoredSteamSession | null;
   try {
@@ -256,15 +257,20 @@ export async function refreshSteamExpiry(
   // player the sign-in they were promised was once-per-machine. `new Date(0)`
   // is a common "no date" encoding, and the same call is reachable from the
   // renderer, so this refuses both the accident and the abuse.
-  if (expiry !== null && expiry <= Date.now()) return "ignored";
+  if (expiry !== null && expiry <= now) return "ignored";
   // Nor may a storeback turn a known expiry back into an unknown one. R9 honors
   // the expiry the account service supplies "when a login returns one"; `null`
   // is the absence of one, and writing it over the flow's own lifetime would
   // leave a record that never self-expires and so keeps replaying a dead token
   // instead of asking the player to sign in again.
   if (expiry === null && stored.expiry !== null) return "ignored";
+  // The renderer reports what the account service supplied; it does not own
+  // local retention. Never let that boundary extend the bearer token beyond
+  // the one-year lifetime established by the OAuth flow itself.
+  const boundedExpiry =
+    expiry === null ? null : Math.min(expiry, now + STEAM_TOKEN_LIFETIME_MS);
   try {
-    await store.save({ token: stored.token, expiry });
+    await store.save({ token: stored.token, expiry: boundedExpiry });
     return "refreshed";
   } catch {
     return "failed";
