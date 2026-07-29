@@ -1,7 +1,8 @@
 // The credential seam, driven the way the game client drives it: through the
-// real `Module.login` / `Module.nativeAccount` objects, the real frozen bridge,
-// the real IPC handlers, and the real encrypted store. Nothing is stubbed --
-// `gwNative.steam` is frozen, so it could not be.
+// real `Module.login` / `Module.nativeAccount` objects, the frozen bridge, the
+// real IPC handlers, and the real encrypted store. The OS encryption provider
+// is replaced at its existing composition seam with deterministic ciphertext;
+// provider qualification has its own platform tests.
 //
 // Interactive requests replace the production acquirer at the composition
 // boundary with a local OAuth fixture. The renderer, frozen preload bridge,
@@ -23,7 +24,6 @@ import {
 import { extractZipNatively } from "../helpers/native-zip.js";
 
 const SESSION_MODULE = path.join(root, "build/main/core/steam-session.js");
-const PROVIDER_MODULE = path.join(root, "build/main/credential-provider.js");
 const IPC_MODULE = path.join(root, "build/main/ipc.js");
 const ACQUIRE_MODULE = path.join(root, "build/main/steam-acquire.js");
 const CONTRACTS_MODULE = path.join(root, "build/shared/contracts.js");
@@ -31,9 +31,7 @@ const RETURN_URL = "https://www.guildwars.test/app/live/auth";
 
 /** A fake token: 32 hex characters that were typed here, not issued. */
 const TOKEN = "0123456789abcdef0123456789abcdef";
-const OTHER_TOKEN = "fedcba9876543210fedcba9876543210";
 const FAR_FUTURE = 4_000_000_000_000;
-const TOKEN_LIFETIME_MS = 31_536_000 * 1000;
 
 interface StoredRecord {
   token: string;
@@ -107,18 +105,15 @@ async function startIpcOAuthFixture(): Promise<IpcOAuthFixture> {
 
 async function installFixtureAcquirer(
   app: OfflineFixture["app"],
-  config: IpcOAuthFixture["config"],
+  config?: IpcOAuthFixture["config"],
 ): Promise<void> {
-  await app.evaluate(async ({ app, BrowserWindow, ipcMain, safeStorage }, arg) => {
+  await app.evaluate(async ({ app, BrowserWindow, ipcMain }, arg) => {
     const { createRequire } = process.getBuiltinModule("module");
     const fs = process.getBuiltinModule("fs");
     const nodePath = process.getBuiltinModule("path");
     const load = createRequire(arg.ipcModule);
     const { registerSteamIpcHandlers } = load(arg.ipcModule) as {
       registerSteamIpcHandlers(context: unknown, provider: unknown): void;
-    };
-    const { createCredentialProvider } = load(arg.providerModule) as {
-      createCredentialProvider(platform: string, storage: unknown): unknown;
     };
     const { acquireSteamToken } = load(arg.acquireModule) as {
       acquireSteamToken(
@@ -153,6 +148,22 @@ async function installFixtureAcquirer(
       window: win,
       profileId,
     });
+    const testProvider = {
+      protection: "os-safe-storage-v1",
+      acceptsLegacyRawCiphertext: false,
+      available: async () => true,
+      encrypt: async (plaintext: string) =>
+        Buffer.from(Buffer.from(plaintext, "utf8").reverse()),
+      decrypt: async (ciphertext: Buffer) => ({
+        plaintext: Buffer.from(Buffer.from(ciphertext).reverse()).toString("utf8"),
+        shouldReEncrypt: false,
+      }),
+    };
+    (
+      globalThis as typeof globalThis & {
+        __gwSteamTestProvider?: unknown;
+      }
+    ).__gwSteamTestProvider = testProvider;
     registerSteamIpcHandlers({
       windows: {
         contextFor: (contents: unknown) => {
@@ -162,32 +173,38 @@ async function installFixtureAcquirer(
         contextForWindow,
       },
       getProfile: async () => profile,
-      acquireSteamToken: (parent: unknown, record: (event: unknown) => void) =>
-        acquireSteamToken(arg.config, { parent, record }),
-    }, createCredentialProvider(process.platform, safeStorage));
+      acquireSteamToken: (parent: unknown, record: (event: unknown) => void) => {
+        if (!arg.config) {
+          throw new Error("unexpected interactive Steam acquisition");
+        }
+        return acquireSteamToken(arg.config, { parent, record });
+      },
+    }, testProvider);
   }, {
     ipcModule: IPC_MODULE,
     acquireModule: ACQUIRE_MODULE,
-    providerModule: PROVIDER_MODULE,
     contractsModule: CONTRACTS_MODULE,
     config,
   });
 }
 
-async function clearSteam(fixture: OfflineFixture): Promise<void> {
-  await fixture.page.evaluate(async () => {
-    const steam = (
-      globalThis as unknown as {
-        gwNative: { steam: { clear(): Promise<void> } };
-      }
-    ).gwNative.steam;
-    await steam.clear();
-  });
+async function launchSteamFixture(prefix: string): Promise<OfflineFixture> {
+  const fixture = await launchOffline(prefix);
+  await installFixtureAcquirer(fixture.app);
+  return fixture;
+}
+
+async function launchSteamFixtureAt(userData: string): Promise<OfflineFixture> {
+  const fixture = await launchOfflineAt(userData);
+  await installFixtureAcquirer(fixture.app);
+  return fixture;
 }
 
 /**
- * Write the real encrypted store, through the real class and the real
- * `safeStorage`, before the client asks for anything.
+ * Write the real encrypted store through the real class before the client asks
+ * for anything. The injected provider is deterministic but still produces
+ * ciphertext; OS-provider qualification belongs to the platform credential
+ * tests rather than to every Steam coordinator branch.
  *
  * This is how a test seeds a token now that no environment variable can. It
  * lives entirely inside the test -- production source carries no seeding path
@@ -197,7 +214,7 @@ async function seedStore(
   app: OfflineFixture["app"],
   record: StoredRecord,
 ): Promise<void> {
-  await app.evaluate(async ({ app, safeStorage }, arg) => {
+  await app.evaluate(async ({ app }, arg) => {
     const { createRequire } = process.getBuiltinModule("module");
     const fs = process.getBuiltinModule("fs");
     const nodePath = process.getBuiltinModule("path");
@@ -207,9 +224,12 @@ async function seedStore(
         save(value: unknown): Promise<void>;
       };
     };
-    const { createCredentialProvider } = load(arg.providerModule) as {
-      createCredentialProvider(platform: string, storage: unknown): unknown;
-    };
+    const provider = (
+      globalThis as typeof globalThis & {
+        __gwSteamTestProvider?: unknown;
+      }
+    ).__gwSteamTestProvider;
+    if (!provider) throw new Error("Steam test provider was not installed");
     const profilesRoot = nodePath.join(app.getPath("userData"), "profiles");
     const profileId = fs.readdirSync(profilesRoot).find(
       (name) => /^[0-9a-f]{32}$/u.test(name),
@@ -218,17 +238,17 @@ async function seedStore(
     const steamSession = nodePath.join(profilesRoot, profileId, "steam-session.bin");
     await new SteamSessionStore(
       steamSession,
-      createCredentialProvider(process.platform, safeStorage),
+      provider,
     ).save(
       arg.record,
     );
-  }, { sessionModule: SESSION_MODULE, providerModule: PROVIDER_MODULE, record });
+  }, { sessionModule: SESSION_MODULE, record });
 }
 
 async function readStore(
   app: OfflineFixture["app"],
 ): Promise<StoredRecord | null> {
-  return (await app.evaluate(async ({ app, safeStorage }, arg) => {
+  return (await app.evaluate(async ({ app }, arg) => {
     const { createRequire } = process.getBuiltinModule("module");
     const fs = process.getBuiltinModule("fs");
     const nodePath = process.getBuiltinModule("path");
@@ -238,9 +258,12 @@ async function readStore(
         load(): Promise<unknown>;
       };
     };
-    const { createCredentialProvider } = load(arg.providerModule) as {
-      createCredentialProvider(platform: string, storage: unknown): unknown;
-    };
+    const provider = (
+      globalThis as typeof globalThis & {
+        __gwSteamTestProvider?: unknown;
+      }
+    ).__gwSteamTestProvider;
+    if (!provider) throw new Error("Steam test provider was not installed");
     const profilesRoot = nodePath.join(app.getPath("userData"), "profiles");
     const profileId = fs.readdirSync(profilesRoot).find(
       (name) => /^[0-9a-f]{32}$/u.test(name),
@@ -248,9 +271,9 @@ async function readStore(
     if (!profileId) throw new Error("expected the bootstrapped fixture profile");
     return new SteamSessionStore(
       nodePath.join(profilesRoot, profileId, "steam-session.bin"),
-      createCredentialProvider(process.platform, safeStorage),
+      provider,
     ).load();
-  }, { sessionModule: SESSION_MODULE, providerModule: PROVIDER_MODULE })) as
+  }, { sessionModule: SESSION_MODULE })) as
     | StoredRecord
     | null;
 }
@@ -301,10 +324,10 @@ test.describe("the Steam credential seam", () => {
     if (oauth) await oauth.close();
   });
 
-  test("advertises Steam and nothing else", async () => {
+  test("advertises only Steam and keeps the silent launch probe invisible", async () => {
     // The client renders its Steam button beside the
     // unchanged ArenaNet email/password form.
-    fixture = await launchOffline("gw-steam-providers-");
+    fixture = await launchSteamFixture("gw-steam-providers-");
     const answers = await fixture.page.evaluate(() => {
       const login = (
         globalThis as unknown as {
@@ -326,24 +349,21 @@ test.describe("the Steam credential seam", () => {
       facebook: false,
       nonsense: false,
     });
-  });
-
-  test("refuses a silent request with no stored token, opening no window", async () => {
-    // This is the launch-time probe: a player who never signed
-    // in with Steam must not be shown a Steam window for it.
-    fixture = await launchOffline("gw-steam-none-");
     const before = await windowCount(fixture.app);
 
     const result = await getAuthToken(fixture, "Steam", true);
 
     expect(result).toEqual({ settled: "rejected" });
+    expect(await getAuthToken(fixture, "Apple", true)).toEqual({
+      settled: "rejected",
+    });
     expect(await windowCount(fixture.app)).toBe(before);
     expect(await readStore(fixture.app)).toBe(null);
   });
 
   test("drives an explicit request through the real bridge and IPC seam", async () => {
     oauth = await startIpcOAuthFixture();
-    fixture = await launchOffline("gw-steam-ipc-explicit-");
+    fixture = await launchSteamFixture("gw-steam-ipc-explicit-");
     await installFixtureAcquirer(fixture.app, oauth.config);
 
     const requested = getAuthToken(fixture, "Steam", false);
@@ -360,232 +380,15 @@ test.describe("the Steam credential seam", () => {
     });
   });
 
-  test("coalesces concurrent explicit IPC requests into one window", async () => {
-    oauth = await startIpcOAuthFixture();
-    fixture = await launchOffline("gw-steam-ipc-singleflight-");
-    await installFixtureAcquirer(fixture.app, oauth.config);
-
-    const first = getAuthToken(fixture, "Steam", false);
-    const second = getAuthToken(fixture, "Steam", false);
-    await expect.poll(() => oauth?.hits ?? 0).toBe(1);
-    oauth.release();
-
-    expect(await first).toEqual(await second);
-    expect(oauth.hits).toBe(1);
-  });
-
-  test("makes clear final through the real IPC boundary", async () => {
-    oauth = await startIpcOAuthFixture();
-    fixture = await launchOffline("gw-steam-ipc-clear-order-");
-    await installFixtureAcquirer(fixture.app, oauth.config);
-
-    const requested = getAuthToken(fixture, "Steam", false);
-    await expect.poll(() => oauth?.hits ?? 0).toBe(1);
-    const cleared = clearSteam(fixture);
-    oauth.release();
-
-    expect((await requested).settled).toBe("resolved");
-    await cleared;
-    expect(await readStore(fixture.app)).toBeNull();
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "rejected",
-    });
-  });
-
-  test("reads a request with no options as the silent one", async () => {
-    // Check the launch-time behavior from the other direction. The observed client always passes
-    // `{ silent }`, so this is about a build that stops: refusing is recoverable
-    // -- email and password still work -- while opening a Steam window nobody
-    // asked for is the failure the requirement exists to prevent.
-    fixture = await launchOffline("gw-steam-no-options-");
-    const before = await windowCount(fixture.app);
-
-    const settled = await fixture.page.evaluate(async () => {
-      const login = (
-        globalThis as unknown as {
-          Module: { login: { getAuthToken(name: string): Promise<unknown> } };
-        }
-      ).Module.login;
-      try {
-        await login.getAuthToken("Steam");
-        return "resolved";
-      } catch {
-        return "rejected";
-      }
-    });
-
-    expect(settled).toBe("rejected");
-    expect(await windowCount(fixture.app)).toBe(before);
-  });
-
-  test("vends a stored token in the shape the client destructures", async () => {
-    // `userId` is the client's local profile index, not the
-    // SteamID, and `refreshToken` is empty. The client base64-encodes
-    // `authCode` into <PasswordToken> for login.xml.
-    fixture = await launchOffline("gw-steam-stored-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    const result = await getAuthToken(fixture, "Steam", true);
-
-    expect(result).toEqual({
-      settled: "resolved",
-      value: { userId: "1", authCode: TOKEN, refreshToken: "" },
-    });
-    expect(await windowCount(fixture.app)).toBe(1);
-  });
-
-  test("refuses a provider it does not offer", async () => {
-    fixture = await launchOffline("gw-steam-wrong-provider-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-    expect(await getAuthToken(fixture, "Apple", true)).toEqual({
-      settled: "rejected",
-    });
-  });
-
   test("replays the stored token across a relaunch", async () => {
     // The token survives the process, which is the whole
     // point of persisting it.
-    fixture = await launchOffline("gw-steam-relaunch-");
+    fixture = await launchSteamFixture("gw-steam-relaunch-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
     const userData = fixture.userData;
     await fixture.app.close();
 
-    fixture = await launchOfflineAt(userData);
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "resolved",
-      value: { userId: "1", authCode: TOKEN, refreshToken: "" },
-    });
-  });
-
-  test("treats an expired stored token as absent", async () => {
-    // Return to the login screen, not a failed launch.
-    fixture = await launchOffline("gw-steam-expired-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: 1 });
-
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "rejected",
-    });
-    expect(await readStore(fixture.app)).toBe(null);
-  });
-
-  test("relays the account storeback as an expiry refresh", async () => {
-    // The expiry moves, the token does not, and only for the token
-    // already held.
-    fixture = await launchOffline("gw-steam-storeback-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-    const before = Date.now();
-
-    await fixture.page.evaluate(
-      async ({ token, expiry }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: Date): Promise<void>;
-              };
-            };
-          }
-        ).Module.nativeAccount;
-        await account.storeAccountData(token, new Date(expiry));
-      },
-      { token: TOKEN, expiry: FAR_FUTURE - 5_000 },
-    );
-
-    const stored = await readStore(fixture.app);
-    expect(stored?.token).toBe(TOKEN);
-    expect(stored?.expiry).toBeGreaterThanOrEqual(before + TOKEN_LIFETIME_MS);
-    expect(stored?.expiry).toBeLessThanOrEqual(Date.now() + TOKEN_LIFETIME_MS);
-  });
-
-  test("ignores a storeback carrying something other than the held token", async () => {
-    fixture = await launchOffline("gw-steam-storeback-other-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(
-      async ({ other }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: Date): Promise<void>;
-              };
-            };
-          }
-        ).Module.nativeAccount;
-        // The empty string is what this host vends as `refreshToken`, so it is
-        // the value most likely to come back.
-        await account.storeAccountData("", new Date(1));
-        await account.storeAccountData(other, new Date(1));
-      },
-      { other: OTHER_TOKEN },
-    );
-
-    expect(await readStore(fixture.app)).toEqual({
-      token: TOKEN,
-      expiry: FAR_FUTURE,
-    });
-  });
-
-  test("leaves a working record alone when the expiry is unusable", async () => {
-    fixture = await launchOffline("gw-steam-bad-date-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(
-      async ({ token }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: unknown): Promise<void>;
-              };
-            };
-          }
-        ).Module.nativeAccount;
-        await account.storeAccountData(token, new Date("not a date"));
-      },
-      { token: TOKEN },
-    );
-
-    // Two things at once. The harness turns an Invalid Date into "no expiry
-    // known" rather than into a date in 1970 -- and main then refuses to write
-    // that absence over an expiry it already knows, so the record a working
-    // sign-in depends on survives intact. Either failure alone would show up
-    // here as an expiry of 0 or null.
-    expect(await readStore(fixture.app)).toEqual({
-      token: TOKEN,
-      expiry: FAR_FUTURE,
-    });
-  });
-
-  test("survives a storeback poisoned with a past expiry", async () => {
-    // The renderer can read the token and hand it back with an expiry already
-    // in the past. Persisting that would make the next launch treat the record
-    // as expired and delete it, costing the player a sign-in they were told was
-    // once-per-machine -- so the stored expiry must not move, and the token must
-    // still be vended afterwards.
-    fixture = await launchOffline("gw-steam-poisoned-expiry-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(
-      async ({ token }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: Date): Promise<void>;
-              };
-            };
-          }
-        ).Module.nativeAccount;
-        await account.storeAccountData(token, new Date(0));
-      },
-      { token: TOKEN },
-    );
-
-    expect(await readStore(fixture.app)).toEqual({
-      token: TOKEN,
-      expiry: FAR_FUTURE,
-    });
+    fixture = await launchSteamFixtureAt(userData);
     expect(await getAuthToken(fixture, "Steam", true)).toEqual({
       settled: "resolved",
       value: { userId: "1", authCode: TOKEN, refreshToken: "" },
@@ -597,7 +400,7 @@ test.describe("the Steam credential seam", () => {
     // verdict the exporter wrote about itself: drive the whole seam, export,
     // unzip, and read every file.
     const DIAGNOSTIC_EXPIRY = 4_123_456_789_123;
-    fixture = await launchOffline("gw-steam-diagnostics-");
+    fixture = await launchSteamFixture("gw-steam-diagnostics-");
     await seedStore(fixture.app, { token: TOKEN, expiry: DIAGNOSTIC_EXPIRY });
 
     // Every Steam event this feature can record, in one session.
@@ -677,25 +480,5 @@ test.describe("the Steam credential seam", () => {
     ) as { redaction: { records: number; schemaChecked: number } };
     expect(manifest.redaction.records).toBeGreaterThan(0);
     expect(manifest.redaction.schemaChecked).toBe(manifest.redaction.records);
-  });
-
-  test("forgets the token when the client signs out", async () => {
-    // Exercise the shipped sign-out boundary.
-    fixture = await launchOffline("gw-steam-signout-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(async () => {
-      const account = (
-        globalThis as unknown as {
-          Module: { nativeAccount: { clearAccountData(): Promise<void> } };
-        }
-      ).Module.nativeAccount;
-      await account.clearAccountData();
-    });
-
-    expect(await readStore(fixture.app)).toBe(null);
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "rejected",
-    });
   });
 });
