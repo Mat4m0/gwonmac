@@ -222,6 +222,8 @@ const controlApi = {
     close: (id) => ipcRenderer.invoke(IPC.profilesClose, id),
     forgetSavedLogin: (id) =>
       ipcRenderer.invoke(IPC.profilesForgetLogin, id),
+    resetSavedFiles: (id) =>
+      ipcRenderer.invoke(IPC.profilesResetStorage, id),
     moveToTrash: (id) => ipcRenderer.invoke(IPC.profilesTrash, id),
     onChange: (callback) => listen(IPC.profilesChanged, callback),
   },

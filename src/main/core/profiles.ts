@@ -232,6 +232,12 @@ export class ProfileStore {
     });
   }
 
+  async requestGameStorageReset(id: ProfileId): Promise<void> {
+    const paths = profilePaths(this.root, parseProfileId(id));
+    await readProfileDocument(paths.document);
+    await writeAtomic(paths.gameStorageClearRequest, "", 0o600);
+  }
+
   requestTrash(
     id: ProfileId,
     isRunning: (id: ProfileId) => boolean,

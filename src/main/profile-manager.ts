@@ -128,6 +128,12 @@ export class ProfileManager {
     this.deps.notify();
   }
 
+  async resetSavedFiles(id: ProfileId): Promise<void> {
+    this.assertStopped(id);
+    await this.deps.store.requestGameStorageReset(id);
+    this.deps.notify();
+  }
+
   async moveToTrash(id: ProfileId): Promise<void> {
     this.assertStopped(id);
     await this.deps.store.requestTrash(id, (candidate) =>

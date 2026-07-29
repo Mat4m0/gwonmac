@@ -65,6 +65,17 @@ function render(profile: ProfileSummary): DocumentFragment {
       void act(() => window.gwControl.profiles.forgetSavedLogin(profile.id));
     }
   });
+  const reset = button(fragment, "reset");
+  reset.disabled = profile.status !== "stopped";
+  reset.addEventListener("click", () => {
+    if (
+      window.confirm(
+        `Reset saved Guild Wars files for “${profile.label}” on its next launch?`,
+      )
+    ) {
+      void act(() => window.gwControl.profiles.resetSavedFiles(profile.id));
+    }
+  });
   const trash = button(fragment, "trash");
   trash.disabled = profile.status !== "stopped";
   trash.addEventListener("click", () => {

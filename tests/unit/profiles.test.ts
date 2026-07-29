@@ -167,6 +167,18 @@ describe("directory-backed ProfileStore", () => {
     assert.equal((await stat(profile.paths.root)).isDirectory(), true);
   });
 
+  it("requests game-storage reset only inside the selected profile", async () => {
+    const { root } = await tempProfiles();
+    const store = new ProfileStore(root, () => ID_A);
+    const profile = await store.create("Alpha");
+    const globalSentinel = path.join(path.dirname(root), "settings.json");
+    await writeFile(globalSentinel, "global");
+
+    await store.requestGameStorageReset(profile.id);
+    assert.equal((await stat(profile.paths.gameStorageClearRequest)).size, 0);
+    assert.equal(await readFile(globalSentinel, "utf8"), "global");
+  });
+
   it("defers trash, refuses running profiles, and preserves failed trash", async () => {
     const { root } = await tempProfiles();
     const store = new ProfileStore(root, () => ID_A);

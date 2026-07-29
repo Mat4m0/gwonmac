@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -110,8 +110,11 @@ test("profile manager keeps destructive profile actions stopped-only", async () 
     });
     await assert.rejects(manager.rename(profile.id, "Renamed"), /stopped/);
     await assert.rejects(manager.forgetSavedLogin(profile.id), /stopped/);
+    await assert.rejects(manager.resetSavedFiles(profile.id), /stopped/);
     await assert.rejects(manager.moveToTrash(profile.id), /stopped/);
     games.splice(0);
+    await manager.resetSavedFiles(profile.id);
+    assert.equal((await stat(profile.paths.gameStorageClearRequest)).size, 0);
     await manager.moveToTrash(profile.id);
     assert.equal(restarted, true);
   } finally {

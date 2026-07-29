@@ -481,6 +481,7 @@ export const IPC = {
   profilesLaunch: "gw:profiles:launch",
   profilesClose: "gw:profiles:close",
   profilesForgetLogin: "gw:profiles:forgetLogin",
+  profilesResetStorage: "gw:profiles:resetStorage",
   profilesTrash: "gw:profiles:trash",
   profilesChanged: "gw:profiles:changed",
 } as const;
@@ -518,6 +519,7 @@ export const CONTROL_INVOKE_CHANNELS = [
   "profilesLaunch",
   "profilesClose",
   "profilesForgetLogin",
+  "profilesResetStorage",
   "profilesTrash",
 ] as const satisfies readonly InvokeChannel[];
 
@@ -547,6 +549,7 @@ export interface GwControlApi {
     launch(id: string): Promise<void>;
     close(id: string): Promise<void>;
     forgetSavedLogin(id: string): Promise<void>;
+    resetSavedFiles(id: string): Promise<void>;
     moveToTrash(id: string): Promise<void>;
     onChange(callback: () => void): () => void;
   };

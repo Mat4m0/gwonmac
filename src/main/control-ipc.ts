@@ -91,6 +91,10 @@ export function registerControlIpcHandlers(ctx: ControlIpcContext): void {
       id,
       (value) => ctx.profiles.forgetSavedLogin(value),
     ),
+    profilesResetStorage: channel(
+      id,
+      (value) => ctx.profiles.resetSavedFiles(value),
+    ),
     profilesTrash: channel(id, (value) => ctx.profiles.moveToTrash(value)),
   } satisfies Record<ControlInvokeChannel, AnyChannelDef>;
 
