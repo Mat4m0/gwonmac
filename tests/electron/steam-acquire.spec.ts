@@ -277,6 +277,12 @@ async function replaceSignInCleanup(
 }
 
 test.describe("acquiring a Steam token", () => {
+  // These tests repeatedly launch native Electron windows and local navigation
+  // fixtures. Loaded macOS and Windows runners can spend most of the generic
+  // budget before an assertion begins; keep the larger allowance scoped to
+  // this native-window group.
+  test.describe.configure({ timeout: 120_000 });
+
   // These drive compiled main-process code, so skip rather than error when the
   // build has not run — the same guard tests/electron/sandbox.spec.ts uses.
   test.skip(!existsSync(main), "run pnpm build before the electron tests");
@@ -363,11 +369,6 @@ test.describe("acquiring a Steam token", () => {
   });
 
   test("bounds cleanup that never settles", async () => {
-    // This deliberately spends five seconds on the cleanup deadline. A loaded
-    // Windows runner can consume most of the normal native-test budget before
-    // that clock starts, so only this time-based failure-path test gets the
-    // extended Playwright budget.
-    test.slow();
     server = await startFixture("hang");
     fixture = await launchOffline("gw-steam-acquire-cleanup-deadline-");
 
