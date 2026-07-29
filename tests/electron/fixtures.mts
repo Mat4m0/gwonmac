@@ -3,6 +3,7 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
+import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,6 +22,7 @@ const electronBin = developmentElectronExecutable(root);
 export interface OfflineFixture {
   readonly app: ElectronApplication;
   readonly page: Page;
+  readonly process: ChildProcess;
   readonly userData: string;
 }
 
@@ -64,11 +66,11 @@ export async function launchOfflineAt(
   });
   const page = await app.firstWindow({ timeout: 30_000 });
   await page.waitForLoadState("domcontentloaded");
-  return { app, page, userData };
+  return { app, page, process: app.process(), userData };
 }
 
 export async function closeOffline(fixture: OfflineFixture): Promise<void> {
-  const electronProcess = fixture.app.process();
+  const electronProcess = fixture.process;
   const exited =
     electronProcess.exitCode !== null || electronProcess.signalCode !== null
       ? Promise.resolve()
