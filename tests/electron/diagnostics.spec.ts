@@ -211,7 +211,7 @@ test.describe("diagnostics", () => {
       });
 
       const extracted = path.join(diagnosticRoot, "extracted");
-      await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+      await extractZipNatively(target, extracted);
       const trace = await readFile(
         path.join(extracted, "chromium-trace.json"),
         "utf8",

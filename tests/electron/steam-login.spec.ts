@@ -9,13 +9,11 @@
 // the real implementations, and the suite never reaches Steam production.
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
-import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
 import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import {
   closeOffline,
   launchOffline,
@@ -24,8 +22,7 @@ import {
   type OfflineFixture,
   main,
 } from "./fixtures.mts";
-
-const execFileAsync = promisify(execFile);
+import { extractZipNatively } from "../helpers/native-zip.js";
 
 const SESSION_MODULE = path.join(root, "build/main/core/steam-session.js");
 const PROVIDER_MODULE = path.join(root, "build/main/credential-provider.js");
@@ -658,7 +655,7 @@ test.describe("the Steam credential seam", () => {
     );
 
     const extracted = path.join(diagnosticRoot, "extracted");
-    await execFileAsync("ditto", ["-x", "-k", target, extracted]);
+    await extractZipNatively(target, extracted);
 
     let everything = "";
     for (const name of await readdir(extracted)) {

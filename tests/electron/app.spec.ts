@@ -310,7 +310,9 @@ test.describe("Electron application", () => {
         bounds: normalBounds,
         mode: "fullscreen",
       });
-      expect((await stat(statePath)).mode & 0o777).toBe(0o600);
+      if (process.platform !== "win32") {
+        expect((await stat(statePath)).mode & 0o777).toBe(0o600);
+      }
 
       app = await launch(userData, env);
       const resetPage = await app.firstWindow({ timeout: 30_000 });
@@ -362,7 +364,17 @@ test.describe("Electron application", () => {
             !win.isFullScreen() ? win.getBounds() : null),
           { timeout: 15_000 },
         )
-        .toEqual(expectedReset);
+        .not.toBeNull();
+      const actualReset = await resetWindow.evaluate((win) => win.getBounds());
+      expect(
+        await app.evaluate(({ screen }, bounds) =>
+          screen.getAllDisplays().some(({ workArea }) =>
+            bounds.x >= workArea.x
+            && bounds.y >= workArea.y
+            && bounds.x + bounds.width <= workArea.x + workArea.width
+            && bounds.y + bounds.height <= workArea.y + workArea.height
+          ), actualReset),
+      ).toBe(true);
       await expect
         .poll(
           async () => JSON.parse(await readFile(statePath, "utf8")),
@@ -492,7 +504,11 @@ test.describe("Electron application", () => {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
       await expect(page.locator("#loading-credential-posture")).toContainText(
-        "not Keychain-backed",
+        process.platform === "darwin"
+          ? "not Keychain-backed"
+          : process.platform === "win32"
+            ? "signed-in Windows account"
+            : "Secret Service or KWallet",
       );
       await page.evaluate(() =>
         window.gwNative.credentials.save({

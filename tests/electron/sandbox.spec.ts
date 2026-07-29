@@ -84,7 +84,7 @@ test.describe("sandbox boundary", () => {
         await fixture.app.evaluate(({ app }) =>
           app.commandLine.hasSwitch("use-mock-keychain"),
         ),
-      ).toBe(true);
+      ).toBe(process.platform === "darwin");
       const snapshotResponse = await fixture.page.evaluate(async () => {
         const response = await window.fetch("Gw.snapshot", {
           headers: { Range: "bytes=0-0" },
