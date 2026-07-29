@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.js";
 import { AppError } from "../../src/shared/errors.js";
 import {
@@ -152,7 +152,7 @@ describe("settings", () => {
     );
     assert.match(backup, /settings\.json\.corrupt-\d+$/);
     assert.equal(await readFile(backup, "utf8"), "{not json");
-    assert.deepEqual(await readdir(dir), [backup.split("/").at(-1)]);
+    assert.deepEqual(await readdir(dir), [basename(backup)]);
   });
 
   it("saves only known fields", async () => {
@@ -247,7 +247,7 @@ describe("settings", () => {
       "settings.json.corrupt-3000",
       "settings.json.corrupt-4000",
       "settings.json.corrupt-not-an-epoch",
-      backup.split("/").at(-1),
+      basename(backup),
       "window-state.json",
     ].sort());
     // The newest three are the new one and the two most recent older ones.

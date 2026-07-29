@@ -14,7 +14,7 @@ import {
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   sweepOrphanDirectories,
   sweepOrphans,
@@ -271,7 +271,9 @@ describe("atomic-file orphan sweep", () => {
       process.execPath,
       [
         "--import",
-        fileURLToPath(new URL("../../scripts/ts-hook.mjs", import.meta.url)),
+        pathToFileURL(
+          fileURLToPath(new URL("../../scripts/ts-hook.mjs", import.meta.url)),
+        ).href,
         "--experimental-strip-types",
         fileURLToPath(new URL("../fixtures/pause-mid-atomic-write.ts", import.meta.url)),
         target,

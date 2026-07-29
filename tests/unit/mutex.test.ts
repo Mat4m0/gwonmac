@@ -110,10 +110,11 @@ describe("generation mutex", () => {
 
     assert.deepEqual(log.slice(0, 3), ["a:enter", "b:enter", "c:enter"]);
     const failures = results.filter((r) => r.status === "rejected");
-    // `artifacts` can only be moved aside once, so the two transitions that
-    // lose the race fail mid-move — the rollback a crashed renderer is waiting
-    // on throws instead of restoring anything.
-    assert.equal(failures.length, 2);
+    // At least one transition loses the race. The exact count is filesystem
+    // scheduling: Windows may let a later transition enter after the first
+    // rename chain completes, while POSIX commonly leaves both peers failing.
+    // Either result proves the unprotected operation is not total.
+    assert.ok(failures.length >= 1);
     for (const failure of failures) {
       assert.match(String((failure as PromiseRejectedResult).reason), /ENOENT/);
     }

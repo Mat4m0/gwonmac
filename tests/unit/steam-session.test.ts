@@ -53,7 +53,9 @@ describe("the Steam session store", () => {
 
     const raw = await readFile(path);
     assert.equal(raw.includes(Buffer.from(TOKEN)), false, "the token must not sit in the file");
-    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    if (process.platform !== "win32") {
+      assert.equal((await stat(path)).mode & 0o777, 0o600);
+    }
 
     await store.clear();
     assert.equal(await store.load(), null);
