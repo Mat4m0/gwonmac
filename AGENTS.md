@@ -55,6 +55,7 @@ not only happy paths.
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | bounded flight recorder, captures, export                     |
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
+| `src/control/`            | lightweight profile-manager presentation                      |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
@@ -94,7 +95,9 @@ not only happy paths.
 - WASM packet views must be compacted before crossing `contextBridge`.
 - The main process owns TCP handles, backpressure, destination/port checks,
   owner cleanup, and final close semantics.
-- Red X means a clean application quit, not a hidden headless process.
+- Closing a game flushes only that profile. Closing the manager leaves a
+  visible game running; closing the last visible window exits cleanly with no
+  hidden headless process.
 - Main owns atomic owner-only window state. Persist the last normal bounds
   beneath maximized/fullscreen mode, validate against connected display work
   areas, never restore minimized, and keep the View-menu recovery action.

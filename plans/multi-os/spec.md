@@ -1,6 +1,6 @@
 # Multi-OS and profile-management specification
 
-Status: proposed architecture; this is not current product behaviour
+Status: implementation in progress; public support remains gated below
 Research cut: 2026-07-29
 Audience: a mid-level developer implementing with AI-agent assistance
 Execution plan: [plan.md](plan.md)

@@ -24,9 +24,9 @@ profile isolation, and release evidence are specified in the
 [multi-OS architecture](plans/multi-os/spec.md) and implemented in the
 [phased plan](plans/multi-os/plan.md).
 
-The planned profile manager stores a private display label, not account
-credentials; the official game login remains the only credential-entry
-surface. Sequential switching comes first. Simultaneous clients remain
+The profile manager stores a private display label, not account credentials;
+the official game login remains the only credential-entry surface. It launches
+one isolated profile at a time. Simultaneous clients remain
 conditional on measured IDBFS/performance results and current Guild Wars 1
 policy clarification. Input broadcasting and automation remain permanent
 non-goals.
@@ -58,7 +58,8 @@ how recent a release is and nothing about which game client build it certifies:
 
 ## How it works
 
-On first launch the app asks how you want game data downloaded, and waits for your choice.
+On first launch, select the generated **Default** profile. The profile's game
+launcher then asks how you want game data downloaded and waits for your choice.
 The two modes are:
 
 | Mode                            | What happens                                                                                |
@@ -76,7 +77,8 @@ mid-download with _Play Now Instead_.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
 - Guild Wars' own **Remember Password** writes one encrypted, owner-only local
-  file. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
+  file inside the selected profile. Profiles cannot read each other's saved
+  login. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
   encryption, so software running as your macOS user could recover it. Leave
   Remember Password off if that tradeoff isn't acceptable.
 - **The app does not poll for updates.** It asks GitHub whether a newer release

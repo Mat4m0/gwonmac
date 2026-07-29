@@ -494,18 +494,21 @@ patch the official glue speculatively: `Gw.dat` is persistent client state and
 removing it can turn memory pressure into repeated reconstruction and snapshot
 I/O.
 
-Closing the single game window is an application quit. The close event is
-converted to `app.quit()` before the renderer is destroyed, cleanup closes
-sockets and background work, diagnostics flush their final lifecycle events,
-and the process exits with status zero. Main-to-renderer events are dropped
-once either the window or its `webContents` is destroyed. Renderer recovery is
-reserved for unexpected loss while the application is not quitting.
+The profile manager and at most one sequential game window are owned by the
+single Electron process. Closing a game flushes its IDBFS and Electron session,
+closes only its sockets, and destroys only that window. Closing the manager
+while the game remains visible does not hide or stop the game. Closing the last
+visible window starts normal application cleanup and exits with status zero.
+Main-to-renderer events are dropped once either the window or its
+`webContents` is destroyed. A crashed game keeps its registry reservation
+until its one automatic replacement is created, so the manager cannot launch a
+duplicate during recovery.
 
 The process acquires Electron's single-instance lock before it reads or sweeps
 profile-owned files. A second launch exits and asks the primary process to
-restore, show, and focus its existing window. That lock is what makes startup
-cleanup of atomic-write temporary files safe: another live app process cannot
-still own a foreign-PID temporary file in the same profile.
+restore, show, and focus—or recreate—the profile manager. That lock is what
+makes startup cleanup of atomic-write temporary files safe: another live app
+process cannot still own a foreign-PID temporary file in the same profile.
 
 ## Rendering and input
 
@@ -820,10 +823,12 @@ two that read _none_ today are recorded rather than quietly kept.
 
 ### Approved multi-OS claims that are not public yet
 
-Windows, Linux, and named profiles are approved product targets, not current
-behaviour. The [`multi-OS specification`](../plans/multi-os/spec.md) owns their
-acceptance catalogue. None of these candidate claims may move into the website,
-user guide, download CTA, or in-app copy until its complete proof is green:
+Windows and Linux remain approved targets rather than supported downloads.
+Sequential named-profile behaviour is implemented and documented, but its
+release claim remains gated on legacy migration and native packaged evidence.
+The [`multi-OS specification`](../plans/multi-os/spec.md) owns the acceptance
+catalogue. Candidate support claims may not move into the website or download
+CTA until their complete proof is green:
 
 | Candidate claim | Required proof before publication |
 | --- | --- |

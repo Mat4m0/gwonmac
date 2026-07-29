@@ -1,6 +1,6 @@
 # Multi-OS and profile-management implementation plan
 
-Status: proposed; no phase in this file is current product behaviour
+Status: active execution ledger; checked work is current
 Specification: [spec.md](spec.md)
 Repository rules: [AGENTS.md](../../AGENTS.md)
 Prepared: 2026-07-29
@@ -675,23 +675,23 @@ keeping runtime concurrency simple.
 Specification: section 5
 Acceptance: MOS-R01, MOS-R02, and MOS-D01
 
-- [ ] Replace `GamePaths` with disjoint `AppPaths`/`ProfilePaths` and migrate
+- [x] Replace `GamePaths` with disjoint `AppPaths`/`ProfilePaths` and migrate
   every caller in one cutover.
-- [ ] Keep the existing `game/` and chunk paths byte-for-byte stable.
-- [ ] Add branded `ProfileId`, random generation, parser, and path containment.
-- [ ] Implement scan/create/rename/list/deferred-trash without a database or
+- [x] Keep the existing `game/` and chunk paths byte-for-byte stable.
+- [x] Add branded `ProfileId`, random generation, parser, and path containment.
+- [x] Implement scan/create/rename/list/deferred-trash without a database or
   index.
-- [ ] Validate the exact `profile.json` schema and canonical label rules.
-- [ ] Stage/publish creation atomically and clean only recognised incomplete
+- [x] Validate the exact `profile.json` schema and canonical label rules.
+- [x] Stage/publish creation atomically and clean only recognised incomplete
   stages.
-- [ ] Make delete write the closed `trash-on-start` marker and request restart;
+- [x] Make delete write the closed `trash-on-start` marker and request restart;
   process marked roots with `shell.trashItem` before any profile session is
   created. Preserve the profile/marker on failure and never recursively
   delete.
-- [ ] Test traversal, separators, absolute paths, reserved Windows names,
+- [x] Test traversal, separators, absolute paths, reserved Windows names,
   Unicode normalisation/control/bidi, long labels, duplicate labels, and
   hostile HTML-like display text.
-- [ ] Prove profile operations cannot return or delete an app-global path.
+- [x] Prove profile operations cannot return or delete an app-global path.
 
 ### WP-5.2 — typed one-time migration
 
@@ -724,13 +724,13 @@ default-session profile path.
 Specification: sections 6.1 and 9
 Acceptance: MOS-R01 and MOS-S01
 
-- [ ] Create `session.fromPath(profilePaths.browser, chosenOptions)` only in
+- [x] Create `session.fromPath(profilePaths.browser, chosenOptions)` only in
   main.
-- [ ] Install the game protocol/security/permission policy on each new session.
-- [ ] Bind one game window and one credential store to its registered profile.
-- [ ] Make cookie/cache/IndexedDB reset operate on the selected stopped
+- [x] Install the game protocol/security/permission policy on each new session.
+- [x] Bind one game window and one credential store to its registered profile.
+- [x] Make cookie/cache/IndexedDB reset operate on the selected stopped
   profile's session only.
-- [ ] Keep global native cache reset separately confirmed and unavailable
+- [x] Keep global native cache reset separately confirmed and unavailable
   while a game is running.
 - [ ] Add A/B IndexedDB/IDBFS sentinel and credential isolation tests across
   packaged relaunch.
@@ -740,42 +740,42 @@ Acceptance: MOS-R01 and MOS-S01
 Specification: sections 7 and 12
 Acceptance: MOS-A02 and MOS-R01
 
-- [ ] Add a lightweight packaged control page that never imports game modules.
-- [ ] Add label-only profile creation and the exact v1 actions: Add, Rename,
+- [x] Add a lightweight packaged control page that never imports game modules.
+- [x] Add label-only profile creation and the exact v1 actions: Add, Rename,
   Launch/Focus, Close, Forget Saved Login, Move to Trash.
-- [ ] Sort by canonical label; do not add ordering/groups/tags.
-- [ ] Derive stopped/starting/running/closing status from the registry.
-- [ ] Add role-specific frozen preload namespaces and main authorization.
-- [ ] Ensure control IPC can select a profile for lifecycle actions but can
+- [x] Sort by canonical label; do not add ordering/groups/tags.
+- [x] Derive stopped/starting/running/closing status from the registry.
+- [x] Add role-specific frozen preload namespaces and main authorization.
+- [x] Ensure control IPC can select a profile for lifecycle actions but can
   never read credential plaintext or invoke game sockets.
-- [ ] Ensure game IPC never accepts a profile ID.
-- [ ] Keep game titles generic and labels out of diagnostics.
+- [x] Ensure game IPC never accepts a profile ID.
+- [x] Keep game titles generic and labels out of diagnostics.
 
 ### WP-5.5 — sequential lifecycle
 
 Specification: section 6.3
 Acceptance: MOS-U01
 
-- [ ] Enforce at most one live game globally.
-- [ ] A Launch on another profile asks to close/flush the current game before
+- [x] Enforce at most one live game globally.
+- [x] A Launch on another profile asks to close/flush the current game before
   starting the selected one.
-- [ ] Game close flushes its IDBFS/session and closes its sockets without
+- [x] Game close flushes its IDBFS/session and closes its sockets without
   corrupting the manager.
-- [ ] Control close with a game visible leaves that visible game running.
-- [ ] Last visible window close exits with no background process.
-- [ ] Second OS invocation focuses/recreates the control window.
-- [ ] Official client clean exit closes its own game window.
+- [x] Control close with a game visible leaves that visible game running.
+- [x] Last visible window close exits with no background process.
+- [x] Second OS invocation focuses/recreates the control window.
+- [x] Official client clean exit closes its own game window.
 - [ ] Add crash/reload/failure tests for every transition without persisting a
   runtime state machine.
 
 ### WP-5.6 — profile diagnostics/privacy
 
-- [ ] Add ephemeral window slots and per-window clocks.
-- [ ] Keep profile IDs/labels out of the closed schema.
-- [ ] Require the control window to be destroyed before Level 2 tracing starts
+- [x] Add ephemeral window slots and per-window clocks.
+- [x] Keep profile IDs/labels out of the closed schema.
+- [x] Require the control window to be destroyed before Level 2 tracing starts
   and recreate it after capture on request; refuse capture if it cannot close.
-- [ ] Refuse or stop a capture whose target closes.
-- [ ] Prove a corrupt profile A cannot prevent diagnostics or profile B from
+- [x] Refuse or stop a capture whose target closes.
+- [x] Prove a corrupt profile A cannot prevent diagnostics or profile B from
   opening.
 
 ### Phase 5 gate
