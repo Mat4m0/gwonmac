@@ -9,6 +9,18 @@ export default defineConfig({
   ...shared,
   outputDir: path.join(process.cwd(), "test-results/electron-fault"),
   testMatch: /faults\/.*\.spec\.ts$/,
+  reporter: [
+    ["list"],
+    [
+      "./closed-reporter.ts",
+      {
+        outputFile: path.join(
+          process.cwd(),
+          "test-results/electron-fault/summary.json",
+        ),
+      },
+    ],
+  ],
   maxFailures: 1,
   workers: 1,
 });

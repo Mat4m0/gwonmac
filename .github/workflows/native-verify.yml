@@ -26,22 +26,23 @@ jobs:
     outputs:
       matrix: ${{ steps.targets.outputs.matrix }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - name: Review dependency changes
         if: inputs.dependency-review
-        uses: actions/dependency-review-action@cc4f6536e38d1126c5e3b0683d469a14f23bfea4 # v3.1.5
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
         with:
           fail-on-severity: high
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 11.13.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24"
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - id: install
+        run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=high
       - name: Resolve canonical native target matrix
         id: targets
@@ -61,17 +62,18 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 11.13.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24"
           cache: pnpm
       - name: Install Linux packaging and display tools
+        id: prerequisites
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
@@ -80,38 +82,51 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           test "$(sysctl -n kernel.unprivileged_userns_clone)" = "1"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level=high
+      - id: install
+        run: pnpm install --frozen-lockfile
       - name: Assert native runner identity
+        id: identity
         run: >-
           node --import ./scripts/ts-hook.mjs --experimental-strip-types
           scripts/assert-native-target.ts ${{ matrix.targetId }}
-      - run: pnpm build
-      - run: pnpm test:unit
-      - run: pnpm test:integration
+      - id: build
+        run: pnpm build
+      - id: unit
+        run: pnpm test:unit
+      - id: integration
+        run: pnpm test:integration
       - name: Test Electron on Linux
+        id: electron-stable-linux
         if: matrix.platform == 'linux'
         env:
           GW_EXPECT_LINUX_KEYRING: unavailable
         run: xvfb-run --auto-servernum pnpm test:electron:stable
       - name: Test Electron
+        id: electron-stable-native
         if: matrix.platform != 'linux'
         run: pnpm test:electron:stable
       - name: Test isolated renderer fault on Linux
+        id: electron-fault-linux
         if: matrix.platform == 'linux'
         run: xvfb-run --auto-servernum pnpm test:electron:fault
       - name: Test isolated renderer fault
+        id: electron-fault-native
         if: matrix.platform != 'linux'
         run: pnpm test:electron:fault
-      - run: pnpm test:release
-      - run: pnpm make:prepared
+      - id: release
+        run: pnpm test:release
+      - id: make
+        run: pnpm make:prepared
       - name: Test unpacked package on Linux
+        id: packaged-linux
         if: matrix.platform == 'linux'
         run: xvfb-run --auto-servernum pnpm test:packaged
       - name: Test unpacked package
+        id: packaged-native
         if: matrix.platform != 'linux'
         run: pnpm test:packaged
       - name: Verify macOS code signature
+        id: signature
         if: matrix.platform == 'darwin'
         run: |
           app="$(find out -name 'Guild Wars.app' -type d -print -quit)"
@@ -120,7 +135,8 @@ jobs:
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
           echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
-      - run: pnpm test:artifact
+      - id: artifact
+        run: pnpm test:artifact
 
       - name: Prepare tested preview artifact
         if: inputs.artifact-name != ''
@@ -130,6 +146,7 @@ jobs:
           scripts/prepare-preview-artifact.ts ${{ matrix.targetId }}
 
       - name: Generate preview SBOM
+        id: sbom
         if: inputs.artifact-name != ''
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
@@ -140,46 +157,107 @@ jobs:
           upload-release-assets: false
 
       - name: Finalize preview checksums
+        id: checksums
         if: inputs.artifact-name != ''
         run: >-
           node --import ./scripts/ts-hook.mjs --experimental-strip-types
           scripts/finalize-preview-checksums.ts
 
       - name: Upload tested preview artifact
+        id: preview-upload
         if: inputs.artifact-name != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.artifact-name }}-${{ matrix.targetId }}
+          name: ${{ inputs.artifact-name }}-${{ matrix.targetId }}-${{ github.run_attempt }}
           path: distribution/*
           if-no-files-found: error
           retention-days: ${{ inputs.artifact-retention-days }}
           compression-level: 0
 
+      - name: Collect native failure evidence
+        id: failure-manifest
+        if: ${{ failure() && !cancelled() }}
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/native-ci-report.ts collect
+          ${{ matrix.targetId }} ${{ github.sha }}
+          ${{ github.run_id }} ${{ github.run_attempt }}
+          prerequisites=${{ steps.prerequisites.outcome }}
+          install=${{ steps.install.outcome }}
+          identity=${{ steps.identity.outcome }}
+          build=${{ steps.build.outcome }}
+          unit=${{ steps.unit.outcome }}
+          integration=${{ steps.integration.outcome }}
+          electron-stable-linux=${{ steps.electron-stable-linux.outcome }}
+          electron-stable-native=${{ steps.electron-stable-native.outcome }}
+          electron-fault-linux=${{ steps.electron-fault-linux.outcome }}
+          electron-fault-native=${{ steps.electron-fault-native.outcome }}
+          release=${{ steps.release.outcome }}
+          make=${{ steps.make.outcome }}
+          packaged-linux=${{ steps.packaged-linux.outcome }}
+          packaged-native=${{ steps.packaged-native.outcome }}
+          signature=${{ steps.signature.outcome }}
+          artifact=${{ steps.artifact.outcome }}
+          preview=${{ steps.preview.outcome }}
+          sbom=${{ steps.sbom.outcome }}
+          checksums=${{ steps.checksums.outcome }}
+          preview-upload=${{ steps.preview-upload.outcome }}
+
       - name: Upload native test failure evidence
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: failure-upload
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: native-test-results-${{ matrix.targetId }}-${{ github.run_attempt }}
+          name: native-test-results-${{ matrix.targetId }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-results/**
-          if-no-files-found: warn
-          retention-days: 3
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Summarize native verification
+        if: ${{ always() && !cancelled() }}
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/native-ci-report.ts summary
+          ${{ matrix.targetId }} ${{ github.sha }}
+          ${{ github.run_id }} ${{ github.run_attempt }}
+          prerequisites=${{ steps.prerequisites.outcome }}
+          install=${{ steps.install.outcome }}
+          identity=${{ steps.identity.outcome }}
+          build=${{ steps.build.outcome }}
+          unit=${{ steps.unit.outcome }}
+          integration=${{ steps.integration.outcome }}
+          electron-stable-linux=${{ steps.electron-stable-linux.outcome }}
+          electron-stable-native=${{ steps.electron-stable-native.outcome }}
+          electron-fault-linux=${{ steps.electron-fault-linux.outcome }}
+          electron-fault-native=${{ steps.electron-fault-native.outcome }}
+          release=${{ steps.release.outcome }}
+          make=${{ steps.make.outcome }}
+          packaged-linux=${{ steps.packaged-linux.outcome }}
+          packaged-native=${{ steps.packaged-native.outcome }}
+          signature=${{ steps.signature.outcome }}
+          artifact=${{ steps.artifact.outcome }}
+          preview=${{ steps.preview.outcome }}
+          sbom=${{ steps.sbom.outcome }}
+          checksums=${{ steps.checksums.outcome }}
+          preview-upload=${{ steps.preview-upload.outcome }}
 
   linux-keyring:
     needs: static
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 11.13.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24"
           cache: pnpm
       - name: Install supported Secret Service fixture
+        id: prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install --yes dbus-x11 gnome-keyring libglib2.0-bin xvfb
@@ -187,9 +265,12 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           test "$(sysctl -n kernel.unprivileged_userns_clone)" = "1"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - id: install
+        run: pnpm install --frozen-lockfile
+      - id: build
+        run: pnpm build
       - name: Qualify saved login with GNOME Secret Service
+        id: keyring
         env:
           GW_EXPECT_LINUX_KEYRING: available
         run: |
@@ -208,11 +289,33 @@ jobs:
               tests/electron/app.spec.ts \
               --grep "saved login follows"
           '
+      - name: Collect keyring qualification failure evidence
+        if: ${{ failure() && !cancelled() }}
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/native-ci-report.ts collect
+          linux-x64-keyring ${{ github.sha }}
+          ${{ github.run_id }} ${{ github.run_attempt }}
+          prerequisites=${{ steps.prerequisites.outcome }}
+          install=${{ steps.install.outcome }}
+          build=${{ steps.build.outcome }}
+          keyring=${{ steps.keyring.outcome }}
       - name: Upload keyring qualification failure evidence
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: linux-keyring-test-results-${{ github.run_attempt }}
+          name: linux-keyring-test-results-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-results/**
-          if-no-files-found: warn
-          retention-days: 3
+          if-no-files-found: error
+          retention-days: 7
+      - name: Summarize keyring qualification
+        if: ${{ always() && !cancelled() }}
+        run: >-
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types
+          scripts/native-ci-report.ts summary
+          linux-x64-keyring ${{ github.sha }}
+          ${{ github.run_id }} ${{ github.run_attempt }}
+          prerequisites=${{ steps.prerequisites.outcome }}
+          install=${{ steps.install.outcome }}
+          build=${{ steps.build.outcome }}
+          keyring=${{ steps.keyring.outcome }}

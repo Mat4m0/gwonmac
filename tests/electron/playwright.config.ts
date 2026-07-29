@@ -29,12 +29,20 @@ export default defineConfig({
   outputDir: path.join(root, "test-results/electron-stable"),
   testMatch: /.*\.spec\.ts$/,
   testIgnore: /faults\/.*\.spec\.ts$/,
-  reporter: "list",
+  reporter: [
+    ["list"],
+    [
+      "./closed-reporter.ts",
+      {
+        outputFile: path.join(
+          root,
+          "test-results/electron-stable/summary.json",
+        ),
+      },
+    ],
+  ],
   timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  // Stop at the first native failure. Continuing after an Electron worker has
-  // lost its process produces teardown cascades that hide the owning assertion.
-  maxFailures: process.env.CI ? 1 : 0,
   workers: 1,
 });
