@@ -13,13 +13,11 @@ import {
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
+import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const main = path.join(root, "build/main/main.js");
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const electronBin = developmentElectronExecutable(root);
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };

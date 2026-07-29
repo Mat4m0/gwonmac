@@ -8,6 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -15,10 +16,7 @@ export const root = path.resolve(
 );
 export const main = path.join(root, "build/main/main.js");
 
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const electronBin = developmentElectronExecutable(root);
 
 export interface OfflineFixture {
   readonly app: ElectronApplication;

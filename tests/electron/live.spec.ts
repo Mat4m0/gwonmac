@@ -10,12 +10,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppSettings } from "../../src/shared/contracts.js";
 import type { PublishedClientManifest } from "../../src/main/core/published-client.js";
+import { developmentElectronExecutable } from "../../scripts/electron-layout.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const electronBin = developmentElectronExecutable(root);
 const userData = path.join(root, "test-results", "live-user-data");
 
 /**

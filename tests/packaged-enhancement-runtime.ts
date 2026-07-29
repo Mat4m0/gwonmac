@@ -18,6 +18,7 @@ import { chromium } from "playwright";
 import type { Browser, Page } from "playwright";
 import type { PublishedClientManifest } from "../src/main/core/published-client.ts";
 import type { AppSettingsPatch } from "../src/shared/contracts.ts";
+import { desktopPlatformFor } from "../src/shared/contracts.ts";
 // The canonical tables, not their emitted copies. `pnpm typecheck` runs before
 // `pnpm build` in `pnpm verify`, so a static import of `build/` here would make
 // checking depend on output that may not exist yet — the dependency Phase 0b
@@ -34,6 +35,10 @@ import {
   COMPANION_SNAPSHOT_BYTES,
 } from "../src/renderer/companion-snapshot.ts";
 import { root } from "./electron/fixtures.mts";
+import {
+  packagedElectronLayout,
+  terminateTestChild,
+} from "../scripts/electron-layout.js";
 
 /**
  * The host `Module` the renderer publishes for ArenaNet's generated glue. Only
@@ -77,10 +82,7 @@ type ReadoutPageGlobals = PageGlobals & {
   __targetReadoutFixture: TargetReadoutFixture;
 };
 
-const packagedExecutable = path.join(
-  root,
-  `out/Guild Wars-darwin-${process.arch}/Guild Wars.app/Contents/MacOS/Guild Wars`,
-);
+const packagedExecutable = packagedElectronLayout(root).executable;
 assert.ok(
   existsSync(packagedExecutable),
   `packaged app is missing at ${packagedExecutable}; run pnpm package first`,
@@ -216,13 +218,7 @@ async function rendererPage(
 }
 
 async function stopProcess(child: ChildProcess) {
-  if (child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("close", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await terminateTestChild(child);
 }
 
 /** Where a launch's per-run state lives, for the `prepare` hook to seed. */
@@ -409,6 +405,7 @@ async function assertPackagedOffSession() {
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init),
       {
+        desktopPlatform: desktopPlatformFor(process.platform),
         enhancementAutomation: false,
         enhancementSelection: {
           nativeCursor: false,

@@ -26,30 +26,24 @@ import {
   PRELOAD_ENTRY,
   relativeEsmClosure,
 } from "./helpers/package-inventory.ts";
+import {
+  packagedElectronLayout,
+  terminateTestChild,
+} from "../scripts/electron-layout.js";
 
 const root = path.resolve(import.meta.dirname, "..");
-const appBundle = path.join(
-  root,
-  `out/Guild Wars-darwin-${process.arch}/Guild Wars.app`,
-);
-const executable = path.join(
-  appBundle,
-  "Contents/MacOS/Guild Wars",
-);
+const layout = packagedElectronLayout(root);
 const execFileAsync = promisify(execFile);
-const resources = path.join(appBundle, "Contents/Resources");
-const asarPath = path.join(resources, "app.asar");
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 ).version;
-const macOSVersion = macOSBundleVersions(packageVersion);
 
 // `isPack: false` is what the omitted argument already meant — asar only
 // decorates each path with its pack state when the flag is on — and these are
 // compared against archive-rooted paths.
 const actualPackageFiles = new Set(
-  listPackage(asarPath, { isPack: false }).filter(
-    (file) => !("files" in statFile(asarPath, file.slice(1))),
+  listPackage(layout.asar, { isPack: false }).filter(
+    (file) => !("files" in statFile(layout.asar, file.slice(1))),
   ),
 );
 const ignore = forgeConfig.packagerConfig?.ignore;
@@ -62,7 +56,8 @@ assert.deepEqual(
 assertRequiredPackageFiles(actualPackageFiles);
 assertNoDeveloperPackageFiles(actualPackageFiles);
 
-const asarText = (file: string) => extractFile(asarPath, file.slice(1)).toString("utf8");
+const asarText = (file: string) =>
+  extractFile(layout.asar, file.slice(1)).toString("utf8");
 const packagedManifest = JSON.parse(asarText("/package.json"));
 const packagedRendererIndex = "/build/renderer/index.html";
 const packagedClosure = relativeEsmClosure({
@@ -80,42 +75,50 @@ const packagedClosure = relativeEsmClosure({
 assert.ok(packagedClosure.has("/build/main/core/enhancement-builds.js"));
 assert.ok(packagedClosure.has("/build/renderer/enhancement-readout.js"));
 
-const { stdout: bundleInfo } = await execFileAsync("plutil", [
-  "-p",
-  path.join(appBundle, "Contents/Info.plist"),
-]);
-assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
-assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
+if (process.platform === "darwin") {
+  const macOSVersion = macOSBundleVersions(packageVersion);
+  const { stdout: bundleInfo } = await execFileAsync("plutil", [
+    "-p",
+    path.join(layout.application, "Contents", "Info.plist"),
+  ]);
+  assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
+  assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
+  assert.match(
+    bundleInfo,
+    new RegExp(
+      `"CFBundleShortVersionString" => "${macOSVersion.appVersion.replaceAll(".", "\\.")}"`,
+    ),
+  );
+  assert.match(
+    bundleInfo,
+    new RegExp(
+      `"CFBundleVersion" => "${macOSVersion.buildVersion.replaceAll(".", "\\.")}"`,
+    ),
+  );
+  assert.deepEqual(
+    await readFile(path.join(layout.resources, "electron.icns")),
+    await readFile(path.join(root, "assets/AppIcon.icns")),
+  );
+  await execFileAsync("codesign", [
+    "--verify",
+    "--deep",
+    "--strict",
+    layout.application,
+  ]);
+}
 assert.match(
-  bundleInfo,
-  new RegExp(
-    `"CFBundleShortVersionString" => "${macOSVersion.appVersion.replaceAll(".", "\\.")}"`,
-  ),
-);
-assert.match(
-  bundleInfo,
-  new RegExp(
-    `"CFBundleVersion" => "${macOSVersion.buildVersion.replaceAll(".", "\\.")}"`,
-  ),
-);
-assert.deepEqual(
-  await readFile(path.join(resources, "electron.icns")),
-  await readFile(path.join(root, "assets/AppIcon.icns")),
-);
-assert.match(
-  await readFile(path.join(resources, "LICENSE"), "utf8"),
+  await readFile(path.join(layout.resources, "LICENSE"), "utf8"),
   /GNU GENERAL PUBLIC LICENSE[\s\S]*Version 3/,
 );
 assert.match(
-  await readFile(path.join(resources, "THIRD-PARTY-NOTICES.md"), "utf8"),
+  await readFile(path.join(layout.resources, "THIRD-PARTY-NOTICES.md"), "utf8"),
   /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/,
 );
 assert.match(
-  await readFile(path.join(resources, "COPYING-QUALITYPE"), "utf8"),
+  await readFile(path.join(layout.resources, "COPYING-QUALITYPE"), "utf8"),
   /SIL OPEN FONT LICENSE[\s\S]*Version 1\.1/,
 );
-await execFileAsync("codesign", ["--verify", "--deep", "--strict", appBundle]);
-const fuses = await getCurrentFuseWire(executable);
+const fuses = await getCurrentFuseWire(layout.executable);
 for (const option of [
   FuseV1Options.RunAsNode,
   FuseV1Options.EnableNodeOptionsEnvironmentVariable,
@@ -127,16 +130,23 @@ for (const option of [
 }
 for (const option of [
   FuseV1Options.EnableCookieEncryption,
-  FuseV1Options.EnableEmbeddedAsarIntegrityValidation,
-  FuseV1Options.OnlyLoadAppFromAsar,
   FuseV1Options.WasmTrapHandlers,
 ]) {
   assert.equal(fuses[option], FuseState.ENABLE);
 }
+for (const option of [
+  FuseV1Options.EnableEmbeddedAsarIntegrityValidation,
+  FuseV1Options.OnlyLoadAppFromAsar,
+]) {
+  assert.equal(
+    fuses[option],
+    process.platform === "linux" ? FuseState.DISABLE : FuseState.ENABLE,
+  );
+}
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
-const child = spawn(executable, [`--user-data-dir=${userData}`], {
+const child = spawn(layout.executable, [`--user-data-dir=${userData}`], {
   cwd: root,
   env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
   stdio: ["ignore", "pipe", "pipe"],
@@ -201,11 +211,6 @@ try {
   assert.ok(started, "the packaged app recorded no diagnostics.started event");
   assert.equal(started.fields?.appVersion, packageVersion);
 } finally {
-  if (child.exitCode === null) child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("close", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await terminateTestChild(child);
   await rm(userData, { recursive: true, force: true });
 }

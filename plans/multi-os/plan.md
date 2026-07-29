@@ -293,15 +293,15 @@ Primary files:
 
 Tasks:
 
-- [ ] Add one test/build-only resolver for Electron development executable and
+- [x] Add one test/build-only resolver for Electron development executable and
   packaged executable/resources/ASAR locations.
-- [ ] Replace hard-coded `.app` paths in Electron fixtures and enhancement
+- [x] Replace hard-coded `.app` paths in Electron fixtures and enhancement
   tooling.
-- [ ] Add a platform-native child termination helper; assert outcomes rather
+- [x] Add a platform-native child termination helper; assert outcomes rather
   than a POSIX signal name.
-- [ ] Separate shared package assertions from macOS metadata/signature
+- [x] Separate shared package assertions from macOS metadata/signature
   assertions.
-- [ ] Delete every package-path copy superseded by the helper.
+- [x] Delete every package-path copy superseded by the helper.
 
 ### WP-1.3 — portable atomic documents
 
