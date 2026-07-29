@@ -89,6 +89,18 @@ const launch = (userData: string, env: Record<string, string>) =>
     ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
   });
 
+/**
+ * Playwright launches the downloaded Linux development binary with
+ * `--no-sandbox`: its chrome-sandbox helper is not installed setuid-root.
+ * Raw child launches in this spec must match that test harness or Chromium
+ * aborts with SIGTRAP before Electron can exercise the application contract.
+ */
+const rawLaunchArgs = (userData: string): string[] => [
+  ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+  ".",
+  `--user-data-dir=${userData}`,
+];
+
 test.describe("Electron application", () => {
   test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
 
@@ -110,7 +122,7 @@ test.describe("Electron application", () => {
 
       const second = spawn(
         electronBin,
-        [".", `--user-data-dir=${userData}`],
+        rawLaunchArgs(userData),
         { cwd: root, env, stdio: "ignore" },
       );
       const exit = await new Promise<ProcessExit>((resolve, reject) => {
@@ -147,7 +159,7 @@ test.describe("Electron application", () => {
     });
     const failed = spawn(
       electronBin,
-      [".", `--user-data-dir=${userData}`],
+      rawLaunchArgs(userData),
       {
         cwd: root,
         env: { ...baseEnv, GW_TEST_STARTUP_FAILURE: "1" },
