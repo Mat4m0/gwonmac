@@ -23,6 +23,7 @@ import {
   parseReleaseTargets,
   releaseTargetFilename,
 } from "../src/shared/release-targets.ts";
+import { packagedElectronLayout } from "../scripts/electron-layout.ts";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
@@ -40,6 +41,12 @@ assert.equal(
 );
 const target = matches[0]!;
 const expectedFilename = releaseTargetFilename(target, packageVersion);
+const packaged = packagedElectronLayout(
+  root,
+  target.platform,
+  target.arch,
+);
+const packagedAsar = await readFile(packaged.asar);
 
 async function filesBelow(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { recursive: true, withFileTypes: true });
@@ -71,6 +78,11 @@ async function assertPackagedRuntime(
   );
   const asar = path.join(resources, "app.asar");
   await access(asar);
+  assert.deepEqual(
+    await readFile(asar),
+    packagedAsar,
+    "final artifact does not contain the tested package payload",
+  );
   const manifest = JSON.parse(
     extractFile(asar, "package.json").toString("utf8"),
   ) as { main?: unknown; version?: unknown };

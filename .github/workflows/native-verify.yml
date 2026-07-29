@@ -104,7 +104,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
       - run: pnpm test:release
-      - run: pnpm package
+      - run: pnpm package:prepared
       - name: Test unpacked package on Linux
         if: matrix.platform == 'linux'
         run: xvfb-run --auto-servernum pnpm test:packaged
@@ -120,7 +120,7 @@ jobs:
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
           echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
-      - run: pnpm make
+      - run: pnpm make:prepared
       - run: pnpm test:artifact
 
       - name: Prepare tested preview artifact

@@ -387,9 +387,23 @@ test("the application ships only the reviewed portable ZIP dependency", () => {
   );
 });
 
-test("packaging cleans its output first, and builds the renderer program", () => {
-  assert.match(script("make"), /scripts\/clean-output\.mjs/);
-  assert.match(script("package"), /scripts\/clean-output\.mjs/);
+test("packaging builds once and makers consume the tested package", () => {
+  assert.match(script("package"), /pnpm build && pnpm package:prepared/);
+  assert.match(script("package:prepared"), /scripts\/clean-output\.mjs/);
+  assert.match(
+    script("make"),
+    /pnpm build && pnpm package:prepared && pnpm make:prepared/,
+  );
+  assert.match(script("make:prepared"), /make --skip-package/);
+  assert.match(script("make:prepared"), /scripts\/clean-make-output\.mjs/);
+  assert.match(
+    read(".github/workflows/native-verify.yml"),
+    /pnpm package:prepared[\s\S]*pnpm test:packaged[\s\S]*pnpm make:prepared[\s\S]*pnpm test:artifact/,
+  );
+  assert.match(
+    read("tests/final-artifact-smoke.ts"),
+    /final artifact does not contain the tested package payload/,
+  );
   assert.match(read("scripts/build.mjs"), /tsconfig\.renderer\.json/);
 });
 
