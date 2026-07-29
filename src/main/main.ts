@@ -51,18 +51,23 @@ import {
   enhancementsEnabledFor,
   enhancementSelectionFor,
 } from "./enhancement-policy.js";
-import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
+import {
+  gameProtocolHandler,
+  registerGwScheme,
+  setProtocolDeps,
+} from "./protocol.js";
+import { installGameSession } from "./game-session.js";
 import {
   createMainWindow,
   exportProblemReport,
   flushWindowState,
-  getMainWindow,
   prepareWindowState,
   RENDERER_URL,
   resetGameInput,
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
+import { WindowRegistry } from "./window-registry.js";
 
 if (process.platform === "win32") {
   app.setAppUserModelId("com.squirrel.GuildWars.GuildWars");
@@ -88,11 +93,12 @@ if (!primaryInstance) {
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 let settingsWrite: Promise<void> = Promise.resolve();
 let secondInstanceRequested = false;
+let activeWindows: WindowRegistry | null = null;
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
 
 function revealMainWindow(): void {
-  const win = getMainWindow();
+  const win = activeWindows?.gameWindow() ?? null;
   if (!win || win.isDestroyed()) {
     secondInstanceRequested = true;
     return;
@@ -128,7 +134,7 @@ function resetAppSettings(): Promise<AppSettings> {
   return operation;
 }
 
-function buildSocketManager(): SocketManager {
+function buildSocketManager(windows: WindowRegistry): SocketManager {
   return new SocketManager(
     (ownerId, event) => {
       if (event.type === "open") {
@@ -146,7 +152,7 @@ function buildSocketManager(): SocketManager {
           code: event.code,
         });
       }
-      emitSocketEvent(ownerId, event);
+      emitSocketEvent(windows, ownerId, event);
     },
     { count, observe, gauge, peakGauge },
     !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
@@ -163,7 +169,7 @@ function buildSocketManager(): SocketManager {
 }
 
 function setProgress(next: DownloadProgress): void {
-  updateLongRunningTaskFeedback(next);
+  updateLongRunningTaskFeedback(next, activeWindows?.gameWindow() ?? null);
   sendToRenderer(IPC.progressEvent, next);
 }
 
@@ -174,7 +180,7 @@ function setPrefetch(next: PrefetchProgress): void {
 }
 
 function sendToRenderer(channel: string, value: unknown): void {
-  const win = getMainWindow();
+  const win = activeWindows?.gameWindow() ?? null;
   if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
   try {
     win.webContents.send(channel, value);
@@ -257,6 +263,7 @@ async function applyPendingGameStorageClear(): Promise<void> {
 function buildWindowHost(
   clientRuntime: ClientRuntime,
   sockets: SocketManager,
+  windows: WindowRegistry,
   enhancementSelection: EnhancementSelection,
 ): WindowHost {
   return {
@@ -266,11 +273,11 @@ function buildWindowHost(
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
     exportDiagnostics: async () => {
-      const win = getMainWindow();
+      const win = windows.gameWindow();
       return win ? exportDiagnosticsForWindow(win) : "";
     },
-    markPerformanceProblem,
-    startCapture: startDiagnosticCapture,
+    markPerformanceProblem: (win) => markPerformanceProblem(win),
+    startCapture: (win, level) => startDiagnosticCapture(win, level),
     stopCapture: stopDiagnosticCapture,
     reloadGame: (win) => {
       sockets.closeAll(win.webContents.id);
@@ -342,7 +349,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
-  const sockets = buildSocketManager();
+  const socketOwner: { current: SocketManager | null } = { current: null };
+  const windows = new WindowRegistry(1, (ownerId) => {
+    socketOwner.current?.closeAll(ownerId);
+  });
+  activeWindows = windows;
+  const sockets = buildSocketManager(windows);
+  socketOwner.current = sockets;
   powerMonitor.on("suspend", () => {
     if (!clientRuntime.isDownloading) return;
     logEvent({ k: "fullDownload.stoppedForSleep" });
@@ -351,10 +364,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
   setProtocolDeps({
     getActiveClient: () => clientRuntime.active,
   });
-  installGwProtocolHandler();
+  installGameSession(session.defaultSession, windows, gameProtocolHandler);
   logEvent({ k: "protocol.installed" });
 
   registerIpcHandlers({
+    windows,
     sockets,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
@@ -378,28 +392,33 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   onAppQuit(async () => {
-    await flushWindowState();
+    await flushWindowState(windows);
     sockets.closeAll();
     updateLongRunningTaskFeedback({
       ...INITIAL_PROGRESS,
       phase: "ready",
       label: "Quitting",
-    });
+    }, windows.gameWindow());
     await clientRuntime.shutdown();
     await clearBrowserCookies("quit");
     await stopDiagnostics();
+    windows.clear();
+    if (activeWindows === windows) activeWindows = null;
   });
 
   const win = createMainWindow(buildWindowHost(
     clientRuntime,
     sockets,
+    windows,
     enhancementSelection,
-  ));
+  ), windows);
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
-        void startDiagnosticCapture(1).catch((error) => {
+        const target = windows.gameWindow();
+        if (!target) return;
+        void startDiagnosticCapture(target, 1).catch((error) => {
           logEvent({
             k: "capture.automationStartFailed",
             code: errorCode(error),
@@ -411,7 +430,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   } else {
     setDiagnosticCaptureStoppedHandler(async () => {
-      const win = getMainWindow();
+      const win = windows.gameWindow();
       if (!win || win.isDestroyed()) return;
       await resetGameInput(win);
       const { response } = await dialog.showMessageBox(win, {
@@ -436,8 +455,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (!getMainWindow()) {
-      createMainWindow(buildWindowHost(clientRuntime, sockets, enhancementSelection));
+    if (!windows.gameWindow()) {
+      createMainWindow(
+        buildWindowHost(clientRuntime, sockets, windows, enhancementSelection),
+        windows,
+      );
     }
   });
   app.on("child-process-gone", (_event, details) => {

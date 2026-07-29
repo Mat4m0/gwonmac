@@ -45,10 +45,7 @@ import {
 import { loadSettings } from "./core/settings.js";
 import { writeDiagnosticZip } from "./core/diagnostic-zip.js";
 import type { ProxyRoute } from "./core/proxy-routes.js";
-import {
-  canonicalRendererWindow,
-  sendRendererCommand,
-} from "./renderer-commands.js";
+import { sendRendererCommand } from "./renderer-commands.js";
 import {
   FlightRecorder,
   runtimeVersions as versions,
@@ -98,6 +95,8 @@ const eventLoop = monitorEventLoopDelay({ resolution: 5 });
 let previousEventLoopUtilization = performance.eventLoopUtilization();
 let eventLoopWindowStartedUs = 0;
 let captureStoppedHandler: (() => void | Promise<void>) | null = null;
+let captureTarget: BrowserWindow | null = null;
+let captureTargetLost: (() => void) | null = null;
 
 /**
  * The renderer half of a capture. `level` crosses as a number inside a typed
@@ -105,9 +104,10 @@ let captureStoppedHandler: (() => void | Promise<void>) | null = null;
  * is chosen by the same trust test the inbound direction uses.
  */
 const rendererCaptureCommand = (
+  target: BrowserWindow | null,
   command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
 ): Promise<void> =>
-  sendRendererCommand(canonicalRendererWindow(), command).then((outcome) => {
+  sendRendererCommand(target, command).then((outcome) => {
     if (outcome !== "completed") {
       logEvent({
         k: "renderer.commandIncomplete",
@@ -157,9 +157,9 @@ export function peakGauge(name: string, value: number): void {
   recorder.setPeak(name, value);
 }
 
-export function markPerformanceProblem(): void {
+export function markPerformanceProblem(target: BrowserWindow): void {
   logEvent({ k: "performance.problemMarked" });
-  void rendererCaptureCommand({
+  void rendererCaptureCommand(target, {
     type: "diagnostics.capture",
     action: "problem-marked",
   });
@@ -582,22 +582,42 @@ async function stopTrace(): Promise<boolean> {
   }
 }
 
-export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
+export function startDiagnosticCapture(
+  target: BrowserWindow,
+  level: 1 | 2,
+): Promise<void> {
   if (captureLevel !== 0 || captureStopPromise || captureStartPromise) {
     return Promise.reject(new Error("a diagnostics capture is already active"));
   }
+  if (
+    target.isDestroyed()
+    || target.webContents.isDestroyed()
+    || target.webContents.isCrashed()
+  ) {
+    return Promise.reject(new Error("diagnostics target is unavailable"));
+  }
+  captureTarget = target;
+  const targetLost = (): void => {
+    void stopDiagnosticCapture("target-lost");
+  };
+  captureTargetLost = targetLost;
+  target.webContents.once("destroyed", targetLost);
+  target.webContents.once("render-process-gone", targetLost);
   const operation = (async () => {
     // Beginning a capture replaces the previous capture result. Its raw trace
     // must be deleted first; clearing only the pointer would orphan a file that
     // can contain Chromium process data.
     await discardTrace();
-    await rendererCaptureCommand({ type: "diagnostics.capture", action: "reset" });
+    await rendererCaptureCommand(target, {
+      type: "diagnostics.capture",
+      action: "reset",
+    });
     await recorder.beginCapture();
     eventLoop.reset();
     previousEventLoopUtilization = performance.eventLoopUtilization();
     eventLoopWindowStartedUs = recorder.timestampUs();
     captureLevel = level;
-    await rendererCaptureCommand({
+    await rendererCaptureCommand(target, {
       type: "diagnostics.capture",
       action: "started",
       level,
@@ -644,7 +664,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       if (captureTimer) clearTimeout(captureTimer);
       captureTimer = null;
       captureLevel = 0;
-      await rendererCaptureCommand({
+      await rendererCaptureCommand(target, {
         type: "diagnostics.capture",
         action: "stopped",
       });
@@ -660,6 +680,12 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
   })();
   captureStartPromise = operation.finally(() => {
     captureStartPromise = null;
+    if (captureLevel === 0) {
+      target.webContents.off("destroyed", targetLost);
+      target.webContents.off("render-process-gone", targetLost);
+      if (captureTarget === target) captureTarget = null;
+      if (captureTargetLost === targetLost) captureTargetLost = null;
+    }
   });
   return captureStartPromise;
 }
@@ -676,10 +702,14 @@ export function stopDiagnosticCapture(
   }
   if (captureLevel === 0) return Promise.resolve();
   const stoppedLevel = captureLevel;
+  const target = captureTarget;
   captureStopPromise = (async () => {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
-    await rendererCaptureCommand({ type: "diagnostics.capture", action: "flush" });
+    await rendererCaptureCommand(target, {
+      type: "diagnostics.capture",
+      action: "flush",
+    });
     const traceCompleted = await stopTrace();
     const completedLevel =
       stoppedLevel === 2 && !traceCompleted ? 1 : stoppedLevel;
@@ -690,7 +720,7 @@ export function stopDiagnosticCapture(
     });
     recorder.endCapture(completedLevel, reason);
     captureLevel = 0;
-    await rendererCaptureCommand({
+    await rendererCaptureCommand(target, {
         type: "diagnostics.capture",
         action: "stopped",
       });
@@ -704,6 +734,12 @@ export function stopDiagnosticCapture(
     }
   })().finally(() => {
     captureStopPromise = null;
+    if (target && captureTargetLost) {
+      target.webContents.off("destroyed", captureTargetLost);
+      target.webContents.off("render-process-gone", captureTargetLost);
+    }
+    captureTarget = null;
+    captureTargetLost = null;
   });
   return captureStopPromise;
 }

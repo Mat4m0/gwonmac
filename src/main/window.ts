@@ -39,6 +39,7 @@ import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import { ENHANCEMENT_AUTOMATION_ENABLED } from "./enhancement-policy.js";
 import { isDevBuild } from "./protocol.js";
+import type { WindowRegistry } from "./window-registry.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.
@@ -57,14 +58,13 @@ export interface WindowHost {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
   exportDiagnostics: () => Promise<string>;
-  markPerformanceProblem: () => void;
-  startCapture: (level: 1 | 2) => Promise<void>;
+  markPerformanceProblem: (win: BrowserWindow) => void;
+  startCapture: (win: BrowserWindow, level: 1 | 2) => Promise<void>;
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
 }
 
-let mainWindow: BrowserWindow | null = null;
 let rendererRecoveryUsed = false;
 let restoredWindowState: WindowState | null = null;
 let lastNormalBounds: WindowBounds | null = null;
@@ -74,7 +74,7 @@ let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
   value: DownloadProgress,
-  win = mainWindow,
+  win: BrowserWindow | null,
 ): boolean {
   const feedback = longRunningTaskFeedback(value);
   if (feedback.preventAppSuspension && downloadPowerBlockerId === null) {
@@ -140,8 +140,11 @@ function currentWindowState(win: BrowserWindow): WindowState {
   };
 }
 
-async function persistWindowState(win: BrowserWindow): Promise<void> {
-  if (win.isDestroyed() || mainWindow !== win) return;
+async function persistWindowState(
+  win: BrowserWindow,
+  windows: WindowRegistry,
+): Promise<void> {
+  if (win.isDestroyed() || windows.contextForWindow(win)?.kind !== "game") return;
   const state = currentWindowState(win);
   restoredWindowState = state;
   const write = windowStateWrite.then(() =>
@@ -151,28 +154,31 @@ async function persistWindowState(win: BrowserWindow): Promise<void> {
   await write;
 }
 
-function scheduleWindowStateSave(win: BrowserWindow): void {
+function scheduleWindowStateSave(
+  win: BrowserWindow,
+  windows: WindowRegistry,
+): void {
   if (windowStateTimer) clearTimeout(windowStateTimer);
   windowStateTimer = setTimeout(() => {
     windowStateTimer = null;
-    void persistWindowState(win).catch(() => {
+    void persistWindowState(win, windows).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
   }, 300);
 }
 
-export async function flushWindowState(): Promise<void> {
+export async function flushWindowState(windows: WindowRegistry): Promise<void> {
   if (windowStateTimer) {
     clearTimeout(windowStateTimer);
     windowStateTimer = null;
   }
-  const win = mainWindow;
+  const win = windows.gameWindow();
   if (!win || win.isDestroyed()) return;
-  await persistWindowState(win);
+  await persistWindowState(win, windows);
   await windowStateWrite;
 }
 
-export async function resetWindowState(win = mainWindow): Promise<void> {
+export async function resetWindowState(win: BrowserWindow | null): Promise<void> {
   if (windowStateTimer) {
     clearTimeout(windowStateTimer);
     windowStateTimer = null;
@@ -214,10 +220,6 @@ export async function resetWindowState(win = mainWindow): Promise<void> {
   });
 }
 
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow;
-}
-
 /** The only renderer URL, and it carries no configuration. */
 export const RENDERER_URL = "gw://app/";
 
@@ -240,7 +242,10 @@ export function rendererInitArgument(options: {
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }
 
-export function createMainWindow(host: WindowHost): BrowserWindow {
+export function createMainWindow(
+  host: WindowHost,
+  windows: WindowRegistry,
+): BrowserWindow {
   const initialState = restoredWindowState
     ? fitWindowStateToDisplays(
         restoredWindowState,
@@ -272,7 +277,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     },
   });
 
-  mainWindow = win;
+  windows.registerGame(win);
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
@@ -286,12 +291,12 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   const rememberNormalBounds = (): void => {
     if (win.isFullScreen() || win.isMaximized()) return;
     lastNormalBounds = { ...win.getBounds() };
-    scheduleWindowStateSave(win);
+    scheduleWindowStateSave(win, windows);
   };
   win.on("move", rememberNormalBounds);
   win.on("resize", rememberNormalBounds);
   const persistMode = (): void => {
-    void persistWindowState(win).catch(() => {
+    void persistWindowState(win, windows).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
   };
@@ -337,24 +342,6 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     }
   });
 
-  const mayLockPointer = (
-    webContents: Electron.WebContents | null,
-    permission: string,
-    isMainFrame: boolean,
-  ): boolean =>
-    permission === "pointerLock" &&
-    webContents === win.webContents &&
-    isMainFrame &&
-    isCanonicalRendererUrl(webContents.getURL());
-  win.webContents.session.setPermissionRequestHandler(
-    (webContents, permission, callback, details) => {
-      callback(mayLockPointer(webContents, permission, details.isMainFrame));
-    },
-  );
-  win.webContents.session.setPermissionCheckHandler(
-    (webContents, permission, _origin, details) =>
-      mayLockPointer(webContents, permission, details.isMainFrame),
-  );
   win.webContents.on("will-attach-webview", (event) => {
     event.preventDefault();
     logEvent({ k: "security.webviewBlocked" });
@@ -393,7 +380,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
           })
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
-            createMainWindow(host);
+            createMainWindow(host, windows);
             win.destroy();
             logEvent({ k: "renderer.recovered" });
           });
@@ -411,10 +398,6 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     event.preventDefault();
     logEvent({ k: "window.closeRequested" });
     app.quit();
-  });
-
-  win.on("closed", () => {
-    if (mainWindow === win) mainWindow = null;
   });
 
   installMenu(host, win);
@@ -478,7 +461,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
     }
     if (response === 1) {
       try {
-        await host.startCapture(1);
+        await host.startCapture(win, 1);
       } catch (error) {
         dialog.showErrorBox(
           "Capture could not start",
@@ -552,7 +535,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           label: "Start Performance Capture",
           click: async () => {
             await resetGameInput(win);
-            void host.startCapture(1).catch((error) => {
+            void host.startCapture(win, 1).catch((error) => {
               dialog.showErrorBox(
                 "Capture could not start",
                 error instanceof Error ? error.message : String(error),
@@ -566,7 +549,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           accelerator: "CmdOrCtrl+Shift+M",
           click: async () => {
             await resetGameInput(win);
-            host.markPerformanceProblem();
+            host.markPerformanceProblem(win);
           },
         },
         {
@@ -574,7 +557,7 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           label: "Start Chromium Trace",
           click: async () => {
             await resetGameInput(win);
-            void host.startCapture(2).catch((error) => {
+            void host.startCapture(win, 2).catch((error) => {
               dialog.showErrorBox(
                 "Trace could not start",
                 error instanceof Error ? error.message : String(error),

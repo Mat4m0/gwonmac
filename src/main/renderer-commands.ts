@@ -1,11 +1,10 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { ipcMain, type BrowserWindow } from "electron";
 import {
   IPC,
   type RendererCommand,
   type RendererCommandCompletion,
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
-import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 
 /**
  * Main→renderer commands, and the single owner of "which window is the
@@ -35,17 +34,6 @@ ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
   if (!entry || entry.webContentsId !== event.sender.id) return;
   entry.settle(outcome as RendererCommandCompletion);
 });
-
-export function canonicalRendererWindow(): BrowserWindow | null {
-  return (
-    BrowserWindow.getAllWindows().find(
-      (win) =>
-        !win.isDestroyed()
-        && !win.webContents.isDestroyed()
-        && isCanonicalRendererUrl(win.webContents.getURL()),
-    ) ?? null
-  );
-}
 
 /**
  * Resolves with the renderer's truthful completion, failure when the page that

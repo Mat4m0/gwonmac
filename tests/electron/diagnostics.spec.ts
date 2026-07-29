@@ -173,6 +173,7 @@ test.describe("diagnostics", () => {
     const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
     try {
+      await clickMenu(fixture.app, "start-chromium-trace");
       const target = path.join(diagnosticRoot, "capture.gwdiag");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       const contractsPath = path.join(root, "build/shared/contracts.js");
@@ -183,8 +184,6 @@ test.describe("diagnostics", () => {
             .createRequire(args.modulePath);
           const diagnostics = load(args.modulePath);
           const { DEFAULT_SETTINGS } = load(args.contractsPath);
-          await diagnostics.startDiagnosticCapture(2);
-
           const originalStopRecording = contentTracing.stopRecording;
           let attemptedTarget = "";
           contentTracing.stopRecording = async (traceTarget) => {

@@ -59,9 +59,11 @@ import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
-import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
+import { resetGameInput, resetWindowState } from "./window.js";
+import type { WindowRegistry } from "./window-registry.js";
 
 export interface IpcContext {
+  windows: WindowRegistry;
   sockets: SocketManager;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
@@ -76,9 +78,13 @@ export interface IpcContext {
   getClientSession: () => ClientSession;
 }
 
-function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+function assertSender(
+  event: Electron.IpcMainInvokeEvent,
+  windows: WindowRegistry,
+): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win || win !== getMainWindow()) {
+  const context = windows.contextFor(event.sender);
+  if (!win || context?.kind !== "game" || context.window !== win) {
     throw new AllowlistError("unowned ipc sender");
   }
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
@@ -666,7 +672,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     const def = definition as ChannelDef<unknown, unknown>;
     const name = key as InvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(event);
+      const win = assertSender(event, ctx.windows);
       let input: unknown;
       try {
         input = def.parse(args);
@@ -730,11 +736,14 @@ function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
   );
 }
 
-export function emitSocketEvent(ownerId: number, event: SocketEvent): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
-    if (win.webContents.id === ownerId) {
-      sendIfLive(win, IPC.socketEvent, toWireSocketEvent(event));
-    }
-  }
+export function emitSocketEvent(
+  windows: WindowRegistry,
+  ownerId: number,
+  event: SocketEvent,
+): void {
+  const context = windows.gameWindows().find(
+    (candidate) => candidate.window.webContents.id === ownerId,
+  );
+  if (!context) return;
+  sendIfLive(context.window, IPC.socketEvent, toWireSocketEvent(event));
 }

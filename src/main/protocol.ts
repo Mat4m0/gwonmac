@@ -1,4 +1,8 @@
-import { app, protocol, net } from "electron";
+import {
+  app,
+  protocol,
+  net,
+} from "electron";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -81,8 +85,8 @@ export function registerGwScheme(): void {
   ]);
 }
 
-export function installGwProtocolHandler(): void {
-  protocol.handle("gw", (request) => handleGwRequest(request));
+export function gameProtocolHandler(request: Request): Promise<Response> {
+  return handleGwRequest(request);
 }
 
 function headers(extra: Record<string, string> = {}): Headers {
