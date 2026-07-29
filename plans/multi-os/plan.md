@@ -462,15 +462,15 @@ Tasks:
 
 ### WP-2.5 — artifact manifests and immutable handoff
 
-- [ ] Generate the versioned artifact manifest defined in the specification.
-- [ ] Include source commit, Electron version, target, format, filename, hash,
+- [x] Generate the versioned artifact manifest defined in the specification.
+- [x] Include source commit, Electron version, target, format, filename, hash,
   signing posture, and CI run URL.
-- [ ] Verify the manifest against the actual artifact, not Forge intent.
-- [ ] Generalise SBOM/checksum generation without shell-specific hash commands
+- [x] Verify the manifest against the actual artifact, not Forge intent.
+- [x] Generalise SBOM/checksum generation without shell-specific hash commands
   where a Node implementation is simpler.
-- [ ] Make the assembler require the exact configured public set and one
+- [x] Make the assembler require the exact configured public set and one
   version/commit.
-- [ ] Preserve the current least-privilege publisher: no checkout, install,
+- [x] Preserve the current least-privilege publisher: no checkout, install,
   build, or signing after handoff.
 
 ### Phase 2 gate

@@ -99,6 +99,15 @@ jobs:
       - name: Test unpacked package
         if: matrix.platform != 'linux'
         run: pnpm test:packaged
+      - name: Verify macOS code signature
+        if: matrix.platform == 'darwin'
+        run: |
+          app="$(find out -name 'Guild Wars.app' -type d -print -quit)"
+          test -n "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
+          echo "$signature"
+          echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
       - run: pnpm make
       - run: pnpm test:artifact
 
@@ -109,8 +118,8 @@ jobs:
           node --import ./scripts/ts-hook.mjs --experimental-strip-types
           scripts/prepare-preview-artifact.ts ${{ matrix.targetId }}
 
-      - name: Generate macOS preview SBOM
-        if: inputs.artifact-name != '' && matrix.platform == 'darwin'
+      - name: Generate preview SBOM
+        if: inputs.artifact-name != ''
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           path: ${{ steps.preview.outputs.application }}

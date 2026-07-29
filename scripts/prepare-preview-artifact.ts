@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   appendFile,
   copyFile,
@@ -11,6 +10,11 @@ import {
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import releaseTargetsJson from "../release-targets.json" with { type: "json" };
+import {
+  createArtifactManifest,
+  sha256File,
+  writeArtifactManifest,
+} from "./artifact-manifest.js";
 import { packagedElectronLayout } from "./electron-layout.js";
 import {
   parseReleaseTargets,
@@ -40,6 +44,7 @@ export async function preparePreviewArtifact(
   readonly application: string;
   readonly artifact: string;
   readonly checksum: string;
+  readonly manifest: string;
   readonly sbom: string;
 }> {
   if (!/^[0-9a-f]{40}$/u.test(sourceCommit)) {
@@ -71,6 +76,34 @@ export async function preparePreviewArtifact(
     `${sourceCommit}\n`,
   );
   const stem = filename.replace(/\.(?:zip|exe|deb)$/u, "");
+  const manifest = `${artifact}.manifest.json`;
+  const electronPackage = JSON.parse(
+    await readFile(path.join(root, "node_modules", "electron", "package.json"), "utf8"),
+  ) as { version?: unknown };
+  if (typeof electronPackage.version !== "string") {
+    throw new Error("installed Electron version is unavailable");
+  }
+  const repository = process.env.GITHUB_REPOSITORY;
+  const runId = process.env.GITHUB_RUN_ID;
+  if (
+    repository === undefined
+    || !/^[^/\s]+\/[^/\s]+$/u.test(repository)
+    || runId === undefined
+    || !/^[1-9][0-9]*$/u.test(runId)
+  ) {
+    throw new Error("GitHub Actions run identity is unavailable");
+  }
+  await writeArtifactManifest(
+    await createArtifactManifest({
+      appVersion: version,
+      artifact,
+      ciRunUrl: `https://github.com/${repository}/actions/runs/${runId}`,
+      electronVersion: electronPackage.version,
+      sourceCommit,
+      target,
+    }),
+    manifest,
+  );
   return {
     application: packagedElectronLayout(
       root,
@@ -79,6 +112,7 @@ export async function preparePreviewArtifact(
     ).application,
     artifact,
     checksum: path.join(distribution, "SHA256SUMS.txt"),
+    manifest,
     sbom: path.join(distribution, `${stem}.spdx.json`),
   };
 }
@@ -92,8 +126,9 @@ export async function writeDistributionChecksums(
   if (files.length === 0) throw new Error("distribution is empty");
   const lines: string[] = [];
   for (const file of files) {
-    const bytes = await readFile(path.join(distribution, file));
-    lines.push(`${createHash("sha256").update(bytes).digest("hex")}  ${file}`);
+    lines.push(
+      `${await sha256File(path.join(distribution, file))}  ${file}`,
+    );
   }
   await writeFile(
     path.join(distribution, "SHA256SUMS.txt"),

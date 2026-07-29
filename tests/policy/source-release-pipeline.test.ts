@@ -104,12 +104,13 @@ test("native makers use one early Windows installer path and no extra ZIP", () =
 
 test("official releases have one honest ad-hoc signing path", () => {
   const workflow = read(".github/workflows/release.yml");
+  const verification = read(".github/workflows/native-verify.yml");
   const forge = read("forge.config.ts");
   assert.doesNotMatch(workflow, /APPLE_|Developer ID|notary|stapler/);
   assert.doesNotMatch(forge, /APPLE_|osxSign|osxNotarize/);
   assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
-  assert.match(workflow, /codesign --verify --deep --strict/);
-  assert.match(workflow, /Signature=adhoc/);
+  assert.match(verification, /codesign --verify --deep --strict/);
+  assert.match(verification, /Signature=adhoc/);
   assert.match(workflow, /ad-hoc signed, not notarized/);
 });
 
@@ -122,10 +123,10 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
-  assert.match(workflow, /name: Smoke-test release candidate[\s\S]*pnpm test:packaged/);
-  assert.match(workflow, /shasum -a 256 -c "\$\(basename "\$CHECKSUM"\)"/);
-  assert.match(workflow, /anchore\/sbom-action@/);
-  assert.match(workflow, /format: spdx-json/);
+  assert.match(verification, /run: pnpm test:packaged/);
+  assert.match(verification, /scripts\/prepare-preview-artifact\.ts/);
+  assert.match(verification, /anchore\/sbom-action@/);
+  assert.match(verification, /format: spdx-json/);
   assert.match(workflow, /actions\/attest@/);
   assert.match(workflow, /sbom-path: \$\{\{ steps\.assets\.outputs\.sbom \}\}/);
   assert.match(workflow, /artifact-metadata: write/);
@@ -142,7 +143,9 @@ test("release workflow publishes one tested, attested package version", () => {
   const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
   assert.match(releaseBuild, /permissions:\s+contents: read/);
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
-  assert.match(releaseBuild, /actions\/upload-artifact@/);
+  assert.match(releaseBuild, /actions\/download-artifact@/);
+  assert.match(releaseBuild, /scripts\/artifact-manifest\.ts distribution/);
+  assert.doesNotMatch(releaseBuild, /run: pnpm (?:install|make|test)/);
   assert.match(releasePublish, /actions\/download-artifact@/);
   assert.doesNotMatch(
     releasePublish,
@@ -154,7 +157,10 @@ test("release workflow publishes one tested, attested package version", () => {
     workflow,
     /if \[ "\$PRERELEASE" = "true" \]; then[\s\S]*This is a prerelease build/,
   );
-  assert.match(workflow, /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$SBOM"/);
+  assert.match(
+    workflow,
+    /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$MANIFEST" "\$SBOM" "\$SOURCE_COMMIT"/,
+  );
 });
 
 test("tester snapshots are verified, immutable, bounded, and isolated from releases", () => {
@@ -253,6 +259,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.ok(handoff < attest && attest < publish && publish < prune);
   assert.match(publisher, /test "\$\(tr -d '\\n' < "\$source_commit"\)" = "\$COMMIT_SHA"/);
   assert.match(publisher, /shasum -a 256 -c SHA256SUMS\.txt/);
+  assert.match(publisher, /scripts\/artifact-manifest\.ts snapshot-assets/);
   assert.match(publisher, /tag="snapshot-\$RUN_NUMBER-\$short"/);
   assert.match(
     publisher,
@@ -262,7 +269,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(publisher, /--prerelease[\s\S]*--latest=false/);
   assert.match(
     publisher,
-    /gh release create "\$TAG" "\$ARCHIVE" "\$CHECKSUM" "\$SBOM" "\$SOURCE_COMMIT"/,
+    /gh release create "\$TAG" "\$ARCHIVE" "\$CHECKSUM" "\$MANIFEST" "\$SBOM" "\$SOURCE_COMMIT"/,
   );
   assert.match(publisher, /scripts\/snapshot-retention\.ts[\s\S]*--apply/);
   assert.match(publisher, /only the newest three are retained/);
