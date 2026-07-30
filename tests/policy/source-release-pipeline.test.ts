@@ -353,6 +353,8 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.match(workflow, /runs-on: ubuntu-latest/);
   assert.match(workflow, /run: pnpm test:website/);
   assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
+  assert.equal(workflow.match(/- "src\/shared\/\*\*"/gu)?.length, 2);
+  assert.equal(workflow.match(/- "package\.json"/gu)?.length, 2);
   assert.match(workflow, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(workflow, /contents: write|id-token: write|issues: write/);
   assert.doesNotMatch(script("verify"), /test:website/);

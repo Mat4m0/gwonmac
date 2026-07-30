@@ -40,10 +40,17 @@ function rendererCheckout(): string {
   write("src/renderer/index.html", "<!doctype html>\n");
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/gw-native.d.ts", "export {};\n");
+  write("src/renderer/favicon.ico", "ico");
+  write("src/renderer/favicon.png", "png");
+  write("src/renderer/harness.css", "css");
+  write("src/renderer/loading.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
+  write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/hero-poster.jpg", "jpeg");
   write("src/renderer/images/hero-video.webm", "webm");
+  write("src/renderer/.DS_Store", "local metadata");
+  write("src/renderer/images/local-note.txt", "untracked");
   return root;
 }
 
@@ -95,6 +102,24 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       (file) => file.endsWith(".js") || file.endsWith(".ts"),
     );
     assert.deepEqual(code, []);
+  });
+
+  it("copies only declared package inputs", () => {
+    const relative = filesUnder(path.join(root, "build/renderer"))
+      .map((file) => path.relative(path.join(root, "build/renderer"), file))
+      .sort();
+    assert.deepEqual(relative, [
+      "favicon.ico",
+      "favicon.png",
+      "fonts/COPYING-QUALITYPE",
+      "fonts/QTFrizQuad.otf",
+      "harness.css",
+      "images/hero-poster.jpg",
+      "images/hero-video.webm",
+      "images/logo.webp",
+      "index.html",
+      "loading.css",
+    ]);
   });
 
   it("emits no WebAssembly", () => {

@@ -5,14 +5,18 @@ on:
     branches: [main]
     paths:
       - "apps/website/**"
+      - "src/shared/**"
       - "tests/website-smoke.ts"
+      - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/website.yml"
   pull_request:
     paths:
       - "apps/website/**"
+      - "src/shared/**"
       - "tests/website-smoke.ts"
+      - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/website.yml"
