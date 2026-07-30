@@ -181,7 +181,15 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /anchore\/sbom-action@/);
   assert.match(workflow, /format: spdx-json/);
   assert.match(workflow, /actions\/attest@/);
-  assert.match(workflow, /sbom-path: release-assets\/\*\.spdx\.json/);
+  assert.match(
+    workflow,
+    /id: release-state[\s\S]*echo "sbom=\$sbom" >> "\$GITHUB_OUTPUT"/,
+  );
+  assert.match(
+    workflow,
+    /sbom-path: \$\{\{ steps\.release-state\.outputs\.sbom \}\}/,
+  );
+  assert.doesNotMatch(workflow, /sbom-path: [^\n]*\*/);
   assert.match(workflow, /artifact-metadata: write/);
   assert.match(verification, /actions\/dependency-review-action@/);
   assert.ok(
