@@ -134,6 +134,8 @@ jobs:
         run: pnpm make
 
       - name: Smoke-test signed release candidate
+        env:
+          GW_EXPECT_OFFICIAL_UPDATER: "1"
         run: pnpm test:packaged
 
       - name: Notarize and staple DMG
