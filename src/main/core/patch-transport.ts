@@ -124,9 +124,18 @@ export async function fetchPatchBytes(options: {
       await sleep(2 ** attempt * 1_000, options.signal);
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new AppError("fetch_failed", String(lastError));
+  // Classification happens here because only the transport knows a throw was
+  // a fetch: an `AppError` (HTTP status, response limit) keeps its code, and
+  // anything else is a request that never got an HTTP answer — offline, no
+  // DNS, or a timeout — which `errorCode()` would otherwise collapse to
+  // `unknown` and the renderer could not tell apart from an app fault.
+  if (lastError instanceof AppError) throw lastError;
+  if (lastError instanceof Error) {
+    throw new AppError("net_offline", `${options.url}: ${lastError.message}`, {
+      cause: lastError,
+    });
+  }
+  throw new AppError("fetch_failed", String(lastError));
 }
 
 export async function readBoundedResponse(

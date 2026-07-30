@@ -32,7 +32,7 @@ const ROOT_STYLE = [
   "user-select:none",
 ].join(";");
 const LABEL_STYLE = "color:#9a9a9a;text-transform:uppercase";
-const DISTANCE_STYLE = "font-size:15px;color:#f3dd9d";
+const DISTANCE_STYLE = "font-size:15px;color:#ffb488";
 const RANGE_STYLE = "color:#c9c9c9";
 
 /**

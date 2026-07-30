@@ -53,6 +53,11 @@ export const ERROR_CODES = [
   "manifest_parent",
   "manifest_required",
   "manifest_size",
+  /** The transport gave up without ever receiving an HTTP answer: no
+   * connection, no route, or a request that timed out. Distinguished from
+   * `http_status` so the renderer can say "check your connection" instead of
+   * blaming ArenaNet. */
+  "net_offline",
   "not_ready",
   "proxy_path",
   "range_required",

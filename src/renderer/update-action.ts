@@ -12,8 +12,11 @@ const FAILURE_MESSAGE: Record<AppUpdateErrorCode, string> = {
   unreadable: "Couldn't check — GitHub's answer could not be read.",
   'unsupported-build':
     "Couldn't check — this build's version is not on the release line.",
+  // Plain words for a non-technical player: this copy (a development or
+  // tester build) has no self-updater, and the fix is a download, not a fault.
+  // The Releases link is shown beside this sentence — see `showReleaseNotes`.
   'updater-unavailable':
-    'Automatic updates are available in official Developer ID builds.',
+    "This version can't update itself — new versions are on the Releases page.",
   'feed-invalid':
     "Couldn't update — the release files did not pass validation.",
   'download-failed':
@@ -27,9 +30,11 @@ export function formatLastChecked(
   checkedAt: string | null | undefined,
   now: number,
 ): string {
-  if (checkedAt === null || checkedAt === undefined) return '';
-  const value = Date.parse(checkedAt);
-  if (Number.isNaN(value)) return '';
+  // "Never" is said out loud rather than hidden: it is the one network-free
+  // nudge an opted-out player gets that updates exist to be checked for. An
+  // unparseable timestamp is also "never" from the player's point of view.
+  const value = Date.parse(checkedAt ?? '');
+  if (Number.isNaN(value)) return 'Never checked for updates';
   const minutes = Math.floor(Math.max(0, now - value) / 60_000);
   if (minutes < 1) return 'Last checked just now';
   if (minutes < 60) return `Last checked ${plural(minutes, 'minute')} ago`;
@@ -109,8 +114,12 @@ export function createUpdateAction({
     channel: /^\d+\.\d+\.\d+$/u.test(state.currentVersion)
       ? 'Stable'
       : 'Preview',
+    // Also shown when this build cannot update itself: the message points at
+    // the Releases page, so the link to it must be on the same surface.
     showReleaseNotes:
-      state.phase === 'downloading' || state.phase === 'ready',
+      state.phase === 'downloading' ||
+      state.phase === 'ready' ||
+      (state.phase === 'failed' && state.reason === 'updater-unavailable'),
     ready: state.phase === 'ready',
   });
   const publish = () => {
@@ -197,7 +206,9 @@ export function bindUpdateActionDom(
     launcherStatus.textContent = view.message;
     launcherStatus.hidden = view.message === '';
     launcherWhen.textContent = view.lastChecked;
-    launcherWhen.hidden = view.lastChecked === '';
+    // One line on the launcher: when there is a sentence, the sentence is the
+    // news and the timestamp yields to it. Settings always shows both.
+    launcherWhen.hidden = view.lastChecked === '' || view.message !== '';
     launcherGet.textContent = view.ready ? 'Restart to Update' : 'Release Notes';
     launcherGet.hidden = !view.showReleaseNotes;
 

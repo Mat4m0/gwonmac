@@ -7,6 +7,7 @@ import {
   readdir,
   readFile,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -140,6 +141,13 @@ for (const option of [
   assert.equal(fuses[option], FuseState.ENABLE);
 }
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
+// Packaged builds are update-capable and the check defaults on; a smoke launch
+// must not reach GitHub, so the profile opts out before the first boot.
+await writeFile(
+  path.join(userData, "settings.json"),
+  JSON.stringify({ autoCheckUpdates: false }),
+  { mode: 0o600 },
+);
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
 const child = spawn(executable, [

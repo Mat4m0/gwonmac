@@ -244,17 +244,25 @@ async function crashSignInWindow(app: OfflineFixture["app"]): Promise<void> {
 }
 
 async function closeSignInWindow(app: OfflineFixture["app"]): Promise<void> {
-  const destroyed = await app.evaluate(({ BrowserWindow }) => {
+  const scheduled = await app.evaluate(({ BrowserWindow }) => {
     let count = 0;
     for (const win of BrowserWindow.getAllWindows()) {
       if (win.webContents.getURL().includes("127.0.0.1")) {
-        win.destroy();
+        // Do not destroy a BrowserWindow from inside Playwright's active
+        // main-process evaluation. On a loaded macOS runner, tearing down the
+        // sheet can invalidate that same inspector context before its result
+        // reaches the worker. Scheduling the real close for the next turn
+        // leaves production teardown unchanged and makes this test boundary
+        // deterministic.
+        setImmediate(() => {
+          if (!win.isDestroyed()) win.destroy();
+        });
         count += 1;
       }
     }
     return count;
   });
-  expect(destroyed).toBe(1);
+  expect(scheduled).toBe(1);
 }
 
 async function replaceSignInCleanup(

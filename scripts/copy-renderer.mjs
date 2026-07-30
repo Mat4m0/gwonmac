@@ -23,26 +23,10 @@ function copyAssets(src, dest) {
   }
 }
 
-const ART_CREDIT =
-  'Screenshots by <a href="https://bloogum.net/guildwars/">Snapshot Henchman</a>';
-
 const src = path.resolve("src/renderer");
 // No rmSync: scripts/build.mjs removes build/ once, at the start, and this
 // script now runs before the renderer is compiled into the same directory.
 const dest = path.resolve("build/renderer");
 copyAssets(src, dest);
-
-const imagesDir = path.join(dest, "images");
-if (fs.existsSync(imagesDir)) {
-  const names = fs.readdirSync(imagesDir).filter((n) => !n.startsWith("."));
-  fs.writeFileSync(
-    path.join(imagesDir, "index.json"),
-    JSON.stringify({
-      logo: names.includes("logo.webp") ? "images/logo.webp" : null,
-      backgrounds: names.filter((n) => n.startsWith("bg")).map((n) => `images/${n}`),
-      credit: ART_CREDIT,
-    }),
-  );
-}
 
 console.log(`copied renderer -> ${dest}`);

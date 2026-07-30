@@ -34,6 +34,7 @@
   const dataChoiceQuick = byId('data-choice-quick') as HTMLButtonElement;
   const dataChoiceFull = byId('data-choice-full') as HTMLButtonElement;
   const dataChoiceFullSize = byId('data-choice-full-size');
+  const dataChoiceError = byId('data-choice-error');
   const dataDownload = byId('data-download');
   const dataDownloadStatus = byId('data-download-status');
   const dataDownloadDetail = byId('data-download-detail');
@@ -191,15 +192,12 @@
     return operation;
   }
 
-  // Both tool surfaces are rendered from the settings main returned, never
-  // from requested state. Declining the required restart therefore restores
-  // what is actually running.
+  // The tool surface is rendered from the settings main returned, never from
+  // requested state. Declining the required restart therefore restores what
+  // is actually running.
   const toolSettings = window.gwEnhancementSettings.create({
     form,
-    byId,
     selection: window.gwNative.init.enhancementSelection,
-    persist: persistSettings,
-    current: () => currentSettings,
   });
 
   function requestUpdateCheck() {
@@ -466,7 +464,9 @@
       : downloadPhase === 'running'
         ? 'Pause Download'
         : 'Resume Download';
-    dataDownloadPlay.textContent = ready ? 'Play Guild Wars' : 'Play Now Instead';
+    dataDownloadPlay.textContent = ready
+      ? 'Play Guild Wars'
+      : 'Play While Downloading';
     dataDownloadQuick.hidden = ready;
   }
 
@@ -489,14 +489,20 @@
     fullDownloadPromise = window.gwNative.cache.downloadAll()
       .then(async (outcome) => {
         // The download reports why it stopped, and the sentence for that
-        // reason is written here rather than in the main process.
+        // reason is written here rather than in the main process. The cache
+        // is re-read first so a disk-full sentence can carry the shortfall.
         downloadError = '';
+        const cache = await window.gwNative.cache.info();
         if (outcome.status === 'failed') {
           const { describeDownloadFailure } =
             await import('./failure-messages.js');
-          downloadError = describeDownloadFailure(outcome.errorCode);
+          downloadError = describeDownloadFailure(
+            outcome.errorCode,
+            cache.fullDownloadShortfall > 0
+              ? { shortfall: size(cache.fullDownloadShortfall) }
+              : undefined,
+          );
         }
-        const cache = await window.gwNative.cache.info();
         currentCache = cache;
         renderSettingsData(cache);
         if (!dataDownload.hidden) renderLauncherDownload(cache);
@@ -565,13 +571,28 @@
     currentCache = cache;
     launcherTotalBytes = total;
     const remaining = Math.max(0, total - (cache.bytes || 0));
-    choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? false;
-    // The gate runs after the settings load, so the tool boxes show the saved
-    // answer rather than a default written a second time in the renderer.
-    if (currentSettings) toolSettings.render(currentSettings);
-    dataChoiceFullSize.textContent = remaining > 0
-      ? `Download ${size(remaining)} before starting.`
-      : 'The full game is already downloaded.';
+    // `?? true` mirrors DEFAULT_SETTINGS, which the renderer cannot import at
+    // runtime; the gate runs after the settings load, so this only decides
+    // the frame before that load lands.
+    choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? true;
+    // Disk reality at the moment of decision: a download that cannot fit is
+    // refused with the shortfall, not discovered mid-transfer.
+    const shortfall = cache.fullDownloadShortfall || 0;
+    dataChoiceFull.disabled = shortfall > 0;
+    if (remaining <= 0) {
+      dataChoiceFullSize.textContent = 'The full game is already downloaded.';
+    } else if (shortfall > 0) {
+      dataChoiceFullSize.textContent =
+        `Needs ${size(remaining)} — this disk has ${size(Math.max(0, cache.freeBytes))} free. ` +
+        `Free at least ${size(shortfall)} more.`;
+    } else {
+      const free = cache.freeBytes >= 0
+        ? ` · ${size(cache.freeBytes)} free on this Mac`
+        : '';
+      dataChoiceFullSize.textContent =
+        `Download ${size(remaining)} first${free}. You can play while it downloads.`;
+    }
+    dataChoiceError.hidden = true;
     dataDownload.hidden = true;
     dataChoice.hidden = false;
     launcherMilestone('launcher.choiceShown');
@@ -617,12 +638,10 @@
           showChoice(resolvedCache, total);
         }
       });
-    } catch (error) {
-      window.gwLoading?.fail(
-        error instanceof Error
-          ? error.message
-          : 'Launcher settings could not be loaded.',
-      );
+    } catch {
+      // A fixed sentence: a raw error message is the one string on this
+      // surface nobody reviewed.
+      window.gwLoading?.fail('Launcher settings could not be loaded.');
       return new Promise(() => {});
     }
   }
@@ -645,15 +664,23 @@
     autoCheckUpdates: choiceAutoUpdates.checked,
   });
 
+  // A failed save gets its own status line: overwriting the size label would
+  // trade the information the player is deciding with for the error.
+  function showChoiceError() {
+    dataChoiceError.textContent =
+      'Your choice could not be saved. Please try again.';
+    dataChoiceError.hidden = false;
+  }
+
   dataChoiceQuick.addEventListener('click', async () => {
     dataChoiceQuick.disabled = true;
     dataChoiceFull.disabled = true;
+    dataChoiceError.hidden = true;
     try {
       await persistSettings(answeredChoice('quick'));
       releaseGameBoot('launcher.quickSelected');
     } catch {
-      dataChoiceFullSize.textContent =
-        'Your choice could not be saved. Please try again.';
+      showChoiceError();
     } finally {
       dataChoiceQuick.disabled = false;
       dataChoiceFull.disabled = false;
@@ -663,6 +690,7 @@
   dataChoiceFull.addEventListener('click', async () => {
     dataChoiceQuick.disabled = true;
     dataChoiceFull.disabled = true;
+    dataChoiceError.hidden = true;
     try {
       await persistSettings(answeredChoice('full'));
       if (!currentCache) {
@@ -671,8 +699,7 @@
       launcherMilestone('launcher.fullSelected');
       showFullDownload(currentCache, launcherTotalBytes);
     } catch {
-      dataChoiceFullSize.textContent =
-        'Your choice could not be saved. Please try again.';
+      showChoiceError();
     } finally {
       dataChoiceQuick.disabled = false;
       dataChoiceFull.disabled = false;
@@ -788,6 +815,10 @@
     else void startFullDownload();
   });
 
+  byId('settings-reveal-data')?.addEventListener('click', () => {
+    void window.gwNative.app.reveal('gameData');
+  });
+
   byId('settings-clear-cache')?.addEventListener('click', async () => {
     feedback.textContent = '';
     try {
@@ -831,6 +862,9 @@
         : currentCache?.bytes || 0,
       totalBytes:
         progress.total || currentCache?.totalBytes || launcherTotalBytes || 0,
+      // Carried forward, not recomputed: only main can measure the volume.
+      freeBytes: currentCache?.freeBytes ?? -1,
+      fullDownloadShortfall: currentCache?.fullDownloadShortfall ?? 0,
     };
     currentCache = next;
     renderSettingsData(next);

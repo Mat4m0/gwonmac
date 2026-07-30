@@ -35,18 +35,27 @@ test.describe("launcher recovery", () => {
     try {
       const { app, page } = fixture;
       await expect(page.locator("#data-choice")).toBeVisible();
-      await expect(page.locator("#data-choice-native-cursor")).toBeChecked();
+      // One decision and one consent line. The game tools live in Settings
+      // only — a first launch must not ask about restarts.
+      await expect(page.locator("#data-choice-auto-updates")).toBeChecked();
+      await expect(page.locator("#data-choice")).toContainText(
+        "contacts GitHub once per start",
+      );
+      await expect(page.locator("#data-choice")).not.toContainText("cursor");
+      await expect(page.locator("#data-choice")).not.toContainText("restart");
+      // The recommended card reads first.
       await expect(
-        page.locator("#data-choice-target-readout"),
-      ).not.toBeChecked();
-      await expect(page.locator("#data-choice")).toContainText(
-        "Use the game's own cursor",
+        page.locator(".data-choice-actions .data-choice-option").first(),
+      ).toHaveId("data-choice-quick");
+      // The card carries the size, the disk reality, and the hybrid promise.
+      await expect(page.locator("#data-choice-full-size")).toContainText(
+        "Download 8.00 GB first",
       );
-      await expect(page.locator("#data-choice")).toContainText(
-        "Show target distance and range",
+      await expect(page.locator("#data-choice-full-size")).toContainText(
+        "free on this Mac",
       );
-      await expect(page.locator("#data-choice-full-size")).toHaveText(
-        "Download 8.00 GB before starting.",
+      await expect(page.locator("#data-choice-full-size")).toContainText(
+        "You can play while it downloads.",
       );
       expect(
         await page.evaluate(() =>
@@ -123,6 +132,8 @@ test.describe("launcher recovery", () => {
           chunks: 1,
           totalBytes,
           totalChunks: 1,
+          freeBytes: -1,
+          fullDownloadShortfall: 0,
         }));
         ipcMain.removeHandler("gw:cache:downloadAll");
         ipcMain.handle("gw:cache:downloadAll", () => {

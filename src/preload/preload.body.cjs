@@ -197,6 +197,7 @@ const api = {
   },
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
+    reveal: (kind) => ipcRenderer.invoke(IPC.appRevealPath, kind),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
   },
   client: {

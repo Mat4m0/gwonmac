@@ -251,7 +251,10 @@ async function launchPackaged(
     await Promise.all([
       writeFile(
         path.join(userData, "settings.json"),
-        JSON.stringify(settings),
+        // Packaged builds are update-capable and the check defaults on; a test
+        // launch must never reach GitHub, so every profile opts out unless the
+        // test says otherwise.
+        JSON.stringify({ autoCheckUpdates: false, ...settings }),
         { mode: 0o600 },
       ),
       writeFile(path.join(artifacts, "Gw.jspi.wasm"), OFFICIAL_WASM),
