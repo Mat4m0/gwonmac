@@ -14,6 +14,6 @@ jobs:
   verify:
     uses: ./.github/workflows/macos-verify.yml
     with:
-      artifact-name: ${{ format('gwonmac-pr-{0}-{1}', github.event.pull_request.number, github.sha) }}
+      artifact-name: ${{ format('gwonmac-pr-{0}-{1}-{2}', github.event.pull_request.number, github.sha, github.run_attempt) }}
       artifact-retention-days: 3
       dependency-review: true

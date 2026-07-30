@@ -11,11 +11,15 @@ on:
         type: string
       run-number:
         required: true
-        type: number
+        type: string
       require-current-main:
         required: false
         type: boolean
         default: false
+
+concurrency:
+  group: snapshot-publisher
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -52,10 +56,15 @@ jobs:
             echo "Invalid snapshot commit: $COMMIT_SHA" >&2
             exit 1
           fi
+          if ! [[ "$RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid snapshot run number: $RUN_NUMBER" >&2
+            exit 1
+          fi
           if [ "$REQUIRE_CURRENT_MAIN" = "true" ]; then
             current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
             if [ "$current" != "$COMMIT_SHA" ]; then
               echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "prune=false" >> "$GITHUB_OUTPUT"
               echo "A newer main commit exists; skipping stale snapshot $COMMIT_SHA."
               exit 0
             fi
@@ -82,6 +91,7 @@ jobs:
             | head -n 1)"
           if [ -n "$existing" ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "prune=true" >> "$GITHUB_OUTPUT"
             echo "Snapshot $existing already publishes $COMMIT_SHA."
             exit 0
           fi
@@ -96,6 +106,7 @@ jobs:
           short="${COMMIT_SHA:0:7}"
           tag="snapshot-$RUN_NUMBER-$short"
           echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "prune=true" >> "$GITHUB_OUTPUT"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
           echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
@@ -162,7 +173,7 @@ jobs:
             --notes "$notes"
 
       - name: Prune expired snapshots
-        if: steps.assets.outputs.publish == 'true'
+        if: steps.assets.outputs.prune == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

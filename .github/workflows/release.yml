@@ -265,7 +265,7 @@ jobs:
       - name: Retain debug symbols
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-dsyms
+          name: release-dsyms-${{ github.run_id }}-${{ github.run_attempt }}
           path: out/**/*.dSYM
           if-no-files-found: warn
           retention-days: 30
@@ -273,7 +273,7 @@ jobs:
       - name: Handoff verified release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-assets
+          name: release-assets-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.assets.outputs.asset_dir }}
           if-no-files-found: error
           retention-days: 1
@@ -305,19 +305,16 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: release-assets
+          name: release-assets-${{ github.run_id }}-${{ github.run_attempt }}
           path: release-assets
 
-      - name: Refuse an existing release and verify handoff
+      - name: Verify handoff and resolve draft release
+        id: release-state
         env:
           GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
           TAG: ${{ needs.release-build.outputs.tag }}
         run: |
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1 ||
-             gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Tag or release $TAG already exists." >&2
-            exit 1
-          fi
           (
             cd release-assets
             test "$(find . -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')" = "1"
@@ -326,19 +323,42 @@ jobs:
             test -f SHA256SUMS.txt
             shasum -a 256 -c SHA256SUMS.txt
           )
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft --jq '.isDraft')" = "true"
+            test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isPrerelease --jq '.isPrerelease')" = "$PRERELEASE"
+            test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json targetCommitish --jq '.targetCommitish')" = "$GITHUB_SHA"
+            local_assets="$(find release-assets -maxdepth 1 -type f \
+              -exec basename {} \; | sort)"
+            remote_assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' | sort)"
+            test "$remote_assets" = "$local_assets"
+            echo "create=false" >> "$GITHUB_OUTPUT"
+          else
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG exists without a resumable draft release." >&2
+              exit 1
+            fi
+            echo "create=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Attest ZIP provenance and SBOM
+        if: steps.release-state.outputs.create == 'true'
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-path: release-assets/*.zip
           sbom-path: release-assets/*.spdx.json
 
       - name: Attest DMG provenance
+        if: steps.release-state.outputs.create == 'true'
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-path: release-assets/*.dmg
 
       - name: Create complete draft release
+        if: steps.release-state.outputs.create == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
