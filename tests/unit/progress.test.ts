@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  DownloadDetailLine,
   DownloadRateAverage,
-  EtaDisplay,
   longRunningTaskFeedback,
   secondsRemaining,
 } from "../../src/shared/progress.ts";
+import {
+  DownloadDetailLine,
+  EtaDisplay,
+} from "../../src/renderer/progress-display.ts";
 
 describe("download progress", () => {
   it("warms up, then smooths bursty chunk completion rates", () => {

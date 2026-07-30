@@ -235,7 +235,7 @@ window.gwLoading = (function (): LoadingController {
     const [{ describeLaunchFailure, describeNotice, failureDetail }, { DownloadDetailLine }] =
       await Promise.all([
         import('./failure-messages.js'),
-        import('../shared/progress.js'),
+        import('./progress-display.js'),
       ]);
 
     return new Promise<boolean>((resolve) => {

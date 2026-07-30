@@ -69,8 +69,8 @@
   // The stable "about N min left" readout, fed by the progress subscription
   // below. The module resolves at startup, long before a download can
   // produce its first estimate.
-  let etaMinutes: import('../shared/progress.js').EtaDisplay | null = null;
-  void import('../shared/progress.js').then((m) => {
+  let etaMinutes: import('./progress-display.js').EtaDisplay | null = null;
+  void import('./progress-display.js').then((m) => {
     etaMinutes = new m.EtaDisplay();
   });
   let shownEtaMinutes: number | null = null;
