@@ -65,6 +65,7 @@ describe("settings", () => {
   });
 
   it("fills missing fields and ignores unknown keys on read", () => {
+    assert.equal(parseSettings({}).renderScale, 2);
     const got = parseSettings({
       patchMode: "fullImage",
       renderScale: 2,
@@ -73,6 +74,12 @@ describe("settings", () => {
     assert.equal("patchMode" in got, false);
     assert.equal(got.renderScale, 2);
     assert.equal("mystery" in got, false);
+  });
+
+  it("preserves every explicit supported render scale", () => {
+    assert.equal(parseSettings({ renderScale: 1 }).renderScale, 1);
+    assert.equal(parseSettings({ renderScale: 1.5 }).renderScale, 1.5);
+    assert.equal(parseSettings({ renderScale: 2 }).renderScale, 2);
   });
 
   it("rejects unknown types", () => {
@@ -142,15 +149,16 @@ describe("settings", () => {
   it("loads defaults for missing or corrupt files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
     const path = join(dir, "settings.json");
-    assert.deepEqual(await loadSettings(path), DEFAULT_SETTINGS);
+    const missing = await loadSettings(path);
+    assert.deepEqual(missing, DEFAULT_SETTINGS);
+    assert.equal(missing.renderScale, 2);
     await writeFile(path, "{not json");
     let backup = "";
-    assert.deepEqual(
-      await loadSettings(path, (value) => {
-        backup = value;
-      }),
-      DEFAULT_SETTINGS,
-    );
+    const corrupt = await loadSettings(path, (value) => {
+      backup = value;
+    });
+    assert.deepEqual(corrupt, DEFAULT_SETTINGS);
+    assert.equal(corrupt.renderScale, 2);
     assert.match(backup, /settings\.json\.corrupt-\d+$/);
     assert.equal(await readFile(backup, "utf8"), "{not json");
     assert.deepEqual(await readdir(dir), [backup.split("/").at(-1)]);

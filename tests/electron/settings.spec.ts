@@ -410,6 +410,7 @@ test.describe("settings experience", () => {
 
       const reset = await page.evaluate(() => window.gwNative.settings.reset());
       expect(reset).toMatchObject({
+        renderScale: 2,
         nativeCursor: true,
         targetReadout: false,
       });
@@ -425,6 +426,7 @@ test.describe("settings experience", () => {
         buttons: ["Reset and Restart", "Cancel"],
       });
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
+        renderScale: 2,
         nativeCursor: true,
       });
       await app.evaluate(({ app: electronApp }) => {
@@ -457,10 +459,12 @@ test.describe("settings experience", () => {
 
       const reset = await page.evaluate(() => window.gwNative.settings.reset());
       expect(reset).toMatchObject({
+        renderScale: 2,
         showDiagnostics: false,
         nativeCursor: true,
       });
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
+        renderScale: 2,
         showDiagnostics: false,
         nativeCursor: true,
       });
