@@ -122,6 +122,11 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
   assert.match(forge, /osxNotarize: releaseNotarization/);
   assert.match(forge, /GW_OFFICIAL_RELEASE/);
   assert.match(forge, /packaging\/official-update\.json/);
+  const dmgVolumeName = forge.match(
+    /new MakerDMG\(\{[\s\S]*?\bname: "([^"]+)"/,
+  )?.[1];
+  assert.equal(dmgVolumeName, "Guild Wars Reforged");
+  assert.ok(Buffer.byteLength(dmgVolumeName, "utf8") <= 27);
   assert.match(forge, /com\.apple\.security\.cs\.allow-jit/);
   assert.doesNotMatch(forge, /camera|microphone|location|bluetooth|usb/i);
   assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
