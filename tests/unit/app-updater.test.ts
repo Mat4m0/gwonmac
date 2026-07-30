@@ -4,6 +4,12 @@ import { AppUpdater } from "../../src/main/app-updater.ts";
 import type { AppUpdateState } from "../../src/shared/contracts.ts";
 
 const repo = "https://github.com/Mat4m0/gwonmac";
+const releaseApi =
+  "https://api.github.com/repos/Mat4m0/gwonmac/releases?per_page=100";
+
+function isReleaseApiRequest(input: RequestInfo | URL): boolean {
+  return String(input) === releaseApi;
+}
 
 function release(version: string, options: {
   draft?: boolean;
@@ -66,8 +72,7 @@ function fixture(options: {
     currentVersion: options.currentVersion ?? "2026.7.0-beta.1",
     capable: options.capable ?? true,
     fetch: options.fetch ?? (async (input) => {
-      const url = String(input);
-      return url.includes("api.github.com")
+      return isReleaseApiRequest(input)
         ? response([release("2026.7.0-beta.2")])
         : response(manifest("2026.7.0-beta.2"));
     }),
@@ -100,6 +105,26 @@ function fixture(options: {
 }
 
 describe("application updater", () => {
+  it("recognizes only the exact GitHub releases API endpoint", () => {
+    assert.equal(isReleaseApiRequest(releaseApi), true);
+    assert.equal(
+      isReleaseApiRequest(
+        `https://attacker.invalid/?next=${encodeURIComponent(releaseApi)}`,
+      ),
+      false,
+    );
+    assert.equal(
+      isReleaseApiRequest(
+        "https://api.github.com.attacker.invalid/repos/Mat4m0/gwonmac/releases",
+      ),
+      false,
+    );
+    assert.equal(
+      isReleaseApiRequest("https://attacker.invalid/api.github.com"),
+      false,
+    );
+  });
+
   it("makes no request and reports unavailable without the signed marker", async () => {
     let requests = 0;
     const f = fixture({
@@ -147,7 +172,7 @@ describe("application updater", () => {
     const f = fixture({
       fetch: async (input) => {
         requests += 1;
-        if (String(input).includes("api.github.com")) return pending;
+        if (isReleaseApiRequest(input)) return pending;
         return response(manifest("2026.7.0-beta.2"));
       },
     });
@@ -183,7 +208,7 @@ describe("application updater", () => {
 
   it("allows a preview install to advance to stable", async () => {
     const f = fixture({
-      fetch: async (input) => String(input).includes("api.github.com")
+      fetch: async (input) => isReleaseApiRequest(input)
         ? response([
           release("2026.7.0"),
           release("2026.7.0-beta.2"),
@@ -215,7 +240,7 @@ describe("application updater", () => {
       release("2026.7.0-beta.2"),
     ]) {
       const f = fixture({
-        fetch: async (input) => String(input).includes("api.github.com")
+        fetch: async (input) => isReleaseApiRequest(input)
           ? response([badRelease])
           : response({ ...manifest("2026.7.0-beta.2"), version: "2026.9.0" }),
       });
@@ -251,7 +276,7 @@ describe("application updater", () => {
     const f = fixture({
       timeoutMs: 1,
       fetch: async (input, init) => {
-        if (String(input).includes("api.github.com")) {
+        if (isReleaseApiRequest(input)) {
           return response([release("2026.7.0-beta.2")]);
         }
         return new Promise<Response>((_resolve, reject) => {
