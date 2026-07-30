@@ -42,9 +42,6 @@ window.gwLoading = (function (): LoadingController {
   const retry = el('loading-retry') as HTMLButtonElement;
   let recovery: 'client' | 'filesystem' = 'client';
 
-  const mb = (n: number) => (n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB'
-                              : (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB');
-
   function setBar(frac: number | null) {
     if (frac === null) { bar.classList.add('busy'); return; }
     bar.classList.remove('busy');
@@ -235,11 +232,15 @@ window.gwLoading = (function (): LoadingController {
     api.set('Checking the game client', null);
     // Resolved before the first progress event can arrive, so the failure
     // path below stays synchronous.
-    const { describeLaunchFailure, describeNotice, failureDetail } =
-      await import('./failure-messages.js');
+    const [{ describeLaunchFailure, describeNotice, failureDetail }, { DownloadDetailLine }] =
+      await Promise.all([
+        import('./failure-messages.js'),
+        import('../shared/progress.js'),
+      ]);
 
     return new Promise<boolean>((resolve) => {
       let settled = false;
+      const detailLine = new DownloadDetailLine();
       const finish = (ok: boolean) => {
         if (settled) return;
         settled = true;
@@ -266,18 +267,12 @@ window.gwLoading = (function (): LoadingController {
           return;
         }
         const frac = p.total ? p.received / p.total : null;
-        const eta = p.secondsRemaining != null
-          ? `${Math.ceil(p.secondsRemaining / 60)} min remaining` : '';
-        const rate = p.bytesPerSecond > 0
-          ? `${(p.bytesPerSecond / 1e6).toFixed(1)} MB/s avg` : '';
         // The client phase keeps main's label: only patch-client knows
         // whether this is a first download or a patch-day update.
         const text = p.phase === 'starting' || p.phase === 'checking'
           ? 'Checking the game client'
           : p.label || 'Preparing files needed to start';
-        api.set(text, frac,
-                [p.total ? `${mb(p.received)} of ${mb(p.total)}` : '', rate, eta]
-                  .filter(Boolean).join(' · '));
+        api.set(text, frac, detailLine.update(p));
       };
 
       const unsub = window.gwNative.progress.onChange(apply);
