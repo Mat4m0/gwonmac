@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 const packageVersion = (
   JSON.parse(readFileSync(path.resolve("package.json"), "utf8")) as {
@@ -24,8 +24,6 @@ declare global {
 }
 
 test.describe("settings experience", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   // P5.1: the menu item used to run a string of JavaScript in the renderer.
   // It now sends a typed command, and this is the only caller of `settings.open`
   // — every other spec dispatches the renderer event directly, which would keep

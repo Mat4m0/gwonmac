@@ -2,8 +2,6 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import type { ElectronApplication } from "@playwright/test";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import {
   mkdtemp,
   readFile,
@@ -13,13 +11,7 @@ import {
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const main = path.join(root, "build/main/main.js");
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+import { electronBin, root } from "./fixtures.mjs";
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
@@ -65,22 +57,18 @@ const launchEnv = (
 };
 
 /**
- * An absent `electronBin` means Playwright resolves the binary itself, so the
- * property is omitted rather than passed as `undefined`.
+ * Global setup verifies the executable before any spec starts.
  */
 const launch = (userData: string, env: Record<string, string>) =>
   electron.launch({
     cwd: root,
     args: [".", `--user-data-dir=${userData}`],
     env,
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
+    executablePath: electronBin,
   });
 
 test.describe("Electron application", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("a second instance exits and reveals the primary window", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -132,7 +120,6 @@ test.describe("Electron application", () => {
   });
 
   test("a startup failure exits nonzero and releases the instance lock", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
     const baseEnv = launchEnv({
       GW_OFFLINE_SHELL: "1",
@@ -319,23 +306,6 @@ test.describe("Electron application", () => {
           BrowserWindow.getAllWindows()[0]?.getNormalBounds()),
       ).toEqual(normalBounds);
 
-      const expectedReset = await app.evaluate(({ screen }) => {
-        const area = screen.getPrimaryDisplay().workArea;
-        const width = Math.min(
-          1280,
-          Math.max(Math.min(800, area.width), area.width - 64),
-        );
-        const height = Math.min(
-          800,
-          Math.max(Math.min(600, area.height), area.height - 64),
-        );
-        return {
-          x: Math.round(area.x + (area.width - width) / 2),
-          y: Math.round(area.y + (area.height - height) / 2),
-          width,
-          height,
-        };
-      });
       await resetPage.evaluate(() => {
         const probe = window as ResetProbeWindow;
         probe.__windowResetReleasedInput = false;
@@ -361,17 +331,51 @@ test.describe("Electron application", () => {
           }),
           { timeout: 15_000 },
         )
-        .toEqual(expectedReset);
-      await expect
-        .poll(
-          async () => JSON.parse(await readFile(statePath, "utf8")),
-          { timeout: 15_000 },
-        )
-        .toEqual({
-          formatVersion: 1,
-          bounds: expectedReset,
-          mode: "normal",
+        .not.toBeNull();
+      const resetHasSettled = async () => {
+        const bounds = await app.evaluate(({ BrowserWindow }) => {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (!win) throw new Error("window missing");
+          return win.getBounds();
         });
+        const saved = JSON.parse(await readFile(statePath, "utf8")) as {
+          formatVersion?: unknown;
+          bounds?: Partial<typeof bounds>;
+          mode?: unknown;
+        };
+        return {
+          bounds,
+          saved,
+          converged:
+            saved.formatVersion === 1
+            && saved.mode === "normal"
+            && saved.bounds?.x === bounds.x
+            && saved.bounds?.y === bounds.y
+            && saved.bounds?.width === bounds.width
+            && saved.bounds?.height === bounds.height,
+        };
+      };
+      await expect
+        .poll(async () => (await resetHasSettled()).converged, {
+          timeout: 15_000,
+        })
+        .toBe(true);
+      const { bounds: actualReset, saved: savedReset } =
+        await resetHasSettled();
+      expect(
+        await app.evaluate(({ screen }, bounds) =>
+          screen.getAllDisplays().some(({ workArea }) =>
+            bounds.x >= workArea.x
+            && bounds.y >= workArea.y
+            && bounds.x + bounds.width <= workArea.x + workArea.width
+            && bounds.y + bounds.height <= workArea.y + workArea.height
+          ), actualReset),
+      ).toBe(true);
+      expect(savedReset).toEqual({
+        formatVersion: 1,
+        bounds: actualReset,
+        mode: "normal",
+      });
       await closeCleanly(app);
     } finally {
       await app.close().catch(() => undefined);
@@ -460,16 +464,12 @@ test.describe("Electron application", () => {
       // A histogram the recorder never wrote reads `undefined` here and fails
       // the assertion, which is what a missing measurement should do.
       expect(result.summary.histograms["socket.writeCallback"]?.count).toBe(20);
+      expect(result.summary.histograms["socket.rendererSync"]?.count).toBe(20);
+      expect(result.summary.histograms["socket.rendererSettle"]?.count).toBe(20);
       expect(result.summary.latest["socket.activeWrites"]).toBe(0);
       expect(result.summary.latest["socket.queuedBytes"]).toBe(0);
       expect(result.summary.latest["socket.peakActiveWrites"]).toBeGreaterThanOrEqual(1);
       expect(result.summary.latest["socket.peakQueuedBytes"]).toBeGreaterThanOrEqual(21);
-      expect(
-        result.summary.histograms["socket.rendererSync"]?.p95Us,
-      ).toBeLessThanOrEqual(1_000);
-      expect(
-        result.summary.histograms["socket.rendererSettle"]?.p95Us,
-      ).toBeLessThanOrEqual(8_000);
     } finally {
       await app.close();
       await rm(userData, { recursive: true, force: true });

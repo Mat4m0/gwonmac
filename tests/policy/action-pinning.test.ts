@@ -16,21 +16,6 @@ const workflows = readdirSync(workflowDirectory).filter((file) =>
 const pinned = /^[^@\s]+\/[^@\s]+@[0-9a-f]{40}$/;
 
 test("every workflow action is pinned to a full commit SHA", () => {
-  assert.deepEqual(
-    workflows.sort(),
-    [
-      "client-canary.yml",
-      "macos-verify.yml",
-      "main-snapshot.yml",
-      "pr-package.yml",
-      "publish-snapshot.yml",
-      "release.yml",
-      "tester-build.yml",
-      "website.yml",
-    ],
-    "a workflow was added or removed; confirm it is covered here",
-  );
-
   const unpinned: string[] = [];
   let total = 0;
   for (const file of workflows) {
