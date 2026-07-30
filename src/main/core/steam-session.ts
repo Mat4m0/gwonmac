@@ -1,3 +1,4 @@
+import type { SteamRefusalReason } from "../../shared/contracts.js";
 import { AppError, errorCode, type ErrorCode } from "../../shared/errors.js";
 import {
   EncryptedJsonStore,
@@ -100,6 +101,11 @@ export type SteamResolutionNote =
 export interface SteamResolution {
   token: string | null;
   notes: SteamResolutionNote[];
+  /**
+   * Why an interactive sign-in produced no token, for the renderer's status
+   * line. Absent when a token was vended or when nothing interactive ran.
+   */
+  refusal?: SteamRefusalReason;
 }
 
 export interface SteamResolutionOptions {
@@ -109,8 +115,8 @@ export interface SteamResolutionOptions {
    * a player who did not ask for one.
    */
   silent: boolean;
-  /** Runs the sign-in flow. Resolves to `null` when it did not complete. */
-  acquire: () => Promise<string | null>;
+  /** Runs the sign-in flow. A `null` token carries why it did not complete. */
+  acquire: () => Promise<{ token: string | null; refusal?: SteamRefusalReason }>;
   now?: number;
 }
 
@@ -168,7 +174,7 @@ export async function resolveSteamToken(
     await store.clear().catch(() => undefined);
   }
 
-  let acquired: string | null;
+  let acquired: { token: string | null; refusal?: SteamRefusalReason };
   try {
     acquired = await options.acquire();
   } catch (error) {
@@ -177,16 +183,23 @@ export async function resolveSteamToken(
     // and leaving this one bare would let a construction failure escape the
     // "nothing here throws" contract the IPC handler is written against.
     notes.push({ note: "acquireFailed", code: errorCode(error) });
-    return { token: null, notes };
+    return { token: null, notes, refusal: "failed" };
   }
-  if (!acquired) return { token: null, notes };
+  if (!acquired.token) {
+    return {
+      token: null,
+      notes,
+      ...(acquired.refusal ? { refusal: acquired.refusal } : {}),
+    };
+  }
+  const token = acquired.token;
   // Check the acquired token before anything is done with it. Persistence would
   // reject an implausible one, but a `storeFailed` is tolerated by design — so
   // without this an oversized token from a malformed OAuth response would fail
   // to store and still be handed to the client and copied into wasm memory.
-  if (acquired.length > MAX_TOKEN_LENGTH) {
+  if (token.length > MAX_TOKEN_LENGTH) {
     notes.push({ note: "acquireFailed", code: "steam_session_corrupt" });
-    return { token: null, notes };
+    return { token: null, notes, refusal: "failed" };
   }
 
   // Recorded before the write, because it states where the token came from, not
@@ -195,13 +208,13 @@ export async function resolveSteamToken(
   // when persistence failed.
   notes.push({ note: "acquired" });
   try {
-    await store.save({ token: acquired, expiry: now + STEAM_TOKEN_LIFETIME_MS });
+    await store.save({ token, expiry: now + STEAM_TOKEN_LIFETIME_MS });
   } catch (error) {
     // The token still authenticates this session; all that is lost is not
     // having to sign in again next launch.
     notes.push({ note: "storeFailed", code: errorCode(error) });
   }
-  return { token: acquired, notes };
+  return { token, notes };
 }
 
 export type SteamTokenOutcome = "vended" | "absent" | "acquired";

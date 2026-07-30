@@ -1,6 +1,8 @@
 // The Enhancement registry reaches the renderer through gwNative.init. This module
-// owns only the two settings surfaces and the words they need; it is not a
-// general settings framework.
+// owns only the Settings-pane surface and the words it needs; it is not a
+// general settings framework. The first-run gate deliberately carries no tool
+// checkboxes: the defaults are right for a first launch, and Settings is where
+// a player who has formed an opinion changes them.
 //
 // index.html loads this as a classic script, so the file carries no top-level
 // import or export and names the contracts through type-only `import(…)`.
@@ -15,16 +17,8 @@
   type ToolSettingsOptions = Parameters<Window['gwEnhancementSettings']['create']>[0];
 
   const PRESENTATION = Object.freeze({
-    nativeCursor: Object.freeze({
-      launcherId: 'data-choice-native-cursor',
-      noteId: 'data-choice-native-cursor-note',
-      noun: 'cursor',
-    }),
-    targetReadout: Object.freeze({
-      launcherId: 'data-choice-target-readout',
-      noteId: 'data-choice-target-readout-note',
-      noun: 'target readout',
-    }),
+    nativeCursor: Object.freeze({ noun: 'cursor' }),
+    targetReadout: Object.freeze({ noun: 'target readout' }),
   });
 
   function createEnhancementSettings(options: ToolSettingsOptions) {
@@ -43,19 +37,13 @@
     const controls = names.map((name) => {
       const presentation = PRESENTATION[name];
       const settings = options.form.elements.namedItem(name);
-      const launcher = options.byId(presentation.launcherId);
-      if (
-        !(settings instanceof globalThis.HTMLInputElement) ||
-        !(launcher instanceof globalThis.HTMLInputElement)
-      ) {
+      if (!(settings instanceof globalThis.HTMLInputElement)) {
         throw new Error(`missing Enhancement settings control: ${name}`);
       }
       return {
         name,
         noun: presentation.noun,
         settings,
-        launcher,
-        note: options.byId(presentation.noteId),
       };
     });
     const byName = new Map(controls.map((control) => [control.name, control]));
@@ -63,7 +51,6 @@
     function render(settings: AppSettings) {
       for (const control of controls) {
         control.settings.checked = settings[control.name];
-        control.launcher.checked = settings[control.name];
       }
     }
 
@@ -90,28 +77,6 @@
           ? `Saved. Restarting to apply the ${tool.noun}…`
           : `The ${tool.noun} was not changed.`,
       };
-    }
-
-    for (const control of controls) {
-      control.launcher.addEventListener('change', () => {
-        const wanted = control.launcher.checked;
-        control.note.hidden = true;
-        void options.persist({ [control.name]: wanted })
-          .then((saved) => {
-            // A successful change is already relaunching. Only a declined
-            // restart needs a sentence on the launcher.
-            if (saved[control.name] === wanted) return;
-            control.note.textContent = `The ${control.noun} was not changed.`;
-            control.note.hidden = false;
-          })
-          .catch(() => {
-            const current = options.current();
-            if (current) render(current);
-            control.note.textContent =
-              `The ${control.noun} could not be changed.`;
-            control.note.hidden = false;
-          });
-      });
     }
 
     return Object.freeze({ patchFor, render, resultFor });

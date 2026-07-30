@@ -27,7 +27,9 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/build/main/main.js",
   PRELOAD_ENTRY,
   "/build/renderer/index.html",
-  "/build/renderer/images/index.json",
+  "/build/renderer/images/hero-poster.jpg",
+  "/build/renderer/images/hero-video.webm",
+  "/build/renderer/images/logo.webp",
   "/package.json",
 ]);
 

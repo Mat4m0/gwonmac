@@ -226,6 +226,7 @@ const INVOCATIONS: Invocation[] = [
   },
   { path: "diagnostics.current", args: [], channel: IPC.diagnosticsCurrent },
   { path: "app.openExternal", args: ["support"], channel: IPC.appOpenExternal },
+  { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   { path: "client.retry", args: [], channel: IPC.clientRetry },
   {

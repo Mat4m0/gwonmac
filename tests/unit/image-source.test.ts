@@ -61,10 +61,12 @@ function fakeTransport(
     serve(index: number) {
       serve(requests[index]!);
     },
-    fail(index: number, message: string) {
+    fail(index: number, message: string, code?: string) {
       const request = requests[index]!;
       request.settled = true;
-      request.reject(new Error(message));
+      const error = new Error(message);
+      if (code) (error as Error & { gwCode?: string }).gwCode = code;
+      request.reject(error);
     },
     issued: () => requests.map((r) => ({ start: r.start, priority: r.priority })),
   };
@@ -371,11 +373,12 @@ describe("renderer image source", () => {
 
     const failing = image.readAsync(handle, 0, null, 0, 16);
     await turn();
-    transport.fail(0, "Game data download failed (HTTP 503).");
+    transport.fail(0, "Game data download failed (HTTP 503).", "chunk_offline");
     await assert.rejects(failing, /HTTP 503/);
     await turn();
 
-    assert.equal(source.lastError(), "Game data download failed (HTTP 503).");
+    // The code the response was tagged with is reported; the prose is not.
+    assert.equal(source.lastErrorCode(), "chunk_offline");
     assert.equal(source.state().activeDemand, 0);
     assert.equal(source.state().pendingChunks, 0);
 
@@ -414,7 +417,8 @@ describe("renderer image source", () => {
     assert.equal(transport.requests[1]!.length, 4 * 64);
     assert.equal(source.state().activeDemand, 4);
     assert.equal(source.state().queuedDemand, 0);
-    assert.equal(source.lastError(), "Game data download failed (HTTP 503).");
+    // A failure with no tagged code reports null rather than leaking prose.
+    assert.equal(source.lastErrorCode(), null);
 
     transport.serveImmediately();
     await Promise.all(reads.slice(8));

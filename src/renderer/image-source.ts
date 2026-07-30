@@ -89,7 +89,7 @@ export type ImageSource = {
   stats(): ImageStats;
   state(): SnapshotState;
   evictMemory(): number;
-  lastError(): string;
+  lastErrorCode(): string | null;
   stop(): void;
 };
 
@@ -134,7 +134,10 @@ export function createImageSource({
   const stats = { reads: 0, bytes: 0, fromMemory: 0, fromNative: 0, coalesced: 0 };
   let burstBytes = 0;
   let burstTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastError = '';
+  // The code the gw://app response tagged onto the failure, or null when the
+  // throw carried none. Prose never leaves this module: the renderer maps the
+  // code to a reviewed sentence in failure-messages.ts.
+  let lastErrorCode: string | null = null;
 
   const inflight = new Map<number, ChunkTask>();
   const demandQueue: ChunkTask[] = [];
@@ -243,7 +246,8 @@ export function createImageSource({
         task.resolve(chunk);
       }
     }).catch((error) => {
-      lastError = error instanceof Error ? error.message : String(error);
+      const coded = (error as { gwCode?: unknown } | null)?.gwCode;
+      lastErrorCode = typeof coded === 'string' && coded ? coded : null;
       for (const task of tasks) task.reject(error);
     }).finally(() => {
       for (const task of tasks) inflight.delete(task.index);
@@ -477,7 +481,7 @@ export function createImageSource({
       return n;
     },
 
-    lastError: () => lastError,
+    lastErrorCode: () => lastErrorCode,
 
     // The page is going away: stop issuing background work and fail what is
     // still queued. Clearing the burst timer leaves nothing pending, which is

@@ -78,7 +78,7 @@ test.describe("settings experience", () => {
       );
       await expect(page.locator("#settings-update-channel")).toHaveText("Preview");
       await expect(page.locator("#settings-update-status")).toContainText(
-        "official Developer ID builds",
+        "can't update itself",
       );
       await expect(page.locator("#settings-restart-update")).toBeHidden();
     } finally {
@@ -87,9 +87,20 @@ test.describe("settings experience", () => {
   });
 
   test("a ready update flushes IDBFS before installing", async () => {
-    const fixture = await launchOffline("gw-update-restart-e2e-", {
-      GW_TEST_OFFICIAL_UPDATER: "1",
-    });
+    const fixture = await launchOffline(
+      "gw-update-restart-e2e-",
+      { GW_TEST_OFFICIAL_UPDATER: "1" },
+      async (userData) => {
+        // Update-capable build: the default launch check would reach the real
+        // GitHub before the stub below installs, so this profile opts out and
+        // the test drives every check itself.
+        await writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({ autoCheckUpdates: false }),
+          { mode: 0o600 },
+        );
+      },
+    );
     try {
       const { app, page } = fixture;
       await app.evaluate(({ autoUpdater }) => {
@@ -327,8 +338,9 @@ test.describe("settings experience", () => {
         ),
       ).toBe(false);
       // The generated launch selection carries the canonical Enhancement registry
-      // into the renderer. Every member must bind both settings surfaces; a
-      // future tool cannot silently stop at main/preload.
+      // into the renderer. Every member must bind the Settings pane — and only
+      // the Settings pane: the first-run gate asks one question, so a tool
+      // checkbox appearing there again is a regression, not a feature.
       expect(
         await page.evaluate(() =>
           Object.keys(window.gwNative.init.enhancementSelection).map((name) => {
@@ -346,8 +358,8 @@ test.describe("settings experience", () => {
           }),
         ),
       ).toEqual([
-        { name: "nativeCursor", settings: true, launcher: true },
-        { name: "targetReadout", settings: true, launcher: true },
+        { name: "nativeCursor", settings: true, launcher: false },
+        { name: "targetReadout", settings: true, launcher: false },
       ]);
     } finally {
       await closeOffline(fixture);

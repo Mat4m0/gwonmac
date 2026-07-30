@@ -42,7 +42,8 @@ function rendererCheckout(): string {
   write("src/renderer/gw-native.d.ts", "export {};\n");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/images/logo.webp", "webp");
-  write("src/renderer/images/bg1.webp", "webp");
+  write("src/renderer/images/hero-poster.jpg", "jpeg");
+  write("src/renderer/images/hero-video.webm", "webm");
   return root;
 }
 
@@ -66,7 +67,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
     assert.equal(result.status, 0, result.stderr);
   });
 
-  it("still produces the renderer tree and the image index", () => {
+  it("still produces the renderer tree and its static media", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
       "<!doctype html>\n",
@@ -75,16 +76,13 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       readFileSync(path.join(root, "build/renderer/fonts/COPYING-QUALITYPE"), "utf8"),
       "licence",
     );
-    assert.deepEqual(
-      JSON.parse(
-        readFileSync(path.join(root, "build/renderer/images/index.json"), "utf8"),
-      ),
-      {
-        logo: "images/logo.webp",
-        backgrounds: ["images/bg1.webp"],
-        credit:
-          'Screenshots by <a href="https://bloogum.net/guildwars/">Snapshot Henchman</a>',
-      },
+    assert.equal(
+      readFileSync(path.join(root, "build/renderer/images/hero-poster.jpg"), "utf8"),
+      "jpeg",
+    );
+    assert.equal(
+      readFileSync(path.join(root, "build/renderer/images/hero-video.webm"), "utf8"),
+      "webm",
     );
     // Not the preload: P5.6 moved that to scripts/generate-preload.ts, which
     // splices the canonical channel constants in and is the only producer of

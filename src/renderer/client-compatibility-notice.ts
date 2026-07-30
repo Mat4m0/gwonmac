@@ -22,19 +22,16 @@ const FEATURES = 'build templates, screenshots and chat logs';
 const GAMEPLAY =
   'Gameplay itself is unaffected: no stat, no timing and no input path changes.';
 
-const RECOVERY =
-  'Certifying a client build takes a new release of this app. Retrying, '
-  + 'reinstalling or clearing downloaded game data cannot fix it.';
-
 /**
- * An uncertified ArenaNet build proves only that *this* client build has not
- * been certified with *this* version of the app. Whether a newer app release
- * exists is a different fact, established by a different question, and neither
- * surface may let one stand in for the other.
+ * Recovery is an app update, and the notice offers that check right beside
+ * this sentence — action-forward rather than "a separate question", which
+ * made the player do the reasoning the UI should do. Naming what cannot fix
+ * it spares them trying all three.
  */
-const SEPARATION =
-  'This does not mean the app is out of date — whether a newer version of the '
-  + 'app exists is a separate question.';
+const RECOVERY =
+  'A newer version of this app may already support this build — choose Check '
+  + 'for Updates. Retrying, reinstalling or clearing downloaded game data '
+  + 'cannot fix it.';
 
 export type CompatibilityReport = {
   state: ClientCompatibilityState;
@@ -81,21 +78,20 @@ export function compatibilityReport(
       state,
       degraded: true,
       enhancementDegraded,
-      summary:
-        'This ArenaNet client build has not been certified with this version '
-        + 'of the app.',
+      summary: 'ArenaNet released a new game build — you can play it now.',
       details: [
-        `The app is using ArenaNet’s untouched module, so ${FEATURES} may not `
-          + 'work correctly.',
-        enhancementDegraded
-          ? `GWonMac Tools do not load on an uncertified build, so your ${
-              requestedTools
-            } ${selectedTools.length === 1 ? 'is' : 'are'} unavailable for this session.`
-          : 'GWonMac Tools do not load on an uncertified build. The game cursor '
-            + 'and target readout remain available once this build is certified.',
         GAMEPLAY,
+        'Extras added by this app are limited until an app update confirms '
+          + `this build: ${FEATURES} may not work correctly, and the game `
+          + 'tools stay off.',
+        ...(enhancementDegraded
+          ? [
+              `Your ${requestedTools} ${
+                selectedTools.length === 1 ? 'is' : 'are'
+              } off for this session.`,
+            ]
+          : []),
         RECOVERY,
-        SEPARATION,
       ],
     };
   }
@@ -106,8 +102,7 @@ export function compatibilityReport(
       degraded: enhancementDegraded,
       enhancementDegraded,
       summary:
-        `This client build is certified for ${FEATURES}, but not yet for `
-        + 'the GWonMac Tools.',
+        `This game build supports ${FEATURES}, but not yet the game tools.`,
       details: enhancementDegraded
         ? [
             `${capitalise(FEATURES)} work normally.`,
@@ -116,11 +111,10 @@ export function compatibilityReport(
             } unavailable for this session.`,
             GAMEPLAY,
             RECOVERY,
-            SEPARATION,
           ]
         : [
             `${capitalise(FEATURES)} work normally.`,
-            'The game cursor and target readout are not certified for this '
+            'The game cursor and target readout are not confirmed for this '
               + 'build, so switching either on would have no effect yet.',
             RECOVERY,
           ],
@@ -133,17 +127,15 @@ export function compatibilityReport(
       degraded: true,
       enhancementDegraded: true,
       summary:
-        'This client build is certified, but GWonMac Tools could not be prepared '
-        + 'for this session.',
+        'The game tools could not be prepared for this session.',
       details: [
         `${capitalise(FEATURES)} work normally.`,
         `Your ${requestedTools} ${
           selectedTools.length === 1 ? 'is' : 'are'
         } unavailable for this session.`,
         GAMEPLAY,
-        'Restart the app to try preparing GWonMac Tools again. If it keeps failing, '
-          + 'export diagnostics and report the problem.',
-        SEPARATION,
+        'Restart the app to try preparing the game tools again. If it keeps '
+          + 'failing, export diagnostics and report the problem.',
       ],
     };
   }
@@ -152,7 +144,7 @@ export function compatibilityReport(
     state,
     degraded: false,
     enhancementDegraded: false,
-    summary: 'This game client build is certified.',
+    summary: 'This game client build is fully supported.',
     details: [
       `${capitalise(FEATURES)} work normally.`,
       selectedTools.length > 0
@@ -190,7 +182,10 @@ export function renderClientCompatibility(
   const launcherVersion = requiredElement(root, 'client-compat-version');
 
   settingsVersion.textContent = `App version ${session.appVersion}`;
-  launcherVersion.textContent = `App version ${session.appVersion}.`;
+  // The launcher notice reminds the player it will not nag: acknowledged once
+  // per new game build, keyed by the build's hash.
+  launcherVersion.textContent =
+    `Shown once per new game build · App version ${session.appVersion}.`;
   if (!session.compatibility) {
     settingsStatus.hidden = true;
     settingsDetail.hidden = true;

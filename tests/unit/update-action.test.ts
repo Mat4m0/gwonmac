@@ -9,7 +9,14 @@ import type { AppUpdateState } from "../../src/shared/contracts.ts";
 
 describe("update action", () => {
   it("formats persisted check times without claiming a future time", () => {
-    assert.equal(formatLastChecked(undefined, 1000), "");
+    // No timestamp is said out loud: the one network-free nudge an opted-out
+    // player gets that updates exist to be checked for.
+    assert.equal(formatLastChecked(undefined, 1000), "Never checked for updates");
+    assert.equal(formatLastChecked(null, 1000), "Never checked for updates");
+    assert.equal(
+      formatLastChecked("not-a-date", 1000),
+      "Never checked for updates",
+    );
     assert.equal(
       formatLastChecked("1970-01-01T00:00:01.000Z", 1000),
       "Last checked just now",

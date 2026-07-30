@@ -1,5 +1,6 @@
 import { BrowserWindow, session, type Session } from "electron";
 import { randomUUID } from "node:crypto";
+import type { SteamRefusalReason } from "../shared/contracts.js";
 import {
   buildAuthUrl,
   inspectRedirect,
@@ -10,7 +11,7 @@ import {
 
 export type SteamAcquireResult =
   | { ok: true; token: string }
-  | { ok: false; reason: "cancelled" | "state-mismatch" | "no-token" | "failed" };
+  | { ok: false; reason: SteamRefusalReason };
 
 /**
  * What the window did, reported as outcomes for the caller to record.

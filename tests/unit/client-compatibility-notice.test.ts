@@ -137,13 +137,16 @@ describe("client compatibility notice", () => {
     assert.match(said, /game cursor and target readout/);
     assert.match(said, /Restart the app/);
     assert.match(said, /export diagnostics/);
-    assert.doesNotMatch(said, /takes a new release of this app/);
+    // A runtime failure is retryable; it must not borrow the certification
+    // recovery sentence.
+    assert.doesNotMatch(said, /cannot fix it/);
   });
 
-  it("uses the GWonMac Tools name on every public degraded surface", () => {
+  it("speaks player language, never project vocabulary", () => {
     for (const said of [
       text("uncertified", CURSOR),
       text("template-only", READOUT),
+      text("certified", NONE),
       [
         compatibilityReport(
           compatibility("certified", BOTH, false),
@@ -151,8 +154,19 @@ describe("client compatibility notice", () => {
         ).summary,
       ].join(" "),
     ]) {
-      assert.match(said, /GWonMac Tools/);
+      assert.doesNotMatch(said, /GWonMac/);
       assert.doesNotMatch(said, /\bEnhancement\b/);
+      assert.doesNotMatch(said, /certif/i);
+    }
+  });
+
+  it("leads an uncertified build with the reassurance, not the warning", () => {
+    for (const selection of SELECTIONS) {
+      const report = compatibilityReport(
+        compatibility("uncertified", selection),
+        selection,
+      );
+      assert.match(report.summary, /you can play it now/);
     }
   });
 
@@ -196,25 +210,29 @@ describe("client compatibility notice", () => {
     }
   });
 
-  it("keeps gameplay and recovery honest wherever it degrades", () => {
+  it("keeps gameplay and recovery honest wherever certification degrades", () => {
     for (const state of STATES) {
       for (const selection of SELECTIONS) {
         const report = compatibilityReport(
           compatibility(state, selection),
           selection,
         );
-        if (!report.degraded) continue;
+        // The retryable preparation failure has its own recovery sentence and
+        // is covered above; this loop pins the certification-gap branches.
+        if (!report.degraded || state === "certified") continue;
         const said = [report.summary, ...report.details].join(" ");
         assert.match(said, /Gameplay itself is unaffected/);
-        assert.match(said, /takes a new release of this app/);
-        // Recovery is not a retry, a reinstall or a cache clear, and the copy
-        // says so rather than leaving the player to try all three.
+        // Recovery is an app update, offered as the action right beside the
+        // sentence rather than left as "a separate question".
+        assert.match(said, /Check for Updates/);
+        // Not a retry, a reinstall or a cache clear, and the copy says so
+        // rather than leaving the player to try all three.
         assert.match(said, /Retrying, reinstalling or clearing/);
       }
     }
   });
 
-  it("never reports an uncertified client as an out-of-date app", () => {
+  it("never claims the app itself is out of date", () => {
     for (const state of STATES) {
       for (const selection of SELECTIONS) {
         const report = compatibilityReport(
@@ -222,10 +240,11 @@ describe("client compatibility notice", () => {
           selection,
         );
         const said = [report.summary, ...report.details].join(" ");
-        assert.doesNotMatch(said, /update the app|app is out of date\./i);
-        if (report.degraded) {
-          assert.match(said, /does not mean the app is out of date/);
-          assert.match(said, /separate question/);
+        // "may already support this build" offers the check without asserting
+        // an update exists — that fact is established by the check itself.
+        assert.doesNotMatch(said, /update the app|app is out of date/i);
+        if (report.degraded && state !== "certified") {
+          assert.match(said, /may already support this build/);
         }
       }
     }
@@ -248,7 +267,7 @@ describe("client compatibility notice", () => {
     );
     assert.equal(
       dom.element("client-compat-version").textContent,
-      "App version 2026.7.0.",
+      "Shown once per new game build · App version 2026.7.0.",
     );
     assert.equal(dom.element("settings-compat-status").hidden, true);
     assert.equal(dom.element("settings-compat-detail").hidden, true);

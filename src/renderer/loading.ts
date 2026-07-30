@@ -31,13 +31,6 @@ window.gwAutomation = (function (): EnhancementAutomation {
 
 window.gwLoading = (function (): LoadingController {
   type DownloadProgress = import('../shared/contracts.js').DownloadProgress;
-  // The art index scripts/copy-renderer.mjs writes beside the images. It is
-  // fetched rather than imported, so nothing but this shape is guaranteed.
-  type ArtIndex = {
-    logo?: string | null;
-    credit?: string | null;
-    backgrounds?: string[] | null;
-  };
 
   const el = (id: string) => {
     const element = document.getElementById(id);
@@ -76,14 +69,14 @@ window.gwLoading = (function (): LoadingController {
       setBar(frac);
     },
 
-    fail(text) {
+    fail(text, failDetail) {
       recovery = 'client';
       root.style.display = '';
       root.classList.remove('gone');
       label.textContent = text;
       label.classList.add('error');
       detail.textContent =
-        'You can retry, or choose Help → Report a Problem.';
+        failDetail ?? 'You can retry, or choose Help → Report a Problem.';
       retry.hidden = false;
       retry.textContent = 'Retry';
       bar.classList.remove('busy');
@@ -113,38 +106,64 @@ window.gwLoading = (function (): LoadingController {
     waitForClient,
   };
 
-  // Art index is generated at package time next to the images.
-  fetch('images/index.json')
-    .then(async (r): Promise<ArtIndex | null> => (r.ok ? r.json() : null))
-    .then((art) => {
-      if (!art) return;
-      if (art.logo) {
-        (el('loading-logo') as HTMLImageElement).src = art.logo;
-      }
-      if (art.credit) el('loading-credit').innerHTML = art.credit;
-      if (!art.backgrounds || !art.backgrounds.length) return;
-      const backgrounds = art.backgrounds;
-      const pick = backgrounds[Math.floor(Math.random() * backgrounds.length)];
-      if (!pick) return;
-      const img = new Image();
-      img.onload = () => {
-        const bg = el('loading-bg');
-        bg.style.backgroundImage = `url("${pick}")`;
-        bg.classList.add('shown');
-      };
-      img.src = pick;
-    })
-    .catch(() => {});
+  // Motion follows both accessibility preference and app focus. The poster is
+  // always available, so pausing never leaves the launcher without artwork.
+  const backgroundVideo = el('loading-bg') as HTMLVideoElement;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function syncBackgroundVideo() {
+    if (
+      reducedMotion.matches ||
+      document.visibilityState !== 'visible' ||
+      !document.hasFocus()
+    ) {
+      backgroundVideo.pause();
+      return;
+    }
+    void backgroundVideo.play().catch(() => {});
+  }
+  reducedMotion.addEventListener('change', syncBackgroundVideo);
+  document.addEventListener('visibilitychange', syncBackgroundVideo);
+  window.addEventListener('blur', syncBackgroundVideo);
+  window.addEventListener('focus', syncBackgroundVideo);
+  syncBackgroundVideo();
 
-  // The running version, in the footer, on every launch. It used to live only
-  // in the macOS About panel, which means a bug report had to go hunting for
-  // it — and under CalVer the number doubles as a staleness signal.
-  window.gwNative?.client.session().then((session) => {
-    const version = document.createElement('p');
-    version.id = 'loading-version';
-    version.textContent = `Guild Wars Reforged ${session.appVersion}`;
-    el('loading-legal').prepend(version);
-  }).catch(() => {});
+  // The passive health line: version, data mode, and (once a client is
+  // active) the game build's short id, in the footer on every launch. The
+  // version used to live only in the macOS About panel, which meant a bug
+  // report had to go hunting for it — and under CalVer the number doubles as
+  // a staleness signal. Everything here is already-local data; no request is
+  // made to render it.
+  async function renderFooterStatus() {
+    const native = window.gwNative;
+    if (!native) return;
+    try {
+      const [session, settings] = await Promise.all([
+        native.client.session(),
+        native.settings.get(),
+      ]);
+      const mode = settings.dataStrategy === 'quick'
+        ? 'Quick Start'
+        : settings.dataStrategy === 'full' ? 'Full Game' : '';
+      const build = session.compatibility
+        ? `game client ${session.compatibility.clientSha256.slice(0, 8)}`
+        : '';
+      let version = document.getElementById('loading-version');
+      if (!version) {
+        version = document.createElement('p');
+        version.id = 'loading-version';
+        el('loading-legal').prepend(version);
+      }
+      // "App version", not the app's game-shaped name: the number belongs to
+      // this fan project, and the line must never read like an ArenaNet
+      // product version. The vocabulary matches the compatibility surfaces.
+      version.textContent =
+        [`App version ${session.appVersion}`, mode, build]
+          .filter(Boolean).join(' · ');
+    } catch {
+      // The footer is informational; a failed read shows nothing extra.
+    }
+  }
+  void renderFooterStatus();
 
   // A failed boot gets a one-click retry, same as View → Reload Game.
   retry?.addEventListener('click', async () => {
@@ -164,8 +183,12 @@ window.gwLoading = (function (): LoadingController {
       // carrying a sentence the main process had written.
       const progress = await window.gwNative.progress.current();
       if (progress.phase === 'error') {
-        const { describeLaunchFailure } = await import('./failure-messages.js');
-        api.fail(describeLaunchFailure(progress.errorCode));
+        const { describeLaunchFailure, failureDetail } =
+          await import('./failure-messages.js');
+        api.fail(
+          describeLaunchFailure(progress.errorCode),
+          failureDetail(progress.errorCode),
+        );
         return;
       }
       window.location.reload();
@@ -180,11 +203,6 @@ window.gwLoading = (function (): LoadingController {
     }
   });
 
-  // The artwork's ambient drift (loading.css) pauses while the window is
-  // unfocused: an idle launcher in the background should cost zero GPU.
-  window.addEventListener('blur', () => el('loading-bg')?.classList.add('idle'));
-  window.addEventListener('focus', () => el('loading-bg')?.classList.remove('idle'));
-
   // Project links are enum-selected so the renderer never invents arbitrary URLs.
   el('loading-links')?.addEventListener('click', (e) => {
     const target = e.target;
@@ -196,13 +214,14 @@ window.gwLoading = (function (): LoadingController {
       window.dispatchEvent(new window.Event('gw:settings'));
       return;
     }
+    // `store` stays in the shared contract for the website; the launcher no
+    // longer offers it, so it is not accepted here.
     const kind = a.dataset.external;
     if (
       kind !== 'github' &&
       kind !== 'discord' &&
       kind !== 'donate' &&
-      kind !== 'releases' &&
-      kind !== 'store'
+      kind !== 'releases'
     ) return;
     e.preventDefault();
     void window.gwNative.app.openExternal(kind);
@@ -216,7 +235,8 @@ window.gwLoading = (function (): LoadingController {
     api.set('Checking the game client', null);
     // Resolved before the first progress event can arrive, so the failure
     // path below stays synchronous.
-    const { describeLaunchFailure } = await import('./failure-messages.js');
+    const { describeLaunchFailure, describeNotice, failureDetail } =
+      await import('./failure-messages.js');
 
     return new Promise<boolean>((resolve) => {
       let settled = false;
@@ -229,13 +249,19 @@ window.gwLoading = (function (): LoadingController {
 
       const apply = (p: DownloadProgress) => {
         if (p.phase === 'error') {
-          api.fail(describeLaunchFailure(p.errorCode));
+          api.fail(describeLaunchFailure(p.errorCode), failureDetail(p.errorCode));
           finish(false);
           return;
         }
         window.gwAutomation.set(`launcher.${p.phase}`);
         if (p.phase === 'ready') {
-          api.set('Starting Guild Wars', null, p.notice || '');
+          api.set(
+            'Starting Guild Wars',
+            null,
+            p.noticeCode ? describeNotice(p.noticeCode) : '',
+          );
+          // A client is active now, so the footer can name its build.
+          void renderFooterStatus();
           finish(true);
           return;
         }
@@ -244,11 +270,11 @@ window.gwLoading = (function (): LoadingController {
           ? `${Math.ceil(p.secondsRemaining / 60)} min remaining` : '';
         const rate = p.bytesPerSecond > 0
           ? `${(p.bytesPerSecond / 1e6).toFixed(1)} MB/s avg` : '';
+        // The client phase keeps main's label: only patch-client knows
+        // whether this is a first download or a patch-day update.
         const text = p.phase === 'starting' || p.phase === 'checking'
           ? 'Checking the game client'
-          : p.phase === 'client'
-            ? 'Preparing files needed to start'
-            : p.label || 'Preparing files needed to start';
+          : p.label || 'Preparing files needed to start';
         api.set(text, frac,
                 [p.total ? `${mb(p.received)} of ${mb(p.total)}` : '', rate, eta]
                   .filter(Boolean).join(' · '));
