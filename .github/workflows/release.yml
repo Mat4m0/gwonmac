@@ -326,6 +326,11 @@ jobs:
             test -f SHA256SUMS.txt
             shasum -a 256 -c SHA256SUMS.txt
           )
+          sbom_count="$(find release-assets -maxdepth 1 -type f -name '*.spdx.json' |
+            wc -l | tr -d ' ')"
+          test "$sbom_count" = "1"
+          sbom="$(find release-assets -maxdepth 1 -type f -name '*.spdx.json' -print -quit)"
+          echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
               --json isDraft --jq '.isDraft')" = "true"
@@ -352,7 +357,7 @@ jobs:
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-path: release-assets/*.zip
-          sbom-path: release-assets/*.spdx.json
+          sbom-path: ${{ steps.release-state.outputs.sbom }}
 
       - name: Attest DMG provenance
         if: steps.release-state.outputs.create == 'true'
