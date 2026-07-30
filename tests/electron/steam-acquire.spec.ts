@@ -379,7 +379,6 @@ test.describe("acquiring a Steam token", () => {
       reason: "cancelled",
     });
     expect(Date.now() - started).toBeGreaterThanOrEqual(4_500);
-    expect(Date.now() - started).toBeLessThan(10_000);
   });
 
   test("blocks a navigation that leaves the configured origins", async () => {

@@ -25,12 +25,12 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.tests.json",
     "lint": "eslint .",
     "check:links": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/check-markdown-links.ts",
-    "test:unit": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/unit/*.ts",
-    "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/integration/*.ts",
+    "test:unit": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/unit/*.ts",
+    "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/integration/*.ts",
     "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",
-    "test:policy": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/policy/*.ts",
-    "test:release": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test tests/release/*.ts",
+    "test:policy": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/policy/*.ts",
+    "test:release": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/release/*.ts",
     "enhancements:live": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-live.ts",
     "enhancements:doctor": "pnpm build && node build/tools/enhancement-doctor.js",
     "enhancements:recertify": "pnpm build && node build/tools/enhancement-recertify.js",
@@ -48,7 +48,7 @@
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
-    "verify": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test && pnpm test:policy && pnpm test:release && pnpm package && pnpm test:packaged"
+    "verify": "pnpm check && pnpm build && pnpm test:integration && pnpm test:release && pnpm test:electron && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
