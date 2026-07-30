@@ -95,7 +95,10 @@ const config: ForgeConfig = {
     ...(officialRelease
       ? [
           new MakerDMG({
-            name: `Guild-Wars-Reforged-${packageVersion}-macOS-arm64`,
+            // appdmg also uses this as the mounted volume name and rejects
+            // names longer than 27 characters. The release workflow gives the
+            // finished asset its versioned immutable filename.
+            name: "Guild Wars Reforged",
             icon: path.resolve("assets/AppIcon.icns"),
             overwrite: true,
             additionalDMGOptions: {
