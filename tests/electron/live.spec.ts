@@ -88,7 +88,7 @@ test.describe("live client", () => {
     writeFileSync(
       path.join(userData, "settings.json"),
       JSON.stringify({
-        renderScale: 1,
+        renderScale: 2,
         nativeCursor: false,
         touchMode: "dbltap",
         showDiagnostics: false,
@@ -311,6 +311,10 @@ test.describe("live client", () => {
         }, renderScale);
       const dimensions = () =>
         page.evaluate(async () => {
+          const canvas = globalThis.document.getElementById("canvas");
+          if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
+            throw new Error("the game canvas is missing");
+          }
           const latest = (await window.gwNative.diagnostics.current()).latest;
           // Every gauge is a `DiagnosticScalar`. A graphics dimension that is
           // not a number is one the renderer has not published yet, which is
@@ -320,12 +324,39 @@ test.describe("live client", () => {
             return typeof value === "number" ? value : 0;
           };
           return {
+            cssWidth: canvas.clientWidth,
+            cssHeight: canvas.clientHeight,
+            canvasWidth: gauge("graphics.canvasWidth"),
+            canvasHeight: gauge("graphics.canvasHeight"),
             width: gauge("graphics.drawingBufferWidth"),
             height: gauge("graphics.drawingBufferHeight"),
             offscreenWidth: gauge("graphics.offscreenWidth"),
             offscreenHeight: gauge("graphics.offscreenHeight"),
           };
         });
+
+      await test.step("the initial Retina buffer is really 2x", async () => {
+        await expect
+          .poll(async () => {
+            const value = await dimensions();
+            const expectedWidth = Math.round(value.cssWidth * 2);
+            const expectedHeight = Math.round(value.cssHeight * 2);
+            return Math.max(
+              Math.abs(value.canvasWidth - expectedWidth),
+              Math.abs(value.canvasHeight - expectedHeight),
+              Math.abs(value.offscreenWidth - expectedWidth),
+              Math.abs(value.offscreenHeight - expectedHeight),
+              Math.abs(value.width - expectedWidth),
+              Math.abs(value.height - expectedHeight),
+            );
+          }, { timeout: 30_000 })
+          .toBeLessThanOrEqual(1);
+        const initial = await dimensions();
+        expect(initial.offscreenWidth).toBe(initial.canvasWidth);
+        expect(initial.offscreenHeight).toBe(initial.canvasHeight);
+        expect(initial.width).toBe(initial.canvasWidth);
+        expect(initial.height).toBe(initial.canvasHeight);
+      });
 
       await test.step("render scale changes the real drawing buffer", async () => {
         await applyScale(1);

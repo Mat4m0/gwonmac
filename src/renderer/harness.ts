@@ -213,6 +213,23 @@ const STARTUP_LABELS = {
 
 const SNAPSHOT_URL = 'Gw.snapshot';
 let appSettings: import('../shared/contracts.js').AppSettings | null = null;
+let clientResizeFrame = 0;
+
+function currentRenderScale(): import('../shared/contracts.js').AppSettings['renderScale'] {
+  if (!appSettings) {
+    throw new Error('graphics initialized before settings');
+  }
+  return appSettings.renderScale;
+}
+
+function scheduleClientResize(): void {
+  if (clientResizeFrame) return;
+  clientResizeFrame = requestAnimationFrame(() => {
+    clientResizeFrame = 0;
+    window.dispatchEvent(new globalThis.Event('resize'));
+  });
+}
+
 let clientHealthConfirmation:
   | import('./client-health.js').ClientHealthConfirmation
   | null = null;
@@ -225,7 +242,7 @@ window.gwApplySettings = (next) => {
   appSettings = updated;
   inputHost?.applySettings(updated);
   if (previousScale !== undefined && updated.renderScale !== previousScale) {
-    window.dispatchEvent(new globalThis.Event('resize'));
+    scheduleClientResize();
   }
   window.gwDiagnostics?.setVisible(updated.showDiagnostics);
   if (inputHost) log('settings applied');
@@ -325,12 +342,16 @@ Module = {
     host.installGraphics({
       env: imports.env,
       module: Module,
-      renderScale: () => appSettings?.renderScale ?? 1,
+      renderScale: currentRenderScale,
       firstFrame: () => {
         performance.mark('gw.frame.first-submit');
         milestone('frame.firstSubmit');
         clientHealthConfirmation?.firstFramePresented();
         log('first frame presented');
+        // The client is now running and has installed its resize handling.
+        // Give it one settled-layout signal so the initial backing buffer
+        // cannot remain at the canvas element's 1280x800 placeholder size.
+        scheduleClientResize();
       },
       log,
     });
