@@ -15,44 +15,50 @@
      Layout: the artwork owns the window; every control lives in the dock along
      the bottom edge, with the progress rail on the dock's top border. -->
 <div id="loading">
-  <div id="loading-bg"></div>
+  <video id="loading-bg" muted loop playsinline preload="auto"
+         poster="images/hero-poster.jpg" aria-hidden="true">
+    <source src="images/hero-video.webm" type="video/webm">
+  </video>
   <div id="loading-scrim"></div>
 
   <!-- noreferrer as well as noopener: these are external sites and there is
-       no reason to hand them the address of a server on someone's machine. -->
+       no reason to hand them the address of a server on someone's machine.
+       The links are one quiet row; the update answer is a separate one-line
+       status beneath it, so a sentence can never reflow the row. -->
+  <!-- The one claim every screenshot of this window must carry: this is not
+       an ArenaNet product. Top-left counterpart to the nav, always visible. -->
+  <p id="loading-unofficial">Unofficial client for Guild Wars Reforged</p>
+
   <nav id="loading-links">
-    <span id="loading-update">
-      <a href="#" id="loading-update-check">Check for Updates</a>
-      <span id="loading-update-status" role="status" aria-live="polite" hidden></span>
-      <span id="loading-update-when" hidden></span>
-      <a href="#" id="loading-update-get" class="update"
-         data-external="releases" hidden>Get the update</a>
-    </span>
+    <a href="#" id="loading-update-check">Check for Updates</a>
+    <a href="#" id="loading-update-get" class="update"
+       data-external="releases" hidden>Get the update</a>
     <a href="#" data-settings>Settings</a>
-    <a href="#" data-external="store">Buy Guild Wars</a>
     <a href="#" data-external="discord">Discord</a>
     <a href="#" data-external="github">GitHub</a>
     <a href="#" data-external="donate">Donate</a>
   </nav>
+  <p id="loading-update-line">
+    <span id="loading-update-status" role="status" aria-live="polite" hidden></span>
+    <span id="loading-update-when" hidden></span>
+  </p>
 
   <div id="loading-inner">
-    <img id="loading-logo" alt="Guild Wars">
+    <img id="loading-logo" src="images/logo.webp" alt="Guild Wars Reforged">
   </div>
 
   <!-- Credit left, legal right, both just above the dock where the scrim is
        darkest. Static, not fetched: a disclaimer that only appears when a
        request succeeds is not a disclaimer. -->
   <div id="loading-footer">
-    <div id="loading-credit"></div>
+    <div id="loading-credit">Background video and logo © ArenaNet LLC.</div>
+    <!-- The compact notice; README.md carries the full trademark enumeration. -->
     <div id="loading-legal">
       <p class="strong">An independent fan project, not affiliated with, endorsed,
         sponsored, or approved by ArenaNet or NCSOFT.</p>
-      <p>© ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars,
-        Guild Wars 2, GW2, Heart of Thorns, Path of Fire, End of Dragons,
-        Secrets of the Obscure, Janthir Wilds, Visions of Eternity, and all
-        associated logos, designs, and composite marks are trademarks or
-        registered trademarks of NCSOFT Corporation. All other trademarks are
-        the property of their respective owners.</p>
+      <p>© ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars, and
+        all associated marks are trademarks of NCSOFT Corporation. All other
+        trademarks belong to their respective owners.</p>
     </div>
   </div>
 

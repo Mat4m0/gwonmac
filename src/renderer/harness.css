@@ -40,7 +40,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   box-sizing: border-box;
   padding: 5px 10px;
   border: 1px solid #945b4f;
-  border-radius: 2px;
+  border-radius: 6px;
   color: #fff1e9;
   background: #1b0c0be8;
   font: 12px/1.4 Tahoma, sans-serif;
@@ -60,8 +60,8 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   max-width: min(82vw, 620px);
   box-sizing: border-box;
   padding: 8px 14px;
-  border: 1px solid #79613c;
-  border-radius: 2px;
+  border: 1px solid #7a4b38;
+  border-radius: 6px;
   color: #eee3c9;
   background: #17120eee;
   font: 13px/1.5 Tahoma, sans-serif;
@@ -81,7 +81,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   margin-left: 4px;
   padding-left: 8px;
   border-left: 1px solid #945b4f99;
-  color: #f3dd9d;
+  color: #ffb488;
 }
 #capture-marker[hidden] { display: none; }
 
@@ -103,7 +103,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
    dialog that saves automatically has no Done button -- just a Saved note. */
 
 #settings-dialog {
-  border: 1px solid #9b793f;
+  border: 1px solid #a34a22;
   background: #100d0a;
   color: #eee3c9;
   font: 14px/1.45 "QT Friz Quad", "Iowan Old Style", Palatino, Georgia, serif;
@@ -112,8 +112,8 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   max-height: calc(100vh - 2rem);
   box-sizing: border-box;
   overflow: auto;
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1px #f0d4921c, 0 4px 12px #0009;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px #ffab731c, 0 4px 12px #0009;
 }
 #settings-dialog::backdrop { background: rgba(0,0,0,.68); }
 #settings-form { display: flex; flex-direction: column; }
@@ -124,12 +124,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   gap: 12px;
   padding: 13px 12px 12px 20px;
   background: #17120e;
-  border-bottom: 1px solid #806537;
+  border-bottom: 1px solid #8a4526;
 }
 .settings-header h2 {
   flex: 1;
   margin: 0;
-  color: #f3dd9d;
+  color: #ffb488;
   font-size: 19px;
   font-weight: 400;
   letter-spacing: .025em;
@@ -137,7 +137,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 /* Auto-save proof: flashes when a change lands. aria-hidden -- the feedback
    line in the footer is the accessible announcement channel. */
 #settings-saved {
-  color: #d9b25c;
+  color: #e87038;
   font: 11.5px/1 Tahoma, sans-serif;
   opacity: 0;
   transition: opacity .25s ease;
@@ -151,7 +151,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: #cbbd9d99;
   font-size: 14px;
 }
-#settings-form #settings-done:hover { color: #f3dd9d; background: #f3dd9d1a; border-color: transparent; }
+#settings-form #settings-done:hover { color: #ffb488; background: #ffb4881a; border-color: transparent; }
 
 .settings-body { display: flex; min-height: 292px; }
 
@@ -161,7 +161,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   width: 138px;
   flex-shrink: 0;
   padding: 10px 0;
-  border-right: 1px solid #6e59332e;
+  border-right: 1px solid #6e3d2b2e;
   background: #14100c;
 }
 #settings-form .settings-rtab {
@@ -175,11 +175,11 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   font-size: 14px;
   text-align: left;
 }
-#settings-form .settings-rtab:hover { color: #f0dfb7; background: #f0d49208; border-left-color: transparent; }
+#settings-form .settings-rtab:hover { color: #f0dfb7; background: #ffab7308; border-left-color: transparent; }
 #settings-form .settings-rtab[aria-selected="true"] {
-  color: #f3dd9d;
-  border-left-color: #d9b25c;
-  background: #f0d4920d;
+  color: #ffb488;
+  border-left-color: #e87038;
+  background: #ffab730d;
 }
 
 .settings-panes { flex: 1; min-width: 0; padding: 18px 20px; }
@@ -225,8 +225,8 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
    working; the label paints the segment. */
 .settings-seg {
   display: inline-flex;
-  border: 1px solid #67583e;
-  border-radius: 2px;
+  border: 1px solid #6e4534;
+  border-radius: 6px;
   overflow: hidden;
 }
 #settings-form label.settings-radio {
@@ -237,7 +237,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: #cbbd9dcc;
   cursor: default;
 }
-#settings-form label.settings-radio + label.settings-radio { border-left: 1px solid #67583e80; }
+#settings-form label.settings-radio + label.settings-radio { border-left: 1px solid #6e453480; }
 #settings-form label.settings-radio:hover { color: #f0dfb7; background: #2b2117; }
 #settings-form label.settings-radio input {
   position: absolute;
@@ -248,12 +248,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   opacity: 0;
 }
 #settings-form label.settings-radio:has(input:checked) {
-  background: #6d5222;
+  background: #6f2c14;
   color: #fff8e7;
-  box-shadow: inset 0 0 0 1px #a98338;
+  box-shadow: inset 0 0 0 1px #b04d1c;
 }
 #settings-form label.settings-radio:has(input:focus-visible) {
-  outline: 2px solid #e0bd73;
+  outline: 2px solid #ff9d66;
   outline-offset: 2px;
 }
 .render-scale-option {
@@ -276,32 +276,32 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: #a98338;
+  accent-color: #b04d1c;
 }
 #settings-form select, #settings-form button {
   min-height: 36px;
-  border: 1px solid #67583e;
-  border-radius: 2px;
+  border: 1px solid #6e4534;
+  border-radius: 6px;
   background: #201a14;
   color: #f2e8d2;
   font: inherit;
   padding: .45rem .7rem;
 }
 #settings-form button { cursor: default; }
-#settings-form button:hover:not(:disabled) { background: #2d241a; border-color: #9b793f; }
+#settings-form button:hover:not(:disabled) { background: #2d241a; border-color: #a34a22; }
 #settings-form button:active:not(:disabled) { background: #15110d; }
 #settings-form button:focus-visible,
 #settings-form select:focus-visible,
 #settings-form input:focus-visible {
-  outline: 2px solid #e0bd73;
+  outline: 2px solid #ff9d66;
   outline-offset: 2px;
 }
 #settings-form button.primary {
-  border-color: #a98338;
-  background: #6d5222;
+  border-color: #b04d1c;
+  background: #6f2c14;
   color: #fff8e7;
 }
-#settings-form button.primary:hover:not(:disabled) { background: #806329; }
+#settings-form button.primary:hover:not(:disabled) { background: #8f3d1a; }
 #settings-form button:disabled { cursor: default; opacity: .45; }
 
 .settings-data-actions { margin-top: 12px; }
@@ -312,7 +312,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
    something to get. Built by settings.js so the launcher mount stays identical. */
 .settings-update-actions { display: flex; gap: 10px; margin: 12px 0; }
 
-.settings-divider { height: 1px; margin: 16px 0 12px; background: #6e59332e; }
+.settings-divider { height: 1px; margin: 16px 0 12px; background: #6e3d2b2e; }
 
 #settings-form button.quiet-danger {
   min-height: 0;
@@ -345,7 +345,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   height: 8px;
   margin: 10px 0 0;
   overflow: hidden;
-  border: 1px solid #67583e80;
+  border: 1px solid #6e453480;
   border-radius: 4px;
   background: #201a145e;
 }
@@ -353,8 +353,8 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 #settings-progress-fill {
   width: 0;
   height: 100%;
-  background: linear-gradient(90deg, #8a6a2b, #d9b25c 55%, #f3dd9d);
-  box-shadow: 0 0 10px #d9b25c73;
+  background: linear-gradient(90deg, #8a3a16, #e87038 55%, #ffb488);
+  box-shadow: 0 0 10px #e8703873;
   transition: width .25s ease;
 }
 .settings-note {
@@ -371,7 +371,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   justify-content: space-between;
   gap: 14px;
   padding: 9px 20px;
-  border-top: 1px solid #6e59332e;
+  border-top: 1px solid #6e3d2b2e;
 }
 .settings-feedback {
   min-height: 1.3em;
@@ -388,9 +388,9 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 @media (max-width: 560px) {
   .settings-body { flex-direction: column; min-height: 0; }
   .settings-rail { width: auto; flex-direction: row; overflow-x: auto;
-                   padding: 0; border-right: 0; border-bottom: 1px solid #6e59332e; }
+                   padding: 0; border-right: 0; border-bottom: 1px solid #6e3d2b2e; }
   #settings-form .settings-rtab { border-left: 0; border-bottom: 2px solid transparent; }
-  #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: #d9b25c; }
+  #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: #e87038; }
 }
 
 @media (prefers-reduced-motion: reduce) {

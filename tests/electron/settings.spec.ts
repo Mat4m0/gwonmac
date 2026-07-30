@@ -78,7 +78,7 @@ test.describe("settings experience", () => {
       );
       await expect(page.locator("#settings-update-channel")).toHaveText("Preview");
       await expect(page.locator("#settings-update-status")).toContainText(
-        "official Developer ID builds",
+        "can't update itself",
       );
       await expect(page.locator("#settings-restart-update")).toBeHidden();
     } finally {

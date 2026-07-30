@@ -67,7 +67,7 @@ test.describe("release check network policy", () => {
       // The launch check ran without being asked: its answer is on the
       // launcher, and the attempt was remembered.
       await expect(page.locator("#loading-update-status")).toContainText(
-        "official Developer ID builds",
+        "can't update itself",
       );
       await expect
         .poll(async () =>

@@ -31,13 +31,6 @@ window.gwAutomation = (function (): EnhancementAutomation {
 
 window.gwLoading = (function (): LoadingController {
   type DownloadProgress = import('../shared/contracts.js').DownloadProgress;
-  // The art index scripts/copy-renderer.mjs writes beside the images. It is
-  // fetched rather than imported, so nothing but this shape is guaranteed.
-  type ArtIndex = {
-    logo?: string | null;
-    credit?: string | null;
-    backgrounds?: string[] | null;
-  };
 
   const el = (id: string) => {
     const element = document.getElementById(id);
@@ -113,28 +106,26 @@ window.gwLoading = (function (): LoadingController {
     waitForClient,
   };
 
-  // Art index is generated at package time next to the images.
-  fetch('images/index.json')
-    .then(async (r): Promise<ArtIndex | null> => (r.ok ? r.json() : null))
-    .then((art) => {
-      if (!art) return;
-      if (art.logo) {
-        (el('loading-logo') as HTMLImageElement).src = art.logo;
-      }
-      if (art.credit) el('loading-credit').innerHTML = art.credit;
-      if (!art.backgrounds || !art.backgrounds.length) return;
-      const backgrounds = art.backgrounds;
-      const pick = backgrounds[Math.floor(Math.random() * backgrounds.length)];
-      if (!pick) return;
-      const img = new Image();
-      img.onload = () => {
-        const bg = el('loading-bg');
-        bg.style.backgroundImage = `url("${pick}")`;
-        bg.classList.add('shown');
-      };
-      img.src = pick;
-    })
-    .catch(() => {});
+  // Motion follows both accessibility preference and app focus. The poster is
+  // always available, so pausing never leaves the launcher without artwork.
+  const backgroundVideo = el('loading-bg') as HTMLVideoElement;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function syncBackgroundVideo() {
+    if (
+      reducedMotion.matches ||
+      document.visibilityState !== 'visible' ||
+      !document.hasFocus()
+    ) {
+      backgroundVideo.pause();
+      return;
+    }
+    void backgroundVideo.play().catch(() => {});
+  }
+  reducedMotion.addEventListener('change', syncBackgroundVideo);
+  document.addEventListener('visibilitychange', syncBackgroundVideo);
+  window.addEventListener('blur', syncBackgroundVideo);
+  window.addEventListener('focus', syncBackgroundVideo);
+  syncBackgroundVideo();
 
   // The passive health line: version, data mode, and (once a client is
   // active) the game build's short id, in the footer on every launch. The
@@ -154,7 +145,7 @@ window.gwLoading = (function (): LoadingController {
         ? 'Quick Start'
         : settings.dataStrategy === 'full' ? 'Full Game' : '';
       const build = session.compatibility
-        ? `client ${session.compatibility.clientSha256.slice(0, 8)}`
+        ? `game client ${session.compatibility.clientSha256.slice(0, 8)}`
         : '';
       let version = document.getElementById('loading-version');
       if (!version) {
@@ -162,8 +153,11 @@ window.gwLoading = (function (): LoadingController {
         version.id = 'loading-version';
         el('loading-legal').prepend(version);
       }
+      // "App version", not the app's game-shaped name: the number belongs to
+      // this fan project, and the line must never read like an ArenaNet
+      // product version. The vocabulary matches the compatibility surfaces.
       version.textContent =
-        [`Guild Wars Reforged ${session.appVersion}`, mode, build]
+        [`App version ${session.appVersion}`, mode, build]
           .filter(Boolean).join(' · ');
     } catch {
       // The footer is informational; a failed read shows nothing extra.
@@ -209,11 +203,6 @@ window.gwLoading = (function (): LoadingController {
     }
   });
 
-  // The artwork's ambient drift (loading.css) pauses while the window is
-  // unfocused: an idle launcher in the background should cost zero GPU.
-  window.addEventListener('blur', () => el('loading-bg')?.classList.add('idle'));
-  window.addEventListener('focus', () => el('loading-bg')?.classList.remove('idle'));
-
   // Project links are enum-selected so the renderer never invents arbitrary URLs.
   el('loading-links')?.addEventListener('click', (e) => {
     const target = e.target;
@@ -225,13 +214,14 @@ window.gwLoading = (function (): LoadingController {
       window.dispatchEvent(new window.Event('gw:settings'));
       return;
     }
+    // `store` stays in the shared contract for the website; the launcher no
+    // longer offers it, so it is not accepted here.
     const kind = a.dataset.external;
     if (
       kind !== 'github' &&
       kind !== 'discord' &&
       kind !== 'donate' &&
-      kind !== 'releases' &&
-      kind !== 'store'
+      kind !== 'releases'
     ) return;
     e.preventDefault();
     void window.gwNative.app.openExternal(kind);

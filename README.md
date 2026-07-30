@@ -231,8 +231,6 @@ useful, the credit belongs upstream first.
 
 Also with thanks to:
 
-- **[Snapshot Henchman](https://bloogum.net/guildwars/)** — loading-screen
-  photography.
 - **QualiType** — the QT Friz Quad typeface, released under the SIL Open Font
   License 1.1.
 - **ArenaNet** — for the game, and for keeping the Guild Wars client alive and
@@ -256,10 +254,10 @@ The committed macOS icon was prepared by
 [gwnative](https://github.com/jean-humann/gwnative) from that artwork. The
 artwork and Guild Wars marks remain the property of their respective owners.
 
-Loading-screen photography is by
-[Snapshot Henchman](https://bloogum.net/guildwars/). The loading-screen typeface
-is QT Friz Quad, © 1992 QualiType, distributed under the SIL Open Font License
-1.1; its license ships with the font.
+The loading-screen video and logo were published by ArenaNet on the official
+[Guild Wars Reforged website](https://guildwars.com/en/). The loading-screen
+typeface is QT Friz Quad, © 1992 QualiType, distributed under the SIL Open Font
+License 1.1; its license ships with the font.
 
 No cursor artwork ships with this application. The game cursor — on by default,
 switchable off under Settings → Controls — reads the bitmap the player's own
