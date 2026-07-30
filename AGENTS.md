@@ -236,8 +236,11 @@ When an ArenaNet client update lands, a build is in one of three states and
 `src/main/client-certification.ts` is the only thing that decides which. Known
 hashes use the shipped tables. An unknown hash is checked by the bounded
 isolated process in `src/main/local-client-verifier-host.ts`; only an exact
-structural proof may supply locally derived records, and any failure serves the
-untouched official module. The
+structural proof may supply locally derived records. The template proof hashes
+the complete affected caller bodies after normalising only the selected call
+indices; the Enhancement proof requires all eight static addresses in the same
+complete code-reference contexts. Any other change serves the untouched
+official module. The
 `client.buildCertification` gauge in a `.gwdiag` names it —
 `certified`, `template-only` (templates save, enhancement tools cannot load), or
 `uncertified` — and `wasm.templateSaveCompatible` is the older boolean

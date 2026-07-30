@@ -14,13 +14,17 @@ import {
   type BridgeKind,
   type KnownTemplateSaveBuild,
 } from "./template-save-compat.js";
-import { inspectTemplateSaveCandidate } from "./template-save-verifier.js";
+import {
+  deriveEquivalentTemplateSaveBuild,
+  TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
+} from "./template-save-verifier.js";
 import {
   readSleb,
   readUleb,
   sectionById,
   splitSections,
 } from "./wasm-binary.js";
+import { enhancementAddressEvidence } from "./enhancement-address-evidence.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -31,7 +35,7 @@ declare const WebAssembly: {
  * value is stored beside a derived result so an app update never inherits a
  * decision made by older verifier code.
  */
-export const LOCAL_CLIENT_VERIFIER_ABI = 1;
+export const LOCAL_CLIENT_VERIFIER_ABI = 2;
 
 export type LocalVerificationReason =
   | "invalid-wasm"
@@ -55,32 +59,31 @@ interface DataSegmentShape {
 }
 
 /**
- * Exact initialized-data topology of the build whose Enhancement layout was
- * measured live. ArenaNet's current rebuild inserted bytes into the first
- * segment and moved every later segment, BSS address and static pointer by one
- * common delta. Relative object fields do not move.
+ * Exact initialized-data topology of the current live-measured Enhancement
+ * baseline. A future candidate may propose one common delta from this shape,
+ * but the code-reference fingerprint below must prove every relocated address.
  */
 const ENHANCEMENT_DATA_BASELINE: readonly DataSegmentShape[] = Object.freeze([
-  Object.freeze({ base: 0x10_0000, size: 1_580_612 }),
-  Object.freeze({ base: 2_629_200, size: 19_880 }),
-  Object.freeze({ base: 2_649_080, size: 23_358 }),
-  Object.freeze({ base: 2_672_438, size: 1_060 }),
+  Object.freeze({ base: 0x10_0000, size: 1_580_804 }),
+  Object.freeze({ base: 2_629_392, size: 19_880 }),
+  Object.freeze({ base: 2_649_272, size: 23_358 }),
+  Object.freeze({ base: 2_672_630, size: 1_060 }),
 ]);
 
-const EXPECTED_TEMPLATE_SIGNATURES: Readonly<Record<BridgeKind, string>> =
-  Object.freeze({
-    ensureDirectory: "(i32,i32)->(i32)",
-    findFiles: "(i32,i32,i32)->()",
-    fileBaseName: "(i32,i32,i32,i32,i32,i32)->(i32)",
-    deleteFile: "(i32)->(i32)",
-    fileExists: "(i32,i32,i32)->(i32)",
-  });
-
-const EXPECTED_DELETE_ASSERTION = Object.freeze({
-  message: "not implemented",
-  file: "../../../../Base/Os/Emscripten/Exe/EmscriptenExeFile.cpp",
-  line: 840,
-});
+const TEMPLATE_BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
+  "ensureDirectory",
+  "findFiles",
+  "fileBaseName",
+  "deleteFile",
+  "fileExists",
+]);
+/**
+ * Normalized code-reference identity for the current measured layout. Every
+ * relevant address must appear in the same complete function bodies; only the
+ * five-byte address immediates themselves may move together.
+ */
+const ENHANCEMENT_ADDRESS_EVIDENCE_FINGERPRINT =
+  "97e05f36c3d2881b8c7ddbfe6d47e87c36af0c99b8d715880aef7ab360fc5da2";
 
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -89,9 +92,11 @@ function sha256(value: Uint8Array | string): string {
 function baselineFingerprint(): string {
   return sha256(JSON.stringify({
     verifierAbi: LOCAL_CLIENT_VERIFIER_ABI,
-    template: TEMPLATE_SAVE_BUILDS[0],
-    enhancement: ENHANCEMENT_BUILDS[0],
+    template: TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1],
+    templateSemantics: TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
+    enhancement: ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1],
     data: ENHANCEMENT_DATA_BASELINE,
+    addressEvidence: ENHANCEMENT_ADDRESS_EVIDENCE_FINGERPRINT,
   }));
 }
 
@@ -99,62 +104,6 @@ export const LOCAL_CLIENT_BASELINE_FINGERPRINT = baselineFingerprint();
 
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function templateShapeIsEquivalent(
-  report: ReturnType<typeof inspectTemplateSaveCandidate>,
-): report is ReturnType<typeof inspectTemplateSaveCandidate> & {
-  entry: KnownTemplateSaveBuild;
-} {
-  const entry = report.entry;
-  const baseline = TEMPLATE_SAVE_BUILDS[0];
-  if (
-    !baseline
-    || !entry
-    || report.status !== "derived"
-    || !report.validWasm
-    || report.encodings.canonical !== 0
-    || !sameJson(report.deleteAssertion, EXPECTED_DELETE_ASSERTION)
-    || entry.bridges.length !== baseline.bridges.length
-  ) {
-    return false;
-  }
-
-  for (const expected of baseline.bridges) {
-    const candidate = entry.bridges.find(
-      (bridge) => bridge.kind === expected.kind,
-    );
-    const target = report.targets[expected.kind];
-    if (
-      !candidate
-      || !target
-      || target.signature !== EXPECTED_TEMPLATE_SIGNATURES[expected.kind]
-      || candidate.callSites.length !== expected.callSites.length
-    ) {
-      return false;
-    }
-
-    // Function indices may move. The instruction offset and number of semantic
-    // callers may not: a changed caller body needs maintainer investigation.
-    const expectedOffsets = expected.callSites
-      .map((site) => site.bodyOffset)
-      .sort((a, b) => a - b);
-    const candidateOffsets = candidate.callSites
-      .map((site) => site.bodyOffset)
-      .sort((a, b) => a - b);
-    if (!sameJson(candidateOffsets, expectedOffsets)) return false;
-
-    // The three silent stubs are their complete semantics. Delete contains
-    // relocated string addresses, so its decoded assertion above is the proof.
-    if (
-      expected.kind !== "deleteFile"
-      && expected.stubBody
-      && !sameJson(candidate.stubBody, expected.stubBody)
-    ) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function dataSegments(input: Uint8Array): DataSegmentShape[] {
@@ -249,10 +198,17 @@ function deriveEnhancementBuild(
   official: Uint8Array,
   templateOutput: Uint8Array,
 ): KnownEnhancementBuild | null {
-  const baseline = ENHANCEMENT_BUILDS[0];
+  const baseline = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1];
   if (!baseline) return null;
   const delta = inferStaticDelta(official);
   if (delta === null) return null;
+  const layout = relocateEnhancementLayout(baseline.layout, delta);
+  if (
+    enhancementAddressEvidence(official, layout)
+    !== ENHANCEMENT_ADDRESS_EVIDENCE_FINGERPRINT
+  ) {
+    return null;
+  }
 
   const report = inspectEnhancementCandidate(templateOutput);
   if (
@@ -275,7 +231,7 @@ function deriveEnhancementBuild(
     hookParams: baseline.hookParams,
     hookResults: baseline.hookResults,
     tableSlot: baseline.tableSlot,
-    layout: relocateEnhancementLayout(baseline.layout, delta),
+    layout,
   };
   transformEnhancementWasm(templateOutput, build);
   return build;
@@ -304,8 +260,8 @@ export function verifyLocalClientBytes(
     };
   }
 
-  const report = inspectTemplateSaveCandidate(official);
-  if (!templateShapeIsEquivalent(report)) {
+  const templateSaveBuild = deriveEquivalentTemplateSaveBuild(official);
+  if (!templateSaveBuild) {
     return {
       ...base,
       templateSaveBuild: null,
@@ -316,7 +272,7 @@ export function verifyLocalClientBytes(
 
   let templateOutput: Uint8Array;
   try {
-    templateOutput = rewriteTemplateSaveWasm(official, report.entry);
+    templateOutput = rewriteTemplateSaveWasm(official, templateSaveBuild);
   } catch {
     return {
       ...base,
@@ -335,7 +291,7 @@ export function verifyLocalClientBytes(
   }
   return {
     ...base,
-    templateSaveBuild: report.entry,
+    templateSaveBuild,
     enhancementBuild,
     reasons,
   };
@@ -361,7 +317,8 @@ function isTemplateSaveBuild(
     || !isIndex(build.importCount)
     || !isIndex(build.carrierImport)
     || !Array.isArray(build.bridges)
-    || build.bridges.length !== TEMPLATE_SAVE_BUILDS[0]?.bridges.length
+    || build.bridges.length
+      !== TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1]?.bridges.length
   ) {
     return false;
   }
@@ -369,7 +326,7 @@ function isTemplateSaveBuild(
   for (const bridge of build.bridges) {
     if (
       !bridge
-      || !Object.hasOwn(EXPECTED_TEMPLATE_SIGNATURES, bridge.kind)
+      || !TEMPLATE_BRIDGE_KINDS.includes(bridge.kind)
       || kinds.has(bridge.kind)
       || !isIndex(bridge.stubFunction)
       || !Array.isArray(bridge.callSites)
@@ -402,7 +359,7 @@ function isTemplateSaveBuild(
     }
     kinds.add(bridge.kind);
   }
-  return kinds.size === Object.keys(EXPECTED_TEMPLATE_SIGNATURES).length;
+  return kinds.size === TEMPLATE_BRIDGE_KINDS.length;
 }
 
 function isRelocatedEnhancementBuild(
@@ -411,7 +368,7 @@ function isRelocatedEnhancementBuild(
 ): value is KnownEnhancementBuild {
   if (!value || typeof value !== "object") return false;
   const build = value as Partial<KnownEnhancementBuild>;
-  const baseline = ENHANCEMENT_BUILDS[0];
+  const baseline = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1];
   if (
     !baseline
     || build.sha256 !== inputSha256

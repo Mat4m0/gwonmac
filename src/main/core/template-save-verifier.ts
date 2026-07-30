@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import {
   countFunctionImports,
   functionImportIndex,
+  indexOfBytes,
   paddedIndex,
   parseCode,
   parseIndexVector,
@@ -35,7 +36,6 @@ import {
   type FunctionType,
 } from "./wasm-binary.js";
 import {
-  findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
   TEMPLATE_SAVE_BUILDS,
   type BridgeKind,
@@ -51,6 +51,19 @@ const ASSERT_HOOK_IMPORT_NAME = "emscripten_asm_const_int";
 const CREATE_DIRECTORY_BODY = [0x00, 0x41, 0x02, 0x0b];
 const FIND_FILES_BODY = [0x00, 0x0b];
 const FILE_BASE_NAME_BODY = [0x00, 0x41, 0x00, 0x0b];
+const EXPECTED_TEMPLATE_SIGNATURES: Readonly<Record<BridgeKind, string>> =
+  Object.freeze({
+    ensureDirectory: "(i32,i32)->(i32)",
+    findFiles: "(i32,i32,i32)->()",
+    fileBaseName: "(i32,i32,i32,i32,i32,i32)->(i32)",
+    deleteFile: "(i32)->(i32)",
+    fileExists: "(i32,i32,i32)->(i32)",
+  });
+const EXPECTED_DELETE_ASSERTION = Object.freeze({
+  message: "not implemented",
+  file: "../../../../Base/Os/Emscripten/Exe/EmscriptenExeFile.cpp",
+  line: 840,
+});
 
 export type TargetName = BridgeKind | "assertHandler";
 
@@ -64,12 +77,10 @@ export interface LocatedFunction {
   readonly rejected: readonly number[];
 }
 
-export interface TemplateSaveCandidateReport {
+export interface TemplateSaveAnalysis {
   readonly sha256: string;
   readonly validWasm: boolean;
-  readonly status: "certified" | "derived" | "not-applicable" | "failed";
-  readonly certified: boolean;
-  readonly matchesCertifiedEntry: boolean | null;
+  readonly status: "derived" | "not-applicable" | "failed";
   readonly importCount: number | null;
   readonly carrierImport: number | null;
   readonly targets: Partial<Record<TargetName, LocatedFunction>>;
@@ -77,6 +88,7 @@ export interface TemplateSaveCandidateReport {
   readonly deleteAssertion: { message: string; file: string; line: number } | null;
   readonly encodings: { padded: number; canonical: number };
   readonly entry: KnownTemplateSaveBuild | null;
+  readonly semanticFingerprint: string | null;
   readonly diagnostics: readonly string[];
 }
 
@@ -227,20 +239,6 @@ function callNeedle(functionIndex: number): Uint8Array {
   needle[0] = 0x10;
   needle.set(padded, 1);
   return needle;
-}
-
-function indexOfBytes(
-  haystack: Uint8Array,
-  needle: Uint8Array,
-  from: number,
-): number {
-  outer: for (let at = from; at + needle.byteLength <= haystack.byteLength; at += 1) {
-    for (let index = 0; index < needle.byteLength; index += 1) {
-      if (haystack[at + index] !== needle[index]) continue outer;
-    }
-    return at;
-  }
-  return -1;
 }
 
 function intersect(left: Set<number>, right: Set<number>): number[] {
@@ -638,53 +636,81 @@ export function deriveTemplateSaveBuild(
   return certify(input, draftTemplateSaveBuild(input));
 }
 
-/** Field-by-field difference against the checked-in entry; [] means identical. */
-export function compareToCertified(
-  entry: KnownTemplateSaveBuild,
-): string[] {
-  const certified = TEMPLATE_SAVE_BUILDS.find(
-    (build) => build.sha256 === entry.sha256,
-  );
-  if (!certified) return [`no certified entry for ${entry.sha256}`];
-  const differences: string[] = [];
-  const compare = (what: string, a: unknown, b: unknown) => {
-    if (JSON.stringify(a) !== JSON.stringify(b)) {
-      differences.push(`${what}: derived ${JSON.stringify(a)} vs certified ${JSON.stringify(b)}`);
-    }
-  };
-  compare("outputSha256", entry.outputSha256, certified.outputSha256);
-  compare("importCount", entry.importCount, certified.importCount);
-  compare("carrierImport", entry.carrierImport, certified.carrierImport);
-  compare(
-    "bridge kinds",
-    entry.bridges.map((bridge) => bridge.kind),
-    certified.bridges.map((bridge) => bridge.kind),
-  );
-  for (const bridge of entry.bridges) {
-    const other = certified.bridges.find((value) => value.kind === bridge.kind);
-    if (!other) continue;
-    compare(`${bridge.kind}.stubFunction`, bridge.stubFunction, other.stubFunction);
-    compare(`${bridge.kind}.stubBody`, bridge.stubBody ?? null, other.stubBody ?? null);
-    compare(
-      `${bridge.kind}.callSites`,
-      sortSites(bridge.callSites),
-      sortSites(other.callSites),
-    );
-  }
-  return differences;
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
-export function inspectTemplateSaveCandidate(
+/**
+ * Identity of the complete bodies whose calls the transform will repoint.
+ *
+ * Function indices are allowed to move, so the five-byte operands of the
+ * selected calls are replaced by stable bridge-kind tags before hashing. Every
+ * other instruction and immediate remains exact. This is deliberately stricter
+ * than the shape locator: a changed path calculation, flag, branch or unrelated
+ * call is a semantic change and must refuse local certification.
+ */
+function semanticFingerprint(
+  found: Located,
+  entry: KnownTemplateSaveBuild,
+): string {
+  const tags = new Map<BridgeKind, number>(
+    entry.bridges.map((bridge, index) => [bridge.kind, index + 1]),
+  );
+  const touched = new Map<number, string[]>();
+  for (const bridge of entry.bridges) {
+    for (const site of bridge.callSites) {
+      const roles = touched.get(site.localFunction) ?? [];
+      roles.push(`${bridge.kind}:${site.bodyOffset}`);
+      touched.set(site.localFunction, roles);
+    }
+  }
+
+  const callers = [...touched].map(([local, roles]) => {
+    const source = found.view.bodies[local]
+      ?? fail(`semantic caller ${local} is out of range`);
+    const normalized = source.slice();
+    for (const bridge of entry.bridges) {
+      const expected = callNeedle(
+        found.view.functionIndex(bridge.stubFunction),
+      );
+      for (const site of bridge.callSites) {
+        if (site.localFunction !== local) continue;
+        const end = site.bodyOffset + expected.byteLength;
+        if (
+          end > source.byteLength
+          || !expected.every(
+            (byte, index) => source[site.bodyOffset + index] === byte,
+          )
+        ) {
+          fail(`semantic ${bridge.kind} call site signature mismatch`);
+        }
+        normalized.fill(0, site.bodyOffset + 1, end);
+        normalized[site.bodyOffset + 1] = tags.get(bridge.kind)!;
+      }
+    }
+    return {
+      roles: [...roles].sort(),
+      bodySha256: sha256(normalized),
+    };
+  }).sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right)));
+
+  return sha256(new TextEncoder().encode(JSON.stringify({
+    callers,
+    fileExistsBodySha256: sha256(
+      found.view.bodies[found.targets.fileExists.localFunction]!,
+    ),
+  })));
+}
+
+export function analyzeTemplateSaveCandidate(
   input: Uint8Array,
-): TemplateSaveCandidateReport {
+): TemplateSaveAnalysis {
   const hash = sha256(input);
-  const certified = findTemplateSaveBuild(hash) !== null;
-  const empty: TemplateSaveCandidateReport = {
+  const empty: TemplateSaveAnalysis = {
     sha256: hash,
     validWasm: false,
     status: "failed",
-    certified,
-    matchesCertifiedEntry: null,
     importCount: null,
     carrierImport: null,
     targets: {},
@@ -692,6 +718,7 @@ export function inspectTemplateSaveCandidate(
     deleteAssertion: null,
     encodings: { padded: 0, canonical: 0 },
     entry: null,
+    semanticFingerprint: null,
     diagnostics: [],
   };
 
@@ -716,13 +743,10 @@ export function inspectTemplateSaveCandidate(
         sum + canonicalCallCount(view, view.functionIndex(bridge.stubFunction)),
       0,
     );
-    const differences = certified ? compareToCertified(entry) : [];
     return {
       sha256: hash,
       validWasm: true,
       status: "derived",
-      certified,
-      matchesCertifiedEntry: certified ? differences.length === 0 : null,
       importCount: view.importCount,
       carrierImport: found.carrierImport,
       targets: found.targets,
@@ -730,6 +754,7 @@ export function inspectTemplateSaveCandidate(
       deleteAssertion: found.deleteAssertion,
       encodings: { padded, canonical },
       entry,
+      semanticFingerprint: semanticFingerprint(found, entry),
       diagnostics: [
         ...found.diagnostics,
         `template scans ${found.scans.join(", ")}`,
@@ -742,7 +767,6 @@ export function inspectTemplateSaveCandidate(
             + ` five-byte form — see internal/upstream/recertify.md`,
           ]
           : []),
-        ...differences.map((value) => `differs from certified entry — ${value}`),
       ],
     };
   } catch (error) {
@@ -764,35 +788,55 @@ export function inspectTemplateSaveCandidate(
   }
 }
 
-/** Paste-ready TypeScript for the entry, emitted to stderr by the CLI. */
-export function formatBuildEntry(entry: KnownTemplateSaveBuild): string {
-  const site = (value: CallSite) =>
-    `            Object.freeze({ localFunction: ${value.localFunction},`
-      + ` bodyOffset: ${value.bodyOffset} }),`;
-  const body = (values: readonly number[]) =>
-    values.map((value) => `0x${value.toString(16).padStart(2, "0")}`).join(", ");
-  const bridges = entry.bridges.map((bridge) => {
-    const stub = bridge.stubBody
-      ? `          stubBody: Object.freeze([${body(bridge.stubBody)}]),\n`
-      : "";
-    return (
-      `        Object.freeze({\n`
-      + `          kind: "${bridge.kind}" as const,\n`
-      + `          stubFunction: ${bridge.stubFunction},\n`
-      + stub
-      + `          callSites: Object.freeze([\n`
-      + `${sortSites(bridge.callSites).map(site).join("\n")}\n`
-      + `          ]),\n`
-      + `        }),`
+/**
+ * The current measured build is the source of truth for local semantic
+ * inheritance. This value is generated from its normalized touched callers,
+ * not from the whole client, so an unrelated ArenaNet rebuild can still pass.
+ */
+export const TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT =
+  "607abe51ec1bef208373970b49208005bb51d115cabe0cce16615a778b521e07";
+
+/**
+ * Return a transform record only when the locator and the complete relevant
+ * caller bodies prove the same behavior as the current shipped baseline.
+ */
+export function deriveEquivalentTemplateSaveBuild(
+  input: Uint8Array,
+): KnownTemplateSaveBuild | null {
+  const analysis = analyzeTemplateSaveCandidate(input);
+  const entry = analysis.entry;
+  const baseline = TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1];
+  if (
+    !baseline
+    || !entry
+    || analysis.status !== "derived"
+    || !analysis.validWasm
+    || analysis.encodings.canonical !== 0
+    || analysis.semanticFingerprint
+      !== TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT
+    || !sameJson(analysis.deleteAssertion, EXPECTED_DELETE_ASSERTION)
+    || entry.bridges.length !== baseline.bridges.length
+  ) {
+    return null;
+  }
+
+  for (const expected of baseline.bridges) {
+    const candidate = entry.bridges.find(
+      (bridge) => bridge.kind === expected.kind,
     );
-  });
-  return (
-    `    Object.freeze({\n`
-    + `      sha256:\n        "${entry.sha256}",\n`
-    + `      outputSha256:\n        "${entry.outputSha256}",\n`
-    + `      importCount: ${entry.importCount},\n`
-    + `      carrierImport: ${entry.carrierImport},\n`
-    + `      bridges: Object.freeze([\n${bridges.join("\n")}\n      ]),\n`
-    + `    }),`
-  );
+    const target = analysis.targets[expected.kind];
+    if (
+      !candidate
+      || !target
+      || target.signature !== EXPECTED_TEMPLATE_SIGNATURES[expected.kind]
+      || candidate.callSites.length !== expected.callSites.length
+      || (
+        expected.stubBody
+        && !sameJson(candidate.stubBody, expected.stubBody)
+      )
+    ) {
+      return null;
+    }
+  }
+  return entry;
 }

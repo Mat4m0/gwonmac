@@ -61,6 +61,24 @@ export function concat(...parts: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
+export function indexOfBytes(
+  haystack: Uint8Array,
+  needle: Uint8Array,
+  from = 0,
+): number {
+  outer: for (
+    let at = from;
+    at + needle.byteLength <= haystack.byteLength;
+    at += 1
+  ) {
+    for (let index = 0; index < needle.byteLength; index += 1) {
+      if (haystack[at + index] !== needle[index]) continue outer;
+    }
+    return at;
+  }
+  return -1;
+}
+
 export function uleb(value: number): Uint8Array {
   if (!Number.isSafeInteger(value) || value < 0) fail("invalid unsigned value");
   const out: number[] = [];

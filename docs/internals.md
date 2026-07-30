@@ -339,11 +339,14 @@ Read it before changing anything below.
 Every index and offset the transform carries belongs to one exact client build.
 The shape locator is production code under `src/main/core`; both the launcher
 and `pnpm template:recertify` call that one implementation. It re-derives
-indices from body bytes, resolved signatures, caller-set intersections, and
-exact call-site offsets, and refuses rather than guessing when a locator finds
-the wrong number of candidates. The command remains the maintainer surface for
-investigating a refusal and for re-measuring semantics; the launcher accepts
-only the narrower case where the already-understood structures are equivalent.
+indices from body bytes, resolved signatures, and caller-set intersections,
+then fingerprints every complete caller body the transform will modify. Only
+the five selected call-index operands are normalised. A changed path
+calculation, flag, branch, immediate, or unrelated call therefore refuses even
+when every call remains at the old byte offset. CLI comparison, diagnostics,
+and paste-ready formatting stay under `src/tools`; they are not part of the
+packaged proof. The command remains the maintainer surface for investigating a
+refusal and for re-measuring semantics.
 
 Four `Base/Os` file routines ship unimplemented and never reach Emscripten FS.
 Creating a directory returns error 2 unconditionally, which is why a build save
@@ -395,10 +398,13 @@ expected output hash, then atomically cached and streamed by the existing
 protocol path. A hash already in the shipped tables takes the fast path. For an
 unknown hash, Electron starts one utility process with only the artifact path
 and expected hash. That process re-reads and re-hashes the file, proves the
-template structures above, and checks that Enhancement's exported loop,
-signature, empty table slot, and initialized-data topology are unchanged. It
-may relocate only the eight known static addresses by one common aligned
-delta; every relative object offset stays exact.
+template structures above, and checks Enhancement's exported loop, signature,
+empty table slot, and initialized-data topology. The topology may propose one
+common aligned relocation, but it is not evidence by itself: all eight static
+addresses must also appear in the same complete code-reference contexts as the
+current shipped baseline. The address immediates are the only bytes normalised
+for that comparison; every surrounding instruction and every relative object
+offset stays exact.
 
 The utility process has a five-second deadline and writes no profile state.
 Only main publishes its checksum-protected, owner-only exact-hash answer to

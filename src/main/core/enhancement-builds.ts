@@ -84,8 +84,9 @@ export interface KnownEnhancementBuild {
 // transform is the floor every launch lands on, and the Enhancement transform is
 // layered on top so opting in never costs template save/load. It only appends
 // functions, so the main-loop index, the free table slot and every data address
-// below are the ones certified against official build 38771
-// (b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483).
+// below are certified separately for each exact template-save output. The last
+// entry is also the structural baseline from which the isolated verifier may
+// prove a future common relocation.
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
   Object.freeze({
     sha256: "68c6e09cec0f6992058a44a5617ca9eac7fab4697be1421943bbf664e6d444f6",
@@ -125,6 +126,46 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       cursorSoftwareModel: 0x5a1624,
       cursorShowCount: 0x5a1628,
       cursorColorBuffer: 0x298d90,
+      cursorArtHotspot: 0x00,
+      cursorArtTexture: 0x0c,
+      cursorHandleKey: 0x08,
+      cursorHandleObject: 0x00,
+      cursorViewTexture: 0x08,
+      cursorTextureType: 0x0c,
+      cursorTextureWidth: 0x14,
+      cursorTextureHeight: 0x18,
+    }),
+  }),
+  Object.freeze({
+    sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
+    programId: 1,
+    buildId: 38771,
+    hookFunction: 446,
+    hookParams: Object.freeze(["i32"] as const),
+    hookResults: Object.freeze([] as const),
+    tableSlot: 0,
+    layout: Object.freeze({
+      contextRoot: 0x5a0ee0,
+      agentArray: 0x5a4e58,
+      manualTargetAgentId: 0x5a394c,
+      automaticTargetAgentId: 0x5a3948,
+      gameContextSlot: 6,
+      characterContext: 0x44,
+      mapId: 0x198,
+      isExplorable: 0x19c,
+      currentMapId: 0x234,
+      currentInstanceType: 0x23c,
+      playerNumber: 0x2ac,
+      agentId: 0x2c,
+      agentX: 0x74,
+      agentY: 0x78,
+      agentType: 0x9c,
+      agentPlayerNumber: 0xf4,
+      agentModelType: 0xf6,
+      cursorActiveArt: 0x5a16e0,
+      cursorSoftwareModel: 0x5a16e4,
+      cursorShowCount: 0x5a16e8,
+      cursorColorBuffer: 0x298e50,
       cursorArtHotspot: 0x00,
       cursorArtTexture: 0x0c,
       cursorHandleKey: 0x08,

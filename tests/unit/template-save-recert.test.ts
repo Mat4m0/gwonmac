@@ -13,6 +13,20 @@ import {
   isLocalClientVerification,
   verifyLocalClientBytes,
 } from "../../src/main/core/local-client-verifier.js";
+import {
+  deriveEquivalentTemplateSaveBuild,
+} from "../../src/main/core/template-save-verifier.js";
+import {
+  concat,
+  encodeCode,
+  encodeSection,
+  paddedIndex,
+  parseCode,
+  sectionById,
+  splitSections,
+  WASM_HEADER,
+} from "../../src/main/core/wasm-binary.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
 import { defaultGuildWarsProfile } from "../../src/tools/enhancement-doctor.js";
 
 function uleb(value: number): number[] {
@@ -104,6 +118,8 @@ interface Options {
   canonicalProbe?: boolean;
   /** A second function calling File::Open with modes 1 and 2. */
   secondOpenPair?: boolean;
+  /** Change the path pointer passed to the existence probe. */
+  probePath?: number;
 }
 
 /**
@@ -181,7 +197,8 @@ function build(options: Options = {}): {
   add("writeFn", T_VOID, [
     0x00,
     ...constant(0), ...constant(0), ...call(createStub), 0x1a,
-    ...constant(0), ...constant(1), ...constant(0), ...probeCall, 0x1a,
+    ...constant(options.probePath ?? 0),
+    ...constant(1), ...constant(0), ...probeCall, 0x1a,
     ...constant(0), ...constant(2), ...constant(0), ...call(fileOpen), 0x1a,
     0x0b,
   ]);
@@ -289,6 +306,22 @@ function build(options: Options = {}): {
   };
 }
 
+function rewriteCode(
+  input: Uint8Array,
+  edit: (bodies: Uint8Array[]) => void,
+): Uint8Array {
+  const sections = splitSections(input);
+  const bodies = parseCode(sectionById(sections, 10));
+  edit(bodies);
+  return concat(
+    WASM_HEADER,
+    ...sections.map((sectionValue) =>
+      encodeSection(sectionValue.id === 10
+        ? { id: 10, body: encodeCode(bodies) }
+        : sectionValue)),
+  );
+}
+
 describe("template-save re-certification", () => {
   it("builds a valid fixture module", () => {
     assert.equal(WebAssembly.validate(build().bytes), true);
@@ -369,6 +402,24 @@ describe("template-save re-certification", () => {
     ]);
   });
 
+  it("fingerprints complete caller semantics, not only call offsets", () => {
+    const baseline = inspectTemplateSaveCandidate(build().bytes);
+    const changedPath = inspectTemplateSaveCandidate(
+      build({ probePath: 1 }).bytes,
+    );
+    assert.equal(baseline.status, "derived");
+    assert.equal(changedPath.status, "derived");
+    assert.notEqual(
+      changedPath.semanticFingerprint,
+      baseline.semanticFingerprint,
+    );
+    assert.deepEqual(
+      changedPath.entry?.bridges.map((bridge) => bridge.callSites),
+      baseline.entry?.bridges.map((bridge) => bridge.callSites),
+      "the shape locator still sees identical call offsets",
+    );
+  });
+
   it("reports a build with no create-directory stub as not applicable", () => {
     // The "ArenaNet fixed it" signal: nothing returns i32.const 2.
     const patched = build().bytes.slice();
@@ -447,5 +498,53 @@ describe("template-save re-certification", () => {
     if (report.certified) {
       assert.deepEqual(compareToCertified(derived), []);
     }
+
+    const fileExists = derived.bridges.find(
+      (bridge) => bridge.kind === "fileExists",
+    )!;
+    const site = fileExists.callSites[0]!;
+    // The current client computes the path argument immediately before the
+    // existence probe. Keep the call at the exact same byte offset while
+    // changing that computation by one byte.
+    const changedCaller = rewriteCode(bytes, (bodies) => {
+      const caller = bodies[site.localFunction]!;
+      const pathImmediate = site.bodyOffset - 7;
+      caller[pathImmediate] = caller[pathImmediate]! ^ 1;
+    });
+    assert.equal(WebAssembly.validate(new Uint8Array(changedCaller)), true);
+    assert.equal(deriveEquivalentTemplateSaveBuild(changedCaller), null);
+    assert.deepEqual(
+      verifyLocalClientBytes(changedCaller).reasons,
+      ["template-shape-changed"],
+    );
+
+    const layout = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!.layout;
+    const needle = paddedIndex(layout.agentArray);
+    const touched = new Set(
+      derived.bridges.flatMap((bridge) =>
+        bridge.callSites.map((callSite) => callSite.localFunction)),
+    );
+    let changedAddress = false;
+    const changedAddressReference = rewriteCode(bytes, (bodies) => {
+      for (let local = 0; local < bodies.length; local += 1) {
+        if (touched.has(local)) continue;
+        const body = bodies[local]!;
+        const at = body.findIndex((_, offset) =>
+          needle.every((byte, index) => body[offset + index] === byte));
+        if (at < 0) continue;
+        body[at] = body[at]! ^ 1;
+        changedAddress = true;
+        break;
+      }
+    });
+    assert.equal(changedAddress, true);
+    assert.equal(
+      WebAssembly.validate(new Uint8Array(changedAddressReference)),
+      true,
+    );
+    const addressDecision = verifyLocalClientBytes(changedAddressReference);
+    assert.ok(addressDecision.templateSaveBuild);
+    assert.equal(addressDecision.enhancementBuild, null);
+    assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
   });
 });

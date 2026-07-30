@@ -246,8 +246,12 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
 });
 
 test("a new client build can be re-certified without hand-derivation", async () => {
-  const recert = await readFile(
+  const locator = await readFile(
     path.join(root, "src/main/core/template-save-verifier.ts"),
+    "utf8",
+  );
+  const recert = await readFile(
+    path.join(root, "src/tools/template-save-recert.ts"),
     "utf8",
   );
   const cli = await readFile(
@@ -264,14 +268,16 @@ test("a new client build can be re-certified without hand-derivation", async () 
   // today's certified entry before pointing it at a new build.
   assert.match(cli, /--expect-certified/);
   assert.match(recert, /compareToCertified/);
+  assert.match(recert, /formatBuildEntry/);
+  assert.doesNotMatch(locator, /formatBuildEntry|compareToCertified/);
   assert.equal(
     manifest.scripts?.["template:recertify"],
     "pnpm build && node build/tools/template-save-recertify.js",
   );
 
   // Derivation must stay shape-based. A remembered index would defeat the point.
-  assert.match(recert, /caller-set intersection|callers\(/);
-  assert.doesNotMatch(recert, /localFunction: \d+/);
+  assert.match(locator, /caller-set intersection|callers\(/);
+  assert.doesNotMatch(locator, /localFunction: \d+/);
   // Deleted with P5.17: two assertions that the recertifier's "expected exactly
   // one" and "expected exactly 2 template scans" messages appeared in its
   // source. tests/unit/template-save-recert.test.ts builds ambiguous modules and

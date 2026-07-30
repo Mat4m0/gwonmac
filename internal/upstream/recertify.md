@@ -26,8 +26,11 @@ pnpm template:recertify -- "<path>/Gw.jspi.wasm" --emit-ts
 The command calls the same production locator as the launcher. It re-derives
 every index and call-site offset by shape — body bytes, resolved signatures,
 and caller-set intersection — then runs the derived entry through the
-production transform to fill in `outputSha256`. It never guesses: each stage
-asserts an exact count and reports every candidate it rejected.
+production transform to fill in `outputSha256`. The launcher additionally
+compares the complete affected caller bodies with the current baseline,
+normalising only the five selected call-index operands. Identical offsets alone
+are not proof. CLI-only comparison, diagnostic prose, and TypeScript formatting
+remain under `src/tools`.
 
 Read the `status` field first:
 
@@ -38,12 +41,12 @@ Read the `status` field first:
 | `not-applicable` | no create-directory stub — **ArenaNet may have fixed it**, see step 1 below before doing anything else |
 | `failed` | read `diagnostics`; a locator found the wrong number of candidates and named them |
 
-**When this manual procedure is required.** The launcher accepts only the
-already-understood shapes and the one proven static-address relocation. A
-refusal means a maintainer must recover semantics, not merely indices. Step 5
-below — re-measuring what the path helpers actually do — still has to be done
-by hand, and skipping it is how you ship a bridge that resolves cleanly and
-behaves wrongly. Every one of the six upstream defects in
+**When this manual procedure is required.** The launcher accepts only unchanged
+complete caller semantics and a static-address relocation whose eight code
+reference contexts are unchanged. A refusal means a maintainer must recover
+semantics, not merely indices. Step 5 below — re-measuring what the path helpers
+actually do — still has to be done by hand, and skipping it is how you ship a
+bridge that resolves cleanly and behaves wrongly. Every one of the six upstream defects in
 [upstream-defects.md](upstream-defects.md) was a semantic finding, not an index.
 
 ## Manual procedure
