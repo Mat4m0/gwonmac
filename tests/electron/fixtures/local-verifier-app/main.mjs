@@ -1,7 +1,13 @@
 import { app, BrowserWindow } from "electron";
-import {
-  verifyClientLocally,
-} from "../../../../build/main/local-client-verifier-host.js";
+
+// `pnpm verify` typechecks a clean checkout before it creates build/. Resolve
+// the compiled host at runtime so this fixture exercises the shipped entry
+// without making generated output a typecheck prerequisite.
+const hostUrl = new URL(
+  "../../../../build/main/local-client-verifier-host.js",
+  import.meta.url,
+);
+const { verifyClientLocally } = await import(hostUrl.href);
 
 const [officialWasmPath, cachePath, officialSha256] = process.argv.slice(-3);
 if (!officialWasmPath || !cachePath || !officialSha256) {
