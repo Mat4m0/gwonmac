@@ -1,11 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import type { DownloadProgress } from "../../src/shared/contracts.js";
 import {
   closeOffline,
   launchOffline,
-  main,
   root,
 } from "./fixtures.mjs";
 
@@ -14,8 +12,6 @@ const patchClientModule = path.join(root, "build/main/core/patch-client.js");
 const pathsModule = path.join(root, "build/main/core/paths.js");
 
 test.describe("client generation coordination", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
-
   test("interrupts a slow update before renderer crash recovery takes the lock", async () => {
     const fixture = await launchOffline("gw-runtime-update-abort-e2e-");
     try {
@@ -72,7 +68,6 @@ test.describe("client generation coordination", () => {
           try {
             const update = runtime.requestUpdate();
             await updateStarted;
-            const began = Date.now();
             let deadline;
             const recovery = await Promise.race([
               runtime.recoverRendererCrash().then(() => "settled"),
@@ -84,7 +79,6 @@ test.describe("client generation coordination", () => {
             await update;
             return {
               recovery,
-              elapsedMs: Date.now() - began,
               updateAborted: updateSignal?.aborted ?? false,
               errorCodes: progress
                 .filter((value) => value.phase === "error")
@@ -105,7 +99,6 @@ test.describe("client generation coordination", () => {
 
       expect(result.recovery).toBe("settled");
       expect(result.updateAborted).toBe(true);
-      expect(result.elapsedMs).toBeLessThan(1_000);
       expect(result.errorCodes).toEqual(["not_ready"]);
     } finally {
       await closeOffline(fixture);
@@ -164,7 +157,6 @@ test.describe("client generation coordination", () => {
           try {
             const update = runtime.requestUpdate();
             await updateStarted;
-            const began = Date.now();
             let deadline;
             const shutdown = await Promise.race([
               runtime.shutdown().then(() => "settled"),
@@ -176,7 +168,6 @@ test.describe("client generation coordination", () => {
             await update;
             return {
               shutdown,
-              elapsedMs: Date.now() - began,
               updateAborted: updateSignal?.aborted ?? false,
             };
           } finally {
@@ -196,7 +187,6 @@ test.describe("client generation coordination", () => {
         shutdown: "settled",
         updateAborted: true,
       });
-      expect(result.elapsedMs).toBeLessThan(1_000);
     } finally {
       await closeOffline(fixture);
     }

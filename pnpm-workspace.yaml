@@ -7,13 +7,15 @@ confirmModulesPurge: false
 blockExoticSubdeps: false
 overrides:
   "brace-expansion@": 5.0.8
-  tar: 7.5.19
+  tar: 7.5.21
   tmp: 0.2.7
 allowBuilds:
   electron: true
   esbuild: true
   fs-xattr: true
   macos-alias: true
+# Electron Forge's packaging-only legacy minimatch graph requires
+# brace-expansion 1/2; forcing the incompatible major 5 is not a fix.
 auditConfig:
   ignoreGhsas:
     - GHSA-mh99-v99m-4gvg

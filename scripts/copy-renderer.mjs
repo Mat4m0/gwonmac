@@ -8,25 +8,27 @@
 import fs from "node:fs";
 import path from "node:path";
 
-// Everything the compiler owns. An asset is what is left, so a new font or
-// image needs no change here, and a new module can never be shipped twice.
-const COMPILED = new Set([".js", ".ts"]);
+// Package inputs are explicit. Copying "everything except code" made ignored
+// editor and OS files part of the build, so two clean checkouts could package
+// different applications. A new asset must be reviewed here.
+const ASSETS = [
+  "favicon.ico",
+  "favicon.png",
+  "fonts/COPYING-QUALITYPE",
+  "fonts/QTFrizQuad.otf",
+  "harness.css",
+  "images/hero-poster.jpg",
+  "images/hero-video.webm",
+  "images/logo.webp",
+  "index.html",
+  "loading.css",
+];
 
-/** @param {string} src @param {string} dest */
-function copyAssets(src, dest) {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const from = path.join(src, entry.name);
-    const to = path.join(dest, entry.name);
-    if (entry.isDirectory()) copyAssets(from, to);
-    else if (!COMPILED.has(path.extname(entry.name))) fs.copyFileSync(from, to);
-  }
-}
-
-const src = path.resolve("src/renderer");
-// No rmSync: scripts/build.mjs removes build/ once, at the start, and this
-// script now runs before the renderer is compiled into the same directory.
 const dest = path.resolve("build/renderer");
-copyAssets(src, dest);
+for (const relative of ASSETS) {
+  const target = path.join(dest, relative);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(path.resolve("src/renderer", relative), target);
+}
 
 console.log(`copied renderer -> ${dest}`);

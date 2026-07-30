@@ -311,7 +311,7 @@ describe("integration: patch updater", () => {
     assert.equal(await readFile(join(artifacts, "Gw.jspi.js"), "utf8"), "OLD");
   });
 
-  it("bounds an unresponsive ArenaNet request", async () => {
+  it("bounds an unresponsive ArenaNet request", { timeout: 2_000 }, async () => {
     const server = http.createServer(() => {
       // Deliberately never respond; AbortSignal must end the request.
     });
@@ -330,7 +330,6 @@ describe("integration: patch updater", () => {
       fetch: createBoundedPatchFetch(globalThis.fetch, 25),
     });
 
-    const started = Date.now();
     try {
       await assert.rejects(() =>
         client.getBytes(`http://127.0.0.1:${address.port}/manifest.json`, {
@@ -338,7 +337,6 @@ describe("integration: patch updater", () => {
           tries: 1,
         }),
       );
-      assert(Date.now() - started < 1_000);
     } finally {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

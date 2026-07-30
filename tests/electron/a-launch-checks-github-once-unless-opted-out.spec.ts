@@ -14,10 +14,9 @@
 // path at all. The second test seeds an opted-out profile, wraps `fetch`, and
 // counts the real thing.
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 declare global {
   // The counter the stub below keeps in the main process, read back through
@@ -51,8 +50,6 @@ function countGithubRequests() {
 }
 
 test.describe("release check network policy", () => {
-  test.skip(!existsSync(main), "run the build before Electron tests");
-
   test("a default launch has the check on and attempts it once", async () => {
     // No GW_TEST_OFFICIAL_UPDATER: this build is not update-capable, so the
     // launch check finishes as `updater-unavailable` with no network path at

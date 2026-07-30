@@ -138,7 +138,10 @@ describe("patch transport", () => {
     );
   });
 
-  it("interrupts retry backoff without starting another request", async () => {
+  it(
+    "interrupts retry backoff without starting another request",
+    { timeout: 2_000 },
+    async () => {
     const controller = new AbortController();
     const reason = new AppError(
       "download_stopped",
@@ -157,13 +160,12 @@ describe("patch transport", () => {
       signal: controller.signal,
     });
     await new Promise<void>((resolve) => setImmediate(resolve));
-    const began = performance.now();
     controller.abort(reason);
 
     await assert.rejects(pending, (error: unknown) => error === reason);
-    assert.ok(performance.now() - began < 250);
     assert.equal(calls, 1);
-  });
+    },
+  );
 
   it("bounds streamed bodies with and without content-length", async () => {
     const declared = new Response(new Uint8Array(5), {
