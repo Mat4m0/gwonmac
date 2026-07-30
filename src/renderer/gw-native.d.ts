@@ -46,7 +46,7 @@ declare global {
 
   interface LoadingController {
     set(message: string, fraction: number | null, detail?: string): void;
-    fail(message: string): void;
+    fail(message: string, detail?: string): void;
     failFilesystem(): void;
     done(): void;
     waitForClient(): Promise<boolean>;
@@ -163,10 +163,7 @@ declare global {
     readonly gwEnhancementSettings: Readonly<{
       create(options: {
         form: HTMLFormElement;
-        byId(id: string): HTMLElement;
         selection: EnhancementSelection;
-        persist(patch: AppSettingsPatch): Promise<AppSettings>;
-        current(): AppSettings | null;
       }): EnhancementSettingsController;
     }>;
     gwAutomation: EnhancementAutomation;

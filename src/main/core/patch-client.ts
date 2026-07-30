@@ -213,6 +213,7 @@ export class PatchClient {
       total: number;
       rate: DownloadRateAverage;
       sizes: Map<string, number>;
+      label: string;
     },
     signal?: AbortSignal,
   ): Promise<void> {
@@ -242,7 +243,7 @@ export class PatchClient {
       const rate = progress.rate.update(progress.got);
       this.emit({
         phase: "client",
-        label: "Preparing files needed to start",
+        label: progress.label,
         received: progress.got,
         total: progress.total,
         bytesPerSecond: rate,
@@ -252,7 +253,7 @@ export class PatchClient {
 
     this.emit({
       phase: "client",
-      label: "Preparing files needed to start",
+      label: progress.label,
       received: progress.got,
       total: progress.total,
       bytesPerSecond: 0,
@@ -512,12 +513,17 @@ export class PatchClient {
       total,
       rate: new DownloadRateAverage(),
       sizes,
+      // A first launch and a patch day are different experiences and the
+      // label says which one this is; the renderer shows it as-is.
+      label: previousGeneration.valid
+        ? "Updating the game client"
+        : "Downloading the game client",
     };
 
     if (total) {
       this.emit({
         phase: "client",
-        label: "Preparing files needed to start",
+        label: progress.label,
         received: 0,
         total,
         bytesPerSecond: 0,

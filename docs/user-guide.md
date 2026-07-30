@@ -45,16 +45,19 @@ concurrent ArenaNet requests.
 Quick Start is the default. It keeps the loading screen tied to data the game
 actually needs and caches downloaded areas for later.
 
-On the first online start, the loading screen offers **Quick Start
-(Recommended)** or **Download Full Game**. Guild Wars, its audio, networking,
-and graphics do not start before this decision.
+On the first online start, the loading screen asks one question: **Quick
+Start (Recommended)** or **Download Full Game**. A single pre-checked line
+beneath it covers the automatic update check — see [Updates](#updates) — and
+everything else keeps its default; the game tools live under
+**Settings → Controls**. Guild Wars, its audio, networking, and graphics do
+not start before this decision.
 
 Quick Start starts Guild Wars and downloads areas when needed. Download Full
 Game remains in the launcher, shows verified bytes, speed, and ETA, and does
 not start Guild Wars automatically. When complete, choose **Play Guild Wars**.
 While downloading you may pause, return to Quick Start, or explicitly choose
-**Play Now Instead**; only that last action starts the game early and lets the
-full download continue in the background.
+**Play While Downloading**; only that last action starts the game early and
+lets the full download continue in the background.
 
 The displayed transfer rate is a short moving average, so chunk-completion
 bursts do not make the number jump between unrealistic highs and lows. While a
@@ -176,6 +179,11 @@ running as your macOS user may be able to recover it. If the file cannot be read
 or the sign-in has expired or been revoked, you are simply returned to the login
 screen — the application does not fail to start.
 
+If an explicit sign-in fails for a reason other than you closing the window, a
+brief status line appears over the login screen saying the sign-in did not
+complete; it disappears on its own. Closing the Steam window yourself shows
+nothing — you already know what happened.
+
 Signing out in the game forgets the local copy. It does not unlink your accounts.
 
 **This signs you in to a Steam account that is already linked to a Guild Wars
@@ -194,7 +202,8 @@ in the app to export diagnostics and open it. Diagnostics are optional.
 - For a crash, startup, download, graphics, input, audio, or login problem,
   choose **Export Recent Diagnostics…**.
 - For stutter, choose **Record Performance Problem**, reproduce it, press
-  **Cmd+Shift+M** when it is visible, then use **View → Stop Capture**.
+  **Cmd+Shift+M** when it is visible, then use
+  **Help → Diagnostics → Stop Capture**.
 - When investigating a repeatable long loading stall with a Chromium trace,
   start the trace and wait five seconds before entering the portal or changing
   maps. Stop the capture after the destination has rendered. The initial wait
@@ -203,9 +212,9 @@ in the app to export diagnostics and open it. Diagnostics are optional.
 An always-visible capture indicator shows the recording type and elapsed time.
 After **Cmd+Shift+M**, it confirms that the problem marker was registered.
 
-The app creates one `.gwdiag` file and can reveal it in Finder. GitHub does not
-accept that extension directly: Control-click the file, choose **Compress**,
-and attach the resulting `.zip`.
+The app creates one `.zip` file and can reveal it in Finder. Attach it to the
+GitHub bug report as it is. (Earlier releases named the same archive `.gwdiag`;
+the developer tools still read either.)
 
 Your password, saved login, account name, game traffic, and crash dumps are
 never recorded, so they are not in the export to begin with. The event log the
@@ -241,11 +250,12 @@ public, so review the bug form’s privacy notice as well.
 The first Developer ID release must be installed manually from its notarized
 DMG. Later official releases can update themselves.
 
-The app never polls. Choose **Check for Updates** on the loading screen, in the
+The app never polls. **Automatically check for and download app updates** is
+on by default — it performs one check per launch, and the first-run screen
+says so before the first one happens. Turn it off and the app contacts GitHub
+only when you choose **Check for Updates** — on the loading screen, in the
 application menu, on a client-compatibility notice, or under
-**Settings → Updates**. **Automatically check for and download app updates** is
-off by default; enabling it performs one check per launch and immediately
-checks once. While it is off, the app contacts GitHub only when you ask.
+**Settings → Updates**. Turning it back on immediately checks once.
 
 An eligible update downloads in the background. When it is ready, choose
 **Restart to Update** or choose Later and let it install on the next ordinary
@@ -297,4 +307,5 @@ official artifact is unchanged whichever way the box is set.
 
 Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually
-`~/Library/Application Support/Guild Wars`.
+`~/Library/Application Support/Guild Wars`. **Settings → Game Data → Show in
+Finder** opens the game-data folder directly.

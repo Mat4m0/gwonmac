@@ -241,9 +241,12 @@ async function handleSnapshot(request: Request): Promise<Response> {
       code === "chunk_offline"
         ? "No cached copy of this game data is available while offline."
         : "ArenaNet is unavailable. Guild Wars will retry this download.";
+    // The body prose is for the WASM client's own log; the header carries the
+    // code so the renderer can choose a reviewed sentence instead of showing
+    // whatever this handler happened to write.
     return new Response(message, {
       status: 503,
-      headers: headers({ "Cache-Control": "no-store" }),
+      headers: headers({ "Cache-Control": "no-store", "X-GW-Error": code }),
     });
   }
 }

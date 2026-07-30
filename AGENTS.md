@@ -130,10 +130,12 @@ not only happy paths.
   Chromium's `use-mock-keychain` switch before ready. Official Developer ID
   packages use Chromium's real Keychain-backed provider. All builds clear
   browser cookies at startup and quit.
-- The app makes no network request the user did not ask for. `autoCheckUpdates`
-  (default `false`) governs **every** automatic release check without
-  exception, including the one on an unrecognised client build; with it off, a
-  launch reaches github.com zero times. `src/main/app-updater.ts` is the only
+- The app makes no network request the user was not plainly told about.
+  `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
+  run and in Settings → Updates) performs one release check per launch and
+  governs **every** automatic check without exception, including the one on an
+  unrecognised client build; switched off, a launch reaches github.com zero
+  times, forever. `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of discovery, feed
   validation, download, ready, and install state. Only an official package
   carrying the release marker may reach Squirrel.Mac. Stable installs never

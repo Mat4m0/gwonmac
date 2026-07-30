@@ -76,14 +76,14 @@ window.gwLoading = (function (): LoadingController {
       setBar(frac);
     },
 
-    fail(text) {
+    fail(text, failDetail) {
       recovery = 'client';
       root.style.display = '';
       root.classList.remove('gone');
       label.textContent = text;
       label.classList.add('error');
       detail.textContent =
-        'You can retry, or choose Help → Report a Problem.';
+        failDetail ?? 'You can retry, or choose Help → Report a Problem.';
       retry.hidden = false;
       retry.textContent = 'Retry';
       bar.classList.remove('busy');
@@ -136,15 +136,40 @@ window.gwLoading = (function (): LoadingController {
     })
     .catch(() => {});
 
-  // The running version, in the footer, on every launch. It used to live only
-  // in the macOS About panel, which means a bug report had to go hunting for
-  // it — and under CalVer the number doubles as a staleness signal.
-  window.gwNative?.client.session().then((session) => {
-    const version = document.createElement('p');
-    version.id = 'loading-version';
-    version.textContent = `Guild Wars Reforged ${session.appVersion}`;
-    el('loading-legal').prepend(version);
-  }).catch(() => {});
+  // The passive health line: version, data mode, and (once a client is
+  // active) the game build's short id, in the footer on every launch. The
+  // version used to live only in the macOS About panel, which meant a bug
+  // report had to go hunting for it — and under CalVer the number doubles as
+  // a staleness signal. Everything here is already-local data; no request is
+  // made to render it.
+  async function renderFooterStatus() {
+    const native = window.gwNative;
+    if (!native) return;
+    try {
+      const [session, settings] = await Promise.all([
+        native.client.session(),
+        native.settings.get(),
+      ]);
+      const mode = settings.dataStrategy === 'quick'
+        ? 'Quick Start'
+        : settings.dataStrategy === 'full' ? 'Full Game' : '';
+      const build = session.compatibility
+        ? `client ${session.compatibility.clientSha256.slice(0, 8)}`
+        : '';
+      let version = document.getElementById('loading-version');
+      if (!version) {
+        version = document.createElement('p');
+        version.id = 'loading-version';
+        el('loading-legal').prepend(version);
+      }
+      version.textContent =
+        [`Guild Wars Reforged ${session.appVersion}`, mode, build]
+          .filter(Boolean).join(' · ');
+    } catch {
+      // The footer is informational; a failed read shows nothing extra.
+    }
+  }
+  void renderFooterStatus();
 
   // A failed boot gets a one-click retry, same as View → Reload Game.
   retry?.addEventListener('click', async () => {
@@ -164,8 +189,12 @@ window.gwLoading = (function (): LoadingController {
       // carrying a sentence the main process had written.
       const progress = await window.gwNative.progress.current();
       if (progress.phase === 'error') {
-        const { describeLaunchFailure } = await import('./failure-messages.js');
-        api.fail(describeLaunchFailure(progress.errorCode));
+        const { describeLaunchFailure, failureDetail } =
+          await import('./failure-messages.js');
+        api.fail(
+          describeLaunchFailure(progress.errorCode),
+          failureDetail(progress.errorCode),
+        );
         return;
       }
       window.location.reload();
@@ -216,7 +245,8 @@ window.gwLoading = (function (): LoadingController {
     api.set('Checking the game client', null);
     // Resolved before the first progress event can arrive, so the failure
     // path below stays synchronous.
-    const { describeLaunchFailure } = await import('./failure-messages.js');
+    const { describeLaunchFailure, describeNotice, failureDetail } =
+      await import('./failure-messages.js');
 
     return new Promise<boolean>((resolve) => {
       let settled = false;
@@ -229,13 +259,19 @@ window.gwLoading = (function (): LoadingController {
 
       const apply = (p: DownloadProgress) => {
         if (p.phase === 'error') {
-          api.fail(describeLaunchFailure(p.errorCode));
+          api.fail(describeLaunchFailure(p.errorCode), failureDetail(p.errorCode));
           finish(false);
           return;
         }
         window.gwAutomation.set(`launcher.${p.phase}`);
         if (p.phase === 'ready') {
-          api.set('Starting Guild Wars', null, p.notice || '');
+          api.set(
+            'Starting Guild Wars',
+            null,
+            p.noticeCode ? describeNotice(p.noticeCode) : '',
+          );
+          // A client is active now, so the footer can name its build.
+          void renderFooterStatus();
           finish(true);
           return;
         }
@@ -244,11 +280,11 @@ window.gwLoading = (function (): LoadingController {
           ? `${Math.ceil(p.secondsRemaining / 60)} min remaining` : '';
         const rate = p.bytesPerSecond > 0
           ? `${(p.bytesPerSecond / 1e6).toFixed(1)} MB/s avg` : '';
+        // The client phase keeps main's label: only patch-client knows
+        // whether this is a first download or a patch-day update.
         const text = p.phase === 'starting' || p.phase === 'checking'
           ? 'Checking the game client'
-          : p.phase === 'client'
-            ? 'Preparing files needed to start'
-            : p.label || 'Preparing files needed to start';
+          : p.label || 'Preparing files needed to start';
         api.set(text, frac,
                 [p.total ? `${mb(p.received)} of ${mb(p.total)}` : '', rate, eta]
                   .filter(Boolean).join(' · '));

@@ -152,6 +152,8 @@
 #data-choice-title { margin:0 0 2px; font-size:17px; font-weight:400;
                      letter-spacing:.02em; color:#f2e8d2; }
 .dock-info > p { margin:0; font-size:13px; color:#d8caaaad; }
+/* The gate's save-failure line: never shares a slot with the size label. */
+#data-choice-error { color:#ff8f6b; }
 
 /* First-run options: two compact cards on the dock's action side. */
 .data-choice-actions { display:flex; gap:12px; flex-shrink:0; }

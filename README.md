@@ -54,10 +54,10 @@ mid-download with _Play Now Instead_.
   payloads are never recorded.
 - Guild Wars' own **Remember Password** writes one encrypted, owner-only local
   file using Chromium's macOS Keychain-backed encryption in official builds.
-- **The app does not poll for updates.** It asks GitHub whether a newer release
-  exists when you press **Check for Updates**, and otherwise only if you switch
-  on automatic checking and downloading — which is off by default. A downloaded
-  update is offered as a restart and otherwise installs on the next restart. See
+- **The app does not poll for updates.** It checks GitHub once per launch — a
+  default declared at first run that one checkbox turns off. Switched off, it
+  asks GitHub only when you press **Check for Updates**. A downloaded update is
+  offered as a restart and otherwise installs on the next restart. See
   [Updates](docs/user-guide.md#updates).
 
 Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).

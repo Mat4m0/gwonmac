@@ -17,9 +17,25 @@ export interface SnapshotMetadata {
 }
 
 /**
- * A client preparation that is still running. `label` and `notice` are the
- * last English the main process writes into this channel, and the renderer
- * already substitutes its own text for every phase but `image`.
+ * Why a ready client is not simply "ready": the launch took a fallback the
+ * player may want to know about. A closed union for the same reason failure
+ * codes are one: the sentence the player reads belongs to the renderer
+ * (`src/renderer/failure-messages.ts`), where it can be tested.
+ */
+export const NOTICE_CODES = [
+  "cached-live-probe",
+  "rejected-candidate-fallback",
+  "update-failed-previous-restored",
+  "offline-using-cached-client",
+  "interrupted-update-retryable",
+] as const;
+
+export type NoticeCode = (typeof NOTICE_CODES)[number];
+
+/**
+ * A client preparation that is still running. `label` is the last English the
+ * main process writes into this channel, and the renderer already substitutes
+ * its own text for every phase but `image`.
  */
 export interface DownloadActivity {
   phase:
@@ -33,7 +49,7 @@ export interface DownloadActivity {
   total: number;
   bytesPerSecond: number;
   secondsRemaining: number | null;
-  notice?: string;
+  noticeCode?: NoticeCode;
 }
 
 /**
@@ -76,6 +92,19 @@ export interface CacheInfo {
   chunks: number;
   totalBytes: number;
   totalChunks: number;
+  /**
+   * Free bytes on the game-data volume when this info was built, or -1 when
+   * the volume could not be measured. Advisory: the download preflight in
+   * chunk-store.ts re-measures and is the enforcement.
+   */
+  freeBytes: number;
+  /**
+   * How many more bytes must be freed before the full download could start,
+   * or 0 when it fits (or cannot be judged). Computed in the main process
+   * beside the preflight's own margin, because the renderer cannot import
+   * that constant at runtime and a second copy of it would drift.
+   */
+  fullDownloadShortfall: number;
 }
 
 export interface SocketOpenedEvent {
@@ -177,9 +206,11 @@ export interface AppSettings extends EnhancementSelection {
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
-   * Opt in to automatic release checks. `false` means this app makes no
-   * network request to GitHub unless the user asks for one — with no
-   * exceptions, including the check on an uncertified client build.
+   * Automatic release checks: one GitHub request per launch, on by default so
+   * players stay current, and declared plainly wherever the checkbox appears.
+   * `false` means this app makes no network request to GitHub unless the user
+   * asks for one — with no exceptions, including the check on an uncertified
+   * client build. Opting out is one checkbox, honored forever.
    */
   autoCheckUpdates: boolean;
   /**
@@ -209,7 +240,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,
-  autoCheckUpdates: false,
+  autoCheckUpdates: true,
   lastUpdateCheckAt: null,
   compatibilityNoticeSeenFor: null,
 };
@@ -219,12 +250,42 @@ export interface StoredCredentials {
   password: string;
 }
 
+/**
+ * Why an interactive Steam sign-in produced no token. A closed vocabulary that
+ * crosses to the renderer so the player can be told what happened instead of
+ * silently landing back on the login screen; the sentence itself lives in
+ * `src/renderer/failure-messages.ts`. `cancelled` stays silent by design —
+ * the player closed the window and needs no explanation of their own action.
+ */
+export type SteamRefusalReason =
+  | "cancelled"
+  | "state-mismatch"
+  | "no-token"
+  | "failed";
+
+/**
+ * What a Steam token request produced. `reason` is present only when an
+ * interactive sign-in ran and did not complete; a silent probe with nothing
+ * stored answers `{ token: null }` alone, which is a normal launch, not news.
+ */
+export interface SteamTokenResult {
+  token: string | null;
+  reason?: SteamRefusalReason;
+}
+
 export type ExternalLinkKind =
   | "github"
   | "discord"
   | "donate"
   | "releases"
   | "store";
+
+/**
+ * Directories the renderer may ask to reveal in Finder. A closed enum, never
+ * a path: the renderer names an intent, main resolves the location, and no
+ * filesystem path crosses the bridge in either direction.
+ */
+export type RevealKind = "gameData";
 
 // The application and website both use this canonical release location.
 export const RELEASE_REPO = "Mat4m0/gwonmac";
@@ -465,6 +526,7 @@ export const IPC = {
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
   diagnosticsCurrent: "gw:diagnostics:current",
   appOpenExternal: "gw:app:openExternal",
+  appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
@@ -562,13 +624,13 @@ export interface GwNativeApi {
    */
   steam: {
     /**
-     * The token to log in with, or `null` when there is none to offer.
+     * The token to log in with, or a refusal.
      *
      * `silent` is the client's launch-time probe: it may only read what is
      * already stored. A non-silent request is the player having clicked the
      * button, and is the only thing that may open a Steam sign-in window.
      */
-    getToken(silent: boolean): Promise<string | null>;
+    getToken(silent: boolean): Promise<SteamTokenResult>;
     /**
      * Hand back what the account service returned. Refreshes the stored
      * expiry only when the token matches the one already held; anything else
@@ -603,6 +665,8 @@ export interface GwNativeApi {
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;
+    /** Reveal a named app directory in Finder. */
+    reveal(kind: RevealKind): Promise<void>;
     requestQuit(): Promise<void>;
   };
   client: {

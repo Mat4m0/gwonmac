@@ -71,40 +71,30 @@
       <button type="button" id="loading-retry" hidden>Retry</button>
     </div>
 
+    <!-- One decision, two cards, and a single plainly-worded consent line.
+         The game tools live in Settings: their defaults are right for a first
+         launch, and a player who has never played has no basis to answer. -->
     <section id="data-choice" aria-labelledby="data-choice-title" hidden>
       <div class="dock-info">
-        <h2 id="data-choice-title">Welcome — choose how to play</h2>
-        <p>Choose what should happen before Guild Wars starts. You can change this later in Settings.</p>
+        <h2 id="data-choice-title">How would you like to play?</h2>
+        <p>You can change this any time in Settings.</p>
         <p>
           <label>
-            <input type="checkbox" id="data-choice-auto-updates">
-            Automatically check for and download app updates
+            <input type="checkbox" id="data-choice-auto-updates" checked>
+            Check for app updates at launch — contacts GitHub once per start
           </label>
         </p>
-        <p>
-          <label>
-            <input type="checkbox" id="data-choice-native-cursor">
-            Use the game's own cursor — changing this restarts the app
-          </label>
-          <span id="data-choice-native-cursor-note" role="status" hidden></span>
-        </p>
-        <p>
-          <label>
-            <input type="checkbox" id="data-choice-target-readout">
-            Show target distance and range — changing this restarts the app
-          </label>
-          <span id="data-choice-target-readout-note" role="status" hidden></span>
-        </p>
+        <p id="data-choice-error" role="status" hidden></p>
       </div>
       <div class="data-choice-actions">
-        <button type="button" id="data-choice-full" class="data-choice-option">
-          <span class="data-choice-name">Download Full Game</span>
-          <span id="data-choice-full-size" class="data-choice-description">Download everything before starting.</span>
-        </button>
         <button type="button" id="data-choice-quick" class="data-choice-option recommended">
           <span class="data-choice-name">Quick Start</span>
           <span class="data-choice-badge">Recommended</span>
-          <span class="data-choice-description">Download each area when you need it.</span>
+          <span class="data-choice-description">Play now — each area downloads when you need it.</span>
+        </button>
+        <button type="button" id="data-choice-full" class="data-choice-option">
+          <span class="data-choice-name">Download Full Game</span>
+          <span id="data-choice-full-size" class="data-choice-description">Download everything first. You can play while it downloads.</span>
         </button>
       </div>
     </section>
@@ -128,7 +118,7 @@
           Pause Download
         </button>
         <button type="button" id="data-download-play" class="launcher-primary">
-          Play Now Instead
+          Play While Downloading
         </button>
       </div>
     </section>
@@ -143,12 +133,14 @@
                 aria-live="polite" hidden></span>
         </p>
       </div>
+      <!-- Recovery is an app update, so the check is the visible secondary
+           action; Play stays primary because play is never blocked. -->
       <div class="client-compat-actions">
-        <button type="button" id="client-compat-check" class="launcher-link">
-          Check for Updates
-        </button>
         <button type="button" id="client-compat-releases" class="launcher-link">
           Open Releases…
+        </button>
+        <button type="button" id="client-compat-check" class="launcher-secondary">
+          Check for Updates
         </button>
         <button type="button" id="client-compat-play" class="launcher-primary">
           Play Guild Wars
@@ -195,6 +187,9 @@
   <span id="capture-label">Performance capture · 00:00</span>
   <span id="capture-marker" hidden>Problem marked ✓</span>
 </output>
+<!-- A transient host-drawn line over the client's login screen: the one place
+     a failed Steam sign-in can be explained without drawing over the game. -->
+<output id="login-status" role="status" aria-live="polite" hidden></output>
 <span id="capture-announcement" class="sr-only" role="status" aria-live="polite"></span>
 
 <!-- Settings: one compact panel with a section rail. Every pane fits without
@@ -253,7 +248,9 @@
           <p id="settings-data-note" class="settings-note"></p>
           <div class="settings-data-actions">
             <button type="button" id="settings-download-full" class="primary">Start Downloading Now</button>
+            <button type="button" id="settings-reveal-data">Show in Finder</button>
           </div>
+          <p class="settings-note">Game data lives in your Library folder; Show in Finder opens it.</p>
           <div class="settings-divider" aria-hidden="true"></div>
           <button type="button" id="settings-clear-cache" class="quiet-danger">Clear Game Data…</button>
           <p class="settings-danger-sub">Frees the downloaded game data. Your login and settings are kept.</p>
@@ -321,7 +318,7 @@
             <input type="checkbox" name="autoCheckUpdates">
             <span>Automatically check for and download app updates</span>
           </label>
-          <p class="settings-note">While this is off, the app contacts GitHub only when you ask it to — including when it meets a game client build it does not recognise. Downloaded updates are installed when you restart.</p>
+          <p class="settings-note">On by default: one check per launch. Turn this off and the app contacts GitHub only when you ask it to — including when it meets a game client build it does not recognise. Downloaded updates are installed when you restart.</p>
           <div class="settings-update-actions">
             <button type="button" id="settings-check-updates">
               Check for Updates

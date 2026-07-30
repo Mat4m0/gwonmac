@@ -4,6 +4,7 @@ import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SafeStorageApi } from "../../src/main/core/encrypted-store.js";
+import type { SteamRefusalReason } from "../../src/shared/contracts.js";
 import {
   parseSteamSession,
   refreshSteamExpiry,
@@ -196,18 +197,23 @@ function fakeStore(
   };
 }
 
+type AcquireAnswer = { token: string | null; refusal?: SteamRefusalReason };
+
 /** An acquisition that records whether it was reached at all. */
-function fakeAcquire(token: string | null): (() => Promise<string | null>) & {
+function fakeAcquire(
+  token: string | null,
+  refusal?: SteamRefusalReason,
+): (() => Promise<AcquireAnswer>) & {
   readonly calls: number;
 } {
   let calls = 0;
-  const acquire = async (): Promise<string | null> => {
+  const acquire = async (): Promise<AcquireAnswer> => {
     calls += 1;
-    return token;
+    return { token, ...(refusal ? { refusal } : {}) };
   };
   return Object.defineProperty(acquire, "calls", {
     get: () => calls,
-  }) as (() => Promise<string | null>) & { readonly calls: number };
+  }) as (() => Promise<AcquireAnswer>) & { readonly calls: number };
 }
 
 const NOW = 1_800_000_000_000;
@@ -339,6 +345,51 @@ describe("deciding which Steam token to vend", () => {
     assert.equal(store.held, null);
   });
 
+  it("carries the sign-in refusal reason through to the caller", async () => {
+    // The reason is what lets the renderer explain a failed sign-in instead
+    // of silently redrawing the login screen.
+    const store = fakeStore(null);
+    const refused = await resolveSteamToken(store, {
+      silent: false,
+      acquire: fakeAcquire(null, "no-token"),
+      now: NOW,
+    });
+    assert.equal(refused.token, null);
+    assert.equal(refused.refusal, "no-token");
+
+    // A throwing acquisition and an implausible token both read as "failed".
+    const threw = await resolveSteamToken(store, {
+      silent: false,
+      acquire: () => Promise.reject(new Error("window construction failed")),
+      now: NOW,
+    });
+    assert.equal(threw.refusal, "failed");
+    const oversized = await resolveSteamToken(store, {
+      silent: false,
+      acquire: fakeAcquire("x".repeat(4097)),
+      now: NOW,
+    });
+    assert.equal(oversized.refusal, "failed");
+
+    // A silent probe with nothing stored is a normal launch, not a refusal.
+    const silent = await resolveSteamToken(store, {
+      silent: true,
+      acquire: fakeAcquire(null),
+      now: NOW,
+    });
+    assert.equal(silent.token, null);
+    assert.equal(silent.refusal, undefined);
+
+    // A vended token never carries one.
+    const vended = await resolveSteamToken(store, {
+      silent: false,
+      acquire: fakeAcquire(ACQUIRED),
+      now: NOW,
+    });
+    assert.equal(vended.token, ACQUIRED);
+    assert.equal(vended.refusal, undefined);
+  });
+
   it("treats an expired token as absent and discards it", async () => {
     const store = fakeStore({ token: FRESH, expiry: NOW - 1 });
     const acquire = fakeAcquire(ACQUIRED);
@@ -462,8 +513,8 @@ describe("ordering complete Steam session operations", () => {
   it("makes clear final when acquisition was already in flight", async () => {
     const store = fakeStore(null);
     const steam = new SteamSessionCoordinator(store);
-    let finishAcquire!: (token: string | null) => void;
-    const acquired = new Promise<string | null>((resolve) => {
+    let finishAcquire!: (answer: AcquireAnswer) => void;
+    const acquired = new Promise<AcquireAnswer>((resolve) => {
       finishAcquire = resolve;
     });
 
@@ -475,7 +526,7 @@ describe("ordering complete Steam session operations", () => {
     await Promise.resolve();
     const cleared = steam.clear();
 
-    finishAcquire(ACQUIRED);
+    finishAcquire({ token: ACQUIRED });
     assert.equal((await resolution).token, ACQUIRED);
     await cleared;
     assert.equal(store.held, null);
@@ -585,19 +636,19 @@ describe("ordering complete Steam session operations", () => {
   it("coalesces concurrent interactive resolutions", async () => {
     const store = fakeStore(null);
     const steam = new SteamSessionCoordinator(store);
-    let finishAcquire!: (token: string | null) => void;
+    let finishAcquire!: (answer: AcquireAnswer) => void;
     let calls = 0;
-    const acquired = new Promise<string | null>((resolve) => {
+    const acquired = new Promise<AcquireAnswer>((resolve) => {
       finishAcquire = resolve;
     });
-    const acquire = (): Promise<string | null> => {
+    const acquire = (): Promise<AcquireAnswer> => {
       calls += 1;
       return acquired;
     };
 
     const first = steam.resolve({ silent: false, acquire, now: NOW });
     const second = steam.resolve({ silent: false, acquire, now: NOW });
-    finishAcquire(ACQUIRED);
+    finishAcquire({ token: ACQUIRED });
 
     assert.deepEqual(await first, await second);
     assert.equal(calls, 1);

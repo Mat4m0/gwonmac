@@ -87,6 +87,40 @@ describe("patch transport", () => {
     assert.equal(calls, 1);
   });
 
+  it("classifies a request that never got an HTTP answer as net_offline", async () => {
+    // Chromium's net.fetch throws a plain TypeError when offline; without
+    // classification at this seam it would collapse to `unknown` and the
+    // renderer could not tell a dead connection from an app fault.
+    await assert.rejects(
+      () =>
+        fetchPatchBytes({
+          fetch: async () => {
+            throw new TypeError("net::ERR_INTERNET_DISCONNECTED");
+          },
+          url: "https://fixture.invalid/chunk",
+          headers,
+          maxBytes: 4,
+          tries: 1,
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "net_offline",
+    );
+
+    // An HTTP answer, even a failing one, keeps its own code through retries.
+    await assert.rejects(
+      () =>
+        fetchPatchBytes({
+          fetch: async () => ({ status: 503, body: new Uint8Array() }),
+          url: "https://fixture.invalid/chunk",
+          headers,
+          maxBytes: 4,
+          tries: 1,
+        }),
+      (error: unknown) =>
+        error instanceof HttpStatusError && error.status === 503,
+    );
+  });
+
   it("rejects a materialized body above its declared call-site limit", async () => {
     await assert.rejects(
       () =>

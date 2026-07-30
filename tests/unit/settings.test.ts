@@ -24,9 +24,10 @@ describe("settings", () => {
       touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
-      // Off until the user says otherwise: this is the one flag that decides
-      // whether the app ever makes a network request nobody asked for.
-      autoCheckUpdates: false,
+      // On by default since the 2026-07 UX revision, and declared as a
+      // pre-checked line at first run. Unticking it is the one flag that stops
+      // every network request nobody asked for, without exception.
+      autoCheckUpdates: true,
       lastUpdateCheckAt: null,
       // No client build has been warned about yet, so every build warns once.
       compatibilityNoticeSeenFor: null,
@@ -57,7 +58,7 @@ describe("settings", () => {
       touchMode: "off",
       showDiagnostics: true,
       dataStrategy: "full",
-      autoCheckUpdates: false,
+      autoCheckUpdates: true,
       lastUpdateCheckAt: null,
       compatibilityNoticeSeenFor: null,
     });
@@ -207,10 +208,12 @@ describe("settings", () => {
       touchMode: "translate",
       showDiagnostics: true,
       dataStrategy: "full",
-      // Fields that alpha never wrote arrive at their defaults, and the
-      // default for the update check is off — an upgrade must not switch on a
-      // network request the user never agreed to.
-      autoCheckUpdates: false,
+      // Fields that alpha never wrote arrive at their defaults — deliberately
+      // including the update check, which now defaults on: a profile that
+      // never answered the question inherits the current default, while any
+      // profile that completed first run carries its explicit answer and an
+      // opt-out is therefore never overridden.
+      autoCheckUpdates: true,
       lastUpdateCheckAt: null,
       compatibilityNoticeSeenFor: null,
     });

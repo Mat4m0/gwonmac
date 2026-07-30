@@ -27,9 +27,11 @@ export function formatLastChecked(
   checkedAt: string | null | undefined,
   now: number,
 ): string {
-  if (checkedAt === null || checkedAt === undefined) return '';
-  const value = Date.parse(checkedAt);
-  if (Number.isNaN(value)) return '';
+  // "Never" is said out loud rather than hidden: it is the one network-free
+  // nudge an opted-out player gets that updates exist to be checked for. An
+  // unparseable timestamp is also "never" from the player's point of view.
+  const value = Date.parse(checkedAt ?? '');
+  if (Number.isNaN(value)) return 'Never checked for updates';
   const minutes = Math.floor(Math.max(0, now - value) / 60_000);
   if (minutes < 1) return 'Last checked just now';
   if (minutes < 60) return `Last checked ${plural(minutes, 'minute')} ago`;

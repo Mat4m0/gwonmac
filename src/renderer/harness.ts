@@ -265,9 +265,33 @@ async function fetchSnapshotRange(
   });
   if (!res.ok && res.status !== 206) {
     const detail = await res.text();
-    throw new Error(detail || `Game data download failed (HTTP ${res.status}).`);
+    const error = new Error(detail || `Game data download failed (HTTP ${res.status}).`);
+    const code = res.headers.get('x-gw-error');
+    if (code) (error as Error & { gwCode?: string }).gwCode = code;
+    throw error;
   }
   return new Uint8Array(await res.arrayBuffer());
+}
+
+// The one explanation the host draws beside the client's login screen: why an
+// interactive Steam sign-in produced no login. Transient and non-blocking —
+// the login screen itself stays entirely the client's.
+let loginStatusTimer: ReturnType<typeof setTimeout> | null = null;
+function showLoginStatus(
+  reason: import('../shared/contracts.js').SteamRefusalReason,
+): void {
+  void (async () => {
+    const { describeSteamRefusal } = await import('./failure-messages.js');
+    const text = describeSteamRefusal(reason);
+    const status = document.getElementById('login-status');
+    if (!text || !status) return;
+    status.textContent = text;
+    status.hidden = false;
+    if (loginStatusTimer) clearTimeout(loginStatusTimer);
+    loginStatusTimer = setTimeout(() => {
+      status.hidden = true;
+    }, 12_000);
+  })();
 }
 
 addEventListener('beforeunload', () => {
@@ -428,15 +452,23 @@ Module = {
         throw new Error('provider not offered');
       }
       const silent = isSilentRequest(options);
-      const token = await native().steam.getToken(silent);
-      if (!token) {
+      const result = await native().steam.getToken(silent);
+      if (!result.token) {
         log(`login.getAuthToken(silent=${silent}) -> no token`);
+        // The refusal still ends on the client's own login screen; the line
+        // below is the one explanation the host may add beside it. A plain
+        // cancel stays silent — describeSteamRefusal answers null for it.
+        if (!silent && result.reason) showLoginStatus(result.reason);
         throw new Error('no Steam token available');
       }
       // Never the value: the token must not reach this log, which is bounded
       // and read back into diagnostics.
       log(`login.getAuthToken(silent=${silent}) -> token vended`);
-      return { userId: LOCAL_PROFILE_INDEX, authCode: token, refreshToken: '' };
+      return {
+        userId: LOCAL_PROFILE_INDEX,
+        authCode: result.token,
+        refreshToken: '',
+      };
     },
   },
 
@@ -496,9 +528,17 @@ Module = {
   handleFatalReadError() {
     milestone('snapshot.fatalRead');
     log('[err] module reported a fatal read error');
-    window.gwLoading?.fail(
-      imageSource?.lastError() || 'No cached copy of the required game data is available.',
-    );
+    // The read failure carries a code, never prose: the sentence the player
+    // sees is written and reviewed in failure-messages.ts.
+    void (async () => {
+      const { describeSnapshotReadFailure, failureDetail } =
+        await import('./failure-messages.js');
+      const code = imageSource?.lastErrorCode() ?? null;
+      window.gwLoading?.fail(
+        describeSnapshotReadFailure(code),
+        code ? failureDetail(code) : undefined,
+      );
+    })();
   },
   setBuildInfo(info) {
     window.gwBuildInfo = Object.freeze({
@@ -716,7 +756,9 @@ function loadGlue() {
 (async function boot() {
   if (!window.gwNative) {
     window.gwLoading?.fail(
-      'Native bridge missing — open this page from Guild Wars Reforged.app.',
+      // Identical to loading.ts's sentence for the same fault; a shared
+      // constant is not worth an import in a classic-script context.
+      'Native bridge missing — this page must run inside Guild Wars Reforged.app.',
     );
     return;
   }

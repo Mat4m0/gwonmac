@@ -4,6 +4,7 @@ import type {
   ClientHealthToken,
   DownloadProgress,
   FullDownloadOutcome,
+  NoticeCode,
   PrefetchProgress,
   SnapshotMetadata,
 } from "../shared/contracts.js";
@@ -396,17 +397,17 @@ export class ClientRuntime {
     }
   }
 
-  private publishReadyProgress(notice?: string): void {
+  private publishReadyProgress(noticeCode?: NoticeCode): void {
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "ready",
       label: "Starting Guild Wars",
-      ...(notice ? { notice } : {}),
+      ...(noticeCode ? { noticeCode } : {}),
     });
   }
 
-  private clientReady(active: ActiveClient, notice?: string): void {
-    this.publishReadyProgress(notice);
+  private clientReady(active: ActiveClient, noticeCode?: NoticeCode): void {
+    this.publishReadyProgress(noticeCode);
     void active.store
       .prefetch((progress) => {
         if (this.activeSlot.current?.generation === active.generation) {
@@ -419,10 +420,10 @@ export class ClientRuntime {
       );
   }
 
-  private async activatePublishedAndReady(notice?: string): Promise<void> {
+  private async activatePublishedAndReady(noticeCode?: NoticeCode): Promise<void> {
     const active = await this.activatePublishedClient();
     await this.pruneChunkCache();
-    this.clientReady(active, notice);
+    this.clientReady(active, noticeCode);
   }
 
   private async runUpdate(signal: AbortSignal): Promise<void> {
@@ -437,9 +438,7 @@ export class ClientRuntime {
     }
     if (this.options.cachedOnly) {
       try {
-        await this.activatePublishedAndReady(
-          "Live probe is using the existing cached client.",
-        );
+        await this.activatePublishedAndReady("cached-live-probe");
         gauge("update.usingCachedClient", true);
       } catch (error) {
         this.publishProgress({ phase: "error", errorCode: errorCode(error) });
@@ -489,9 +488,7 @@ export class ClientRuntime {
       const result = await patchClient.update({ blockedFingerprint, signal });
       signal.throwIfAborted();
       if (result.blocked) {
-        await this.activatePublishedAndReady(
-          "A newer game client did not start successfully, so the last working client is being used.",
-        );
+        await this.activatePublishedAndReady("rejected-candidate-fallback");
         gauge("update.usingCachedClient", true);
         updateSpan.end({
           status: "rejectedCandidateSkipped",
@@ -524,8 +521,12 @@ export class ClientRuntime {
       }
       const code = errorCode(error);
       try {
+        // An offline machine is not a failed update: the fallback is the app
+        // working as designed, and the notice should say so.
         await this.activatePublishedAndReady(
-          "The game client update failed, so the previous client was restored.",
+          code === "net_offline"
+            ? "offline-using-cached-client"
+            : "update-failed-previous-restored",
         );
         logEvent({ k: "patch.updateFallback", code });
         gauge("update.usingCachedClient", true);
@@ -698,15 +699,11 @@ export class ClientRuntime {
         if (interruptedUpdate) {
           const active = this.activeSlot.current;
           if (active) {
-            this.publishReadyProgress(
-              "The interrupted game client update can be retried.",
-            );
+            this.publishReadyProgress("interrupted-update-retryable");
             return;
           }
           try {
-            await this.activatePublishedAndReady(
-              "The interrupted game client update can be retried.",
-            );
+            await this.activatePublishedAndReady("interrupted-update-retryable");
           } catch (error) {
             this.publishProgress({
               phase: "error",

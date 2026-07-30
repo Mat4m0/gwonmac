@@ -981,7 +981,7 @@ export async function exportDiagnosticsZip(
   await recorder.flush();
   const dir = gamePaths().diagnostics;
   const staging = path.join(dir, `export-${randomUUID()}`);
-  const zipPath = /\.(gwdiag|zip)$/i.test(targetPath) ? targetPath : `${targetPath}.gwdiag`;
+  const zipPath = /\.(gwdiag|zip)$/i.test(targetPath) ? targetPath : `${targetPath}.zip`;
   const zipPart = path.join(
     path.dirname(zipPath),
     `.${path.basename(zipPath)}.${randomUUID()}.part`,
@@ -1155,10 +1155,12 @@ export async function exportDiagnosticsZip(
 }
 
 export async function exportDiagnosticsForWindow(win: BrowserWindow): Promise<string> {
+  // The report has always been a PKZIP archive; `.zip` is the name that lets
+  // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
     title: "Export Diagnostics",
-    defaultPath: "guild-wars-diagnostics.gwdiag",
-    filters: [{ name: "Guild Wars diagnostics", extensions: ["gwdiag"] }],
+    defaultPath: "guild-wars-diagnostics.zip",
+    filters: [{ name: "Guild Wars diagnostics", extensions: ["zip"] }],
   });
   if (canceled || !filePath) return "";
   return exportDiagnosticsZip(filePath, {

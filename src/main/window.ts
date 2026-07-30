@@ -432,7 +432,7 @@ export async function exportProblemReport(
       cancelId: 2,
       message: "Problem report ready",
       detail:
-        "Diagnostics are optional. To attach this report on GitHub, compress the .gwdiag file to a .zip in Finder first. It is redacted and contains no credentials.",
+        "Diagnostics are optional. The .zip can be attached to the GitHub bug report as it is. It is redacted and contains no credentials.",
     });
     if (response === 0) await shell.openExternal(BUG_REPORT_URL);
     if (response === 1) shell.showItemInFolder(saved);
@@ -550,49 +550,6 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           },
         },
         {
-          id: "start-performance-capture",
-          label: "Start Performance Capture",
-          click: async () => {
-            await resetGameInput(win);
-            void host.startCapture(1).catch((error) => {
-              dialog.showErrorBox(
-                "Capture could not start",
-                error instanceof Error ? error.message : String(error),
-              );
-            });
-          },
-        },
-        {
-          id: "mark-performance-problem",
-          label: "Mark Performance Problem",
-          accelerator: "CmdOrCtrl+Shift+M",
-          click: async () => {
-            await resetGameInput(win);
-            host.markPerformanceProblem();
-          },
-        },
-        {
-          id: "start-chromium-trace",
-          label: "Start Chromium Trace",
-          click: async () => {
-            await resetGameInput(win);
-            void host.startCapture(2).catch((error) => {
-              dialog.showErrorBox(
-                "Trace could not start",
-                error instanceof Error ? error.message : String(error),
-              );
-            });
-          },
-        },
-        {
-          id: "stop-capture",
-          label: "Stop Capture",
-          click: async () => {
-            await resetGameInput(win);
-            void host.stopCapture();
-          },
-        },
-        {
           label: "Reload Game",
           accelerator: "CmdOrCtrl+R",
           click: async () => {
@@ -638,6 +595,57 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
           id: "report-problem",
           label: "Report a Problem…",
           click: () => void reportProblem(),
+        },
+        // Capture tooling supports Report a Problem, so it lives beside it
+        // rather than in View next to everyday commands. Ids are the test
+        // contract and survive the move; ⌘⇧M stays global.
+        {
+          label: "Diagnostics",
+          submenu: [
+            {
+              id: "start-performance-capture",
+              label: "Start Performance Capture",
+              click: async () => {
+                await resetGameInput(win);
+                void host.startCapture(1).catch((error) => {
+                  dialog.showErrorBox(
+                    "Capture could not start",
+                    error instanceof Error ? error.message : String(error),
+                  );
+                });
+              },
+            },
+            {
+              id: "mark-performance-problem",
+              label: "Mark Performance Problem",
+              accelerator: "CmdOrCtrl+Shift+M",
+              click: async () => {
+                await resetGameInput(win);
+                host.markPerformanceProblem();
+              },
+            },
+            {
+              id: "start-chromium-trace",
+              label: "Start Chromium Trace",
+              click: async () => {
+                await resetGameInput(win);
+                void host.startCapture(2).catch((error) => {
+                  dialog.showErrorBox(
+                    "Trace could not start",
+                    error instanceof Error ? error.message : String(error),
+                  );
+                });
+              },
+            },
+            {
+              id: "stop-capture",
+              label: "Stop Capture",
+              click: async () => {
+                await resetGameInput(win);
+                void host.stopCapture();
+              },
+            },
+          ],
         },
       ],
     },

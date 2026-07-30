@@ -6,7 +6,7 @@ import {
   app,
   safeStorage,
 } from "electron";
-import { writeFile } from "node:fs/promises";
+import { statfs, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
@@ -19,7 +19,10 @@ import type {
   FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
+  RevealKind,
   SocketEvent,
+  SteamRefusalReason,
+  SteamTokenResult,
   StoredCredentials,
 } from "../shared/contracts.js";
 import type {
@@ -51,7 +54,7 @@ import type {
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
-import type { ChunkStore } from "./core/chunk-store.js";
+import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
   count,
   diagnosticSummary,
@@ -303,6 +306,13 @@ const asSteamStoreback: Parser<{ token: string; expiry: number | null }> = (args
   return { token, expiry };
 };
 
+const asRevealKind = one((value: unknown): RevealKind => {
+  if (value !== "gameData") {
+    throw new ValidationError("invalid reveal kind");
+  }
+  return value;
+});
+
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   if (
     value !== "github" &&
@@ -391,17 +401,49 @@ async function confirmEnhancementRestart(win: BrowserWindow): Promise<boolean> {
   return response === 0;
 }
 
-async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
-  if (!store) return { bytes: 0, chunks: 0, totalBytes: 0, totalChunks: 0 };
+async function chunkStoreInfo(
+  store: ChunkStore | null,
+  volumeDir: string,
+): Promise<CacheInfo> {
+  // Advisory only — the download preflight re-measures and enforces. An
+  // unreadable volume therefore answers "could not be measured" rather than
+  // blocking the Full Game card on a measurement error.
+  let freeBytes = -1;
+  try {
+    const fsStat = await statfs(store?.chunksDir ?? volumeDir);
+    freeBytes = Number(fsStat.bavail) * Number(fsStat.bsize);
+  } catch {
+    // Keep the "could not be measured" answer.
+  }
+  if (!store) {
+    return {
+      bytes: 0,
+      chunks: 0,
+      totalBytes: 0,
+      totalChunks: 0,
+      freeBytes,
+      fullDownloadShortfall: 0,
+    };
+  }
   const resident = await store.residentIndices();
+  const bytes = resident.reduce(
+    (total, index) => total + store.chunkByteLength(index),
+    0,
+  );
+  // Remaining bytes rather than the preflight's hash-deduplicated need: close
+  // enough for a card, and always the pessimistic side of the two.
+  const remaining = Math.max(0, store.size - bytes);
+  const fullDownloadShortfall =
+    remaining > 0 && freeBytes >= 0
+      ? Math.max(0, remaining + FREE_MARGIN - freeBytes)
+      : 0;
   return {
-    bytes: resident.reduce(
-      (total, index) => total + store.chunkByteLength(index),
-      0,
-    ),
+    bytes,
     chunks: resident.length,
     totalBytes: store.size,
     totalChunks: store.hashes.length,
+    freeBytes,
+    fullDownloadShortfall,
   };
 }
 
@@ -593,7 +635,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     cacheInfo: channel(nothing, async () => {
       try {
-        return await chunkStoreInfo(ctx.getChunkStore());
+        return await chunkStoreInfo(ctx.getChunkStore(), paths.userData);
       } catch (error) {
         logEvent({ k: "cache.infoFailed", code: errorCode(error) });
         throw error;
@@ -689,6 +731,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
       await shell.openExternal(EXTERNAL_URLS[kind]);
     }),
 
+    // The renderer names an intent; only main knows the path, and no path is
+    // answered back.
+    appRevealPath: channel(asRevealKind, (_win, kind) => {
+      if (kind === "gameData") shell.showItemInFolder(paths.game);
+    }),
+
     appRequestQuit: channel(nothing, () => {
       app.quit();
     }),
@@ -760,7 +808,9 @@ export function registerSteamIpcHandlers(
     new SteamSessionStore(paths.steamSession, safeStorage),
   );
 
-  const runSteamSignIn = async (win: BrowserWindow): Promise<string | null> => {
+  const runSteamSignIn = async (
+    win: BrowserWindow,
+  ): Promise<{ token: string | null; refusal?: SteamRefusalReason }> => {
     const result = await acquireSteamToken(win, (event) => {
       if (event.k === "opened") logEvent({ k: "steam.signInOpened" });
       if (event.k === "blocked") {
@@ -770,7 +820,11 @@ export function registerSteamIpcHandlers(
         logEvent({ k: "steam.signInResult", outcome: event.outcome });
       }
     });
-    return result.ok ? result.token : null;
+    // The reason survives to the renderer: a player whose sign-in failed used
+    // to land back on the login screen with no explanation at all.
+    return result.ok
+      ? { token: result.token }
+      : { token: null, refusal: result.reason };
   };
 
   const handlers = {
@@ -800,7 +854,10 @@ export function registerSteamIpcHandlers(
         outcome: steamTokenOutcome(resolution),
         silent,
       });
-      return resolution.token;
+      return {
+        token: resolution.token,
+        ...(resolution.refusal ? { reason: resolution.refusal } : {}),
+      } satisfies SteamTokenResult;
     }),
 
     steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
