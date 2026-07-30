@@ -167,6 +167,8 @@ test("release workflow publishes one tested, attested package version", () => {
   const verification = read(".github/workflows/macos-verify.yml");
   assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
   assert.match(verification, /runs-on: macos-15/);
+  assert.match(verification, /test "\$\(uname -m\)" = "arm64"/);
+  assert.match(workflow, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);

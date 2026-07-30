@@ -1,5 +1,5 @@
-// P0.4: every Markdown link in this repository resolves to a file that exists.
-// These tests run the checker itself, not a regex over its source.
+// P0.4: the Markdown link checker follows repository boundaries and reports
+// useful failures. `pnpm check:links` owns the one scan of the real tree.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -49,10 +49,6 @@ function runChecker(dir: string) {
   const result = spawnSync(process.execPath, [...LOADER, checker, dir], { encoding: "utf8" });
   return { status: result.status, stderr: result.stderr };
 }
-
-test("no Markdown link in this repository points at a missing file", () => {
-  assert.deepEqual(findBrokenLinks(root), []);
-});
 
 test("a link to NOPE.md in README.md exits non-zero and names the line", () => {
   const dir = fixture({ "README.md": "# Title\n\nSee [nope](NOPE.md).\n" }, { git: true });

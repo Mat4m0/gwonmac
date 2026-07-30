@@ -38,6 +38,8 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=high
       - run: pnpm verify

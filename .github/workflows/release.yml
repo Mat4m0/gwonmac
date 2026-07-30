@@ -39,6 +39,9 @@ jobs:
           node-version: "24"
           cache: pnpm
 
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
+
       - name: Require a client canary newer than 14 days
         env:
           GH_TOKEN: ${{ github.token }}
