@@ -247,7 +247,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
 
 test("a new client build can be re-certified without hand-derivation", async () => {
   const recert = await readFile(
-    path.join(root, "src/tools/template-save-recert.ts"),
+    path.join(root, "src/main/core/template-save-verifier.ts"),
     "utf8",
   );
   const cli = await readFile(
@@ -291,12 +291,14 @@ test("the WASM section codec has exactly one home", async () => {
   assert.match(shared, /function copyRange/);
   assert.doesNotMatch(shared, /bodies\.push\(bytes\.slice/);
 
-  // The recertifier is developer tooling and lives in src/tools/, so it names
-  // the same codec one directory further away (P4.4).
+  // The locator is production code now: both the isolated launcher verifier
+  // and the developer CLI reuse it. Every runtime consumer names the same
+  // sibling codec.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
     ["src/main/core/enhancement-transform.ts", './wasm-binary.js'],
     ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
-    ["src/tools/template-save-recert.ts", '../main/core/wasm-binary.js'],
+    ["src/main/core/template-save-verifier.ts", './wasm-binary.js'],
+    ["src/main/core/local-client-verifier.ts", './wasm-binary.js'],
   ];
   for (const [file, specifier] of sharers) {
     const source = await readFile(path.join(root, file), "utf8");

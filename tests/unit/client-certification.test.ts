@@ -4,14 +4,36 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  certificationFromLocalVerification,
   certifyClientBuild,
   type CertifiedBuildTables,
 } from "../../src/main/client-certification.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
+import {
+  LOCAL_CLIENT_BASELINE_FINGERPRINT,
+  LOCAL_CLIENT_VERIFIER_ABI,
+  type LocalClientVerification,
+} from "../../src/main/core/local-client-verifier.js";
 
 const OFFICIAL = TEMPLATE_SAVE_BUILDS[0]!;
 const UNKNOWN = "0".repeat(64);
+
+function localVerification(
+  template: boolean,
+  enhancement: boolean,
+): LocalClientVerification {
+  return {
+    verifierAbi: LOCAL_CLIENT_VERIFIER_ABI,
+    baselineFingerprint: LOCAL_CLIENT_BASELINE_FINGERPRINT,
+    officialSha256: OFFICIAL.sha256,
+    templateSaveBuild: template ? OFFICIAL : null,
+    enhancementBuild: enhancement ? ENHANCEMENT_BUILDS[0]! : null,
+    reasons: template
+      ? (enhancement ? [] : ["enhancement-layout-changed"])
+      : ["template-shape-changed"],
+  };
+}
 
 /** The shipped tables with the Enhancement side emptied: state 2, exactly. */
 const withoutEnhancement: CertifiedBuildTables = {
@@ -65,5 +87,26 @@ describe("client certification", () => {
       enhancement: () => ENHANCEMENT_BUILDS[0]!,
     });
     assert.deepEqual(certification, { state: "uncertified" });
+  });
+
+  it("maps a complete local proof into the canonical certified state", () => {
+    const certification = certificationFromLocalVerification(
+      localVerification(true, true),
+    );
+    assert.equal(certification.state, "certified");
+  });
+
+  it("keeps a partial local proof useful without enabling Enhancement", () => {
+    const certification = certificationFromLocalVerification(
+      localVerification(true, false),
+    );
+    assert.equal(certification.state, "template-only");
+  });
+
+  it("keeps the official module when local verification proves nothing", () => {
+    assert.deepEqual(
+      certificationFromLocalVerification(localVerification(false, false)),
+      { state: "uncertified" },
+    );
   });
 });

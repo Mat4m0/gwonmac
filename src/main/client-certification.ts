@@ -7,6 +7,7 @@ import {
   findEnhancementBuild,
   type KnownEnhancementBuild,
 } from "./core/enhancement-builds.js";
+import type { LocalClientVerification } from "./core/local-client-verifier.js";
 
 /**
  * Which of the three certification states an ArenaNet client build is in.
@@ -57,5 +58,26 @@ export function certifyClientBuild(
     : {
         state: "template-only",
         templateSaveBuild: templateSave,
+      };
+}
+
+/**
+ * Convert a proof made by the isolated local verifier into the one canonical
+ * launch decision. A partial proof deliberately preserves template saving
+ * while leaving enhancement tools disabled.
+ */
+export function certificationFromLocalVerification(
+  verification: LocalClientVerification,
+): ClientCertification {
+  if (!verification.templateSaveBuild) return { state: "uncertified" };
+  return verification.enhancementBuild
+    ? {
+        state: "certified",
+        templateSaveBuild: verification.templateSaveBuild,
+        enhancementBuild: verification.enhancementBuild,
+      }
+    : {
+        state: "template-only",
+        templateSaveBuild: verification.templateSaveBuild,
       };
 }

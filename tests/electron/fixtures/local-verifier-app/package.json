@@ -1,0 +1,6 @@
+{
+  "name": "local-verifier-electron-fixture",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs"
+}

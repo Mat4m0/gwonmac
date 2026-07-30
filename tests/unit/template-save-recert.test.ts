@@ -9,6 +9,10 @@ import {
   formatBuildEntry,
   inspectTemplateSaveCandidate,
 } from "../../src/tools/template-save-recert.js";
+import {
+  isLocalClientVerification,
+  verifyLocalClientBytes,
+} from "../../src/main/core/local-client-verifier.js";
 import { defaultGuildWarsProfile } from "../../src/tools/enhancement-doctor.js";
 
 function uleb(value: number): number[] {
@@ -421,7 +425,7 @@ describe("template-save re-certification", () => {
 
   // The real proof. The client artifact is gitignored and absent in CI, so this
   // runs wherever the game is installed and skips cleanly elsewhere.
-  it("reproduces the checked-in certified entry", async (t) => {
+  it("makes a fail-closed decision for an installed client", async (t) => {
     const artifact = process.env.GW_CLIENT_WASM
       ?? path.join(defaultGuildWarsProfile(), "game", "artifacts", "Gw.jspi.wasm");
     const bytes = await readFile(artifact).catch(() => null);
@@ -430,6 +434,18 @@ describe("template-save re-certification", () => {
         `no client WASM at ${artifact}; set GW_CLIENT_WASM to point at one`,
       );
     }
-    assert.deepEqual(compareToCertified(deriveTemplateSaveBuild(bytes)), []);
+    const derived = deriveTemplateSaveBuild(bytes);
+    const report = inspectTemplateSaveCandidate(bytes);
+    const local = verifyLocalClientBytes(bytes);
+    assert.equal(
+      isLocalClientVerification(local, local.officialSha256),
+      true,
+    );
+    // If this is a statically shipped build, the shape locator must still
+    // reproduce that record exactly. Unknown builds are intentionally decided
+    // by the local verifier instead of making this test demand a release.
+    if (report.certified) {
+      assert.deepEqual(compareToCertified(derived), []);
+    }
   });
 });

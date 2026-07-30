@@ -23,12 +23,14 @@ stable-only downloads once the first stable release is available.
 
 **What the number does not mean.** It is not a compatibility promise, and in
 particular it says nothing about which Guild Wars client build the release
-works with. ArenaNet ships client builds on its own schedule, and this app
-certifies them one hash at a time; that is a set, not a scale, and no version
-number can encode it. The app tells you directly instead — see
+works with. ArenaNet ships client builds on its own schedule. The app first
+checks an unknown build locally against its shipped structural baseline and
+uses the untouched official client if that proof refuses; no version number
+can encode that outcome. The app tells you directly instead — see
 [When the client build is not certified](user-guide.md#when-the-client-build-is-not-certified).
-A newer app version fixes an uncertified client build only if that release is
-the one that certified it, so a higher number on its own is not the answer.
+A newer app version fixes an uncertified client build only if it contains a
+baseline for the changed structure, so a higher number on its own is not the
+answer.
 
 Nothing about the number implies an automatic update. Updating is manual, and
 the app checks for a newer release only when asked — see

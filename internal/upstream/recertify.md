@@ -1,14 +1,14 @@
 # Re-certifying a new client build
 
 Every function index, local index and byte offset in these documents belongs to
-build `b0319704…`. A new ArenaNet client invalidates all of them.
-
-Nothing breaks when that happens: `findTemplateSaveBuild` returns null for an
-unknown hash and the untouched official module is used, so the client keeps
-working and templates go back to being broken. Startup logs
-`wasm.templateSaveUnsupported`, and the `wasm.templateSaveCompatible` gauge is
-`false` in any `.gwdiag` a user sends — **check that first when someone reports
-that templates stopped working.**
+build `b0319704…`. A new ArenaNet hash triggers the launcher's isolated local
+verifier. If all understood structures are equivalent, it derives exact records
+for that hash and no app release is needed. If anything is ambiguous or changed,
+the untouched official module is used, so the client keeps working and only the
+unproven compatibility features are disabled. Startup logs the local verifier
+outcome, and `client.buildCertification` in a `.gwdiag` says `certified`,
+`template-only`, or `uncertified` — **check that first when someone reports a
+regression.**
 
 ## The short version
 
@@ -23,10 +23,11 @@ pnpm template:recertify -- "<path>/Gw.jspi.wasm"
 pnpm template:recertify -- "<path>/Gw.jspi.wasm" --emit-ts
 ```
 
-The tool re-derives every index and call-site offset by shape — body bytes,
-resolved signatures, and caller-set intersection — then runs the derived entry
-through the production transform to fill in `outputSha256`. It never guesses:
-each stage asserts an exact count and reports every candidate it rejected.
+The command calls the same production locator as the launcher. It re-derives
+every index and call-site offset by shape — body bytes, resolved signatures,
+and caller-set intersection — then runs the derived entry through the
+production transform to fill in `outputSha256`. It never guesses: each stage
+asserts an exact count and reports every candidate it rejected.
 
 Read the `status` field first:
 
@@ -37,10 +38,12 @@ Read the `status` field first:
 | `not-applicable` | no create-directory stub — **ArenaNet may have fixed it**, see step 1 below before doing anything else |
 | `failed` | read `diagnostics`; a locator found the wrong number of candidates and named them |
 
-**What this does not do.** It recovers indices, not semantics. Step 5 below —
-re-measuring what the path helpers actually do — still has to be done by hand,
-and skipping it is how you ship a bridge that resolves cleanly and behaves
-wrongly. Every one of the six upstream defects in
+**When this manual procedure is required.** The launcher accepts only the
+already-understood shapes and the one proven static-address relocation. A
+refusal means a maintainer must recover semantics, not merely indices. Step 5
+below — re-measuring what the path helpers actually do — still has to be done
+by hand, and skipping it is how you ship a bridge that resolves cleanly and
+behaves wrongly. Every one of the six upstream defects in
 [upstream-defects.md](upstream-defects.md) was a semantic finding, not an index.
 
 ## Manual procedure
