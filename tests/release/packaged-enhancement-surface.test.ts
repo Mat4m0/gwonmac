@@ -38,7 +38,7 @@ const root = path.resolve(import.meta.dirname, "../..");
 // relative to the project root with a leading "/" — and fs-extra never
 // descends into a directory the filter rejected (node_modules/@electron/
 // packager/dist/copy-filter.js). This walk is that copy: what it collects is
-// what lands in `Guild Wars.app/Contents/Resources/app.asar`.
+// what lands in `Guild Wars Reforged.app/Contents/Resources/app.asar`.
 const ignore = forgeConfig.packagerConfig?.ignore;
 assert.equal(typeof ignore, "function", "forge.config.ts still decides what ships");
 

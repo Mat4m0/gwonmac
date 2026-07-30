@@ -12,7 +12,7 @@ const STEPS = [
   },
   {
     title: "Move to Applications",
-    detail: "Drag Guild Wars from Downloads into the Applications folder.",
+    detail: "Drag Guild Wars Reforged from Downloads into the Applications folder.",
   },
   {
     title: "Open it once — macOS blocks it",
@@ -22,7 +22,7 @@ const STEPS = [
   {
     title: "Allow it in System Settings",
     detail:
-      "Open System Settings → Privacy & Security and scroll down. Next to “‘Guild Wars’ was blocked to protect your Mac”, click Open Anyway.",
+      "Open System Settings → Privacy & Security and scroll down. Next to “‘Guild Wars Reforged’ was blocked to protect your Mac”, click Open Anyway.",
   },
   {
     title: "Confirm and play",
@@ -34,14 +34,16 @@ const STEPS = [
 // The step count is counted, not remembered: the description said "four short
 // steps" above five entries for as long as the fifth one has existed (P3.23).
 useSeoMeta({
-  title: "Install Guide — Guild Wars for macOS",
-  description: `Install Guild Wars on your Mac in ${STEPS.length} short steps, including the one-time first-launch confirmation.`,
+  title: "Install Guide — Guild Wars Reforged",
+  description: `Install Guild Wars Reforged on your Mac in ${STEPS.length} short steps, including the one-time first-launch confirmation.`,
 });
 </script>
 
 <template>
   <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-    <h1 class="text-center text-4xl text-parchment-100">Install Guild Wars on your Mac</h1>
+    <h1 class="text-center text-4xl text-parchment-100">
+      Install Guild Wars Reforged on your Mac
+    </h1>
     <p class="mx-auto mt-4 max-w-xl text-center text-parchment-300/80">
       Current releases require a one-time approval in System Settings on first launch because they
       are not yet notarized by Apple.

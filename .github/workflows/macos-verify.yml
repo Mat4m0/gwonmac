@@ -48,12 +48,12 @@ jobs:
         if: inputs.artifact-name != ''
         id: package
         run: |
-          app_count="$(find out -name 'Guild Wars.app' -type d | wc -l | tr -d ' ')"
+          app_count="$(find out -name 'Guild Wars Reforged.app' -type d | wc -l | tr -d ' ')"
           if [ "$app_count" != "1" ]; then
             echo "Expected exactly one packaged app, found $app_count." >&2
             exit 1
           fi
-          app="$(find out -name 'Guild Wars.app' -type d -print -quit)"
+          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
           codesign --verify --deep --strict --verbose=2 "$app"
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
@@ -61,8 +61,8 @@ jobs:
 
           short="${GITHUB_SHA:0:7}"
           mkdir distribution
-          archive="$PWD/distribution/Guild-Wars-$short-macOS-arm64.zip"
-          sbom="$PWD/distribution/Guild-Wars-$short-macOS-arm64.spdx.json"
+          archive="$PWD/distribution/Guild-Wars-Reforged-$short-macOS-arm64.zip"
+          sbom="$PWD/distribution/Guild-Wars-Reforged-$short-macOS-arm64.spdx.json"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
           printf '%s\n' "$GITHUB_SHA" > distribution/SOURCE_COMMIT.txt
           echo "app=$app" >> "$GITHUB_OUTPUT"

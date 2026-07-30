@@ -43,12 +43,21 @@ const script = (name: string): string => {
   return command;
 };
 
-test("macOS identity uses the Guild Wars name and the configured application icon", () => {
-  assert.equal(json("package.json").productName, "Guild Wars");
+test("macOS identity uses the Reforged name and configured application icon", () => {
+  assert.equal(json("package.json").productName, "Guild Wars Reforged");
   const forge = read("forge.config.ts");
-  assert.match(forge, /name: "Guild Wars"/);
-  assert.match(forge, /executableName: "Guild Wars"/);
+  assert.match(forge, /name: "Guild Wars Reforged"/);
+  assert.match(forge, /executableName: "Guild Wars Reforged"/);
   assert.match(forge, /icon: path\.resolve\("assets\/AppIcon\.icns"\)/);
+});
+
+test("the public rename keeps the existing profile as its one data home", () => {
+  const main = read("src/main/main.ts");
+  assert.match(
+    main,
+    /app\.setPath\("userData", path\.join\(app\.getPath\("appData"\), "Guild Wars"\)\)/,
+  );
+  assert.match(main, /!app\.commandLine\.hasSwitch\("user-data-dir"\)/);
 });
 
 test("package metadata identifies the GPL project and canonical repository", () => {
@@ -64,7 +73,11 @@ test("packaged releases carry the project and third-party license notices", () =
   assert.match(forge, /extraResource:[\s\S]*"THIRD-PARTY-NOTICES\.md"/);
   assert.match(forge, /extraResource:[\s\S]*"src\/renderer\/fonts\/COPYING-QUALITYPE"/);
   const notices = read("THIRD-PARTY-NOTICES.md");
-  assert.match(notices, /not relicensed under GPL-3\.0-only/);
+  assert.match(notices, /not relicensed under\s+GPL-3\.0-only/);
+  assert.match(
+    notices,
+    /Guild Wars Reforged application[\s\S]*Apple App Store[\s\S]*gwnative project/,
+  );
   assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
 });
 

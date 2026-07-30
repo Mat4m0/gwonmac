@@ -10,7 +10,7 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: "en" },
       meta: [
-        { name: "apple-mobile-web-app-title", content: "GWonMac" },
+        { name: "apple-mobile-web-app-title", content: "GW Reforged" },
       ],
       link: [
         {

@@ -247,7 +247,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     ...(initialState?.bounds ?? { width: 1280, height: 800 }),
     minWidth: 800,
     minHeight: 600,
-    title: "Guild Wars",
+    title: "Guild Wars Reforged",
     show: false,
     webPreferences: {
       preload: preloadPath(),

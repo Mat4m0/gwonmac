@@ -30,11 +30,11 @@ import {
 const root = path.resolve(import.meta.dirname, "..");
 const appBundle = path.join(
   root,
-  `out/Guild Wars-darwin-${process.arch}/Guild Wars.app`,
+  `out/Guild Wars Reforged-darwin-${process.arch}/Guild Wars Reforged.app`,
 );
 const executable = path.join(
   appBundle,
-  "Contents/MacOS/Guild Wars",
+  "Contents/MacOS/Guild Wars Reforged",
 );
 const execFileAsync = promisify(execFile);
 const resources = path.join(appBundle, "Contents/Resources");
@@ -84,8 +84,8 @@ const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",
   path.join(appBundle, "Contents/Info.plist"),
 ]);
-assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars"/);
-assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars"/);
+assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars Reforged"/);
+assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars Reforged"/);
 assert.match(
   bundleInfo,
   new RegExp(
@@ -108,7 +108,7 @@ assert.match(
 );
 assert.match(
   await readFile(path.join(resources, "THIRD-PARTY-NOTICES.md"), "utf8"),
-  /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/,
+  /Guild Wars Reforged application[\s\S]*Apple App Store[\s\S]*QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/,
 );
 assert.match(
   await readFile(path.join(resources, "COPYING-QUALITYPE"), "utf8"),

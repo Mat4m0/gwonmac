@@ -120,7 +120,7 @@ jobs:
 
       - name: Verify code signature
         run: |
-          app="$(find out -name 'Guild Wars.app' -type d -print -quit)"
+          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
           test -n "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
@@ -139,9 +139,9 @@ jobs:
           fi
           asset="$(find out/make -type f -name '*.zip' -print -quit)"
           asset_dir="$(dirname "$asset")"
-          app="$(find out -name 'Guild Wars.app' -type d -print -quit)"
+          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
           test -n "$app"
-          sbom="$asset_dir/Guild-Wars-$VERSION-macOS-arm64.spdx.json"
+          sbom="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.spdx.json"
           checksum="$asset_dir/SHA256SUMS.txt"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
           echo "app=$app" >> "$GITHUB_OUTPUT"

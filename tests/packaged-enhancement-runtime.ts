@@ -79,7 +79,7 @@ type ReadoutPageGlobals = PageGlobals & {
 
 const packagedExecutable = path.join(
   root,
-  `out/Guild Wars-darwin-${process.arch}/Guild Wars.app/Contents/MacOS/Guild Wars`,
+  `out/Guild Wars Reforged-darwin-${process.arch}/Guild Wars Reforged.app/Contents/MacOS/Guild Wars Reforged`,
 );
 assert.ok(
   existsSync(packagedExecutable),

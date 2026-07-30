@@ -1,4 +1,4 @@
-// P3.24. The website answers "Is Guild Wars for macOS safe?" with: the app
+// P3.24. The website answers "Is Guild Wars Reforged for macOS safe?" with:
 // "does not upload telemetry, credentials, account identifiers, or game
 // traffic". One review read the game-traffic half as an overclaim. It is not —
 // but until now it was backed by three modules' own tests that happen to add up

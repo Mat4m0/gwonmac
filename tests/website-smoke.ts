@@ -15,9 +15,9 @@ import {
 // release workflow publishes; the rendered pages below prove what a visitor
 // gets before any of that resolves.
 const ARM64_ZIP = {
-  name: "Guild Wars-darwin-arm64-0.0.3.zip",
+  name: "Guild Wars Reforged-darwin-arm64-0.0.3.zip",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-darwin-arm64-0.0.3.zip",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-Reforged-darwin-arm64-0.0.3.zip",
 };
 const CHECKSUMS = {
   name: "SHA256SUMS.txt",
@@ -25,9 +25,9 @@ const CHECKSUMS = {
     "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/SHA256SUMS.txt",
 };
 const SBOM = {
-  name: "Guild-Wars-0.0.3-macOS-arm64.spdx.json",
+  name: "Guild-Wars-Reforged-0.0.3-macOS-arm64.spdx.json",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-0.0.3-macOS-arm64.spdx.json",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-Reforged-0.0.3-macOS-arm64.spdx.json",
 };
 const STABLE = {
   tag_name: "v0.0.3",
@@ -36,9 +36,9 @@ const STABLE = {
   assets: [CHECKSUMS, SBOM, ARM64_ZIP],
 };
 const PRERELEASE_ARM64_ZIP = {
-  name: "Guild Wars-darwin-arm64-0.0.4-alpha.1.zip",
+  name: "Guild Wars Reforged-darwin-arm64-0.0.4-alpha.1.zip",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-alpha.1/Guild-Wars-darwin-arm64-0.0.4-alpha.1.zip",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-alpha.1/Guild-Wars-Reforged-darwin-arm64-0.0.4-alpha.1.zip",
 };
 const PRERELEASE = {
   tag_name: "v0.0.4-alpha.1",
@@ -52,7 +52,7 @@ const SNAPSHOTS = Array.from({ length: 25 }, (_, index) => ({
   draft: false,
   prerelease: true,
   assets: [{
-    name: `Guild-Wars-abcdef${index % 10}-macOS-arm64.zip`,
+    name: `Guild-Wars-Reforged-abcdef${index % 10}-macOS-arm64.zip`,
     browser_download_url:
       `https://github.com/Mat4m0/gwonmac/releases/download/snapshot-${index + 1}/snapshot.zip`,
   }],
@@ -122,9 +122,9 @@ assert.equal(selectWebsiteDownload([PRERELEASE], "stable"), null);
 // tag is ignored, and the greatest canonical stable version wins even when
 // GitHub returns it after an older release.
 const NEWER_ARM64_ZIP = {
-  name: "Guild Wars-darwin-arm64-2026.8.0.zip",
+  name: "Guild Wars Reforged-darwin-arm64-2026.8.0.zip",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v2026.8.0/Guild-Wars-darwin-arm64-2026.8.0.zip",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v2026.8.0/Guild-Wars-Reforged-darwin-arm64-2026.8.0.zip",
 };
 const NEWER_STABLE = {
   tag_name: "v2026.8.0",
@@ -238,7 +238,7 @@ try {
   const home = await load("/");
   assert.equal(home.status, 200);
   const html = await home.text();
-  assert.match(html, /<h1[^>]*>Guild Wars on Apple Silicon<\/h1>/);
+  assert.match(html, /<h1[^>]*>Guild Wars Reforged on Apple Silicon<\/h1>/);
   assert.match(
     html,
     /https:\/\/plausible\.io\/js\/pa--X4qMlLVyMnUW4L8emwE_\.js/,
@@ -278,7 +278,9 @@ try {
   assert.equal(stepCount, 5);
   assert.match(
     installHtml,
-    new RegExp(`content="Install Guild Wars on your Mac in ${stepCount} short steps`),
+    new RegExp(
+      `content="Install Guild Wars Reforged on your Mac in ${stepCount} short steps`,
+    ),
   );
 } finally {
   if (server.exitCode === null) {

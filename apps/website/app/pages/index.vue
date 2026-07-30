@@ -35,9 +35,9 @@ const SCREENSHOTS = [
       <div class="scrim absolute inset-0" />
       <div class="relative mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 py-24 text-center sm:px-6 sm:py-32">
         <img src="/images/logo.webp" alt="Guild Wars" class="w-64 drop-shadow-[0_3px_14px_rgba(0,0,0,0.65)] sm:w-80" />
-        <h1 class="text-4xl text-parchment-100 sm:text-5xl">Guild Wars on Apple Silicon</h1>
+        <h1 class="text-4xl text-parchment-100 sm:text-5xl">Guild Wars Reforged on Apple Silicon</h1>
         <p class="max-w-xl text-lg text-parchment-300/90">
-          Run the official Guild Wars client in a performant macOS app.
+          An independent macOS host for ArenaNet's official Reforged client.
         </p>
         <div class="gold-rule h-px w-40" aria-hidden="true" />
         <DownloadCta size="large" source="hero" />
@@ -64,8 +64,8 @@ const SCREENSHOTS = [
         The original game, built for your Mac.
       </h2>
       <p class="mx-auto mt-3 max-w-2xl text-center text-parchment-300/80">
-        Guild Wars for macOS runs ArenaNet's official client inside a native application. No
-        Windows installation or compatibility-layer setup is required.
+        Guild Wars Reforged runs ArenaNet's official client inside a native
+        application. No Windows installation or compatibility-layer setup is required.
       </p>
       <div class="mt-8 grid gap-4 sm:grid-cols-3">
         <figure v-for="shot in SCREENSHOTS" :key="shot.src" class="panel overflow-hidden">
@@ -110,7 +110,7 @@ const SCREENSHOTS = [
       <div class="relative mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 py-20 text-center sm:px-6">
         <h2 class="text-3xl text-parchment-100 sm:text-4xl">Return to Tyria.</h2>
         <p class="text-parchment-300/90">
-          Download Guild Wars for macOS and follow the short first-open guide.
+          Download Guild Wars Reforged and follow the short first-open guide.
         </p>
         <div class="flex flex-wrap items-center justify-center gap-4">
           <DownloadCta size="large" source="final-cta" />
@@ -123,7 +123,7 @@ const SCREENSHOTS = [
     <section id="faq" class="mx-auto max-w-3xl scroll-mt-20 px-4 py-16 sm:px-6">
       <SectionTitle>FAQ</SectionTitle>
       <div class="mt-8 space-y-3">
-        <FaqItem question="Is Guild Wars for macOS safe?">
+        <FaqItem question="Is Guild Wars Reforged for macOS safe?">
           <p>
             The app is open source and runs ArenaNet's official Guild Wars client. Game files are
             downloaded directly from ArenaNet and verified before use. The application does not
@@ -139,9 +139,9 @@ const SCREENSHOTS = [
         </FaqItem>
         <FaqItem question="How do I open the app?">
           <p>
-            Move Guild Wars to Applications and open it once — macOS will block it. Then go to
-            System Settings → Privacy &amp; Security, click Open Anyway, and confirm. This is only
-            needed for the first launch. The
+            Move Guild Wars Reforged to Applications and open it once — macOS
+            will block it. Then go to System Settings → Privacy &amp; Security,
+            click Open Anyway, and confirm. This is only needed for the first launch. The
             <NuxtLink to="/install" class="underline hover:text-gold-200">install guide</NuxtLink>
             walks through each step.
           </p>
