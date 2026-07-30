@@ -66,6 +66,14 @@
   // Only ever the "image" phase: the dock renders a running download, and a
   // failure arrives as the download's own outcome, not as a progress event.
   let currentDownloadProgress: DownloadActivity | null = null;
+  // The stable "about N min left" readout, fed by the progress subscription
+  // below. The module resolves at startup, long before a download can
+  // produce its first estimate.
+  let etaMinutes: import('./progress-display.js').EtaDisplay | null = null;
+  void import('./progress-display.js').then((m) => {
+    etaMinutes = new m.EtaDisplay();
+  });
+  let shownEtaMinutes: number | null = null;
   let downloadError = '';
   let launcherResolve: (() => void) | null = null;
   let launcherTotalBytes = 0;
@@ -440,11 +448,8 @@
       const rate = progress && progress.bytesPerSecond > 0
         ? ` · ${size(progress.bytesPerSecond)}/s avg`
         : '';
-      const eta =
-        progress &&
-        progress.secondsRemaining !== null &&
-        Number.isFinite(progress.secondsRemaining)
-        ? ` · about ${Math.max(1, Math.ceil(progress.secondsRemaining / 60))} min left`
+      const eta = progress && shownEtaMinutes !== null
+        ? ` · about ${shownEtaMinutes} min left`
         : '';
       dataDownloadStatus.textContent = progress?.total
         ? `Downloading · ${size(received)} of ${size(total)}${rate}${eta}`
@@ -854,6 +859,7 @@
     // progress event must not resurrect a paused or already-settled download.
     if (!fullDownloadPromise || downloadPhase !== 'running') return;
     currentDownloadProgress = progress;
+    shownEtaMinutes = etaMinutes?.update(progress.secondsRemaining) ?? null;
     const next = {
       chunks: currentCache?.chunks ?? 0,
       totalChunks: currentCache?.totalChunks ?? 0,

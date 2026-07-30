@@ -50,6 +50,9 @@ export function secondsRemaining(
  * displaying their instantaneous rate makes the number jump even when the
  * connection is steady. The warm-up avoids publishing a misleading first
  * sample; the five-second time constant then follows real changes gradually.
+ * Samples commit at most twice a second: a burst of completions milliseconds
+ * apart would otherwise enter the average as a series of absurd
+ * chunk-per-millisecond rates instead of one honest interval.
  */
 export class DownloadRateAverage {
   private readonly startedAtMs: number;
@@ -59,12 +62,14 @@ export class DownloadRateAverage {
   private average = 0;
   private readonly warmupMs: number;
   private readonly smoothingMs: number;
+  private readonly minSampleMs: number;
 
   constructor(
     startedBytes = 0,
     startedAtMs = Date.now(),
     warmupMs = 1_500,
     smoothingMs = 5_000,
+    minSampleMs = 500,
   ) {
     this.startedBytes = startedBytes;
     this.startedAtMs = startedAtMs;
@@ -72,6 +77,7 @@ export class DownloadRateAverage {
     this.lastAtMs = startedAtMs;
     this.warmupMs = warmupMs;
     this.smoothingMs = smoothingMs;
+    this.minSampleMs = minSampleMs;
   }
 
   update(received: number, nowMs = Date.now()): number {
@@ -87,7 +93,11 @@ export class DownloadRateAverage {
     const elapsedMs = nowMs - this.startedAtMs;
     const intervalMs = nowMs - this.lastAtMs;
     const intervalBytes = received - this.lastBytes;
-    if (intervalMs <= 0 || intervalBytes <= 0) return this.average;
+    if (intervalMs <= 0 || intervalMs < this.minSampleMs || intervalBytes <= 0) {
+      // Deferred, not dropped: the bytes stay uncommitted and fold into the
+      // next accepted sample's interval.
+      return this.average;
+    }
     this.lastAtMs = nowMs;
     this.lastBytes = received;
 
