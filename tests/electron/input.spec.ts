@@ -334,7 +334,10 @@ test.describe("renderer input", () => {
         await new Promise((resolve) => setTimeout(resolve, 450));
         mouse("mousedown", 2);
         mouse("mouseup", 2);
-        await new Promise((resolve) => setTimeout(resolve, 180));
+        const deadline = performance.now() + 2_000;
+        while (observed.length < 4 && performance.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
         return observed;
       });
 
