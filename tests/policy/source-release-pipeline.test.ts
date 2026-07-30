@@ -173,7 +173,10 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
-  assert.match(workflow, /name: Smoke-test signed release candidate[\s\S]*pnpm test:packaged/);
+  assert.match(
+    workflow,
+    /name: Smoke-test signed release candidate[\s\S]*?GW_EXPECT_OFFICIAL_UPDATER: "1"[\s\S]*?run: pnpm test:packaged/,
+  );
   assert.match(workflow, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(workflow, /anchore\/sbom-action@/);
   assert.match(workflow, /format: spdx-json/);

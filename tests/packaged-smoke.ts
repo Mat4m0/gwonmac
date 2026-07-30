@@ -42,10 +42,14 @@ const executable = path.join(
 const execFileAsync = promisify(execFile);
 const resources = path.join(appBundle, "Contents/Resources");
 const asarPath = path.join(resources, "app.asar");
+const expectsOfficialUpdater =
+  process.env.GW_EXPECT_OFFICIAL_UPDATER === "1";
 assert.equal(
   existsSync(path.join(resources, "official-update.json")),
-  false,
-  "ordinary local packages must not carry the official updater capability",
+  expectsOfficialUpdater,
+  expectsOfficialUpdater
+    ? "an official release must carry the updater capability"
+    : "ordinary local packages must not carry the official updater capability",
 );
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
