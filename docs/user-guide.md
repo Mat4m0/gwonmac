@@ -274,20 +274,26 @@ requests. After that bounded pause, pressing the button asks GitHub again.
 
 ## When the client build is not certified
 
-Each ArenaNet client build is certified separately for two things: the repair
+Each ArenaNet client build is checked separately for two things: the repair
 that makes build templates, screenshots, and chat logs work, and the read-only
-enhancement transform used by the cursor and target readout. When ArenaNet ships
-a build this app has not certified — or has certified for saving files but not
-yet for the GWonMac Tools you selected — the loading screen says so once for
-that build, names exactly what is affected, and offers **Play Guild Wars** as
-the primary action. The notice explains; it does not block you.
+enhancement transform used by the cursor and target readout. When ArenaNet
+ships a new build, the launcher checks a local copy in an isolated process.
+When the structures it uses are unchanged or have only moved in the one
+supported way, everything continues normally without an app update or an
+extra choice.
+
+If that check cannot prove compatibility — or proves saving files but not the
+GWonMac Tools you selected — the loading screen says so once for that build,
+names exactly what is affected, and offers **Play Guild Wars** as the primary
+action. The notice explains; it does not block you.
 
 Gameplay is unaffected either way: no stat, no timing, and no input path
-changes. Recovery needs a new release of this app; retrying, reinstalling, or
-clearing downloaded game data cannot certify a build. The same status is always
-visible under **Settings → Controls**. An uncertified client build does not mean
-the app is out of date — whether a newer release exists is the separate question
-above, which the notice's own **Check for Updates** button answers.
+changes. If the local check refuses a changed structure, support may need a new
+app release; retrying, reinstalling, or clearing downloaded game data will not
+change that decision. The same status is always visible under **Settings →
+Controls**. An uncertified client build does not mean the app is out of date —
+whether a newer release exists is the separate question above, which the
+notice's own **Check for Updates** button answers.
 
 The two GWonMac Tools choices control their observations independently. The cursor
 choice reads only the cursor Guild Wars is drawing. The target-readout choice

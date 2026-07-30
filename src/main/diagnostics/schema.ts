@@ -220,6 +220,12 @@ const thermalState = literal([
   "serious",
   "critical",
 ] as const);
+const localVerificationSource = literal(["cache", "process"] as const);
+const buildCertification = literal([
+  "certified",
+  "template-only",
+  "uncertified",
+] as const);
 
 const none = {} as const;
 
@@ -681,6 +687,19 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "warn",
     fields: { code },
+  },
+  "wasm.localVerificationCompleted": {
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      source: localVerificationSource,
+      certification: buildCertification,
+    },
+  },
+  "wasm.localVerificationUnavailable": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: none,
   },
   "wasm.templateSavePrepareFailed": {
     subsystem: "wasm",

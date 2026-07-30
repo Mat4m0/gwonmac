@@ -337,11 +337,16 @@ re-certification procedure for a new client build, and the investigation log.
 Read it before changing anything below.
 
 Every index and offset the transform carries belongs to one exact client build.
-`pnpm template:recertify` re-derives them from a new one by shape — body bytes,
-resolved signatures, and caller-set intersection — and refuses rather than
-guessing when a locator finds the wrong number of candidates. It recovers
-indices, not semantics; `internal/upstream/recertify.md` still owns re-measuring
-what the client's path helpers actually do.
+The shape locator is production code under `src/main/core`; both the launcher
+and `pnpm template:recertify` call that one implementation. It re-derives
+indices from body bytes, resolved signatures, and caller-set intersections,
+then fingerprints every complete caller body the transform will modify. Only
+the five selected call-index operands are normalised. A changed path
+calculation, flag, branch, immediate, or unrelated call therefore refuses even
+when every call remains at the old byte offset. CLI comparison, diagnostics,
+and paste-ready formatting stay under `src/tools`; they are not part of the
+packaged proof. The command remains the maintainer surface for investigating a
+refusal and for re-measuring semantics.
 
 Four `Base/Os` file routines ship unimplemented and never reach Emscripten FS.
 Creating a directory returns error 2 unconditionally, which is why a build save
@@ -390,7 +395,24 @@ character of the name with it.
 The downloaded official module remains canonical. The derived module is
 verified by input hash, instruction signature, WebAssembly validation, and
 expected output hash, then atomically cached and streamed by the existing
-protocol path. Unknown builds use the official module. The derived cache is
+protocol path. A hash already in the shipped tables takes the fast path. For an
+unknown hash, Electron starts one utility process with only the artifact path
+and expected hash. That process re-reads and re-hashes the file, proves the
+template structures above, and checks Enhancement's exported loop, signature,
+empty table slot, and initialized-data topology. The topology may propose one
+common aligned relocation, but it is not evidence by itself: all eight static
+addresses must also appear in the same complete code-reference contexts as the
+current shipped baseline. The address immediates are the only bytes normalised
+for that comparison; every surrounding instruction and every relative object
+offset stays exact.
+
+The utility process has a five-second deadline and writes no profile state.
+Only main publishes its checksum-protected, owner-only exact-hash answer to
+`game/local-client-verification.json`; its verifier ABI and baseline
+fingerprint make every code or baseline change invalidate the cache. A crash,
+timeout, changed file, malformed answer, ambiguous locator, unexpected data
+layout, or transform failure is no proof. The launcher then serves the
+untouched official module and starts the game normally. The derived caches are
 rebuildable from the official artifact and old compatibility generations are
 deleted when the selected client changes.
 
@@ -409,12 +431,13 @@ step two — templates saved, cursors gone — which is the normal intermediate
 during a recertification, because the transform that breaks saving is fixed
 before the one that draws a pointer.
 
-`src/main/client-certification.ts` composes the two lookups into one answer:
-`uncertified`, `template-only`, or `certified`. It is the single owner, and
-every consumer asks it rather than composing the chain again — the launcher
-notice, the settings status, the diagnostics gauges, the weekly canary, and
-`pnpm enhancements:doctor`. A certified build whose template-save transform throws
-is published as `uncertified`, because it is degraded exactly that far.
+`src/main/client-certification.ts` composes the shipped lookups or one local
+proof into the same answer: `uncertified`, `template-only`, or `certified`. It
+is the single owner, and every consumer asks it rather than composing the chain
+again — the launcher notice, the settings status, the diagnostics gauges, the
+weekly canary, and `pnpm enhancements:doctor`. A certified build whose
+template-save transform throws is published as `uncertified`, because it is
+degraded exactly that far.
 
 `ClientRuntime` publishes the state once per activated client as
 `client.buildCertification` in a `.gwdiag`, and the older
@@ -473,12 +496,13 @@ player-facing surface nor couples the two tools in packaged builds.
 
 After publication, certification matches the official hash to the exact
 template-save record and then matches that record's output hash to the exact
-Enhancement record. `client-module.ts` consumes those records directly and owns the
+Enhancement record. Those records may be shipped or locally proven; downstream
+code has no second path. `client-module.ts` consumes them directly and owns the
 official → template-save → optional Enhancement chain, cache reuse, stale-cache
 discard, and atomic publication. Disabled and unsupported stages delete their
-cache. A Enhancement transform failure serves the verified template-save module;
-an uncertified build serves the official module, so the game stays playable
-and the cursor falls back to the plain macOS pointer.
+cache. An Enhancement transform failure serves the verified template-save
+module; an uncertified build serves the official module, so the game stays
+playable and the cursor falls back to the plain macOS pointer.
 
 `enhancement-transform.ts` is the pure byte transform. The manifest's ordered
 layout fields generate the embedded `layoutWords`; the renderer does not

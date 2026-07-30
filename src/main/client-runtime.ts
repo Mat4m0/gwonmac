@@ -10,7 +10,10 @@ import type {
 import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
-import { certifyClientBuild } from "./client-certification.js";
+import {
+  certificationFromLocalVerification,
+  certifyClientBuild,
+} from "./client-certification.js";
 import {
   PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
@@ -55,6 +58,7 @@ import {
   startClientUpdateSpan,
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
+import { verifyClientLocally } from "./local-client-verifier-host.js";
 
 export type { ActiveClient } from "./core/active-client.js";
 
@@ -193,7 +197,24 @@ export class ClientRuntime {
       return { wasmPath: officialWasm, build: null };
     }
 
-    const certification = certifyClientBuild(officialSha256);
+    let certification = certifyClientBuild(officialSha256);
+    if (certification.state === "uncertified") {
+      const local = await verifyClientLocally({
+        officialWasmPath: officialWasm,
+        officialSha256,
+        cachePath: this.options.paths.localClientVerification,
+      });
+      if (local) {
+        certification = certificationFromLocalVerification(local.result);
+        logEvent({
+          k: "wasm.localVerificationCompleted",
+          source: local.source,
+          certification: certification.state,
+        });
+      } else {
+        logEvent({ k: "wasm.localVerificationUnavailable" });
+      }
+    }
     const prepared = await prepareClientModule({
       officialWasmPath: officialWasm,
       officialSha256,
