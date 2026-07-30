@@ -9,6 +9,7 @@ import {
   selectWebsiteDownload,
   WEBSITE_RELEASE_CHANNEL,
 } from "../apps/website/app/utils/release-download.ts";
+import { stopChildProcess } from "./helpers/child-process.ts";
 
 // P3.25 — the download button, executed rather than described. The composable's
 // channel policy runs here against release payloads shaped like the ones the
@@ -283,8 +284,5 @@ try {
     ),
   );
 } finally {
-  if (server.exitCode === null) {
-    server.kill();
-    await once(server, "exit");
-  }
+  await stopChildProcess(server);
 }

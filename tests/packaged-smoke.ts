@@ -28,6 +28,7 @@ import {
   PRELOAD_ENTRY,
   relativeEsmClosure,
 } from "./helpers/package-inventory.ts";
+import { stopChildProcess } from "./helpers/child-process.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 const appBundle = path.join(
@@ -218,11 +219,6 @@ try {
   assert.ok(started, "the packaged app recorded no diagnostics.started event");
   assert.equal(started.fields?.appVersion, packageVersion);
 } finally {
-  if (child.exitCode === null) child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("close", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await stopChildProcess(child);
   await rm(userData, { recursive: true, force: true });
 }

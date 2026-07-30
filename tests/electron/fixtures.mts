@@ -3,7 +3,6 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,7 +14,7 @@ export const root = path.resolve(
 );
 export const main = path.join(root, "build/main/main.js");
 
-const electronBin = path.join(
+export const electronBin = path.join(
   root,
   "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
 );
@@ -32,8 +31,13 @@ export async function launchOffline(
   prepare: (userData: string) => Promise<void> = async () => {},
 ): Promise<OfflineFixture> {
   const userData = await mkdtemp(path.join(tmpdir(), prefix));
-  await prepare(userData);
-  return launchOfflineAt(userData, environment);
+  try {
+    await prepare(userData);
+    return await launchOfflineAt(userData, environment);
+  } catch (error) {
+    await rm(userData, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 export async function launchOfflineAt(
@@ -55,20 +59,74 @@ export async function launchOfflineAt(
     ...environment,
   });
   delete env.ELECTRON_RUN_AS_NODE;
-  const app = await electron.launch({
-    cwd: root,
-    args: [".", `--user-data-dir=${userData}`],
-    env,
-    // Omitted rather than passed as `undefined`: a tree without the downloaded
-    // binary falls back to Playwright's own resolution.
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
+  let app: ElectronApplication | null = null;
+  try {
+    app = await electron.launch({
+      cwd: root,
+      args: [".", `--user-data-dir=${userData}`],
+      env,
+      executablePath: electronBin,
+    });
+    const page = await app.firstWindow({ timeout: 30_000 });
+    await page.waitForLoadState("domcontentloaded");
+    return { app, page, userData };
+  } catch (error) {
+    if (!app) throw error;
+    try {
+      await stopElectron(app);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Electron launch and cleanup both failed",
+        { cause: cleanupError },
+      );
+    }
+    throw error;
+  }
+}
+
+async function waitForExit(
+  child: ReturnType<ElectronApplication["process"]>,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return true;
+  return new Promise((resolve) => {
+    const exited = () => {
+      clearTimeout(timeout);
+      resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      child.removeListener("exit", exited);
+      resolve(false);
+    }, timeoutMs);
+    child.once("exit", exited);
   });
-  const page = await app.firstWindow({ timeout: 30_000 });
-  await page.waitForLoadState("domcontentloaded");
-  return { app, page, userData };
+}
+
+async function stopElectron(app: ElectronApplication): Promise<void> {
+  const child = app.process();
+  const closed = await new Promise<boolean>((resolve) => {
+    const finish = (value: boolean) => {
+      clearTimeout(timeout);
+      resolve(value);
+    };
+    const timeout = setTimeout(() => finish(false), 5_000);
+    void app.close().then(
+      () => finish(true),
+      () => finish(false),
+    );
+  });
+  if (!closed && child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+  }
+  if (await waitForExit(child, 5_000)) return;
+  if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  if (!(await waitForExit(child, 5_000))) {
+    throw new Error("Electron process did not exit after SIGKILL");
+  }
 }
 
 export async function closeOffline(fixture: OfflineFixture): Promise<void> {
-  await fixture.app.close().catch(() => undefined);
+  await stopElectron(fixture.app);
   await rm(fixture.userData, { recursive: true, force: true });
 }

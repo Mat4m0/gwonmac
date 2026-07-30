@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import net from "node:net";
+import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import type { SocketEvent } from "../../src/shared/contracts.ts";
 import { SocketManager } from "../../src/main/core/sockets.ts";
@@ -16,6 +17,7 @@ describe("integration: native sockets", () => {
   const server = net.createServer((socket) => {
     socket.on("data", (data) => socket.write(data));
   });
+  let fixturePort = 0;
   const manager = new SocketManager(
     (ownerId, event) => events.push({ ownerId, ...event }),
     {
@@ -25,14 +27,18 @@ describe("integration: native sockets", () => {
     },
     (destination) => {
       assert.equal(destination, "127.0.0.1:6112");
-      return { host: "127.0.0.1", port: 6112, family: 4 };
+      assert.notEqual(fixturePort, 0);
+      return { host: "127.0.0.1", port: fixturePort, family: 4 };
     },
   );
 
   before(async () => {
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(6112, "127.0.0.1", () => resolve());
+      server.listen(0, "127.0.0.1", () => {
+        fixturePort = (server.address() as AddressInfo).port;
+        resolve();
+      });
     });
   });
 

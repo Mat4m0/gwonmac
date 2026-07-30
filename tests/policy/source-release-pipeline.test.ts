@@ -167,6 +167,8 @@ test("release workflow publishes one tested, attested package version", () => {
   const verification = read(".github/workflows/macos-verify.yml");
   assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
   assert.match(verification, /runs-on: macos-15/);
+  assert.match(verification, /test "\$\(uname -m\)" = "arm64"/);
+  assert.match(workflow, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
@@ -204,6 +206,16 @@ test("release workflow publishes one tested, attested package version", () => {
     /if \[ "\$prerelease" = "false" \]; then\s+test "\$SIGNED_BETA_UPDATE_PROVEN" = "true"/,
   );
   assert.match(workflow, /--draft --generate-notes/);
+  assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" = "true"/);
+  assert.match(workflow, /--json targetCommitish --jq '\.targetCommitish'\)" = "\$GITHUB_SHA"/);
+  assert.match(
+    workflow,
+    /name: Create complete draft release\n {8}if: steps\.release-state\.outputs\.create == 'true'/,
+  );
+  assert.equal(
+    workflow.match(/if: steps\.release-state\.outputs\.create == 'true'/gu)?.length,
+    3,
+  );
   assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
   assert.match(workflow, /\*\.zip \*\.dmg RELEASES\.json \*\.spdx\.json/);
@@ -242,7 +254,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.doesNotMatch(pullRequest, /workflow_dispatch:|push:/);
   assert.match(
     pullRequest,
-    /gwonmac-pr-\{0\}-\{1\}', github\.event\.pull_request\.number, github\.sha/,
+    /gwonmac-pr-\{0\}-\{1\}-\{2\}', github\.event\.pull_request\.number, github\.sha, github\.run_attempt/,
   );
   assert.match(pullRequest, /artifact-retention-days: 3/);
   assert.match(pullRequest, /dependency-review: true/);
@@ -254,7 +266,8 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(main, /on:\n {2}push:\n {4}branches: \[main\]/);
   assert.doesNotMatch(main, /pull_request:|workflow_dispatch:/);
   assert.match(main, /artifact-retention-days: 1/);
-  assert.match(main, /run-number: \$\{\{ fromJSON\(github\.run_number\) \}\}/);
+  assert.match(main, /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(main, /run-number: \$\{\{ github\.run_number \}\}/);
   assert.match(
     main,
     /publish:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
@@ -272,7 +285,8 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
   assert.doesNotMatch(manual, /schedule:|release-build|package\.json'\)\.version/);
   assert.match(manual, /artifact-retention-days: 1/);
-  assert.match(manual, /run-number: \$\{\{ fromJSON\(github\.run_number\) \}\}/);
+  assert.match(manual, /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(manual, /run-number: \$\{\{ github\.run_number \}\}/);
   assert.match(manual, /publish:\n {4}needs: verify/);
   assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
 
@@ -286,6 +300,13 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(publisher, /test "\$\(tr -d '\\n' < "\$source_commit"\)" = "\$COMMIT_SHA"/);
   assert.match(publisher, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(publisher, /tag="snapshot-\$RUN_NUMBER-\$short"/);
+  assert.match(publisher, /type: string/);
+  assert.match(
+    publisher,
+    /if ! \[\[ "\$RUN_NUMBER" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/,
+  );
+  assert.match(publisher, /group: snapshot-publisher/);
+  assert.match(publisher, /if: steps\.assets\.outputs\.prune == 'true'/);
   assert.match(
     publisher,
     /test\(\\"\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\\"\)/,
@@ -353,6 +374,8 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.match(workflow, /runs-on: ubuntu-latest/);
   assert.match(workflow, /run: pnpm test:website/);
   assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
+  assert.equal(workflow.match(/- "src\/shared\/\*\*"/gu)?.length, 2);
+  assert.equal(workflow.match(/- "package\.json"/gu)?.length, 2);
   assert.match(workflow, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(workflow, /contents: write|id-token: write|issues: write/);
   assert.doesNotMatch(script("verify"), /test:website/);

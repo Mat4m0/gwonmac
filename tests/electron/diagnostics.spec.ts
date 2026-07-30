@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -18,7 +17,6 @@ import type { ElectronApplication } from "@playwright/test";
 import {
   closeOffline,
   launchOffline,
-  main,
   root,
 } from "./fixtures.mjs";
 
@@ -38,8 +36,6 @@ const clickMenu = (app: ElectronApplication, id: string) =>
   }, id);
 
 test.describe("diagnostics", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("serializes capture lifecycle and exposes an unmistakable marker", async () => {
     const fixture = await launchOffline("gw-capture-e2e-");
     try {

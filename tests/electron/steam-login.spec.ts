@@ -8,7 +8,6 @@
 // validated IPC handler, coordinator, encrypted store, and BrowserWindow remain
 // the real implementations, and the suite never reaches Steam production.
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
 import { createServer, type Server, type ServerResponse } from "node:http";
@@ -22,7 +21,6 @@ import {
   launchOfflineAt,
   root,
   type OfflineFixture,
-  main,
 } from "./fixtures.mts";
 
 const execFileAsync = promisify(execFile);
@@ -250,10 +248,6 @@ async function windowCount(app: OfflineFixture["app"]): Promise<number> {
 }
 
 test.describe("the Steam credential seam", () => {
-  // These drive compiled main-process code, so skip rather than error when the
-  // build has not run — the same guard tests/electron/sandbox.spec.ts uses.
-  test.skip(!existsSync(main), "run pnpm build before the electron tests");
-
   let fixture: OfflineFixture;
   let oauth: IpcOAuthFixture | undefined;
 

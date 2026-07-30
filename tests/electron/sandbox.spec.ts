@@ -1,10 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 test.describe("sandbox boundary", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("exposes only the frozen application capabilities", async () => {
     const fixture = await launchOffline("gw-sandbox-e2e-");
     try {

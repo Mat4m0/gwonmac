@@ -1,8 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 /** One cursor region header, as the kernel would publish it. */
 interface CursorPublication {
@@ -182,8 +181,6 @@ async function driveCursor(
 }
 
 test.describe("enhancement cursor presentation", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("renders the game cursor as a 32 px image-set and hands back the plain pointer", async () => {
     const fixture = await launchOffline("gw-enhancement-cursor-e2e-");
     try {
