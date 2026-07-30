@@ -313,9 +313,10 @@
                                   max-width:none; white-space:nowrap;
                                   font-size:10.5px; letter-spacing:.02em; }
 
-/* Narrow windows: stack the dock's info above its actions, shrink chrome. */
+/* Narrow windows: stack the dock's info above its actions, shrink chrome.
+   The window's own minimum is 800×600, so this band is 800–860px wide. */
 @media (max-width:860px) {
-  #loading { --dock-h: 168px; }
+  #loading { --dock-h: 128px; }
   #loading-unofficial { top:10px; left:50%; transform:translateX(-50%);
                         white-space:nowrap; }
   #loading-links { top:46px; left:12px; right:12px;
@@ -331,7 +332,9 @@
   .data-choice-option { width:auto; flex:1; max-width:260px; }
   .data-download-actions,
   .client-compat-actions { justify-content:center; flex-wrap:wrap; }
-  #loading-boot { width:100%; text-align:center; }
+  /* space-between would pin the text to the left edge while Retry is hidden;
+     centered, the boot line and an eventual Retry read as one group. */
+  #loading-boot { width:100%; text-align:center; justify-content:center; }
   #loading-footer { flex-direction:column; align-items:center; gap:4px; }
   #loading-legal { text-align:center; max-width:100%; }
   #loading-logo { width:min(520px,82vw); }
