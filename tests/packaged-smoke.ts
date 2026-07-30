@@ -155,10 +155,14 @@ await writeFile(
 );
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
-const child = spawn(executable, [
+const launchArguments = [
   `--user-data-dir=${userData}`,
-  "--gw-adhoc-test-keychain",
-], {
+  // An ordinary ad-hoc package must select mock storage from the absence of the
+  // official marker. The signed release smoke still needs this explicit CI-only
+  // escape hatch because its real provider would open an interactive prompt.
+  ...(expectsOfficialUpdater ? ["--gw-adhoc-test-keychain"] : []),
+];
+const child = spawn(executable, launchArguments, {
   cwd: root,
   env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
   stdio: ["ignore", "pipe", "pipe"],

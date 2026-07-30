@@ -193,12 +193,14 @@ shop.initialize/inAppPurchase
 The generated glue requires all three credential methods. They cross a narrow
 IPC boundary to one native `CredentialsStore`, which writes encrypted
 `credentials.bin` atomically with mode `0600`. Official Developer ID packages
-let Electron `safeStorage` use its macOS Keychain-backed provider. Unpackaged
-development and the explicit packaged-test switch use Chromium's local mock
-provider to avoid recurring prompts from an unstable identity. An unreadable
-ciphertext is never deleted by a read; the failure is recorded without
-credential content and the game prompts again. A later explicit save atomically
-replaces it.
+let Electron `safeStorage` use its macOS Keychain-backed provider. Every
+package without the official release marker, unpackaged development, and the
+explicit release-smoke switch use Chromium's local mock provider. The decision
+is made before Electron becomes ready: allowing an ad-hoc package to create the
+same Safe Storage item binds it to an unstable code identity, after which macOS
+repeatedly challenges the official application. An unreadable ciphertext is
+never deleted by a read; the failure is recorded without credential content and
+the game prompts again. A later explicit save atomically replaces it.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 Steam is advertised as a federated provider; Apple and Google are not. The

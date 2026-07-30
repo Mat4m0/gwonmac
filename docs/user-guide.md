@@ -29,6 +29,13 @@ development mock provider to macOS Keychain-backed protection. An existing
 preview installation may ask you to sign in once; its old encrypted file is
 preserved rather than silently deleted.
 
+Tester snapshots published before this boundary was enforced could create a
+**Guild Wars Reforged Safe Storage** item under their temporary ad-hoc identity.
+If macOS repeatedly asks the official application to access that item, choose
+**Always Allow**. If the prompt returns on a later launch, quit the application,
+delete only that named item in Keychain Access, and launch again. You will need
+to sign in once; downloaded game data and launcher settings are unaffected.
+
 The app then:
 
 1. checks the official game client;
@@ -137,12 +144,13 @@ centered on the primary display instead of opening off-screen. Choose **View →
 Reset Window Size and Position** for an immediate window-only reset.
 
 Guild Wars' **Remember Password** checkbox controls saved login. The password
-is encrypted in an owner-only local file and is not placed in macOS Keychain,
-so the application does not show a Keychain prompt. Because unsigned builds
-use Chromium's local mock encryption provider, this is weaker than Keychain:
-software running as your macOS user may be able to recover it. Leave
-**Remember Password** off if that tradeoff is not acceptable. Browser cookies
-are cleared at startup and quit.
+is encrypted in an owner-only local file rather than stored as a Keychain
+password. Official releases protect that file's encryption key with macOS
+Keychain; tester snapshots use Chromium's local mock provider so their unstable
+code identity cannot cause authorization prompts in a later official release.
+The snapshot protection is weaker: software running as your macOS user may be
+able to recover the password. Leave **Remember Password** off if that tradeoff
+is not acceptable. Browser cookies are cleared at startup and quit.
 
 ## Signing in with Steam
 
@@ -175,8 +183,9 @@ You only do this once per machine. The sign-in is remembered in an encrypted,
 owner-only local file and replayed on later launches, so no Steam window appears
 again until it expires or you sign out. It carries the same tradeoff as the saved
 password above: it is not in macOS Keychain, and on an unsigned build software
-running as your macOS user may be able to recover it. If the file cannot be read,
-or the sign-in has expired or been revoked, you are simply returned to the login
+running as your macOS user may be able to recover it. The official application
+protects the file's encryption key with Keychain. If the file cannot be read, or
+the sign-in has expired or been revoked, you are simply returned to the login
 screen — the application does not fail to start.
 
 If an explicit sign-in fails for a reason other than you closing the window, a

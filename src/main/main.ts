@@ -75,14 +75,17 @@ import { sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
 
-// Ad-hoc builds have no stable code identity, so Chromium's profile encryption
-// repeatedly asks for access to "<app> Safe Storage". The mock provider avoids
-// that OS prompt. The same provider encrypts the owner-only saved-login file;
-// this is intentionally weaker than a signed app's stable Keychain identity.
+// Anything without the official release marker has no stable Developer ID
+// identity. If it touches Chromium's real provider, macOS binds "<app> Safe
+// Storage" to that ad-hoc build and repeatedly challenges the later official
+// app. Select the mock provider before ready for every such build. The explicit
+// switch lets packaged release smoke tests avoid an interactive prompt too.
+// This is intentionally weaker than an official package's Keychain protection.
 if (
   process.platform === "darwin"
   && (
     !app.isPackaged
+    || !hasOfficialReleaseMarker()
     || app.commandLine.hasSwitch("gw-adhoc-test-keychain")
   )
 ) {
@@ -234,10 +237,7 @@ function sendToRenderer(channel: string, value: unknown): void {
   }
 }
 
-function officialUpdaterCapable(): boolean {
-  if (!app.isPackaged) {
-    return process.env.GW_TEST_OFFICIAL_UPDATER === "1";
-  }
+function hasOfficialReleaseMarker(): boolean {
   if (process.platform !== "darwin") return false;
   try {
     const marker = JSON.parse(
@@ -253,6 +253,13 @@ function officialUpdaterCapable(): boolean {
   } catch {
     return false;
   }
+}
+
+function officialUpdaterCapable(): boolean {
+  if (!app.isPackaged) {
+    return process.env.GW_TEST_OFFICIAL_UPDATER === "1";
+  }
+  return hasOfficialReleaseMarker();
 }
 
 async function ensureDirs(): Promise<void> {

@@ -84,13 +84,26 @@ test("no build seeds the Steam token from the environment", () => {
   );
 });
 
-test("only development and explicit ad-hoc tests enable mock keychain", () => {
+test("every non-official build enables mock keychain before ready", () => {
   // Ordering, not existence: `appendSwitch` after `whenReady` is a silent
   // no-op, and the symptom is an OS keychain prompt on a user's machine.
   const main = read("src/main/main.ts");
+  const packagedSmoke = read("tests/packaged-smoke.ts");
+  const packagedEnhancement = read("tests/packaged-enhancement-runtime.ts");
   assert.match(main, /appendSwitch\("use-mock-keychain"\)/);
   assert.match(main, /!app\.isPackaged/);
+  assert.match(main, /\|\| !hasOfficialReleaseMarker\(\)/);
   assert.match(main, /hasSwitch\("gw-adhoc-test-keychain"\)/);
+  assert.match(
+    main,
+    /function officialUpdaterCapable\(\)[\s\S]*return hasOfficialReleaseMarker\(\)/,
+  );
+  for (const smoke of [packagedSmoke, packagedEnhancement]) {
+    assert.match(
+      smoke,
+      /GW_EXPECT_OFFICIAL_UPDATER[\s\S]*\? \["--gw-adhoc-test-keychain"\][\s\S]*: \[\]/,
+    );
+  }
   assert.match(main, /clearStorageData\(\{ storages: \["cookies"\] \}\)/);
   assert.ok(
     main.indexOf('appendSwitch("use-mock-keychain")') <

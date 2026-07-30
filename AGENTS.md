@@ -126,10 +126,12 @@ not only happy paths.
   inspection. Do not write docs or UI that tell a player to verify the origin.
   `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
   pins the presentation.
-- Unpackaged development and explicitly marked ad-hoc test builds set
-  Chromium's `use-mock-keychain` switch before ready. Official Developer ID
-  packages use Chromium's real Keychain-backed provider. All builds clear
-  browser cookies at startup and quit.
+- Every package without the official release marker, plus unpackaged
+  development and explicitly marked release smoke tests, sets Chromium's
+  `use-mock-keychain` switch before ready. This keeps an unstable ad-hoc code
+  identity from claiming the official app's Safe Storage Keychain item.
+  Official Developer ID packages use Chromium's real Keychain-backed provider.
+  All builds clear browser cookies at startup and quit.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check per launch and
