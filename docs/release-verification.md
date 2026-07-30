@@ -32,8 +32,8 @@ A newer app version fixes an uncertified client build only if it contains a
 baseline for the changed structure, so a higher number on its own is not the
 answer.
 
-Nothing about the number implies an automatic update. Updating is manual, and
-the app checks for a newer release only when asked — see
+Automatic checks remain opt-in, and stable installations are never offered a
+preview — see
 [Updates](user-guide.md#updates).
 
 Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
@@ -52,37 +52,53 @@ checks it.
 
 ## Signing and evidence
 
-Guild Wars Reforged releases are ad-hoc signed and are not notarized by
-Apple. The project deliberately does not require a paid Apple Developer
-membership. Each GitHub release instead publishes three independently useful
-pieces of evidence:
+Guild Wars Reforged releases are signed with Developer ID, use the hardened
+runtime, and are notarized and stapled by Apple. Each GitHub release also
+publishes independently useful evidence:
 
-- the application ZIP;
-- `SHA256SUMS.txt`, covering the ZIP and SBOM;
+- the notarized DMG for installation;
+- the notarized application ZIP used by automatic updates;
+- `RELEASES.json`, naming that exact ZIP;
+- `SHA256SUMS.txt`, covering the DMG, ZIP, feed, and SBOM;
 - an SPDX SBOM describing the packaged application.
 
-GitHub also stores signed build-provenance and SBOM attestations for the ZIP.
+GitHub also stores signed build-provenance attestations for the DMG and ZIP and
+an SBOM attestation for the ZIP.
 These establish that the file was produced from this repository by the
 published release workflow. They do not replace macOS Gatekeeper or make an
 untrusted repository safe.
 
+## First signed release rollout
+
+The first Developer ID beta is a manual DMG bootstrap. An ad-hoc installation
+cannot securely replace itself with an application carrying a different code
+identity. Publish a second beta from the same Developer ID identity and prove
+automatic updating on both a clean profile and an existing profile before
+shipping a stable release.
+
+The `release` environment variable `SIGNED_BETA_UPDATE_PROVEN` is deliberately
+unset during this rollout. After the second beta has installed automatically,
+retained the profile, and the one-time saved-login re-entry has been verified,
+set it to exactly `true`. The release workflow refuses every stable version
+until that evidence gate is opened; preview releases do not depend on it.
+
 ## Verify the downloaded files
 
-Download the ZIP, `SHA256SUMS.txt`, and the `.spdx.json` file from the same
+Download the DMG, ZIP, `RELEASES.json`, `SHA256SUMS.txt`, and `.spdx.json` from the same
 GitHub release into one folder. In Terminal, change to that folder and run:
 
 ```bash
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
-Both entries must report `OK`. A mismatch means the files do not belong
+Every entry must report `OK`. A mismatch means the files do not belong
 together or were changed; delete them and download the release again.
 
 If the [GitHub CLI](https://cli.github.com/) is installed, also verify the
 repository-bound attestations:
 
 ```bash
-zip="$(find . -maxdepth 1 -name 'Guild Wars Reforged-darwin-arm64-*.zip' -print -quit)"
+zip="$(find . -maxdepth 1 -name 'Guild-Wars-Reforged-*-macOS-arm64.zip' -print -quit)"
 gh attestation verify "$zip" --repo Mat4m0/gwonmac
 ```
 
@@ -92,10 +108,9 @@ attestations are both attached to that exact ZIP digest.
 
 ## Install without disabling Gatekeeper
 
-After verification, unzip the application and move `Guild Wars Reforged.app` to
-Applications. Try to open it once, choose **Done** when macOS blocks it, then
-open **System Settings → Privacy & Security**, scroll to **Security**, choose
-**Open Anyway**, and confirm the second prompt.
+After verification, open the DMG and drag `Guild Wars Reforged.app` to
+Applications. Gatekeeper verifies the Developer ID signature and stapled Apple
+notarization ticket.
 
-Do not disable Gatekeeper globally and do not run a blanket quarantine-removal
-command. The one-time System Settings approval is scoped to this application.
+Do not disable Gatekeeper globally or run a blanket quarantine-removal
+command.

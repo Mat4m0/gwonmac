@@ -488,6 +488,17 @@ function installMenu(host: WindowHost, win: BrowserWindow): void {
               { role: "about" as const },
               { type: "separator" as const },
               {
+                label: "Check for Updates…",
+                click: async () => {
+                  await resetGameInput(win);
+                  await sendRendererCommand(win, {
+                    type: "settings.open",
+                    pane: "updates",
+                    checkForUpdates: true,
+                  });
+                },
+              },
+              {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
                 click: async () => {

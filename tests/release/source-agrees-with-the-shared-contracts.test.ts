@@ -63,7 +63,7 @@ test("every main→renderer event channel is named somewhere in main", async () 
   //    generated bridge exposes;
   //  - the handler registry is `satisfies Record<InvokeChannel, …>` (P5.9), so
   //    an `invoke` channel with no handler fails `tsc`.
-  // The five event channels have neither a registry nor a caller to execute:
+  // The event channels have neither a registry nor a caller to execute:
   // main sends them, and a channel main never sends is dead weight nothing else
   // would notice.
   const { EVENT_CHANNELS }: typeof import("../../src/shared/contracts.ts") =
@@ -76,7 +76,7 @@ test("every main→renderer event channel is named somewhere in main", async () 
     .filter((file) => file && existsSync(path.join(root, file)))
     .map(read)
     .join("\n");
-  assert.equal(EVENT_CHANNELS.length, 5);
+  assert.equal(EVENT_CHANNELS.length, 6);
   for (const key of EVENT_CHANNELS) {
     assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
   }

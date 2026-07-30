@@ -135,6 +135,12 @@ declare global {
   interface Window {
     readonly gwNative: GwNativeApi;
     Module?: {
+      FS?: {
+        syncfs(
+          populate: boolean,
+          callback: (error?: unknown) => void,
+        ): void;
+      };
       canvas?: {
         offscreen?: { width: number; height: number };
       };

@@ -47,6 +47,7 @@ test.describe("sandbox boundary", () => {
         // together.
         keys: [
           "app",
+          "appUpdates",
           "cache",
           "client",
           "commands",
@@ -56,7 +57,6 @@ test.describe("sandbox boundary", () => {
           "gameStorage",
           "init",
           "progress",
-          "releaseNotice",
           "settings",
           "snapshot",
           "sockets",

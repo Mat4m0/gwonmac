@@ -14,6 +14,7 @@ declare global {
     originalQuit: Electron.App["quit"];
     originalRelaunch: Electron.App["relaunch"];
   };
+  var __updateInstallCalls: number;
 }
 
 test.describe("settings experience", () => {
@@ -42,6 +43,117 @@ test.describe("settings experience", () => {
         }),
       ).toBe("CmdOrCtrl+,");
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("the update menu opens the dedicated pane and starts one check", async () => {
+    const fixture = await launchOffline("gw-updates-menu-e2e-");
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.items[0]?.submenu?.items.find(
+            (candidate) => candidate.label === "Check for Updates…",
+          )
+          ?.click();
+      });
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await expect(page.locator(".settings-panes")).toHaveAttribute(
+        "data-active",
+        "updates",
+      );
+      await expect(page.locator("#settings-pane-updates")).toContainText(
+        "Automatically check for and download app updates",
+      );
+      await expect(page.locator("#settings-update-version")).toHaveText(
+        "2026.7.0-beta.1",
+      );
+      await expect(page.locator("#settings-update-channel")).toHaveText("Preview");
+      await expect(page.locator("#settings-update-status")).toContainText(
+        "official Developer ID builds",
+      );
+      await expect(page.locator("#settings-restart-update")).toBeHidden();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("a ready update flushes IDBFS before installing", async () => {
+    const fixture = await launchOffline("gw-update-restart-e2e-", {
+      GW_TEST_OFFICIAL_UPDATER: "1",
+    });
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ autoUpdater }) => {
+        globalThis.__updateInstallCalls = 0;
+        const version = "2026.7.0-beta.2";
+        const tag = `v${version}`;
+        const zip = `Guild-Wars-Reforged-${version}-macOS-arm64.zip`;
+        const base =
+          `https://github.com/Mat4m0/gwonmac/releases/download/${tag}`;
+        globalThis.fetch = async (input) => {
+          const url = String(input);
+          return new Response(JSON.stringify(
+            url.includes("api.github.com")
+              ? [{
+                  tag_name: tag,
+                  draft: false,
+                  prerelease: true,
+                  assets: [
+                    {
+                      name: "RELEASES.json",
+                      browser_download_url: `${base}/RELEASES.json`,
+                    },
+                    {
+                      name: zip,
+                      browser_download_url: `${base}/${zip}`,
+                    },
+                  ],
+                }]
+              : {
+                  url: `${base}/${zip}`,
+                  name: `Guild Wars Reforged v${version}`,
+                  version,
+                  tag,
+                  pub_date: "2026-07-30T00:00:00.000Z",
+                  notes: "",
+                },
+          ), { status: 200 });
+        };
+        autoUpdater.setFeedURL = () => undefined;
+        autoUpdater.checkForUpdates = () => {
+          queueMicrotask(() => autoUpdater.emit("update-downloaded"));
+        };
+        autoUpdater.quitAndInstall = () => {
+          globalThis.__updateInstallCalls += 1;
+        };
+      });
+      await page.evaluate(() => {
+        window.Module ??= {};
+        window.Module.FS = {
+          syncfs: (_populate, callback) => {
+            document.documentElement.dataset.updateFsSynced = "yes";
+            callback();
+          },
+        };
+        globalThis.dispatchEvent(new globalThis.CustomEvent("gw:settings", {
+          detail: { pane: "updates" },
+        }));
+      });
+      await expect(page.locator("#settings-update-version")).toHaveText(
+        "2026.7.0-beta.1",
+      );
+      await page.locator("#settings-check-updates").click();
+      await expect(page.locator("#settings-restart-update")).toBeVisible();
+      await page.locator("#settings-restart-update").click();
+      await expect
+        .poll(() => page.locator("html").getAttribute("data-update-fs-synced"))
+        .toBe("yes");
+      await expect
+        .poll(() => app.evaluate(() => globalThis.__updateInstallCalls))
+        .toBe(1);
     } finally {
       await closeOffline(fixture);
     }

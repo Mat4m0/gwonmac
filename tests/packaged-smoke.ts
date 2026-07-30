@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import {
   mkdtemp,
   readdir,
@@ -39,6 +40,11 @@ const executable = path.join(
 const execFileAsync = promisify(execFile);
 const resources = path.join(appBundle, "Contents/Resources");
 const asarPath = path.join(resources, "app.asar");
+assert.equal(
+  existsSync(path.join(resources, "official-update.json")),
+  false,
+  "ordinary local packages must not carry the official updater capability",
+);
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 ).version;
@@ -136,7 +142,10 @@ for (const option of [
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
-const child = spawn(executable, [`--user-data-dir=${userData}`], {
+const child = spawn(executable, [
+  `--user-data-dir=${userData}`,
+  "--gw-adhoc-test-keychain",
+], {
   cwd: root,
   env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
   stdio: ["ignore", "pipe", "pipe"],

@@ -21,20 +21,13 @@ ArenaNet, verifies it, and hosts it in a sandboxed Chromium process.
 create accounts or bypass the login — if you don't own the game yet, buy it
 from the [official store](https://store.guildwars.com/en-us).
 
-1. **Download** the latest release and unzip it. Safari unzips automatically;
-   otherwise double-click the `.zip`.
-2. **Move** `Guild Wars Reforged.app` into your Applications folder.
-3. **Open it once.** macOS blocks it and offers only _Move to Bin_ and _Done_ —
-   click **Done**.
-4. **Allow it:** System Settings → Privacy & Security → scroll down → **Open
-   Anyway** next to the blocked-app notice.
-5. **Confirm.** The warning appears once more, now with an _Open Anyway_ button.
-   The app opens and stays trusted from then on.
+1. **Download** the latest `.dmg` release and open it.
+2. **Move** `Guild Wars Reforged.app` into the Applications folder.
+3. **Open** the app from Applications.
 
-Releases are ad-hoc signed but not notarized by Apple, which is why macOS asks.
-The project deliberately does not require a paid Apple Developer membership.
-Every release includes SHA-256 checksums, an SPDX SBOM, and GitHub build
-attestations; see [Verify a release](docs/release-verification.md).
+Releases are signed with Developer ID and notarized by Apple. Every release
+also includes SHA-256 checksums, an SPDX SBOM, and GitHub build attestations;
+see [Verify a release](docs/release-verification.md).
 
 Releases are numbered by date — `2026.7.1` is a July 2026 build — which says
 how recent a release is and nothing about which game client build it certifies:
@@ -60,13 +53,11 @@ mid-download with _Play Now Instead_.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
 - Guild Wars' own **Remember Password** writes one encrypted, owner-only local
-  file. It is _not_ macOS Keychain: ad-hoc builds use Chromium's local mock
-  encryption, so software running as your macOS user could recover it. Leave
-  Remember Password off if that tradeoff isn't acceptable.
+  file using Chromium's macOS Keychain-backed encryption in official builds.
 - **The app does not poll for updates.** It asks GitHub whether a newer release
   exists when you press **Check for Updates**, and otherwise only if you switch
-  on the automatic check — which is off by default. Updating is manual: the app
-  never downloads or installs anything by itself. See
+  on automatic checking and downloading — which is off by default. A downloaded
+  update is offered as a restart and otherwise installs on the next restart. See
   [Updates](docs/user-guide.md#updates).
 
 Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
@@ -93,7 +84,7 @@ The first online run fetches the small JSPI client artifacts.
 | ------------------------------------------------------------------------ | ------------------------------------------- |
 | `pnpm dev`                                                               | Build and launch the app via Electron Forge |
 | `pnpm package`                                                           | Build a local `.app` under `out/`           |
-| `pnpm make`                                                              | Build the distributable `.zip`              |
+| `pnpm make`                                                              | Build a local ad-hoc `.zip`                  |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
 | `pnpm check`                                                             | Fast inner loop: static checks and policy   |
 | `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites (run `pnpm build` first)        |
@@ -128,8 +119,24 @@ under `apps/`.
 settings, and every project link — the launcher and website both import it.
 
 Releases are cut from `main` by manual dispatch of the macOS workflow. The
-workflow verifies one ad-hoc signed package, generates checksums and an SPDX
-SBOM, attests that exact ZIP, and publishes those same tested files.
+approval-gated workflow signs with Developer ID, notarizes and staples the app
+and DMG, generates the updater feed, checksums and SPDX SBOM, attests the exact
+DMG and ZIP, and publishes only after re-verifying the complete draft.
+
+The GitHub `release` environment must require a maintainer approval and contain
+these secrets:
+
+- `APPLE_DEVELOPER_ID_P12`: base64 of the exported Developer ID Application
+  certificate and private key;
+- `APPLE_DEVELOPER_ID_PASSWORD`: the export password;
+- `APPLE_API_KEY_P8`: base64 of the App Store Connect API key;
+- `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`, and `APPLE_TEAM_ID`: their Apple
+  identifiers.
+
+On macOS, `base64 -i DeveloperID.p12 | pbcopy` and
+`base64 -i AuthKey_KEYID.p8 | pbcopy` produce the two encoded secret values.
+Keep the original files outside the repository and remove local export copies
+after the GitHub secrets have been set.
 
 ### Test snapshots
 

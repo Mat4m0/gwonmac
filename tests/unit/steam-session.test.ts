@@ -559,6 +559,29 @@ describe("ordering complete Steam session operations", () => {
     assert.equal(clears, 2);
   });
 
+  it("lets quit wait for the last queued secret write", async () => {
+    let finishSave!: () => void;
+    const saved = new Promise<void>((resolve) => {
+      finishSave = resolve;
+    });
+    const steam = new SteamSessionCoordinator({
+      load: async () => ({ token: FRESH, expiry: NOW + 1_000 }),
+      save: () => saved,
+      clear: async () => undefined,
+    });
+
+    const refresh = steam.refresh(FRESH, Date.now() + 60_000);
+    let settled = false;
+    const drain = steam.settled().then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    assert.equal(settled, false);
+    finishSave();
+    await Promise.all([refresh, drain]);
+    assert.equal(settled, true);
+  });
+
   it("coalesces concurrent interactive resolutions", async () => {
     const store = fakeStore(null);
     const steam = new SteamSessionCoordinator(store);

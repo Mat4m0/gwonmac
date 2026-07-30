@@ -1,3 +1,4 @@
+import { MakerDMG } from "@electron-forge/maker-dmg";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
@@ -11,6 +12,43 @@ const packageVersion = (
   }
 ).version;
 const macOSVersion = macOSBundleVersions(packageVersion);
+const officialRelease = process.env.GW_OFFICIAL_RELEASE === "1";
+const developerIdIdentity =
+  "Developer ID Application: Matthias Amon (9NN976MFZ4)";
+
+function requiredReleaseEnvironment(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required for an official release`);
+  return value;
+}
+
+const releaseSigning = officialRelease
+  ? {
+      identity: developerIdIdentity,
+      keychain: requiredReleaseEnvironment("APPLE_KEYCHAIN"),
+      hardenedRuntime: true,
+      timestamp: "http://timestamp.apple.com/ts01",
+      optionsForFile: (filePath: string) => ({
+        entitlements: filePath.includes("Helper (Plugin).app")
+          ? [
+              "com.apple.security.cs.allow-jit",
+              "com.apple.security.cs.allow-unsigned-executable-memory",
+              "com.apple.security.cs.disable-library-validation",
+            ]
+          : ["com.apple.security.cs.allow-jit"],
+        hardenedRuntime: true,
+        timestamp: "http://timestamp.apple.com/ts01",
+      }),
+    }
+  : undefined;
+
+const releaseNotarization = officialRelease
+  ? {
+      appleApiKey: requiredReleaseEnvironment("APPLE_API_KEY_PATH"),
+      appleApiKeyId: requiredReleaseEnvironment("APPLE_API_KEY_ID"),
+      appleApiIssuer: requiredReleaseEnvironment("APPLE_API_ISSUER_ID"),
+    }
+  : undefined;
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -29,7 +67,10 @@ const config: ForgeConfig = {
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
       "src/renderer/fonts/COPYING-QUALITYPE",
+      ...(officialRelease ? ["packaging/official-update.json"] : []),
     ],
+    ...(releaseSigning ? { osxSign: releaseSigning } : {}),
+    ...(releaseNotarization ? { osxNotarize: releaseNotarization } : {}),
     extendInfo: {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
     },
@@ -49,8 +90,24 @@ const config: ForgeConfig = {
     },
   },
   rebuildConfig: {},
-  // Distribution is the zipped .app; no DMG.
-  makers: [new MakerZIP({}, ["darwin"])],
+  makers: [
+    new MakerZIP({}, ["darwin"]),
+    ...(officialRelease
+      ? [
+          new MakerDMG({
+            name: `Guild-Wars-Reforged-${packageVersion}-macOS-arm64`,
+            icon: path.resolve("assets/AppIcon.icns"),
+            overwrite: true,
+            additionalDMGOptions: {
+              "code-sign": {
+                "signing-identity": developerIdIdentity,
+                identifier: "com.gwdevhub.guildwars",
+              },
+            },
+          }),
+        ]
+      : []),
+  ],
   hooks: {
     packageAfterCopy: async (_config, resourcesPath, _version, platform, arch) => {
       if (platform !== "darwin") return;
@@ -73,7 +130,7 @@ const config: ForgeConfig = {
       );
     },
     postPackage: async (_config, result) => {
-      if (result.platform !== "darwin") return;
+      if (result.platform !== "darwin" || officialRelease) return;
       const { spawnSync } = await import("node:child_process");
       for (const outputPath of result.outputPaths) {
         const appPath = path.join(outputPath, "Guild Wars Reforged.app");

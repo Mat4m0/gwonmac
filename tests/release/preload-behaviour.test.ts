@@ -234,7 +234,13 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.clientHealthy,
   },
   { path: "client.session", args: [], channel: IPC.clientSession },
-  { path: "releaseNotice.check", args: [], channel: IPC.releaseNoticeCheck },
+  { path: "appUpdates.getState", args: [], channel: IPC.appUpdatesGetState },
+  { path: "appUpdates.check", args: [], channel: IPC.appUpdatesCheck },
+  {
+    path: "appUpdates.restartAndInstall",
+    args: [],
+    channel: IPC.appUpdatesRestartAndInstall,
+  },
 ];
 
 /** The main→renderer streams, which subscribe instead of invoking. */
@@ -267,6 +273,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "sockets.onEvent",
     channel: IPC.socketEvent,
     subscribe: (api, listener) => api.sockets.onEvent(listener),
+  },
+  {
+    path: "appUpdates.onState",
+    channel: IPC.appUpdatesState,
+    subscribe: (api, listener) => api.appUpdates.onState(listener),
   },
 ];
 

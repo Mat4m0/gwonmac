@@ -62,8 +62,8 @@ Refusals, not a backlog.
 - **No disk-usage promise.** The full download is about 4 GB and stays until
   the player clears it; the app does not silently evict game data to stay under
   a cap. Making that promise means building eviction first.
-- **No update that installs itself.** Replacing the app is manual, and it
-  checks for a newer release only when asked.
+- **No forced update.** Automatic checking and downloading is opt-in. A ready
+  update waits for the player to restart or choose **Restart to Update**.
 
 ## Claims we stand behind
 

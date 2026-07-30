@@ -8,34 +8,23 @@ const STEPS = [
   {
     title: "Download",
     detail:
-      "Download the latest release — a .zip containing the app. Safari unzips it automatically; otherwise double-click the file.",
+      "Download the latest notarized .dmg release and open the disk image.",
   },
   {
     title: "Move to Applications",
-    detail: "Drag Guild Wars Reforged from Downloads into the Applications folder.",
+    detail:
+      "Drag Guild Wars Reforged into the Applications folder shown in the disk image.",
   },
   {
-    title: "Open it once — macOS blocks it",
+    title: "Open and play",
     detail:
-      "Open the app from Applications. macOS shows “Apple is not able to verify that it is free from malware” with only Move to Bin and Done. Click Done — do not click Move to Bin.",
-  },
-  {
-    title: "Allow it in System Settings",
-    detail:
-      "Open System Settings → Privacy & Security and scroll down. Next to “‘Guild Wars Reforged’ was blocked to protect your Mac”, click Open Anyway.",
-  },
-  {
-    title: "Confirm and play",
-    detail:
-      "The warning appears one more time, now with an Open Anyway button — click it. The app opens, checks the official client, and downloads the files needed to begin. This is only required for the first launch.",
+      "Open Guild Wars Reforged from Applications. It checks the official client and downloads the files needed to begin.",
   },
 ] as const;
 
-// The step count is counted, not remembered: the description said "four short
-// steps" above five entries for as long as the fifth one has existed (P3.23).
 useSeoMeta({
   title: "Install Guide — Guild Wars Reforged",
-  description: `Install Guild Wars Reforged on your Mac in ${STEPS.length} short steps, including the one-time first-launch confirmation.`,
+  description: `Install the signed and notarized Guild Wars Reforged app on your Mac in ${STEPS.length} short steps.`,
 });
 </script>
 
@@ -45,8 +34,7 @@ useSeoMeta({
       Install Guild Wars Reforged on your Mac
     </h1>
     <p class="mx-auto mt-4 max-w-xl text-center text-parchment-300/80">
-      Current releases require a one-time approval in System Settings on first launch because they
-      are not yet notarized by Apple.
+      Releases are signed with Developer ID and notarized by Apple.
     </p>
     <div class="mt-6 flex justify-center">
       <DownloadCta size="large" source="install-guide" />
@@ -65,8 +53,8 @@ useSeoMeta({
     <div class="panel mt-10 px-6 py-5">
       <h2 class="text-sm tracking-[0.12em] text-gold-400 uppercase">Security note</h2>
       <p class="mt-2 text-parchment-300/85">
-        Do not disable Gatekeeper or change global macOS security settings. Use the per-app Open
-        Anyway confirmation described above.
+        macOS verifies the Developer ID signature and stapled notarization ticket. Do not disable
+        Gatekeeper or change global macOS security settings.
       </p>
     </div>
 

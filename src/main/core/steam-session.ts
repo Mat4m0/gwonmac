@@ -320,6 +320,10 @@ export class SteamSessionCoordinator {
     return this.enqueue(() => this.store.clear());
   }
 
+  settled(): Promise<void> {
+    return this.tail;
+  }
+
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.tail.then(operation, operation);
     this.tail = result.then(

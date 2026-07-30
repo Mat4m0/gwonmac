@@ -1,22 +1,9 @@
-// The renderer half of "is there a newer release of this app?".
-//
-// The state and the concrete DOM binding live together here. The three answers
-// must never collapse into two, and every launcher/settings/compatibility
-// surface must show the same request and result. `settings.ts` supplies the
-// native actions and persistence; this module owns how that one action appears.
-
 import type {
-  ReleaseCheckFailure,
-  ReleaseNotice,
+  AppUpdateErrorCode,
+  AppUpdateState,
 } from '../shared/contracts.js';
 
-/**
- * One sentence per failure reason, keyed by the closed vocabulary so that a
- * reason added to the contract fails `tsc` here instead of rendering as a
- * blank line. "Couldn't check" never says "up to date": that conflation is the
- * quiet lie this whole path exists to remove.
- */
-const FAILURE_MESSAGE: Record<ReleaseCheckFailure, string> = {
+const FAILURE_MESSAGE: Record<AppUpdateErrorCode, string> = {
   'rate-limited':
     "Couldn't check — GitHub is refusing further requests from this network. Try again in an hour.",
   offline: "Couldn't check — GitHub could not be reached.",
@@ -25,38 +12,25 @@ const FAILURE_MESSAGE: Record<ReleaseCheckFailure, string> = {
   unreadable: "Couldn't check — GitHub's answer could not be read.",
   'unsupported-build':
     "Couldn't check — this build's version is not on the release line.",
+  'updater-unavailable':
+    'Automatic updates are available in official Developer ID builds.',
+  'feed-invalid':
+    "Couldn't update — the release files did not pass validation.",
+  'download-failed':
+    "Couldn't download the update. Try checking again.",
 };
-
-// The bridge resolves for every network outcome, so a rejection means the
-// check could not be run at all. That is still not "up to date".
-const UNAVAILABLE_MESSAGE = "Couldn't check — the update check could not run.";
-
-export function describeReleaseNotice(notice: ReleaseNotice): string {
-  if (notice.state === 'update-available') {
-    return `Version ${notice.latestVersion} is available.`;
-  }
-  if (notice.state === 'up-to-date') return "You're on the latest version.";
-  return FAILURE_MESSAGE[notice.reason];
-}
 
 const plural = (value: number, unit: string) =>
   `${value} ${unit}${value === 1 ? '' : 's'}`;
 
-/**
- * When a release check was last attempted. Empty string means never, which is
- * the state that `unknown` would otherwise be indistinguishable from.
- *
- * `checkedAt` and `now` are both epoch milliseconds; a null `checkedAt` means
- * no check has ever completed.
- */
 export function formatLastChecked(
-  checkedAt: number | null,
+  checkedAt: string | null | undefined,
   now: number,
 ): string {
-  if (checkedAt === null) return '';
-  // A profile can travel between machines whose clocks disagree; a negative
-  // age is reported as "just now" rather than as a time in the future.
-  const minutes = Math.floor(Math.max(0, now - checkedAt) / 60_000);
+  if (checkedAt === null || checkedAt === undefined) return '';
+  const value = Date.parse(checkedAt);
+  if (Number.isNaN(value)) return '';
+  const minutes = Math.floor(Math.max(0, now - value) / 60_000);
   if (minutes < 1) return 'Last checked just now';
   if (minutes < 60) return `Last checked ${plural(minutes, 'minute')} ago`;
   const hours = Math.floor(minutes / 60);
@@ -65,113 +39,126 @@ export function formatLastChecked(
 }
 
 export type UpdateActionView = {
-  /** Label for the control that starts a check. */
   actionLabel: string;
-  /** A check is in flight; starting another does nothing. */
   busy: boolean;
-  /** The answer, or '' before the first one arrives. */
   message: string;
-  /** '' until a release check has completed once. */
   lastChecked: string;
-  /** Whether to offer the releases page. */
-  updateAvailable: boolean;
+  currentVersion: string;
+  channel: 'Stable' | 'Preview';
+  showReleaseNotes: boolean;
+  ready: boolean;
 };
 
 export type UpdateAction = {
   subscribe(listener: (view: UpdateActionView) => void): void;
-  restore(checkedAt: number | null): void;
+  initialize(): Promise<void>;
   check(): Promise<void>;
+  restartAndInstall(): Promise<void>;
 };
 
 type UpdateActionOptions = {
-  /** Asks the main process. */
-  check(): Promise<ReleaseNotice>;
-  /** Persists the timestamp, so "never checked" survives a relaunch. */
-  remember(checkedAt: number): Promise<unknown>;
+  getState(): Promise<AppUpdateState>;
+  check(): Promise<void>;
+  restartAndInstall(): Promise<void>;
+  onState(listener: (state: AppUpdateState) => void): () => void;
   now?(): number;
 };
 
+function checkedAt(state: AppUpdateState): string | undefined {
+  return 'checkedAt' in state ? state.checkedAt : state.lastCheckedAt;
+}
+
+function messageFor(state: AppUpdateState): string {
+  switch (state.phase) {
+    case 'idle':
+      return '';
+    case 'checking':
+      return 'Checking for updates…';
+    case 'up-to-date':
+      return "You're on the latest version.";
+    case 'downloading':
+      return `Downloading version ${state.latestVersion}…`;
+    case 'ready':
+      return `Version ${state.latestVersion} is ready to install.`;
+    case 'failed':
+      return FAILURE_MESSAGE[state.reason];
+  }
+}
+
 export function createUpdateAction({
+  getState,
   check,
-  remember,
+  restartAndInstall,
+  onState,
   now = () => Date.now(),
 }: UpdateActionOptions): UpdateAction {
-  let result: ReleaseNotice | 'unavailable' | null = null;
-  let lastCheckedAt: number | null = null;
+  let state: AppUpdateState = {
+    phase: 'idle',
+    currentVersion: '—',
+  };
   let running: Promise<void> | null = null;
-  const listeners: ((view: UpdateActionView) => void)[] = [];
+  let initialized = false;
+  const listeners: Array<(view: UpdateActionView) => void> = [];
 
-  function view(): UpdateActionView {
-    const notice = result === null || result === 'unavailable' ? null : result;
-    return {
-      actionLabel: running ? 'Checking…' : 'Check for Updates',
-      busy: running !== null,
-      message:
-        result === null
-          ? ''
-          : notice === null
-            ? UNAVAILABLE_MESSAGE
-            : describeReleaseNotice(notice),
-      lastChecked: formatLastChecked(lastCheckedAt, now()),
-      updateAvailable: notice?.state === 'update-available',
-    };
-  }
-
-  function publish() {
+  const view = (): UpdateActionView => ({
+    actionLabel: state.phase === 'checking' ? 'Checking…' : 'Check for Updates',
+    busy: state.phase === 'checking' || running !== null,
+    message: messageFor(state),
+    lastChecked: formatLastChecked(checkedAt(state), now()),
+    currentVersion: state.currentVersion,
+    channel: /^\d+\.\d+\.\d+$/u.test(state.currentVersion)
+      ? 'Stable'
+      : 'Preview',
+    showReleaseNotes:
+      state.phase === 'downloading' || state.phase === 'ready',
+    ready: state.phase === 'ready',
+  });
+  const publish = () => {
     const current = view();
     for (const listener of listeners) listener(current);
-  }
+  };
+  const setState = (next: AppUpdateState) => {
+    state = next;
+    publish();
+  };
 
   return {
     subscribe(listener) {
       listeners.push(listener);
       listener(view());
     },
-
-    /**
-     * The settings file owns this value; this is where it is read back in.
-     * Re-publishing also re-renders a relative time that went stale while a
-     * surface sat open.
-     */
-    restore(checkedAt) {
-      lastCheckedAt = checkedAt;
-      publish();
+    async initialize() {
+      if (initialized) return;
+      initialized = true;
+      let eventSeen = false;
+      onState((next) => {
+        eventSeen = true;
+        setState(next);
+      });
+      const snapshot = await getState();
+      if (!eventSeen) setState(snapshot);
     },
-
     check() {
       if (running) return running;
-      // `check()` is invoked synchronously — a second ask must not become a
-      // second request — but its outcome is normalised to a promise before
-      // anything awaits it. A synchronous throw (a missing bridge property,
-      // an `invoke` that raises before returning) would otherwise run the
-      // `finally` below *before* `running = operation` on the way out, and
-      // the action would stay "Checking…" and busy for the whole session.
-      const request = (async () => check())();
-      const operation = (async () => {
-        try {
-          const notice = await request;
-          result = notice;
-          // Every result carries `checkedAt`, including the failures: the
-          // timestamp records the check attempt, not a successful request.
-          // A cached answer keeps its original time, so repeated clicks do not
-          // claim that another check ran.
-          lastCheckedAt = notice.checkedAt;
-          try {
-            await remember(notice.checkedAt);
-          } catch {
-            // A settings write that fails must not discard the answer.
-          }
-        } catch {
-          result = 'unavailable';
-        } finally {
+      const operation = check()
+        .catch(() => {
+          const lastCheckedAt = checkedAt(state);
+          state = {
+            phase: 'failed',
+            currentVersion: state.currentVersion,
+            ...(lastCheckedAt === undefined ? {} : { lastCheckedAt }),
+            reason: 'updater-unavailable',
+          };
+        })
+        .finally(() => {
           running = null;
           publish();
-        }
-      })();
+        });
       running = operation;
       publish();
       return operation;
     },
+    restartAndInstall,
   };
 }
 
@@ -181,19 +168,10 @@ function requiredElement(root: Document, id: string): HTMLElement {
   return node;
 }
 
-/**
- * The two controls whose `disabled` this module writes. index.html declares
- * both as `<button>`; the assertion narrows to the property that needs it and
- * nothing else, so the other nine ids stay plain elements.
- */
 function requiredButton(root: Document, id: string): HTMLButtonElement {
   return requiredElement(root, id) as HTMLButtonElement;
 }
 
-/**
- * Bind the one update action to its three fixed surfaces. Static structure
- * belongs in index.html; the synchronized state and clicks belong here.
- */
 export function bindUpdateActionDom(
   root: Document,
   action: UpdateAction,
@@ -205,8 +183,11 @@ export function bindUpdateActionDom(
   const launcherGet = requiredElement(root, 'loading-update-get');
   const settingsCheck = requiredButton(root, 'settings-check-updates');
   const settingsReleases = requiredElement(root, 'settings-open-releases');
+  const settingsRestart = requiredButton(root, 'settings-restart-update');
   const settingsStatus = requiredElement(root, 'settings-update-status');
   const settingsWhen = requiredElement(root, 'settings-update-when');
+  const settingsVersion = requiredElement(root, 'settings-update-version');
+  const settingsChannel = requiredElement(root, 'settings-update-channel');
   const compatibilityCheck = requiredButton(root, 'client-compat-check');
   const compatibilityReleases = requiredElement(root, 'client-compat-releases');
   const compatibilityStatus = requiredElement(root, 'client-compat-update');
@@ -217,7 +198,8 @@ export function bindUpdateActionDom(
     launcherStatus.hidden = view.message === '';
     launcherWhen.textContent = view.lastChecked;
     launcherWhen.hidden = view.lastChecked === '';
-    launcherGet.hidden = !view.updateAvailable;
+    launcherGet.textContent = view.ready ? 'Restart to Update' : 'Release Notes';
+    launcherGet.hidden = !view.showReleaseNotes;
 
     settingsCheck.textContent = view.actionLabel;
     settingsCheck.disabled = view.busy;
@@ -225,7 +207,10 @@ export function bindUpdateActionDom(
     settingsStatus.hidden = view.message === '';
     settingsWhen.textContent = view.lastChecked;
     settingsWhen.hidden = view.lastChecked === '';
-    settingsReleases.hidden = !view.updateAvailable;
+    settingsVersion.textContent = view.currentVersion;
+    settingsChannel.textContent = view.channel;
+    settingsReleases.hidden = !view.showReleaseNotes;
+    settingsRestart.hidden = !view.ready;
 
     compatibilityCheck.textContent = view.actionLabel;
     compatibilityCheck.disabled = view.busy;
@@ -233,19 +218,22 @@ export function bindUpdateActionDom(
     compatibilityStatus.hidden = view.message === '';
   });
 
-  const check = () => {
-    void action.check();
-  };
+  const requestCheck = () => void action.check();
   launcherCheck.addEventListener('click', (event) => {
     event.preventDefault();
-    check();
+    requestCheck();
   });
-  settingsCheck.addEventListener('click', check);
-  compatibilityCheck.addEventListener('click', check);
-  settingsReleases.addEventListener('click', () => {
-    void openReleases();
+  settingsCheck.addEventListener('click', requestCheck);
+  compatibilityCheck.addEventListener('click', requestCheck);
+  settingsRestart.addEventListener('click', () => {
+    void action.restartAndInstall();
   });
-  compatibilityReleases.addEventListener('click', () => {
-    void openReleases();
+  launcherGet.addEventListener('click', (event) => {
+    if (!settingsRestart.hidden) {
+      event.preventDefault();
+      void action.restartAndInstall();
+    }
   });
+  settingsReleases.addEventListener('click', () => void openReleases());
+  compatibilityReleases.addEventListener('click', () => void openReleases());
 }

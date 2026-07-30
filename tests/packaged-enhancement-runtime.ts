@@ -277,6 +277,7 @@ async function launchPackaged(
     packagedExecutable,
     [
       `--user-data-dir=${userData}`,
+      "--gw-adhoc-test-keychain",
       `--remote-debugging-port=${port}`,
       "--remote-debugging-address=127.0.0.1",
     ],

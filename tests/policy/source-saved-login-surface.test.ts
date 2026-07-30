@@ -84,11 +84,13 @@ test("no build seeds the Steam token from the environment", () => {
   );
 });
 
-test("the ad-hoc build's mock keychain is installed before Electron is ready", () => {
+test("only development and explicit ad-hoc tests enable mock keychain", () => {
   // Ordering, not existence: `appendSwitch` after `whenReady` is a silent
   // no-op, and the symptom is an OS keychain prompt on a user's machine.
   const main = read("src/main/main.ts");
   assert.match(main, /appendSwitch\("use-mock-keychain"\)/);
+  assert.match(main, /!app\.isPackaged/);
+  assert.match(main, /hasSwitch\("gw-adhoc-test-keychain"\)/);
   assert.match(main, /clearStorageData\(\{ storages: \["cookies"\] \}\)/);
   assert.ok(
     main.indexOf('appendSwitch("use-mock-keychain")') <

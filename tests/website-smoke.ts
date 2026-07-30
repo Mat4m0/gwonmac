@@ -14,10 +14,10 @@ import {
 // channel policy runs here against release payloads shaped like the ones the
 // release workflow publishes; the rendered pages below prove what a visitor
 // gets before any of that resolves.
-const ARM64_ZIP = {
-  name: "Guild Wars Reforged-darwin-arm64-0.0.3.zip",
+const ARM64_DMG = {
+  name: "Guild-Wars-Reforged-0.0.3-macOS-arm64.dmg",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-Reforged-darwin-arm64-0.0.3.zip",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-Reforged-0.0.3-macOS-arm64.dmg",
 };
 const CHECKSUMS = {
   name: "SHA256SUMS.txt",
@@ -33,18 +33,18 @@ const STABLE = {
   tag_name: "v0.0.3",
   draft: false,
   prerelease: false,
-  assets: [CHECKSUMS, SBOM, ARM64_ZIP],
+  assets: [CHECKSUMS, SBOM, ARM64_DMG],
 };
-const PRERELEASE_ARM64_ZIP = {
-  name: "Guild Wars Reforged-darwin-arm64-0.0.4-alpha.1.zip",
+const PRERELEASE_ARM64_DMG = {
+  name: "Guild-Wars-Reforged-0.0.4-alpha.1-macOS-arm64.dmg",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-alpha.1/Guild-Wars-Reforged-darwin-arm64-0.0.4-alpha.1.zip",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-alpha.1/Guild-Wars-Reforged-0.0.4-alpha.1-macOS-arm64.dmg",
 };
 const PRERELEASE = {
   tag_name: "v0.0.4-alpha.1",
   draft: false,
   prerelease: true,
-  assets: [PRERELEASE_ARM64_ZIP],
+  assets: [PRERELEASE_ARM64_DMG],
 };
 const DRAFT = { ...STABLE, tag_name: "v0.0.5", draft: true };
 const SNAPSHOTS = Array.from({ length: 25 }, (_, index) => ({
@@ -58,21 +58,21 @@ const SNAPSHOTS = Array.from({ length: 25 }, (_, index) => ({
   }],
 }));
 
-// The resolved download is the arm64 ZIP of the release, not its checksums.
+// The resolved download is the notarized arm64 DMG, not its updater ZIP.
 assert.equal(WEBSITE_RELEASE_CHANNEL, "preview");
 assert.deepEqual(selectWebsiteDownload([STABLE]), {
-  url: ARM64_ZIP.browser_download_url,
+  url: ARM64_DMG.browser_download_url,
   version: "0.0.3",
 });
 
 // During the launch phase, a newer prerelease becomes the direct download.
 assert.deepEqual(selectWebsiteDownload([PRERELEASE, STABLE]), {
-  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  url: PRERELEASE_ARM64_DMG.browser_download_url,
   version: "0.0.4-alpha.1",
 });
 
 assert.deepEqual(selectWebsiteDownload([PRERELEASE]), {
-  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  url: PRERELEASE_ARM64_DMG.browser_download_url,
   version: "0.0.4-alpha.1",
 });
 
@@ -80,11 +80,11 @@ assert.deepEqual(selectWebsiteDownload([PRERELEASE]), {
 // failed cleanup can put more than one old API page ahead of the beta without
 // changing the website's answer, whichever side of it GitHub returns them on.
 assert.deepEqual(selectWebsiteDownload([...SNAPSHOTS, PRERELEASE, STABLE]), {
-  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  url: PRERELEASE_ARM64_DMG.browser_download_url,
   version: "0.0.4-alpha.1",
 });
 assert.deepEqual(selectWebsiteDownload([PRERELEASE, STABLE, ...SNAPSHOTS]), {
-  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  url: PRERELEASE_ARM64_DMG.browser_download_url,
   version: "0.0.4-alpha.1",
 });
 assert.deepEqual(
@@ -100,20 +100,20 @@ assert.deepEqual(
     PRERELEASE,
   ]),
   {
-    url: PRERELEASE_ARM64_ZIP.browser_download_url,
+    url: PRERELEASE_ARM64_DMG.browser_download_url,
     version: "0.0.4-alpha.1",
   },
 );
 
 // Drafts are invisible to a logged-out visitor and are not offered either.
 assert.deepEqual(selectWebsiteDownload([DRAFT, PRERELEASE]), {
-  url: PRERELEASE_ARM64_ZIP.browser_download_url,
+  url: PRERELEASE_ARM64_DMG.browser_download_url,
   version: "0.0.4-alpha.1",
 });
 
 // Reverting the one channel constant to stable restores the long-term policy.
 assert.deepEqual(selectWebsiteDownload([PRERELEASE, STABLE], "stable"), {
-  url: ARM64_ZIP.browser_download_url,
+  url: ARM64_DMG.browser_download_url,
   version: "0.0.3",
 });
 assert.equal(selectWebsiteDownload([PRERELEASE], "stable"), null);
@@ -121,16 +121,16 @@ assert.equal(selectWebsiteDownload([PRERELEASE], "stable"), null);
 // Network ordering and network text are not version policy. A malformed stable
 // tag is ignored, and the greatest canonical stable version wins even when
 // GitHub returns it after an older release.
-const NEWER_ARM64_ZIP = {
-  name: "Guild Wars Reforged-darwin-arm64-2026.8.0.zip",
+const NEWER_ARM64_DMG = {
+  name: "Guild-Wars-Reforged-2026.8.0-macOS-arm64.dmg",
   browser_download_url:
-    "https://github.com/Mat4m0/gwonmac/releases/download/v2026.8.0/Guild-Wars-Reforged-darwin-arm64-2026.8.0.zip",
+    "https://github.com/Mat4m0/gwonmac/releases/download/v2026.8.0/Guild-Wars-Reforged-2026.8.0-macOS-arm64.dmg",
 };
 const NEWER_STABLE = {
   tag_name: "v2026.8.0",
   draft: false,
   prerelease: false,
-  assets: [NEWER_ARM64_ZIP],
+  assets: [NEWER_ARM64_DMG],
 };
 assert.equal(
   selectWebsiteDownload([{ ...STABLE, tag_name: "banana" }]),
@@ -139,7 +139,7 @@ assert.equal(
 assert.deepEqual(
   selectWebsiteDownload([STABLE, NEWER_STABLE]),
   {
-    url: NEWER_ARM64_ZIP.browser_download_url,
+    url: NEWER_ARM64_DMG.browser_download_url,
     version: "2026.8.0",
   },
 );
@@ -184,7 +184,7 @@ assert.equal(selectWebsiteDownload({ message: "API rate limit exceeded" }), null
     );
     for (const answer of answers) {
       assert.deepEqual(answer, {
-        url: PRERELEASE_ARM64_ZIP.browser_download_url,
+        url: PRERELEASE_ARM64_DMG.browser_download_url,
         version: "0.0.4-alpha.1",
       });
     }
@@ -275,11 +275,11 @@ try {
   const steps = /<ol[^>]*>([\s\S]*?)<\/ol>/.exec(installHtml)?.[1];
   assert(steps);
   const stepCount = [...steps.matchAll(/<li[\s>]/g)].length;
-  assert.equal(stepCount, 5);
+  assert.equal(stepCount, 3);
   assert.match(
     installHtml,
     new RegExp(
-      `content="Install Guild Wars Reforged on your Mac in ${stepCount} short steps`,
+      `content="Install the signed and notarized Guild Wars Reforged app on your Mac in ${stepCount} short steps`,
     ),
   );
 } finally {

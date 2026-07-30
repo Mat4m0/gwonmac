@@ -10,6 +10,7 @@ import { writeFile } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
+  AppUpdateState,
   CacheInfo,
   ClientHealthToken,
   ClientSession,
@@ -18,7 +19,6 @@ import type {
   FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
-  ReleaseNotice,
   SocketEvent,
   StoredCredentials,
 } from "../shared/contracts.js";
@@ -68,6 +68,7 @@ import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
+import { isQuitting } from "./lifecycle.js";
 import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
@@ -81,7 +82,9 @@ export interface IpcContext {
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
   retryClient: () => Promise<void>;
-  checkReleaseNotice: () => Promise<ReleaseNotice>;
+  getAppUpdateState: () => AppUpdateState;
+  checkAppUpdates: () => Promise<void>;
+  restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
   getClientSession: () => ClientSession;
   acquireSteamToken: (
     parent: BrowserWindow,
@@ -402,9 +405,24 @@ async function chunkStoreInfo(store: ChunkStore | null): Promise<CacheInfo> {
   };
 }
 
-export function registerIpcHandlers(ctx: IpcContext): void {
+export function registerIpcHandlers(ctx: IpcContext): {
+  drainSecrets(): Promise<void>;
+} {
   const paths = gamePaths();
   const credentials = new CredentialsStore(paths.credentials, safeStorage);
+  const secretOperations = new Set<Promise<unknown>>();
+  const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    if (isQuitting()) {
+      return Promise.reject(new ValidationError("application is quitting"));
+    }
+    const pending = operation();
+    secretOperations.add(pending);
+    void pending.then(
+      () => secretOperations.delete(pending),
+      () => secretOperations.delete(pending),
+    );
+    return pending;
+  };
 
   /**
    * Every channel main answers, with the parser that turns its arguments into
@@ -543,7 +561,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     credentialsLoad: channel(nothing, async () => {
       try {
-        return await credentials.load();
+        return await secretOperation(() => credentials.load());
       } catch (error) {
         logEvent({ k: "credentials.loadFailed" });
         throw error;
@@ -556,7 +574,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       one(parseCredentials),
       async (_win, value: StoredCredentials) => {
         try {
-          await credentials.save(value);
+          await secretOperation(() => credentials.save(value));
         } catch (error) {
           logEvent({ k: "credentials.saveFailed" });
           throw error;
@@ -566,7 +584,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     credentialsClear: channel(nothing, async () => {
       try {
-        await credentials.clear();
+        await secretOperation(() => credentials.clear());
       } catch (error) {
         logEvent({ k: "credentials.clearFailed" });
         throw error;
@@ -683,11 +701,24 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
     clientSession: channel(nothing, () => ctx.getClientSession()),
 
-    releaseNoticeCheck: channel(nothing, () => ctx.checkReleaseNotice()),
+    appUpdatesGetState: channel(nothing, () => ctx.getAppUpdateState()),
+    appUpdatesCheck: channel(nothing, () => ctx.checkAppUpdates()),
+    appUpdatesRestartAndInstall: channel(
+      nothing,
+      (win) => ctx.restartAndInstallUpdate(win),
+    ),
   } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
   registerChannelDefinitions(handlers);
-  registerSteamIpcHandlers(ctx.acquireSteamToken);
+  const steamSettled = registerSteamIpcHandlers(ctx.acquireSteamToken);
+  return {
+    async drainSecrets() {
+      await steamSettled();
+      while (secretOperations.size > 0) {
+        await Promise.allSettled([...secretOperations]);
+      }
+    },
+  };
 }
 
 function registerChannelDefinitions(
@@ -723,7 +754,7 @@ function registerChannelDefinitions(
 
 export function registerSteamIpcHandlers(
   acquireSteamToken: IpcContext["acquireSteamToken"],
-): void {
+): () => Promise<void> {
   const paths = gamePaths();
   const steam = new SteamSessionCoordinator(
     new SteamSessionStore(paths.steamSession, safeStorage),
@@ -748,6 +779,7 @@ export function registerSteamIpcHandlers(
     // rebuilds its own login screen from a refused credential and a rejection
     // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
+      if (isQuitting()) throw new ValidationError("application is quitting");
       const resolution = await steam.resolve({
         silent,
         acquire: () => runSteamSignIn(win),
@@ -772,11 +804,13 @@ export function registerSteamIpcHandlers(
     }),
 
     steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
+      if (isQuitting()) throw new ValidationError("application is quitting");
       const outcome = await steam.refresh(token, expiry);
       logEvent({ k: "steam.storeback", outcome });
     }),
 
     steamClear: channel(nothing, async () => {
+      if (isQuitting()) throw new ValidationError("application is quitting");
       try {
         await steam.clear();
         logEvent({ k: "steam.tokenCleared" });
@@ -788,6 +822,7 @@ export function registerSteamIpcHandlers(
   } satisfies Record<SteamInvokeChannel, AnyChannelDef>;
 
   registerChannelDefinitions(handlers);
+  return () => steam.settled();
 }
 
 function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {

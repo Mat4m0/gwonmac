@@ -6,8 +6,7 @@ not bundle game binaries.
 
 ## Install and start
 
-Current builds are ad-hoc signed and not notarized. The project deliberately
-does not require a paid Apple Developer subscription.
+Published builds are signed with Developer ID and notarized by Apple.
 
 To build from source:
 
@@ -17,15 +16,18 @@ pnpm install --frozen-lockfile
 pnpm package
 ```
 
-Open
-`out/Guild Wars Reforged-darwin-arm64/Guild Wars Reforged.app`. On the first
-launch macOS may block an ad-hoc build. Try to open the app once, then open
-**System Settings → Privacy & Security**, scroll to **Security**, click **Open
-Anyway**, and confirm the second prompt. Do not disable Gatekeeper globally.
+Local source builds remain ad-hoc signed. Published releases use a `.dmg`:
+open it, drag Guild Wars Reforged into Applications, then launch it normally.
+Do not disable Gatekeeper globally.
 
 Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
 build/SBOM attestations. Follow [Verify a release](release-verification.md)
 before opening a downloaded build.
+
+The first Developer ID release changes saved-login encryption from the
+development mock provider to macOS Keychain-backed protection. An existing
+preview installation may ask you to sign in once; its old encrypted file is
+preserved rather than silently deleted.
 
 The app then:
 
@@ -236,44 +238,24 @@ public, so review the bug form’s privacy notice as well.
 
 ## Updates
 
-Updating this app is manual. Download a newer release, replace
-`Guild Wars Reforged.app`, and your settings, saved login, and downloaded game
-data stay where they are. The app never downloads or installs anything by
-itself.
-ArenaNet's own client files still update automatically; that is the game
-updating, not the app.
+The first Developer ID release must be installed manually from its notarized
+DMG. Later official releases can update themselves.
 
-The app does not poll for releases. It asks GitHub whether a newer version
-exists only when one of three things happens:
+The app never polls. Choose **Check for Updates** on the loading screen, in the
+application menu, on a client-compatibility notice, or under
+**Settings → Updates**. **Automatically check for and download app updates** is
+off by default; enabling it performs one check per launch and immediately
+checks once. While it is off, the app contacts GitHub only when you ask.
 
-1. You choose **Check for Updates**, on the loading screen or under
-   **Settings → Advanced**.
-2. You choose **Check for Updates** on the notice that appears when the app
-   does not recognize the game client build ArenaNet is currently serving.
-3. The app starts while **Check for app updates automatically** is on. That
-   box is off unless you turn it on; the first-launch screen offers it beside
-   the download-mode question, and **Settings → Advanced** owns it afterwards.
-   It performs one check per launch, and nothing else checks in the background.
+An eligible update downloads in the background. When it is ready, choose
+**Restart to Update** or choose Later and let it install on the next ordinary
+restart. Restarting while Guild Wars is connected asks before disconnecting.
+The app saves its persistent game filesystem before either kind of restart.
 
-While the box is off, the app contacts GitHub only when you press **Check for
-Updates** yourself — including on a client build it does not recognize.
-
-A check has three possible answers, and "we could not tell" is never reported
-as good news:
-
-- a newer version exists, with a link to the releases page;
-- you are on the latest version;
-- the check could not be completed, and the message says why — GitHub could not
-  be reached, did not answer within five seconds, refused further requests from
-  your network, returned an error or an unreadable answer, or this build's
-  version is not on the release line.
-
-**Last checked** beside the button records when the last release-check attempt
-finished and survives a restart, so a failed check cannot be mistaken for a
-fresh success.
-Repeated presses reuse every answer for ten minutes, including an offline,
-timeout, server, rate-limit, or unreadable response, instead of sending more
-requests. After that bounded pause, pressing the button asks GitHub again.
+Stable installations receive stable releases only. Preview installations may
+receive a newer preview or advance to stable. A failed check is never reported
+as “up to date,” and **Last checked** records the last completed catalog check.
+ArenaNet client updates remain separate and automatic.
 
 ## When the client build is not certified
 

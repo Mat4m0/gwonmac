@@ -123,55 +123,35 @@ Dock shows determinate or indeterminate progress and
 `prevent-app-suspension` remains active until the download completes, pauses,
 or fails. There is no renderer-owned download or power state.
 
-## This app's own release check
+## This app's own updater
 
-Replacing the application is manual and always has been. What is new is that
-the app no longer asks GitHub anything on its own initiative.
+`src/main/app-updater.ts` is the single update owner. It asks the bounded GitHub
+release list only after a manual request or the one opt-in launch check. The
+setting defaults off, so a default launch reaches github.com zero times. There
+is no timer or polling loop.
 
-`src/main/release-notice.ts` is the only code that contacts
-`api.github.com/repos/<repo>/releases?per_page=100`, and it has exactly three
-callers: the manual **Check for Updates** action, the same action mounted on the
-client-compatibility notice, and one launch-time check that runs only while
-`AppSettings.autoCheckUpdates` is on. The bounded list is necessary because
-GitHub's `releases/latest` endpoint excludes prereleases; stable installs ignore
-prereleases, while an install already on a prerelease channel may see a newer
-one. Both GitHub's prerelease flag and SemVer prerelease syntax are honoured;
-drafts and malformed tags are ignored. The setting defaults to `false` and
-governs every automatic request without exception, the compatibility path
-included, so a default launch reaches github.com zero times. There is no
-per-launch poll and no background timer.
+Only a packaged macOS build carrying `official-update.json` may update. Forge
+includes that marker only when `GW_OFFICIAL_RELEASE=1`; local, tester, and
+ad-hoc packages fail as `updater-unavailable` before making a request. Stable
+installs ignore previews. Preview installs may advance through previews or to
+stable. Drafts, malformed tags, duplicate assets, unexpected download URLs,
+and a `RELEASES.json` that does not name the exact release ZIP fail closed.
 
-`checkForNewerRelease(currentVersion)` takes the running version as an argument
-instead of calling `app.getVersion()`, so main keeps the single Electron
-binding and the module is executable in a unit test. It aborts after five
-seconds, coalesces concurrent callers onto one request, and caches every result
-for ten minutes. That includes offline, timeout, server, and unreadable
-responses: the manual button is a refresh action, not a way to spend an
-unbounded request budget by clicking repeatedly.
+The main process gives the validated single-release server response to
+Electron's Squirrel.Mac `autoUpdater`, which downloads the ZIP. Main has already
+made the version decision; the feed is deliberately not Squirrel's static
+multi-release format because its native numeric comparison cannot represent
+this project's SemVer preview suffixes. It publishes one discriminated
+`AppUpdateState`: `idle`, `checking`, `up-to-date`, `downloading`, `ready`, or
+`failed` with a closed reason. The renderer receives no network text or URL.
+`lastUpdateCheckAt` is persisted by main after a catalog check completes.
 
-The result is three states and never two: `update-available`, `up-to-date`, or
-`unknown` carrying a reason from a closed vocabulary (`rate-limited`,
-`offline`, `timeout`, `server`, `unreadable`, `unsupported-build`). Both a
-parse failure and a network failure are `unknown`; reporting either as
-"up to date" is the class of quiet lie this path exists to remove, so no
-boolean or tri-state "update status" is exported and each reason has its own
-sentence in `src/renderer/update-action.ts`. Every result carries `checkedAt`,
-the completion time of the check attempt (including an unsupported local
-version that made no request). The renderer persists it as
-`lastUpdateCheckAt` and renders it as "Last checked". The launcher and the
-settings dialog mount the same controller, so the two surfaces cannot
-disagree.
-
-No attacker-controlled string crosses IPC. The response's URL is discarded
-rather than carried: the renderer can only open the closed `ExternalLinkKind`
-vocabulary, so the releases page is opened by name, and `latestVersion` is
-re-rendered by `formatReleaseVersion` from the parsed version instead of
-echoing the tag. Parsing, comparison, and the channel policy — a prerelease is
-only ever offered to an install already running a prerelease — are
-`src/shared/release.ts`, which is also where the website's resolver points for
-the rule it implements against GitHub's own `prerelease` flag.
-`docs/user-guide.md` owns what the player is told; the numbering itself is
-[Release numbering](release-verification.md#release-numbering).
+A ready update is offered nonmodally. Restart is explicit; choosing Later lets
+Squirrel apply it on the next ordinary restart. The update restart uses the
+same quit path as a normal quit, including a bounded renderer `FS.syncfs(false)`
+before native cleanup. An active game socket requires confirmation. The first
+Developer ID release is a manual DMG bootstrap because an older ad-hoc
+signature cannot update into the new signing identity.
 
 ## WASM host
 
@@ -211,14 +191,13 @@ shop.initialize/inAppPurchase
 
 The generated glue requires all three credential methods. They cross a narrow
 IPC boundary to one native `CredentialsStore`, which writes encrypted
-`credentials.bin` atomically with mode `0600`. Because ad-hoc builds have no
-stable signing identity, the main process enables Chromium's
-`use-mock-keychain` provider before ready. Electron `safeStorage` therefore
-uses a local mock profile key rather than macOS Keychain: it prevents recurring
-OS prompts and casual plaintext disclosure, but does not defend the saved
-login from software running as the same user. An unreadable ciphertext is never
-deleted by a read; the failure is recorded without credential content and the
-game prompts again. A later explicit save atomically replaces it.
+`credentials.bin` atomically with mode `0600`. Official Developer ID packages
+let Electron `safeStorage` use its macOS Keychain-backed provider. Unpackaged
+development and the explicit packaged-test switch use Chromium's local mock
+provider to avoid recurring prompts from an unstable identity. An unreadable
+ciphertext is never deleted by a read; the failure is recorded without
+credential content and the game prompts again. A later explicit save atomically
+replaces it.
 Browser cookies are cleared at startup and quit. Persistent IDBFS client
 preferences and the dedicated saved-login file remain intact.
 Steam is advertised as a federated provider; Apple and Google are not. The
@@ -905,9 +884,9 @@ two that read _none_ today are recorded rather than quietly kept.
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.ts` for publication, corruption repair and rollback |
 | No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |
 | A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
-| The app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-reaches-github-only-when-asked.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts **zero** api.github.com requests across a launch with the defaults, then exactly one across a launch with the box ticked. The three unit tests underneath it prove constituents, not the claim: `tests/unit/settings.test.ts` that the default is `false`, `tests/unit/release-notice.test.ts` and `tests/unit/update-action.test.ts` that the check itself behaves |
+| The app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-reaches-github-only-when-asked.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts **zero** api.github.com requests across a launch with the defaults, then exactly one across a launch with the box ticked. `tests/unit/settings.test.ts`, `tests/unit/app-updater.test.ts`, and `tests/unit/update-action.test.ts` prove the constituents |
 | The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/enhancement-cursor.spec.ts` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.ts` for what is tracked |
-| Releases are ad-hoc signed and the shipped fuses hold | website FAQ | `tests/packaged-smoke.ts` (`codesign --verify --deep --strict`, the nine fuse states), `tests/policy/fuses.test.ts` |
+| Releases are Developer ID signed, notarized, stapled, and the shipped fuses hold | website FAQ | `.github/workflows/release.yml` verifies identity, Team ID, timestamp, hardened runtime, minimal entitlements, Gatekeeper and stapled tickets; `tests/policy/source-release-pipeline.test.ts` pins that policy; `tests/packaged-smoke.ts` and `tests/policy/fuses.test.ts` verify package structure and fuses |
 | Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.ts` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.ts` for the resolutions shown beside each scale |
 | "Up to 60 FPS", "tuned for Apple Silicon" | website capability facts | **none.** No test asserts a frame rate, and `tests/packaged-smoke.ts` does not assert the packaged binary's architecture |
 | "The client's available graphics settings, plus selectable render scale" | website capability facts | Narrowed in P3.22 from "every in-game quality option, fully available", which was wrong — the official WebGL client may offer only `None` for antialiasing. `tests/website-smoke.ts` executes the served page and fails if it promises every quality option again; the render-scale half is the row above |

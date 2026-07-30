@@ -93,19 +93,68 @@ test("the packaged bundle takes its version numbers from the package version", (
   assert.match(forge, /buildVersion: macOSVersion\.buildVersion/);
 });
 
-test("the host has one manual application replacement path", () => {
-  assert.doesNotMatch(read("src/main/main.ts"), /startAppUpdater|autoUpdater/);
+test("the host has one native automatic application replacement path", () => {
+  const main = read("src/main/main.ts");
+  const updater = read("src/main/app-updater.ts");
+  assert.match(main, /import \{[\s\S]{0,80}\bapp,[\s\S]{0,80}\bautoUpdater,/);
+  assert.match(main, /new AppUpdater/);
+  assert.match(main, /officialUpdaterCapable\(\)/);
+  assert.match(main, /autoUpdater\.quitAndInstall\(\)/);
+  assert.doesNotMatch(updater, /electron-updater|update-electron-app|Sparkle/);
+  assert.deepEqual(json("package.json").dependencies ?? {}, {});
 });
 
-test("official releases have one honest ad-hoc signing path", () => {
+test("official releases use Developer ID, notarization, and a scoped marker", () => {
   const workflow = read(".github/workflows/release.yml");
   const forge = read("forge.config.ts");
-  assert.doesNotMatch(workflow, /APPLE_|Developer ID|notary|stapler/);
-  assert.doesNotMatch(forge, /APPLE_|osxSign|osxNotarize/);
+  assert.match(workflow, /environment: release/);
+  for (const secret of [
+    "APPLE_DEVELOPER_ID_P12",
+    "APPLE_DEVELOPER_ID_PASSWORD",
+    "APPLE_API_KEY_P8",
+    "APPLE_API_KEY_ID",
+    "APPLE_API_ISSUER_ID",
+    "APPLE_TEAM_ID",
+  ]) {
+    assert.match(workflow, new RegExp(secret));
+  }
+  assert.match(forge, /osxSign: releaseSigning/);
+  assert.match(forge, /osxNotarize: releaseNotarization/);
+  assert.match(forge, /GW_OFFICIAL_RELEASE/);
+  assert.match(forge, /packaging\/official-update\.json/);
+  assert.match(forge, /com\.apple\.security\.cs\.allow-jit/);
+  assert.doesNotMatch(forge, /camera|microphone|location|bluetooth|usb/i);
   assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
-  assert.match(workflow, /codesign --verify --deep --strict/);
-  assert.match(workflow, /Signature=adhoc/);
-  assert.match(workflow, /ad-hoc signed, not notarized/);
+  assert.match(workflow, /security create-keychain/);
+  assert.match(workflow, /gwonmac-release-\$\(openssl rand -hex 16\)/);
+  assert.match(workflow, /security delete-keychain/);
+  assert.match(
+    workflow,
+    /name: Delete temporary signing material\n {8}if: always\(\)/,
+  );
+  assert.ok(
+    workflow.indexOf('echo "APPLE_KEYCHAIN=$keychain"')
+      < workflow.indexOf("security create-keychain"),
+  );
+  assert.ok(
+    workflow.indexOf('echo "APPLE_CERTIFICATE_PATH=$certificate"')
+      < workflow.indexOf("security create-keychain"),
+  );
+  assert.match(
+    workflow,
+    /rm -f "\$APPLE_CERTIFICATE_PATH"[\s\S]*rm -f "\$APPLE_API_KEY_PATH"/,
+  );
+  assert.match(workflow, /xcrun notarytool submit/);
+  assert.match(workflow, /xcrun stapler staple/);
+  assert.match(workflow, /test "\$TEAM_ID" = "9NN976MFZ4"/);
+  assert.match(workflow, /TeamIdentifier=9NN976MFZ4/);
+  assert.match(
+    forge,
+    /Developer ID Application: Matthias Amon \(9NN976MFZ4\)/,
+  );
+  assert.match(workflow, /Timestamp=/);
+  assert.match(workflow, /spctl --assess --type execute/);
+  assert.match(workflow, /spctl --assess --type open/);
 });
 
 test("release workflow publishes one tested, attested package version", () => {
@@ -117,12 +166,12 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
-  assert.match(workflow, /name: Smoke-test release candidate[\s\S]*pnpm test:packaged/);
-  assert.match(workflow, /shasum -a 256 -c "\$\(basename "\$CHECKSUM"\)"/);
+  assert.match(workflow, /name: Smoke-test signed release candidate[\s\S]*pnpm test:packaged/);
+  assert.match(workflow, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(workflow, /anchore\/sbom-action@/);
   assert.match(workflow, /format: spdx-json/);
   assert.match(workflow, /actions\/attest@/);
-  assert.match(workflow, /sbom-path: \$\{\{ steps\.assets\.outputs\.sbom \}\}/);
+  assert.match(workflow, /sbom-path: release-assets\/\*\.spdx\.json/);
   assert.match(workflow, /artifact-metadata: write/);
   assert.match(verification, /actions\/dependency-review-action@/);
   assert.ok(
@@ -135,7 +184,7 @@ test("release workflow publishes one tested, attested package version", () => {
     workflow.indexOf("\n  release:"),
   );
   const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
-  assert.match(releaseBuild, /permissions:\s+contents: read/);
+  assert.match(releaseBuild, /permissions:[\s\S]{0,80}contents: read/);
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
   assert.match(releaseBuild, /actions\/upload-artifact@/);
   assert.match(releasePublish, /actions\/download-artifact@/);
@@ -144,12 +193,16 @@ test("release workflow publishes one tested, attested package version", () => {
     /actions\/checkout|pnpm install|pnpm make|pnpm test/,
   );
   assert.match(workflow, /--prerelease --latest=false/);
-  assert.doesNotMatch(workflow, /This is an alpha build/);
+  assert.match(workflow, /SIGNED_BETA_UPDATE_PROVEN: \$\{\{ vars\.SIGNED_BETA_UPDATE_PROVEN \}\}/);
   assert.match(
     workflow,
-    /if \[ "\$PRERELEASE" = "true" \]; then[\s\S]*This is a prerelease build/,
+    /if \[ "\$prerelease" = "false" \]; then\s+test "\$SIGNED_BETA_UPDATE_PROVEN" = "true"/,
   );
-  assert.match(workflow, /gh release create "\$TAG" "\$ASSET" "\$CHECKSUM" "\$SBOM"/);
+  assert.match(workflow, /--draft --generate-notes/);
+  assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--draft=false/);
+  assert.match(workflow, /RELEASES\.json/);
+  assert.match(workflow, /\*\.zip \*\.dmg RELEASES\.json \*\.spdx\.json/);
+  assert.match(workflow, /gh release create "\$TAG" "\$\{args\[@\]\}" release-assets\/\*/);
 });
 
 test("tester snapshots are verified, immutable, bounded, and isolated from releases", () => {

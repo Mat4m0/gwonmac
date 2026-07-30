@@ -130,18 +130,17 @@ const SCREENSHOTS = [
             upload telemetry, credentials, account identifiers, or game traffic.
           </p>
         </FaqItem>
-        <FaqItem question="Why does macOS show a security warning?">
+        <FaqItem question="How does macOS verify the app?">
           <p>
-            Current releases are ad-hoc signed, but they are not yet signed with an Apple Developer
-            ID or notarized by Apple. macOS therefore asks you to confirm the first launch
-            manually. You should never disable Gatekeeper globally.
+            Releases are signed with Developer ID, use Apple's hardened runtime, and are notarized
+            and stapled before publication. macOS verifies them through Gatekeeper. You should
+            never disable Gatekeeper globally.
           </p>
         </FaqItem>
         <FaqItem question="How do I open the app?">
           <p>
-            Move Guild Wars Reforged to Applications and open it once — macOS
-            will block it. Then go to System Settings → Privacy &amp; Security,
-            click Open Anyway, and confirm. This is only needed for the first launch. The
+            Open the downloaded DMG, drag Guild Wars Reforged to Applications,
+            and launch it normally. The
             <NuxtLink to="/install" class="underline hover:text-gold-200">install guide</NuxtLink>
             walks through each step.
           </p>
@@ -174,11 +173,10 @@ const SCREENSHOTS = [
             identifiers, packet contents, and crash dumps are never included.
           </p>
         </FaqItem>
-        <FaqItem question="Why is the app not notarized?">
+        <FaqItem question="How can I support ongoing releases?">
           <p>
-            Apple requires a paid Developer Program membership for Developer ID signing and
-            notarization. It costs about €100 each year. We are collecting donations to cover this
-            recurring cost.
+            Developer ID signing and notarization require a recurring Apple Developer Program
+            membership. Donations help cover that and ongoing development.
           </p>
           <p>
             <a :href="EXTERNAL_URLS.donate" class="btn-primary mt-2 px-4 py-2 text-sm">

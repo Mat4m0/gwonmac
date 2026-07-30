@@ -209,8 +209,11 @@
   void import('./update-action.js')
     .then((module) => {
       const action = module.createUpdateAction({
-        check: () => window.gwNative.releaseNotice.check(),
-        remember: (checkedAt) => persistSettings({ lastUpdateCheckAt: checkedAt }),
+        getState: () => window.gwNative.appUpdates.getState(),
+        check: () => window.gwNative.appUpdates.check(),
+        restartAndInstall: () =>
+          window.gwNative.appUpdates.restartAndInstall(),
+        onState: (listener) => window.gwNative.appUpdates.onState(listener),
       });
       updateAction = action;
       module.bindUpdateActionDom(
@@ -218,15 +221,7 @@
         action,
         () => window.gwNative.app.openExternal('releases'),
       );
-      void loadSettings()
-        .then((settings) => {
-          action.restore(settings.lastUpdateCheckAt);
-          // The only automatic check the renderer makes, and it is off by
-          // default. Every other automatic trigger reads the same flag: one
-          // answer governs every request the user did not ask for.
-          if (settings.autoCheckUpdates) void action.check();
-        })
-        .catch(() => undefined);
+      void action.initialize();
     })
     .catch(() => {
       const updateCheck = byId('settings-check-updates') as HTMLButtonElement;
@@ -655,7 +650,6 @@
     dataChoiceFull.disabled = true;
     try {
       await persistSettings(answeredChoice('quick'));
-      if (choiceAutoUpdates.checked) requestUpdateCheck();
       releaseGameBoot('launcher.quickSelected');
     } catch {
       dataChoiceFullSize.textContent =
@@ -671,7 +665,6 @@
     dataChoiceFull.disabled = true;
     try {
       await persistSettings(answeredChoice('full'));
-      if (choiceAutoUpdates.checked) requestUpdateCheck();
       if (!currentCache) {
         throw new Error("download status is not ready");
       }
@@ -722,7 +715,6 @@
       currentSettings = await window.gwNative.settings.get();
       fillForm(currentSettings);
       // "Last checked 4 minutes ago" goes stale while a window sits open.
-      updateAction?.restore(currentSettings.lastUpdateCheckAt);
       // The client build's status is the answer to "why is my cursor plain?",
       // so it is in Settings whether or not the launcher notice was ever seen.
       await readSession().catch(() => undefined);
@@ -732,7 +724,18 @@
     }
   }
 
-  window.addEventListener('gw:settings', () => { void openSettings(); });
+  window.addEventListener('gw:settings', (event) => {
+    const detail = event instanceof globalThis.CustomEvent
+      ? event.detail as {
+          pane?: import('../shared/contracts.js').SettingsPane;
+          checkForUpdates?: boolean;
+        } | undefined
+      : undefined;
+    if (detail?.pane) selectPane(detail.pane);
+    void openSettings().then(() => {
+      if (detail?.checkForUpdates) requestUpdateCheck();
+    });
+  });
 
   form.addEventListener('change', (event) => {
     const control = event.target;
@@ -801,7 +804,6 @@
       if (!reset) return;
       currentSettings = reset;
       fillForm(reset);
-      updateAction?.restore(reset.lastUpdateCheckAt);
       renderSettingsData();
       window.gwApplySettings?.(reset);
       feedback.textContent =

@@ -13,8 +13,8 @@
     { type: 'diagnostics.capture' }
   >;
 
-  const dispatch = (name: string) => {
-    window.dispatchEvent(new window.CustomEvent(name));
+  const dispatch = (name: string, detail?: unknown) => {
+    window.dispatchEvent(new window.CustomEvent(name, { detail }));
   };
 
   async function capture(command: CaptureCommand) {
@@ -45,7 +45,23 @@
         dispatch('gw:input-reset');
         break;
       case 'settings.open':
-        dispatch('gw:settings');
+        dispatch('gw:settings', {
+          pane: command.pane,
+          checkForUpdates: command.checkForUpdates,
+        });
+        break;
+      case 'filesystem.sync':
+        await new Promise<void>((resolve, reject) => {
+          const fs = window.Module?.FS;
+          if (!fs) {
+            resolve();
+            return;
+          }
+          fs.syncfs(false, (error?: unknown) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        });
         break;
       case 'diagnostics.toggle':
         dispatch('gw:diagnostics-toggle');

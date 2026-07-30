@@ -1,6 +1,7 @@
 import {
   EVENT_CHANNELS,
   IPC,
+  type AppUpdateErrorCode,
   type EventChannel,
   type InvokeChannel,
   type RendererCommand,
@@ -136,6 +137,17 @@ const captureAction = literal(RENDERER_CAPTURE_ACTIONS);
 const incompleteCommandOutcome = literal(
   INCOMPLETE_RENDERER_COMMAND_OUTCOMES,
 );
+const appUpdateErrorCode = literal([
+  "rate-limited",
+  "offline",
+  "timeout",
+  "server",
+  "unreadable",
+  "unsupported-build",
+  "updater-unavailable",
+  "feed-invalid",
+  "download-failed",
+] as const satisfies readonly AppUpdateErrorCode[]);
 const closeReason = literal([
   "requested",
   "peer",
@@ -267,7 +279,17 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "error",
     fields: { code },
   },
+  "quit.rendererSyncIncomplete": {
+    subsystem: "app",
+    level: "error",
+    fields: { outcome: incompleteCommandOutcome },
+  },
   "electron.ready": { subsystem: "app", level: "info", fields: none },
+  "appUpdate.failed": {
+    subsystem: "app",
+    level: "error",
+    fields: { reason: appUpdateErrorCode },
+  },
   "orphanTemps.swept": {
     subsystem: "app",
     level: "info",

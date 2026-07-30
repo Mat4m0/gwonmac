@@ -20,13 +20,15 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: verify
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
+    environment: release
     permissions:
-      contents: read
       actions: read
+      contents: read
     outputs:
       prerelease: ${{ steps.version.outputs.prerelease }}
       tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -39,14 +41,6 @@ jobs:
           node-version: "24"
           cache: pnpm
 
-      # GitHub disables scheduled workflows in a repository that has been quiet
-      # for 60 days, and a canary that stopped running looks exactly like a
-      # canary that keeps passing. Only the last successful run tells the two
-      # apart, and GitHub already keeps that timestamp; a copy committed here
-      # would need a scheduled job with write access to stay true, which is the
-      # permission this repository deliberately withholds from the canary.
-      # The age is computed in Node so that no wall clock reaches the release
-      # version, which comes from package.json and nowhere else.
       - name: Require a client canary newer than 14 days
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,98 +49,199 @@ jobs:
           started="$(gh api \
             "$runs?status=success&branch=$GITHUB_REF_NAME&per_page=1" \
             --jq '.workflow_runs[0].run_started_at // ""')"
-          if [ -z "$started" ]; then
-            echo "No ArenaNet client canary has ever succeeded on $GITHUB_REF_NAME." >&2
-            echo "Run the 'ArenaNet client canary' workflow, then release." >&2
-            exit 1
-          fi
+          test -n "$started"
           age="$(node -e '
             const started = Date.parse(process.argv[1]);
-            if (Number.isNaN(started)) {
-              console.error(`unreadable canary timestamp: ${process.argv[1]}`);
-              process.exit(1);
-            }
+            if (Number.isNaN(started)) process.exit(1);
             console.log(Math.floor((Date.now() - started) / 86400000));
           ' "$started")"
-          echo "Last successful ArenaNet client canary: $started ($age days ago)."
           if [ "$age" -gt 14 ]; then
-            echo "The canary has not passed for $age days, so nothing here has" >&2
-            echo "met ArenaNet's current client. Re-run the 'ArenaNet client" >&2
-            echo "canary' workflow and release once it is green." >&2
+            echo "The ArenaNet client canary is $age days old; run it again." >&2
             exit 1
           fi
 
-      # Before install, because it needs neither: a bad version should cost
-      # seconds, not a full build. scripts/macos-version.ts is the one owner of
-      # what a release version may be — it rejects leading zeroes, months that
-      # are not months, and anything that cannot become a valid CFBundleVersion.
-      # `pnpm make` reaches the same function through forge.config.ts, so a
-      # second regex here could only ever disagree with the build.
-      #
-      # It is TypeScript, so this runs under the repository's one loader — the
-      # same two flags package.json's script entries carry. Both files are
-      # tracked, so this still needs no install.
       - name: Resolve release version
         id: version
+        env:
+          SIGNED_BETA_UPDATE_PROVEN: ${{ vars.SIGNED_BETA_UPDATE_PROVEN }}
         run: |
           version="$(node -p "require('./package.json').version")"
           node --import ./scripts/ts-hook.mjs --experimental-strip-types -e '
             const { macOSBundleVersions } = await import("./scripts/macos-version.js");
-            try {
-              const { appVersion, buildVersion } = macOSBundleVersions(process.argv[1]);
-              console.log(`CFBundleShortVersionString ${appVersion}`);
-              console.log(`CFBundleVersion ${buildVersion}`);
-            } catch (error) {
-              console.error(`package.json contains an invalid release version: ${error.message}`);
-              process.exit(1);
-            }
+            macOSBundleVersions(process.argv[1]);
           ' "$version"
-          tag="v$version"
           prerelease=false
-          if [[ "$version" == *-* ]]; then
-            prerelease=true
+          if [[ "$version" == *-* ]]; then prerelease=true; fi
+          if [ "$prerelease" = "false" ]; then
+            test "$SIGNED_BETA_UPDATE_PROVEN" = "true"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build release candidate
+      - name: Import Developer ID and notarization credentials
+        env:
+          CERTIFICATE_B64: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
+          NOTARY_KEY_B64: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          umask 077
+          test -n "$CERTIFICATE_B64"
+          test -n "$CERTIFICATE_PASSWORD"
+          test -n "$NOTARY_KEY_B64"
+          test -n "$API_KEY_ID"
+          test -n "$API_ISSUER_ID"
+          test -n "$TEAM_ID"
+          test "$TEAM_ID" = "9NN976MFZ4"
+          keychain="$RUNNER_TEMP/gwonmac-release-$(openssl rand -hex 16).keychain-db"
+          certificate="$RUNNER_TEMP/developer-id.p12"
+          api_key="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
+          {
+            echo "APPLE_KEYCHAIN=$keychain"
+            echo "APPLE_CERTIFICATE_PATH=$certificate"
+            echo "APPLE_API_KEY_PATH=$api_key"
+            echo "APPLE_API_KEY_ID=$API_KEY_ID"
+            echo "APPLE_API_ISSUER_ID=$API_ISSUER_ID"
+            echo "APPLE_TEAM_ID=$TEAM_ID"
+          } >> "$GITHUB_ENV"
+          keychain_password="$(openssl rand -hex 32)"
+          printf '%s' "$CERTIFICATE_B64" | base64 --decode > "$certificate"
+          printf '%s' "$NOTARY_KEY_B64" | base64 --decode > "$api_key"
+          chmod 600 "$certificate" "$api_key"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: -s \
+            -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security default-keychain -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain" |
+            grep 'Developer ID Application: Matthias Amon (9NN976MFZ4)'
+          rm -f "$certificate"
+
+      - name: Build, sign, notarize, and staple application
+        env:
+          GW_OFFICIAL_RELEASE: "1"
         run: pnpm make
 
-      - name: Smoke-test release candidate
+      - name: Smoke-test signed release candidate
         run: pnpm test:packaged
 
-      - name: Verify code signature
+      - name: Notarize and staple DMG
+        run: |
+          dmg_count="$(find out/make -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          test "$dmg_count" = "1"
+          dmg="$(find out/make -type f -name '*.dmg' -print -quit)"
+          xcrun notarytool submit "$dmg" --wait \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID"
+          xcrun stapler staple -v "$dmg"
+
+      - name: Verify Apple distribution identity and tickets
         run: |
           app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          dmg="$(find out/make -type f -name '*.dmg' -print -quit)"
           test -n "$app"
+          test -n "$dmg"
           codesign --verify --deep --strict --verbose=2 "$app"
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
-          echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
+          echo "$signature" | grep "Authority=Developer ID Application"
+          echo "$signature" | grep "TeamIdentifier=9NN976MFZ4"
+          echo "$signature" | grep "Runtime Version"
+          echo "$signature" | grep "Timestamp="
+          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/app-entitlements.plist"
+          plutil -convert json -o "$RUNNER_TEMP/app-entitlements.json" \
+            "$RUNNER_TEMP/app-entitlements.plist"
+          node -e '
+            const value = require(process.argv[1]);
+            const allowed = new Set(["com.apple.security.cs.allow-jit"]);
+            if (Object.keys(value).some((key) => !allowed.has(key))) process.exit(1);
+            if (value["com.apple.security.cs.allow-jit"] !== true) process.exit(1);
+          ' "$RUNNER_TEMP/app-entitlements.json"
+          while IFS= read -r -d '' helper; do
+            entitlements="$RUNNER_TEMP/$(basename "$helper").plist"
+            json="$entitlements.json"
+            codesign -d --entitlements :- "$helper" > "$entitlements"
+            plutil -convert json -o "$json" "$entitlements"
+            node -e '
+              const value = require(process.argv[1]);
+              const plugin = process.argv[2].includes("(Plugin)");
+              const allowed = new Set([
+                "com.apple.security.cs.allow-jit",
+                ...(plugin ? [
+                  "com.apple.security.cs.allow-unsigned-executable-memory",
+                  "com.apple.security.cs.disable-library-validation",
+                ] : []),
+              ]);
+              const keys = Object.keys(value);
+              if (keys.some((key) => !allowed.has(key))) process.exit(1);
+              if ([...allowed].some((key) => value[key] !== true)) process.exit(1);
+            ' "$json" "$helper"
+            helper_signature="$(codesign -dv --verbose=4 "$helper" 2>&1)"
+            echo "$helper_signature" | grep "TeamIdentifier=9NN976MFZ4"
+            echo "$helper_signature" | grep "Runtime Version"
+            echo "$helper_signature" | grep "Timestamp="
+          done < <(find "$app/Contents/Frameworks" -name '*Helper*.app' -print0)
+          xcrun stapler validate -v "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+          codesign --verify --verbose=2 "$dmg"
+          dmg_signature="$(codesign -dv --verbose=4 "$dmg" 2>&1)"
+          echo "$dmg_signature" | grep "Authority=Developer ID Application"
+          echo "$dmg_signature" | grep "TeamIdentifier=9NN976MFZ4"
+          echo "$dmg_signature" | grep "Timestamp="
+          xcrun stapler validate -v "$dmg"
+          spctl --assess --type open \
+            --context context:primary-signature --verbose=4 "$dmg"
 
-      - name: Prepare release assets
+      - name: Prepare immutable release assets
         id: assets
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          asset_count="$(find out/make -type f -name '*.zip' | wc -l | tr -d ' ')"
-          if [ "$asset_count" != "1" ]; then
-            echo "Expected exactly one ZIP, found $asset_count." >&2
-            exit 1
-          fi
-          asset="$(find out/make -type f -name '*.zip' -print -quit)"
-          asset_dir="$(dirname "$asset")"
+          asset_dir="$RUNNER_TEMP/release-assets"
+          mkdir -p "$asset_dir"
           app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          zip_source="$(find out/make -type f -name '*.zip' -print -quit)"
+          dmg_source="$(find out/make -type f -name '*.dmg' -print -quit)"
           test -n "$app"
+          test -n "$zip_source"
+          test -n "$dmg_source"
+          zip="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.zip"
+          dmg="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.dmg"
+          cp "$zip_source" "$zip"
+          cp "$dmg_source" "$dmg"
+          manifest="$asset_dir/RELEASES.json"
+          published_at="$(git show -s --format=%cI "$GITHUB_SHA")"
+          node --import ./scripts/ts-hook.mjs --experimental-strip-types \
+            scripts/release-manifest.ts \
+            "$VERSION" "$TAG" "$(basename "$zip")" "$published_at" "$manifest"
+          unzip_dir="$RUNNER_TEMP/unzipped-release"
+          ditto -x -k "$zip" "$unzip_dir"
+          extracted="$unzip_dir/Guild Wars Reforged.app"
+          codesign --verify --deep --strict --verbose=2 "$extracted"
+          xcrun stapler validate -v "$extracted"
           sbom="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.spdx.json"
           checksum="$asset_dir/SHA256SUMS.txt"
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
-          echo "app=$app" >> "$GITHUB_OUTPUT"
-          echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
-          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+          {
+            echo "asset_dir=$asset_dir"
+            echo "app=$app"
+            echo "zip=$zip"
+            echo "dmg=$dmg"
+            echo "manifest=$manifest"
+            echo "sbom=$sbom"
+            echo "checksum=$checksum"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate SPDX SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
@@ -157,119 +252,120 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
-      - name: Finalize release checksums
+      - name: Finalize checksums
         env:
-          ASSET: ${{ steps.assets.outputs.asset }}
-          CHECKSUM: ${{ steps.assets.outputs.checksum }}
-          SBOM: ${{ steps.assets.outputs.sbom }}
+          ASSET_DIR: ${{ steps.assets.outputs.asset_dir }}
         run: |
-          asset_dir="$(dirname "$ASSET")"
           (
-            cd "$asset_dir"
-            shasum -a 256 "$(basename "$ASSET")" "$(basename "$SBOM")" \
-              > "$(basename "$CHECKSUM")"
-            shasum -a 256 -c "$(basename "$CHECKSUM")"
+            cd "$ASSET_DIR"
+            shasum -a 256 *.zip *.dmg RELEASES.json *.spdx.json > SHA256SUMS.txt
+            shasum -a 256 -c SHA256SUMS.txt
           )
+
+      - name: Retain debug symbols
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-dsyms
+          path: out/**/*.dSYM
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Handoff verified release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-assets
-          path: |
-            ${{ steps.assets.outputs.asset }}
-            ${{ steps.assets.outputs.checksum }}
-            ${{ steps.assets.outputs.sbom }}
+          path: ${{ steps.assets.outputs.asset_dir }}
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+
+      - name: Delete temporary signing material
+        if: always()
+        run: |
+          if [ -n "${APPLE_KEYCHAIN:-}" ]; then
+            security delete-keychain "$APPLE_KEYCHAIN" || true
+          fi
+          if [ -n "${APPLE_CERTIFICATE_PATH:-}" ]; then
+            rm -f "$APPLE_CERTIFICATE_PATH"
+          fi
+          if [ -n "${APPLE_API_KEY_PATH:-}" ]; then
+            rm -f "$APPLE_API_KEY_PATH"
+          fi
 
   release:
     if: github.ref == 'refs/heads/main'
     needs: release-build
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       attestations: write
       artifact-metadata: write
       contents: write
       id-token: write
     steps:
-      - name: Receive verified release assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: release-assets
           path: release-assets
 
-      - name: Resolve and verify handoff
-        id: assets
+      - name: Refuse an existing release and verify handoff
         env:
-          TAG: ${{ needs.release-build.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-build.outputs.tag }}
         run: |
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1 ||
              gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Tag or release $TAG already exists." >&2
             exit 1
           fi
-          asset_count="$(find release-assets -type f -name '*.zip' | wc -l | tr -d ' ')"
-          sbom_count="$(find release-assets -type f -name '*.spdx.json' | wc -l | tr -d ' ')"
-          test "$asset_count" = "1"
-          test "$sbom_count" = "1"
-          asset="$(find release-assets -type f -name '*.zip' -print -quit)"
-          sbom="$(find release-assets -type f -name '*.spdx.json' -print -quit)"
-          checksum="release-assets/SHA256SUMS.txt"
-          test -f "$checksum"
           (
             cd release-assets
+            test "$(find . -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')" = "1"
+            test "$(find . -maxdepth 1 -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+            test -f RELEASES.json
+            test -f SHA256SUMS.txt
             shasum -a 256 -c SHA256SUMS.txt
           )
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
-          echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
-          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
 
-      - name: Attest release provenance
+      - name: Attest ZIP provenance and SBOM
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
-          subject-path: ${{ steps.assets.outputs.asset }}
+          subject-path: release-assets/*.zip
+          sbom-path: release-assets/*.spdx.json
 
-      - name: Attest release SBOM
+      - name: Attest DMG provenance
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
-          subject-path: ${{ steps.assets.outputs.asset }}
-          sbom-path: ${{ steps.assets.outputs.sbom }}
+          subject-path: release-assets/*.dmg
 
-      - name: Publish GitHub release
+      - name: Create complete draft release
         env:
-          ASSET: ${{ steps.assets.outputs.asset }}
-          CHECKSUM: ${{ steps.assets.outputs.checksum }}
-          SBOM: ${{ steps.assets.outputs.sbom }}
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
           TAG: ${{ needs.release-build.outputs.tag }}
         run: |
-          notes=""
-          release_args=(--repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG")
+          args=(--repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TAG" --draft --generate-notes)
           if [ "$PRERELEASE" = "true" ]; then
-            release_args+=(--prerelease --latest=false)
-            notes="> [!WARNING]
-          > This is a prerelease build. Back up important data and expect bugs."
+            args+=(--prerelease --latest=false)
           fi
-          signing_note="> [!NOTE]
-          > This build is ad-hoc signed, not notarized by Apple. macOS blocks the
-          > first launch; follow the install guide for the one-time per-app
-          > approval. Do not disable Gatekeeper."
-          if [ -n "$notes" ]; then
-            notes="$notes
+          gh release create "$TAG" "${args[@]}" release-assets/*
 
-          $signing_note"
-          else
-            notes="$signing_note"
-          fi
-          notes="$notes
-
-          Every release includes SHA-256 checksums, an SPDX SBOM, and GitHub
-          build/SBOM attestations. See the install guide for verification."
-          gh release create "$TAG" "$ASSET" "$CHECKSUM" "$SBOM" \
-            "${release_args[@]}" \
-            --generate-notes \
-            --notes "$notes"
+      - name: Verify remote release and publish atomically
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-build.outputs.tag }}
+        run: |
+          expected="$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          actual="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets | length')"
+          test "$actual" = "$expected"
+          remote="$RUNNER_TEMP/remote-assets"
+          mkdir -p "$remote"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$remote"
+          (
+            cd "$remote"
+            shasum -a 256 -c SHA256SUMS.txt
+          )
+          cmp release-assets/RELEASES.json "$remote/RELEASES.json"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

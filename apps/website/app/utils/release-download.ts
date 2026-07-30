@@ -39,18 +39,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The one asset this site promises: a zipped Apple Silicon build. An asset that
+ * The one asset this site promises: a notarized Apple Silicon DMG. An asset that
  * does not name the architecture is not one the download button can claim, so a
  * release carrying only checksums and an SBOM is skipped rather than offered.
  */
-function appleSiliconZip(release: Record<string, unknown>): string | null {
+function appleSiliconDmg(release: Record<string, unknown>): string | null {
   const assets = release.assets;
   if (!Array.isArray(assets)) return null;
   for (const asset of assets) {
     if (!isRecord(asset)) continue;
     const { name, browser_download_url: downloadUrl } = asset;
     if (typeof name !== "string" || typeof downloadUrl !== "string") continue;
-    if (/arm64.*\.zip$/i.test(name)) return downloadUrl;
+    if (/arm64\.dmg$/i.test(name)) return downloadUrl;
   }
   return null;
 }
@@ -86,7 +86,7 @@ export function selectWebsiteDownload(
     ) {
       continue;
     }
-    const url = appleSiliconZip(release);
+    const url = appleSiliconDmg(release);
     if (!url) continue;
     if (
       !selected

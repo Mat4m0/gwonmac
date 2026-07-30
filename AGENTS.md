@@ -126,21 +126,21 @@ not only happy paths.
   inspection. Do not write docs or UI that tell a player to verify the origin.
   `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
   pins the presentation.
-- Ad-hoc macOS builds set Chromium's `use-mock-keychain` switch before ready
-  and clear browser cookies at startup and quit. The switch prevents OS
-  prompts but gives saved login weaker same-user protection than Keychain. The
-  Steam token is longer-lived and higher-value than the password it replaces
-  and inherits that same weaker-than-Keychain posture.
+- Unpackaged development and explicitly marked ad-hoc test builds set
+  Chromium's `use-mock-keychain` switch before ready. Official Developer ID
+  packages use Chromium's real Keychain-backed provider. All builds clear
+  browser cookies at startup and quit.
 - The app makes no network request the user did not ask for. `autoCheckUpdates`
   (default `false`) governs **every** automatic release check without
   exception, including the one on an unrecognised client build; with it off, a
-  launch reaches github.com zero times. `src/main/release-notice.ts` is the
-  only caller of the releases API, its three callers are the manual action, the
-  compatibility notice's button, and that one opt-in launch check, and its
-  result is three states — never a boolean, never "unknown" collapsed into
-  "up to date". Application replacement is manual; ArenaNet client updates
-  remain automatic. `docs/internals.md` owns the mechanism and
-  `docs/user-guide.md` owns what the player is told.
+  launch reaches github.com zero times. `src/main/app-updater.ts` is the only
+  caller of the releases API and the single owner of discovery, feed
+  validation, download, ready, and install state. Only an official package
+  carrying the release marker may reach Squirrel.Mac. Stable installs never
+  receive previews; a preview may advance to stable. A ready update waits for
+  an explicit or ordinary restart. ArenaNet client updates remain separate and
+  automatic. `docs/internals.md` owns the mechanism and `docs/user-guide.md`
+  owns what the player is told.
 
 ## Diagnostics and privacy
 

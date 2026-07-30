@@ -247,38 +247,64 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
  * unauthenticated requests per hour per IP, and a manual button invites
  * mashing, so that case needs its own sentence.
  */
-export type ReleaseCheckFailure =
+export type AppUpdateErrorCode =
   | "rate-limited"
   | "offline"
   | "timeout"
   | "server"
   | "unreadable"
-  | "unsupported-build";
+  | "unsupported-build"
+  | "updater-unavailable"
+  | "feed-invalid"
+  | "download-failed";
 
 /**
- * Three states, never two. `latestVersion` is re-rendered from the parsed
+ * One closed state union. `latestVersion` is re-rendered from the parsed
  * version rather than passed through from the API response, so no free text
  * from the network reaches the UI.
  */
-export type ReleaseNotice =
+export type AppUpdateState =
   | {
-      state: "update-available";
+      phase: "idle";
       currentVersion: string;
-      latestVersion: string;
-      checkedAt: number;
+      lastCheckedAt?: string;
     }
   | {
-      state: "up-to-date";
+      phase: "checking";
       currentVersion: string;
-      latestVersion: string;
-      checkedAt: number;
+      lastCheckedAt?: string;
     }
   | {
-      state: "unknown";
+      phase: "up-to-date";
       currentVersion: string;
-      reason: ReleaseCheckFailure;
-      checkedAt: number;
+      latestVersion: string;
+      checkedAt: string;
+    }
+  | {
+      phase: "downloading";
+      currentVersion: string;
+      latestVersion: string;
+      checkedAt: string;
+    }
+  | {
+      phase: "ready";
+      currentVersion: string;
+      latestVersion: string;
+      checkedAt: string;
+    }
+  | {
+      phase: "failed";
+      currentVersion: string;
+      lastCheckedAt?: string;
+      reason: AppUpdateErrorCode;
     };
+
+export type SettingsPane =
+  | "data"
+  | "display"
+  | "controls"
+  | "updates"
+  | "advanced";
 
 /**
  * Which of the three client-certification states this session is in. The two
@@ -386,7 +412,12 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
-  | { type: "settings.open" }
+  | {
+      type: "settings.open";
+      pane?: SettingsPane;
+      checkForUpdates?: boolean;
+    }
+  | { type: "filesystem.sync" }
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";
@@ -443,9 +474,10 @@ export const IPC = {
   // window, which `executeJavaScript`'s awaited result used to guarantee.
   rendererCommand: "gw:renderer:command",
   rendererCommandDone: "gw:renderer:commandDone",
-  // Named for its trigger: the renderer asks for a check, it does not read a
-  // status the main process was already keeping.
-  releaseNoticeCheck: "gw:releaseNotice:check",
+  appUpdatesGetState: "gw:appUpdates:getState",
+  appUpdatesCheck: "gw:appUpdates:check",
+  appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
+  appUpdatesState: "gw:appUpdates:state",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -466,6 +498,7 @@ export const EVENT_CHANNELS = [
   "socketEvent",
   "rendererCommand",
   "rendererCommandDone",
+  "appUpdatesState",
 ] as const;
 
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
@@ -577,7 +610,10 @@ export interface GwNativeApi {
     healthy(token: ClientHealthToken): Promise<void>;
     session(): Promise<ClientSession>;
   };
-  releaseNotice: {
-    check(): Promise<ReleaseNotice>;
+  appUpdates: {
+    getState(): Promise<AppUpdateState>;
+    check(): Promise<void>;
+    restartAndInstall(): Promise<void>;
+    onState(callback: (state: AppUpdateState) => void): () => void;
   };
 }

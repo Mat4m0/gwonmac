@@ -1,4 +1,12 @@
-import { app, dialog, powerMonitor, session } from "electron";
+import {
+  app,
+  autoUpdater,
+  dialog,
+  Notification,
+  powerMonitor,
+  session,
+} from "electron";
+import { readFileSync } from "node:fs";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -33,7 +41,7 @@ import {
 } from "./diagnostics.js";
 import type { AppPhase } from "./diagnostics/schema.js";
 import { emitSocketEvent, registerIpcHandlers } from "./ipc.js";
-import { checkForNewerRelease } from "./release-notice.js";
+import { AppUpdater } from "./app-updater.js";
 import {
   enableSandboxBeforeReady,
   onAppQuit,
@@ -63,6 +71,7 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
+import { sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
 
@@ -70,7 +79,13 @@ import { acquireSteamToken } from "./steam-acquire.js";
 // repeatedly asks for access to "<app> Safe Storage". The mock provider avoids
 // that OS prompt. The same provider encrypts the owner-only saved-login file;
 // this is intentionally weaker than a signed app's stable Keychain identity.
-if (process.platform === "darwin") {
+if (
+  process.platform === "darwin"
+  && (
+    !app.isPackaged
+    || app.commandLine.hasSwitch("gw-adhoc-test-keychain")
+  )
+) {
   app.commandLine.appendSwitch("use-mock-keychain");
 }
 
@@ -91,8 +106,30 @@ if (!primaryInstance) {
   wireLifecycle();
 }
 
+const HOST_VERSION = (() => {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(path.join(app.getAppPath(), "package.json"), "utf8"),
+    ) as unknown;
+    if (
+      typeof manifest === "object"
+      && manifest !== null
+      && !Array.isArray(manifest)
+    ) {
+      const version = (manifest as Record<string, unknown>).version;
+      if (typeof version === "string") return version;
+    }
+  } catch {
+    // Electron's answer remains the safe fallback for a broken development
+    // checkout. Official packages always carry their package manifest.
+  }
+  return app.getVersion();
+})();
+
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 let settingsWrite: Promise<void> = Promise.resolve();
+let appUpdaterController: AppUpdater | null = null;
+let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
@@ -114,7 +151,15 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   const operation = settingsWrite.then(async () => {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
-    return saveSettings(settingsPath, { ...current, ...patch });
+    const saved = await saveSettings(settingsPath, { ...current, ...patch });
+    if (
+      !current.autoCheckUpdates
+      && saved.autoCheckUpdates
+      && appUpdaterController
+    ) {
+      void appUpdaterController.check();
+    }
+    return saved;
   });
   settingsWrite = operation.then(
     () => undefined,
@@ -186,6 +231,27 @@ function sendToRenderer(channel: string, value: unknown): void {
     win.webContents.send(channel, value);
   } catch {
     // Renderer teardown can race a native progress callback.
+  }
+}
+
+function officialUpdaterCapable(): boolean {
+  if (!app.isPackaged) {
+    return process.env.GW_TEST_OFFICIAL_UPDATER === "1";
+  }
+  if (process.platform !== "darwin") return false;
+  try {
+    const marker = JSON.parse(
+      readFileSync(path.join(process.resourcesPath, "official-update.json"), "utf8"),
+    ) as unknown;
+    return (
+      typeof marker === "object"
+      && marker !== null
+      && !Array.isArray(marker)
+      && (marker as Record<string, unknown>).schema === 1
+      && (marker as Record<string, unknown>).repository === "Mat4m0/gwonmac"
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -296,8 +362,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
   app.setAboutPanelOptions({
     applicationName: "Guild Wars Reforged",
-    applicationVersion: app.getVersion(),
-    version: app.getVersion(),
+    applicationVersion: HOST_VERSION,
+    version: HOST_VERSION,
     copyright:
       "Independent GPL-3.0 project · Guild Wars © ArenaNet LLC.",
     credits:
@@ -341,7 +407,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
   const clientRuntime = new ClientRuntime({
     paths,
-    hostVersion: app.getVersion(),
+    hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementsEnabled: enhancementsEnabledFor(settings),
@@ -349,6 +415,47 @@ if (primaryInstance) void app.whenReady().then(async () => {
     onPrefetch: setPrefetch,
   });
   const sockets = buildSocketManager();
+  appUpdaterController = new AppUpdater({
+    currentVersion: HOST_VERSION,
+    capable: officialUpdaterCapable(),
+    nativeUpdater: {
+      setFeedURL: (options) => autoUpdater.setFeedURL(options),
+      checkForUpdates: () => {
+        autoUpdater.checkForUpdates();
+      },
+      quitAndInstall: () => autoUpdater.quitAndInstall(),
+    },
+    rememberCheckedAt: async (lastUpdateCheckAt) => {
+      await updateAppSettings({ lastUpdateCheckAt });
+    },
+    publish: (state) => {
+      if (state.phase === "failed") {
+        logEvent({ k: "appUpdate.failed", reason: state.reason });
+      }
+      if (
+        app.isPackaged
+        && state.phase === "ready"
+        && Notification.isSupported()
+      ) {
+        new Notification({
+          title: "Guild Wars Reforged update ready",
+          body: `Version ${state.latestVersion} will install when you restart.`,
+          silent: true,
+        }).show();
+      }
+      sendToRenderer(IPC.appUpdatesState, state);
+    },
+  });
+  appUpdaterController.restoreLastCheckedAt(settings.lastUpdateCheckAt);
+  autoUpdater.on("update-downloaded", () => {
+    appUpdaterController?.updateDownloaded();
+  });
+  autoUpdater.on("error", () => {
+    appUpdaterController?.updateFailed();
+  });
+  autoUpdater.on("update-not-available", () => {
+    appUpdaterController?.updateNotAvailable();
+  });
   powerMonitor.on("suspend", () => {
     if (!clientRuntime.isDownloading) return;
     logEvent({ k: "fullDownload.stoppedForSleep" });
@@ -360,7 +467,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   installGwProtocolHandler();
   logEvent({ k: "protocol.installed" });
 
-  registerIpcHandlers({
+  const ipcCleanup = registerIpcHandlers({
     sockets,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
@@ -375,9 +482,35 @@ if (primaryInstance) void app.whenReady().then(async () => {
     // worked is already on the progress channel, which is where the renderer
     // reads it — a second, thrown answer would have been a second owner.
     retryClient: () => clientRuntime.requestUpdate(),
-    checkReleaseNotice: () => checkForNewerRelease(app.getVersion()),
+    getAppUpdateState: () => appUpdaterController!.getState(),
+    checkAppUpdates: () => appUpdaterController!.check(),
+    restartAndInstallUpdate: (win) => {
+      if (updateRestartInFlight) return updateRestartInFlight;
+      const operation = (async () => {
+        if (appUpdaterController?.getState().phase !== "ready") return;
+        await resetGameInput(win);
+        if (sockets.size() > 0) {
+          const { response } = await dialog.showMessageBox(win, {
+            type: "warning",
+            buttons: ["Restart and Update", "Later"],
+            defaultId: 1,
+            cancelId: 1,
+            message: "Restart and update Guild Wars?",
+            detail:
+              "The current game connection will close. The downloaded update remains ready if you choose Later.",
+          });
+          if (response !== 0) return;
+        }
+        await runQuitCleanup();
+        appUpdaterController.quitAndInstall();
+      })().finally(() => {
+        if (updateRestartInFlight === operation) updateRestartInFlight = null;
+      });
+      updateRestartInFlight = operation;
+      return operation;
+    },
     getClientSession: () => ({
-      appVersion: app.getVersion(),
+      appVersion: HOST_VERSION,
       compatibility: clientRuntime.compatibility,
       healthToken: clientRuntime.healthToken,
     }),
@@ -386,6 +519,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   onAppQuit(async () => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) {
+      const outcome = await sendRendererCommand(win, {
+        type: "filesystem.sync",
+      });
+      if (outcome !== "completed") {
+        logEvent({ k: "quit.rendererSyncIncomplete", outcome });
+      }
+    }
+    await ipcCleanup.drainSecrets();
     await flushWindowState();
     sockets.closeAll();
     updateLongRunningTaskFeedback({
@@ -403,6 +546,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     sockets,
     enhancementSelection,
   ));
+  if (settings.autoCheckUpdates) {
+    void appUpdaterController.check();
+  }
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {

@@ -204,8 +204,12 @@ const api = {
     healthy: (token) => ipcRenderer.invoke(IPC.clientHealthy, token),
     session: () => ipcRenderer.invoke(IPC.clientSession),
   },
-  releaseNotice: {
-    check: () => ipcRenderer.invoke(IPC.releaseNoticeCheck),
+  appUpdates: {
+    getState: () => ipcRenderer.invoke(IPC.appUpdatesGetState),
+    check: () => ipcRenderer.invoke(IPC.appUpdatesCheck),
+    restartAndInstall: () =>
+      ipcRenderer.invoke(IPC.appUpdatesRestartAndInstall),
+    onState: (callback) => listen(IPC.appUpdatesState, callback),
   },
 };
 for (const namespace of Object.values(api)) Object.freeze(namespace);
