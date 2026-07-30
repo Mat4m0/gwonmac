@@ -1,8 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+
+const packageVersion = (
+  JSON.parse(readFileSync(path.resolve("package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 
 declare global {
   // The main-process probe that records what the reset dialog was asked and
@@ -68,7 +74,7 @@ test.describe("settings experience", () => {
         "Automatically check for and download app updates",
       );
       await expect(page.locator("#settings-update-version")).toHaveText(
-        "2026.7.0-beta.1",
+        packageVersion,
       );
       await expect(page.locator("#settings-update-channel")).toHaveText("Preview");
       await expect(page.locator("#settings-update-status")).toContainText(
@@ -88,7 +94,7 @@ test.describe("settings experience", () => {
       const { app, page } = fixture;
       await app.evaluate(({ autoUpdater }) => {
         globalThis.__updateInstallCalls = 0;
-        const version = "2026.7.0-beta.2";
+        const version = "9999.1.0";
         const tag = `v${version}`;
         const zip = `Guild-Wars-Reforged-${version}-macOS-arm64.zip`;
         const base =
@@ -143,7 +149,7 @@ test.describe("settings experience", () => {
         }));
       });
       await expect(page.locator("#settings-update-version")).toHaveText(
-        "2026.7.0-beta.1",
+        packageVersion,
       );
       await page.locator("#settings-check-updates").click();
       await expect(page.locator("#settings-restart-update")).toBeVisible();

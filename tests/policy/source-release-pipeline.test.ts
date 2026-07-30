@@ -249,6 +249,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(main, /on:\n {2}push:\n {4}branches: \[main\]/);
   assert.doesNotMatch(main, /pull_request:|workflow_dispatch:/);
   assert.match(main, /artifact-retention-days: 1/);
+  assert.match(main, /run-number: \$\{\{ fromJSON\(github\.run_number\) \}\}/);
   assert.match(
     main,
     /publish:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
@@ -266,6 +267,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
   assert.doesNotMatch(manual, /schedule:|release-build|package\.json'\)\.version/);
   assert.match(manual, /artifact-retention-days: 1/);
+  assert.match(manual, /run-number: \$\{\{ fromJSON\(github\.run_number\) \}\}/);
   assert.match(manual, /publish:\n {4}needs: verify/);
   assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
 

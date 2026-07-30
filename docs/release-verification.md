@@ -70,11 +70,12 @@ untrusted repository safe.
 
 ## First signed release rollout
 
-The first Developer ID beta is a manual DMG bootstrap. An ad-hoc installation
-cannot securely replace itself with an application carrying a different code
-identity. Publish a second beta from the same Developer ID identity and prove
-automatic updating on both a clean profile and an existing profile before
-shipping a stable release.
+The existing `2026.7.0-beta.1` is an ad-hoc package. The first Developer ID
+beta is therefore `2026.7.0-beta.2` and remains a manual DMG bootstrap: an
+ad-hoc installation cannot securely replace itself with an application
+carrying a different code identity. Publish `2026.7.0-beta.3` from the same
+Developer ID identity and prove automatic updating from beta 2 on both a clean
+profile and an existing profile before shipping a stable release.
 
 The `release` environment variable `SIGNED_BETA_UPDATE_PROVEN` is deliberately
 unset during this rollout. After the second beta has installed automatically,
