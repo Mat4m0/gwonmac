@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { existsSync } from "node:fs";
-import { closeOffline, launchOffline, main } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 /**
  * What a listener installed by one `page.evaluate` recorded, read back by a
@@ -62,8 +61,6 @@ async function startGameInput(page: Page) {
 }
 
 test.describe("renderer input", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("keeps game text entry native-assistance free without blurring the game", async () => {
     const fixture = await launchOffline("gw-text-input-e2e-");
     try {

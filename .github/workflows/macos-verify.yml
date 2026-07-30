@@ -44,6 +44,15 @@ jobs:
       - run: pnpm audit --audit-level=high
       - run: pnpm verify
 
+      - name: Upload Electron failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: electron-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Prepare tested package
         if: inputs.artifact-name != ''
         id: package

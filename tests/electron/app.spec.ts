@@ -2,8 +2,6 @@ import { test, expect, _electron as electron } from "@playwright/test";
 import type { ElectronApplication } from "@playwright/test";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import {
   mkdtemp,
   readFile,
@@ -13,13 +11,7 @@ import {
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const main = path.join(root, "build/main/main.js");
-const electronBin = path.join(
-  root,
-  "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+import { electronBin, root } from "./fixtures.mjs";
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
@@ -65,22 +57,18 @@ const launchEnv = (
 };
 
 /**
- * An absent `electronBin` means Playwright resolves the binary itself, so the
- * property is omitted rather than passed as `undefined`.
+ * Global setup verifies the executable before any spec starts.
  */
 const launch = (userData: string, env: Record<string, string>) =>
   electron.launch({
     cwd: root,
     args: [".", `--user-data-dir=${userData}`],
     env,
-    ...(existsSync(electronBin) ? { executablePath: electronBin } : {}),
+    executablePath: electronBin,
   });
 
 test.describe("Electron application", () => {
-  test.skip(!existsSync(main), "run tsc + copy-renderer before electron tests");
-
   test("a second instance exits and reveals the primary window", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -132,7 +120,6 @@ test.describe("Electron application", () => {
   });
 
   test("a startup failure exits nonzero and releases the instance lock", async () => {
-    test.skip(!existsSync(electronBin), "Electron application binary is unavailable");
     const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
     const baseEnv = launchEnv({
       GW_OFFLINE_SHELL: "1",
