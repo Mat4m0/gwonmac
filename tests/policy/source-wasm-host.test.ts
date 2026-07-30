@@ -382,10 +382,16 @@ test("the served module, not requested settings, decides whether Enhancement imp
   assert.doesNotMatch(initialized, /init\.nativeCursor/u);
 });
 
-test("a clean WASM process exit closes the host application", async () => {
+test("a completed client main loop closes the host application", async () => {
   const harness = await readFile(
     path.join(root, "src/renderer/harness.ts"),
     "utf8",
+  );
+  assert.match(harness, /host\.installClientExit\(\{/);
+  assert.ok(
+    harness.indexOf("host.installClientExit({")
+      < harness.indexOf("WebAssembly.instantiateStreaming("),
+    "the clean-exit adapter must wrap imports before instantiation",
   );
   assert.match(harness, /onExit\(code\)/);
   assert.match(harness, /code === 0[\s\S]*native\(\)\.app\.requestQuit\(\)/);

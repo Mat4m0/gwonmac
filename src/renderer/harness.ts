@@ -13,6 +13,9 @@
  * them declares is still an error here.
  */
 type GwClientImports = Parameters<
+  typeof import('./client-exit.js').installClientExit
+>[0]['imports'] &
+  Parameters<
   typeof import('./gl-program-cache.js').installGlProgramCache
 >[0]['imports'] &
   Parameters<
@@ -259,6 +262,7 @@ let gamepadImportsAvailable = false;
 // glue and cannot await. Reading `host` before boot() assigns it is a
 // TypeError, not a silently skipped installation.
 let host: typeof import('./graphics.js') &
+  typeof import('./client-exit.js') &
   typeof import('./gl-program-cache.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
@@ -324,6 +328,13 @@ Module = {
 
   // Take over instantiation so the EGL imports can be patched first.
   instantiateWasm(imports, success) {
+    host.installClientExit({
+      imports,
+      instance: () => gameWasmInstance,
+      onExit: () => Module.onExit(0),
+      onFailure: (error) => Module.onAbort(error),
+      log,
+    });
     host.installTemplateSaveCompatibility({
       imports,
       module: Module,
@@ -788,6 +799,7 @@ function loadGlue() {
     const [
       { unavailablePlatformCapabilities },
       { createSocketHost },
+      clientExit,
       graphics,
       glProgramCache,
       filesystem,
@@ -798,6 +810,7 @@ function loadGlue() {
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
+      import('./client-exit.js'),
       import('./graphics.js'),
       import('./gl-program-cache.js'),
       import('./filesystem.js'),
@@ -807,6 +820,7 @@ function loadGlue() {
       import('./client-health.js'),
     ]);
     host = {
+      ...clientExit,
       ...graphics,
       ...glProgramCache,
       ...filesystem,
