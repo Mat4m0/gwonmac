@@ -18,6 +18,7 @@ import { chromium } from "playwright";
 import type { Browser, Page } from "playwright";
 import type { PublishedClientManifest } from "../src/main/core/published-client.ts";
 import type { AppSettingsPatch } from "../src/shared/contracts.ts";
+import { stopChildProcess } from "./helpers/child-process.ts";
 // The canonical tables, not their emitted copies. `pnpm typecheck` runs before
 // `pnpm build` in `pnpm verify`, so a static import of `build/` here would make
 // checking depend on output that may not exist yet — the dependency Phase 0b
@@ -215,16 +216,6 @@ async function rendererPage(
   );
 }
 
-async function stopProcess(child: ChildProcess) {
-  if (child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("close", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
-}
-
 /** Where a launch's per-run state lives, for the `prepare` hook to seed. */
 interface LaunchPaths {
   artifacts: string;
@@ -299,7 +290,7 @@ async function launchPackaged(
     const page = await rendererPage(browser, child, output);
     return { artifacts, browser, child, output, page, userData };
   } catch (error) {
-    await stopProcess(child);
+    await stopChildProcess(child);
     await rm(userData, { recursive: true, force: true });
     throw error;
   }
@@ -309,7 +300,7 @@ type PackagedFixture = Awaited<ReturnType<typeof launchPackaged>>;
 
 async function closePackaged(fixture: PackagedFixture) {
   await fixture.browser.close().catch(() => undefined);
-  await stopProcess(fixture.child);
+  await stopChildProcess(fixture.child);
   await rm(fixture.userData, { recursive: true, force: true });
 }
 
