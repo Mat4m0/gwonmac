@@ -142,7 +142,7 @@ window.gwLoading = (function (): LoadingController {
   window.gwNative?.client.session().then((session) => {
     const version = document.createElement('p');
     version.id = 'loading-version';
-    version.textContent = `Guild Wars for macOS ${session.appVersion}`;
+    version.textContent = `Guild Wars Reforged ${session.appVersion}`;
     el('loading-legal').prepend(version);
   }).catch(() => {});
 
@@ -210,7 +210,7 @@ window.gwLoading = (function (): LoadingController {
 
   async function waitForClient() {
     if (!window.gwNative) {
-      api.fail('Native bridge missing — this page must run inside Guild Wars.app.');
+      api.fail('Native bridge missing — this page must run inside Guild Wars Reforged.app.');
       return false;
     }
     api.set('Checking the game client', null);

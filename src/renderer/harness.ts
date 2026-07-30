@@ -715,7 +715,9 @@ function loadGlue() {
 
 (async function boot() {
   if (!window.gwNative) {
-    window.gwLoading?.fail('Native bridge missing — open this page from Guild Wars.app.');
+    window.gwLoading?.fail(
+      'Native bridge missing — open this page from Guild Wars Reforged.app.',
+    );
     return;
   }
   milestone('renderer.loaded');

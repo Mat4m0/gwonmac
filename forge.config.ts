@@ -15,8 +15,8 @@ const macOSVersion = macOSBundleVersions(packageVersion);
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: "Guild Wars",
-    executableName: "Guild Wars",
+    name: "Guild Wars Reforged",
+    executableName: "Guild Wars Reforged",
     appVersion: macOSVersion.appVersion,
     buildVersion: macOSVersion.buildVersion,
     icon: path.resolve("assets/AppIcon.icns"),
@@ -24,7 +24,7 @@ const config: ForgeConfig = {
     appCategoryType: "public.app-category.games",
     darwinDarkModeSupport: true,
     appCopyright:
-      "© 2026 gwonmac contributors. Guild Wars © 2005–2026 ArenaNet, Inc.",
+      "© 2026 gwonmac contributors. Guild Wars © ArenaNet LLC.",
     extraResource: [
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
@@ -76,7 +76,7 @@ const config: ForgeConfig = {
       if (result.platform !== "darwin") return;
       const { spawnSync } = await import("node:child_process");
       for (const outputPath of result.outputPaths) {
-        const appPath = path.join(outputPath, "Guild Wars.app");
+        const appPath = path.join(outputPath, "Guild Wars Reforged.app");
         const signed = spawnSync(
           "codesign",
           ["--force", "--deep", "--sign", "-", appPath],

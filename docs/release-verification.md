@@ -52,7 +52,7 @@ checks it.
 
 ## Signing and evidence
 
-Guild Wars for macOS releases are ad-hoc signed and are not notarized by
+Guild Wars Reforged releases are ad-hoc signed and are not notarized by
 Apple. The project deliberately does not require a paid Apple Developer
 membership. Each GitHub release instead publishes three independently useful
 pieces of evidence:
@@ -82,7 +82,7 @@ If the [GitHub CLI](https://cli.github.com/) is installed, also verify the
 repository-bound attestations:
 
 ```bash
-zip="$(find . -maxdepth 1 -name 'Guild Wars-darwin-arm64-*.zip' -print -quit)"
+zip="$(find . -maxdepth 1 -name 'Guild Wars Reforged-darwin-arm64-*.zip' -print -quit)"
 gh attestation verify "$zip" --repo Mat4m0/gwonmac
 ```
 
@@ -92,7 +92,7 @@ attestations are both attached to that exact ZIP digest.
 
 ## Install without disabling Gatekeeper
 
-After verification, unzip the application and move `Guild Wars.app` to
+After verification, unzip the application and move `Guild Wars Reforged.app` to
 Applications. Try to open it once, choose **Done** when macOS blocks it, then
 open **System Settings → Privacy & Security**, scroll to **Security**, choose
 **Open Anyway**, and confirm the second prompt.

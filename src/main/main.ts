@@ -74,6 +74,14 @@ if (process.platform === "darwin") {
   app.commandLine.appendSwitch("use-mock-keychain");
 }
 
+// The public app name changed after alpha profiles already existed. Keep that
+// one profile as the canonical home so the rename cannot strand saved login,
+// settings, diagnostics, or roughly 4 GB of verified game data. An explicit
+// profile remains authoritative for tests and the deliberately scoped tools.
+if (!app.commandLine.hasSwitch("user-data-dir")) {
+  app.setPath("userData", path.join(app.getPath("appData"), "Guild Wars"));
+}
+
 const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) {
   app.quit();
@@ -287,13 +295,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
     throw new Error("injected startup failure");
   }
   app.setAboutPanelOptions({
-    applicationName: "Guild Wars",
+    applicationName: "Guild Wars Reforged",
     applicationVersion: app.getVersion(),
     version: app.getVersion(),
     copyright:
-      "Independent GPL-3.0 project · Guild Wars © 2005–2026 ArenaNet, Inc.",
+      "Independent GPL-3.0 project · Guild Wars © ArenaNet LLC.",
     credits:
-      "Mat4m0/gwonmac · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSoft.",
+      "Mat4m0/gwonmac · App icon artwork © ArenaNet LLC · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSOFT.",
     website: EXTERNAL_URLS.github,
   });
   await applyPendingCacheClear();

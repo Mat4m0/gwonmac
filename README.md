@@ -1,7 +1,7 @@
-# Guild Wars for macOS
+# Guild Wars Reforged
 
-Play ArenaNet's official Guild Wars client natively on your Mac — no Windows
-install, no Wine, no compatibility layer to configure.
+Play ArenaNet's official Guild Wars Reforged client natively on your Mac — no
+Windows install, Wine, or compatibility layer to configure.
 
 [Download](https://github.com/Mat4m0/gwonmac/releases) ·
 [Install guide](docs/user-guide.md) ·
@@ -23,7 +23,7 @@ from the [official store](https://store.guildwars.com/en-us).
 
 1. **Download** the latest release and unzip it. Safari unzips automatically;
    otherwise double-click the `.zip`.
-2. **Move** `Guild Wars.app` into your Applications folder.
+2. **Move** `Guild Wars Reforged.app` into your Applications folder.
 3. **Open it once.** macOS blocks it and offers only _Move to Bin_ and _Done_ —
    click **Done**.
 4. **Allow it:** System Settings → Privacy & Security → scroll down → **Open
@@ -230,13 +230,24 @@ Also with thanks to:
   License 1.1.
 - **ArenaNet** — for the game, and for keeping the Guild Wars client alive and
   publicly downloadable more than twenty years on.
+- **[gwnative](https://github.com/jean-humann/gwnative)** — for identifying the
+  official Reforged App Store artwork and preparing the macOS icon adopted
+  here.
 
 ## Legal
 
-Guild Wars and all associated game content are © 2005–2026 ArenaNet, Inc. All
-rights reserved. NCsoft, the interlocking NC logo, ArenaNet, Arena.net, Guild
-Wars and associated logos and designs are trademarks or registered trademarks
-of NCsoft Corporation.
+© ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars, Guild Wars
+2, GW2, Heart of Thorns, Path of Fire, End of Dragons, Secrets of the Obscure,
+Janthir Wilds, Visions of Eternity, and all associated logos, designs, and
+composite marks are trademarks or registered trademarks of NCSOFT Corporation.
+All other trademarks are the property of their respective owners.
+
+`assets/AppIcon.png` is the 1024 × 1024 Guild Wars Reforged application
+artwork published by ArenaNet on the official
+[Apple App Store listing](https://apps.apple.com/app/guild-wars-reforged/id820613069).
+The committed macOS icon was prepared by
+[gwnative](https://github.com/jean-humann/gwnative) from that artwork. The
+artwork and Guild Wars marks remain the property of their respective owners.
 
 Loading-screen photography is by
 [Snapshot Henchman](https://bloogum.net/guildwars/). The loading-screen typeface
@@ -248,7 +259,6 @@ switchable off under Settings → Controls — reads the bitmap the player's own
 installed client has already decoded, and never redistributes it.
 
 Source code is GPL-3.0-only — see [LICENSE](LICENSE). Unless an asset carries
-its own license, Guild Wars imagery, screenshots, loading artwork, the
-application icon, and derived favicons are fan-project visual material, are not
-relicensed under GPL-3.0, and all underlying rights remain with their
-respective owners.
+its own license, Guild Wars imagery, screenshots, loading artwork, the official
+application-icon artwork, and derived favicons are not relicensed under
+GPL-3.0, and all underlying rights remain with their respective owners.

@@ -1,7 +1,8 @@
-# Guild Wars for macOS user guide
+# Guild Wars Reforged user guide
 
-Guild Wars for macOS is an independent host for ArenaNet’s official Guild Wars client. It is not affiliated with ArenaNet or NCSoft and does not
-bundle game binaries.
+Guild Wars Reforged is an independent macOS host for ArenaNet’s official Guild
+Wars Reforged client. It is not affiliated with ArenaNet or NCSOFT and does
+not bundle game binaries.
 
 ## Install and start
 
@@ -16,10 +17,11 @@ pnpm install --frozen-lockfile
 pnpm package
 ```
 
-Open `out/Guild Wars-darwin-arm64/Guild Wars.app`. On the first launch macOS may
-block an ad-hoc build. Try to open the app once, then open **System Settings →
-Privacy & Security**, scroll to **Security**, click **Open Anyway**, and confirm
-the second prompt. Do not disable Gatekeeper globally.
+Open
+`out/Guild Wars Reforged-darwin-arm64/Guild Wars Reforged.app`. On the first
+launch macOS may block an ad-hoc build. Try to open the app once, then open
+**System Settings → Privacy & Security**, scroll to **Security**, click **Open
+Anyway**, and confirm the second prompt. Do not disable Gatekeeper globally.
 
 Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
 build/SBOM attestations. Follow [Verify a release](release-verification.md)
@@ -60,7 +62,7 @@ the task finishes or is paused.
 
 To schedule the complete game from a running session:
 
-1. Open **Guild Wars → Settings…**.
+1. Open **Guild Wars Reforged → Settings…**.
 2. Select **Full Game** under **Game data mode**.
 
 The current session is not interrupted. The next launch opens the resumable
@@ -117,7 +119,7 @@ confirm that controllers work. Physical controller behavior is not part of
 the automated release gate because the project has no dedicated test
 controller yet.
 
-Settings are always available with **Command-,**, **Guild Wars → Settings…**,
+Settings are always available with **Command-,**, **Guild Wars Reforged → Settings…**,
 or the **Settings** link on the loading screen. **Reset Launcher Settings…**
 under **Advanced** restores launcher defaults, resets the window to a centered
 1280×800 normal window, and makes the download choice appear on the next
@@ -235,8 +237,9 @@ public, so review the bug form’s privacy notice as well.
 ## Updates
 
 Updating this app is manual. Download a newer release, replace
-`Guild Wars.app`, and your settings, saved login, and downloaded game data stay
-where they are. The app never downloads or installs anything by itself.
+`Guild Wars Reforged.app`, and your settings, saved login, and downloaded game
+data stay where they are. The app never downloads or installs anything by
+itself.
 ArenaNet's own client files still update automatically; that is the game
 updating, not the app.
 

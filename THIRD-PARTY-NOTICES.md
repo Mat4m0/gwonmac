@@ -4,24 +4,37 @@ The GPL-3.0-only license in `LICENSE` applies to the gwonmac host source code.
 It does not grant rights in the third-party names, game content, visual
 material, or font described below.
 
-## Guild Wars
+## Guild Wars and Guild Wars Reforged
 
-Guild Wars and associated game content are © 2005–2026 ArenaNet, Inc. NCsoft,
-the interlocking NC logo, ArenaNet, Arena.net, Guild Wars, and associated logos
-and designs are trademarks or registered trademarks of NCsoft Corporation.
-This independent interoperability project is not affiliated with or endorsed
-by ArenaNet or NCSoft.
+© ArenaNet LLC. All rights reserved. NCSOFT, ArenaNet, Guild Wars, Guild Wars
+2, GW2, Heart of Thorns, Path of Fire, End of Dragons, Secrets of the Obscure,
+Janthir Wilds, Visions of Eternity, and all associated logos, designs, and
+composite marks are trademarks or registered trademarks of NCSOFT Corporation.
+All other trademarks are the property of their respective owners.
+
+This independent interoperability project is not affiliated with, endorsed,
+sponsored, or approved by ArenaNet or NCSOFT.
 
 The application does not contain ArenaNet game binaries. It downloads the
 official client directly from ArenaNet.
 
-## Visual material
+## Application icon
+
+`assets/AppIcon.png` is the 1024 × 1024 Guild Wars Reforged application
+artwork published by ArenaNet on the official
+[Apple App Store listing](https://apps.apple.com/app/guild-wars-reforged/id820613069).
+The committed `assets/AppIcon.icns` was prepared by the independent
+[gwnative project](https://github.com/jean-humann/gwnative) from that artwork
+for macOS. The artwork and Guild Wars marks remain the property of their
+respective owners and are not covered by this project's GPL license.
+
+## Other visual material
 
 Loading-screen photography is credited to
 [Snapshot Henchman](https://bloogum.net/guildwars/). Guild Wars imagery,
-screenshots, loading artwork, the application icon, and derived favicons are
-fan-project visual material and are not relicensed under GPL-3.0-only. Their
-inclusion does not grant permission to reuse them separately.
+screenshots, loading artwork, and derived favicons are not relicensed under
+GPL-3.0-only. Their inclusion does not grant permission to reuse them
+separately.
 
 No cursor artwork is distributed with this application. When the player turns
 on the optional game cursor, the host reads the bitmap the player's own

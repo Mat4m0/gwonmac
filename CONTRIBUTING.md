@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for improving Guild Wars for macOS. This is an independent
+Thank you for improving Guild Wars Reforged for macOS. This is an independent
 interoperability project; keep changes narrow, maintainable, and respectful of
 ArenaNet’s production services.
 
