@@ -2,21 +2,11 @@ import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import {
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import {
-  FuseState,
-  FuseV1Options,
-  getCurrentFuseWire,
-} from "@electron/fuses";
+import { FuseState, FuseV1Options, getCurrentFuseWire } from "@electron/fuses";
 import { extractFile, listPackage, statFile } from "@electron/asar";
 import forgeConfig from "../forge.config.ts";
 import { macOSBundleVersions } from "../scripts/macos-version.js";
@@ -35,15 +25,11 @@ const appBundle = path.join(
   root,
   `out/Guild Wars Reforged-darwin-${process.arch}/Guild Wars Reforged.app`,
 );
-const executable = path.join(
-  appBundle,
-  "Contents/MacOS/Guild Wars Reforged",
-);
+const executable = path.join(appBundle, "Contents/MacOS/Guild Wars Reforged");
 const execFileAsync = promisify(execFile);
 const resources = path.join(appBundle, "Contents/Resources");
 const asarPath = path.join(resources, "app.asar");
-const expectsOfficialUpdater =
-  process.env.GW_EXPECT_OFFICIAL_UPDATER === "1";
+const expectsOfficialUpdater = process.env.GW_EXPECT_OFFICIAL_UPDATER === "1";
 assert.equal(
   existsSync(path.join(resources, "official-update.json")),
   expectsOfficialUpdater,
@@ -96,7 +82,8 @@ const { stdout: nativeArchitectures } = await execFileAsync("lipo", [
 assert.equal(nativeArchitectures.trim(), process.arch);
 await execFileAsync("codesign", ["--verify", "--strict", nativeAddon]);
 
-const asarText = (file: string) => extractFile(asarPath, file.slice(1)).toString("utf8");
+const asarText = (file: string) =>
+  extractFile(asarPath, file.slice(1)).toString("utf8");
 const packagedManifest = JSON.parse(asarText("/package.json"));
 const packagedRendererIndex = "/build/renderer/index.html";
 const packagedClosure = relativeEsmClosure({
@@ -120,6 +107,15 @@ const { stdout: bundleInfo } = await execFileAsync("plutil", [
 ]);
 assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars Reforged"/);
 assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars Reforged"/);
+assert.match(
+  bundleInfo,
+  /"CFBundleIdentifier" => "io\.github\.mat4m0\.gwonmac"/,
+);
+assert.equal(
+  existsSync(path.join(appBundle, "Contents/embedded.provisionprofile")),
+  expectsOfficialUpdater,
+  "only an official release carries its Developer ID provisioning profile",
+);
 assert.match(
   bundleInfo,
   new RegExp(
@@ -160,13 +156,13 @@ for (const option of [
   assert.equal(fuses[option], FuseState.DISABLE);
 }
 for (const option of [
-  FuseV1Options.EnableCookieEncryption,
   FuseV1Options.EnableEmbeddedAsarIntegrityValidation,
   FuseV1Options.OnlyLoadAppFromAsar,
   FuseV1Options.WasmTrapHandlers,
 ]) {
   assert.equal(fuses[option], FuseState.ENABLE);
 }
+assert.equal(fuses[FuseV1Options.EnableCookieEncryption], FuseState.DISABLE);
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 // Packaged builds are update-capable and the check defaults on; a smoke launch
 // must not reach GitHub, so the profile opts out before the first boot.
@@ -180,14 +176,19 @@ await writeFile(path.join(userData, "steam-session.bin"), "retired-steam");
 await writeFile(path.join(userData, "preserved.txt"), "preserved");
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
-const child = spawn(executable, [
-  `--user-data-dir=${userData}`,
-  "--gw-volatile-secrets",
-], {
-  cwd: root,
-  env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
-  stdio: ["ignore", "pipe", "pipe"],
-});
+const child = spawn(
+  executable,
+  [`--user-data-dir=${userData}`, "--gw-volatile-secrets"],
+  {
+    cwd: root,
+    env: {
+      ...process.env,
+      GW_OFFLINE_SHELL: "1",
+      ELECTRON_ENABLE_LOGGING: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  },
+);
 child.stdout.on("data", (data) => output.push(data.toString()));
 child.stderr.on("data", (data) => output.push(data.toString()));
 
@@ -204,7 +205,9 @@ interface RecordedLine {
 async function recordedEvents(): Promise<RecordedLine[]> {
   let files;
   try {
-    files = (await readdir(diagnostics)).filter((file) => file.endsWith(".jsonl"));
+    files = (await readdir(diagnostics)).filter((file) =>
+      file.endsWith(".jsonl"),
+    );
   } catch {
     return [];
   }
@@ -238,7 +241,9 @@ try {
       `packaged renderer did not synchronize with main\n${output.join("").slice(-4_000)}`,
     );
   }
-  console.log("packaged app started main, protocol, preload, renderer, and diagnostics IPC");
+  console.log(
+    "packaged app started main, protocol, preload, renderer, and diagnostics IPC",
+  );
   // The release check compares app.getVersion() against a release tag, so the
   // running bundle has to report the whole release version. CFBundleShortVersion
   // String cannot carry a prerelease — it is 2026.7.0 for 2026.7.0-alpha.1 — and
@@ -249,7 +254,10 @@ try {
   assert.equal(started.fields?.appVersion, packageVersion);
   assert.equal(existsSync(path.join(userData, "credentials.bin")), false);
   assert.equal(existsSync(path.join(userData, "steam-session.bin")), false);
-  assert.equal(await readFile(path.join(userData, "preserved.txt"), "utf8"), "preserved");
+  assert.equal(
+    await readFile(path.join(userData, "preserved.txt"), "utf8"),
+    "preserved",
+  );
 } finally {
   await stopChildProcess(child);
   await rm(userData, { recursive: true, force: true });
