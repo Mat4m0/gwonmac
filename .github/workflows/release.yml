@@ -224,7 +224,13 @@ jobs:
             };
             require("node:assert/strict").deepEqual(value, expected);
           ' "$RUNNER_TEMP/app-entitlements.json"
+          helper_count=0
+          plugin_helper_count=0
           while IFS= read -r -d '' helper; do
+            ((helper_count += 1))
+            if [[ "$helper" == *"(Plugin)"* ]]; then
+              ((plugin_helper_count += 1))
+            fi
             entitlements="$RUNNER_TEMP/$(basename "$helper").plist"
             json="$entitlements.json"
             codesign -d --entitlements :- "$helper" > "$entitlements"
@@ -248,6 +254,8 @@ jobs:
             echo "$helper_signature" | grep "Runtime Version"
             echo "$helper_signature" | grep "Timestamp="
           done < <(find "$app/Contents/Frameworks" -name '*Helper*.app' -print0)
+          test "$helper_count" -eq 4
+          test "$plugin_helper_count" -eq 1
           xcrun stapler validate -v "$app"
           spctl --assess --type execute --verbose=4 "$app"
           codesign --verify --verbose=2 "$dmg"

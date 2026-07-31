@@ -180,6 +180,8 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
     /rm -f "\$APPLE_PROVISIONING_PROFILE"[\s\S]*rm -f "\$APPLE_PROFILE_PLIST"/,
   );
   assert.match(workflow, /Timestamp=/);
+  assert.match(workflow, /test "\$helper_count" -eq 4/);
+  assert.match(workflow, /test "\$plugin_helper_count" -eq 1/);
   assert.match(workflow, /spctl --assess --type execute/);
   assert.match(workflow, /spctl --assess --type open/);
 });
