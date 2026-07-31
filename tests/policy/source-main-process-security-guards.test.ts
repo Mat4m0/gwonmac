@@ -36,4 +36,8 @@ test("the proxy still answers only fetches", () => {
     read("src/main/protocol.ts"),
     /if \(!isProxyFetchDestination\(destination\)\)/u,
   );
+  assert.equal(
+    read("src/main/protocol.ts").match(/isProxyCookieHeader\(key\)/gu)?.length,
+    2,
+  );
 });

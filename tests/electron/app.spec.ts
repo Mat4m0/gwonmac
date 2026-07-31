@@ -514,7 +514,7 @@ test.describe("Electron application", () => {
     }
   });
 
-  test("startup removes only retired secret files from an existing profile", async () => {
+  test("unofficial startup preserves retired secret files", async () => {
     const userData = await mkdtemp(path.join(tmpdir(), "gw-secret-cleanup-e2e-"));
     const settings = JSON.stringify({ autoCheckUpdates: false });
     await writeFile(path.join(userData, "settings.json"), settings);
@@ -528,8 +528,10 @@ test.describe("Electron application", () => {
     const app = await launch(userData, launchEnv({ GW_OFFLINE_SHELL: "1" }));
     try {
       await app.firstWindow({ timeout: 30_000 });
-      await expect(async () => stat(path.join(userData, "credentials.bin"))).rejects.toThrow();
-      await expect(async () => stat(path.join(userData, "steam-session.bin"))).rejects.toThrow();
+      expect(await readFile(path.join(userData, "credentials.bin"), "utf8"))
+        .toBe("retired-credentials");
+      expect(await readFile(path.join(userData, "steam-session.bin"), "utf8"))
+        .toBe("retired-steam");
       expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
       expect(await readFile(path.join(userData, "window-state.json"), "utf8"))
         .toBe(windowState);

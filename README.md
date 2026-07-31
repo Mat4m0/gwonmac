@@ -193,7 +193,8 @@ Saved ArenaNet and Steam login are the exception: official releases keep them
 in two fixed, device-only Data Protection Keychain items, reachable only
 through the narrow credential IPC methods.
 
-Browser cookies are cleared at startup and quit. Clearing game data never
+The game proxy drops cookies in both directions, and browser cookies are also
+cleared at startup and quit. Clearing game data never
 touches your login or settings; resetting launcher settings never deletes
 downloaded data.
 

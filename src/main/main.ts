@@ -368,12 +368,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
-  const legacySecretFailures = await cleanupLegacySecretFiles(
-    app.getPath("userData"),
-    rm,
-  );
-  for (const failure of legacySecretFailures) {
-    logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
+  const officialReleaseCapability = officialUpdaterCapable();
+  const persistentSecrets =
+    app.isPackaged
+    && officialReleaseCapability
+    && !app.commandLine.hasSwitch("gw-volatile-secrets");
+  if (persistentSecrets) {
+    const legacySecretFailures = await cleanupLegacySecretFiles(
+      app.getPath("userData"),
+      rm,
+    );
+    for (const failure of legacySecretFailures) {
+      logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
+    }
   }
   const obsoleteCacheError = await discardObsoleteEnhancementCache(
     gamePaths(),
@@ -402,11 +409,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const enhancementSelection = enhancementSelectionFor(settings);
   await prepareWindowState();
   const paths = gamePaths();
-  const officialUpdaterCapability = officialUpdaterCapable();
-  const persistentSecrets =
-    app.isPackaged
-    && officialUpdaterCapability
-    && !app.commandLine.hasSwitch("gw-volatile-secrets");
   const keychain: NativeKeychain = persistentSecrets
     ? loadNativeKeychain({
         packaged: true,
@@ -432,7 +434,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const sockets = buildSocketManager();
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
-    capable: officialUpdaterCapability,
+    capable: officialReleaseCapability,
     nativeUpdater: {
       setFeedURL: (options) => autoUpdater.setFeedURL(options),
       checkForUpdates: () => {

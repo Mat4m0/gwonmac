@@ -9,6 +9,11 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const sourceApp = process.env.GW_SIGNED_APP_PATH;
 const signingKeychain = process.env.APPLE_KEYCHAIN;
+if (process.env.GITHUB_ACTIONS !== "true") {
+  throw new Error(
+    "the production-identity Keychain test is restricted to an ephemeral GitHub Actions runner",
+  );
+}
 if (!sourceApp || !signingKeychain) {
   throw new Error("GW_SIGNED_APP_PATH and APPLE_KEYCHAIN are required");
 }
@@ -153,13 +158,14 @@ async function useCredentials(
   }
 }
 
-let cleanupApp = sourceApp;
+let createdSyntheticItem = false;
 try {
   assert.equal(
     await useCredentials(sourceApp, "load"),
     null,
     "refusing to overwrite an existing production credential",
   );
+  createdSyntheticItem = true;
   assert.deepEqual(
     await useCredentials(sourceApp, "save-and-load"),
     credentials,
@@ -173,7 +179,6 @@ try {
   const movedApp = path.join(appCopies, "moved", "Guild Wars Reforged.app");
   await mkdir(path.dirname(movedApp), { recursive: true });
   await execFileAsync("ditto", [sourceApp, movedApp]);
-  cleanupApp = movedApp;
   assert.deepEqual(
     await useCredentials(movedApp, "load"),
     credentials,
@@ -205,6 +210,9 @@ try {
   );
 
   assert.equal(await useCredentials(movedApp, "clear-and-load"), null);
+  createdSyntheticItem = false;
+  await assert.rejects(readFile(path.join(profile, "credentials.bin")));
+  await assert.rejects(readFile(path.join(profile, "steam-session.bin")));
   assert.equal(
     await readFile(path.join(profile, "settings.json"), "utf8"),
     settings,
@@ -217,7 +225,9 @@ try {
     "signed Data Protection Keychain survived relaunch, move, and upgrade",
   );
 } finally {
-  await useCredentials(cleanupApp, "clear-and-load").catch(() => {});
+  if (createdSyntheticItem) {
+    await useCredentials(sourceApp, "clear-and-load").catch(() => {});
+  }
   await rm(profile, { recursive: true, force: true });
   await rm(appCopies, { recursive: true, force: true });
 }

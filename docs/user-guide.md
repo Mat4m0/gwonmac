@@ -151,7 +151,8 @@ Data Protection Keychain by an official release. The app's signed identity
 authorizes that item without the repeated legacy Keychain access questions.
 It does not sync through iCloud or move to another Mac. A source or ad-hoc
 build keeps the value only in memory and forgets it when the process quits.
-Browser cookies are cleared at startup and quit.
+The game proxy does not accept or return cookies. Browser cookies are also
+cleared at startup and quit.
 
 ## Signing in with Steam
 

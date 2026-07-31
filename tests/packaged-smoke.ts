@@ -252,8 +252,14 @@ try {
   const started = events.find((event) => event.name === "diagnostics.started");
   assert.ok(started, "the packaged app recorded no diagnostics.started event");
   assert.equal(started.fields?.appVersion, packageVersion);
-  assert.equal(existsSync(path.join(userData, "credentials.bin")), false);
-  assert.equal(existsSync(path.join(userData, "steam-session.bin")), false);
+  assert.equal(
+    await readFile(path.join(userData, "credentials.bin"), "utf8"),
+    "retired-credentials",
+  );
+  assert.equal(
+    await readFile(path.join(userData, "steam-session.bin"), "utf8"),
+    "retired-steam",
+  );
   assert.equal(
     await readFile(path.join(userData, "preserved.txt"), "utf8"),
     "preserved",

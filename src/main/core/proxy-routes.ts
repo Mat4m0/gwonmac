@@ -43,6 +43,13 @@ export function isProxyFetchDestination(destination: string): boolean {
   return destination === "" || destination === "empty";
 }
 
+/** The game proxy is deliberately stateless; login state belongs in the two
+ *  native secret slots, never Chromium's cookie store. */
+export function isProxyCookieHeader(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower === "cookie" || lower === "set-cookie";
+}
+
 export function rewriteProxyRedirect(
   route: string,
   location: string,

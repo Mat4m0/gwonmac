@@ -203,8 +203,10 @@ game prompts again.
 Unpackaged development, ordinary local packages, and explicitly marked release
 smokes use `VolatileNativeKeychain`, so no unstable identity can claim the
 official items and no development secret survives process exit. There is no
-file, `safeStorage`, or mock-Keychain fallback. The first hard-cutover startup
-attempts to delete exactly `credentials.bin` and `steam-session.bin`; settings,
+file, `safeStorage`, or mock-Keychain fallback. The first official hard-cutover
+startup attempts to delete exactly `credentials.bin` and `steam-session.bin`;
+volatile and unofficial builds preserve them because they cannot install a
+persistent replacement. Settings,
 window state, diagnostics, cached clients and chunks, and the `gw://app` IDBFS
 origin are outside that operation. The cleanup is one-way because the retired
 ciphertexts cannot be safely migrated without recreating the prompt it removes.
@@ -217,7 +219,8 @@ application identifier, team identifier, and JIT entitlement; it does not add
 Keychain Sharing, App Groups, App Sandbox, or `get-task-allow`. Release signing
 pins the G2 certificate fingerprint rather than its non-unique display name.
 The cookie-encryption fuse is disabled so Chromium never initializes a separate
-Safe Storage Keychain item. Browser cookies are cleared at startup and quit.
+Safe Storage Keychain item. The game proxy drops `Cookie` and `Set-Cookie` in
+both directions, and browser cookies are also cleared at startup and quit.
 Steam is advertised as a federated provider; Apple and Google are not. The
 client probes each one while it builds its login screen, and answering yes for
 Steam is what makes it render a Steam button beside the unchanged ArenaNet

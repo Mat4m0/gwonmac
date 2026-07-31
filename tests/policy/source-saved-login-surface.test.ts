@@ -44,10 +44,14 @@ test("saved login has exactly two Data Protection Keychain items", () => {
 });
 
 test("only the official release capability enables persistent secrets", () => {
-  assert.match(main, /const officialUpdaterCapability = officialUpdaterCapable\(\)/);
+  assert.match(main, /const officialReleaseCapability = officialUpdaterCapable\(\)/);
   assert.match(
     main,
-    /const persistentSecrets =\s*app\.isPackaged\s*&& officialUpdaterCapability\s*&& !app\.commandLine\.hasSwitch\("gw-volatile-secrets"\)/,
+    /const persistentSecrets =\s*app\.isPackaged\s*&& officialReleaseCapability\s*&& !app\.commandLine\.hasSwitch\("gw-volatile-secrets"\)/,
+  );
+  assert.match(
+    main,
+    /if \(persistentSecrets\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
   );
   assert.match(main, /persistentSecrets\s*\? loadNativeKeychain/);
   assert.match(main, /: new VolatileNativeKeychain\(\)/);
