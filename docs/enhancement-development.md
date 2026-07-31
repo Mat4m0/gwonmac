@@ -54,6 +54,7 @@ GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario boot
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario target
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario target-readout
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario movement
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario input-left-click
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario reload
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario map-transition
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario performance
@@ -64,6 +65,17 @@ GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario cursor-capture
 identify, drag, world map) and records only typed transitions at 20 Hz, bounded to
 192 changes. It pairs the observed scalars with the renderer's published cursor
 state, so one run shows both what the game committed and what reached Chromium.
+
+`input-left-click` diagnoses click-to-move without changing saved settings. It
+asks for one open-ground click in six controlled arms: the saved mode, mouse
+only, mouse only with the post-click cursor refresh suppressed before the
+canvas, the default double-tap mode, mouse plus touch, and mouse translated to
+touch. Each arm records a bounded trusted/synthetic event sequence, canvas hit
+testing, focus, cursor-event/refresh counts, and player-coordinate displacement.
+It restores the saved mode in a `finally` block and prints ranked `hypotheses`;
+paste the complete final JSON when reporting an input fault. Use Command-Tab to
+enter and leave the game so window activation is not mistaken for the tested
+click. The scenario records no screenshot.
 
 `target-readout` is the one deliberate production-client confirmation for the
 player-facing target feature. Enable **Target distance and range** in Settings,
@@ -94,7 +106,8 @@ The default is cached-only. Main skips the client updater, and the chunk store
 is physically unable to fetch a missing chunk. `--allow-update` is the explicit
 escape hatch for a deliberate ArenaNet client update. `--leave-open` keeps a
 successful run visible. Failures and timeouts always leave Electron open and
-write a screenshot plus bounded logs under `test-results/enhancements-live/`.
+write bounded logs under `test-results/enhancements-live/`. They also write a
+screenshot except for the chat and input probes, whose evidence needs no pixels.
 
 The harness launches Electron directly with the normal Guild Wars profile,
 verifies the effective user-data directory in main before startup, connects to

@@ -298,11 +298,11 @@ try {
 } catch (error) {
   keepAlive = true;
   await mkdir(failureDir, { recursive: true });
-  // The foundation scenario deliberately observes chat occurrence. Even
-  // though no payload enters its ABI, a failure screenshot could capture the
-  // game's visible chat window, so that scenario never records pixels.
+  // Neither diagnostic needs pixels. The foundation scenario could capture
+  // visible chat, while the input probe already records exact hit-test state.
   if (
     plan.name !== "toolbox-foundation"
+    && plan.name !== "input-left-click"
     && failurePage
     && !failurePage.isClosed()
   ) {

@@ -20,11 +20,20 @@ import type { StdioOptions } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
+import type { AppSettings } from "../../src/shared/contracts.js";
 import type { EnhancementDoctorReport } from "../../src/tools/enhancement-doctor.js";
 import type {
   EnhancementObservationType,
 } from "../../src/tools/enhancement-observations.js";
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
+import {
+  inputClickHypotheses,
+  installInputClickProbe,
+} from "./input-click-probe.js";
+import type {
+  BrowserInputClickProbe,
+  InputClickProbePhase,
+} from "./input-click-probe.js";
 
 export type LiveTier = "automation" | "observation";
 
@@ -361,6 +370,106 @@ async function runMovement({ page }: { page: Page }) {
     throw new Error("bounded two-button movement did not change player coordinates");
   }
   return { gesture: "two-button-forward", before, after, distance };
+}
+
+type InputProbeWindow = typeof globalThis & {
+  __gwInputClickProbe?: BrowserInputClickProbe;
+};
+
+async function readInputClickState(page: Page) {
+  return page.evaluate(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    const toolboxState = typeof toolbox === "object" && toolbox !== null
+      ? toolbox as Record<string, unknown>
+      : {};
+    return {
+      x: Number(window.gwCompanionState?.playerX),
+      y: Number(window.gwCompanionState?.playerY),
+      cursorEvents: Number(toolboxState.cursorEventCount) >>> 0,
+      cursorRefreshes:
+        Number(window.gwCompanionRuntime?.cursorRefreshes) >>> 0,
+    };
+  });
+}
+
+/**
+ * One human click per controlled renderer mode. Nothing is persisted: the
+ * saved settings are projected into the running input host and restored in a
+ * finally block. The result retains only event mechanics and scalar movement.
+ */
+async function runInputClickProbe({ page }: AutomationContext) {
+  const installed = await page.evaluate(installInputClickProbe);
+  if (!installed) throw new Error("input click probe could not find the game canvas");
+  const original = await page.evaluate(() => window.gwNative.settings.get());
+  const cases: ReadonlyArray<Readonly<{
+    label: string;
+    mode: AppSettings["touchMode"];
+    suppressCursorRefresh: boolean;
+  }>> = [
+    {
+      label: "current",
+      mode: original.touchMode,
+      suppressCursorRefresh: false,
+    },
+    { label: "mouse-only", mode: "off", suppressCursorRefresh: false },
+    {
+      label: "mouse-only-no-cursor-refresh",
+      mode: "off",
+      suppressCursorRefresh: true,
+    },
+    { label: "default-double-tap", mode: "dbltap", suppressCursorRefresh: false },
+    { label: "mouse-plus-touch", mode: "augment", suppressCursorRefresh: false },
+    { label: "touch-translation", mode: "translate", suppressCursorRefresh: false },
+  ];
+  const phases: InputClickProbePhase[] = [];
+  try {
+    for (const probeCase of cases) {
+      await page.evaluate(({ settings, mode }) => {
+        window.gwApplySettings?.({ ...settings, touchMode: mode });
+        const canvas = globalThis.document.getElementById("canvas");
+        if (canvas instanceof globalThis.HTMLCanvasElement) canvas.focus();
+      }, { settings: original, mode: probeCase.mode });
+      await page.waitForTimeout(150);
+      const before = await readInputClickState(page);
+      await page.evaluate((value) => {
+        const probe = (globalThis as InputProbeWindow).__gwInputClickProbe;
+        if (!probe) throw new Error("input click probe disappeared");
+        probe.begin(value.label, value.mode, value.suppressCursorRefresh);
+      }, probeCase);
+      await operatorCheckpoint(
+        `[${probeCase.label}; mode=${probeCase.mode}] use Command-Tab to focus `
+        + "the game, single-left-click distant empty ground once without "
+        + "dragging, wait until movement stops, then return here using only "
+        + "Command-Tab",
+      );
+      await page.waitForTimeout(500);
+      const after = await readInputClickState(page);
+      const events = await page.evaluate(() => {
+        const probe = (globalThis as InputProbeWindow).__gwInputClickProbe;
+        if (!probe) throw new Error("input click probe disappeared");
+        return probe.finish();
+      });
+      if (!events) throw new Error("input click probe returned no phase");
+      phases.push({
+        ...probeCase,
+        before,
+        after,
+        distance: Math.hypot(after.x - before.x, after.y - before.y),
+        events,
+      });
+    }
+  } finally {
+    await page.evaluate((settings) => {
+      window.gwApplySettings?.(settings);
+      const probe = (globalThis as InputProbeWindow).__gwInputClickProbe;
+      probe?.dispose();
+    }, original).catch(() => undefined);
+  }
+  return {
+    originalTouchMode: original.touchMode,
+    hypotheses: inputClickHypotheses(phases),
+    phases,
+  };
 }
 
 async function runMapTransition({ page }: { page: Page }) {
@@ -906,6 +1015,22 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
+  "input-left-click": Object.freeze({
+    tier: "automation",
+    run: runInputClickProbe,
+    validate(result: { evidence?: Awaited<ReturnType<typeof runInputClickProbe>> }) {
+      const evidence = result.evidence;
+      if (
+        !evidence
+        || evidence.phases.length !== 6
+        || evidence.phases.some((phase) =>
+          phase.events.label !== phase.label
+          || phase.events.mode !== phase.mode)
+      ) {
+        throw new Error("left-click probe did not produce one bounded phase per case");
+      }
+    },
+  }),
   reload: Object.freeze({ tier: "automation", run: noEvidence, validate: acceptEvidence }),
   // The one observation-tier scenario today: it reads typed addresses and the
   // cursor the renderer published, and asks a human for every state change.
@@ -1050,7 +1175,11 @@ export function liveRunRefusal(
   // profile's own setting is on. Without it the run would wait half an hour for
   // a hook that is never installed, so refuse and say which setting.
   if (
-    (plan.tier === "observation" || plan.name === "toolbox-foundation")
+    (
+      plan.tier === "observation"
+      || plan.name === "toolbox-foundation"
+      || plan.name === "input-left-click"
+    )
     && !preflight.nativeCursor
   ) {
     return "native-cursor-disabled";

@@ -148,6 +148,10 @@ describe("an observation live run cannot reach the automation tier", () => {
     // An automation run forces the Enhancement on regardless of the setting.
     assert.equal(liveRunRefusal(planFor("movement"), ready, options), null);
     assert.equal(
+      liveRunRefusal(planFor("input-left-click"), ready, options),
+      "native-cursor-disabled",
+    );
+    assert.equal(
       liveRunRefusal(planFor("cursor-capture"), { ...ready, nativeCursor: true }, options),
       null,
     );
