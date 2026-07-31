@@ -278,6 +278,11 @@ export function installInputClickProbe(): boolean {
 const moved = (phase: InputClickProbePhase | undefined) =>
   phase !== undefined && phase.distance > 5;
 
+const onePhysicalClick = (phase: InputClickProbePhase | undefined) =>
+  phase !== undefined
+  && phase.events.stats.trustedMouseDown === 1
+  && phase.events.stats.trustedMouseUp === 1;
+
 /** Turn the bounded evidence into hypotheses, not a false single diagnosis. */
 export function inputClickHypotheses(
   phases: readonly InputClickProbePhase[],
@@ -289,10 +294,16 @@ export function inputClickHypotheses(
     (phase) => phase.label === "mouse-only-no-cursor-refresh",
   );
   const translate = phases.find((phase) => phase.mode === "translate");
-  const defaultMode = phases.find((phase) => phase.mode === "dbltap");
+  const defaultMode = phases.find(
+    (phase) => phase.label === "default-double-tap",
+  );
+  const controlled = phases.filter(onePhysicalClick);
 
   if (phases.some((phase) => phase.events.stats.trustedMouseDown === 0)) {
     findings.push("physical-click-missing-or-window-not-active");
+  }
+  if (phases.some((phase) => phase.events.stats.trustedMouseDown > 1)) {
+    findings.push("operator-click-count-mismatch");
   }
   if (
     phases.some((phase) =>
@@ -307,30 +318,43 @@ export function inputClickHypotheses(
   if (
     translate
     && translate.events.stats.syntheticTouchStart > 0
+    && onePhysicalClick(translate)
     && !moved(translate)
-    && (moved(mouseOnly) || moved(defaultMode))
+    && (
+      (onePhysicalClick(mouseOnly) && moved(mouseOnly))
+      || (onePhysicalClick(defaultMode) && moved(defaultMode))
+    )
   ) {
     findings.push("translate-mouse-to-touch-breaks-click-to-move");
   }
   if (
     mouseOnly
     && noRefresh
+    && onePhysicalClick(mouseOnly)
+    && onePhysicalClick(noRefresh)
     && !moved(mouseOnly)
     && moved(noRefresh)
     && mouseOnly.events.stats.syntheticMouseMove > 0
   ) {
     findings.push("cursor-refresh-interferes-with-click-to-move");
   }
-  if (current && !moved(current) && phases.some(moved)) {
+  if (
+    onePhysicalClick(current)
+    && !moved(current)
+    && controlled.some(moved)
+  ) {
     findings.push("persisted-current-input-mode-is-the-regression");
   }
   if (
-    phases.every((phase) => !moved(phase))
-    && phases.some((phase) => phase.events.stats.trustedDownOnCanvas > 0)
+    controlled.length > 0
+    && controlled.every((phase) => !moved(phase))
+    && controlled.some(
+      (phase) => phase.events.stats.trustedDownOnCanvas > 0,
+    )
   ) {
     findings.push("game-state-or-click-location-needs-investigation");
   }
-  if (findings.length === 0 && phases.some(moved)) {
+  if (findings.length === 0 && controlled.some(moved)) {
     findings.push("click-to-move-observed-working");
   }
   return findings;

@@ -112,4 +112,41 @@ describe("left-click live hypotheses", () => {
       ["game-state-or-click-location-needs-investigation"],
     );
   });
+
+  it("does not let a noisy current phase manufacture a touch diagnosis", () => {
+    assert.deepEqual(
+      inputClickHypotheses([
+        phase("current", "dbltap", 581, {
+          trustedMouseDown: 35,
+          trustedMouseUp: 35,
+          trustedClick: 24,
+        }),
+        phase("mouse-only", "off", 0, {
+          trustedMouseDown: 3,
+          trustedMouseUp: 3,
+          trustedClick: 3,
+        }),
+        phase("mouse-only-no-cursor-refresh", "off", 0, {
+          trustedMouseDown: 2,
+          trustedMouseUp: 2,
+          trustedClick: 2,
+        }),
+        phase("default-double-tap", "dbltap", 0),
+        phase("mouse-plus-touch", "augment", 0, {
+          syntheticTouchStart: 1,
+          syntheticTouchEnd: 1,
+        }),
+        phase("touch-translation", "translate", 0, {
+          syntheticTouchStart: 1,
+          syntheticTouchEnd: 1,
+          canvasCaptureMouseDown: 0,
+          canvasBubbleMouseDown: 0,
+        }),
+      ]),
+      [
+        "operator-click-count-mismatch",
+        "game-state-or-click-location-needs-investigation",
+      ],
+    );
+  });
 });
