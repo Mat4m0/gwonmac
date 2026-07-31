@@ -122,9 +122,9 @@ your client build is not one this host has certified — you get the normal macO
 pointer. That is a cosmetic difference only: nothing about how the game plays
 changes with the box either way. The rest of the window always keeps the macOS
 pointer.
-Touch compatibility and the local performance overlay stay under
-**Advanced**, outside the normal setup path. Settings reopens to the pane most
-recently used during the current session.
+The local performance overlay stays under **Advanced**, outside the normal
+setup path. Settings reopens to the pane most recently used during the current
+session.
 
 The official WebAssembly client currently requests a WebGL context without
 multisampling, so its in-game antialiasing list may contain only **None**. The
