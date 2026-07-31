@@ -39,6 +39,7 @@
     "enhancements:recertify": "pnpm build && node build/tools/enhancement-recertify.js",
     "enhancements:visual": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-visual.ts",
     "enhancements:transform": "pnpm build && node build/tools/enhancement-transform.js",
+    "enhancements:kernel:verify": "pnpm build && node scripts/verify-companion-kernel.mjs",
     "template:recertify": "pnpm build && node build/tools/template-save-recertify.js",
     "snapshot:prune": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/snapshot-retention.ts",
     "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website build && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/website-smoke.ts",

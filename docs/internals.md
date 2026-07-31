@@ -426,14 +426,13 @@ verified by input hash, instruction signature, WebAssembly validation, and
 expected output hash, then atomically cached and streamed by the existing
 protocol path. A hash already in the shipped tables takes the fast path. For an
 unknown hash, Electron starts one utility process with only the artifact path
-and expected hash. That process re-reads and re-hashes the file, proves the
-template structures above, and checks Enhancement's exported loop, signature,
-empty table slot, and initialized-data topology. The topology may propose one
-common aligned relocation, but it is not evidence by itself: all eight static
-addresses must also appear in the same complete code-reference contexts as the
-current shipped baseline. The address immediates are the only bytes normalised
-for that comparison; every surrounding instruction and every relative object
-offset stays exact.
+and expected hash. That process re-reads and re-hashes the file and may prove
+the template structures above. Enhancement execution is stricter: build 38,797
+proved that its static addresses do not move by one common delta, so an unknown
+post-template hash is never promoted from data topology alone. Until the
+multi-hook verifier can independently recover every function and address from
+semantic anchors, only an exact shipped Enhancement certificate enables the
+kernel.
 
 The utility process has a five-second deadline and writes no profile state.
 Only main publishes its checksum-protected, owner-only exact-hash answer to
@@ -518,39 +517,48 @@ selection or development automation requests Enhancement, while the
 `enhancement_manifest` on the actual instantiated WebAssembly module proves that
 this launch received a certified transform. Only when both are true does it
 import `enhancements.js`. A requested but uncertified launch therefore imports no
-Enhancement module and fetches no kernel. The kernel receives one bit per tool;
-disabled tools perform no per-tick collection. Development automation may force
-the core observation snapshot for live scenarios, but it neither selects a
-player-facing surface nor couples the two tools in packaged builds.
+Enhancement module and fetches no kernel. The kernel receives one bit per
+shipped tool plus one non-packaged foundation bit; disabled tools perform no
+collection. Development automation enables the bounded chat/hero proof and may
+force the core observation snapshot for live scenarios, but it neither selects
+a player-facing surface nor couples the two tools in packaged builds.
 
 After publication, certification matches the official hash to the exact
 template-save record and then matches that record's output hash to the exact
-Enhancement record. Those records may be shipped or locally proven; downstream
-code has no second path. `client-module.ts` consumes them directly and owns the
+Enhancement record. The template record may be shipped or locally proven; the
+Enhancement record is currently exact-shipped only. Downstream code has no
+second path. `client-module.ts` consumes them directly and owns the
 official → template-save → optional Enhancement chain, cache reuse, stale-cache
 discard, and atomic publication. Disabled and unsupported stages delete their
 cache. An Enhancement transform failure serves the verified template-save
 module; an uncertified build serves the official module, so the game stays
 playable and the cursor falls back to the plain macOS pointer.
 
-`enhancement-transform.ts` is the pure byte transform. The manifest's ordered
-layout fields generate the embedded `layoutWords`; the renderer does not
-maintain a second field-order list.
+`enhancement-transform.ts` is the pure byte transform. The certificate's
+ordered layout and UI-message fields generate the embedded `configWords`; the
+renderer does not maintain a second field-order list.
 
-Build 38,771 hooks the exported `EmscriptenExeThreadMainLoop` at function index
-446. It uses the stock table's null slot 0; the mutable global stores
-`slot + 1`, preserving zero as disabled. No table growth or all-functions
-instrumentation remains.
+Build 38,797 hooks three certified functions: exported
+`EmscriptenExeThreadMainLoop` at 446, the five-argument cursor publisher at
+2469, and the three-argument UI dispatcher at 6842. The stock table's sole null
+slot 0 holds one fixed `(i32 × 6) -> void` Rust dispatcher; the mutable global
+stores `slot + 1`, preserving zero as disabled. Existing cursor table slot 922
+continues to point to function 2469. The transform grows neither table nor
+plugin surface.
 
 After runtime initialization in an enabled, manifested session, the renderer
 dynamically loads the Enhancement runtime, allocates its enabled bounded regions
 through the game's allocator, instantiates the dependency-free
 `wasm32-unknown-unknown` companion against the exported memory, installs its
-callback, and enables the dispatcher last. The callback calls the relocated
-original exactly once, then collects cursor state and map/player/target state
-only for their enabled feature bits.
+callback, and enables the dispatcher last. Each dispatch branch calls its
+matching relocated original exactly once before bounded work. Cursor events
+mark the bitmap dirty; the next tick reads it only when dirty, while a tiny
+show-count check preserves visibility changes. A trusted click that produced
+no cursor callback receives one zero-distance hit-test refresh, fixing mode
+changes such as salvage without moving the physical pointer.
 
-Snapshot ABI v1 uses a named 68-byte `repr(C)` Layout and 64-byte Snapshot,
+Snapshot ABI v1 uses a named 156-byte `repr(C)` configuration and 64-byte core
+Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
 sequence lock. It contains no pointers. When target observation is enabled, the
 snapshot observer reads at most once per animation frame and rejects unknown
@@ -559,7 +567,14 @@ flags, invalid IDs/types/bands, and non-finite values. It publishes structured
 cursor consumer is installed and polled only when `nativeCursor` is selected,
 and reaches production DOM only as an inline `cursor` on the game canvas;
 losing the cursor clears that value and nothing else. No memory view or
-per-frame call crosses preload or IPC.
+per-frame call crosses preload or IPC. Development automation additionally
+allocates one 64-byte Toolbox snapshot. It carries only scalar chat count,
+cursor event count, first-owned-hero identity, and typed command status. The UI
+dispatcher observes player-chat events without retaining either pointer-shaped
+argument. Hero Show/Hide requests enter through one boolean Rust export and
+call the exact-build UI original on the next game tick with the current owned
+HeroID. The three message IDs come from the exact build certificate through
+the kernel config; Rust contains no second unversioned copy.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on

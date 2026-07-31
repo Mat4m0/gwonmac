@@ -1,138 +1,113 @@
-# GWonMac Tools on the Electron/WASM client
+# GWonMac Tools on the Electron/Wasm client
 
-Certification baseline: official Guild Wars WASM build 38,771, SHA-256
-`b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483`.
+GWonMac Tools is independently developed. GWToolbox++ and GWCA are research
+references; their Win32 hooks, Direct3D renderer, DLL loader, scanners, and C++
+object graph are not compiled or vendored here.
 
-## Relationship to GWToolbox++
-
-GWonMac Tools is independently developed and maintained as part of GWonMac. It
-is not GWToolbox++, and the GWToolbox++ developers are not responsible for it.
-GWToolbox++ cannot be injected or recompiled unchanged: it is a 32-bit Windows
-DLL coupled to Win32, Direct3D 9, MinHook, native GWCA, and native plugin DLLs.
-The Electron client instead implements selected feature behavior with a small
-renderer-local companion WASM. Main continues to own only native platform
-capabilities.
-
-The first developer-only foundation is operational:
+The maintained shape is one deterministic game transform and one dependency-free
+Rust `no_std` companion:
 
 ```text
-official exact-hash WASM
-  -> one-function deterministic transform
-  -> freestanding no_std companion WASM
-  -> versioned seqlock snapshot
-  -> structured Map/Player and Target Info state
+exact post-template Guild Wars module
+  -> clone tick, cursor, and UI-dispatch originals
+  -> three disabled-direct / enabled-indirect wrappers
+  -> one fixed (i32 x 6) dispatcher in table slot 0
+  -> one Rust kernel over the game's existing memory
+  -> bounded typed snapshots
+  -> Chromium cursor and developer proof UI
 ```
 
-Unknown hashes serve the official client unchanged and do not activate
-enhancement. Official and transformed client binaries are never committed.
-A session with every tool off runs none of this path and presents no enhancement UI.
-The cursor and target readout are selected independently: the cursor is on by
-default, while the readout is off. Only the selected tool is collected and
-presented; `docs/internals.md` owns the pipeline and `docs/user-guide.md` owns
-what the player is told.
+There is no generic hook registry, plugin loader, shared-memory packet ABI, or
+second C++ engine.
 
-## Certified build 38,771
+## Exact build 38,797
 
-| Invariant | Certified value |
+The certificate consumes post-template SHA-256
+`9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094`.
+
+| Boundary | Exact evidence |
 | --- | --- |
-| Browser-driven game loop | exported function `EmscriptenExeThreadMainLoop`, index 446 |
-| Hook signature | `(i32) -> void` |
-| Hook table slot | existing null slot 0, encoded as global value 1 |
-| Context root | `0x5a0e20` |
-| Agent array | `0x5a4d98` |
-| Manual target agent ID | `0x5a388c` |
-| Automatic target agent ID | `0x5a3888` |
-| Live map proof | map 133 / Outpost |
-| Live target proof | Living agent, stable ID/position/distance/range |
+| Tick | function 446, `(i32) -> void` |
+| Cursor event | function 2469, `(i32 x 5) -> void`, existing table slot 922 |
+| UI dispatcher | function 6842, `(i32, i32, i32) -> void` |
+| Shared callback | sole empty fixed table slot 0 |
+| Player chat | `ChCliApi` function 8947, three `0x10000082` sites calling 6842 |
+| Neighbor messages | functions 8942/8945 emit `0x1000007f`/`0x10000080` to 6842 |
+| Hero panel | Hide `0x100001a3`, Show `0x100001a4`, argument is current owned HeroID |
 
-The archived GWCA `FrApi.cpp` / `!s_bufferBits` anchor resolves to function
-6656, but live certification rejected it as a tick hook: it ran once during
-startup. Its direct caller chain leads into the client startup/download path.
-The semantic exported main-loop function is both narrower and more stable.
+The static addresses and relative structure fields live only in
+`src/main/core/enhancement-builds.ts`. Message IDs are build-local too. The
+transform serializes the ordered memory fields and those three IDs into one
+`configWords` array; Rust contains no unversioned copy.
 
-## Production transform
+## Dispatch and original-call rule
 
-`src/main/core/enhancement-builds.ts` is the one source of build-local truth.
-`enhancement-transform.ts` verifies the exact hash, signature, table limits, and
-empty slot before cloning only the selected function. It adds:
+The transform appends a common `(i32 x 6) -> void` type, clones the three exact
+functions, replaces their bodies, and exports the clones. With the hook global
+at zero, each wrapper calls its clone directly once. With the hook enabled, it
+calls only the Rust dispatcher and pads unused arguments with zero.
 
-- a relocated original function export;
-- one mutable hook-slot global;
-- one manifest custom section consumed by the renderer.
+Rust selects the branch by a fixed kind:
 
-The official file remains untouched. `client-module.ts` owns the complete
-official → template-save → optional enhancement chain. It consumes the exact build
-records selected during certification and atomically caches each derived
-module by its input hash, transform ABI, and build-manifest fingerprint. A
-corrupt or stale cache is rebuilt; an enhancement failure falls back to the verified
-template-save module. The transformer remains a deterministic byte-to-byte
-operation. The manifest's canonical ordered layout fields generate the
-embedded layout words consumed by the renderer, avoiding a second ABI ordering
-table.
+- tick: call the tick clone, then collect enabled state and execute one queued
+  typed command;
+- cursor: call the cursor clone, then mark the cursor dirty;
+- UI: call the UI clone, then observe only certified scalar message IDs.
 
-The earlier all-functions dispatcher and table-growth experiments were removed.
-Build 38,771 already has one unused table slot, so no table rewrite is needed.
+Post-work does not run if an original traps. No mutable Rust borrow is held
+across an imported game call, so synchronous nested dispatch cannot alias
+kernel state.
 
-## Companion and snapshot
+## Three examples
 
-`src/companion-kernel/lib.rs` is dependency-free Rust `no_std`, compiled to
-`wasm32-unknown-unknown`. It imports game memory and the relocated original
-loop function. Runtime installation:
+The native cursor is the production example. The cursor callback is the dirty
+signal, so the 4 KiB bitmap is hashed only after a game cursor event. Ticks do
+only a show-count check when clean. After a trusted click, Chromium asks Guild
+Wars for one zero-distance hit-test refresh only when the click produced no
+cursor callback; this makes modes such as salvage visible without requiring
+physical pointer movement.
 
-1. allocates the config and 64-byte snapshot through the game's `malloc`;
-2. instantiates the companion against the exported game memory;
-3. verifies table slot 0 is still null;
-4. installs the companion callback;
-5. enables the dispatcher last.
+The developer chat example observes the real player-chat event after its game
+original. It saturating-increments one scalar. It never dereferences, stores,
+logs, or publishes the pointer-shaped message arguments, so it counts local
+server echoes as well as other players and does not claim sender identity.
 
-The callback calls the original exactly once before collecting state. Every
-pointer, range, array, map, agent ID, type, and coordinate is validated.
-Loading or invalid state publishes flags with zeroed optional fields.
+The developer hero example validates the live party array, selects the first
+hero owned by the current player, and publishes only HeroID/AgentID/count.
+Chromium can enqueue Show or Hide through one boolean export. The next game tick
+revalidates the roster and calls the relocated UI original with the certified
+message and HeroID. Chromium never calls a game function directly.
 
-Snapshot ABI v1 contains magic/version/size, an odd/even sequence lock, status
-flags, tick count, map/instance, player ID/position, and target
-ID/type/position/distance/range. The renderer accepts only two identical even
-sequence reads. No raw pointer, memory view, packet, or per-frame state crosses
-Electron IPC.
+The developer snapshot is fixed at 64 bytes and contains only the two counters,
+first-hero scalar state, panel state, and command request/result numbers.
 
-## Live acceptance
+## Installation and failure behavior
 
-`GW_LIVE_SMOKE=1 pnpm enhancements:live` launches Electron directly—not through a
-temporary Playwright profile—and the app blocks updater work unless its
-effective user-data directory exactly matches the existing Guild Wars profile.
-It uses milestone/DOM state, captures an image only on failure, and never closes
-the app after a timeout or failed probe.
+The renderer validates the one manifest, game exports, table identity, kernel
+import surface, kernel ABI, and kernel-owned sizes. It allocates through the
+game, instantiates Rust, creates consumers, installs slot 0, publishes the
+runtime, and enables the global last. Teardown reverses safety order: disable,
+stop observers and UI, clear slot 0 only by callback identity, free regions,
+drop references.
 
-The certified run proved:
+Unknown builds run the official client unchanged. Template save may be
+shape-recertified locally, but Enhancement is exact-build only until a future
+verifier independently recovers every hook and address. Build 38,797 disproved
+the former common-relocation assumption.
 
-- exact build activation and continuous hook execution;
-- Map/Player state and movement-sensitive coordinates;
-- Target Info for a Living party target;
-- corrected Euclidean distance and semantic range;
-- no renderer errors or per-frame IPC;
-- clean application shutdown.
-
-## Port boundaries and next order
-
-Do not port the injector, native launcher, Win32 input hooks, Direct3D backend,
-native updater/crash dumps, or DLL plugin ABI. Use the Electron lifecycle,
-renderer overlay, diagnostics, and an eventual explicit renderer/WASM plugin
-contract only after core features justify it.
-
-Next feature work should remain read-only: enrich validated agent snapshots,
-then port one high-value widget at a time. Add events only where polling the
-already-produced snapshot cannot meet a feature, and introduce game commands
-individually with explicit preconditions and failure tests.
-
-## Analysis tools
+## Commands
 
 ```bash
-python3 tools/wasmscan.py Gw.jspi.wasm "!s_context"
-python3 tools/gensyms.py Gw.jspi.wasm build/
-python3 tools/gwca_anchor_probe.py path/to/GWCA/Source Gw.jspi.wasm
-pnpm enhancements:transform -- Gw.jspi.wasm build/Gw.enhancement.wasm
+pnpm enhancements:kernel:verify
+pnpm enhancements:recertify
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario toolbox-foundation
 ```
 
-The repeatable development loop, live safety gates, scoped observations,
-recertification procedure, and feature readiness register are defined in
+The kernel verifier checks its exact imports/exports, single imported game
+memory with no exported memory/table, ABI sizes and arities, and byte-for-byte
+reproducibility. The recertifier
+reports `bundleVerified: true` only when the exact certificate passes the full
+production transform.
+
+The broader workflow and live safety rules are in
 [`enhancement-development.md`](enhancement-development.md).

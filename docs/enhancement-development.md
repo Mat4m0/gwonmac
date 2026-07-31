@@ -254,12 +254,13 @@ answer: it imports `enhancements.js` only when the actual instantiated module al
 carries `enhancement_manifest`, so a requested but uncertified build executes no
 Enhancement renderer code.
 
-The kernel receives independent feature bits. A disabled cursor performs no
-cursor collection; a disabled target readout performs no map/player/target
-collection. Development automation may force the core observation snapshot for
-live scenarios, but it does not select either player-facing surface and cannot
-be reached by packaged builds. Settings are read once per launch because the
-kernel configuration cannot change while the game is running.
+The kernel receives independent shipped-tool bits plus one non-packaged
+foundation bit. A disabled cursor performs no cursor collection; a disabled
+target readout performs no map/player/target collection. Development automation
+enables the bounded chat/hero proof and may force the core observation snapshot
+for live scenarios, but it does not select either player-facing surface and
+cannot be reached by packaged builds. Settings are read once per launch because
+the kernel configuration cannot change while the game is running.
 
 The web client kept ArenaNet's Win32 cursor structure and stubbed only its final
 step: `GlDev` decodes the active cursor into fixed buffers, then calls
@@ -292,7 +293,7 @@ them and `blob:` is unavailable. A trailing keyword is mandatory.
 Inspect an official candidate:
 
 ```bash
-pnpm enhancements:recertify -- path/to/Gw.jspi.wasm
+pnpm enhancements:recertify
 ```
 
 Pass the official module. The tool applies the template-save transform first
@@ -300,8 +301,11 @@ when that build is known, because main does the same, and reports both the
 official hash and the derived hash it actually inspected.
 
 The compact report includes the hash, WASM validity, known-build status,
-semantic main-loop export index and signature, table shape, and first empty
-slots. An unknown hash is only a candidate. Certification still requires:
+semantic main-loop export index and signature, table shape, first empty slots,
+and `bundleVerified`. That last field is true only when the exact tick/cursor/UI
+certificate passes the production transform. An unknown hash is only a
+candidate and never inherits the retired common-address relocation.
+Certification still requires:
 
 - semantic main-loop cadence and lifecycle proof;
 - original called exactly once;
@@ -333,6 +337,7 @@ model. Add a bounded region only when its first feature requires it:
 ```text
 core snapshot       lifecycle, map, player, target
 cursor snapshot     one 32x32 bitmap, hotspot, generation
+toolbox snapshot    chat/cursor counters, first hero, typed command result
 party snapshot      fixed-capacity party entries
 agent snapshot      filtered bounded agents
 skill/effect state  bounded domain collections
@@ -360,19 +365,20 @@ evidence has not certified.
 
 | Domain | Foundation | Live evidence | Next proof |
 | --- | --- | --- | --- |
-| Hook lifecycle | Observed | continuous tick, reload, clean shutdown | one live map transition |
+| Hook lifecycle | Observed | tick plus cursor/UI nested paths offline, reload, clean shutdown | one live three-entry run |
 | Map/player | Observed | live identity, 201-unit movement delta | one live map transition |
 | Target identity/distance | Observed | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
 | Cursor | Observed | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
 | Cursor presentation | Shipped, default-on | offline Electron + `cursor-capture` | play on a fresh certified build |
 | Target readout | Shipped, opt-in | decoder/readout unit suite | one live selected-target run |
-| Party | Not modeled | none | locate bounded roster |
+| Party | Partial | bounded owned HeroID/AgentID offline | live first-owned-hero identity |
 | Skills/recharge | Not modeled | none | locate skill context |
 | Effects/conditions | Not modeled | none | locate bounded effect collection |
 | Nearby agents | Partial array knowledge | player/target only | filtered collection ABI |
 | Inventory/equipment | Not modeled | none | lifecycle and string decoding |
-| Events/combat | No event channel | none | prove snapshot insufficiency first |
-| Game commands | Read-only by design | none | one harmless typed target command |
+| Player chat event | Partial | exact dispatcher, scalar counter | bounded live message/map/reload run |
+| Events/combat | Fixed dispatch, no generic ring | none | prove another event is needed |
+| Game commands | Partial | typed queued hero-panel Show/Hide offline | live panel confirmation |
 | Packet-derived state | No packet hook | none | identify dispatch boundary |
 | Extension modules | Intentionally deferred | none | extract after repeated modules |
 

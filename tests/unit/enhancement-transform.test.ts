@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
-  enhancementLayoutWords,
+  enhancementConfigWords,
   ENHANCEMENT_BUILDS,
   type KnownEnhancementBuild,
 } from "../../src/main/core/enhancement-builds.js";
@@ -10,8 +10,10 @@ import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.j
 import {
   inspectEnhancementCandidate,
   ENHANCEMENT_HOOK_EXPORT,
+  ENHANCEMENT_CURSOR_ORIGINAL_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
   ENHANCEMENT_ORIGINAL_EXPORT,
+  ENHANCEMENT_UI_ORIGINAL_EXPORT,
   ENHANCEMENT_TRANSFORM_ABI,
   transformEnhancementWasm,
 } from "../../src/main/core/enhancement-transform.js";
@@ -38,24 +40,53 @@ function section(id: number, body: number[]): number[] {
 // KnownEnhancementBuild's hookParams is the literal ["i32"] and cannot say
 // otherwise.
 function fixture(occupied = false, hookParamType = 0x7f): Uint8Array {
-  const type = section(1, [1, 0x60, 1, hookParamType, 0]);
-  const imports = section(2, [0]);
-  const functions = section(3, [1, 0]);
-  const table = section(4, [1, 0x70, 1, 1, 1]);
+  const type = section(1, [
+    3,
+    0x60, 1, hookParamType, 0,
+    0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
+    0x60, 3, 0x7f, 0x7f, 0x7f, 0,
+  ]);
+  const env = [3, 101, 110, 118];
+  const imports = section(2, [
+    3,
+    ...env, 1, 116, 0, 0,
+    ...env, 1, 99, 0, 1,
+    ...env, 1, 117, 0, 2,
+  ]);
+  const functions = section(3, [3, 0, 1, 2]);
+  const table = section(4, [1, 0x70, 1, 4, 4]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
   const loopName = [...new TextEncoder().encode("EmscriptenExeThreadMainLoop")];
+  const cursorName = [...new TextEncoder().encode("cursor")];
+  const uiName = [...new TextEncoder().encode("ui")];
   const exports = section(7, [
-    2,
+    4,
     ...tableName, 1, 0,
-    ...uleb(loopName.length), ...loopName, 0, 0,
+    ...uleb(loopName.length), ...loopName, 0, 3,
+    ...uleb(cursorName.length), ...cursorName, 0, 4,
+    ...uleb(uiName.length), ...uiName, 0, 5,
   ]);
-  const elements = section(
-    9,
-    occupied ? [1, 0, 0x41, 0, 0x0b, 1, 0] : [0],
-  );
-  const body = [0, 0x0b];
-  const code = section(10, [1, ...uleb(body.length), ...body]);
+  const occupiedSegment = occupied
+    ? [1, 0, 0x41, 0, 0x0b, 1, 3]
+    : [0];
+  const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
+  const elements = section(9, [
+    occupied ? 2 : 1,
+    ...(occupied ? occupiedSegment.slice(1) : []),
+    ...mappedSegment,
+  ]);
+  const tick = [0, 0x20, 0, 0x10, 0, 0x0b];
+  const cursor = [
+    0, 0x20, 0, 0x20, 1, 0x20, 2, 0x20, 3, 0x20, 4, 0x10, 1, 0x0b,
+  ];
+  const ui = [0, 0x20, 0, 0x20, 1, 0x20, 2, 0x10, 2, 0x0b];
+  const code = section(10, [
+    3,
+    ...uleb(tick.length), ...tick,
+    ...uleb(cursor.length), ...cursor,
+    ...uleb(ui.length), ...ui,
+  ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
     ...type, ...imports, ...functions, ...table, ...globals, ...exports,
@@ -68,10 +99,28 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     sha256: createHash("sha256").update(bytes).digest("hex"),
     programId: 1,
     buildId: 1,
-    hookFunction: 0,
+    hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 0,
+    cursorEvent: {
+      functionIndex: 4,
+      params: ["i32", "i32", "i32", "i32", "i32"],
+      results: [],
+      tableSlot: 1,
+      producerFunctions: [4, 4],
+    },
+    uiDispatcher: {
+      functionIndex: 5,
+      params: ["i32", "i32", "i32"],
+      results: [],
+      playerChatMessage: 0x1000_0082,
+      hideHeroPanelMessage: 0x1000_01a3,
+      showHeroPanelMessage: 0x1000_01a4,
+      playerChatProducer: 5,
+      playerChatSites: 3,
+      nearbyPlayerMessageProducers: [5, 5],
+    },
     layout: {
       contextRoot: 1, agentArray: 2, manualTargetAgentId: 3,
       automaticTargetAgentId: 4, gameContextSlot: 6, characterContext: 4,
@@ -82,8 +131,33 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
       cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
       cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
+      partyContext: 28, playerParty: 32, partyHeroes: 36,
+      heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
     },
   };
+}
+
+function callbackFixture(): Uint8Array {
+  const type = section(1, [
+    1, 0x60, 6, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
+  ]);
+  const imports = section(2, [
+    1, 3, 101, 110, 118, 8, 100, 105, 115, 112, 97, 116, 99, 104, 0, 0,
+  ]);
+  const functions = section(3, [1, 0]);
+  const name = [...new TextEncoder().encode("callback")];
+  const exports = section(7, [1, ...uleb(name.length), ...name, 0, 1]);
+  const body = [
+    0,
+    0x20, 0, 0x20, 1, 0x20, 2, 0x20, 3, 0x20, 4, 0x20, 5,
+    0x10, 0,
+    0x0b,
+  ];
+  const code = section(10, [1, ...uleb(body.length), ...body]);
+  return Uint8Array.from([
+    0, 97, 115, 109, 1, 0, 0, 0,
+    ...type, ...imports, ...functions, ...exports, ...code,
+  ]);
 }
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -102,6 +176,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(ENHANCEMENT_HOOK_EXPORT));
     assert.ok(names.includes(ENHANCEMENT_ORIGINAL_EXPORT));
+    assert.ok(names.includes(ENHANCEMENT_CURSOR_ORIGINAL_EXPORT));
+    assert.ok(names.includes(ENHANCEMENT_UI_ORIGINAL_EXPORT));
     const sections = WebAssembly.Module.customSections(
       module,
       ENHANCEMENT_MANIFEST_SECTION,
@@ -111,15 +187,24 @@ describe("targeted Enhancement WebAssembly transform", () => {
       JSON.parse(new TextDecoder().decode(sections[0])),
       {
         transformAbi: ENHANCEMENT_TRANSFORM_ABI,
-        snapshotAbi: 1,
-        snapshotBytes: 64,
-        cursorSnapshotAbi: 1,
-        cursorSnapshotBytes: 4160,
-        configBytes: 116,
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,
-        layoutWords: enhancementLayoutWords(build.layout),
+        hooks: {
+          tick: { functionIndex: 3, params: ["i32"] },
+          cursor: {
+            functionIndex: 4,
+            params: ["i32", "i32", "i32", "i32", "i32"],
+            existingTableSlot: 1,
+          },
+          ui: { functionIndex: 5, params: ["i32", "i32", "i32"] },
+        },
+        messages: {
+          playerChat: 0x1000_0082,
+          hideHeroPanel: 0x1000_01a3,
+          showHeroPanel: 0x1000_01a4,
+        },
+        configWords: enhancementConfigWords(build),
       },
     );
   });
@@ -128,15 +213,97 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const report = inspectEnhancementCandidate(fixture());
     assert.equal(report.validWasm, true);
     assert.deepEqual(report.mainLoop, {
-      functionIndex: 0,
+      functionIndex: 3,
       params: ["i32"],
       results: [],
     });
     assert.deepEqual(report.table, {
-      min: 1,
-      max: 1,
+      min: 4,
+      max: 4,
       firstEmptySlots: [0],
     });
+  });
+
+  it("preserves every argument and calls each relocated original once", () => {
+    const transformed = transformEnhancementWasm(fixture(), manifest(fixture()));
+    const originals: number[][] = [];
+    const dispatches: number[][] = [];
+    const game = { exports: {} as Record<string, unknown> };
+    const callbackInstance = new WebAssembly.Instance(
+      new WebAssembly.Module(
+        new Uint8Array(callbackFixture()).buffer as ArrayBuffer,
+      ),
+      {
+        env: {
+          dispatch: (...args: number[]) => {
+            dispatches.push(args);
+            if (args[0] === 0) {
+              (game.exports[ENHANCEMENT_ORIGINAL_EXPORT] as (a: number) => void)(
+                args[1]!,
+              );
+            } else if (args[0] === 1) {
+              (game.exports[ENHANCEMENT_CURSOR_ORIGINAL_EXPORT] as (
+                ...a: number[]
+              ) => void)(
+                ...args.slice(1),
+              );
+            } else {
+              (game.exports[ENHANCEMENT_UI_ORIGINAL_EXPORT] as (
+                ...a: number[]
+              ) => void)(
+                ...args.slice(1, 4),
+              );
+            }
+          },
+        },
+      },
+    );
+    const gameInstance = new WebAssembly.Instance(
+      new WebAssembly.Module(
+        new Uint8Array(transformed).buffer as ArrayBuffer,
+      ),
+      {
+        env: {
+          t: (a: number) => originals.push([0, a]),
+          c: (...args: number[]) => originals.push([1, ...args]),
+          u: (...args: number[]) => originals.push([2, ...args]),
+        },
+      },
+    );
+    game.exports = gameInstance.exports as Record<string, unknown>;
+    const tick = game.exports.EmscriptenExeThreadMainLoop as (a: number) => void;
+    const cursor = game.exports.cursor as (...args: number[]) => void;
+    const ui = game.exports.ui as (...args: number[]) => void;
+
+    tick(11);
+    cursor(21, 22, 23, 24, 25);
+    ui(31, 32, 33);
+    assert.deepEqual(originals, [
+      [0, 11],
+      [1, 21, 22, 23, 24, 25],
+      [2, 31, 32, 33],
+    ]);
+    assert.deepEqual(dispatches, []);
+
+    (game.exports.tbl as WebAssembly.Table).set(
+      0,
+      callbackInstance.exports.callback as CallableFunction,
+    );
+    (game.exports[ENHANCEMENT_HOOK_EXPORT] as WebAssembly.Global).value = 1;
+    originals.length = 0;
+    tick(41);
+    cursor(51, 52, 53, 54, 55);
+    ui(61, 62, 63);
+    assert.deepEqual(dispatches, [
+      [0, 41, 0, 0, 0, 0],
+      [1, 51, 52, 53, 54, 55],
+      [2, 61, 62, 63, 0, 0],
+    ]);
+    assert.deepEqual(originals, [
+      [0, 41],
+      [1, 51, 52, 53, 54, 55],
+      [2, 61, 62, 63],
+    ]);
   });
 
   it("rejects an occupied slot, hash mismatch, and signature mismatch", () => {

@@ -277,3 +277,73 @@ export function readCompanionCursorPixels(buffer: ArrayBuffer, pointer: number) 
   }
   return Object.freeze({ ...header, pixels });
 }
+
+export const COMPANION_TOOLBOX_ABI = 1;
+export const COMPANION_TOOLBOX_BYTES = 64;
+
+const TOOLBOX_MAGIC = 0x58545747;
+const TOOLBOX_HERO_AVAILABLE = 1 << 0;
+
+export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
+  if (
+    !(buffer instanceof ArrayBuffer)
+    || !Number.isInteger(pointer)
+    || pointer < 0
+    || pointer + COMPANION_TOOLBOX_BYTES > buffer.byteLength
+  ) {
+    return Object.freeze({ status: "waiting", reason: "memory" });
+  }
+  const view = new DataView(buffer, pointer, COMPANION_TOOLBOX_BYTES);
+  const firstSequence = view.getUint32(8, true);
+  if ((firstSequence & 1) !== 0) {
+    return Object.freeze({ status: "waiting", reason: "writing" });
+  }
+  const magic = view.getUint32(0, true);
+  const abi = view.getUint16(4, true);
+  const byteLength = view.getUint16(6, true);
+  const flags = view.getUint32(12, true);
+  const state = {
+    playerChatCount: view.getUint32(16, true),
+    cursorEventCount: view.getUint32(20, true),
+    heroCount: view.getUint32(24, true),
+    firstHeroId: view.getUint32(28, true),
+    firstHeroAgentId: view.getUint32(32, true),
+    panelState: view.getUint32(36, true),
+    commandRequest: view.getUint32(40, true),
+    commandComplete: view.getUint32(44, true),
+    commandStatus: view.getUint32(48, true),
+  };
+  let reserved = 0;
+  for (let offset = 52; offset < COMPANION_TOOLBOX_BYTES; offset += 4) {
+    reserved |= view.getUint32(offset, true);
+  }
+  const secondSequence = view.getUint32(8, true);
+  const heroAvailable = (flags & TOOLBOX_HERO_AVAILABLE) !== 0;
+  if (
+    magic !== TOOLBOX_MAGIC
+    || abi !== COMPANION_TOOLBOX_ABI
+    || byteLength !== COMPANION_TOOLBOX_BYTES
+    || firstSequence !== secondSequence
+    || (secondSequence & 1) !== 0
+    || (flags & ~TOOLBOX_HERO_AVAILABLE) !== 0
+    || reserved !== 0
+    || state.panelState > 2
+    || state.commandStatus > 2
+    || (heroAvailable
+      ? state.heroCount < 1
+        || state.heroCount > 7
+        || state.firstHeroId < 1
+        || state.firstHeroId > 39
+      : state.heroCount !== 0
+        || state.firstHeroId !== 0
+        || state.firstHeroAgentId !== 0)
+  ) {
+    return Object.freeze({ status: "waiting", reason: "toolbox" });
+  }
+  return Object.freeze({
+    status: "ready",
+    sequence: secondSequence,
+    heroAvailable,
+    ...state,
+  });
+}

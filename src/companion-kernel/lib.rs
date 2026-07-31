@@ -16,7 +16,24 @@ const FLAG_LOADING: u32 = 1 << 3;
 
 const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
 const FEATURE_TARGET_READOUT: u32 = 1 << 1;
-const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT;
+const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
+const KNOWN_FEATURES: u32 =
+    FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION;
+
+const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
+const TOOLBOX_MAGIC: u32 = 0x5854_5747;
+const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 1;
+const FLAG_HERO_AVAILABLE: u32 = 1 << 0;
+
+const DISPATCH_TICK: u32 = 0;
+const DISPATCH_CURSOR: u32 = 1;
+const DISPATCH_UI: u32 = 2;
+const PANEL_UNKNOWN: u32 = 0;
+const PANEL_HIDDEN: u32 = 1;
+const PANEL_SHOWN: u32 = 2;
+const COMMAND_IDLE: u32 = 0;
+const COMMAND_APPLIED: u32 = 1;
+const COMMAND_UNAVAILABLE: u32 = 2;
 
 const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
 const CURSOR_MAGIC: u32 = 0x4354_5747;
@@ -65,6 +82,16 @@ struct Layout {
     cursor_texture_type: u32,
     cursor_texture_width: u32,
     cursor_texture_height: u32,
+    party_context: u32,
+    player_party: u32,
+    party_heroes: u32,
+    hero_member_stride: u32,
+    hero_agent_id: u32,
+    hero_owner_player_id: u32,
+    hero_id: u32,
+    player_chat_message: u32,
+    hide_hero_panel_message: u32,
+    show_hero_panel_message: u32,
 }
 
 impl Layout {
@@ -98,6 +125,16 @@ impl Layout {
         cursor_texture_type: 0,
         cursor_texture_width: 0,
         cursor_texture_height: 0,
+        party_context: 0,
+        player_party: 0,
+        party_heroes: 0,
+        hero_member_stride: 0,
+        hero_agent_id: 0,
+        hero_owner_player_id: 0,
+        hero_id: 0,
+        player_chat_message: 0,
+        hide_hero_panel_message: 0,
+        show_hero_panel_message: 0,
     };
 }
 
@@ -140,9 +177,28 @@ struct CursorSnapshot {
     pixels: [u32; 1024],
 }
 
-const _: [(); 116] = [(); size_of::<Layout>()];
+#[repr(C)]
+struct ToolboxSnapshot {
+    magic: u32,
+    abi_and_size: u32,
+    sequence: u32,
+    flags: u32,
+    player_chat_count: u32,
+    cursor_event_count: u32,
+    hero_count: u32,
+    first_hero_id: u32,
+    first_hero_agent_id: u32,
+    panel_state: u32,
+    command_request: u32,
+    command_complete: u32,
+    command_status: u32,
+    reserved: [u32; 3],
+}
+
+const _: [(); 156] = [(); size_of::<Layout>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
+const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 
 static mut SNAPSHOT_PTR: u32 = 0;
 static mut LAYOUT: Layout = Layout::EMPTY;
@@ -154,11 +210,28 @@ static mut CURSOR_PTR: u32 = 0;
 static mut CURSOR_SEQUENCE: u32 = 0;
 static mut CURSOR_GENERATION: u32 = 0;
 static mut CURSOR_PUBLISHED: CursorPublished = CursorPublished::EMPTY;
+static mut CURSOR_DIRTY: bool = true;
+static mut CURSOR_EVENT_COUNT: u32 = 0;
+static mut TOOLBOX_PTR: u32 = 0;
+static mut TOOLBOX_SEQUENCE: u32 = 0;
+static mut PLAYER_CHAT_COUNT: u32 = 0;
+static mut HERO_COUNT: u32 = 0;
+static mut FIRST_HERO_ID: u32 = 0;
+static mut FIRST_HERO_AGENT_ID: u32 = 0;
+static mut PANEL_STATE: u32 = PANEL_UNKNOWN;
+static mut PANEL_PENDING: u32 = PANEL_UNKNOWN;
+static mut COMMAND_REQUEST: u32 = 0;
+static mut COMMAND_COMPLETE: u32 = 0;
+static mut COMMAND_STATUS: u32 = COMMAND_IDLE;
 
 #[link(wasm_import_module = "game")]
 extern "C" {
     #[link_name = "enhancement_tick_original"]
     fn tick_original(context: u32);
+    #[link_name = "enhancement_cursor_original"]
+    fn cursor_original(a: u32, b: u32, c: u32, d: u32, e: u32);
+    #[link_name = "enhancement_ui_original"]
+    fn ui_original(message: u32, wparam: u32, lparam: u32);
 }
 
 #[panic_handler]
@@ -267,8 +340,10 @@ struct AgentState {
 #[derive(Clone, Copy)]
 struct State {
     flags: u32,
+    game: u32,
     map_id: u32,
     instance_type: u32,
+    player_number: u32,
     player: AgentState,
     target: AgentState,
     distance: f32,
@@ -285,8 +360,10 @@ impl State {
         };
         Self {
             flags: 0,
+            game: 0,
             map_id: 0,
             instance_type: 0,
+            player_number: 0,
             player: EMPTY_AGENT,
             target: EMPTY_AGENT,
             distance: 0.0,
@@ -432,8 +509,10 @@ unsafe fn collect(layout: Layout) -> State {
             return state;
         };
         state.flags = FLAG_READY | FLAG_PLAYER_VALID;
+        state.game = game;
         state.map_id = map_id;
         state.instance_type = instance_type;
+        state.player_number = player_number;
         state.player = player;
         break;
     }
@@ -464,6 +543,168 @@ unsafe fn collect(layout: Layout) -> State {
         }
     }
     state
+}
+
+unsafe fn collect_first_owned_hero(layout: Layout, state: State) -> (u32, u32, u32) {
+    if state.flags & (FLAG_READY | FLAG_PLAYER_VALID)
+        != (FLAG_READY | FLAG_PLAYER_VALID)
+        || state.game == 0
+        || state.player_number == 0
+        || layout.hero_member_stride < 12
+        || layout.hero_member_stride > 64
+        || layout.hero_agent_id + 4 > layout.hero_member_stride
+        || layout.hero_owner_player_id + 4 > layout.hero_member_stride
+        || layout.hero_id + 4 > layout.hero_member_stride
+    {
+        return (0, 0, 0);
+    }
+    let party_required = match checked_add(layout.player_party, 4) {
+        Some(value) => value,
+        None => return (0, 0, 0),
+    };
+    let info_required = match checked_add(layout.party_heroes, 12) {
+        Some(value) => value,
+        None => return (0, 0, 0),
+    };
+    let party = match offset(state.game, layout.party_context)
+        .and_then(|at| unsafe { pointer(at, party_required) })
+    {
+        Some(value) => value,
+        None => return (0, 0, 0),
+    };
+    let info = match offset(party, layout.player_party)
+        .and_then(|at| unsafe { pointer(at, info_required) })
+    {
+        Some(value) => value,
+        None => return (0, 0, 0),
+    };
+    let array = match offset(info, layout.party_heroes) {
+        Some(value) if contains(value, 12) => value,
+        _ => return (0, 0, 0),
+    };
+    let Some(buffer) = (unsafe { read_u32(array) }) else {
+        return (0, 0, 0);
+    };
+    let Some(capacity) = offset(array, 4).and_then(|at| unsafe { read_u32(at) }) else {
+        return (0, 0, 0);
+    };
+    let Some(size) = offset(array, 8).and_then(|at| unsafe { read_u32(at) }) else {
+        return (0, 0, 0);
+    };
+    if size > capacity || capacity > 64 {
+        return (0, 0, 0);
+    }
+    if size > 0 {
+        let Some(bytes) = checked_mul(size, layout.hero_member_stride) else {
+            return (0, 0, 0);
+        };
+        if buffer == 0 || buffer & 3 != 0 || !contains(buffer, bytes) {
+            return (0, 0, 0);
+        }
+    }
+
+    let mut count = 0;
+    let mut first_id = 0;
+    let mut first_agent = 0;
+    let mut owned_ids = [0_u32; 7];
+    for index in 0..size {
+        let Some(member) = indexed(buffer, index, layout.hero_member_stride) else {
+            return (0, 0, 0);
+        };
+        let Some(owner) = offset(member, layout.hero_owner_player_id)
+            .and_then(|at| unsafe { read_u32(at) })
+        else {
+            return (0, 0, 0);
+        };
+        let Some(hero_id) = offset(member, layout.hero_id)
+            .and_then(|at| unsafe { read_u32(at) })
+        else {
+            return (0, 0, 0);
+        };
+        let Some(agent_id) = offset(member, layout.hero_agent_id)
+            .and_then(|at| unsafe { read_u32(at) })
+        else {
+            return (0, 0, 0);
+        };
+        if !(1..=39).contains(&hero_id) {
+            return (0, 0, 0);
+        }
+        if owner != state.player_number {
+            continue;
+        }
+        if count >= 7 || owned_ids[..count as usize].contains(&hero_id) {
+            return (0, 0, 0);
+        }
+        owned_ids[count as usize] = hero_id;
+        if count == 0 {
+            first_id = hero_id;
+            first_agent = agent_id;
+        }
+        count += 1;
+    }
+    (count, first_id, first_agent)
+}
+
+unsafe fn publish_toolbox() {
+    let next = unsafe { TOOLBOX_SEQUENCE }.wrapping_add(2) & !1;
+    let snapshot = unsafe { TOOLBOX_PTR as *mut ToolboxSnapshot };
+    let flags = if unsafe { FIRST_HERO_ID } != 0 {
+        FLAG_HERO_AVAILABLE
+    } else {
+        0
+    };
+    unsafe {
+        write_volatile(&mut (*snapshot).sequence, next.wrapping_sub(1));
+        write_volatile(&mut (*snapshot).magic, TOOLBOX_MAGIC);
+        write_volatile(&mut (*snapshot).abi_and_size, TOOLBOX_ABI_AND_SIZE);
+        write_volatile(&mut (*snapshot).flags, flags);
+        write_volatile(&mut (*snapshot).player_chat_count, PLAYER_CHAT_COUNT);
+        write_volatile(&mut (*snapshot).cursor_event_count, CURSOR_EVENT_COUNT);
+        write_volatile(&mut (*snapshot).hero_count, HERO_COUNT);
+        write_volatile(&mut (*snapshot).first_hero_id, FIRST_HERO_ID);
+        write_volatile(&mut (*snapshot).first_hero_agent_id, FIRST_HERO_AGENT_ID);
+        write_volatile(&mut (*snapshot).panel_state, PANEL_STATE);
+        write_volatile(&mut (*snapshot).command_request, COMMAND_REQUEST);
+        write_volatile(&mut (*snapshot).command_complete, COMMAND_COMPLETE);
+        write_volatile(&mut (*snapshot).command_status, COMMAND_STATUS);
+        write_volatile(&mut (*snapshot).sequence, next);
+        TOOLBOX_SEQUENCE = next;
+    }
+}
+
+unsafe fn tick_foundation(layout: Layout, state: State) {
+    let (count, hero_id, agent_id) = unsafe { collect_first_owned_hero(layout, state) };
+    unsafe {
+        if FIRST_HERO_ID != hero_id {
+            PANEL_STATE = PANEL_UNKNOWN;
+        }
+        HERO_COUNT = count;
+        FIRST_HERO_ID = hero_id;
+        FIRST_HERO_AGENT_ID = agent_id;
+    }
+    let desired = unsafe { PANEL_PENDING };
+    if desired != PANEL_UNKNOWN {
+        unsafe { PANEL_PENDING = PANEL_UNKNOWN };
+        if hero_id == 0 {
+            unsafe {
+                COMMAND_COMPLETE = COMMAND_REQUEST;
+                COMMAND_STATUS = COMMAND_UNAVAILABLE;
+            }
+        } else {
+            let message = if desired == PANEL_SHOWN {
+                layout.show_hero_panel_message
+            } else {
+                layout.hide_hero_panel_message
+            };
+            unsafe { ui_original(message, hero_id, 0) };
+            unsafe {
+                PANEL_STATE = desired;
+                COMMAND_COMPLETE = COMMAND_REQUEST;
+                COMMAND_STATUS = COMMAND_APPLIED;
+            }
+        }
+    }
+    unsafe { publish_toolbox() };
 }
 
 unsafe fn publish(state: State) {
@@ -623,6 +864,21 @@ unsafe fn publish_cursor(published: CursorPublished, source: Option<u32>) {
 }
 
 unsafe fn tick_cursor(layout: Layout) {
+    if !unsafe { CURSOR_DIRTY } {
+        let last = unsafe { CURSOR_PUBLISHED };
+        if last.flags & FLAG_CURSOR_VALID == 0 {
+            return;
+        }
+        if let Some(count) = unsafe { read_i32(layout.cursor_show_count) } {
+            let flags = FLAG_CURSOR_VALID
+                | if count < 0 { FLAG_CURSOR_HIDDEN } else { 0 };
+            if flags != last.flags {
+                unsafe { publish_cursor(CursorPublished { flags, ..last }, None) };
+            }
+        }
+        return;
+    }
+    unsafe { CURSOR_DIRTY = false };
     let last = unsafe { CURSOR_PUBLISHED };
     match unsafe { collect_cursor(layout) } {
         Ok(state) => {
@@ -679,6 +935,8 @@ pub unsafe extern "C" fn companion_init(
     config_size: u32,
     cursor_ptr: u32,
     cursor_size: u32,
+    toolbox_ptr: u32,
+    toolbox_size: u32,
     features: u32,
 ) -> u32 {
     if features == 0
@@ -698,13 +956,28 @@ pub unsafe extern "C" fn companion_init(
             cursor_size,
             CURSOR_BYTES,
         )
+        || !valid_region(
+            features & FEATURE_TOOLBOX_FOUNDATION != 0,
+            toolbox_ptr,
+            toolbox_size,
+            TOOLBOX_BYTES,
+        )
+    {
+        return 0;
+    }
+    let layout = unsafe { read_volatile(config_ptr as *const Layout) };
+    if layout.player_chat_message == 0
+        || layout.hide_hero_panel_message == 0
+        || layout.show_hero_panel_message == 0
+        || layout.hide_hero_panel_message == layout.show_hero_panel_message
     {
         return 0;
     }
     unsafe {
         SNAPSHOT_PTR = snapshot_ptr;
         CURSOR_PTR = cursor_ptr;
-        LAYOUT = read_volatile(config_ptr as *const Layout);
+        TOOLBOX_PTR = toolbox_ptr;
+        LAYOUT = layout;
         FEATURES = features;
         INITIALIZED = true;
         TICK_COUNT = 0;
@@ -712,6 +985,18 @@ pub unsafe extern "C" fn companion_init(
         CURSOR_SEQUENCE = 0;
         CURSOR_GENERATION = 0;
         CURSOR_PUBLISHED = CursorPublished::EMPTY;
+        CURSOR_DIRTY = true;
+        CURSOR_EVENT_COUNT = 0;
+        TOOLBOX_SEQUENCE = 0;
+        PLAYER_CHAT_COUNT = 0;
+        HERO_COUNT = 0;
+        FIRST_HERO_ID = 0;
+        FIRST_HERO_AGENT_ID = 0;
+        PANEL_STATE = PANEL_UNKNOWN;
+        PANEL_PENDING = PANEL_UNKNOWN;
+        COMMAND_REQUEST = 0;
+        COMMAND_COMPLETE = 0;
+        COMMAND_STATUS = COMMAND_IDLE;
         if features & FEATURE_TARGET_READOUT != 0 {
             publish(State::empty());
         }
@@ -719,23 +1004,139 @@ pub unsafe extern "C" fn companion_init(
             clear_cursor();
             publish_cursor(CursorPublished::EMPTY, None);
         }
+        if features & FEATURE_TOOLBOX_FOUNDATION != 0 {
+            let words = TOOLBOX_BYTES / 4;
+            for index in 0..words {
+                write_volatile((toolbox_ptr + index * 4) as *mut u32, 0);
+            }
+            publish_toolbox();
+        }
     }
     1
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn companion_tick(context: u32) {
+pub unsafe extern "C" fn companion_dispatch(
+    kind: u32,
+    a: u32,
+    b: u32,
+    c: u32,
+    d: u32,
+    e: u32,
+) {
+    match kind {
+        DISPATCH_TICK => {
+            unsafe { tick_original(a) };
+            if !unsafe { INITIALIZED } {
+                return;
+            }
+            let features = unsafe { FEATURES };
+            let layout = unsafe { LAYOUT };
+            let state = if features & (FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION) != 0 {
+                unsafe { collect(layout) }
+            } else {
+                State::empty()
+            };
+            if features & FEATURE_TARGET_READOUT != 0 {
+                unsafe {
+                    TICK_COUNT = TICK_COUNT.wrapping_add(1);
+                    publish(state);
+                }
+            }
+            if features & FEATURE_TOOLBOX_FOUNDATION != 0 {
+                unsafe { tick_foundation(layout, state) };
+            }
+            if features & FEATURE_NATIVE_CURSOR != 0 {
+                unsafe { tick_cursor(layout) };
+            }
+        }
+        DISPATCH_CURSOR => {
+            unsafe { cursor_original(a, b, c, d, e) };
+            if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_NATIVE_CURSOR != 0 {
+                unsafe {
+                    CURSOR_EVENT_COUNT = CURSOR_EVENT_COUNT.saturating_add(1);
+                    CURSOR_DIRTY = true;
+                    if FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
+                        publish_toolbox();
+                    }
+                }
+            }
+        }
+        DISPATCH_UI => {
+            unsafe { ui_original(a, b, c) };
+            if !unsafe { INITIALIZED }
+                || unsafe { FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0
+            {
+                return;
+            }
+            unsafe {
+                let layout = LAYOUT;
+                if a == layout.player_chat_message {
+                    PLAYER_CHAT_COUNT = PLAYER_CHAT_COUNT.saturating_add(1);
+                } else if b == FIRST_HERO_ID && a == layout.hide_hero_panel_message {
+                    PANEL_STATE = PANEL_HIDDEN;
+                } else if b == FIRST_HERO_ID && a == layout.show_hero_panel_message {
+                    PANEL_STATE = PANEL_SHOWN;
+                }
+                publish_toolbox();
+            }
+        }
+        _ => {}
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn companion_set_first_hero_panel(shown: u32) -> u32 {
+    if !unsafe { INITIALIZED }
+        || unsafe { FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0
+        || shown > 1
+        || unsafe { PANEL_PENDING } != PANEL_UNKNOWN
+    {
+        return 0;
+    }
+    let mut request = unsafe { COMMAND_REQUEST }.wrapping_add(1);
+    if request == 0 {
+        request = 1;
+    }
     unsafe {
-        tick_original(context);
-        if !INITIALIZED {
-            return;
-        }
-        if FEATURES & FEATURE_TARGET_READOUT != 0 {
-            TICK_COUNT = TICK_COUNT.wrapping_add(1);
-            publish(collect(LAYOUT));
-        }
-        if FEATURES & FEATURE_NATIVE_CURSOR != 0 {
-            tick_cursor(LAYOUT);
-        }
+        COMMAND_REQUEST = request;
+        COMMAND_STATUS = COMMAND_IDLE;
+        PANEL_PENDING = if shown == 1 { PANEL_SHOWN } else { PANEL_HIDDEN };
+        publish_toolbox();
+    }
+    request
+}
+
+#[no_mangle]
+pub extern "C" fn companion_abi() -> u32 {
+    2
+}
+
+#[no_mangle]
+pub extern "C" fn companion_config_bytes() -> u32 {
+    CONFIG_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_snapshot_bytes() -> u32 {
+    SNAPSHOT_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_cursor_bytes() -> u32 {
+    CURSOR_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_toolbox_bytes() -> u32 {
+    TOOLBOX_BYTES
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn companion_cursor_event_count() -> u32 {
+    if unsafe { INITIALIZED } {
+        unsafe { CURSOR_EVENT_COUNT }
+    } else {
+        0
     }
 }

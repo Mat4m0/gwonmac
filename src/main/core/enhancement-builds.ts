@@ -28,6 +28,13 @@ export interface EnhancementLayout {
   cursorTextureType: number;
   cursorTextureWidth: number;
   cursorTextureHeight: number;
+  partyContext: number;
+  playerParty: number;
+  partyHeroes: number;
+  heroMemberStride: number;
+  heroAgentId: number;
+  heroOwnerPlayerId: number;
+  heroId: number;
 }
 
 export const ENHANCEMENT_LAYOUT_FIELDS = [
@@ -60,10 +67,26 @@ export const ENHANCEMENT_LAYOUT_FIELDS = [
   "cursorTextureType",
   "cursorTextureWidth",
   "cursorTextureHeight",
+  "partyContext",
+  "playerParty",
+  "partyHeroes",
+  "heroMemberStride",
+  "heroAgentId",
+  "heroOwnerPlayerId",
+  "heroId",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
   return ENHANCEMENT_LAYOUT_FIELDS.map((field) => layout[field]);
+}
+
+export function enhancementConfigWords(build: KnownEnhancementBuild): number[] {
+  return [
+    ...enhancementLayoutWords(build.layout),
+    build.uiDispatcher.playerChatMessage,
+    build.uiDispatcher.hideHeroPanelMessage,
+    build.uiDispatcher.showHeroPanelMessage,
+  ];
 }
 
 export interface KnownEnhancementBuild {
@@ -74,6 +97,24 @@ export interface KnownEnhancementBuild {
   hookParams: readonly ["i32"];
   hookResults: readonly [];
   tableSlot: number;
+  cursorEvent: Readonly<{
+    functionIndex: number;
+    params: readonly ["i32", "i32", "i32", "i32", "i32"];
+    results: readonly [];
+    tableSlot: number;
+    producerFunctions: readonly [number, number];
+  }>;
+  uiDispatcher: Readonly<{
+    functionIndex: number;
+    params: readonly ["i32", "i32", "i32"];
+    results: readonly [];
+    playerChatMessage: number;
+    hideHeroPanelMessage: number;
+    showHeroPanelMessage: number;
+    playerChatProducer: number;
+    playerChatSites: 3;
+    nearbyPlayerMessageProducers: readonly [number, number];
+  }>;
   layout: EnhancementLayout;
 }
 
@@ -84,68 +125,44 @@ export interface KnownEnhancementBuild {
 // transform is the floor every launch lands on, and the Enhancement transform is
 // layered on top so opting in never costs template save/load. It only appends
 // functions, so the main-loop index, the free table slot and every data address
-// below are certified separately for each exact template-save output. The last
-// entry is also the structural baseline from which the isolated verifier may
-// prove a future common relocation.
+// below are certified separately for each exact template-save output. Unknown
+// Enhancement builds remain off until another complete exact entry is added.
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
-  Object.freeze({
-    sha256: "68c6e09cec0f6992058a44a5617ca9eac7fab4697be1421943bbf664e6d444f6",
-    programId: 1,
-    buildId: 38771,
-    // ArenaNet's exported browser-driven client loop. The older GWCA
-    // FrApi/LeaveGameThread anchor (#6656) runs only during startup here.
-    hookFunction: 446,
-    hookParams: Object.freeze(["i32"] as const),
-    hookResults: Object.freeze([] as const),
-    tableSlot: 0,
-    layout: Object.freeze({
-      contextRoot: 0x5a0e20,
-      agentArray: 0x5a4d98,
-      // AvSelectGetTarget (#7335) returns manual when non-zero, otherwise
-      // automatic. Keep that exact selection rule in the companion.
-      manualTargetAgentId: 0x5a388c,
-      automaticTargetAgentId: 0x5a3888,
-      gameContextSlot: 6,
-      characterContext: 0x44,
-      mapId: 0x198,
-      isExplorable: 0x19c,
-      currentMapId: 0x234,
-      currentInstanceType: 0x23c,
-      playerNumber: 0x2ac,
-      agentId: 0x2c,
-      agentX: 0x74,
-      agentY: 0x78,
-      agentType: 0x9c,
-      agentPlayerNumber: 0xf4,
-      agentModelType: 0xf6,
-      // Live-probe confirmed for build 38771. The game decodes the active
-      // cursor into these fixed buffers on every change and then calls an
-      // empty Emscripten sink. cursorColorBuffer is 32x32 BGRA, pitch 128;
-      // its own alpha already matches the redundant A8 mask.
-      cursorActiveArt: 0x5a1620,
-      cursorSoftwareModel: 0x5a1624,
-      cursorShowCount: 0x5a1628,
-      cursorColorBuffer: 0x298d90,
-      cursorArtHotspot: 0x00,
-      cursorArtTexture: 0x0c,
-      cursorHandleKey: 0x08,
-      cursorHandleObject: 0x00,
-      cursorViewTexture: 0x08,
-      cursorTextureType: 0x0c,
-      cursorTextureWidth: 0x14,
-      cursorTextureHeight: 0x18,
-    }),
-  }),
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
     programId: 1,
-    buildId: 38771,
+    buildId: 38797,
     hookFunction: 446,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
     tableSlot: 0,
+    cursorEvent: Object.freeze({
+      functionIndex: 2469,
+      params: Object.freeze(
+        ["i32", "i32", "i32", "i32", "i32"] as const,
+      ),
+      results: Object.freeze([] as const),
+      tableSlot: 922,
+      producerFunctions: Object.freeze([2828, 2834] as const),
+    }),
+    uiDispatcher: Object.freeze({
+      functionIndex: 6842,
+      params: Object.freeze(["i32", "i32", "i32"] as const),
+      results: Object.freeze([] as const),
+      playerChatMessage: 0x1000_0082,
+      hideHeroPanelMessage: 0x1000_01a3,
+      showHeroPanelMessage: 0x1000_01a4,
+      // ChCliApi #8947 contains three independent kPlayerChatMessage sites;
+      // each directly calls #6842. Nearby ChCliApi producers #8942/#8945
+      // emit 0x1000007f/0x10000080 to that same dispatcher.
+      playerChatProducer: 8947,
+      playerChatSites: 3,
+      nearbyPlayerMessageProducers: Object.freeze([8942, 8945] as const),
+    }),
     layout: Object.freeze({
-      contextRoot: 0x5a0ee0,
+      // Recovered independently. This root moved differently from the other
+      // static data, which is why Enhancement never relocates unknown builds.
+      contextRoot: 0x5a0ed4,
       agentArray: 0x5a4e58,
       manualTargetAgentId: 0x5a394c,
       automaticTargetAgentId: 0x5a3948,
@@ -174,6 +191,15 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       cursorTextureType: 0x0c,
       cursorTextureWidth: 0x14,
       cursorTextureHeight: 0x18,
+      // GameContext -> PartyContext -> current PartyInfo -> heroes Array.
+      // Only owned HeroID/AgentID pairs cross the companion ABI.
+      partyContext: 0x4c,
+      playerParty: 0x54,
+      partyHeroes: 0x24,
+      heroMemberStride: 0x18,
+      heroAgentId: 0x00,
+      heroOwnerPlayerId: 0x04,
+      heroId: 0x08,
     }),
   }),
 ]);

@@ -26,14 +26,9 @@ import { stopChildProcess } from "./helpers/child-process.ts";
 // test is built from these same sources.
 import {
   ENHANCEMENT_BUILDS,
-  enhancementLayoutWords,
+  enhancementConfigWords,
 } from "../src/main/core/enhancement-builds.ts";
-import {
-  COMPANION_CURSOR_ABI,
-  COMPANION_CURSOR_BYTES,
-  COMPANION_SNAPSHOT_ABI,
-  COMPANION_SNAPSHOT_BYTES,
-} from "../src/renderer/companion-snapshot.ts";
+import { ENHANCEMENT_TRANSFORM_ABI } from "../src/main/core/enhancement-transform.ts";
 import { root } from "./electron/fixtures.mts";
 import {
   DISTRIBUTION_CHANNEL_CONFIG,
@@ -107,7 +102,7 @@ const OFFICIAL_SHA256 = createHash("sha256")
 // optional every function below would have to re-narrow.
 const ENHANCEMENT_BUILD =
   ENHANCEMENT_BUILDS[0] ?? assert.fail("the canonical Enhancement build table is empty");
-const LAYOUT_WORDS = enhancementLayoutWords(ENHANCEMENT_BUILD.layout);
+const CONFIG_WORDS = enhancementConfigWords(ENHANCEMENT_BUILD);
 const SNAPSHOT_BYTES = Uint8Array.of(0);
 const SNAPSHOT_HASH = createHash("md5")
   .update(SNAPSHOT_BYTES)
@@ -147,15 +142,31 @@ function manifestMarkerModule() {
 
 function installableManifestModule() {
   const manifest = [...new TextEncoder().encode(JSON.stringify({
-    snapshotAbi: COMPANION_SNAPSHOT_ABI,
-    snapshotBytes: COMPANION_SNAPSHOT_BYTES,
-    cursorSnapshotAbi: COMPANION_CURSOR_ABI,
-    cursorSnapshotBytes: COMPANION_CURSOR_BYTES,
-    configBytes: LAYOUT_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
+    transformAbi: ENHANCEMENT_TRANSFORM_ABI,
     buildId: ENHANCEMENT_BUILD.buildId,
     programId: ENHANCEMENT_BUILD.programId,
     tableSlot: ENHANCEMENT_BUILD.tableSlot,
-    layoutWords: LAYOUT_WORDS,
+    hooks: {
+      tick: {
+        functionIndex: ENHANCEMENT_BUILD.hookFunction,
+        params: ENHANCEMENT_BUILD.hookParams,
+      },
+      cursor: {
+        functionIndex: ENHANCEMENT_BUILD.cursorEvent.functionIndex,
+        params: ENHANCEMENT_BUILD.cursorEvent.params,
+        existingTableSlot: ENHANCEMENT_BUILD.cursorEvent.tableSlot,
+      },
+      ui: {
+        functionIndex: ENHANCEMENT_BUILD.uiDispatcher.functionIndex,
+        params: ENHANCEMENT_BUILD.uiDispatcher.params,
+      },
+    },
+    messages: {
+      playerChat: ENHANCEMENT_BUILD.uiDispatcher.playerChatMessage,
+      hideHeroPanel: ENHANCEMENT_BUILD.uiDispatcher.hideHeroPanelMessage,
+      showHeroPanel: ENHANCEMENT_BUILD.uiDispatcher.showHeroPanelMessage,
+    },
+    configWords: CONFIG_WORDS,
   }))];
   return customSectionModule("enhancement_manifest", manifest);
 }
@@ -564,6 +575,8 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
           malloc,
           free,
           enhancement_tick_original: () => undefined,
+          enhancement_cursor_original: () => undefined,
+          enhancement_ui_original: () => undefined,
           enhancement_hook_slot: hookSlot,
         },
       },
@@ -640,7 +653,7 @@ async function assertTargetReadoutLifecycle() {
     assert.deepEqual(
       await installTargetReadout(fixture.page, installableManifestModule()),
       {
-        allocations: [64, 116],
+        allocations: [64, 156],
         hook: 1,
         installed: "installed",
         readout: { visible: false, line: "" },
@@ -723,8 +736,103 @@ async function assertTargetReadoutLifecycle() {
   }
 }
 
+async function assertRollbackAfterTablePublication() {
+  const fixture = await launchPackaged("gw-packaged-foundation-rollback-", {
+    nativeCursor: false,
+    targetReadout: false,
+  });
+  try {
+    await fixture.page.waitForFunction(() => {
+      const { Module } = globalThis as PageGlobals;
+      return typeof Module?.socket?.connect === "function";
+    });
+    const result = await fixture.page.evaluate(async (bytes: number[]) => {
+      const memory = new WebAssembly.Memory({ initial: 256 });
+      const table = new WebAssembly.Table({
+        initial: 1,
+        maximum: 1,
+        element: "anyfunc",
+      });
+      const hookSlot = new WebAssembly.Global(
+        { value: "i32", mutable: true },
+        0,
+      );
+      const allocations: { pointer: number; size: number }[] = [];
+      const freed: number[] = [];
+      let nextPointer = 0x1000;
+      const malloc = (size: number) => {
+        const pointer = nextPointer;
+        nextPointer = (nextPointer + size + 7) & ~7;
+        allocations.push({ pointer, size });
+        return pointer;
+      };
+      const free = (pointer: number) => freed.push(pointer);
+      const module = new WebAssembly.Module(Uint8Array.from(bytes));
+      const specifier = "./enhancements.js";
+      const { installEnhancements }:
+        typeof import("../src/renderer/enhancements.ts") =
+          await import(specifier);
+      const requestFrame = globalThis.requestAnimationFrame;
+      let rejected = false;
+      try {
+        globalThis.requestAnimationFrame = () => {
+          throw new Error("intentional post-table failure");
+        };
+        await installEnhancements(
+          {
+            exports: {
+              memory,
+              __indirect_function_table: table,
+              malloc,
+              free,
+              enhancement_tick_original: () => undefined,
+              enhancement_cursor_original: () => undefined,
+              enhancement_ui_original: () => undefined,
+              enhancement_hook_slot: hookSlot,
+            },
+          },
+          module,
+          { nativeCursor: false, targetReadout: false },
+          true,
+        );
+      } catch {
+        rejected = true;
+      } finally {
+        globalThis.requestAnimationFrame = requestFrame;
+      }
+      return {
+        allocations,
+        freed,
+        hook: hookSlot.value,
+        rejected,
+        runtime: window.gwCompanionRuntime,
+        tableEmpty: table.get(0) === null,
+        toolboxCount: globalThis.document.querySelectorAll(
+          "#toolbox-foundation",
+        ).length,
+      };
+    }, [...installableManifestModule()]);
+    assert.deepEqual(result, {
+      allocations: [
+        { pointer: 0x1000, size: 64 },
+        { pointer: 0x1040, size: 156 },
+        { pointer: 0x10e0, size: 64 },
+      ],
+      freed: [0x10e0, 0x1040, 0x1000],
+      hook: 0,
+      rejected: true,
+      runtime: null,
+      tableEmpty: true,
+      toolboxCount: 0,
+    });
+  } finally {
+    await closePackaged(fixture);
+  }
+}
+
 await assertPackagedOffSession();
 await assertTargetReadoutLifecycle();
+await assertRollbackAfterTablePublication();
 console.log(
-  "packaged Enhancement runtime proved all-tools-off isolation and target-readout lifecycle",
+  "packaged Enhancement runtime proved isolation, lifecycle, and post-table rollback",
 );

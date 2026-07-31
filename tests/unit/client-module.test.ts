@@ -69,14 +69,16 @@ const CALL_OFFSET = 5;
  */
 function officialFixture(): Uint8Array {
   const types = section(1, [
-    3,
+    5,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
     0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
     0x60, 1, 0x7f, 0,
+    0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
+    0x60, 3, 0x7f, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [3, 0, 0, 2]);
-  const table = section(4, [1, 0x70, 1, 1, 1]);
+  const functions = section(3, [5, 0, 0, 2, 3, 4]);
+  const table = section(4, [1, 0x70, 1, 4, 4]);
   const globals = section(6, [0]);
   const callerName = [...new TextEncoder().encode("caller")];
   const loopName = [
@@ -88,7 +90,7 @@ function officialFixture(): Uint8Array {
     ...uleb(loopName.length), ...loopName, 0, 3,
     3, 116, 98, 108, 1, 0,
   ]);
-  const elements = section(9, [0]);
+  const elements = section(9, [1, 0, 0x41, 1, 0x0b, 3, 4, 3, 5]);
   const caller = [
     0,
     0x20, 0,
@@ -98,9 +100,11 @@ function officialFixture(): Uint8Array {
   ];
   const loop = [0, 0x0b];
   const code = section(10, [
-    3,
+    5,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
+    ...uleb(loop.length), ...loop,
+    ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
   ]);
   return Uint8Array.from([
@@ -149,6 +153,24 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 0,
+    cursorEvent: {
+      functionIndex: 4,
+      params: ["i32", "i32", "i32", "i32", "i32"],
+      results: [],
+      tableSlot: 1,
+      producerFunctions: [4, 4],
+    },
+    uiDispatcher: {
+      functionIndex: 5,
+      params: ["i32", "i32", "i32"],
+      results: [],
+      playerChatMessage: 0x1000_0082,
+      hideHeroPanelMessage: 0x1000_01a3,
+      showHeroPanelMessage: 0x1000_01a4,
+      playerChatProducer: 5,
+      playerChatSites: 3,
+      nearbyPlayerMessageProducers: [5, 5],
+    },
     layout: {
       contextRoot: 1,
       agentArray: 2,
@@ -179,6 +201,13 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
       cursorTextureType: 12,
       cursorTextureWidth: 20,
       cursorTextureHeight: 24,
+      partyContext: 28,
+      playerParty: 32,
+      partyHeroes: 36,
+      heroMemberStride: 24,
+      heroAgentId: 0,
+      heroOwnerPlayerId: 4,
+      heroId: 8,
     },
   };
 }

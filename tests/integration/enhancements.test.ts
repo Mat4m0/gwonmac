@@ -5,8 +5,10 @@ import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
   readCompanionSnapshot,
+  readCompanionToolbox,
   COMPANION_CURSOR_ABI,
   COMPANION_CURSOR_BYTES,
+  COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
 
 // Every read returns a discriminated union: `reason` belongs to the members
@@ -17,6 +19,7 @@ import {
 type SnapshotRead = ReturnType<typeof readCompanionSnapshot>;
 type CursorHeaderRead = ReturnType<typeof readCompanionCursorHeader>;
 type CursorPixelsRead = ReturnType<typeof readCompanionCursorPixels>;
+type ToolboxRead = ReturnType<typeof readCompanionToolbox>;
 
 function decoded(read: SnapshotRead) {
   if (read.status !== "ready") {
@@ -61,9 +64,17 @@ function publishedPixels(read: CursorPixelsRead) {
   return read;
 }
 
+function readyToolbox(read: ToolboxRead) {
+  if (read.status !== "ready") {
+    throw new Error(`expected a toolbox snapshot, got ${JSON.stringify(read)}`);
+  }
+  return read;
+}
+
 const MAGIC = 0x42545747;
 const FEATURE_NATIVE_CURSOR = 1 << 0;
 const FEATURE_TARGET_READOUT = 1 << 1;
+const FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
 const ALL_FEATURES = FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT;
 
 interface SnapshotOverrides {
@@ -221,8 +232,12 @@ const ADDRESSES = Object.freeze({
   handle: 0x8200,
   textureView: 0x8300,
   texture: 0x8400,
+  toolbox: 0x9000,
+  partyContext: 0xa000,
+  partyInfo: 0xa100,
+  heroBuffer: 0xa200,
 });
-const CONFIG_WORDS = 29;
+const CONFIG_WORDS = 39;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
 const TEXTURE_KEY = 0x6772_7478;
 
@@ -234,6 +249,8 @@ interface KernelOverrides {
   configSize?: number;
   cursorPointer?: number;
   cursorSize?: number;
+  toolboxPointer?: number;
+  toolboxSize?: number;
 }
 
 /**
@@ -251,29 +268,53 @@ type KernelInit = (
   configSize: number,
   cursorPointer: number,
   cursorSize: number,
+  toolboxPointer: number,
+  toolboxSize: number,
   features: number,
 ) => number;
-type KernelTick = (context: number) => void;
+type KernelDispatch = (
+  kind: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+) => void;
 
 function kernelExports(exports: WebAssembly.Exports) {
   const init = exports["companion_init"];
-  const tick = exports["companion_tick"];
-  if (typeof init !== "function" || typeof tick !== "function") {
-    throw new Error("companion-kernel.wasm did not export companion_init/companion_tick");
+  const dispatch = exports["companion_dispatch"];
+  const setPanel = exports["companion_set_first_hero_panel"];
+  if (
+    typeof init !== "function"
+    || typeof dispatch !== "function"
+    || typeof setPanel !== "function"
+  ) {
+    throw new Error("companion-kernel.wasm did not export its foundation ABI");
   }
-  return { init: init as KernelInit, tick: tick as KernelTick };
+  return {
+    init: init as KernelInit,
+    dispatch: dispatch as KernelDispatch,
+    setPanel: setPanel as (shown: number) => number,
+  };
 }
 
 async function createKernel() {
   const bytes = await readFile("build/renderer/companion-kernel.wasm");
   const memory = new WebAssembly.Memory({ initial: 256 });
-  const calls = { original: 0 };
+  const calls = {
+    original: 0,
+    cursor: [] as number[][],
+    ui: [] as number[][],
+  };
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: { memory },
     game: {
       enhancement_tick_original: () => {
         calls.original += 1;
       },
+      enhancement_cursor_original: (...args: number[]) => calls.cursor.push(args),
+      enhancement_ui_original: (...args: number[]) => calls.ui.push(args),
     },
   });
   const view = new DataView(memory.buffer);
@@ -287,6 +328,8 @@ async function createKernel() {
     ADDRESSES.activeArt, ADDRESSES.softwareModel, ADDRESSES.showCount,
     ADDRESSES.colorBuffer,
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
+    0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
+    0x1000_0082, 0x1000_01a3, 0x1000_01a4,
   ]);
   return {
     instance,
@@ -313,10 +356,25 @@ async function createKernel() {
           ?? ((features & FEATURE_NATIVE_CURSOR) !== 0
             ? COMPANION_CURSOR_BYTES
             : 0),
+        overrides.toolboxPointer
+          ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
+            ? ADDRESSES.toolbox
+            : 0),
+        overrides.toolboxSize
+          ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
+            ? COMPANION_TOOLBOX_BYTES
+            : 0),
         features,
       );
     },
-    tick: () => exports.tick(123),
+    tick: () => exports.dispatch(0, 123, 0, 0, 0, 0),
+    cursorEvent: (...args: number[]) =>
+      exports.dispatch(1, args[0] ?? 1, args[1] ?? 2, args[2] ?? 3,
+        args[3] ?? 4, args[4] ?? 5),
+    uiEvent: (message: number, wparam: number, lparam: number) =>
+      exports.dispatch(2, message, wparam, lparam, 0, 0),
+    setPanel: (shown: boolean) => exports.setPanel(shown ? 1 : 0),
+    toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),
@@ -355,6 +413,17 @@ function installGameGraph(view: DataView) {
   view.setFloat32(ADDRESSES.target + 0x78, 20, true);
   view.setUint32(ADDRESSES.target + 0x9c, 0xdb, true);
   view.setUint32(ADDRESSES.manualTargetId, 9, true);
+  view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+  view.setUint32(ADDRESSES.partyContext + 0x54, ADDRESSES.partyInfo, true);
+  view.setUint32(ADDRESSES.partyInfo + 0x24, ADDRESSES.heroBuffer, true);
+  view.setUint32(ADDRESSES.partyInfo + 0x28, 2, true);
+  view.setUint32(ADDRESSES.partyInfo + 0x2c, 2, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x00, 77, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x04, 42, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x08, 1, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x18, 88, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x1c, 99, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x20, 2, true);
 }
 
 // s_activeArt -> art -> handle -> view -> GrTex2d, exactly the chain the
@@ -607,7 +676,7 @@ describe("Companion kernel", () => {
       "game",
     );
     assert.equal(kernel.calls.original, boundaries.length + 6);
-    assert.equal(typeof instance.exports.companion_tick, "function");
+    assert.equal(typeof instance.exports.companion_dispatch, "function");
   });
 
   it("collects only the explicitly enabled tools", async () => {
@@ -651,10 +720,52 @@ describe("Companion kernel", () => {
     assert.equal(readoutOnly.calls.original, 1);
   });
 
+  it("counts chat without retaining payloads and applies hero panel commands on tick", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(
+      kernel.init({
+        features: FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION,
+      }),
+      1,
+    );
+    kernel.tick();
+    let state = readyToolbox(kernel.toolbox());
+    assert.equal(state.playerChatCount, 0);
+    assert.equal(state.heroAvailable, true);
+    assert.equal(state.heroCount, 1);
+    assert.equal(state.firstHeroId, 1);
+    assert.equal(state.firstHeroAgentId, 77);
+
+    kernel.uiEvent(0x1000_0080, 0xdead_beef, 0x7fff_fffd);
+    assert.equal(readyToolbox(kernel.toolbox()).playerChatCount, 0);
+    kernel.uiEvent(0x1000_0082, 0xdead_beef, 0x7fff_fffd);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.playerChatCount, 1);
+    assert.deepEqual(kernel.calls.ui.slice(0, 2), [
+      [0x1000_0080, 0xdead_beef | 0, 0x7fff_fffd],
+      [0x1000_0082, 0xdead_beef | 0, 0x7fff_fffd],
+    ]);
+
+    const request = kernel.setPanel(true);
+    assert.equal(request, 1);
+    assert.equal(kernel.calls.ui.length, 2);
+    assert.equal(readyToolbox(kernel.toolbox()).commandRequest, request);
+    kernel.tick();
+    assert.deepEqual(kernel.calls.ui[2], [0x1000_01a4, 1, 0]);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.panelState, 2);
+    assert.equal(state.commandComplete, request);
+    assert.equal(state.commandStatus, 1);
+
+    kernel.uiEvent(0x1000_01a3, 1, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).panelState, 1);
+  });
+
   it("rejects empty, unknown, missing, or unselected feature regions", async () => {
     const kernel = await createKernel();
     assert.equal(kernel.init({ features: 0 }), 0);
-    assert.equal(kernel.init({ features: 1 << 2 }), 0);
+    assert.equal(kernel.init({ features: 1 << 3 }), 0);
     assert.equal(
       kernel.init({
         features: FEATURE_NATIVE_CURSOR,
@@ -759,6 +870,7 @@ describe("Companion kernel", () => {
     assert.equal(kernel.field(CURSOR.sequence), sequence);
 
     const second = paintCursor(view, 2);
+    kernel.cursorEvent();
     kernel.tick();
     assert.equal(kernel.field(CURSOR.generation), 2);
     assert.equal(kernel.field(CURSOR.pixelHash), fnv1a(second));
@@ -770,6 +882,7 @@ describe("Companion kernel", () => {
     // Identical pixels, moved hotspot: the pixel hash cannot see this, so the
     // published identity must carry the hotspot too.
     view.setUint32(ADDRESSES.art + 0x04, 9, true);
+    kernel.cursorEvent();
     kernel.tick();
     assert.equal(kernel.field(CURSOR.generation), 3);
     assert.equal(kernel.field(CURSOR.pixelHash), fnv1a(second));
@@ -808,6 +921,7 @@ describe("Companion kernel", () => {
     assert.equal(kernel.published(), null);
 
     paintCursor(kernel.view, 4);
+    kernel.cursorEvent();
     kernel.tick();
     assert.equal(kernel.header().status, "ready");
     assert.equal(kernel.field(CURSOR.generation), 1);
@@ -824,6 +938,7 @@ describe("Companion kernel", () => {
 
     view.setUint32(ADDRESSES.softwareModel, 1, true);
     const replacement = paintCursor(view, 6);
+    kernel.cursorEvent();
     for (let index = 0; index < 3; index += 1) kernel.tick();
     const unsupported = invalidCursor(kernel.header());
     assert.equal(unsupported.status, "invalid");
@@ -833,6 +948,7 @@ describe("Companion kernel", () => {
     assert.deepEqual(kernel.payload(), expectedRgba(good));
 
     view.setUint32(ADDRESSES.softwareModel, 0, true);
+    kernel.cursorEvent();
     kernel.tick();
     const recovered = publishedPixels(kernel.published());
     assert.equal(recovered.status, "ready");
@@ -862,6 +978,7 @@ describe("Companion kernel", () => {
     let generation = 1;
     for (const [name, breakGraph] of rejections) {
       breakGraph();
+      kernel.cursorEvent();
       kernel.tick();
       const broken = invalidCursor(kernel.header());
       assert.equal(broken.status, "invalid", name);
@@ -873,6 +990,7 @@ describe("Companion kernel", () => {
       assert.deepEqual(kernel.payload(), expectedRgba(words), name);
 
       installCursorGraph(view);
+      kernel.cursorEvent();
       kernel.tick();
       generation += 1;
       assert.equal(kernel.header().status, "ready", name);

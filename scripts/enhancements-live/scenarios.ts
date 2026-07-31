@@ -17,6 +17,7 @@
 // automation surface being present. That is the property P4.7 asks for.
 
 import type { StdioOptions } from "node:child_process";
+import { createInterface } from "node:readline/promises";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
 import type { EnhancementDoctorReport } from "../../src/tools/enhancement-doctor.js";
@@ -575,6 +576,197 @@ async function runCursorCapture({ sample, evaluate, wait }: ObservationContext) 
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
+async function operatorCheckpoint(please: string): Promise<void> {
+  if (!process.stdin.isTTY) {
+    throw new Error("toolbox foundation live proof requires an interactive terminal");
+  }
+  console.log(JSON.stringify({ checkpoint: "operator", please }));
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    await prompt.question("Press Return when complete. ");
+  } finally {
+    prompt.close();
+  }
+}
+
+type ToolboxLiveState = {
+  status: string;
+  playerChatCount: number;
+  cursorEventCount: number;
+  cursorRefreshes: number;
+  cursorGeneration: number;
+  cursorPixelHash: number;
+  cursorValid: boolean;
+  heroAvailable: boolean;
+  firstHeroId: number;
+  panelState: number;
+  commandRequest: number;
+  commandComplete: number;
+  commandStatus: number;
+};
+
+async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
+  return page.evaluate(() => {
+    const raw = window.gwCompanionRuntime?.toolbox;
+    const value = typeof raw === "object" && raw !== null
+      ? raw as Record<string, unknown>
+      : {};
+    return {
+      status: String(value.status ?? "missing"),
+      playerChatCount: Number(value.playerChatCount) >>> 0,
+      cursorEventCount: Number(value.cursorEventCount) >>> 0,
+      cursorRefreshes: Number(window.gwCompanionRuntime?.cursorRefreshes) >>> 0,
+      cursorGeneration:
+        typeof window.gwCompanionRuntime?.cursor === "object"
+          && window.gwCompanionRuntime.cursor !== null
+          && "generation" in window.gwCompanionRuntime.cursor
+          ? Number(window.gwCompanionRuntime.cursor.generation) >>> 0
+          : 0,
+      cursorPixelHash:
+        typeof window.gwCompanionRuntime?.cursor === "object"
+          && window.gwCompanionRuntime.cursor !== null
+          && "pixelHash" in window.gwCompanionRuntime.cursor
+          ? Number(window.gwCompanionRuntime.cursor.pixelHash) >>> 0
+          : 0,
+      cursorValid:
+        typeof window.gwCompanionRuntime?.cursor === "object"
+        && window.gwCompanionRuntime.cursor !== null
+        && "valid" in window.gwCompanionRuntime.cursor
+        && window.gwCompanionRuntime.cursor.valid === true,
+      heroAvailable: value.heroAvailable === true,
+      firstHeroId: Number(value.firstHeroId) >>> 0,
+      panelState: Number(value.panelState) >>> 0,
+      commandRequest: Number(value.commandRequest) >>> 0,
+      commandComplete: Number(value.commandComplete) >>> 0,
+      commandStatus: Number(value.commandStatus) >>> 0,
+    };
+  });
+}
+
+async function runToolboxFoundation({ page }: AutomationContext) {
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "status" in toolbox
+      && toolbox.status === "ready";
+  });
+  const baseline = await readToolboxState(page);
+  await page.waitForTimeout(5_000);
+  const quiet = await readToolboxState(page);
+  if (quiet.playerChatCount !== baseline.playerChatCount) {
+    throw new Error("player chat count changed during the quiet baseline");
+  }
+
+  await operatorCheckpoint(
+    "open the inventory, place the pointer over a salvage kit without clicking it, then return here using only the keyboard",
+  );
+  const cursorBefore = await readToolboxState(page);
+  if (!cursorBefore.cursorValid) {
+    throw new Error("the game cursor was not published before the click proof");
+  }
+  console.log(JSON.stringify({
+    checkpoint: "operator-timed",
+    please:
+      "within 10 seconds, switch back using only the keyboard and activate the salvage kit without moving the pointer",
+  }));
+  const cursorDeadline = Date.now() + 10_000;
+  let cursorAfter = cursorBefore;
+  while (
+    Date.now() < cursorDeadline
+    && cursorAfter.cursorRefreshes === cursorBefore.cursorRefreshes
+  ) {
+    await page.waitForTimeout(25);
+    cursorAfter = await readToolboxState(page);
+  }
+  // A double-click may schedule two bounded refreshes. Let both mouse releases
+  // and the following game tick settle before comparing the final publication.
+  await page.waitForTimeout(1_000);
+  cursorAfter = await readToolboxState(page);
+  if (
+    cursorAfter.cursorRefreshes <= cursorBefore.cursorRefreshes
+    || cursorAfter.cursorEventCount <= cursorBefore.cursorEventCount
+    || cursorAfter.cursorGeneration <= cursorBefore.cursorGeneration
+    || cursorAfter.cursorPixelHash === cursorBefore.cursorPixelHash
+    || !cursorAfter.cursorValid
+  ) {
+    throw new Error("the zero-distance click did not publish the salvage cursor");
+  }
+
+  await operatorCheckpoint(
+    "have a second player send exactly one team/group message",
+  );
+  await page.waitForFunction(
+    (expected) => {
+      const toolbox = window.gwCompanionRuntime?.toolbox;
+      return typeof toolbox === "object"
+        && toolbox !== null
+        && "playerChatCount" in toolbox
+        && Number(toolbox.playerChatCount) === expected;
+    },
+    quiet.playerChatCount + 1,
+    { timeout: 5_000 },
+  );
+  await page.waitForTimeout(1_500);
+  const afterChat = await readToolboxState(page);
+  if (afterChat.playerChatCount !== quiet.playerChatCount + 1) {
+    throw new Error("one player chat event did not settle at exactly one increment");
+  }
+
+  await operatorCheckpoint("enter /age in Guild Wars and wait for its response");
+  await page.waitForTimeout(1_000);
+  const afterAge = await readToolboxState(page);
+  if (afterAge.playerChatCount !== afterChat.playerChatCount) {
+    throw new Error("the non-player /age response incremented player chat");
+  }
+  if (!afterAge.heroAvailable || afterAge.firstHeroId === 0) {
+    throw new Error("no first owned hero is available for the panel proof");
+  }
+
+  await page.getByRole("button", { name: "Hide panel" }).click();
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 1
+      && "commandRequest" in toolbox
+      && "commandComplete" in toolbox
+      && toolbox.commandRequest === toolbox.commandComplete;
+  });
+  await operatorCheckpoint("confirm the first owned hero's real game panel is hidden");
+
+  await page.getByRole("button", { name: "Show panel" }).click();
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 2
+      && "commandRequest" in toolbox
+      && "commandComplete" in toolbox
+      && toolbox.commandRequest === toolbox.commandComplete;
+  });
+  await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
+  const final = await readToolboxState(page);
+  return {
+    baseline: baseline.playerChatCount,
+    final: final.playerChatCount,
+    delta: final.playerChatCount - baseline.playerChatCount,
+    heroId: final.firstHeroId,
+    panelState: final.panelState,
+    commandStatus: final.commandStatus,
+    cursorEventDelta:
+      cursorAfter.cursorEventCount - cursorBefore.cursorEventCount,
+    cursorGenerationDelta:
+      cursorAfter.cursorGeneration - cursorBefore.cursorGeneration,
+    cursorRefreshDelta:
+      cursorAfter.cursorRefreshes - cursorBefore.cursorRefreshes,
+    cursorChanged:
+      cursorAfter.cursorPixelHash !== cursorBefore.cursorPixelHash,
+  };
+}
+
 export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   // Reaching a playable character is itself a keypress, so the scenarios that
   // only need the client up are automation too. `tier` names what the run does,
@@ -606,6 +798,26 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         || !evidence.presentation.text.includes(evidence.acquired.range)
       ) {
         throw new Error("target readout did not render the acquired target");
+      }
+    },
+  }),
+  "toolbox-foundation": Object.freeze({
+    tier: "automation",
+    run: runToolboxFoundation,
+    validate(result: { evidence?: Awaited<ReturnType<typeof runToolboxFoundation>> }) {
+      const evidence = result.evidence;
+      if (
+        !evidence
+        || evidence.delta !== 1
+        || evidence.heroId === 0
+        || evidence.panelState !== 2
+        || evidence.commandStatus !== 1
+        || evidence.cursorEventDelta < 1
+        || evidence.cursorGenerationDelta < 1
+        || evidence.cursorRefreshDelta < 1
+        || !evidence.cursorChanged
+      ) {
+        throw new Error("toolbox foundation live proof did not settle correctly");
       }
     },
   }),
@@ -761,7 +973,10 @@ export function liveRunRefusal(
   // An observation run enables nothing: the Enhancement installs only because the
   // profile's own setting is on. Without it the run would wait half an hour for
   // a hook that is never installed, so refuse and say which setting.
-  if (plan.tier === "observation" && !preflight.nativeCursor) {
+  if (
+    (plan.tier === "observation" || plan.name === "toolbox-foundation")
+    && !preflight.nativeCursor
+  ) {
     return "native-cursor-disabled";
   }
   return null;

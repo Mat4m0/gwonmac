@@ -298,7 +298,14 @@ try {
 } catch (error) {
   keepAlive = true;
   await mkdir(failureDir, { recursive: true });
-  if (failurePage && !failurePage.isClosed()) {
+  // The foundation scenario deliberately observes chat occurrence. Even
+  // though no payload enters its ABI, a failure screenshot could capture the
+  // game's visible chat window, so that scenario never records pixels.
+  if (
+    plan.name !== "toolbox-foundation"
+    && failurePage
+    && !failurePage.isClosed()
+  ) {
     await failurePage
       .screenshot({ path: path.join(failureDir, "failure.png") })
       .catch(() => undefined);

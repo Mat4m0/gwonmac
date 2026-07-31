@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   ENHANCEMENT_BUILDS,
-  type EnhancementLayout,
+  findEnhancementBuild,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import {
@@ -18,13 +18,6 @@ import {
   deriveEquivalentTemplateSaveBuild,
   TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
 } from "./template-save-verifier.js";
-import {
-  readSleb,
-  readUleb,
-  sectionById,
-  splitSections,
-} from "./wasm-binary.js";
-import { enhancementAddressEvidence } from "./enhancement-address-evidence.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -35,7 +28,7 @@ declare const WebAssembly: {
  * value is stored beside a derived result so an app update never inherits a
  * decision made by older verifier code.
  */
-export const LOCAL_CLIENT_VERIFIER_ABI = 2;
+export const LOCAL_CLIENT_VERIFIER_ABI = 3;
 
 export type LocalVerificationReason =
   | "invalid-wasm"
@@ -53,23 +46,6 @@ export interface LocalClientVerification {
   readonly reasons: readonly LocalVerificationReason[];
 }
 
-interface DataSegmentShape {
-  readonly base: number;
-  readonly size: number;
-}
-
-/**
- * Exact initialized-data topology of the current live-measured Enhancement
- * baseline. A future candidate may propose one common delta from this shape,
- * but the code-reference fingerprint below must prove every relocated address.
- */
-const ENHANCEMENT_DATA_BASELINE: readonly DataSegmentShape[] = Object.freeze([
-  Object.freeze({ base: 0x10_0000, size: 1_580_804 }),
-  Object.freeze({ base: 2_629_392, size: 19_880 }),
-  Object.freeze({ base: 2_649_272, size: 23_358 }),
-  Object.freeze({ base: 2_672_630, size: 1_060 }),
-]);
-
 const TEMPLATE_BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
   "ensureDirectory",
   "findFiles",
@@ -77,14 +53,6 @@ const TEMPLATE_BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
   "deleteFile",
   "fileExists",
 ]);
-/**
- * Normalized code-reference identity for the current measured layout. Every
- * relevant address must appear in the same complete function bodies; only the
- * five-byte address immediates themselves may move together.
- */
-const ENHANCEMENT_ADDRESS_EVIDENCE_FINGERPRINT =
-  "97e05f36c3d2881b8c7ddbfe6d47e87c36af0c99b8d715880aef7ab360fc5da2";
-
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -95,8 +63,6 @@ function baselineFingerprint(): string {
     template: TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1],
     templateSemantics: TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
     enhancement: ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1],
-    data: ENHANCEMENT_DATA_BASELINE,
-    addressEvidence: ENHANCEMENT_ADDRESS_EVIDENCE_FINGERPRINT,
   }));
 }
 
@@ -106,133 +72,19 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function dataSegments(input: Uint8Array): DataSegmentShape[] {
-  const bytes = sectionById(splitSections(input), 11);
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const segments: DataSegmentShape[] = [];
-  for (let index = 0; index < count; index += 1) {
-    if (readUleb(bytes, cursor) !== 0) {
-      throw new Error("local verifier: passive data segment");
-    }
-    if (bytes[cursor.offset++] !== 0x41) {
-      throw new Error("local verifier: non-constant data segment");
-    }
-    const base = readSleb(bytes, cursor);
-    if (bytes[cursor.offset++] !== 0x0b) {
-      throw new Error("local verifier: malformed data segment");
-    }
-    const size = readUleb(bytes, cursor);
-    const end = cursor.offset + size;
-    if (base < 0 || end > bytes.byteLength) {
-      throw new Error("local verifier: data segment out of range");
-    }
-    segments.push({ base, size });
-    cursor.offset = end;
-  }
-  if (cursor.offset !== bytes.byteLength) {
-    throw new Error("local verifier: trailing data bytes");
-  }
-  return segments;
-}
-
-function inferStaticDelta(input: Uint8Array): number | null {
-  let current: DataSegmentShape[];
-  try {
-    current = dataSegments(input);
-  } catch {
-    return null;
-  }
-  if (current.length !== ENHANCEMENT_DATA_BASELINE.length) return null;
-
-  const first = current[0];
-  const baselineFirst = ENHANCEMENT_DATA_BASELINE[0];
-  if (!first || !baselineFirst || first.base !== baselineFirst.base) return null;
-  const delta = first.size - baselineFirst.size;
-  if (
-    !Number.isSafeInteger(delta)
-    || Math.abs(delta) > 0x10_0000
-    || (delta & 0x0f) !== 0
-  ) {
-    return null;
-  }
-  for (let index = 1; index < current.length; index += 1) {
-    const actual = current[index]!;
-    const expected = ENHANCEMENT_DATA_BASELINE[index]!;
-    if (
-      actual.base !== expected.base + delta
-      || actual.size !== expected.size
-    ) {
-      return null;
-    }
-  }
-  return delta;
-}
-
-function shifted(value: number, delta: number): number {
-  const next = value + delta;
-  if (!Number.isSafeInteger(next) || next <= 0 || next > 0xffff_ffff) {
-    throw new Error("local verifier: relocated address out of range");
-  }
-  return next;
-}
-
-function relocateEnhancementLayout(
-  layout: EnhancementLayout,
-  delta: number,
-): EnhancementLayout {
-  return {
-    ...layout,
-    contextRoot: shifted(layout.contextRoot, delta),
-    agentArray: shifted(layout.agentArray, delta),
-    manualTargetAgentId: shifted(layout.manualTargetAgentId, delta),
-    automaticTargetAgentId: shifted(layout.automaticTargetAgentId, delta),
-    cursorActiveArt: shifted(layout.cursorActiveArt, delta),
-    cursorSoftwareModel: shifted(layout.cursorSoftwareModel, delta),
-    cursorShowCount: shifted(layout.cursorShowCount, delta),
-    cursorColorBuffer: shifted(layout.cursorColorBuffer, delta),
-  };
-}
-
 function deriveEnhancementBuild(
-  official: Uint8Array,
+  _official: Uint8Array,
   templateOutput: Uint8Array,
 ): KnownEnhancementBuild | null {
-  const baseline = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1];
-  if (!baseline) return null;
-  const delta = inferStaticDelta(official);
-  if (delta === null) return null;
-  const layout = relocateEnhancementLayout(baseline.layout, delta);
-  if (
-    enhancementAddressEvidence(official, layout)
-    !== ENHANCEMENT_ADDRESS_EVIDENCE_FINGERPRINT
-  ) {
-    return null;
-  }
-
   const report = inspectEnhancementCandidate(templateOutput);
-  if (
-    !report.validWasm
-    || !report.mainLoop
-    || !sameJson(report.mainLoop.params, baseline.hookParams)
-    || !sameJson(report.mainLoop.results, baseline.hookResults)
-    || !report.table?.firstEmptySlots.includes(baseline.tableSlot)
-  ) {
-    return null;
-  }
-
-  const build: KnownEnhancementBuild = {
-    sha256: report.sha256,
-    programId: baseline.programId,
-    // This identifies the companion/layout contract. A new semantic build ID
-    // requires a shipped baseline rather than a local relocation decision.
-    buildId: baseline.buildId,
-    hookFunction: report.mainLoop.functionIndex,
-    hookParams: baseline.hookParams,
-    hookResults: baseline.hookResults,
-    tableSlot: baseline.tableSlot,
-    layout,
-  };
+  if (!report.validWasm) return null;
+  // The previous verifier assumed every static address moved by one common
+  // delta. Build 38,797 disproved that: contextRoot moved independently. Until
+  // all three hooks and every address can be re-derived by their own semantic
+  // anchors, enhancement execution is exact-build only. Template save remains
+  // independently shape-verifiable.
+  const build = findEnhancementBuild(report.sha256);
+  if (!build) return null;
   transformEnhancementWasm(templateOutput, build);
   return build;
 }
@@ -362,37 +214,12 @@ function isTemplateSaveBuild(
   return kinds.size === TEMPLATE_BRIDGE_KINDS.length;
 }
 
-function isRelocatedEnhancementBuild(
+function isExactEnhancementBuild(
   value: unknown,
   inputSha256: string,
 ): value is KnownEnhancementBuild {
-  if (!value || typeof value !== "object") return false;
-  const build = value as Partial<KnownEnhancementBuild>;
-  const baseline = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1];
-  if (
-    !baseline
-    || build.sha256 !== inputSha256
-    || build.programId !== baseline.programId
-    || build.buildId !== baseline.buildId
-    || !isIndex(build.hookFunction)
-    || !sameJson(build.hookParams, baseline.hookParams)
-    || !sameJson(build.hookResults, baseline.hookResults)
-    || build.tableSlot !== baseline.tableSlot
-    || !build.layout
-  ) {
-    return false;
-  }
-
-  const delta = build.layout.contextRoot - baseline.layout.contextRoot;
-  if (
-    !Number.isSafeInteger(delta)
-    || Math.abs(delta) > 0x10_0000
-    || (delta & 0x0f) !== 0
-  ) {
-    return false;
-  }
-  const relocated = relocateEnhancementLayout(baseline.layout, delta);
-  return sameJson(build.layout, relocated);
+  const exact = findEnhancementBuild(inputSha256);
+  return exact !== null && sameJson(value, exact);
 }
 
 /**
@@ -442,7 +269,7 @@ export function isLocalClientVerification(
     );
   }
   return result.reasons.length === 0
-    && isRelocatedEnhancementBuild(
+    && isExactEnhancementBuild(
       result.enhancementBuild,
       result.templateSaveBuild.outputSha256,
     );

@@ -297,14 +297,13 @@ test("the WASM section codec has exactly one home", async () => {
   assert.match(shared, /function copyRange/);
   assert.doesNotMatch(shared, /bodies\.push\(bytes\.slice/);
 
-  // The locator is production code now: both the isolated launcher verifier
-  // and the developer CLI reuse it. Every runtime consumer names the same
-  // sibling codec.
+  // Every module that parses or rewrites sections names the same sibling
+  // codec. The local verifier now composes those transforms without parsing a
+  // second time, so it deliberately has no codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
     ["src/main/core/enhancement-transform.ts", './wasm-binary.js'],
     ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
     ["src/main/core/template-save-verifier.ts", './wasm-binary.js'],
-    ["src/main/core/local-client-verifier.ts", './wasm-binary.js'],
   ];
   for (const [file, specifier] of sharers) {
     const source = await readFile(path.join(root, file), "utf8");
