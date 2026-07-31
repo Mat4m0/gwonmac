@@ -89,6 +89,7 @@ struct Layout {
     hero_agent_id: u32,
     hero_owner_player_id: u32,
     hero_id: u32,
+    prop_context_slot: u32,
     player_chat_message: u32,
     hide_hero_panel_message: u32,
     show_hero_panel_message: u32,
@@ -132,6 +133,7 @@ impl Layout {
         hero_agent_id: 0,
         hero_owner_player_id: 0,
         hero_id: 0,
+        prop_context_slot: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -195,7 +197,7 @@ struct ToolboxSnapshot {
     reserved: [u32; 3],
 }
 
-const _: [(); 156] = [(); size_of::<Layout>()];
+const _: [(); 160] = [(); size_of::<Layout>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
@@ -682,29 +684,44 @@ unsafe fn tick_foundation(layout: Layout, state: State) {
         FIRST_HERO_ID = hero_id;
         FIRST_HERO_AGENT_ID = agent_id;
     }
-    let desired = unsafe { PANEL_PENDING };
-    if desired != PANEL_UNKNOWN {
-        unsafe { PANEL_PENDING = PANEL_UNKNOWN };
-        if hero_id == 0 {
-            unsafe {
-                COMMAND_COMPLETE = COMMAND_REQUEST;
-                COMMAND_STATUS = COMMAND_UNAVAILABLE;
-            }
-        } else {
-            let message = if desired == PANEL_SHOWN {
-                layout.show_hero_panel_message
-            } else {
-                layout.hide_hero_panel_message
-            };
-            unsafe { ui_original(message, hero_id, 0) };
-            unsafe {
-                PANEL_STATE = desired;
-                COMMAND_COMPLETE = COMMAND_REQUEST;
-                COMMAND_STATUS = COMMAND_APPLIED;
-            }
-        }
-    }
+    unsafe { apply_pending_hero_command(layout, state) };
     unsafe { publish_toolbox() };
+}
+
+// Internal calls made after the game tick need the same PropContext that the
+// official browser client installs around its own calls. Save the slot, install
+// the already-validated GameContext for this one synchronous dispatch, and
+// restore the exact prior value before publishing completion.
+unsafe fn apply_pending_hero_command(layout: Layout, state: State) {
+    let desired = unsafe { PANEL_PENDING };
+    if desired == PANEL_UNKNOWN {
+        return;
+    }
+    unsafe { PANEL_PENDING = PANEL_UNKNOWN };
+    let hero_id = unsafe { FIRST_HERO_ID };
+    if hero_id == 0 || state.game == 0 {
+        unsafe {
+            COMMAND_COMPLETE = COMMAND_REQUEST;
+            COMMAND_STATUS = COMMAND_UNAVAILABLE;
+        }
+        return;
+    }
+    let message = if desired == PANEL_SHOWN {
+        layout.show_hero_panel_message
+    } else {
+        layout.hide_hero_panel_message
+    };
+    let previous = unsafe { read_volatile(layout.prop_context_slot as *const u32) };
+    unsafe {
+        write_volatile(layout.prop_context_slot as *mut u32, state.game);
+        ui_original(message, hero_id, 0);
+        write_volatile(layout.prop_context_slot as *mut u32, previous);
+    }
+    unsafe {
+        PANEL_STATE = desired;
+        COMMAND_COMPLETE = COMMAND_REQUEST;
+        COMMAND_STATUS = COMMAND_APPLIED;
+    }
 }
 
 unsafe fn publish(state: State) {
@@ -970,6 +987,9 @@ pub unsafe extern "C" fn companion_init(
         || layout.hide_hero_panel_message == 0
         || layout.show_hero_panel_message == 0
         || layout.hide_hero_panel_message == layout.show_hero_panel_message
+        || (features & FEATURE_TOOLBOX_FOUNDATION != 0
+            && (layout.prop_context_slot & 3 != 0
+                || !contains(layout.prop_context_slot, 4)))
     {
         return 0;
     }
@@ -1109,7 +1129,7 @@ pub unsafe extern "C" fn companion_set_first_hero_panel(shown: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    2
+    3
 }
 
 #[no_mangle]

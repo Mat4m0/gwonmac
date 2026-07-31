@@ -237,7 +237,7 @@ const ADDRESSES = Object.freeze({
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
 });
-const CONFIG_WORDS = 39;
+const CONFIG_WORDS = 40;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
 const TEXTURE_KEY = 0x6772_7478;
 
@@ -302,10 +302,12 @@ function kernelExports(exports: WebAssembly.Exports) {
 async function createKernel() {
   const bytes = await readFile("build/renderer/companion-kernel.wasm");
   const memory = new WebAssembly.Memory({ initial: 256 });
+  const view = new DataView(memory.buffer);
   const calls = {
     original: 0,
     cursor: [] as number[][],
     ui: [] as number[][],
+    uiContext: [] as number[],
   };
   const { instance } = await WebAssembly.instantiate(bytes, {
     env: { memory },
@@ -314,10 +316,12 @@ async function createKernel() {
         calls.original += 1;
       },
       enhancement_cursor_original: (...args: number[]) => calls.cursor.push(args),
-      enhancement_ui_original: (...args: number[]) => calls.ui.push(args),
+      enhancement_ui_original: (...args: number[]) => {
+        calls.ui.push(args);
+        calls.uiContext.push(view.getUint32(0x28cc20, true));
+      },
     },
   });
-  const view = new DataView(memory.buffer);
   const exports = kernelExports(instance.exports);
   const config = new Uint32Array(memory.buffer, ADDRESSES.config, CONFIG_WORDS);
   config.set([
@@ -328,7 +332,7 @@ async function createKernel() {
     ADDRESSES.activeArt, ADDRESSES.softwareModel, ADDRESSES.showCount,
     ADDRESSES.colorBuffer,
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
-    0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
+    0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08, 0x28cc20,
     0x1000_0082, 0x1000_01a3, 0x1000_01a4,
   ]);
   return {
@@ -720,7 +724,7 @@ describe("Companion kernel", () => {
     assert.equal(readoutOnly.calls.original, 1);
   });
 
-  it("counts chat without retaining payloads and applies hero panel commands on tick", async () => {
+  it("counts chat and applies hero commands on tick inside a restored PropContext", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
     assert.equal(
@@ -746,13 +750,17 @@ describe("Companion kernel", () => {
       [0x1000_0080, 0xdead_beef | 0, 0x7fff_fffd],
       [0x1000_0082, 0xdead_beef | 0, 0x7fff_fffd],
     ]);
+    assert.deepEqual(kernel.calls.uiContext, [0, 0]);
 
     const request = kernel.setPanel(true);
     assert.equal(request, 1);
     assert.equal(kernel.calls.ui.length, 2);
     assert.equal(readyToolbox(kernel.toolbox()).commandRequest, request);
+    kernel.view.setUint32(0x28cc20, 0x1234_5678, true);
     kernel.tick();
     assert.deepEqual(kernel.calls.ui[2], [0x1000_01a4, 1, 0]);
+    assert.equal(kernel.calls.uiContext[2], ADDRESSES.game);
+    assert.equal(kernel.view.getUint32(0x28cc20, true), 0x1234_5678);
     state = readyToolbox(kernel.toolbox());
     assert.equal(state.panelState, 2);
     assert.equal(state.commandComplete, request);

@@ -723,6 +723,7 @@ async function runToolboxFoundation({ page }: AutomationContext) {
     throw new Error("no first owned hero is available for the panel proof");
   }
 
+  const hideStarted = Date.now();
   await page.getByRole("button", { name: "Hide panel" }).click();
   await page.waitForFunction(() => {
     const toolbox = window.gwCompanionRuntime?.toolbox;
@@ -733,9 +734,11 @@ async function runToolboxFoundation({ page }: AutomationContext) {
       && "commandRequest" in toolbox
       && "commandComplete" in toolbox
       && toolbox.commandRequest === toolbox.commandComplete;
-  });
+  }, undefined, { timeout: 1_000 });
+  const hideLatencyMs = Date.now() - hideStarted;
   await operatorCheckpoint("confirm the first owned hero's real game panel is hidden");
 
+  const showStarted = Date.now();
   await page.getByRole("button", { name: "Show panel" }).click();
   await page.waitForFunction(() => {
     const toolbox = window.gwCompanionRuntime?.toolbox;
@@ -746,7 +749,8 @@ async function runToolboxFoundation({ page }: AutomationContext) {
       && "commandRequest" in toolbox
       && "commandComplete" in toolbox
       && toolbox.commandRequest === toolbox.commandComplete;
-  });
+  }, undefined, { timeout: 1_000 });
+  const showLatencyMs = Date.now() - showStarted;
   await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
   const final = await readToolboxState(page);
   return {
@@ -756,6 +760,8 @@ async function runToolboxFoundation({ page }: AutomationContext) {
     heroId: final.firstHeroId,
     panelState: final.panelState,
     commandStatus: final.commandStatus,
+    hideLatencyMs,
+    showLatencyMs,
     cursorEventDelta:
       cursorAfter.cursorEventCount - cursorBefore.cursorEventCount,
     cursorGenerationDelta:
@@ -764,6 +770,59 @@ async function runToolboxFoundation({ page }: AutomationContext) {
       cursorAfter.cursorRefreshes - cursorBefore.cursorRefreshes,
     cursorChanged:
       cursorAfter.cursorPixelHash !== cursorBefore.cursorPixelHash,
+  };
+}
+
+async function runToolboxHeroPanel({ page }: AutomationContext) {
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "status" in toolbox
+      && toolbox.status === "ready"
+      && "heroAvailable" in toolbox
+      && toolbox.heroAvailable === true;
+  });
+  await operatorCheckpoint(
+    "confirm a hero is in the party",
+  );
+  const initial = await readToolboxState(page);
+  const hideStarted = Date.now();
+  await page.getByRole("button", { name: "Hide panel" }).click();
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 1
+      && "commandRequest" in toolbox
+      && "commandComplete" in toolbox
+      && toolbox.commandRequest === toolbox.commandComplete;
+  }, undefined, { timeout: 1_000 });
+  const hideLatencyMs = Date.now() - hideStarted;
+  await operatorCheckpoint("confirm the first owned hero's real game panel is hidden");
+
+  const showStarted = Date.now();
+  await page.getByRole("button", { name: "Show panel" }).click();
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 2
+      && "commandRequest" in toolbox
+      && "commandComplete" in toolbox
+      && toolbox.commandRequest === toolbox.commandComplete;
+  }, undefined, { timeout: 1_000 });
+  const showLatencyMs = Date.now() - showStarted;
+  await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
+  const final = await readToolboxState(page);
+  return {
+    heroId: initial.firstHeroId,
+    panelState: final.panelState,
+    commandStatus: final.commandStatus,
+    hideLatencyMs,
+    showLatencyMs,
   };
 }
 
@@ -818,6 +877,23 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         || !evidence.cursorChanged
       ) {
         throw new Error("toolbox foundation live proof did not settle correctly");
+      }
+    },
+  }),
+  "toolbox-hero-panel": Object.freeze({
+    tier: "automation",
+    run: runToolboxHeroPanel,
+    validate(result: { evidence?: Awaited<ReturnType<typeof runToolboxHeroPanel>> }) {
+      const evidence = result.evidence;
+      if (
+        !evidence
+        || evidence.heroId === 0
+        || evidence.panelState !== 2
+        || evidence.commandStatus !== 1
+        || evidence.hideLatencyMs > 1_000
+        || evidence.showLatencyMs > 1_000
+      ) {
+        throw new Error("hero panel live proof did not settle promptly");
       }
     },
   }),

@@ -14,9 +14,9 @@ import {
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const ENHANCEMENT_TRANSFORM_ABI = 5;
-const COMPANION_ABI = 2;
-const CONFIG_WORDS = 39;
+const ENHANCEMENT_TRANSFORM_ABI = 6;
+const COMPANION_ABI = 3;
+const CONFIG_WORDS = 40;
 
 /**
  * The five values the installer needs out of the kernel's manifest section.
@@ -73,9 +73,9 @@ function decodeManifest(module: WebAssembly.Module): EnhancementManifest | null 
           Number.isInteger(message)
           && Number(message) > 0
           && Number(message) <= 0xffff_ffff)
-      || configWords[36] !== messages.playerChat
-      || configWords[37] !== messages.hideHeroPanel
-      || configWords[38] !== messages.showHeroPanel
+      || configWords[37] !== messages.playerChat
+      || configWords[38] !== messages.hideHeroPanel
+      || configWords[39] !== messages.showHeroPanel
     ) {
       return null;
     }

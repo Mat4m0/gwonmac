@@ -35,6 +35,7 @@ export interface EnhancementLayout {
   heroAgentId: number;
   heroOwnerPlayerId: number;
   heroId: number;
+  propContextSlot: number;
 }
 
 export const ENHANCEMENT_LAYOUT_FIELDS = [
@@ -74,6 +75,7 @@ export const ENHANCEMENT_LAYOUT_FIELDS = [
   "heroAgentId",
   "heroOwnerPlayerId",
   "heroId",
+  "propContextSlot",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
@@ -201,6 +203,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       heroAgentId: 0x00,
       heroOwnerPlayerId: 0x04,
       heroId: 0x08,
+      // PropGet #228 loads this slot and asserts when it is null. Internal
+      // synchronous calls temporarily install the validated GameContext here.
+      propContextSlot: 0x28cc20,
     }),
   }),
 ]);

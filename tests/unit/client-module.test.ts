@@ -208,6 +208,7 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
       heroAgentId: 0,
       heroOwnerPlayerId: 4,
       heroId: 8,
+      propContextSlot: 40,
     },
   };
 }

@@ -133,6 +133,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
       partyContext: 28, playerParty: 32, partyHeroes: 36,
       heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
+      propContextSlot: 40,
     },
   };
 }

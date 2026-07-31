@@ -76,8 +76,8 @@ function exportedFunction(name) {
   if (typeof value !== "function") throw new Error(`missing function ${name}`);
   return value;
 }
-assert.equal(exportedFunction("companion_abi")(), 2);
-assert.equal(exportedFunction("companion_config_bytes")(), 156);
+assert.equal(exportedFunction("companion_abi")(), 3);
+assert.equal(exportedFunction("companion_config_bytes")(), 160);
 assert.equal(exportedFunction("companion_snapshot_bytes")(), 64);
 assert.equal(exportedFunction("companion_cursor_bytes")(), 4_160);
 assert.equal(exportedFunction("companion_toolbox_bytes")(), 64);

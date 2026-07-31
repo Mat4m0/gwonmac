@@ -653,7 +653,10 @@ async function assertTargetReadoutLifecycle() {
     assert.deepEqual(
       await installTargetReadout(fixture.page, installableManifestModule()),
       {
-        allocations: [64, 156],
+        allocations: [
+          64,
+          CONFIG_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
+        ],
         hook: 1,
         installed: "installed",
         readout: { visible: false, line: "" },
@@ -815,7 +818,10 @@ async function assertRollbackAfterTablePublication() {
     assert.deepEqual(result, {
       allocations: [
         { pointer: 0x1000, size: 64 },
-        { pointer: 0x1040, size: 156 },
+        {
+          pointer: 0x1040,
+          size: CONFIG_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
+        },
         { pointer: 0x10e0, size: 64 },
       ],
       freed: [0x10e0, 0x1040, 0x1000],

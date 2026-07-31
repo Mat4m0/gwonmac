@@ -60,7 +60,22 @@ HeroPartyMember stride 0x18
 
 Ownership is compared with `CharacterContext + 0x2ac`. At most seven unique
 owned HeroIDs are accepted. The developer command uses only the first current
-owned HeroID and executes through the relocated UI original on the game tick.
+owned HeroID.
+
+The relocated UI dispatcher is safe for preserving a game-owned dispatch, but
+not as a naked tick-time sender. A live Show attempt from the main-loop hook
+aborted at `EmscriptenExeProp.cpp`'s `s_propContext` assertion, and deferring it
+until the next game-owned UI dispatch avoided the abort but introduced a
+visible multi-second delay.
+
+Static function 228 identifies the missing boundary: `PropGet` loads the
+active context from `0x28cc20` and asserts at `EmscriptenExeProp.cpp:32` when
+the slot is null. This matches GWCAjs's independently proven internal-call
+runtime for an earlier exact build. The command now saves that certified slot,
+temporarily installs the already validated GameContext, calls the relocated UI
+original synchronously on the next tick, and restores the exact previous slot
+value before publishing completion. No pointer wake-up or passive UI-event
+wait remains.
 
 ## Live correction and update policy
 

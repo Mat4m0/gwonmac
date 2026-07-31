@@ -29,7 +29,7 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 5;
+export const ENHANCEMENT_TRANSFORM_ABI = 6;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_TICK_ORIGINAL_EXPORT = "enhancement_tick_original";
 export const ENHANCEMENT_CURSOR_ORIGINAL_EXPORT = "enhancement_cursor_original";
