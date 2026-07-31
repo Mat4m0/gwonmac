@@ -20,8 +20,12 @@ function shippedSources(directory = "src"): string[] {
 }
 
 const shippedApplication = shippedSources().map(read).join("\n");
+const legacyFilenameOwners = shippedSources().filter((file) =>
+  /credentials\.bin|steam-session\.bin/u.test(read(file)),
+);
 const main = read("src/main/main.ts");
 const native = read("src/native/keychain/keychain.mm");
+const legacyCleanup = read("src/main/core/legacy-secret-cleanup.ts");
 
 test("saved login has exactly two Data Protection Keychain items", () => {
   assert.match(native, /kSecUseDataProtectionKeychain/);
@@ -30,7 +34,11 @@ test("saved login has exactly two Data Protection Keychain items", () => {
   assert.equal((native.match(/@"arena-net-credentials"/gu) ?? []).length, 1);
   assert.equal((native.match(/@"steam-session"/gu) ?? []).length, 1);
   assert.doesNotMatch(shippedApplication, /safeStorage|encryptString|decryptString/);
-  assert.doesNotMatch(shippedApplication, /credentials\.bin|steam-session\.bin/);
+  assert.deepEqual(legacyFilenameOwners, [
+    "src/main/core/legacy-secret-cleanup.ts",
+  ]);
+  assert.doesNotMatch(legacyCleanup, /recursive\s*:|clearStorageData|IndexedDB|IDBFS/);
+  assert.match(legacyCleanup, /remove\(path\.join\(userData, filename\), \{ force: true \}\)/);
   assert.doesNotMatch(shippedApplication, /localStorage|sessionStorage/);
   assert.doesNotMatch(shippedApplication, /plaintext|fallbackKey|masterPassword/);
 });
@@ -39,7 +47,7 @@ test("only the official release capability enables persistent secrets", () => {
   assert.match(main, /const officialUpdaterCapability = officialUpdaterCapable\(\)/);
   assert.match(
     main,
-    /const persistentSecrets =\s*app\.isPackaged\s*&& officialUpdaterCapability\s*&& !app\.commandLine\.hasSwitch\("gw-adhoc-test-keychain"\)/,
+    /const persistentSecrets =\s*app\.isPackaged\s*&& officialUpdaterCapability\s*&& !app\.commandLine\.hasSwitch\("gw-volatile-secrets"\)/,
   );
   assert.match(main, /persistentSecrets\s*\? loadNativeKeychain/);
   assert.match(main, /: new VolatileNativeKeychain\(\)/);

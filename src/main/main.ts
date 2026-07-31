@@ -81,6 +81,7 @@ import {
   type NativeKeychain,
 } from "./core/native-keychain.js";
 import { loadNativeKeychain } from "./native-keychain.js";
+import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -367,6 +368,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
+  const legacySecretFailures = await cleanupLegacySecretFiles(
+    app.getPath("userData"),
+    rm,
+  );
+  for (const failure of legacySecretFailures) {
+    logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
+  }
   const obsoleteCacheError = await discardObsoleteEnhancementCache(
     gamePaths(),
     rm,
@@ -398,7 +406,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const persistentSecrets =
     app.isPackaged
     && officialUpdaterCapability
-    && !app.commandLine.hasSwitch("gw-adhoc-test-keychain");
+    && !app.commandLine.hasSwitch("gw-volatile-secrets");
   const keychain: NativeKeychain = persistentSecrets
     ? loadNativeKeychain({
         packaged: true,

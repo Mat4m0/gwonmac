@@ -8,6 +8,7 @@ import {
   readdir,
   rm,
   stat,
+  writeFile,
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -507,6 +508,31 @@ test.describe("Electron application", () => {
       await relaunchedPage.waitForLoadState("domcontentloaded");
       expect(await relaunchedPage.evaluate(() =>
         window.gwNative.credentials.load())).toBeNull();
+    } finally {
+      await app.close().catch(() => {});
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
+  test("startup removes only retired secret files from an existing profile", async () => {
+    const userData = await mkdtemp(path.join(tmpdir(), "gw-secret-cleanup-e2e-"));
+    const settings = JSON.stringify({ autoCheckUpdates: false });
+    await writeFile(path.join(userData, "settings.json"), settings);
+    const windowState = JSON.stringify({
+      bounds: { x: 120, y: 64, width: 1024, height: 768 },
+      mode: "normal",
+    });
+    await writeFile(path.join(userData, "window-state.json"), windowState);
+    await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");
+    await writeFile(path.join(userData, "steam-session.bin"), "retired-steam");
+    const app = await launch(userData, launchEnv({ GW_OFFLINE_SHELL: "1" }));
+    try {
+      await app.firstWindow({ timeout: 30_000 });
+      await expect(async () => stat(path.join(userData, "credentials.bin"))).rejects.toThrow();
+      await expect(async () => stat(path.join(userData, "steam-session.bin"))).rejects.toThrow();
+      expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
+      expect(await readFile(path.join(userData, "window-state.json"), "utf8"))
+        .toBe(windowState);
     } finally {
       await app.close().catch(() => {});
       await rm(userData, { recursive: true, force: true });

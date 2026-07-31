@@ -175,11 +175,14 @@ await writeFile(
   JSON.stringify({ autoCheckUpdates: false }),
   { mode: 0o600 },
 );
+await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");
+await writeFile(path.join(userData, "steam-session.bin"), "retired-steam");
+await writeFile(path.join(userData, "preserved.txt"), "preserved");
 const diagnostics = path.join(userData, "diagnostics");
 const output: string[] = [];
 const child = spawn(executable, [
   `--user-data-dir=${userData}`,
-  "--gw-adhoc-test-keychain",
+  "--gw-volatile-secrets",
 ], {
   cwd: root,
   env: { ...process.env, GW_OFFLINE_SHELL: "1", ELECTRON_ENABLE_LOGGING: "1" },
@@ -244,6 +247,9 @@ try {
   const started = events.find((event) => event.name === "diagnostics.started");
   assert.ok(started, "the packaged app recorded no diagnostics.started event");
   assert.equal(started.fields?.appVersion, packageVersion);
+  assert.equal(existsSync(path.join(userData, "credentials.bin")), false);
+  assert.equal(existsSync(path.join(userData, "steam-session.bin")), false);
+  assert.equal(await readFile(path.join(userData, "preserved.txt"), "utf8"), "preserved");
 } finally {
   await stopChildProcess(child);
   await rm(userData, { recursive: true, force: true });
