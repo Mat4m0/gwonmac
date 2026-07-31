@@ -1,8 +1,6 @@
 // Renderer-owned game input. The Emscripten host installs this once before its
 // glue loads; native interruptions all converge on releaseAll().
 
-import type { AppSettings } from '../shared/contracts.js';
-
 // Canvases a held drag may wander from the one it started on. The client keeps
 // integrating mouse moves whose coordinates fall outside the canvas, so a drag
 // need not stop at the edge — it only needs to stop somewhere, or the
@@ -80,14 +78,12 @@ type HeldButton = {
 
 type GameInputOptions = {
   canvas: HTMLCanvasElement;
-  initialSettings: AppSettings;
   diagnostics?: GameInputDiagnostics;
   log(...values: unknown[]): void;
 };
 
 export const installGameInput = ({
   canvas,
-  initialSettings,
   diagnostics,
   log,
 }: GameInputOptions): GameInputController => {
@@ -95,10 +91,8 @@ export const installGameInput = ({
   const heldButtons = new Map<number, HeldButton>();
   const syntheticTouches = new Map<number, Touch>();
   const tapTimers = new Set<ReturnType<typeof setTimeout>>();
-  let touchMode = initialSettings.touchMode;
   let pendingTap: { x: number; y: number } | null = null;
   let touchId = 0;
-  let activeTouch: Touch | null = null;
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let releasing = false;
@@ -154,7 +148,7 @@ export const installGameInput = ({
   });
 
   const sendTouch = (
-    type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel',
+    type: 'touchstart' | 'touchend' | 'touchcancel',
     touch: Touch,
   ) => {
     const ended = type === 'touchend' || type === 'touchcancel';
@@ -172,10 +166,6 @@ export const installGameInput = ({
     syntheticTouches.set(touch.identifier, touch);
     sendTouch('touchstart', touch);
   };
-  const moveTouch = (touch: Touch) => {
-    syntheticTouches.set(touch.identifier, touch);
-    sendTouch('touchmove', touch);
-  };
   const finishTouch = (type: 'touchend' | 'touchcancel', touch: Touch) => {
     syntheticTouches.delete(touch.identifier);
     sendTouch(type, touch);
@@ -184,7 +174,6 @@ export const installGameInput = ({
   const cancelSyntheticTouches = () => {
     cancelTapTimers();
     pendingTap = null;
-    activeTouch = null;
     for (const touch of syntheticTouches.values()) {
       sendTouch('touchcancel', touch);
     }
@@ -318,7 +307,8 @@ export const installGameInput = ({
     if (releasing) return;
     releasing = true;
     try {
-      // Translate/augment gestures must see interruption, not a normal mouseup.
+      // A double-click repair interrupted between its two taps must not leave
+      // ArenaNet's touch detector held across a native modal or focus change.
       cancelSyntheticTouches();
       resetWheel();
       releaseKeys();
@@ -454,62 +444,28 @@ export const installGameInput = ({
   }, delay);
 
   canvas.addEventListener('mousedown', (event) => {
-    if (touchMode === 'off' || event.button !== 0) return;
-    if (touchMode === 'dbltap') {
-      // Chromium already applies the user's macOS double-click speed and
-      // distance preferences to detail. Do not impose a second, conflicting
-      // detector here. Even counts preserve consecutive double-click pairs.
-      cancelSyntheticTouches();
-      if (event.detail > 0 && event.detail % 2 === 0) {
-        pendingTap = { x: event.clientX, y: event.clientY };
-      }
-      return;
+    if (event.button !== 0) return;
+    // Chromium already applies the user's macOS double-click speed and
+    // distance preferences to detail. ArenaNet's mouse bridge discards that
+    // count, but its touch path has the double-tap detector the game needs for
+    // actions such as equipping an item. Preserve every mouse event and append
+    // exactly that missing signal for each completed native double-click.
+    cancelSyntheticTouches();
+    if (event.detail > 0 && event.detail % 2 === 0) {
+      pendingTap = { x: event.clientX, y: event.clientY };
     }
-    activeTouch = makeTouch(event.clientX, event.clientY, ++touchId);
-    startTouch(activeTouch);
-    if (touchMode === 'translate') event.stopImmediatePropagation();
-  }, true);
-
-  canvas.addEventListener('mousemove', (event) => {
-    if (touchMode === 'off' || touchMode === 'dbltap' || !activeTouch) return;
-    activeTouch = makeTouch(
-      event.clientX,
-      event.clientY,
-      activeTouch.identifier,
-    );
-    moveTouch(activeTouch);
-    if (touchMode === 'translate') event.stopImmediatePropagation();
   }, true);
 
   canvas.addEventListener('mouseup', (event) => {
-    if (touchMode === 'dbltap') {
-      if (event.button !== 0 || !pendingTap) return;
-      const { x, y } = pendingTap;
-      pendingTap = null;
-      tapAt(x, y, 20);
-      tapAt(x, y, 100);
-      return;
-    }
-    if (touchMode === 'off' || event.button !== 0 || !activeTouch) return;
-    const touch = makeTouch(
-      event.clientX,
-      event.clientY,
-      activeTouch.identifier,
-    );
-    activeTouch = null;
-    finishTouch('touchend', touch);
-    if (touchMode === 'translate') event.stopImmediatePropagation();
+    if (event.button !== 0 || !pendingTap) return;
+    const { x, y } = pendingTap;
+    pendingTap = null;
+    tapAt(x, y, 20);
+    tapAt(x, y, 100);
   }, true);
 
   canvas.addEventListener('mouseleave', () => {
-    if (touchMode === 'dbltap') {
-      pendingTap = null;
-      return;
-    }
-    if (!activeTouch) return;
-    const touch = activeTouch;
-    activeTouch = null;
-    finishTouch('touchcancel', touch);
+    pendingTap = null;
   }, true);
 
   // The client steers from absolute coordinates, so a held right-drag eventually
@@ -622,16 +578,10 @@ export const installGameInput = ({
   document.documentElement.addEventListener('mouseleave', releaseAll);
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  log(`touch mode: ${touchMode}`);
+  log('macOS double-click repair: enabled');
   canvas.dataset.inputReady = 'true';
 
   return Object.freeze({
     releaseAll,
-    applySettings(next: AppSettings) {
-      if (next.touchMode !== touchMode) {
-        cancelSyntheticTouches();
-      }
-      touchMode = next.touchMode;
-    },
   });
 };

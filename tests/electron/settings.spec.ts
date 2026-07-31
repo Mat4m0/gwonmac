@@ -182,6 +182,11 @@ test.describe("settings experience", () => {
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await page.locator("#settings-tab-advanced").click();
+      await expect(page.locator('[name="touchMode"]')).toHaveCount(0);
+      await expect(page.locator("#settings-pane-advanced")).not.toContainText(
+        "Mobile touch compatibility",
+      );
       await page.locator("#settings-tab-display").click();
       await expect(
         page.locator('input[name="renderScale"][value="2"]'),

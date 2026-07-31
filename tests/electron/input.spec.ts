@@ -17,6 +17,7 @@ type InputTestWindow = typeof window & {
   __cameraEvents: CameraEvent[];
   __cameraDrains: number;
   __cameraTasks: number[];
+  __macInputEvents: string[];
 };
 
 /** One mouse event as the client received it, recorded by `watchCameraDrag`. */
@@ -169,17 +170,6 @@ test.describe("renderer input", () => {
               detail,
             }),
           );
-        const applyTouchMode = async (touchMode: "translate" | "dbltap") => {
-          const settings = await window.gwNative.settings.set({ touchMode });
-          const applySettings = window.gwApplySettings;
-          if (!applySettings) throw new Error("gwApplySettings is not installed");
-          applySettings(settings);
-        };
-
-        await applyTouchMode("translate");
-        mouse("mousedown");
-        window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
-        await applyTouchMode("dbltap");
         mouse("mousedown", 1);
         mouse("mouseup", 1);
         mouse("mousedown", 2);
@@ -192,8 +182,59 @@ test.describe("renderer input", () => {
       expect(touchEvents).toEqual([
         "touchstart",
         "touchcancel",
-        "touchstart",
-        "touchcancel",
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("passes primary clicks and drags through without touch input", async () => {
+    const fixture = await launchOffline("gw-macos-pointer-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const loading = globalThis.document.getElementById("loading");
+        if (!canvas || !loading) throw new Error("the renderer shell is missing");
+        loading.classList.add("gone");
+        const testWindow = window as InputTestWindow;
+        testWindow.__macInputEvents = [];
+        for (const type of ["mousedown", "mouseup"] as const) {
+          canvas.addEventListener(type, (event) => {
+            testWindow.__macInputEvents.push(
+              `${type}:${event.button}:${event.buttons}`,
+            );
+          });
+        }
+        canvas.addEventListener("mousemove", (event) => {
+          if (event.buttons === 1) {
+            testWindow.__macInputEvents.push("mousemove:0:1");
+          }
+        });
+        for (const type of ["touchstart", "touchmove", "touchend"] as const) {
+          canvas.addEventListener(type, () => {
+            testWindow.__macInputEvents.push(type);
+          });
+        }
+      });
+
+      const box = await boxOf(page.locator("#canvas"));
+      await page.mouse.click(box.x + 100, box.y + 100);
+      await page.mouse.move(box.x + 140, box.y + 140);
+      await page.mouse.down({ button: "left" });
+      await page.mouse.move(box.x + 180, box.y + 170);
+      await page.mouse.up({ button: "left" });
+
+      expect(
+        await page.evaluate(() =>
+          (window as InputTestWindow).__macInputEvents),
+      ).toEqual([
+        "mousedown:0:1",
+        "mouseup:0:0",
+        "mousedown:0:1",
+        "mousemove:0:1",
+        "mouseup:0:0",
       ]);
     } finally {
       await closeOffline(fixture);

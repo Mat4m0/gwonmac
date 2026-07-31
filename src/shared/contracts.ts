@@ -202,7 +202,6 @@ export type EnhancementSelection = Record<Enhancement, boolean>;
 
 export interface AppSettings extends EnhancementSelection {
   renderScale: 1 | 1.5 | 2;
-  touchMode: "dbltap" | "translate" | "augment" | "off";
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
@@ -237,7 +236,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   nativeCursor: true,
   targetReadout: false,
-  touchMode: "dbltap",
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
