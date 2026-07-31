@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  nativeKeychainErrorCode,
   SECRET_SLOTS,
   type NativeKeychain,
   type SecretSlot,
@@ -47,25 +46,6 @@ describe("native Keychain boundary", () => {
       }),
       "/App/Contents/Resources/app.asar.unpacked/build/native/keychain.node",
     );
-  });
-
-  it("recognizes only the closed native error vocabulary", () => {
-    for (const code of [
-      "interaction_not_allowed",
-      "missing_entitlement",
-      "unavailable",
-    ]) {
-      assert.equal(
-        nativeKeychainErrorCode(Object.assign(new Error(), { code })),
-        code,
-      );
-    }
-    assert.equal(nativeKeychainErrorCode(new Error()), null);
-    assert.equal(
-      nativeKeychainErrorCode(Object.assign(new Error(), { code: "-25308" })),
-      null,
-    );
-    assert.equal(nativeKeychainErrorCode({ code: "unavailable" }), null);
   });
 
   it("accepts an asynchronous in-memory fake without another interface", async () => {

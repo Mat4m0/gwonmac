@@ -33,21 +33,3 @@ export class VolatileNativeKeychain implements NativeKeychain {
     this.values.delete(slot);
   }
 }
-
-export const NATIVE_KEYCHAIN_ERROR_CODES = [
-  "interaction_not_allowed",
-  "missing_entitlement",
-  "unavailable",
-] as const;
-
-export type NativeKeychainErrorCode =
-  (typeof NATIVE_KEYCHAIN_ERROR_CODES)[number];
-
-export function nativeKeychainErrorCode(
-  error: unknown,
-): NativeKeychainErrorCode | null {
-  if (!(error instanceof Error) || !("code" in error)) return null;
-  return (
-    NATIVE_KEYCHAIN_ERROR_CODES.find((code) => error.code === code) ?? null
-  );
-}
