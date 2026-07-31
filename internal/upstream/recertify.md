@@ -3,9 +3,9 @@
 Every function index, local index and byte offset in these documents belongs to
 one exact build. A new ArenaNet hash triggers the launcher's isolated local
 verifier. It may derive the template-save record when those complete semantics
-remain equivalent. Enhancement does **not** auto-relocate: build 38,797 proved
-that its static addresses can move independently. It therefore requires a new
-exact certificate after all three hooks and every address are re-derived. Until
+remain equivalent. Enhancement does **not** auto-relocate: a shared address
+delta cannot prove three hook semantics and every structure field. It therefore
+requires a new exact certificate after all three hooks and every address are re-derived. Until
 then the untouched official module is used, so the client keeps working and
 only unproven compatibility features are disabled. Startup logs the verifier
 outcome, and `client.buildCertification` in a `.gwdiag` says `certified`,

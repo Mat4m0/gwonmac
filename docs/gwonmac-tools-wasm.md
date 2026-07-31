@@ -92,8 +92,8 @@ drop references.
 
 Unknown builds run the official client unchanged. Template save may be
 shape-recertified locally, but Enhancement is exact-build only until a future
-verifier independently recovers every hook and address. Build 38,797 disproved
-the former common-relocation assumption.
+verifier independently recovers every hook and address. A common relocation
+alone is not enough evidence for that decision.
 
 ## Commands
 

@@ -62,11 +62,17 @@ Ownership is compared with `CharacterContext + 0x2ac`. At most seven unique
 owned HeroIDs are accepted. The developer command uses only the first current
 owned HeroID and executes through the relocated UI original on the game tick.
 
-## Rejected update assumption
+## Live correction and update policy
 
-The earlier local verifier moved every static address by one common aligned
-delta. On 38,797, `contextRoot` recovered as `0x5a0ed4` while the common-delta
-rule proposed `0x5a0ee0`. That is sufficient to reject the entire class of
-automatic Enhancement relocation. Unknown builds now keep template recovery
-where it is independently proven and run the official game without Toolbox
-until every required hook and address is re-derived.
+The first static candidate named `contextRoot` as `0x5a0ed4`. The bounded live
+hero proof disproved it: that global resolves into `FcArchive` state and leaves
+the expected game-context slot null. `0x5a0ee0` resolves to a context array,
+slot 6 points to a GameContext, and its character and party chains jointly
+validated map 449, player number 1, and Koss as `{agent: 323, owner: 1,
+hero: 6}`. The exact certificate now uses `0x5a0ee0`.
+
+This correction does not authorize automatic Enhancement relocation. A shared
+delta cannot prove three hook semantics and every structure field. Unknown
+builds keep template recovery where it is independently proven and run the
+official game without Toolbox until every required hook and address is
+re-derived.

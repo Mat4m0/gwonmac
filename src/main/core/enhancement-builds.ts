@@ -160,9 +160,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       nearbyPlayerMessageProducers: Object.freeze([8942, 8945] as const),
     }),
     layout: Object.freeze({
-      // Recovered independently. This root moved differently from the other
-      // static data, which is why Enhancement never relocates unknown builds.
-      contextRoot: 0x5a0ed4,
+      // Live party-state proof resolves this root to a context array whose
+      // slot 6 points at the GameContext. The nearby 0x5a0ed4 global belongs
+      // to FcArchive and leaves slot 6 null.
+      contextRoot: 0x5a0ee0,
       agentArray: 0x5a4e58,
       manualTargetAgentId: 0x5a394c,
       automaticTargetAgentId: 0x5a3948,

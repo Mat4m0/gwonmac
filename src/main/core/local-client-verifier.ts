@@ -78,10 +78,9 @@ function deriveEnhancementBuild(
 ): KnownEnhancementBuild | null {
   const report = inspectEnhancementCandidate(templateOutput);
   if (!report.validWasm) return null;
-  // The previous verifier assumed every static address moved by one common
-  // delta. Build 38,797 disproved that: contextRoot moved independently. Until
-  // all three hooks and every address can be re-derived by their own semantic
-  // anchors, enhancement execution is exact-build only. Template save remains
+  // A common address delta is not proof of all three hook semantics or every
+  // layout field. Until those can be re-derived by their own anchors,
+  // enhancement execution is exact-build only. Template save remains
   // independently shape-verifiable.
   const build = findEnhancementBuild(report.sha256);
   if (!build) return null;
