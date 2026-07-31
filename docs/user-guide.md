@@ -94,8 +94,16 @@ Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
-on release. **Controls** owns two independent GWonMac Tools choices. **Use the
-game's own cursor** is on by default: the host reads the cursor Guild Wars itself draws
+on release. Main-block letter, number-row, and punctuation bindings stay on the
+same physical keys when the macOS input source changes, while chat and other
+text fields continue to type the active layout. Extra ISO/JIS keys and the
+numeric keypad retain the official web client's layout behavior. The in-game
+Controls list shows the binding's stable reference character rather than
+relabeling it after an input-source change. A custom binding first saved by an
+older app build under a non-US input source may need to be rebound once; its
+stored character does not retain the physical position needed for migration.
+**Controls** owns two independent GWonMac Tools choices. **Use the game's own
+cursor** is on by default: the host reads the cursor Guild Wars itself draws
 out of your installed client and shows it over the game view; no cursor artwork
 ships with this app and none is downloaded. **Show target distance and range**
 is off by default and adds the selected target's distance and range band at the

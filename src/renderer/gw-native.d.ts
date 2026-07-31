@@ -26,15 +26,6 @@ export interface AppSettingsNegativeTypeTest extends AppSettings {
 }
 
 declare global {
-  // Keyboard Map API: Chromium ships it, TypeScript's DOM library does not.
-  interface Keyboard extends EventTarget {
-    getLayoutMap(): Promise<ReadonlyMap<string, string>>;
-  }
-
-  interface Navigator {
-    readonly keyboard?: Keyboard;
-  }
-
   interface GameInputDiagnostics {
     event(name: string, value?: unknown): void;
   }

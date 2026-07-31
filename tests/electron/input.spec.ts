@@ -200,8 +200,8 @@ test.describe("renderer input", () => {
     }
   });
 
-  test("restates keys macOS rewrites while Option is held", async () => {
-    const fixture = await launchOffline("gw-option-key-e2e-");
+  test("uses physical main-block keys without changing typed text", async () => {
+    const fixture = await launchOffline("gw-physical-key-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -216,9 +216,8 @@ test.describe("renderer input", () => {
           window.addEventListener(
             type,
             (event) => {
-              if (event.code !== "KeyW") return;
               testWindow.__gameKeys.push(
-                `${event.type}:${event.key}:${event.keyCode}`,
+                `${event.type}:${event.code}:${event.key}:${event.keyCode}`,
               );
             },
             true,
@@ -227,47 +226,98 @@ test.describe("renderer input", () => {
         canvas.focus();
       });
 
-      // macOS reports the Option layer in `key` while leaving `code` alone, so
-      // a key pressed before Option is held is released as a different key.
+      // A layout changes `key`, but the physical `code` stays put. Changing
+      // layouts between a press and release must not strand the old key, and
+      // two physical positions that produce the same letter must stay distinct.
       const cdp = await fixture.app.context().newCDPSession(page);
-      const alt = 1;
-      const sendW = (
+      const sendKey = (
         type: "keyDown" | "keyUp",
+        code: string,
         key: string,
+        virtualKeyCode: number,
         modifiers = 0,
         text?: string,
+        repeat = false,
       ) =>
         cdp.send("Input.dispatchKeyEvent", {
           type,
           key,
-          code: "KeyW",
-          windowsVirtualKeyCode: 87,
-          nativeVirtualKeyCode: 87,
+          code,
+          windowsVirtualKeyCode: virtualKeyCode,
+          nativeVirtualKeyCode: virtualKeyCode,
           modifiers,
+          autoRepeat: repeat,
           ...(text === undefined ? {} : { text }),
         });
 
-      await sendW("keyDown", "w");
-      await sendW("keyUp", "∑", alt);
-      await sendW("keyDown", "∑", alt);
-      // The registry must hold the restated key, or the interruption path
-      // releases a key the client never saw pressed.
+      await sendKey("keyDown", "KeyW", "w", 87);
+      await sendKey("keyUp", "KeyW", "z", 90);
+      await sendKey("keyDown", "KeyW", "z", 90);
+      // The registry must hold the physical key, or interruption releases a
+      // key the client never saw pressed.
       await page.evaluate(() =>
         window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset")),
       );
+      await sendKey("keyDown", "KeyZ", "w", 87);
+      await sendKey("keyUp", "KeyZ", "w", 87);
+
+      const characterCases = [
+        ["Digit1", "&", "1", 49],
+        ["Backquote", "§", "`", 192],
+        ["Minus", ")", "-", 189],
+        ["Equal", "´", "=", 187],
+        ["BracketLeft", "ü", "[", 219],
+        ["BracketRight", "+", "]", 221],
+        ["Backslash", "#", "\\", 220],
+        ["Semicolon", "ö", ";", 186],
+        ["Quote", "ä", "'", 222],
+        ["Comma", ";", ",", 188],
+        ["Period", ":", ".", 190],
+        ["Slash", "-", "/", 191],
+      ] as const;
+      for (const [code, layoutKey, , keyCode] of characterCases) {
+        await sendKey("keyDown", code, layoutKey, keyCode);
+        await sendKey("keyUp", code, layoutKey, keyCode);
+      }
+      await sendKey("keyDown", "KeyW", "∑", 87, 1);
+      await sendKey("keyUp", "KeyW", "∑", 87, 1);
+      // Unsupported positions keep the official client's character semantics,
+      // but a modifier or layout change during one hold must not strand them.
+      await sendKey("keyDown", "IntlBackslash", "<", 226);
+      await sendKey(
+        "keyDown",
+        "IntlBackslash",
+        "≤",
+        226,
+        1,
+        undefined,
+        true,
+      );
+      await sendKey("keyUp", "IntlBackslash", "≤", 226, 1);
 
       expect(
         await page.evaluate(() => (window as InputTestWindow).__gameKeys),
       ).toEqual([
-        "keydown:w:87",
-        "keyup:w:87",
-        "keydown:w:87",
-        "keyup:w:87",
+        "keydown:KeyW:w:87",
+        "keyup:KeyW:w:90",
+        "keydown:KeyW:w:90",
+        "keyup:KeyW:w:90",
+        "keydown:KeyZ:z:87",
+        "keyup:KeyZ:z:87",
+        ...characterCases.flatMap(([code, , canonicalKey, keyCode]) => [
+          `keydown:${code}:${canonicalKey}:${keyCode}`,
+          `keyup:${code}:${canonicalKey}:${keyCode}`,
+        ]),
+        "keydown:KeyW:w:87",
+        "keyup:KeyW:w:87",
+        "keydown:IntlBackslash:<:226",
+        "keydown:IntlBackslash:<:226",
+        "keyup:IntlBackslash:<:226",
       ]);
 
       // The client relays key events from its own text fields to the canvas,
-      // so a rewritten release strands a key there too. Restating must not
-      // cost the field the character the OS composed.
+      // so they need the physical identity too. Stopping propagation must not
+      // cost the field the layout-aware character the OS composed.
       await page.evaluate(() => {
         const text = globalThis.document.getElementById("osk-input-text");
         if (!(text instanceof globalThis.HTMLInputElement)) {
@@ -280,8 +330,8 @@ test.describe("renderer input", () => {
         text.value = "";
         text.focus();
       });
-      await sendW("keyDown", "∑", alt, "∑");
-      await sendW("keyUp", "w");
+      await sendKey("keyDown", "KeyW", "z", 90, 0, "z");
+      await sendKey("keyUp", "KeyW", "z", 90);
       expect(
         await page.evaluate(() => {
           const text = globalThis.document.getElementById("osk-input-text");
@@ -293,7 +343,10 @@ test.describe("renderer input", () => {
             typed: text.value,
           };
         }),
-      ).toEqual({ keys: ["keydown:w:87", "keyup:w:87"], typed: "∑" });
+      ).toEqual({
+        keys: ["keydown:KeyW:w:90", "keyup:KeyW:w:90"],
+        typed: "z",
+      });
     } finally {
       await closeOffline(fixture);
     }
