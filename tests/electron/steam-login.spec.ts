@@ -622,7 +622,6 @@ test.describe("the Steam credential seam", () => {
           settings: {
             renderScale: 1,
             nativeCursor: false,
-            touchMode: "dbltap",
             showDiagnostics: false,
             dataStrategy: "quick",
           },

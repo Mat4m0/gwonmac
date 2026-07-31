@@ -595,7 +595,6 @@ test.describe("diagnostics", () => {
             settings: {
               renderScale: 1,
               nativeCursor: false,
-              touchMode: "dbltap",
               showDiagnostics: false,
               dataStrategy: "quick",
             },

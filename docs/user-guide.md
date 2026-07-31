@@ -95,7 +95,10 @@ Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
-on release. Main-block letter, number-row, and punctuation bindings stay on the
+on release. Mouse, trackpad, and Magic Mouse clicks and drags pass through to
+Guild Wars unchanged. A macOS double-click automatically supplies the
+double-tap signal required by the official web client; there is no input mode to
+configure. Main-block letter, number-row, and punctuation bindings stay on the
 same physical keys when the macOS input source changes, while chat and other
 text fields continue to type the active layout. Extra ISO/JIS keys and the
 numeric keypad retain the official web client's layout behavior. The in-game
@@ -119,9 +122,9 @@ your client build is not one this host has certified — you get the normal macO
 pointer. That is a cosmetic difference only: nothing about how the game plays
 changes with the box either way. The rest of the window always keeps the macOS
 pointer.
-Touch compatibility and the local performance overlay stay under
-**Advanced**, outside the normal setup path. Settings reopens to the pane most
-recently used during the current session.
+The local performance overlay stays under **Advanced**, outside the normal
+setup path. Settings reopens to the pane most recently used during the current
+session.
 
 The official WebAssembly client currently requests a WebGL context without
 multisampling, so its in-game antialiasing list may contain only **None**. The

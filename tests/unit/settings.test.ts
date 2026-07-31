@@ -21,7 +21,6 @@ describe("settings", () => {
       nativeCursor: true,
       // The first optional read-only feature stays opt-in.
       targetReadout: false,
-      touchMode: "dbltap",
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -34,10 +33,11 @@ describe("settings", () => {
     });
   });
 
-  it("gives an alpha profile the game cursor and drops the retired theme key", () => {
+  it("gives an alpha profile the game cursor and drops retired fields", () => {
     // A profile written before the cursor became a boolean carries
-    // `cursorTheme`. It is an unknown field, so it is ignored rather than
-    // rejected: nothing else the player chose may be lost with it.
+    // `cursorTheme` and a selectable input mode. They are unknown fields now,
+    // so they are ignored rather than rejected: nothing else the player chose
+    // may be lost with them.
     //
     // Such a profile also predates the default flip. It gets the new default
     // rather than the old one — an alpha install that never expressed a
@@ -55,7 +55,6 @@ describe("settings", () => {
       renderScale: 1,
       nativeCursor: true,
       targetReadout: false,
-      touchMode: "off",
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -86,7 +85,6 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
     assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
     assert.throws(() => parseSettings({ targetReadout: 1 }), AppError);
-    assert.throws(() => parseSettings({ touchMode: "hover" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
@@ -142,6 +140,7 @@ describe("settings", () => {
       lastUpdateCheckAt: 1_000,
     });
     assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
+    assert.throws(() => parseSettingsPatch({ touchMode: "dbltap" }), AppError);
     // A renderer that still names the retired key is a bug, not a migration.
     assert.throws(() => parseSettingsPatch({ cursorTheme: "system" }), AppError);
   });
@@ -184,7 +183,6 @@ describe("settings", () => {
       "renderScale",
       "showDiagnostics",
       "targetReadout",
-      "touchMode",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -192,8 +190,8 @@ describe("settings", () => {
   it("loads an alpha-written bare-JSON file with every value intact", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
     const path = join(dir, "settings.json");
-    // Byte-for-byte what v0.0.1-alpha.1 wrote: no formatVersion, and a
-    // `cursorTheme` key that build had and this one does not.
+    // Byte-for-byte what v0.0.1-alpha.1 wrote: no formatVersion, and retired
+    // cursor/input keys that build had and this one does not.
     const alpha = {
       renderScale: 1.5,
       nativeCursor: true,
@@ -213,7 +211,6 @@ describe("settings", () => {
       renderScale: 1.5,
       nativeCursor: true,
       targetReadout: false,
-      touchMode: "translate",
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately
@@ -229,12 +226,15 @@ describe("settings", () => {
     assert.deepEqual(await readdir(dir), ["settings.json"]);
     assert.deepEqual(JSON.parse(await readFile(path, "utf8")), alpha);
 
-    // The next save is the only thing that rewrites it, and it keeps the values.
+    // The next save is the only thing that rewrites it. Unrelated values stay;
+    // retired input and cursor fields disappear without a migration marker.
     await saveSettings(path, loaded);
-    assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+    const rewritten = JSON.parse(await readFile(path, "utf8"));
+    assert.deepEqual(rewritten, {
       formatVersion: 1,
       ...loaded,
     });
+    assert.equal("touchMode" in rewritten, false);
     assert.deepEqual(await loadSettings(path), loaded);
   });
 

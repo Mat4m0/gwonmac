@@ -243,7 +243,6 @@ window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
   appSettings = updated;
-  inputHost?.applySettings(updated);
   if (previousScale !== undefined && updated.renderScale !== previousScale) {
     scheduleClientResize();
   }
@@ -743,7 +742,6 @@ function loadGlue() {
 
   inputHost = host.installGameInput({
     canvas: c,
-    initialSettings: appSettings,
     diagnostics: window.gwDiagnostics,
     log,
   });

@@ -32,7 +32,6 @@ declare global {
 
   interface GameInputController {
     releaseAll(): void;
-    applySettings(settings: AppSettings): void;
   }
 
   interface LoadingController {

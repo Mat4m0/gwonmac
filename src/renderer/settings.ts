@@ -45,7 +45,6 @@
   const renderScale = form.elements.namedItem(
     'renderScale',
   ) as HTMLSelectElement;
-  const touchMode = form.elements.namedItem('touchMode') as HTMLSelectElement;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -334,15 +333,6 @@
           ? { renderScale: value }
           : null;
       }
-      case 'touchMode': {
-        const value = control.value;
-        return value === 'dbltap' ||
-          value === 'translate' ||
-          value === 'augment' ||
-          value === 'off'
-          ? { touchMode: value }
-          : null;
-      }
       case 'showDiagnostics':
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
@@ -361,7 +351,6 @@
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
     toolSettings.render(settings);
-    touchMode.value = settings.touchMode;
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     for (const radio of form.querySelectorAll<HTMLInputElement>(

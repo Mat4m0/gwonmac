@@ -623,12 +623,14 @@ half of it, and the `gl.programQuery*` counters prove it is engaged against the
 downloaded client.
 
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
-fullscreen, touch translation, trackpad-wheel normalization, and right-drag
-pointer lock. `input.ts` owns the canvas input listeners and accepts validated
-touch settings from the settings owner; it does not persist settings itself. One
-held-input registry releases keys, buttons, and touches when focus or native UI
-consumes an input release. Pointer lock uses a virtual cursor and recycles a
-held drag so camera rotation does not stall.
+fullscreen, trackpad-wheel normalization, macOS double-click repair, and
+right-drag pointer lock. `input.ts` owns the one canvas input policy. Mouse,
+trackpad, and Magic Mouse clicks and drags pass through unchanged. Chromium's
+native even click count adds the two touch taps ArenaNet's WebAssembly client
+needs for a double-click action; there is no device mode or input setting. One
+held-input registry releases keys, buttons, and an interrupted repair tap when
+focus or native UI consumes an input release. Pointer lock uses a virtual cursor
+and recycles a held drag so camera rotation does not stall.
 
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam

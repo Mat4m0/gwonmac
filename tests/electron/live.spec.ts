@@ -90,7 +90,6 @@ test.describe("live client", () => {
       JSON.stringify({
         renderScale: 2,
         nativeCursor: false,
-        touchMode: "dbltap",
         showDiagnostics: false,
         dataStrategy: "quick",
       }),

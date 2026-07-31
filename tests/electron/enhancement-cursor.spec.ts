@@ -315,7 +315,6 @@ test.describe("enhancement cursor presentation", () => {
           renderScale: 2,
           nativeCursor: value,
           targetReadout: false,
-          touchMode: "dbltap",
           showDiagnostics: false,
           dataStrategy: "quick",
         }),

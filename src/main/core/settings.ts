@@ -11,12 +11,6 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
-const TOUCH_MODES = new Set<AppSettings["touchMode"]>([
-  "dbltap",
-  "translate",
-  "augment",
-  "off",
-]);
 const SETTINGS_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 const SETTINGS_FORMAT = 1;
 const CORRUPT_BACKUPS_KEPT = 3;
@@ -60,12 +54,6 @@ export function parseSettings(raw: unknown): AppSettings {
     if (tool in src) {
       out[tool] = asBool(src[tool], tool);
     }
-  }
-  if ("touchMode" in src) {
-    if (!TOUCH_MODES.has(src.touchMode as AppSettings["touchMode"])) {
-      throw new AppError("bad_settings", `settings.touchMode has unknown type/value`);
-    }
-    out.touchMode = src.touchMode as AppSettings["touchMode"];
   }
   if ("showDiagnostics" in src) {
     out.showDiagnostics = asBool(src.showDiagnostics, "showDiagnostics");
