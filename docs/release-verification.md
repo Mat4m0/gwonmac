@@ -32,8 +32,8 @@ A newer app version fixes an uncertified client build only if it contains a
 baseline for the changed structure, so a higher number on its own is not the
 answer.
 
-Automatic checks remain opt-in, and stable installations are never offered a
-preview — see
+Automatic checks remain user-controlled and on by default; stable
+installations are never offered a preview — see
 [Updates](user-guide.md#updates).
 
 Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
@@ -68,18 +68,37 @@ These establish that the file was produced from this repository by the
 published release workflow. They do not replace macOS Gatekeeper or make an
 untrusted repository safe.
 
-## First signed release rollout
+The approval-gated `release` environment must contain the G2 Developer ID
+certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export password as
+`APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution profile for
+`io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The P12 and profile
+are base64-encoded secret values, not repository files. Before it builds, the
+workflow rejects a profile with the wrong team, application identifier,
+distribution type, certificate fingerprint, certificate count, or remaining
+lifetime. It blocks below two years and warns below five. After signing, it
+compares the embedded profile byte-for-byte and checks the top-level app's
+exact three entitlements.
 
-The existing `2026.7.0-beta.1` is an ad-hoc package. The first Developer ID
-beta is therefore `2026.7.0-beta.2` and remains a manual DMG bootstrap: an
-ad-hoc installation cannot securely replace itself with an application
-carrying a different code identity. Publish `2026.7.0-beta.3` from the same
-Developer ID identity and prove automatic updating from beta 2 on both a clean
-profile and an existing profile before shipping a stable release.
+## Identity correction and saved-login rollout
+
+`2026.7.0-beta.2` was the first Developer ID package, but it inherited the
+unrelated `com.gwdevhub.guildwars` bundle identifier and Chromium Safe Storage
+path. The next beta is the deliberate one-time correction to
+`io.github.mat4m0.gwonmac` and the Data Protection Keychain. Treat it as a
+manual DMG replacement: quit the old app, replace it in `/Applications`, and
+launch the new copy. The explicit application-support path remains
+`~/Library/Application Support/Guild Wars`, so launcher settings, templates,
+diagnostics, and downloaded game data remain. Only `credentials.bin` and
+`steam-session.bin` are retired, and both login routes require one new sign-in.
+
+Do not claim that Squirrel crosses this identity boundary without a signed
+end-to-end proof. Publish one more beta from the corrected identity and prove
+automatic updating from the cutover beta on both a clean profile and an
+existing profile before shipping a stable release.
 
 The `release` environment variable `SIGNED_BETA_UPDATE_PROVEN` is deliberately
-unset during this rollout. After the second beta has installed automatically,
-retained the profile, and the one-time saved-login re-entry has been verified,
+unset during this rollout. After the follow-up beta has installed
+automatically, retained the profile and both Data Protection Keychain items,
 set it to exactly `true`. The release workflow refuses every stable version
 until that evidence gate is opened; preview releases do not depend on it.
 

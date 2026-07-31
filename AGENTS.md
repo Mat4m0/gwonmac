@@ -98,17 +98,19 @@ not only happy paths.
   beneath maximized/fullscreen mode, validate against connected display work
   areas, never restore minimized, and keep the View-menu recovery action.
 - The three game-facing `secureStorage` methods use the single native
-  `CredentialsStore`. Its encrypted `credentials.bin` is atomic and mode
-  `0600`; credentials never enter logs, diagnostics, browser storage, or
-  macOS Keychain.
+  `CredentialsStore`. Official Developer ID packages persist its validated
+  `{ username, password }` value in the fixed `arenaNetCredentials` Data
+  Protection Keychain slot. It never enters logs, diagnostics, browser
+  storage, or a profile file.
 - The Steam login token is a second secret with the same guarantees and its own
-  shape. `EncryptedJsonStore` is the one mechanism underneath both; each secret
+  shape. `KeychainJsonStore` is the one mechanism underneath both; each secret
   supplies its own validator and error codes, so `parseCredentials` — the rule
   the credential IPC boundary runs — is never loosened for a payload it was not
-  written for. `steam-session.bin` holds `{ token, expiry }` and is the token's
-  sole persistent home: **no environment variable seeds it in any build**, and
+  written for. The fixed `steamSession` Data Protection Keychain slot holds
+  `{ token, expiry }` and is the token's sole persistent home: **no environment
+  variable seeds it in any build**, and
   `tests/policy/source-saved-login-surface.test.ts` scans for one. The token
-  never enters logs, diagnostics, browser storage, or macOS Keychain.
+  never enters logs, diagnostics, browser storage, or a profile file.
 - Steam sign-in renders in a window the main process owns, never in the game
   renderer: its own in-memory session partition destroyed with the window,
   no preload and no Node, deny-by-default permissions and downloads, and
@@ -126,10 +128,15 @@ not only happy paths.
   inspection. Do not write docs or UI that tell a player to verify the origin.
   `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
   pins the presentation.
-- Unpackaged development and explicitly marked ad-hoc test builds set
-  Chromium's `use-mock-keychain` switch before ready. Official Developer ID
-  packages use Chromium's real Keychain-backed provider. All builds clear
-  browser cookies at startup and quit.
+- Persistent secrets are available only when a package carries the official
+  release marker and Developer ID identity. Unpackaged development and
+  ordinary/ad-hoc packages use the volatile in-memory implementation and lose
+  secrets at quit; there is no file, mock-Keychain, or `safeStorage` fallback.
+  The first hard-cutover launch deletes exactly the retired
+  `credentials.bin` and `steam-session.bin`, never other profile data. The
+  cookie-encryption fuse is disabled so Chromium cannot create its separate
+  Safe Storage Keychain item. All builds clear browser cookies at startup and
+  quit.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check per launch and

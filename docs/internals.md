@@ -191,16 +191,33 @@ shop.initialize/inAppPurchase
 ```
 
 The generated glue requires all three credential methods. They cross a narrow
-IPC boundary to one native `CredentialsStore`, which writes encrypted
-`credentials.bin` atomically with mode `0600`. Official Developer ID packages
-let Electron `safeStorage` use its macOS Keychain-backed provider. Unpackaged
-development and the explicit packaged-test switch use Chromium's local mock
-provider to avoid recurring prompts from an unstable identity. An unreadable
-ciphertext is never deleted by a read; the failure is recorded without
-credential content and the game prompts again. A later explicit save atomically
-replaces it.
-Browser cookies are cleared at startup and quit. Persistent IDBFS client
-preferences and the dedicated saved-login file remain intact.
+IPC boundary to one native `CredentialsStore`. An official package carrying
+the release marker persists its validated `{ username, password }` JSON in the
+fixed `arenaNetCredentials` slot of the app's Data Protection Keychain access
+group. The Objective-C++ Node-API boundary uses
+`kSecUseDataProtectionKeychain`, `WhenUnlockedThisDeviceOnly`, and a fresh
+noninteractive `LAContext` for every operation. A read failure never deletes or
+replaces an item; the failure is recorded without credential content and the
+game prompts again.
+
+Unpackaged development, ordinary local packages, and explicitly marked release
+smokes use `VolatileNativeKeychain`, so no unstable identity can claim the
+official items and no development secret survives process exit. There is no
+file, `safeStorage`, or mock-Keychain fallback. The first hard-cutover startup
+attempts to delete exactly `credentials.bin` and `steam-session.bin`; settings,
+window state, diagnostics, cached clients and chunks, and the `gw://app` IDBFS
+origin are outside that operation. The cleanup is one-way because the retired
+ciphertexts cannot be safely migrated without recreating the prompt it removes.
+
+The official identity is Team `9NN976MFZ4`, bundle
+`io.github.mat4m0.gwonmac`, and application identifier
+`9NN976MFZ4.io.github.mat4m0.gwonmac`. The embedded Developer ID distribution
+profile authorizes that identity. The top-level signature claims only the
+application identifier, team identifier, and JIT entitlement; it does not add
+Keychain Sharing, App Groups, App Sandbox, or `get-task-allow`. Release signing
+pins the G2 certificate fingerprint rather than its non-unique display name.
+The cookie-encryption fuse is disabled so Chromium never initializes a separate
+Safe Storage Keychain item. Browser cookies are cleared at startup and quit.
 Steam is advertised as a federated provider; Apple and Google are not. The
 client probes each one while it builds its login screen, and answering yes for
 Steam is what makes it render a Steam button beside the unchanged ArenaNet
@@ -265,17 +282,16 @@ inspection.
 `docs/user-guide.md` says so plainly instead of asking them to check a title bar
 that is not there.
 
-The token persists in `steam-session.bin` as `{ token, expiry }`, under the same
-`EncryptedJsonStore` mechanism as `credentials.bin` — `safeStorage` encryption,
-atomic write, mode `0600` — with its own validator, so the credential store's
-shape rule is untouched. It is the token's only persistent home; **no
-environment variable seeds it in any build**. Silent resolution returns a
-stored unexpired token or nothing; explicit resolution reacquires. An expired
-token is discarded;
-an unreadable one is treated as absent but deliberately kept, because encryption
-can be momentarily unavailable and deleting on that would throw away a
-credential that still works. Neither failure fails the launch — both return the
-player to the client's own login screen. The client's `storeAccountData`
+The token persists as `{ token, expiry }` in the fixed `steamSession` Data
+Protection Keychain slot, under the same `KeychainJsonStore` mechanism but with
+its own validator, so the credential store's shape rule is untouched. It is the
+token's only persistent home; **no environment variable seeds it in any
+build**. Silent resolution returns a stored unexpired token or nothing;
+explicit resolution reacquires. An expired token is discarded; an unreadable
+one is treated as absent but deliberately kept, because Keychain access can be
+momentarily unavailable and deleting on that would throw away a credential
+that still works. Neither failure fails the launch — both return the player to
+the client's own login screen. The client's `storeAccountData`
 storeback refreshes the stored expiry only when the value matches the token
 already held, since which value it actually passes back has never been isolated
 and persisting a session-resume token in place of the link token would overwrite
@@ -399,8 +415,8 @@ deleted when the selected client changes.
 After native confirmation, the recovery action records a restart request.
 Startup clears only IndexedDB for the owned `gw://app` session before a
 renderer can mount IDBFS, then removes the request. It cannot clear the
-separate native chunk cache or encrypted credential file. There is no native
-arbitrary-file bridge.
+separate native chunk cache or either Data Protection Keychain item. There is
+no native arbitrary-file bridge.
 
 ### Which of three states a client build is in
 
@@ -894,7 +910,7 @@ two that read _none_ today are recorded rather than quietly kept.
 | A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
 | With update checks switched off, the app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-checks-github-once-unless-opted-out.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts exactly **one** api.github.com request across a launch with the defaults, then **zero** across a launch with the box unticked. `tests/unit/settings.test.ts`, `tests/unit/app-updater.test.ts`, and `tests/unit/update-action.test.ts` prove the constituents |
 | The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/enhancement-cursor.spec.ts` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.ts` for what is tracked |
-| Releases are Developer ID signed, notarized, stapled, and the shipped fuses hold | website FAQ | `.github/workflows/release.yml` verifies identity, Team ID, timestamp, hardened runtime, minimal entitlements, Gatekeeper and stapled tickets; `tests/policy/source-release-pipeline.test.ts` pins that policy; `tests/packaged-smoke.ts` and `tests/policy/fuses.test.ts` verify package structure and fuses |
+| Releases are Developer ID signed, notarized, stapled, and the shipped fuses hold | website FAQ | `.github/workflows/release.yml` verifies the G2 fingerprint, profile identity, Team ID, timestamp, hardened runtime, exact three top-level entitlements, Gatekeeper and stapled tickets; `tests/signed-keychain-runtime.ts` proves the signed product retains a Data Protection Keychain item across relaunch, move, and a newly signed replacement; `tests/policy/source-release-pipeline.test.ts` pins that policy; `tests/packaged-smoke.ts` and `tests/policy/fuses.test.ts` verify package structure and fuses |
 | Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.ts` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.ts` for the resolutions shown beside each scale |
 | "Tuned for Apple Silicon" | website capability facts | `.github/workflows/macos-verify.yml` and `.github/workflows/release.yml` fail before building unless the package runner reports `arm64`; `tests/policy/source-release-pipeline.test.ts` pins both gates |
 | "Up to 60 FPS" | website capability facts | **none.** No automated test asserts a frame rate |

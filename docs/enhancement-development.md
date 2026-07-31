@@ -38,9 +38,10 @@ markup and CSS live under `scripts/enhancements-visual/`; they are not productio
 navigation or packaged renderer assets.
 
 `enhancements:doctor` is local-only. It checks the existing profile, published
-client, exact WASM hash, transformed cache, saved-login presence, the profile's
-`nativeCursor` and `targetReadout` settings, and complete snapshot filename
-presence. It verifies executable artifacts, but labels
+client, exact WASM hash, transformed cache, the profile's `nativeCursor` and
+`targetReadout` settings, and complete snapshot filename presence. It does not
+inspect saved login: command-line tooling is outside the signed app's Data
+Protection Keychain boundary. It verifies executable artifacts, but labels
 snapshot chunks as presence-only because it does not hash their contents. It
 never starts Electron or contacts ArenaNet.
 
