@@ -645,8 +645,13 @@ test.describe("renderer input", () => {
       GW_BACKGROUND_LAUNCH: "0",
     });
     try {
-      const { page } = fixture;
+      const { app, page } = fixture;
       await startGameInput(page);
+      await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+        electronApp.focus({ steal: true });
+        BrowserWindow.getAllWindows()[0]?.focus();
+      });
+      await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
       await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const loading = globalThis.document.getElementById("loading");
