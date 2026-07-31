@@ -1,7 +1,13 @@
 // The single producer of everything under build/.
 import { spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+
+const nativeArchitecture =
+  process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x86_64" : null;
+if (nativeArchitecture === null) {
+  throw new Error(`unsupported native build architecture: ${process.arch}`);
+}
 
 /**
  * Every command that produces a package input, in order. Exported so the step
@@ -38,6 +44,41 @@ export const BUILD_STEPS = [
   ],
   // The main program, and the owner of build/shared.
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // The only native addon. It uses raw Node-API version 8, whose ABI remains
+  // stable across the Node and Electron upgrades this project takes. The
+  // framework APIs resolve at runtime from the Electron host, so the bundle
+  // deliberately leaves Node-API symbols undefined here.
+  [
+    "xcrun",
+    [
+      "clang++",
+      "-std=c++20",
+      "-fobjc-arc",
+      "-bundle",
+      "-undefined",
+      "dynamic_lookup",
+      "-DNAPI_VERSION=8",
+      "-I",
+      "node_modules/node-api-headers/include",
+      "-mmacosx-version-min=12.0",
+      "-arch",
+      nativeArchitecture,
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fvisibility=hidden",
+      "src/native/keychain/keychain.mm",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "LocalAuthentication",
+      "-framework",
+      "Security",
+      "-o",
+      "build/native/keychain.node",
+    ],
+  ],
   // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes
   // build/preload/preload.cjs, which nothing else here produces — so its
   // position is free. It is TypeScript, so it is spawned the one way this
@@ -81,6 +122,7 @@ export const BUILD_STEPS = [
 
 function build() {
   rmSync("build", { recursive: true, force: true });
+  mkdirSync("build/native", { recursive: true });
 
   for (const [command, args] of BUILD_STEPS) {
     const result = spawnSync(command, args, { stdio: "inherit" });

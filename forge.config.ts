@@ -52,7 +52,7 @@ const releaseNotarization = officialRelease
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: { unpack: "**/build/native/keychain.node" },
     name: "Guild Wars Reforged",
     executableName: "Guild Wars Reforged",
     appVersion: macOSVersion.appVersion,
@@ -86,6 +86,7 @@ const config: ForgeConfig = {
       if (p === "/build/renderer") return false;
       if (p.startsWith("/build/renderer/")) return p.endsWith(".d.ts");
       if (p === "/build/preload" || p === "/build/preload/preload.cjs") return false;
+      if (p === "/build/native" || p === "/build/native/keychain.node") return false;
       return true;
     },
   },
