@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { SafeStorageApi } from "../../src/main/core/encrypted-store.js";
+import type {
+  NativeKeychain,
+  SecretSlot,
+} from "../../src/main/core/native-keychain.js";
 import type { SteamRefusalReason } from "../../src/shared/contracts.js";
 import {
   parseSteamSession,
@@ -18,35 +18,44 @@ import {
 } from "../../src/main/core/steam-session.js";
 import { AppError } from "../../src/shared/errors.js";
 
-/** The same reversible stand-in `tests/unit/credentials.test.ts` uses. */
-function fakeStorage(): SafeStorageApi {
-  return {
-    isEncryptionAvailable: () => true,
-    encryptString: (value) => Buffer.from([...value].reverse().join(""), "utf8"),
-    decryptString: (value) => [...value.toString("utf8")].reverse().join(""),
-  };
+class FakeKeychain implements NativeKeychain {
+  readonly values = new Map<SecretSlot, Buffer>();
+  failure: Error | null = null;
+
+  async load(slot: SecretSlot): Promise<Buffer | null> {
+    if (this.failure) throw this.failure;
+    const value = this.values.get(slot);
+    return value ? Buffer.from(value) : null;
+  }
+
+  async save(slot: SecretSlot, value: Buffer): Promise<void> {
+    if (this.failure) throw this.failure;
+    this.values.set(slot, Buffer.from(value));
+  }
+
+  async clear(slot: SecretSlot): Promise<void> {
+    if (this.failure) throw this.failure;
+    this.values.delete(slot);
+  }
 }
 
-async function storeIn(prefix: string): Promise<{ path: string; store: SteamSessionStore }> {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
-  const path = join(dir, "steam-session.bin");
-  return { path, store: new SteamSessionStore(path, fakeStorage()) };
+function storeIn(): { keychain: FakeKeychain; store: SteamSessionStore } {
+  const keychain = new FakeKeychain();
+  return { keychain, store: new SteamSessionStore(keychain) };
 }
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
 
 describe("the Steam session store", () => {
-  it("round-trips an owner-only encrypted record and clears it", async () => {
-    const { path, store } = await storeIn("gw-steam-store-");
+  it("round-trips the fixed Steam slot and clears it", async () => {
+    const { keychain, store } = storeIn();
     const session = { token: TOKEN, expiry: 1_800_000_000_000 };
 
     assert.equal(await store.load(), null);
     await store.save(session);
     assert.deepEqual(await store.load(), session);
 
-    const raw = await readFile(path);
-    assert.equal(raw.includes(Buffer.from(TOKEN)), false, "the token must not sit in the file");
-    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    assert.equal(keychain.values.has("arenaNetCredentials"), false);
 
     await store.clear();
     assert.equal(await store.load(), null);
@@ -56,22 +65,19 @@ describe("the Steam session store", () => {
     // An acquired token is stored before any server expiry is known. `null`
     // is that state, and it must survive the round-trip rather than being read
     // back as a token that expired at the epoch.
-    const { store } = await storeIn("gw-steam-null-expiry-");
+    const { store } = storeIn();
     await store.save({ token: TOKEN, expiry: null });
     assert.deepEqual(await store.load(), { token: TOKEN, expiry: null });
   });
 
   it("reports an absent store as absent, not as a failure", async () => {
-    const { store } = await storeIn("gw-steam-enoent-");
+    const { store } = storeIn();
     assert.equal(await store.load(), null);
   });
 
-  it("refuses unavailable encryption the way the credential store does", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "gw-steam-unavailable-"));
-    const store = new SteamSessionStore(join(dir, "steam-session.bin"), {
-      ...fakeStorage(),
-      isEncryptionAvailable: () => false,
-    });
+  it("maps native failure to the Steam session vocabulary", async () => {
+    const { keychain, store } = storeIn();
+    keychain.failure = new Error("injected native failure");
     await assert.rejects(
       store.save({ token: TOKEN, expiry: null }),
       (error: unknown) =>
@@ -79,37 +85,31 @@ describe("the Steam session store", () => {
     );
   });
 
-  it("refuses ciphertext it cannot read without destroying it", async () => {
+  it("refuses invalid bytes without destroying them", async () => {
     // The token is the only thing standing between the player and a Steam
     // prompt. A read that fails because encryption was momentarily unavailable
     // must not throw away a credential that still works.
-    const { path, store } = await storeIn("gw-steam-corrupt-");
-    await store.save({ token: TOKEN, expiry: null });
-    const wrongKey = new SteamSessionStore(path, {
-      ...fakeStorage(),
-      decryptString: () => {
-        throw new Error("wrong key");
-      },
-    });
+    const { keychain, store } = storeIn();
+    keychain.values.set("steamSession", Buffer.from([0xff]));
     await assert.rejects(
-      wrongKey.load(),
+      store.load(),
       (error: unknown) => error instanceof AppError && error.code === "steam_session_corrupt",
     );
     assert.ok(
-      (await readFile(path)).byteLength > 0,
+      keychain.values.has("steamSession"),
       "a failed read must not delete the stored token",
     );
   });
 
   it("rejects an invalid record before replacing a stored one", async () => {
-    const { path, store } = await storeIn("gw-steam-reject-save-");
+    const { keychain, store } = storeIn();
     await store.save({ token: TOKEN, expiry: null });
-    const before = await readFile(path);
+    const before = Buffer.from(keychain.values.get("steamSession")!);
     await assert.rejects(
       store.save({ token: "", expiry: null }),
       (error: unknown) => error instanceof AppError && error.code === "steam_session_corrupt",
     );
-    assert.deepEqual(await readFile(path), before);
+    assert.deepEqual(keychain.values.get("steamSession"), before);
     assert.deepEqual(await store.load(), { token: TOKEN, expiry: null });
   });
 });

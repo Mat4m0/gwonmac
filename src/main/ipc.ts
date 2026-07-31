@@ -1,11 +1,4 @@
-import {
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  shell,
-  app,
-  safeStorage,
-} from "electron";
+import { BrowserWindow, dialog, ipcMain, shell, app } from "electron";
 import { statfs, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
@@ -39,12 +32,12 @@ import {
 import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
-import { CredentialsStore, parseCredentials } from "./core/credentials.js";
+import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
 import {
   MAX_TOKEN_LENGTH,
   SteamSessionCoordinator,
-  SteamSessionStore,
+  type SteamSessionStore,
   steamTokenOutcome,
 } from "./core/steam-session.js";
 import type {
@@ -76,6 +69,8 @@ import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
 
 export interface IpcContext {
   sockets: SocketManager;
+  credentialsStore: CredentialsStore;
+  steamSessionStore: SteamSessionStore;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
@@ -451,7 +446,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
   drainSecrets(): Promise<void>;
 } {
   const paths = gamePaths();
-  const credentials = new CredentialsStore(paths.credentials, safeStorage);
+  const credentials = ctx.credentialsStore;
   const secretOperations = new Set<Promise<unknown>>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
@@ -758,7 +753,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
   } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
   registerChannelDefinitions(handlers);
-  const steamSettled = registerSteamIpcHandlers(ctx.acquireSteamToken);
+  const steamSettled = registerSteamIpcHandlers(
+    ctx.acquireSteamToken,
+    ctx.steamSessionStore,
+  );
   return {
     async drainSecrets() {
       await steamSettled();
@@ -802,11 +800,9 @@ function registerChannelDefinitions(
 
 export function registerSteamIpcHandlers(
   acquireSteamToken: IpcContext["acquireSteamToken"],
+  store: SteamSessionStore,
 ): () => Promise<void> {
-  const paths = gamePaths();
-  const steam = new SteamSessionCoordinator(
-    new SteamSessionStore(paths.steamSession, safeStorage),
-  );
+  const steam = new SteamSessionCoordinator(store);
 
   const runSteamSignIn = async (
     win: BrowserWindow,

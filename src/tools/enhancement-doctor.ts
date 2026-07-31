@@ -19,7 +19,6 @@ import {
 
 export interface EnhancementDoctorReport {
   profile: "ready" | "missing";
-  credentials: "saved" | "missing";
   /**
    * The profile's own setting. An observation-tier live run enables nothing, so
    * this is the only thing that installs the Enhancement for it (P4.7); an
@@ -139,9 +138,7 @@ export async function inspectEnhancementWorkspace(
     .filter((entry) => !entry.present)
     .map((entry) => entry.name);
   const profileReady = (await isFile(path.join(profile, "settings.json")))
-    || (await isFile(path.join(profile, "credentials.bin")))
     || missing.length < required.length;
-  const credentials = await isFile(path.join(profile, "credentials.bin"));
   const { nativeCursor, targetReadout } = await readEnhancementSettings(profile);
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: EnhancementDoctorReport["artifacts"]["integrity"] =
@@ -185,7 +182,6 @@ export async function inspectEnhancementWorkspace(
     missing.length === 0 && artifactIntegrity === "verified";
   return {
     profile: profileReady ? "ready" : "missing",
-    credentials: credentials ? "saved" : "missing",
     nativeCursor,
     targetReadout,
     artifacts: {

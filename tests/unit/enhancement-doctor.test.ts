@@ -24,7 +24,6 @@ describe("Enhancement workspace doctor", () => {
     const chunks = path.join(game, "chunks");
     await mkdir(artifacts, { recursive: true });
     await mkdir(chunks, { recursive: true });
-    await writeFile(path.join(profile, "credentials.bin"), "encrypted");
     const artifactData = {
       "Gw.jspi.js": "glue",
       "Gw.jspi.wasm": "unsupported",
@@ -75,7 +74,6 @@ describe("Enhancement workspace doctor", () => {
 
     const report = await inspectEnhancementWorkspace(profile);
     assert.equal(report.profile, "ready");
-    assert.equal(report.credentials, "saved");
     assert.equal(report.artifacts.ready, true);
     assert.equal(report.artifacts.integrity, "verified");
     assert.deepEqual(report.snapshot, {

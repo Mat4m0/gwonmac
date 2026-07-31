@@ -479,7 +479,7 @@ test.describe("Electron application", () => {
     }
   });
 
-  test("saved login survives an application relaunch without Keychain", async () => {
+  test("unofficial builds keep saved login only for the current process", async () => {
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
@@ -496,19 +496,17 @@ test.describe("Electron application", () => {
           password: "relaunch-password",
         }),
       );
+      expect(await page.evaluate(() => window.gwNative.credentials.load())).toEqual({
+        username: "relaunch@example.invalid",
+        password: "relaunch-password",
+      });
       await app.close();
 
       app = await launch(userData, env);
       const relaunchedPage = await app.firstWindow({ timeout: 30_000 });
       await relaunchedPage.waitForLoadState("domcontentloaded");
-      expect(
-        await relaunchedPage.evaluate(() =>
-          window.gwNative.credentials.load()),
-      ).toEqual({
-        username: "relaunch@example.invalid",
-        password: "relaunch-password",
-      });
-      await relaunchedPage.evaluate(() => window.gwNative.credentials.clear());
+      expect(await relaunchedPage.evaluate(() =>
+        window.gwNative.credentials.load())).toBeNull();
     } finally {
       await app.close().catch(() => {});
       await rm(userData, { recursive: true, force: true });

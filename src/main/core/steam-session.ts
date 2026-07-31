@@ -1,10 +1,7 @@
 import type { SteamRefusalReason } from "../../shared/contracts.js";
 import { AppError, errorCode, type ErrorCode } from "../../shared/errors.js";
-import {
-  EncryptedJsonStore,
-  type EncryptedSecret,
-  type SafeStorageApi,
-} from "./encrypted-store.js";
+import type { NativeKeychain } from "./native-keychain.js";
+import { KeychainJsonStore, type KeychainSecret } from "./keychain-store.js";
 
 /**
  * The Steam OAuth access token that authenticates a Steam login, and when it
@@ -58,18 +55,18 @@ export function parseSteamSession(value: unknown): StoredSteamSession {
   return { token, expiry };
 }
 
-const STEAM_SESSION: EncryptedSecret<StoredSteamSession> = {
+const STEAM_SESSION: KeychainSecret<StoredSteamSession> = {
   parse: parseSteamSession,
   unavailable: () =>
-    new AppError("steam_session_unavailable", "Steam session encryption is unavailable"),
-  undecryptable: () =>
-    new AppError("steam_session_corrupt", "the stored Steam session cannot be decrypted"),
+    new AppError("steam_session_unavailable", "the saved Steam session is unavailable"),
+  corrupt: () =>
+    new AppError("steam_session_corrupt", "the stored Steam session is invalid"),
 };
 
 /** The Steam token's one persistent home. */
-export class SteamSessionStore extends EncryptedJsonStore<StoredSteamSession> {
-  constructor(path: string, storage: SafeStorageApi) {
-    super(path, storage, STEAM_SESSION);
+export class SteamSessionStore extends KeychainJsonStore<StoredSteamSession> {
+  constructor(keychain: NativeKeychain) {
+    super("steamSession", keychain, STEAM_SESSION);
   }
 }
 

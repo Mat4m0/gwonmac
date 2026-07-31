@@ -1,10 +1,7 @@
 import type { StoredCredentials } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
-import {
-  EncryptedJsonStore,
-  type EncryptedSecret,
-  type SafeStorageApi,
-} from "./encrypted-store.js";
+import type { NativeKeychain } from "./native-keychain.js";
+import { KeychainJsonStore, type KeychainSecret } from "./keychain-store.js";
 
 /**
  * The one credential shape check. Called on two different inputs: whatever the
@@ -28,25 +25,17 @@ export function parseCredentials(value: unknown): StoredCredentials {
   return { username, password };
 }
 
-const CREDENTIALS: EncryptedSecret<StoredCredentials> = {
+const CREDENTIALS: KeychainSecret<StoredCredentials> = {
   parse: parseCredentials,
   unavailable: () =>
-    new AppError("credentials_unavailable", "credential encryption is unavailable"),
-  undecryptable: () =>
-    new AppError("credentials_corrupt", "saved credentials cannot be decrypted"),
+    new AppError("credentials_unavailable", "saved credentials are unavailable"),
+  corrupt: () =>
+    new AppError("credentials_corrupt", "saved credentials are invalid"),
 };
 
-/**
- * The saved login's one encrypted owner-only file.
- *
- * The encrypt / atomic-write / validate-both-ways mechanism moved to
- * `EncryptedJsonStore` when the Steam session needed the same guarantees.
- * Nothing about this store's behaviour moved with it: the shape rule above and
- * the two error codes are unchanged, which is what
- * `tests/unit/credentials.test.ts` proves.
- */
-export class CredentialsStore extends EncryptedJsonStore<StoredCredentials> {
-  constructor(path: string, storage: SafeStorageApi) {
-    super(path, storage, CREDENTIALS);
+/** The ArenaNet saved login's fixed Data Protection Keychain item. */
+export class CredentialsStore extends KeychainJsonStore<StoredCredentials> {
+  constructor(keychain: NativeKeychain) {
+    super("arenaNetCredentials", keychain, CREDENTIALS);
   }
 }
