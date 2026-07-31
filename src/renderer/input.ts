@@ -16,6 +16,32 @@ const POINTER_ROAM = 16;
 // dropped. Four cross a drag's whole range; further is a teleport, not a drag.
 const MAX_POINTER_REGRABS = 4;
 
+// ArenaNet's web client identifies a binding by KeyboardEvent.key, which is a
+// character from the active keyboard layout. Give each main-block position a
+// unique stable US-layout character instead. `code` already is the browser's
+// physical identity; this map is only the vocabulary the client accepts for
+// non-alphanumeric ANSI positions. ISO/JIS extras and the numpad pass through:
+// the key-only client contract has no proven collision-free identity for them.
+const PHYSICAL_PUNCTUATION_KEYS: Readonly<Record<string, string>> = {
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+};
+
+const physicalKey = (code: string, fallback: string): string => {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  return PHYSICAL_PUNCTUATION_KEYS[code] ?? fallback;
+};
+
 /**
  * What a trusted press recorded, so the synthetic release can restate it
  * exactly. `target` is the node the press reached, which is where its release
@@ -195,54 +221,21 @@ export const installGameInput = ({
     }));
   };
 
-  // macOS treats Option as a text modifier, so a held Option rewrites
-  // KeyboardEvent.key: W arrives as "∑" on a US layout, and as an unrelated
-  // ASCII character ("@", "|") on others. ArenaNet's client identifies keys
-  // by that string, so an Option-held release never clears the key its press
-  // registered — holding Option to read merchant names while running left
-  // movement keys down for good. The physical key is in `code`; ask the OS
-  // what that key produces unmodified, and restate the event before the
-  // client (or our own held-key registry) sees it.
-  let layoutKeys = new Map<string, string>();
-  const readLayoutKeys = () => {
-    const layout = navigator.keyboard?.getLayoutMap?.();
-    if (!layout) {
-      log('[warn] keyboard layout unavailable; Option-held keys may stick');
-      return;
-    }
-    layout.then((map) => {
-      layoutKeys = new Map(map);
-    }).catch((error: unknown) => {
-      diagnostics?.event('keyboard.layoutFailed', error);
-      log(
-        '[warn] keyboard layout unreadable:',
-        error instanceof Error ? error.message : String(error),
-      );
-    });
-  };
-  readLayoutKeys();
-  // Chromium has no layout-change event, and switching input source does not
-  // reach the game while another window owns it. Re-reading on focus is the
-  // last moment before the new layout can produce a key.
-  window.addEventListener('focus', readLayoutKeys);
-
   /**
-   * Returns the key the client should see, having already re-dispatched a
-   * corrected event in place of a modifier-rewritten one.
+   * Returns the physical key identity the client should see, having already
+   * re-dispatched a corrected event in place of a layout-dependent one.
    */
-  const layoutKey = (event: KeyboardEvent) => {
+  const clientKey = (
+    event: KeyboardEvent,
+    key = physicalKey(event.code, event.key),
+  ) => {
     const target = event.target;
-    if (!event.altKey || !target) return event.key;
-    const key = layoutKeys.get(event.code);
-    if (!key || key.toUpperCase() === event.key.toUpperCase()) return event.key;
+    if (!target || key === event.key) return key;
     // One event per physical transition: the rewritten one must not also
-    // reach the client, or a layout whose Option layer produces a bound
-    // character presses that binding and never releases it — a German
-    // Option+L is "@", which the client reads as the 2 key going down.
-    // Text entry is restated too: the client's own OSK fields relay key
-    // events to the canvas, so they carry the same rewrite to the same
-    // state. Only propagation stops here, so the field still types the
-    // character the OS composed.
+    // reach the client. Text entry is restated too because the client's OSK
+    // fields relay key events to the canvas. Only propagation stops here, so
+    // the field still types the character the OS composed while game input
+    // receives the physical identity.
     event.stopImmediatePropagation();
     const restated = new globalThis.KeyboardEvent(event.type, {
       bubbles: true,
@@ -337,8 +330,9 @@ export const installGameInput = ({
 
   window.addEventListener('keydown', (event) => {
     if (!event.isTrusted) return;
-    const key = layoutKey(event);
-    if (event.repeat && heldKeys.has(event.code)) return;
+    const held = heldKeys.get(event.code);
+    const key = clientKey(event, event.repeat ? held?.key : undefined);
+    if (event.repeat && held) return;
     heldKeys.set(event.code, {
       target: event.target,
       key,
@@ -355,7 +349,7 @@ export const installGameInput = ({
   }, true);
   window.addEventListener('keyup', (event) => {
     if (!event.isTrusted) return;
-    layoutKey(event);
+    clientKey(event, heldKeys.get(event.code)?.key);
     heldKeys.delete(event.code);
     if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
       releaseKeys((code) =>

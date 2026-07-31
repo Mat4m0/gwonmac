@@ -635,19 +635,26 @@ drags. Bounded at the window edge, the near side recycles about every half
 canvas of travel — far more often than the far side, and the cost of keeping
 every coordinate in the range the client accepts.
 
-The client identifies a key by `KeyboardEvent.key`, so its held-key state is
-character state, not physical state. macOS makes Option a text modifier, which
-rewrites that character for as long as Option is held: `W` arrives as `∑` on a
-US layout, and as a bound character on others — a German Option+L is `@`, which
-the client reads as the `2` key. A press and its release therefore disagree
-whenever Option is held across only one of them, and the key the client believes
-is down never comes up. The input host reads the OS layout map, restates the
-event with the unmodified character of `event.code`, and stops the rewritten
-original so the client sees exactly one event per physical transition. Text
-fields are restated too, because the client relays their key events to the
-canvas; only propagation is stopped, so the field still types the composed
-character. Command is different — macOS withholds the release entirely — and
-that stays handled by releasing every non-modifier key when Command comes up.
+The client identifies a binding by layout-dependent `KeyboardEvent.key` rather
+than physical `KeyboardEvent.code`. The input host converts every main-block
+letter, top-row digit, and ANSI punctuation position to its unique fixed
+unshifted US-layout character before the client sees it. A physical `KeyW` is
+therefore `w` to the client under QWERTY, AZERTY, and macOS's Option layer alike;
+bindings survive an input-source change, and a release cannot disagree with its
+press. ISO/JIS-only and numpad positions retain the official client's behavior:
+its key-only vocabulary has no proven collision-free physical identity for
+them. Their release still reuses the character recorded at press time, so a
+layout or modifier change during one hold cannot strand the key. The client's
+Controls screen receives the canonical character and does not relabel it when
+the input source changes.
+
+The host stops each replaced event and dispatches exactly one normalized key
+event in its place. Text fields are restated too, because the client relays
+their key events to the canvas; stopping propagation without preventing the
+default action lets the field type the layout-aware composed character while
+game input sees the physical identity. Command is different — macOS withholds
+the release entirely — and remains handled by releasing every non-modifier key
+when Command comes up.
 
 ## Diagnostics
 
