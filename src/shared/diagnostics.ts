@@ -195,6 +195,13 @@ export const RENDERER_MILESTONES = [
   "snapshot.fatalRead",
   "wasm.abort",
   "wasm.exit",
+  // The renderer half of the Enhancement story: whether our code was actually
+  // live in the game's call path. Main records that a transformed module was
+  // *prepared*; only these say the hook was installed, refused, or withdrawn —
+  // the first question a wasm.abort triage asks.
+  "enhancement.installed",
+  "enhancement.installFailed",
+  "enhancement.uninstalled",
 ] as const;
 
 export type RendererMilestone = (typeof RENDERER_MILESTONES)[number];
@@ -223,6 +230,17 @@ export interface RendererMilestoneFieldsByName {
   "wasm.abort": { reasonKind: WasmAbortReasonKind; fingerprint: string };
   /** A non-zero client exit: the other way the running game dies. */
   "wasm.exit": { code: number };
+  /**
+   * The hook went live. `capabilityProfile` is the closed profile vocabulary
+   * from contracts — typed as string here because contracts imports this file;
+   * the recorder's schema enforces membership.
+   */
+  "enhancement.installed": {
+    companionAbi: number;
+    installation: number;
+    capabilityProfile: string;
+  };
+  "enhancement.uninstalled": { installation: number };
 }
 export type RendererMilestoneFields =
   RendererMilestoneFieldsByName[keyof RendererMilestoneFieldsByName];

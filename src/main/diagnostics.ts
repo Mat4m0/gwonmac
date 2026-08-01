@@ -24,10 +24,12 @@ import {
   screen,
   type BrowserWindow,
 } from "electron";
-import type {
-  AppSettings,
-  GraphicsDiagnostics,
-  RendererCommand,
+import {
+  ENHANCEMENT_CAPABILITY_PROFILES,
+  type AppSettings,
+  type EnhancementCapabilityProfile,
+  type GraphicsDiagnostics,
+  type RendererCommand,
 } from "../shared/contracts.js";
 import { errorCode, type ErrorCode } from "../shared/errors.js";
 import type {
@@ -570,6 +572,38 @@ export function recordRendererMilestone(
         k: "wasm.exit",
         clockSynchronized: rendererClockSynchronized,
         code: fields.code,
+      },
+      { timestampUs },
+    );
+    return;
+  }
+  if (name === "enhancement.installed") {
+    if (!fields || !("capabilityProfile" in fields)) return;
+    // IPC validated the shape; membership in the closed profile vocabulary is
+    // this recorder's gate. An unknown profile is dropped, not recorded.
+    const profile = fields.capabilityProfile;
+    if (!Object.hasOwn(ENHANCEMENT_CAPABILITY_PROFILES, profile)) return;
+    recordEvent(
+      {
+        k: "enhancement.installed",
+        clockSynchronized: rendererClockSynchronized,
+        companionAbi: fields.companionAbi,
+        installation: fields.installation,
+        capabilityProfile: profile as EnhancementCapabilityProfile,
+      },
+      { timestampUs },
+    );
+    return;
+  }
+  if (name === "enhancement.uninstalled") {
+    if (!fields || !("installation" in fields) || "capabilityProfile" in fields) {
+      return;
+    }
+    recordEvent(
+      {
+        k: "enhancement.uninstalled",
+        clockSynchronized: rendererClockSynchronized,
+        installation: fields.installation,
       },
       { timestampUs },
     );

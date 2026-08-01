@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
@@ -810,6 +811,61 @@ async function assertTargetReadoutLifecycle() {
       state: undefined,
       tableEmpty: true,
     });
+
+    // The crash-triage timeline: installation and withdrawal are recorded
+    // events beside wasm.abort, so an exported log can say whether the hook
+    // was live. Poll, because the recorder flushes asynchronously.
+    const telemetryDeadline = Date.now() + 10_000;
+    let lifecycle: { name: string; fields: Record<string, unknown> }[] = [];
+    while (Date.now() < telemetryDeadline) {
+      const events: { name?: string; fields?: Record<string, unknown> }[] = [];
+      for (const file of (await readdir(path.join(fixture.userData, "diagnostics"))
+        .catch(() => [] as string[]))
+        .filter((name) => name.endsWith(".jsonl"))) {
+        const text = await readFile(
+          path.join(fixture.userData, "diagnostics", file),
+          "utf8",
+        );
+        for (const entry of text.split("\n")) {
+          if (!entry) continue;
+          try {
+            events.push(JSON.parse(entry));
+          } catch {
+            continue;
+          }
+        }
+      }
+      lifecycle = events
+        .filter((event) =>
+          event.name === "enhancement.installed"
+          || event.name === "enhancement.uninstalled")
+        .map((event) => ({ name: event.name ?? "", fields: event.fields ?? {} }));
+      if (lifecycle.length >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    assert.deepEqual(
+      lifecycle.map(({ name, fields }) => ({
+        name,
+        companionAbi: fields.companionAbi,
+        capabilityProfile: fields.capabilityProfile,
+        installation: fields.installation,
+      })),
+      [
+        {
+          name: "enhancement.installed",
+          companionAbi: 6,
+          capabilityProfile: "target",
+          installation: 1,
+        },
+        {
+          name: "enhancement.uninstalled",
+          companionAbi: undefined,
+          capabilityProfile: undefined,
+          installation: 1,
+        },
+      ],
+      "the packaged install lifecycle did not reach the diagnostics log",
+    );
     assert.ok(
       resources.some(
         (url) => new URL(url).pathname === "/companion-kernel.wasm",
