@@ -519,7 +519,7 @@ pub unsafe extern "C" fn companion_set_first_hero_panel(shown: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    3
+    4
 }
 
 #[no_mangle]

@@ -552,16 +552,20 @@ than spare plugin capacity.
 
 After runtime initialization in an enabled, manifested session, the renderer
 dynamically loads the Enhancement runtime, allocates its enabled bounded regions
-through the game's allocator, instantiates the dependency-free
-`wasm32-unknown-unknown` companion against the exported memory, installs its
-callback, and enables the dispatcher last. Each dispatch branch calls its
+through the game's allocator, and reserves one further 64 KiB heap block for
+the companion's own data and stack. The dependency-free
+`wasm32-unknown-unknown` companion is a position-independent side module: it
+imports the exported game memory for bounded reads, while injected memory-base
+and stack globals confine its writes to that reserved block. A private empty
+table satisfies the side-module ABI without consuming a game table entry. The
+renderer then installs its callback and enables the dispatcher last. Each dispatch branch calls its
 matching relocated original exactly once before bounded work. Cursor events
 mark the bitmap dirty; the next tick reads it only when dirty, while a tiny
 show-count check preserves visibility changes. A trusted click that produced
 no cursor callback receives one zero-distance hit-test refresh, fixing mode
 changes such as salvage without moving the physical pointer.
 
-Snapshot ABI v1 uses a named 156-byte `repr(C)` configuration and 64-byte core
+Snapshot ABI v1 uses a named 160-byte `repr(C)` configuration and 64-byte core
 Snapshot,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
 sequence lock. It contains no pointers. When target observation is enabled, the

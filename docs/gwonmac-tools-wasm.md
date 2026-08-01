@@ -12,7 +12,8 @@ exact post-template Guild Wars module
   -> clone tick, cursor, and UI-dispatch originals
   -> three disabled-direct / enabled-indirect wrappers
   -> one fixed (i32 x 6) dispatcher in appended table slot 4683
-  -> one Rust kernel over the game's existing memory
+  -> one position-independent Rust side module over bounded game-memory reads
+  -> one allocator-owned 64 KiB block for Rust data and stack
   -> bounded typed snapshots
   -> Chromium cursor and developer proof UI
 ```
@@ -75,6 +76,15 @@ Rust selects the branch by a fixed kind:
 Post-work does not run if an original traps. No mutable Rust borrow is held
 across an imported game call, so synchronous nested dispatch cannot alias
 kernel state.
+
+The companion imports game memory because cursor and party state live there,
+but its own memory is not allowed to land at linker-default addresses. It is a
+position-independent side module: the renderer allocates one 64 KiB block with
+the game's allocator and supplies that block as the module's data base and
+stack. Its required table is a separate empty table. The binary verifier pins
+the `dylink.0` requirement, absence of a start function, and proves that
+instantiation leaves the former fixed `0x100000` game region byte-for-byte
+unchanged.
 
 ## Three examples
 

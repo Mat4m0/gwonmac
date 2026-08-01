@@ -25,6 +25,18 @@ when slot 0 contained the six-argument companion dispatcher. Slot 0 is therefore
 a dynamic game sentinel. The transform ABI 7 correction leaves every input
 entry untouched and owns only the appended slot.
 
+The next live login exposed a separate `TextParser.cpp:724 IsParam(data)`
+assertion. The trap stack contained only game functions because the corruption
+preceded the parser: the original Rust kernel was a normal imported-memory
+module whose data segment and stack pointer were both linked at `0x100000`.
+Instantiation wrote 28 bytes there and every callback used that unreserved
+game region as its stack. The kernel is now a position-independent WebAssembly
+side module. The renderer reserves one 64 KiB block with the game allocator and
+injects its data base and stack pointer; the side module receives a separate
+empty table. ABI 4 verification pins a 288-byte, four-byte-aligned `dylink.0`
+memory requirement, no table entries, deterministic bytes, and proves that
+instantiation does not change the former fixed region.
+
 ## Tick and cursor
 
 The exported `EmscriptenExeThreadMainLoop` remains absolute function 446 with

@@ -17,7 +17,8 @@ import { decodeEnhancementManifest } from "./enhancement-manifest.js";
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const COMPANION_ABI = 3;
+const COMPANION_ABI = 4;
+const COMPANION_RUNTIME_BYTES = 65_536;
 
 export async function installEnhancements(
   instance: WebAssembly.Instance,
@@ -83,6 +84,7 @@ export async function installEnhancements(
   let configPointer = 0;
   let cursorPointer = 0;
   let toolboxPointer = 0;
+  let runtimePointer = 0;
   let stopObserver = () => {};
   let disposeCursor = () => {};
   let disposeReadout = () => {};
@@ -111,11 +113,13 @@ export async function installEnhancements(
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
+    if (runtimePointer) free(runtimePointer);
     if (window.gwCompanionRuntime === installedRuntime) {
       window.gwCompanionRuntime = null;
     }
   };
   try {
+    runtimePointer = Number(exports.malloc(COMPANION_RUNTIME_BYTES));
     if (observeState) {
       snapshotPointer = Number(exports.malloc(COMPANION_SNAPSHOT_BYTES));
     }
@@ -128,12 +132,21 @@ export async function installEnhancements(
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
     }
     if (
-      !configPointer
+      !runtimePointer
+      || !configPointer
       || (observeState && !snapshotPointer)
       || (selection.nativeCursor && !cursorPointer)
       || (foundation && !toolboxPointer)
     ) {
       throw new Error("Companion allocation failed");
+    }
+    const runtimeEnd = runtimePointer + COMPANION_RUNTIME_BYTES;
+    if (
+      runtimePointer % 16 !== 0
+      || runtimeEnd > exports.memory.buffer.byteLength
+      || runtimeEnd > 0x7fff_ffff
+    ) {
+      throw new Error("Companion runtime allocation is invalid");
     }
     new Uint32Array(
       exports.memory.buffer,
@@ -145,6 +158,10 @@ export async function installEnhancements(
     if (!response.ok) throw new Error("Companion kernel is unavailable");
     const kernelModule = await WebAssembly.compile(await response.arrayBuffer());
     const expectedImports = [
+      "env.__indirect_function_table:table",
+      "env.__memory_base:global",
+      "env.__stack_pointer:global",
+      "env.__table_base:global",
       "env.memory:memory",
       "game.enhancement_cursor_original:function",
       "game.enhancement_tick_original:function",
@@ -156,8 +173,25 @@ export async function installEnhancements(
     if (JSON.stringify(imports) !== JSON.stringify(expectedImports)) {
       throw new Error("Companion kernel import surface is invalid");
     }
+    const immutableI32 = (value: number) => new WebAssembly.Global(
+      { value: "i32", mutable: false },
+      value,
+    );
     const kernel = await WebAssembly.instantiate(kernelModule, {
-      env: { memory: exports.memory },
+      env: {
+        memory: exports.memory,
+        __indirect_function_table: new WebAssembly.Table({
+          initial: 0,
+          maximum: 0,
+          element: "anyfunc",
+        }),
+        __memory_base: immutableI32(runtimePointer),
+        __stack_pointer: new WebAssembly.Global(
+          { value: "i32", mutable: true },
+          runtimeEnd,
+        ),
+        __table_base: immutableI32(0),
+      },
       game: {
         enhancement_tick_original: exports.enhancement_tick_original,
         enhancement_cursor_original: exports.enhancement_cursor_original,

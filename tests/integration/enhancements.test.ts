@@ -236,6 +236,7 @@ const ADDRESSES = Object.freeze({
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
+  companionRuntime: 0x30_0000,
 });
 const CONFIG_WORDS = 40;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
@@ -309,8 +310,25 @@ async function createKernel() {
     ui: [] as number[][],
     uiContext: [] as number[],
   };
+  const immutableI32 = (value: number) => new WebAssembly.Global(
+    { value: "i32", mutable: false },
+    value,
+  );
   const { instance } = await WebAssembly.instantiate(bytes, {
-    env: { memory },
+    env: {
+      memory,
+      __indirect_function_table: new WebAssembly.Table({
+        initial: 0,
+        maximum: 0,
+        element: "anyfunc",
+      }),
+      __memory_base: immutableI32(ADDRESSES.companionRuntime),
+      __stack_pointer: new WebAssembly.Global(
+        { value: "i32", mutable: true },
+        ADDRESSES.companionRuntime + 65_536,
+      ),
+      __table_base: immutableI32(0),
+    },
     game: {
       enhancement_tick_original: () => {
         calls.original += 1;

@@ -670,6 +670,7 @@ async function assertTargetReadoutLifecycle() {
       await installTargetReadout(fixture.page, installableManifestModule()),
       {
         allocations: [
+          65_536,
           64,
           CONFIG_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
         ],
@@ -735,7 +736,7 @@ async function assertTargetReadoutLifecycle() {
       "pagehide did not dispose the target readout",
     );
     assert.deepEqual(disposed, {
-      freed: [0x1000, 0x1040],
+      freed: [0x1000, 0x11_000, 0x11_040],
       hook: 0,
       runtime: null,
       tableEmpty: true,
@@ -849,14 +850,15 @@ async function assertRollbackAfterTablePublication() {
     });
     assert.deepEqual(result, {
       allocations: [
-        { pointer: 0x1000, size: 64 },
+        { pointer: 0x1000, size: 65_536 },
+        { pointer: 0x11_000, size: 64 },
         {
-          pointer: 0x1040,
+          pointer: 0x11_040,
           size: CONFIG_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
         },
-        { pointer: 0x10e0, size: 64 },
+        { pointer: 0x11_0e0, size: 64 },
       ],
-      freed: [0x10e0, 0x1040, 0x1000],
+      freed: [0x11_0e0, 0x11_040, 0x11_000, 0x1000],
       hook: 0,
       rejected: true,
       runtime: null,
