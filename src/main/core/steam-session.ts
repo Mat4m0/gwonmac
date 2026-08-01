@@ -2,6 +2,7 @@ import type { SteamRefusalReason } from "../../shared/contracts.js";
 import { AppError, errorCode, type ErrorCode } from "../../shared/errors.js";
 import type { NativeKeychain } from "./native-keychain.js";
 import { KeychainJsonStore, type KeychainSecret } from "./keychain-store.js";
+import { Mutex } from "./mutex.js";
 
 /**
  * The Steam OAuth access token that authenticates a Steam login, and when it
@@ -298,7 +299,7 @@ export async function refreshSteamExpiry(
  * invariant without putting Electron knowledge in this module.
  */
 export class SteamSessionCoordinator {
-  private tail: Promise<void> = Promise.resolve();
+  private readonly sessionLock = new Mutex();
   private interactiveResolution: Promise<SteamResolution> | null = null;
   private readonly store: SteamSessionReader;
 
@@ -308,11 +309,13 @@ export class SteamSessionCoordinator {
 
   resolve(options: SteamResolutionOptions): Promise<SteamResolution> {
     if (options.silent) {
-      return this.enqueue(() => resolveSteamToken(this.store, options));
+      return this.sessionLock.run(() => resolveSteamToken(this.store, options));
     }
     if (this.interactiveResolution) return this.interactiveResolution;
 
-    const pending = this.enqueue(() => resolveSteamToken(this.store, options));
+    const pending = this.sessionLock.run(() =>
+      resolveSteamToken(this.store, options),
+    );
     const joined = pending.finally(() => {
       if (this.interactiveResolution === joined) {
         this.interactiveResolution = null;
@@ -323,23 +326,16 @@ export class SteamSessionCoordinator {
   }
 
   refresh(token: string, expiry: number | null): Promise<SteamStorebackOutcome> {
-    return this.enqueue(() => refreshSteamExpiry(this.store, token, expiry));
+    return this.sessionLock.run(() =>
+      refreshSteamExpiry(this.store, token, expiry),
+    );
   }
 
   clear(): Promise<void> {
-    return this.enqueue(() => this.store.clear());
+    return this.sessionLock.run(() => this.store.clear());
   }
 
   settled(): Promise<void> {
-    return this.tail;
-  }
-
-  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.tail.then(operation, operation);
-    this.tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
+    return this.sessionLock.settled;
   }
 }

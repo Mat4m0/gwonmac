@@ -1,4 +1,5 @@
 import { AppError, type ErrorCode } from "../../shared/errors.js";
+import { Mutex } from "./mutex.js";
 import type { NativeKeychain, SecretSlot } from "./native-keychain.js";
 
 /**
@@ -28,7 +29,8 @@ export interface KeychainSecret<T> {
 
 /** One validated JSON secret in one fixed native Keychain slot. */
 export class KeychainJsonStore<T> {
-  private tail: Promise<void> = Promise.resolve();
+  /** One slot, so a load must not read what an unfinished save is replacing. */
+  private readonly slotLock = new Mutex();
   private readonly slot: SecretSlot;
   private readonly keychain: NativeKeychain;
   private readonly secret: KeychainSecret<T>;
@@ -44,7 +46,7 @@ export class KeychainJsonStore<T> {
   }
 
   load(): Promise<T | null> {
-    return this.enqueue(async () => {
+    return this.slotLock.run(async () => {
       const bytes = await this.native(() => this.keychain.load(this.slot));
       if (!bytes) return null;
       try {
@@ -61,7 +63,7 @@ export class KeychainJsonStore<T> {
 
   async save(value: unknown): Promise<void> {
     const cleaned = this.secret.parse(value);
-    await this.enqueue(async () => {
+    await this.slotLock.run(async () => {
       const bytes = Buffer.from(JSON.stringify(cleaned), "utf8");
       try {
         await this.native(() => this.keychain.save(this.slot, bytes));
@@ -72,7 +74,9 @@ export class KeychainJsonStore<T> {
   }
 
   clear(): Promise<void> {
-    return this.enqueue(() => this.native(() => this.keychain.clear(this.slot)));
+    return this.slotLock.run(() =>
+      this.native(() => this.keychain.clear(this.slot)),
+    );
   }
 
   private async native<R>(operation: () => Promise<R>): Promise<R> {
@@ -95,14 +99,5 @@ export class KeychainJsonStore<T> {
         cause: error,
       });
     }
-  }
-
-  private enqueue<R>(operation: () => Promise<R>): Promise<R> {
-    const result = this.tail.then(operation, operation);
-    this.tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
   }
 }

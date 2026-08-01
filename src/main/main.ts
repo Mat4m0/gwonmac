@@ -25,6 +25,7 @@ import { errorCode } from "../shared/errors.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
+import { Mutex } from "./core/mutex.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import {
@@ -133,7 +134,8 @@ const HOST_VERSION = (() => {
 })();
 
 const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
-let settingsWrite: Promise<void> = Promise.resolve();
+/** Every settings write is a read-modify-write of one file. */
+const settingsLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
@@ -154,7 +156,7 @@ function revealMainWindow(): void {
 }
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
-  const operation = settingsWrite.then(async () => {
+  return settingsLock.run(async () => {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
     const saved = await saveSettings(settingsPath, { ...current, ...patch });
@@ -167,22 +169,12 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
     }
     return saved;
   });
-  settingsWrite = operation.then(
-    () => undefined,
-    () => undefined,
-  );
-  return operation;
 }
 
 function resetAppSettings(): Promise<AppSettings> {
-  const operation = settingsWrite.then(() =>
+  return settingsLock.run(() =>
     saveSettings(gamePaths().settings, { ...DEFAULT_SETTINGS }),
   );
-  settingsWrite = operation.then(
-    () => undefined,
-    () => undefined,
-  );
-  return operation;
 }
 
 function buildSocketManager(): SocketManager {
