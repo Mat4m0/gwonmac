@@ -1,4 +1,39 @@
+//! The companion kernel: the freestanding side module the renderer installs on
+//! the game's dispatch table. This file owns the exported ABI, the module's
+//! state, and the per-frame agent, target, and party observation. `memory.rs`
+//! owns every load from a game address, `abi.rs` the shared wire format, and
+//! `cursor.rs` and `toolbox.rs` each own the region they publish.
+//!
+//! The memory-safety invariant the whole crate maintains: the kernel reads the
+//! game heap only through `memory.rs`, so every read is bounds-checked against
+//! the live linear memory and every pointer chase answers `Option`; a game
+//! structure that is missing, torn, or hostile costs an observation and never
+//! an out-of-bounds access. The kernel writes to no address the game owns: its
+//! only stores go to the snapshot, cursor, and toolbox regions the host set
+//! aside for it and `companion_init` accepted through `valid_region`, and to
+//! its own module footprint. WebAssembly memory grows and never shrinks, so a
+//! region proven in bounds at init stays in bounds for every later frame, which
+//! is what lets the publishers hold a raw pointer across callbacks.
+//!
+//! The module state below is `static mut`, and stays so. The kernel imports no
+//! function at all — the build contract admits only memory, the base and stack
+//! globals, and a table — so nothing it calls can re-enter it, and it runs only
+//! on the game's callback thread. Every access is a by-value load or store of a
+//! `Copy` value; the crate never forms a reference to one, so there is no
+//! aliasing for a safe wrapper to rule out. A cell wrapper would need its own
+//! `unsafe impl Sync`, which claims more than these two facts prove.
+//!
+//! SAFETY policy for the crate. Two patterns repeat and carry no per-site
+//! comment: reading or writing one of these statics, justified above; and
+//! calling a `memory.rs` reader, or an `unsafe fn` here that does nothing but
+//! forward to them, justified by that module. In `cursor.rs` and `toolbox.rs`,
+//! an `unsafe fn` that reaches the module's published region additionally
+//! requires that its own `initialize` has run; each module header names the
+//! fns that carry no such precondition. Every other unsafe operation states its
+//! own justification.
+
 #![no_std]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use core::panic::PanicInfo;
 use core::ptr::{read_volatile, write_volatile};
@@ -410,8 +445,16 @@ pub(crate) unsafe fn collect_first_owned_hero(
     (count, first_id, first_agent)
 }
 
+// The odd sequence brackets the write: a reader that sees it discards the
+// frame rather than decoding a half-written one.
 unsafe fn publish(state: State) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
+    // SAFETY: every successful `companion_init` assigns `SNAPSHOT_PTR`, and it
+    // is null unless that init carried `FEATURE_TARGET_READOUT`. When the flag
+    // was set, `valid_region` proved a non-null, four-byte-aligned
+    // `SNAPSHOT_BYTES` region inside linear memory. What makes the store sound
+    // is that every caller of `publish` is gated on that same flag from that
+    // same init, and memory never shrinks, so the region is still there.
     let snapshot = unsafe { SNAPSHOT_PTR as *mut Snapshot };
     unsafe {
         write_volatile(&mut (*snapshot).sequence, next.wrapping_sub(1));
@@ -473,10 +516,17 @@ pub unsafe extern "C" fn companion_init(
     {
         return 0;
     }
+    // SAFETY: the guard above refused anything but a four-byte-aligned
+    // `config_ptr` with `CONFIG_BYTES` inside linear memory. `Layout` is a
+    // `repr(C)` block of `u32`, so every bit pattern the host can leave there
+    // is a valid value and the copy cannot observe an invalid one.
     let layout = unsafe { read_volatile(config_ptr as *const Layout) };
     if features & FEATURE_TOOLBOX_FOUNDATION != 0 && !valid_toolbox_messages(layout) {
         return 0;
     }
+    // SAFETY: each `initialize` takes the region its feature flag made
+    // `valid_region` demand, so the pointer it stores is non-null, aligned, and
+    // large enough for the snapshot it will publish.
     unsafe {
         SNAPSHOT_PTR = snapshot_ptr;
         LAYOUT = layout;

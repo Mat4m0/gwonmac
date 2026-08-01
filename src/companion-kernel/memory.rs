@@ -1,3 +1,26 @@
+//! The one place this crate turns a game address into a load. Everything the
+//! kernel learns about the game heap arrives through these readers.
+//!
+//! Each reader proves `address .. address + size` lies inside the live linear
+//! memory before it loads, and answers `None` when it does not, so a torn or
+//! hostile heap costs a frame of observation rather than an out-of-bounds
+//! access. Every address is built with checked arithmetic: a sum that would
+//! wrap yields `None` instead of a small address that would pass the bounds
+//! test. `pointer` also rejects null and unaligned chased values, so a chased
+//! base is four-byte-aligned. Nothing here checks the field offsets added to
+//! it: natural alignment of the field loads is an assumption the certified
+//! build configuration discharges, by supplying real struct offsets that are
+//! multiples of the access width.
+//!
+//! The loads are volatile because the game writes these locations between
+//! callbacks and the compiler is told about neither the writer nor the memory;
+//! a cached or hoisted load would republish a stale frame.
+//!
+//! SAFETY: each reader dereferences an address in the imported game memory,
+//! which the Rust abstract machine does not know is an allocation. That is the
+//! whole of what makes them `unsafe`, and `contains` discharges it in every
+//! one, so the pattern is not annotated again below.
+
 use core::ptr::read_volatile;
 
 pub(crate) fn memory_bytes() -> u32 {

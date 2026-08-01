@@ -1,3 +1,19 @@
+//! The Toolbox observer and the sole writer of the toolbox region. It holds the
+//! chat and cursor event counts, the first owned hero's identity, and the panel
+//! state observed through UI dispatch, and republishes only when one of them
+//! changes.
+//!
+//! The invariant is the crate's: the party walk reaches the game only through
+//! `resolve_game` and `collect_first_owned_hero`, both of which read via
+//! `memory.rs`, and the only address this file writes is `POINTER`, the host
+//! region `companion_init` validated. Neither pointer-shaped UI argument is
+//! ever retained or dereferenced: `observe_ui` compares `message` and `wparam`
+//! against configured values and stores nothing derived from them.
+//!
+//! Every `unsafe fn` below requires `initialize` to have run, which the
+//! `FEATURE_TOOLBOX_FOUNDATION` gate in `companion_dispatch` is what
+//! guarantees.
+
 use core::ptr::{read_volatile, write_volatile};
 
 use crate::abi::*;
@@ -33,6 +49,10 @@ fn is_party_dirty_message(layout: Layout, message: u32) -> bool {
 
 unsafe fn publish() {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
+    // SAFETY: `POINTER` holds the region `companion_init` accepted through
+    // `valid_region` for `FEATURE_TOOLBOX_FOUNDATION` — non-null,
+    // four-byte-aligned, and exactly `TOOLBOX_BYTES` inside linear memory,
+    // which cannot shrink.
     let snapshot = unsafe { POINTER as *mut ToolboxSnapshot };
     let flags = if unsafe { FIRST_HERO_ID } != 0 {
         FLAG_HERO_AVAILABLE
@@ -66,6 +86,10 @@ pub(crate) unsafe fn initialize(pointer: u32) {
         PANEL_STATE = PANEL_UNKNOWN;
         PARTY_DIRTY = true;
     }
+    // SAFETY: `pointer` is the caller's validated `TOOLBOX_BYTES` region, so
+    // the last word this loop reaches is its final four bytes and the sum
+    // cannot overflow. Zeroing it before the first publish is what keeps a
+    // reader from decoding whatever the game's allocator left behind.
     for index in 0..TOOLBOX_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };
     }
@@ -146,6 +170,9 @@ pub(crate) unsafe fn observe_ui(layout: Layout, message: u32, wparam: u32) {
 
 pub(crate) unsafe fn publish_cursor_event() {
     let count = unsafe { cursor::event_count() };
+    // SAFETY: the same validated region `publish` writes. The published count
+    // is read back rather than mirrored in a static, so what the reader sees is
+    // the only thing this comparison can be wrong about.
     let published =
         unsafe { read_volatile(&(*(POINTER as *const ToolboxSnapshot)).cursor_event_count) };
     if count != published {
