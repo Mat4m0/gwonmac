@@ -1,11 +1,17 @@
 // The load-bearing network claim, executed rather than read.
 //
-// AGENTS.md, README.md, PRODUCT.md, docs/user-guide.md and the in-app settings
-// note all say the same thing: `autoCheckUpdates` is on by default and performs
-// one check per launch, and with it off a launch reaches github.com zero
+// AGENTS.md, README.md, docs/user-guide.md and the in-app settings note all
+// say the same thing: `autoCheckUpdates` is on by default and performs one
+// check at launch plus a background re-check no more than every six hours
+// while the app stays open, and with it off a launch reaches github.com zero
 // times. Until this spec existed the only proof was call sites read by hand,
 // and deleting the `if (settings.autoCheckUpdates)` gate in `main.ts` left
 // every suite green.
+//
+// The exact request counts below stay deterministic because the periodic
+// tick first fires thirty minutes in — far beyond any spec's lifetime.
+// Anyone who shortens `PERIODIC_CHECK_TICK_MS` or adds a test seam for it
+// must revisit every 0/1/2 count in this file.
 //
 // The two halves are two launches because they must be. The default-launch
 // check fires at startup, before any test hook can wrap the main process's

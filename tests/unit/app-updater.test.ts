@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AppUpdater } from "../../src/main/app-updater.ts";
+import {
+  AppUpdater,
+  PERIODIC_CHECK_DUE_MS,
+  PERIODIC_CHECK_TICK_MS,
+  periodicCheckDue,
+} from "../../src/main/app-updater.ts";
 import type { AppUpdateState } from "../../src/shared/contracts.ts";
 
 const repo = "https://github.com/Mat4m0/gwonmac";
@@ -316,5 +321,74 @@ describe("application updater", () => {
       lastCheckedAt: "1970-01-01T00:00:01.234Z",
       reason: "feed-invalid",
     });
+  });
+});
+
+describe("periodic check policy", () => {
+  const stale = (overrides: Partial<Parameters<typeof periodicCheckDue>[0]> = {}) => ({
+    capable: true,
+    autoCheckUpdates: true,
+    activeSockets: 0,
+    lastUpdateCheckAt: 0,
+    now: PERIODIC_CHECK_DUE_MS,
+    ...overrides,
+  });
+
+  it("never ticks an update-incapable build", () => {
+    assert.equal(periodicCheckDue(stale({ capable: false })), false);
+    assert.equal(
+      periodicCheckDue(stale({ capable: false, lastUpdateCheckAt: null })),
+      false,
+    );
+  });
+
+  it("honors the opt-out at fire time, however stale the record", () => {
+    assert.equal(periodicCheckDue(stale({ autoCheckUpdates: false })), false);
+    assert.equal(
+      periodicCheckDue(
+        stale({ autoCheckUpdates: false, lastUpdateCheckAt: null }),
+      ),
+      false,
+    );
+  });
+
+  it("defers while a game connection is open, however stale the record", () => {
+    assert.equal(periodicCheckDue(stale({ activeSockets: 1 })), false);
+    assert.equal(
+      periodicCheckDue(stale({ activeSockets: 1, lastUpdateCheckAt: null })),
+      false,
+    );
+  });
+
+  it("checks immediately when no check has ever been recorded", () => {
+    assert.equal(periodicCheckDue(stale({ lastUpdateCheckAt: null })), true);
+  });
+
+  it("becomes due exactly at the six-hour boundary", () => {
+    assert.equal(
+      periodicCheckDue(stale({ now: PERIODIC_CHECK_DUE_MS - 1 })),
+      false,
+    );
+    assert.equal(periodicCheckDue(stale({ now: PERIODIC_CHECK_DUE_MS })), true);
+  });
+
+  it("recovers from a clock moved backwards instead of waiting it out", () => {
+    assert.equal(
+      periodicCheckDue(
+        stale({ lastUpdateCheckAt: PERIODIC_CHECK_DUE_MS * 2, now: 0 }),
+      ),
+      true,
+    );
+    assert.equal(
+      periodicCheckDue(stale({ lastUpdateCheckAt: 1, now: 0 })),
+      false,
+    );
+  });
+
+  it("keeps the declared cadence: 30-minute ticks against a six-hour window", () => {
+    assert.equal(PERIODIC_CHECK_TICK_MS, 30 * 60 * 1000);
+    assert.equal(PERIODIC_CHECK_DUE_MS, 6 * 60 * 60 * 1000);
+    // A tick coarser than the window would silently stretch the promise.
+    assert.ok(PERIODIC_CHECK_TICK_MS < PERIODIC_CHECK_DUE_MS);
   });
 });

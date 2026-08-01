@@ -126,10 +126,16 @@ or fails. There is no renderer-owned download or power state.
 ## This app's own updater
 
 `src/main/app-updater.ts` is the single update owner. It asks the bounded GitHub
-release list only after a manual request or the once-per-launch automatic check.
-`autoCheckUpdates` defaults on and is declared plainly at first run and in
-Settings; switched off, a launch reaches github.com zero times. There is no
-timer or polling loop.
+release list only after a manual request or an automatic check that `main.ts`
+schedules: one at launch, then a 30-minute tick that re-checks when
+`periodicCheckDue` says so — the build is update-capable, `autoCheckUpdates` is
+on, no game socket is open, and the recorded `lastUpdateCheckAt` is at least
+six hours old. The tick-plus-due-time shape survives sleep without a resume
+handler: a laptop waking past the boundary checks within half an hour. Failures
+also record `lastUpdateCheckAt`, so a failing environment retries at the same
+six-hour spacing. `autoCheckUpdates` defaults on and is declared plainly at
+first run and in Settings; switched off, a launch reaches github.com zero
+times.
 
 Only a packaged macOS build whose generated `distribution-channel.json` names
 `release` may update. The marker has the exact shape
@@ -996,7 +1002,8 @@ two that read _none_ today are recorded rather than quietly kept.
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.ts` for publication, corruption repair and rollback |
 | No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |
 | A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
-| With update checks switched off, the app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-checks-github-once-unless-opted-out.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts exactly **one** api.github.com request across a launch with the defaults, then **zero** across a launch with the box unticked. `tests/unit/settings.test.ts`, `tests/unit/app-updater.test.ts`, and `tests/unit/update-action.test.ts` prove the constituents |
+| With update checks switched off, the app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-checks-github-once-unless-opted-out.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts exactly **one** api.github.com request across a launch with the defaults, then **zero** across a launch with the box unticked. `tests/unit/settings.test.ts`, `tests/unit/app-updater.test.ts`, and `tests/unit/update-action.test.ts` prove the constituents, including `periodicCheckDue` — every gate on the background re-check and its cadence constants |
+| Automatic checks happen at launch and then at most every six hours, never while a game connection is open | settings copy, first-run line, `README.md`, `docs/user-guide.md` | `tests/unit/app-updater.test.ts` — the `periodicCheckDue` gates and the `PERIODIC_CHECK_TICK_MS`/`PERIODIC_CHECK_DUE_MS` constants; `tests/policy/source-release-pipeline.test.ts` pins that the tick in `main.ts` is wired through that one predicate |
 | The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/enhancement-cursor.spec.ts` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.ts` for what is tracked |
 | Releases are Developer ID signed, notarized, stapled, and the shipped fuses hold | website FAQ | `.github/workflows/release.yml` verifies the G2 fingerprint, profile identity, Team ID, timestamp, hardened runtime, exact three top-level entitlements, Gatekeeper and stapled tickets; `tests/signed-keychain-runtime.ts` proves the signed product retains a Data Protection Keychain item across relaunch, move, and a newly signed replacement; `tests/policy/source-release-pipeline.test.ts` pins that policy; `tests/packaged-smoke.ts` and `tests/policy/fuses.test.ts` verify package structure and fuses |
 | Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.ts` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.ts` for the resolutions shown beside each scale |
