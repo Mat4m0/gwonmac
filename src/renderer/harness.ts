@@ -177,6 +177,8 @@ const LOG_LINES = 400;
 const logBuf: string[] = [];
 let gameWasmInstance: WebAssembly.Instance | null = null;
 let gameWasmModule: WebAssembly.Module | null = null;
+let runtimeInitialized = false;
+let enhancementInstallationStarted = false;
 let disposeSocketHost = () => {};
 const native = () => window.gwNative;
 const milestone = (
@@ -198,6 +200,45 @@ const log = (...a: unknown[]) => {
     el.scrollTop = el.scrollHeight;
   }
 };
+
+function maybeInstallEnhancements(): void {
+  if (enhancementInstallationStarted || !runtimeInitialized) return;
+
+  const init = native().init;
+  // Launch intent is the first gate: an all-off launch must not even import
+  // Enhancement code. The served module is the second gate. An uncertified
+  // launch has no manifest, while the installer separately checks that a
+  // manifest's exact hook set matches the selected tools or developer program.
+  const enhancementRequested =
+    init.enhancementProgram !== 'none'
+    || init.enhancementSelection.nativeCursor
+    || init.enhancementSelection.targetReadout;
+  if (
+    !enhancementRequested
+    || !gameWasmInstance
+    || !gameWasmModule
+    || WebAssembly.Module.customSections(
+      gameWasmModule,
+      'enhancement_manifest',
+    ).length !== 1
+  ) return;
+
+  enhancementInstallationStarted = true;
+  const enhancementInstance = gameWasmInstance;
+  const enhancementModule = gameWasmModule;
+  void import('./enhancements.js')
+    .then(({ installEnhancements }) =>
+      installEnhancements(
+        enhancementInstance,
+        enhancementModule,
+        init.enhancementSelection,
+        init.enhancementProgram,
+      ))
+    .catch((error) => log(
+      '[enhancement]',
+      error instanceof Error ? error.message : String(error),
+    ));
+}
 
 window.gwLog = (on = true) => {
   const el = document.getElementById('log');
@@ -400,6 +441,7 @@ Module = {
       milestone('wasm.instantiate.end');
       gameWasmInstance = result.instance;
       gameWasmModule = result.module;
+      maybeInstallEnhancements();
       success(result.instance, result.module);
     })().catch((error) => {
       window.gwDiagnostics?.event('client.glueLoadFailed', error);
@@ -593,39 +635,8 @@ Module = {
     milestone('runtime.initialized');
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
-    const init = native().init;
-    // Launch intent is the first gate: an all-off launch must not even import
-    // Enhancement code. The served module is the second gate. An uncertified
-    // launch has no manifest, while the installer separately checks that a
-    // manifest's exact hook set matches the selected tools or developer program.
-    const enhancementRequested =
-      init.enhancementProgram !== 'none'
-      || init.enhancementSelection.nativeCursor
-      || init.enhancementSelection.targetReadout;
-    if (
-      enhancementRequested
-      && gameWasmInstance
-      && gameWasmModule
-      && WebAssembly.Module.customSections(
-        gameWasmModule,
-        'enhancement_manifest',
-      ).length === 1
-    ) {
-      const enhancementInstance = gameWasmInstance;
-      const enhancementModule = gameWasmModule;
-      void import('./enhancements.js')
-        .then(({ installEnhancements }) =>
-          installEnhancements(
-            enhancementInstance,
-            enhancementModule,
-            init.enhancementSelection,
-            init.enhancementProgram,
-          ))
-        .catch((error) => log(
-          '[enhancement]',
-          error instanceof Error ? error.message : String(error),
-        ));
-    }
+    runtimeInitialized = true;
+    maybeInstallEnhancements();
   },
   onAbort(reason) {
     milestone('wasm.abort');
