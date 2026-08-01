@@ -1,3 +1,14 @@
+/**
+ * The two throttled readouts on the loading screen: the minutes-remaining
+ * estimate and the detail line under the bar.
+ *
+ * Both exist because progress arrives on every chunk completion, in bursts, and
+ * a number rewritten that often is unreadable even while it is correct. Neither
+ * smooths the underlying values — the rate is already smoothed where it is
+ * computed — they decide only when a changed value is allowed to reach the
+ * screen, and a value that stops being available is shown immediately rather
+ * than left stale.
+ */
 import type { DownloadActivity } from "../shared/contracts.js";
 
 /**

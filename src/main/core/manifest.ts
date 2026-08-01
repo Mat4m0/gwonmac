@@ -1,3 +1,17 @@
+/**
+ * The parser for an ArenaNet patch manifest, which is treated as hostile input.
+ *
+ * Every bound here — name length, reserved names, directory and file counts,
+ * total chunk references, chunk size — exists because flat `parentIndex`-linked
+ * lists arrive over the network and are turned into filesystem-shaped paths. A
+ * name carrying a separator or a NUL, a parent cycle, a duplicate path, a chunk
+ * count that disagrees with the declared size, or one hash claiming two lengths
+ * is a refusal and never something to normalise: a manifest that parses here is
+ * one whose paths may be joined onto a real directory.
+ *
+ * Construction either yields a fully validated manifest or throws. There is no
+ * partially trusted intermediate state for a caller to observe.
+ */
 import { AppError } from "../../shared/errors.js";
 import { parseContentHash } from "./chunk-format.js";
 

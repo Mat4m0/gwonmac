@@ -1,3 +1,17 @@
+/**
+ * The vocabulary main and the renderer share when they talk about measurements:
+ * levels, subsystems, histogram buckets, the renderer's metrics and milestones,
+ * and the summary and report shapes an export carries.
+ *
+ * Every one of them is a closed union. A renderer failure crosses IPC as an
+ * allow-listed name plus non-text fingerprints, never as console output, and a
+ * metric that is not named here has no way to reach the recorder at all.
+ *
+ * The bucket boundaries are part of the contract, not a tuning constant: two
+ * sessions can only be compared if their histograms were bucketed identically,
+ * so changing them makes existing exports incomparable rather than merely
+ * differently shaped.
+ */
 export type DiagnosticLevel = "debug" | "info" | "warn" | "error";
 
 export type DiagnosticSubsystem =

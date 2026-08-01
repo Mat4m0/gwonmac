@@ -1,3 +1,25 @@
+/**
+ * Open a hardened window the main process owns, run the Steam OAuth2 implicit
+ * flow in it, and return the access token it yields.
+ *
+ * The window matches or beats the game window's posture: its own
+ * in-memory session partition, no preload and no Node, deny-by-default
+ * permission and download handlers, no popups and no webviews, and top-level
+ * navigation confined to the fail-closed allowlist derived from `config`.
+ * Chromium owns subframe and resource isolation; neither can deliver the
+ * top-level redirect. That redirect is intercepted *before it is fetched*, its
+ * `state` is checked against the value generated for this attempt, and the
+ * window and its whole partition are destroyed the moment sign-in ends —
+ * success, refusal, or cancellation alike.
+ *
+ * Sign-in never renders in the game renderer, and this window is never the
+ * place a player is told to verify an origin: it is a sheet, so it draws no
+ * title bar and shows no URL. The allowlist and the sandbox controls above are
+ * what confine it.
+ *
+ * Never throws into the caller: a player whose sign-in failed belongs back at
+ * the client's login screen, not looking at an unhandled rejection.
+ */
 import { BrowserWindow, session, type Session } from "electron";
 import { randomUUID } from "node:crypto";
 import type { SteamRefusalReason } from "../shared/contracts.js";
@@ -36,23 +58,6 @@ export interface SteamAcquireOptions {
 
 const SIGN_IN_CLEANUP_DEADLINE_MS = 5_000;
 
-/**
- * Open a hardened window the main process owns, run the Steam OAuth2 implicit
- * flow in it, and return the access token it yields.
- *
- * The window matches or beats the game window's posture: its own
- * in-memory session partition, no preload and no Node, deny-by-default
- * permission and download handlers, no popups and no webviews, and top-level
- * navigation confined to the fail-closed allowlist derived from `config`.
- * Chromium owns subframe and resource isolation; neither can deliver the
- * top-level redirect. That redirect is intercepted *before it is fetched*, its
- * `state` is checked against the value generated for this attempt, and the
- * window and its whole partition are destroyed the moment sign-in ends —
- * success, refusal, or cancellation alike.
- *
- * Never throws into the caller: a player whose sign-in failed belongs back at
- * the client's login screen, not looking at an unhandled rejection.
- */
 /**
  * Build the partition and the window together, so a failure to construct either
  * is one thing the caller can catch. Separated out because everything here runs

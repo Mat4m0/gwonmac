@@ -1,3 +1,17 @@
+/**
+ * One validated JSON secret in one fixed native Keychain slot: the single
+ * mechanism underneath every persistent secret this app keeps.
+ *
+ * Each secret supplies its own validator and its own error codes, so a second
+ * secret never means widening the first one's shape rule. A slot is serialized
+ * by its own lock, so a load cannot observe the half-written state of a save it
+ * raced. The decoded secret's buffer is zeroed on every path out, success and
+ * failure alike.
+ *
+ * This module sits below the diagnostics redactor and cannot reach it, so it
+ * never logs a value, a message or a stack — only the slot, the classified
+ * refusal, and the kind of thing that was thrown.
+ */
 import { AppError, type ErrorCode } from "../../shared/errors.js";
 import { Mutex } from "./mutex.js";
 import type { NativeKeychain, SecretSlot } from "./native-keychain.js";

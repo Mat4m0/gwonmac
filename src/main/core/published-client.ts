@@ -1,3 +1,18 @@
+/**
+ * The manifest describing an installed client generation, and the proof that
+ * the files sitting beside it are still the ones it names.
+ *
+ * The fingerprint is recomputed while parsing, so a manifest whose recorded
+ * identity disagrees with its own contents is rejected before anything acts on
+ * it: editing this file cannot certify a substituted artifact. Artifacts and
+ * fingerprint travel together — one without the other is incomplete integrity
+ * metadata, not a half-finished upgrade to accept.
+ *
+ * Verification re-reads the artifacts and hashes them chunk by chunk. `false`
+ * means the files are wrong; `null` means the manifest predates artifact
+ * integrity entirely, which is a different answer and must not be collapsed
+ * into the first.
+ */
 import { createHash } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
 import { isDigest } from "../../shared/digest.js";

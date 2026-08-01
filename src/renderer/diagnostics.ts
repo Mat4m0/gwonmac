@@ -1,8 +1,10 @@
-// Cheap renderer-side aggregation. Hot paths only mutate numbers; one bounded
-// batch crosses IPC every two seconds.
-//
-// index.html loads this as a classic script, so the file carries no top-level
-// import or export and names the contracts through type-only `import(…)`.
+/**
+ * Cheap renderer-side aggregation. Hot paths only mutate numbers; one bounded
+ * batch crosses IPC every two seconds.
+ *
+ * index.html loads this as a classic script, so the file carries no top-level
+ * import or export and names the contracts through type-only `import(…)`.
+ */
 (function () {
   'use strict';
 

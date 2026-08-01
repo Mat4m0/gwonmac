@@ -1,3 +1,14 @@
+/**
+ * Deletes the two retired Safe Storage ciphertext files, and does nothing else
+ * to a profile.
+ *
+ * The filenames are a closed list and the removal is not recursive, so this
+ * cannot widen into a profile reset. Nothing here reads, parses, migrates or
+ * backs up what it deletes: the secrets live in the Data Protection Keychain
+ * now, and the old ciphertext is not a source to recover from. Failures are
+ * collected and returned rather than thrown, because a file that will not
+ * delete must not stop a launch.
+ */
 import path from "node:path";
 
 const LEGACY_SECRET_FILES = ["credentials.bin", "steam-session.bin"] as const;

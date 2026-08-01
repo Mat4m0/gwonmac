@@ -1,3 +1,11 @@
+/**
+ * `pnpm diagnostics:validate`: says whether one `.gwdiag` is internally
+ * consistent, and exits non-zero when it is not.
+ *
+ * Argument handling and one call into the shared reader. The rules it enforces
+ * belong to `common.ts`; this file owns the command's usage line and its exit
+ * codes, so no rule is stated twice.
+ */
 import { resolve } from "node:path";
 import { withCapture, validateCapture } from "./common.js";
 

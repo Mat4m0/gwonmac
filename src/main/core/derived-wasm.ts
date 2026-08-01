@@ -1,9 +1,3 @@
-import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
-import path from "node:path";
-import { writeAtomic, writeAtomicJson } from "./atomic-file.js";
-
 /**
  * The shared lifecycle behind every derived WebAssembly module we publish: hash
  * the base, reuse a cache entry only when it still describes exactly this
@@ -14,7 +8,17 @@ import { writeAtomic, writeAtomicJson } from "./atomic-file.js";
  * The cache root belongs to one transform outright. A rebuild empties it, so a
  * client update or an ABI bump cannot leave ~8 MB of dead derived modules
  * behind for every build the machine has ever seen.
+ *
+ * Nothing here returns a module it has not just hashed. An entry that fails any
+ * part of its own description is a miss rather than a repair, and a transform
+ * that throws leaves the last good publication where it is.
  */
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import path from "node:path";
+import { writeAtomic, writeAtomicJson } from "./atomic-file.js";
+
 export interface DerivedWasmCache {
   /** sha256 of the module the transform consumes. Keys the cache entry. */
   inputSha256: string;

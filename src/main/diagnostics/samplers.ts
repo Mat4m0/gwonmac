@@ -1,10 +1,3 @@
-import { arch, cpus, platform, release, totalmem } from "node:os";
-import { monitorEventLoopDelay, performance } from "node:perf_hooks";
-import { app, powerMonitor, screen } from "electron";
-import { runtimeVersions } from "./flight-recorder.js";
-import { logEvent, recorder } from "./recorder.js";
-import { asAppVersion } from "./schema.js";
-
 /**
  * What this process observes about the machine it runs on: the main process's
  * own CPU and memory, Chromium's per-process metrics, event-loop delay, the
@@ -15,6 +8,12 @@ import { asAppVersion } from "./schema.js";
  * so a report covers the launch that produced it, and the detailed sample is a
  * multiple of that interval rather than a second timer.
  */
+import { arch, cpus, platform, release, totalmem } from "node:os";
+import { monitorEventLoopDelay, performance } from "node:perf_hooks";
+import { app, powerMonitor, screen } from "electron";
+import { runtimeVersions } from "./flight-recorder.js";
+import { logEvent, recorder } from "./recorder.js";
+import { asAppVersion } from "./schema.js";
 
 const SAMPLE_INTERVAL_MS = 1_000;
 const PROCESS_SAMPLE_INTERVAL = 5;

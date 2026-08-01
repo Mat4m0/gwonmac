@@ -1,14 +1,16 @@
-// ArenaNet's client does not exit its Emscripten runtime when the player uses
-// the in-game X. Its exported main-loop callback performs the client's cleanup,
-// stops scheduling itself, and resolves successfully. `Module.onExit` therefore
-// never runs even though the client has finished.
-//
-// Own only that missing edge. `emscripten_async_call` is still ArenaNet's
-// scheduler for every other callback. The main loop is identified by function
-// identity against both the exported function and its table entry — the same
-// identity Emscripten's JSPI glue uses before wrapping the callback with
-// `WebAssembly.promising`. If a future client changes that contract, this
-// adapter delegates unchanged instead of guessing.
+/**
+ * ArenaNet's client does not exit its Emscripten runtime when the player uses
+ * the in-game X. Its exported main-loop callback performs the client's cleanup,
+ * stops scheduling itself, and resolves successfully. `Module.onExit` therefore
+ * never runs even though the client has finished.
+ *
+ * Own only that missing edge. `emscripten_async_call` is still ArenaNet's
+ * scheduler for every other callback. The main loop is identified by function
+ * identity against both the exported function and its table entry — the same
+ * identity Emscripten's JSPI glue uses before wrapping the callback with
+ * `WebAssembly.promising`. If a future client changes that contract, this
+ * adapter delegates unchanged instead of guessing.
+ */
 
 type WasmCallback = (...args: number[]) => unknown;
 type PromisingCallback = (...args: number[]) => Promise<unknown>;

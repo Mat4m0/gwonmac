@@ -1,4 +1,20 @@
-// Main-process TCP ownership: public unicast only, ports 6112/80/443.
+/**
+ * Main-process TCP ownership: public unicast only, ports 6112/80/443.
+ *
+ * The renderer never holds a handle. It holds a socket id, and every operation
+ * on that id is re-checked against the owner it was opened under, so one
+ * renderer generation cannot read, write to, or close another's connection.
+ * Owner teardown closes what that owner opened and nothing else.
+ *
+ * The per-socket and per-owner queue ceilings are the backpressure boundary: a
+ * client that writes faster than the network drains is refused rather than
+ * allowed to grow main-process memory without limit. Sockets are counted per
+ * owner for the same reason.
+ *
+ * Nothing about a destination or a libuv failure escapes as text. Addresses stay
+ * inside this module and errors collapse into the closed contract vocabulary
+ * before they are published.
+ */
 import net from "node:net";
 import type {
   SocketCloseReason,

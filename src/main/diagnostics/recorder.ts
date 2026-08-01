@@ -1,9 +1,3 @@
-import { readdir, rm } from "node:fs/promises";
-import path from "node:path";
-import { gamePaths } from "../paths.js";
-import { FlightRecorder } from "./flight-recorder.js";
-import type { DiagnosticEvent } from "./schema.js";
-
 /**
  * The one main-process flight recorder, and the only writes into it.
  *
@@ -11,6 +5,11 @@ import type { DiagnosticEvent } from "./schema.js";
  * rather than holding a recorder of its own, so a second recorder — with its
  * own session id, its own ring, and its own JSONL — cannot exist.
  */
+import { readdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { gamePaths } from "../paths.js";
+import { FlightRecorder } from "./flight-recorder.js";
+import type { DiagnosticEvent } from "./schema.js";
 
 export const recorder = new FlightRecorder();
 

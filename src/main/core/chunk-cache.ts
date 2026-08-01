@@ -1,3 +1,13 @@
+/**
+ * Reclaims cache space by deleting content-addressed chunks that neither the
+ * serving client nor the generation it can roll back to references.
+ *
+ * The keep set is the union of both manifests, so pruning after an update never
+ * destroys the rollback it was supposed to preserve. Anything that is not a
+ * regular file with a content-hash name is left alone: directories, temp files
+ * and unrecognised names are not this module's to judge. A missing rollback
+ * manifest is absence and prunes nothing extra; a corrupt one is an error.
+ */
 import { readdir, readFile, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { mapPool } from "./async-pool.js";

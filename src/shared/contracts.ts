@@ -1,3 +1,19 @@
+/**
+ * The canonical contracts between main, the preload and the renderer: the IPC
+ * channels, the settings, the progress and socket shapes, the Enhancement
+ * capability profiles, and the closed vocabularies each side validates against.
+ *
+ * These are types and frozen values only. Nothing here has behaviour, imports
+ * Electron, or touches a filesystem, which is what lets both processes and the
+ * generated preload share one definition rather than three copies that agree
+ * until they do not.
+ *
+ * The closed unions are the load-bearing part. A channel, a notice, a refusal
+ * or a capability profile exists only if it is listed here, so adding one is a
+ * deliberate edit that the compiler then demands both sides honour. Codes cross
+ * these boundaries; the sentence a player reads is written in the renderer,
+ * where it can be tested against what is actually shown.
+ */
 import type {
   DiagnosticSummary,
   RendererFrameBatch,

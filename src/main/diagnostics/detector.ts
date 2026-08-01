@@ -1,10 +1,3 @@
-import { AppError } from "../../shared/errors.js";
-import {
-  DIAGNOSTIC_EVENT_SCHEMA,
-  diagnosticEventSpec,
-  type DiagnosticEventName,
-} from "./schema.js";
-
 /**
  * Independent structural certification for `events.jsonl`.
  *
@@ -14,6 +7,12 @@ import {
  * fields, and declared values. Unknown events and fields are export failures;
  * there is no open-field counter or fallback path.
  */
+import { AppError } from "../../shared/errors.js";
+import {
+  DIAGNOSTIC_EVENT_SCHEMA,
+  diagnosticEventSpec,
+  type DiagnosticEventName,
+} from "./schema.js";
 
 type Guard<T> = (value: unknown) => value is T;
 

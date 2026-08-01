@@ -1,3 +1,16 @@
+/**
+ * The ArenaNet saved login: its shape rule and its one Keychain slot.
+ *
+ * `parseCredentials` is what the IPC boundary runs on whatever the renderer
+ * sent and what runs again on whatever came back out of the Keychain, so a
+ * value becomes `StoredCredentials` exactly one way. It is written for this
+ * payload alone and must not be widened to admit another secret's shape; the
+ * Steam token supplies its own validator to the same `KeychainJsonStore`.
+ *
+ * Neither field may reach a log, a diagnostic export, browser storage or a
+ * profile file. This module hands them to the Keychain and to the caller that
+ * asked, and nowhere else.
+ */
 import type { StoredCredentials } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import type { NativeKeychain } from "./native-keychain.js";

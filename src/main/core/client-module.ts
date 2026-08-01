@@ -1,3 +1,16 @@
+/**
+ * Chooses the one WebAssembly module a launch serves, and owns the rule that
+ * the choice is a chain and not a menu: official then template-save then
+ * optional Enhancement, each stage taking the previous stage's output as its
+ * input.
+ *
+ * A derived module is served only when its whole ancestry is certified against
+ * the exact official hash in hand. Every refusal degrades by one step and
+ * deletes the cache entries it may no longer serve, so a derivative can never
+ * be handed to a client it was not derived from. The compatibility state
+ * returned here is the state the rest of the app reports; nothing recomputes
+ * it downstream.
+ */
 import {
   type ClientCompatibilityState,
   enhancementCapabilitiesRequested,

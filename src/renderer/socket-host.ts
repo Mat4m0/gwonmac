@@ -1,3 +1,14 @@
+/**
+ * The renderer half of the game's TCP: one object per connection carrying the
+ * three callbacks ArenaNet's glue assigns, multiplexed over the single native
+ * event stream.
+ *
+ * The main process owns the handles, the destination checks and the
+ * backpressure; this owns the demultiplexing and nothing else. An event that
+ * arrives for a socket the caller has not finished creating is queued rather
+ * than dropped — the connect round trip can complete first — and is delivered
+ * in arrival order once the object exists.
+ */
 import type { GwNativeApi, SocketEvent } from '../shared/contracts.js';
 
 // The bridge's own socket surface, named rather than restated: this host is the

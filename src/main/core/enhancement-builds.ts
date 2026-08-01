@@ -1,3 +1,18 @@
+/**
+ * The certified Enhancement support table: per known client hash, the memory
+ * layout the companion kernel reads, the UI message IDs that dirty the party
+ * graph, and the output hash of every capability profile derived from it.
+ *
+ * Entries are matched by exact input hash and by nothing else. Every offset
+ * here was measured against one build, so there is no nearest match, no
+ * inheritance between entries and no default: a client with no entry gets no
+ * Enhancement rather than a plausible guess.
+ *
+ * The order of `ENHANCEMENT_*_LAYOUT_FIELDS` is the config ABI — the kernel
+ * decodes those words positionally. Reordering or inserting a field changes
+ * what the kernel reads and invalidates every `outputSha256` in the table, so
+ * the two must be edited together or not at all.
+ */
 import {
   enhancementCapabilityProfile,
   enhancementConfigWordActive,

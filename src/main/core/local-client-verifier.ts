@@ -1,3 +1,23 @@
+/**
+ * The structural proof that decides whether an unrecognised official client may
+ * still be transformed, and what it may be transformed for.
+ *
+ * Pure: it reads the bytes it is handed and nothing else — no profile state, no
+ * filesystem, no caching. The utility-process host owns all of that, which is
+ * what allows this to run inside a bounded isolated process.
+ *
+ * The two answers are not symmetric and must not be merged. Template save is
+ * shape-verifiable, so a client whose affected call sites still match is
+ * accepted by proof. Enhancement execution is exact-build only, because a
+ * matching address delta is not evidence about hook semantics or layout; an
+ * unrecognised client reports `enhancement-layout-changed` rather than being
+ * given the benefit of the doubt.
+ *
+ * `isLocalClientVerification` re-validates every field of a result that crossed
+ * a process boundary or came back off disk. A verifier ABI or baseline change
+ * makes every older result unreadable, so an app update can never inherit a
+ * decision made by verifier code it no longer contains.
+ */
 import { createHash } from "node:crypto";
 import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/contracts.js";
 import {

@@ -1,8 +1,10 @@
-// ArenaNet's Emscripten client mounts IDBFS at app:, but it does so from
-// main() after preRun. The WASM can open and write files but has no mkdir
-// import, and it leaves the process working directory at the ephemeral MEMFS
-// root. Own the mount once, before main(), so every relative game file is
-// durable and the required template directories already exist.
+/**
+ * ArenaNet's Emscripten client mounts IDBFS at app:, but it does so from
+ * main() after preRun. The WASM can open and write files but has no mkdir
+ * import, and it leaves the process working directory at the ephemeral MEMFS
+ * root. Own the mount once, before main(), so every relative game file is
+ * durable and the required template directories already exist.
+ */
 const MOUNT = 'app:';
 const DEPENDENCY = 'gw-persistent-filesystem';
 const SYNC_TIMEOUT_MS = 30_000;

@@ -1,6 +1,8 @@
-// ArenaNet's EGL adapter. The generated client owns context creation and canvas
-// sizing; this module only supplies the OffscreenCanvas presentation path and
-// the selected render density.
+/**
+ * ArenaNet's EGL adapter. The generated client owns context creation and canvas
+ * sizing; this module only supplies the OffscreenCanvas presentation path and
+ * the selected render density.
+ */
 
 let diagnosticsFrame = 0;
 

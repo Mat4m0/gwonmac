@@ -1,3 +1,18 @@
+/**
+ * Crash-loop protection across an ArenaNet client update: the marker files and
+ * the directory swap that let a launch tell "this generation has never survived
+ * a run" from "this generation works".
+ *
+ * A candidate is marked before it is served and confirmed only after the client
+ * has actually run. A launch that finds an unconfirmed marker rolls the
+ * previous generation back and records the rejected fingerprint, so the same
+ * broken download is not fetched and served again. The rejection is made
+ * durable before either directory moves: repeating the swap after a crash is
+ * safe, re-trying the candidate that caused the crash is not.
+ *
+ * Rejection is scoped to the host version that recorded it, so a fixed app is
+ * allowed to try a generation an older one refused.
+ */
 import { readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { isDigest } from "../../shared/digest.js";

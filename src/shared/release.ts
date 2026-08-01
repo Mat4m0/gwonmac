@@ -1,16 +1,18 @@
-// One parse, one comparison, one channel policy for this project's releases.
-//
-// Three places currently answer "is that version newer than this one, and may
-// it be offered?" and they disagree: the update/mismatch check in main, the
-// website's download resolver, and the release workflow's own tag validation.
-// A disagreement here is user-visible — an install told it is up to date when
-// it is not, or a download button pointing at a prerelease.
-//
-// SemVer only. The versioning *scheme* (CalVer semantics in SemVer syntax) is a
-// product decision owned by scripts/macos-version.ts and the release workflow;
-// nothing in this file knows what a year or a month is. It knows the shapes
-// .github/workflows/release.yml actually publishes: `X.Y.Z`, optionally
-// `-alpha.N` / `-beta.N` / `-rc.N`, optionally tag-prefixed with `v`.
+/**
+ * One parse, one comparison, one channel policy for this project's releases.
+ *
+ * Three places currently answer "is that version newer than this one, and may
+ * it be offered?" and they disagree: the update/mismatch check in main, the
+ * website's download resolver, and the release workflow's own tag validation.
+ * A disagreement here is user-visible — an install told it is up to date when
+ * it is not, or a download button pointing at a prerelease.
+ *
+ * SemVer only. The versioning *scheme* (CalVer semantics in SemVer syntax) is a
+ * product decision owned by scripts/macos-version.ts and the release workflow;
+ * nothing in this file knows what a year or a month is. It knows the shapes
+ * .github/workflows/release.yml actually publishes: `X.Y.Z`, optionally
+ * `-alpha.N` / `-beta.N` / `-rc.N`, optionally tag-prefixed with `v`.
+ */
 
 export type ReleaseChannel = "alpha" | "beta" | "rc" | "stable";
 

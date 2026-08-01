@@ -1,10 +1,12 @@
-// The renderer's single subscriber to main→renderer commands. The main process
-// used to reach in with `executeJavaScript` and a string of source it had built
-// by interpolation; it now sends typed events, and this is the one place that
-// turns them into renderer actions.
-//
-// index.html loads this as a classic script, so the file carries no top-level
-// import or export and names the contracts through type-only `import(…)`.
+/**
+ * The renderer's single subscriber to main→renderer commands. The main process
+ * used to reach in with `executeJavaScript` and a string of source it had built
+ * by interpolation; it now sends typed events, and this is the one place that
+ * turns them into renderer actions.
+ *
+ * index.html loads this as a classic script, so the file carries no top-level
+ * import or export and names the contracts through type-only `import(…)`.
+ */
 (() => {
   'use strict';
 

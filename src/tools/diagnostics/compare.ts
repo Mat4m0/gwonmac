@@ -1,3 +1,12 @@
+/**
+ * `pnpm diagnostics:compare`: two captures side by side.
+ *
+ * The comparison is only as good as the pairing, so the mismatches that make
+ * two captures incomparable — a different application version, a different
+ * capture level, a profiler-contaminated arm — are reported as warnings before
+ * any figure is shown. Level 2 traces locate causes but do not establish gains;
+ * a comparison drawn from them is a lead, not a result.
+ */
 import { resolve } from "node:path";
 import type { Capture } from "./common.js";
 import {

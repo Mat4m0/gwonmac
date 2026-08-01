@@ -1,3 +1,14 @@
+/**
+ * What makes a chunk a chunk: which digest a hash length implies, that the
+ * bytes hash to the name they were fetched under, and that a decoded chunk is
+ * exactly the length the manifest declared.
+ *
+ * Decompression is bounded before it starts rather than checked afterwards —
+ * that bound is what stops a corrupt or hostile gzip chunk from expanding into
+ * memory, and a length that merely differs from the manifest's is a failure
+ * rather than a short read. Every path that accepts chunk bytes goes through
+ * here, so no caller gets to invent its own idea of a valid chunk.
+ */
 import { createHash } from "node:crypto";
 import { gunzip } from "node:zlib";
 import { AppError } from "../../shared/errors.js";

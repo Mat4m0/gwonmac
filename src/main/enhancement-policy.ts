@@ -1,3 +1,18 @@
+/**
+ * The two developer-only Enhancement switches, resolved once, and the rule that
+ * decides when a tool change needs a relaunch.
+ *
+ * Both switches are read from the environment and both are refused in a
+ * packaged application, so no shipped build can be talked into automation
+ * capabilities or a developer example by the environment it was started in.
+ * They stay independent on purpose: automation grants input and IPC
+ * capabilities, the program chooses which example is installed, and neither
+ * implies the other.
+ *
+ * `enhancementSelectionChanged` exists because the client module is chosen
+ * before the renderer exists. A selection the running session cannot honour
+ * makes the settings write and the relaunch one action rather than two.
+ */
 import { app } from "electron";
 import {
   ENHANCEMENTS,

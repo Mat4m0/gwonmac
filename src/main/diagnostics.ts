@@ -1,12 +1,3 @@
-import type { DiagnosticSummary } from "../shared/diagnostics.js";
-import {
-  activeCaptureLevel,
-  discardTrace,
-  stopDiagnosticCapture,
-} from "./diagnostics/capture.js";
-import { recorder, sweepDiagnosticsDirectory } from "./diagnostics/recorder.js";
-import { startSampling, stopSampling } from "./diagnostics/samplers.js";
-
 /**
  * The diagnostics subsystem's one entry point, and the composition of its
  * parts: the recorder under `./diagnostics/`, the capture session, the OS
@@ -15,6 +6,14 @@ import { startSampling, stopSampling } from "./diagnostics/samplers.js";
  * The rest of the main process imports diagnostics from here and nowhere else,
  * so which module owns a given piece of state stays an internal question.
  */
+import type { DiagnosticSummary } from "../shared/diagnostics.js";
+import {
+  activeCaptureLevel,
+  discardTrace,
+  stopDiagnosticCapture,
+} from "./diagnostics/capture.js";
+import { recorder, sweepDiagnosticsDirectory } from "./diagnostics/recorder.js";
+import { startSampling, stopSampling } from "./diagnostics/samplers.js";
 
 export {
   count,

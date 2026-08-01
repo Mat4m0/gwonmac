@@ -1,3 +1,11 @@
+/**
+ * Everything the renderer reports, translated into recorder state.
+ *
+ * The renderer measures the frame loop, the game's reads and sockets, and its
+ * own milestones; main owns the recorder. This is the one place the two meet,
+ * so a renderer-reported value cannot reach the recorder by another route and
+ * arrive under a different name.
+ */
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   type EnhancementCapabilityProfile,
@@ -14,15 +22,6 @@ import {
 import { activeCaptureLevel } from "./capture.js";
 import { logEvent, recordEvent, recorder } from "./recorder.js";
 import { asRendererFingerprint } from "./schema.js";
-
-/**
- * Everything the renderer reports, translated into recorder state.
- *
- * The renderer measures the frame loop, the game's reads and sockets, and its
- * own milestones; main owns the recorder. This is the one place the two meet,
- * so a renderer-reported value cannot reach the recorder by another route and
- * arrive under a different name.
- */
 
 let graphics: GraphicsDiagnostics | null = null;
 let rendererClockOffsetUs = 0;

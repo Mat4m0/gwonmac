@@ -1,3 +1,15 @@
+/**
+ * The shape of download progress and the arithmetic every surface derives from
+ * it: the initial value, the estimate, and the smoothed rate.
+ *
+ * A rate is computed once, here, so the launcher, the Dock and the diagnostics
+ * gauges cannot disagree about how fast a download is going. Chunk completions
+ * arrive in bursts, so the average is time-weighted and samples are committed
+ * at most twice a second — an instantaneous rate over a millisecond interval is
+ * an arithmetically correct number that tells the player nothing true.
+ *
+ * Nothing here formats a sentence or knows what a phase is called on screen.
+ */
 import type {
   DownloadActivity,
   DownloadProgress,

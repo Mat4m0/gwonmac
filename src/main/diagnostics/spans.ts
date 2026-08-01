@@ -1,11 +1,3 @@
-import { randomUUID } from "node:crypto";
-import type { Digest } from "../../shared/digest.js";
-import type { ErrorCode } from "../../shared/errors.js";
-import type { ProxyRoute } from "../core/proxy-routes.js";
-import { activeCaptureLevel } from "./capture.js";
-import { recordEvent, recorder } from "./recorder.js";
-import type { DiagnosticEvent } from "./schema.js";
-
 /**
  * The bounded operations worth timing, each one begin/end pair declared here.
  *
@@ -14,6 +6,13 @@ import type { DiagnosticEvent } from "./schema.js";
  * `end` is ignored — so an unbalanced pair cannot reach the recorder and a
  * histogram cannot be fed a duration no event accounts for.
  */
+import { randomUUID } from "node:crypto";
+import type { Digest } from "../../shared/digest.js";
+import type { ErrorCode } from "../../shared/errors.js";
+import type { ProxyRoute } from "../core/proxy-routes.js";
+import { activeCaptureLevel } from "./capture.js";
+import { recordEvent, recorder } from "./recorder.js";
+import type { DiagnosticEvent } from "./schema.js";
 
 export interface ClosedDiagnosticSpan<End> {
   readonly traceId: string;

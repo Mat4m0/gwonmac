@@ -1,3 +1,22 @@
+/**
+ * The client generation state machine: look for an update, download it, decide
+ * what the resulting build may be transformed into, and publish exactly one
+ * active client.
+ *
+ * `clientReady` is the only thing in the application permitted to publish
+ * progress `phase: "ready"`. That phase means the main process has an active
+ * client, which nothing outside this runtime can know; published early, the
+ * renderer reads snapshot metadata before a client exists, sees size 0, and
+ * streams the whole game over the network.
+ *
+ * Every operation that moves a generation directory holds one lock for the
+ * whole of its work. Update, candidate confirmation and crash rollback all
+ * rename the same trees, and two of them interleaving at an await lets one
+ * rename away a tree the other is still reading.
+ *
+ * Certification is consumed, not re-derived: the runtime asks once which state
+ * a build is in and carries that one answer through preparation.
+ */
 import { net } from "electron";
 import type {
   ClientCompatibility,

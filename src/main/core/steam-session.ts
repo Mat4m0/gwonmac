@@ -1,3 +1,16 @@
+/**
+ * The Steam token's three concerns in one module: what a storable session looks
+ * like, the one slot it lives in, and which token a launch is given.
+ *
+ * There are exactly two sources — the stored session while it is still good,
+ * and a token a sign-in just produced. No third source exists at any tier; in
+ * particular no environment variable seeds this in any build, and
+ * `tests/policy/source-saved-login-surface.test.ts` scans for one.
+ *
+ * Nothing here imports Electron and nothing here logs. What happened on the way
+ * to an answer comes back as notes for the caller to record, so the audit trail
+ * is a value a test can assert on, and no note ever carries the token.
+ */
 import type { SteamRefusalReason } from "../../shared/contracts.js";
 import { AppError, errorCode, type ErrorCode } from "../../shared/errors.js";
 import type { NativeKeychain } from "./native-keychain.js";

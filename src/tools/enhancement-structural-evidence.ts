@@ -1,3 +1,16 @@
+/**
+ * The structural analysis behind a recertification: what a client module's own
+ * shape says about where the Enhancement hooks belong.
+ *
+ * Every answer is evidence with a status attached, never a conclusion.
+ * `candidate` means one location survived all the anchors; `ambiguous` means
+ * several did and a human must choose; `unavailable` names the specific reason
+ * the analysis could not run. A single best guess is deliberately not offered —
+ * silently picking one of two candidates is how a wrong hook gets certified.
+ *
+ * The analysis is bounded: oversized inputs, unsupported module shapes and
+ * exceeded work limits are reported as failures rather than pursued.
+ */
 import { createHash } from "node:crypto";
 import {
   parseCode,

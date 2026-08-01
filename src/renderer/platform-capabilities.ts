@@ -1,7 +1,9 @@
-// ArenaNet's current glue has two defective absence guards: ad playback falls
-// through after reporting failure, and shop purchase dereferences Module.shop
-// before checking it. Keep only those two namespaces, with explicit unavailable
-// semantics. Properly guarded optional namespaces are intentionally absent.
+/**
+ * ArenaNet's current glue has two defective absence guards: ad playback falls
+ * through after reporting failure, and shop purchase dereferences Module.shop
+ * before checking it. Keep only those two namespaces, with explicit unavailable
+ * semantics. Properly guarded optional namespaces are intentionally absent.
+ */
 
 /**
  * The shop namespace ArenaNet's glue expects to find. The four callbacks are

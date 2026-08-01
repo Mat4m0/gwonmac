@@ -1,3 +1,13 @@
+/**
+ * Finding and loading the native Keychain addon, kept apart from every rule
+ * about what a secret is.
+ *
+ * A packaged build resolves it inside `app.asar.unpacked` because a `.node`
+ * binary cannot be loaded from within an archive. What comes back is
+ * shape-checked before it is returned, so a missing, stale or mismatched addon
+ * fails here with a type error instead of at the first attempt to read a
+ * player's saved password.
+ */
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { NativeKeychain } from "./core/native-keychain.js";

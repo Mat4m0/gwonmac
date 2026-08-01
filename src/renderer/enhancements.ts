@@ -1,3 +1,17 @@
+/**
+ * Installs the companion kernel into the running client: verifies the exports
+ * it needs, allocates its shared memory, hands it the manifest's config, and
+ * starts the observer.
+ *
+ * All or nothing. Every precondition is checked before anything is allocated,
+ * and any failure afterwards releases everything this installation took before
+ * rethrowing, so there is no state where some hooks are live and others are
+ * not. A module that carries no decodable manifest, or that lacks an export the
+ * kernel needs, gets no kernel at all rather than a partial one.
+ *
+ * What a failed installation costs the launch is the harness's decision, not
+ * this module's.
+ */
 import {
   enhancementCapabilitiesFor,
   enhancementCapabilityProfile,

@@ -1,3 +1,20 @@
+/**
+ * Talks to ArenaNet's patch service: fetch the manifest, work out what this
+ * installation is missing, download and verify it, and publish the result as a
+ * new client generation.
+ *
+ * Publication is staged and marked as a candidate, never written over the
+ * generation currently in use, so a launch that never completes can be rolled
+ * back. Nothing is published that has not been hash-verified against the
+ * manifest that named it.
+ *
+ * This class reports download progress and nothing more. `"ready"` is excluded
+ * from its `emit` signature at the type level because the launcher reads that
+ * phase as "the main process has an active client", which only `ClientRuntime`
+ * can know; announcing it from here let the renderer read snapshot metadata
+ * before a client existed, receive size 0, and stream the whole game over the
+ * network instead.
+ */
 import {
   copyFile,
   link,

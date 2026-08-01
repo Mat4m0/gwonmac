@@ -1,3 +1,13 @@
+/**
+ * The capture session: its level, its deadline, and the raw Chromium trace it
+ * may leave on disk.
+ *
+ * The active level is what the rest of the subsystem asks before recording
+ * anything a capture pays for, and the level the export declares is a second
+ * value on purpose — it survives the stop so an export after the fact still
+ * describes the capture it is exporting. Both are owned here; nothing else
+ * assigns them.
+ */
 import { rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { contentTracing } from "electron";
@@ -11,17 +21,6 @@ import {
 import type { CaptureMetadata } from "./flight-recorder.js";
 import { logEvent, recorder } from "./recorder.js";
 import { resetEventLoopWindow } from "./samplers.js";
-
-/**
- * The capture session: its level, its deadline, and the raw Chromium trace it
- * may leave on disk.
- *
- * The active level is what the rest of the subsystem asks before recording
- * anything a capture pays for, and the level the export declares is a second
- * value on purpose — it survives the stop so an export after the fact still
- * describes the capture it is exporting. Both are owned here; nothing else
- * assigns them.
- */
 
 let captureLevel: 0 | 1 | 2 = 0;
 let recordedLevel: 0 | 1 | 2 = 0;

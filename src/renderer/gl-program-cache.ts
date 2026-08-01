@@ -1,12 +1,14 @@
-// ArenaNet's client uses KHR_parallel_shader_compile and polls
-// glGetProgramiv(program, COMPLETION_STATUS_KHR) in a loop while a program
-// compiles asynchronously. Chromium cannot answer that from its client-side
-// cache, so every poll flushes the command buffer and waits on the GPU
-// process. A recon session measured 36,713 polls against roughly 250 programs.
-//
-// Completion is the only thing memoized, and only once it reads true, and only
-// while the host has seen the program created and not deleted. Everything else
-// is passed through, including enums this file does not know about.
+/**
+ * ArenaNet's client uses KHR_parallel_shader_compile and polls
+ * glGetProgramiv(program, COMPLETION_STATUS_KHR) in a loop while a program
+ * compiles asynchronously. Chromium cannot answer that from its client-side
+ * cache, so every poll flushes the command buffer and waits on the GPU
+ * process. A recon session measured 36,713 polls against roughly 250 programs.
+ *
+ * Completion is the only thing memoized, and only once it reads true, and only
+ * while the host has seen the program created and not deleted. Everything else
+ * is passed through, including enums this file does not know about.
+ */
 const COMPLETION_STATUS_KHR = 0x91b1;
 const GL_TRUE = 1;
 

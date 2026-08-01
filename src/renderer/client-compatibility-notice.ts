@@ -1,9 +1,11 @@
-// What the player is told about the client build this session is running.
-//
-// The pure report below owns every compatibility sentence. The concrete DOM
-// binding at the end renders that same report in the launcher and Settings and
-// owns the notice acknowledgement. Certification gaps require a new release;
-// a runtime preparation failure is retryable and says so.
+/**
+ * What the player is told about the client build this session is running.
+ *
+ * The pure report below owns every compatibility sentence. The concrete DOM
+ * binding at the end renders that same report in the launcher and Settings and
+ * owns the notice acknowledgement. Certification gaps require a new release;
+ * a runtime preparation failure is retryable and says so.
+ */
 
 import type {
   ClientCompatibility,

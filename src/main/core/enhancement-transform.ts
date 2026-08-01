@@ -1,3 +1,22 @@
+/**
+ * The Enhancement transform: given one exact certified build, appends the hook
+ * dispatch machinery to its WebAssembly and reserves the table slot the
+ * companion kernel is installed into.
+ *
+ * The input hash is checked against the build entry before a byte is read, and
+ * every hook's function signature is re-verified against the certified one, so
+ * a table entry that has gone stale fails loudly instead of producing a module
+ * that traps at runtime. Capability selection is exact — three booleans, no
+ * extra keys, and a profile that has no certified output hash is refused rather
+ * than derived.
+ *
+ * Hook ordering is part of the output identity, not an implementation detail:
+ * it determines relocated function indices and therefore the resulting bytes,
+ * so no capability selection may inherit another's ordering.
+ *
+ * `inspectEnhancementCandidate` is the read-only half. It reports what a module
+ * looks like and certifies nothing.
+ */
 import { createHash } from "node:crypto";
 import {
   enhancementCapabilityProfile,

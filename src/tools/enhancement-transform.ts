@@ -1,3 +1,17 @@
+/**
+ * `pnpm enhancements:transform`: runs the Enhancement transform over one client
+ * module on the command line, for inspecting the derived bytes outside a
+ * launch.
+ *
+ * It emits one fixed profile. The other certified profiles are selected through
+ * the application path that owns their cache identity, and reproducing that
+ * selection here would be a second place where a capability set decides which
+ * output is correct.
+ *
+ * The transform, the build lookup and the expected output hash all come from
+ * the application's own modules, so this command cannot produce bytes a launch
+ * would not.
+ */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -12,9 +26,6 @@ import {
   ENHANCEMENT_TRANSFORM_ABI,
 } from "../shared/contracts.js";
 
-// This developer command emits the fixed foundation derivative: native cursor
-// plus Toolbox. Other exact profiles are selected by settings or live-program
-// intent through the application path that owns their cache identity.
 const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
 
 const [inputPath, outputPath] = process.argv.slice(2).filter((arg) => arg !== "--");

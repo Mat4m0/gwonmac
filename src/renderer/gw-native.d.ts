@@ -1,3 +1,13 @@
+/**
+ * The renderer's global surface: `window.gwNative`, the controllers the host
+ * installs alongside it, and the shape of `Module` as this application uses it.
+ *
+ * Declarations only. Everything named here is implemented elsewhere — in the
+ * preload, in the harness, or by ArenaNet's generated glue — so this file
+ * changes nothing at runtime. It exists so the renderer's classic scripts are
+ * checked against one description of that surface rather than against each
+ * other's assumptions.
+ */
 import type {
   AppSettings,
   AppSettingsPatch,

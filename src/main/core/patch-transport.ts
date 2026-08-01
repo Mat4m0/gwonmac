@@ -1,3 +1,15 @@
+/**
+ * The bounded HTTP transport every patch-service request goes through: one
+ * timeout, one abort composition, one redirect policy, one response ceiling and
+ * one backoff schedule, so manifest and chunk downloads cannot drift apart.
+ *
+ * Bytes are counted as they stream and a declared length over the ceiling is
+ * refused before the body is read, so an unbounded or lying response is never
+ * buffered first and judged second. Redirects are `manual` and a 3xx is fatal:
+ * the patch service is addressed by a fixed root, and a redirect out of it is
+ * not a route to follow. Retries are exponential and exist for transport
+ * faults; the statuses that no retry can fix throw on the first answer.
+ */
 import { AppError, HttpStatusError } from "../../shared/errors.js";
 import { FATAL_HTTP } from "./access-key.js";
 

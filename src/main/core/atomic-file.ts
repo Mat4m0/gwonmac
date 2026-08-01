@@ -1,3 +1,14 @@
+/**
+ * The only way this process replaces a file whose half-written state a reader
+ * could otherwise observe: temp file, fsync, rename, fsync the directory.
+ *
+ * Nothing here overwrites in place and nothing here is best-effort. A failed
+ * write unlinks its own temp file and rethrows, so the target keeps its previous
+ * contents rather than acquiring part of the new ones. Temp names carry the
+ * writing pid, which is what lets the sweep tell a dead process's debris from a
+ * live process's in-flight write; no other code collects them, because chunk
+ * pruning deliberately ignores names that are not content hashes.
+ */
 import { randomBytes } from "node:crypto";
 import { mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";

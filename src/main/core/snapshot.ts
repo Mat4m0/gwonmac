@@ -1,3 +1,15 @@
+/**
+ * The resident-chunk bitmap and the snapshot index published beside a client
+ * generation.
+ *
+ * The bitmap is the compact answer to "is chunk N already on disk" for a
+ * snapshot with hundreds of thousands of chunks. It is packed and read only
+ * here, so no caller indexes the bytes itself and no caller has to know the bit
+ * order. An index outside the chunk count is dropped rather than growing the
+ * map, and a stored bitmap of the wrong length is fitted to the chunk count
+ * instead of being trusted — the cost of a mis-sized index is chunks that look
+ * absent and get fetched again, which must never become an out-of-range read.
+ */
 import type { SnapshotMetadata } from "../../shared/contracts.js";
 import { writeAtomicJson } from "./atomic-file.js";
 

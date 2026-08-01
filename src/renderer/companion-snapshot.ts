@@ -1,3 +1,19 @@
+/**
+ * The decoders for the three fixed-layout records the companion kernel
+ * publishes into shared memory: the game snapshot, the cursor, and the toolbox
+ * state.
+ *
+ * Shared memory is untrusted input here. Every record is checked against its
+ * magic, its ABI and its declared size, and each field is re-validated against
+ * the property the kernel claims to have enforced — coordinates for finiteness
+ * and range, agent types against the accepted bit patterns, flags against the
+ * known set. A decoder that agreed with the writer by construction would be
+ * evidence of nothing.
+ *
+ * The `*_ABI` and `*_BYTES` constants are the contract with the kernel. A
+ * layout change has to move both sides, so a mismatched pair decodes to a
+ * refusal instead of to plausible numbers.
+ */
 export const COMPANION_SNAPSHOT_ABI = 1;
 export const COMPANION_SNAPSHOT_BYTES = 64;
 

@@ -1,3 +1,19 @@
+/**
+ * The single owner of application updates: discovery, feed validation,
+ * download, ready, and install.
+ *
+ * It is also the only caller of the releases API in this project, which is what
+ * makes the consent promise checkable rather than merely stated — with
+ * automatic checks off there is no second code path that could still reach
+ * github.com. `periodicCheckDue` holds every gate on an automatic check and is
+ * pure, so the gates are provable without running a timer; an open game socket
+ * defers a check because a Squirrel download must not compete with live game
+ * traffic.
+ *
+ * Only a package carrying the release marker may reach Squirrel.Mac. A stable
+ * install is never offered a preview, a preview may advance to stable, and a
+ * ready update waits for a restart rather than taking one.
+ */
 import type {
   AppUpdateErrorCode,
   AppUpdateState,

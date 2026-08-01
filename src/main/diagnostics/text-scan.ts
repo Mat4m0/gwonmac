@@ -1,5 +1,3 @@
-import { homedir } from "node:os";
-
 /**
  * The pattern scanner for text this application did **not** author.
  *
@@ -13,6 +11,7 @@ import { homedir } from "node:os";
  * unit test could reach it because that module resolves Electron paths at
  * import time.
  */
+import { homedir } from "node:os";
 
 /**
  * An absolute path. The lookbehind is **negative** so that a path at index 0

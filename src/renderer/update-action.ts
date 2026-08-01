@@ -1,3 +1,15 @@
+/**
+ * The update control as a player meets it: what the button says, what pressing
+ * it does, and the sentence underneath.
+ *
+ * Every update failure becomes prose here. The main process sends a code; the
+ * words live beside the surface that shows them, where a test can execute them
+ * and where free text cannot escape onto a channel and into a diagnostics
+ * export.
+ *
+ * The action's state machine is pure and kept apart from the DOM binding, so
+ * what the button does is testable without a window.
+ */
 import type {
   AppUpdateErrorCode,
   AppUpdateState,

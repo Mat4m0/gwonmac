@@ -1,3 +1,12 @@
+/**
+ * The application menu, which is the whole keyboard-and-mouse surface of this
+ * application outside the game itself.
+ *
+ * Item ids are the contract the Electron specs click through, so an item keeps
+ * its id when it moves between submenus. Every item that opens a sheet or takes
+ * focus clears game input first: the game never sees the key that opened it
+ * released.
+ */
 import {
   app,
   dialog,
@@ -12,16 +21,6 @@ import { reportProblem } from "./problem-report.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
 import type { WindowHost } from "./window.js";
-
-/**
- * The application menu, which is the whole keyboard-and-mouse surface of this
- * application outside the game itself.
- *
- * Item ids are the contract the Electron specs click through, so an item keeps
- * its id when it moves between submenus. Every item that opens a sheet or takes
- * focus clears game input first: the game never sees the key that opened it
- * released.
- */
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 

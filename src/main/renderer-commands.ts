@@ -1,3 +1,13 @@
+/**
+ * Main→renderer commands, and the single owner of "which window is the
+ * renderer".
+ *
+ * Commands are typed values, never JavaScript source built by interpolation,
+ * and the window they may address is the one `renderer-trust.ts` recognises —
+ * the same rule `ipc.ts` applies to traffic coming the other way, so the two
+ * directions cannot drift into different ideas of what the renderer is. Only
+ * the renderer a command was sent to may complete it.
+ */
 import { BrowserWindow, ipcMain } from "electron";
 import {
   IPC,
@@ -6,13 +16,6 @@ import {
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-
-/**
- * Main→renderer commands, and the single owner of "which window is the
- * renderer". `diagnostics.ts` used to answer that question itself with
- * `getURL().startsWith("gw://app")` — looser than the check `ipc.ts` applies to
- * traffic coming the other way — and built the command as JavaScript source.
- */
 
 interface Pending {
   webContentsId: number;

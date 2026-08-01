@@ -1,3 +1,17 @@
+/**
+ * What a game connection is allowed to reach: three ports, public IPv4 unicast,
+ * and the ArenaNet domain suffixes.
+ *
+ * Every rule here is a refusal. Loopback, link-local, RFC1918, carrier-grade
+ * NAT, this-network and multicast are all excluded, so a hostile or confused
+ * destination cannot turn the main process into a scanner of the player's own
+ * network. Suffix matching is anchored on a dot, so `notarenanetworks.com` is
+ * not a match for `arenanetworks.com`.
+ *
+ * These are the game-infrastructure rules. Web services are allowlisted
+ * separately in `proxy-routes.ts`; the two lists grant different things and
+ * must not be merged into one.
+ */
 import { AllowlistError, ValidationError } from "../../shared/errors.js";
 
 export const ALLOWED_PORTS = new Set([6112, 80, 443]);

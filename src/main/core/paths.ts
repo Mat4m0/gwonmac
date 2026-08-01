@@ -1,7 +1,3 @@
-import path from "node:path";
-import type { CLIENT_ARTIFACTS } from "./access-key.js";
-import { clientGenerationPaths } from "./client-compatibility.js";
-
 /**
  * Every filesystem path this application constructs, in one place.
  *
@@ -15,6 +11,10 @@ import { clientGenerationPaths } from "./client-compatibility.js";
  * and so the pinning test can execute it. The Electron-rooted entry point is
  * `src/main/paths.ts`.
  */
+import path from "node:path";
+import type { CLIENT_ARTIFACTS } from "./access-key.js";
+import { clientGenerationPaths } from "./client-compatibility.js";
+
 export interface GamePaths {
   userData: string;
   settings: string;

@@ -1,10 +1,12 @@
-// WebAssembly section codec shared by everything that rewrites or inspects
-// ArenaNet's client: the Enhancement transform, the template-save compatibility
-// transform, and the re-certifier that re-derives a build entry.
-//
-// Callers keep their own domain-prefixed `fail()` for their own invariants;
-// everything here throws `wasm: …` so a structural fault is distinguishable
-// from a policy one.
+/**
+ * WebAssembly section codec shared by everything that rewrites or inspects
+ * ArenaNet's client: the Enhancement transform, the template-save compatibility
+ * transform, and the re-certifier that re-derives a build entry.
+ *
+ * Callers keep their own domain-prefixed `fail()` for their own invariants;
+ * everything here throws `wasm: …` so a structural fault is distinguishable
+ * from a policy one.
+ */
 
 export interface Section {
   id: number;

@@ -1,3 +1,14 @@
+/**
+ * Turns the cursor bitmap the kernel publishes into a CSS cursor.
+ *
+ * The authoring grid is fixed at 32x32 because Chromium silently drops a custom
+ * cursor larger than that; Retina crispness comes from the 2x candidate of the
+ * same `image-set`, never from a bigger grid. The images are data URLs because
+ * the CSP governs cursor images through `img-src`, which bars `blob:`.
+ *
+ * The cache is bounded on purpose. Drag cursors are composed at runtime, so an
+ * unbounded map would grow with every distinct pointer the game ever draws.
+ */
 import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
