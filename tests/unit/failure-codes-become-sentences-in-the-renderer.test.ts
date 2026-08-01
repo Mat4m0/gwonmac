@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  clientCrashPresentation,
   describeDownloadFailure as download,
   describeLaunchFailure as launch,
   describeNotice,
@@ -141,5 +142,26 @@ describe("renderer failure messages", () => {
       failureDetail(),
       "You can retry, or choose Help → Report a Problem.",
     );
+  });
+  it("stops promising a retry once the client crashes twice in one run", () => {
+    const first = clientCrashPresentation(1);
+    const repeated = clientCrashPresentation(2);
+    for (const crash of [first, repeated]) {
+      for (const text of [crash.label, crash.detail, crash.retryButton, crash.reportButton]) {
+        assert.ok(text.length > 0, "crash presentation has empty prose");
+      }
+    }
+    // The first crash reads as transient; the repeat leads with the report.
+    assert.match(first.detail, /usually temporary/);
+    assert.match(repeated.label, /keeps stopping/);
+    assert.match(repeated.detail, /^Retrying alone may not fix this/);
+    // The privacy half-sentence the player needs before agreeing to export.
+    assert.match(repeated.detail, /not your account or chat/);
+    // Buttons are identical across counts: escalation changes the words, not
+    // the actions.
+    assert.equal(first.retryButton, repeated.retryButton);
+    assert.equal(first.reportButton, repeated.reportButton);
+    // An unreadable count degrades to the first-crash presentation.
+    assert.deepEqual(clientCrashPresentation(0), first);
   });
 });

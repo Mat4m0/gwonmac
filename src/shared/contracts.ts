@@ -113,6 +113,8 @@ export interface CacheInfo {
 export interface SocketOpenedEvent {
   type: "open";
   socketId: number;
+  /** Destination port from the closed allowlist; never a host name. */
+  port: number;
 }
 
 export interface SocketDataEvent {
@@ -524,6 +526,7 @@ export const IPC = {
   diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
   diagnosticsCurrent: "gw:diagnostics:current",
+  diagnosticsExportReport: "gw:diagnostics:exportReport",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
@@ -661,6 +664,12 @@ export interface GwNativeApi {
       fields?: RendererMilestoneFields,
     ): Promise<void>;
     current(): Promise<DiagnosticSummary>;
+    /**
+     * The Help-menu "Report a Problem" flow, launched from the renderer. Main
+     * owns everything — save dialog, export, the bug-report follow-up dialog
+     * and its own failure dialog — and nothing crosses back.
+     */
+    exportReport(): Promise<void>;
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;

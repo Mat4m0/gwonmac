@@ -194,13 +194,38 @@ export const RENDERER_MILESTONES = [
   "build.info",
   "snapshot.fatalRead",
   "wasm.abort",
+  "wasm.exit",
 ] as const;
 
 export type RendererMilestone = (typeof RENDERER_MILESTONES)[number];
-export interface RendererMilestoneFields {
-  programId: string | number;
-  buildId: string | number;
+
+/**
+ * The closed vocabulary a WASM abort collapses into before crossing IPC. The
+ * Emscripten abort argument is prose and never leaves the renderer; each kind
+ * names a distinct native failure shape, so the export can say *what class* of
+ * operation died without carrying text.
+ */
+export const WASM_ABORT_REASON_KINDS = [
+  "assertion",
+  "indirectCall",
+  "memoryBounds",
+  "unreachable",
+  "stackOverflow",
+  "oom",
+  "nativeAbort",
+  "unspecified",
+  "other",
+] as const;
+export type WasmAbortReasonKind = (typeof WASM_ABORT_REASON_KINDS)[number];
+
+export interface RendererMilestoneFieldsByName {
+  "build.info": { programId: string | number; buildId: string | number };
+  "wasm.abort": { reasonKind: WasmAbortReasonKind; fingerprint: string };
+  /** A non-zero client exit: the other way the running game dies. */
+  "wasm.exit": { code: number };
 }
+export type RendererMilestoneFields =
+  RendererMilestoneFieldsByName[keyof RendererMilestoneFieldsByName];
 
 export interface DiagnosticHistogramSummary {
   count: number;

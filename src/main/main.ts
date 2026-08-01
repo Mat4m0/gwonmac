@@ -183,7 +183,7 @@ function buildSocketManager(): SocketManager {
   return new SocketManager(
     (ownerId, event) => {
       if (event.type === "open") {
-        logEvent({ k: "socket.open", socketId: event.socketId });
+        logEvent({ k: "socket.open", socketId: event.socketId, port: event.port });
       } else if (event.type === "close") {
         logEvent({
           k: "socket.close",
@@ -543,6 +543,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
       compatibility: clientRuntime.compatibility,
       healthToken: clientRuntime.healthToken,
     }),
+    exportProblemReport: (win) =>
+      exportProblemReport(win, () => exportDiagnosticsForWindow(win)),
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
   });

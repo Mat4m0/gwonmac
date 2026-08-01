@@ -125,18 +125,25 @@
    is visible so the dock never shows two states at once. */
 #loading-boot { flex:1; min-width:0; display:flex; align-items:center;
                 justify-content:space-between; gap:20px; }
-#loading-retry { min-height:38px; padding:8px 22px; border:1px solid #7a4b38;
+#loading-retry,
+#loading-report { min-height:38px; padding:8px 22px; border:1px solid #7a4b38;
                  border-radius:6px; color:#eee3c9; background:#201a14e8;
                  font:inherit; cursor:default;
                  transition:transform .1s ease-out; }
-#loading-retry:hover { border-color:#e07a40; background:#2b2117f2; }
+#loading-retry:hover,
+#loading-report:hover:not(:disabled) { border-color:#e07a40;
+                                       background:#2b2117f2; }
 /* Response on pointer-down, not on release: every dock control presses. */
 #loading-retry:active,
+#loading-report:active:not(:disabled),
 .data-choice-option:active,
 .data-download-actions button:active:not(:disabled),
 .client-compat-actions button:active:not(:disabled) { transform:scale(.97); }
-#loading-retry:focus-visible { outline:2px solid #ff9d66; outline-offset:2px; }
-#loading-retry[hidden] { display:none; }
+#loading-retry:focus-visible,
+#loading-report:focus-visible { outline:2px solid #ff9d66; outline-offset:2px; }
+#loading-retry[hidden],
+#loading-report[hidden] { display:none; }
+#loading-report:disabled { opacity:.6; }
 #loading-dock:has(#data-choice:not([hidden])) #loading-boot,
 #loading-dock:has(#client-compat:not([hidden])) #loading-boot,
 #loading-dock:has(#data-download:not([hidden])) #loading-boot { display:none; }

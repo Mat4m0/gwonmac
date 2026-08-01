@@ -40,12 +40,31 @@ window.gwLoading = (function (): LoadingController {
   const root = el('loading'), bar = el('loading-bar'), fill = el('loading-fill');
   const label = el('loading-label'), detail = el('loading-detail');
   const retry = el('loading-retry') as HTMLButtonElement;
+  const report = el('loading-report') as HTMLButtonElement;
   let recovery: 'client' | 'filesystem' = 'client';
+  // Bumped by every state change so failCrash's async copy upgrade can tell
+  // it has been overtaken — e.g. by a Retry already in progress.
+  let stateGeneration = 0;
 
   function setBar(frac: number | null) {
     if (frac === null) { bar.classList.add('busy'); return; }
     bar.classList.remove('busy');
     fill.style.width = Math.max(0, Math.min(1, frac)) * 100 + '%';
+  }
+
+  /** The shared red failure frame; every fail* variant starts from it. */
+  function showFailureFrame(text: string, sub: string) {
+    stateGeneration += 1;
+    root.style.display = '';
+    root.classList.remove('gone');
+    label.textContent = text;
+    label.classList.add('error');
+    detail.textContent = sub;
+    retry.hidden = false;
+    report.hidden = true;
+    bar.classList.remove('busy');
+    fill.style.width = '100%';
+    fill.style.background = '#b8452f';
   }
 
   function finish() {
@@ -58,42 +77,54 @@ window.gwLoading = (function (): LoadingController {
   const api: LoadingController = {
     set(text, frac, sub) {
       recovery = 'client';
+      stateGeneration += 1;
       label.textContent = text;
       label.classList.remove('error');
       detail.textContent = sub || '';
       retry.hidden = true;
       retry.textContent = 'Retry';
+      report.hidden = true;
       setBar(frac);
     },
 
     fail(text, failDetail) {
       recovery = 'client';
-      root.style.display = '';
-      root.classList.remove('gone');
-      label.textContent = text;
-      label.classList.add('error');
-      detail.textContent =
-        failDetail ?? 'You can retry, or choose Help → Report a Problem.';
-      retry.hidden = false;
+      showFailureFrame(
+        text,
+        failDetail ?? 'You can retry, or choose Help → Report a Problem.',
+      );
       retry.textContent = 'Retry';
-      bar.classList.remove('busy');
-      fill.style.width = '100%';
-      fill.style.background = '#b8452f';
     },
 
     failFilesystem() {
       recovery = 'filesystem';
-      root.style.display = '';
-      root.classList.remove('gone');
-      label.textContent = 'Saved game files could not be opened.';
-      label.classList.add('error');
-      detail.textContent =
-        'Reset the local Guild Wars files to continue. Downloaded game data and your saved login are kept.';
-      retry.hidden = false;
+      showFailureFrame(
+        'Saved game files could not be opened.',
+        'Reset the local Guild Wars files to continue. Downloaded game data and your saved login are kept.',
+      );
       retry.textContent = 'Reset Saved Files…';
-      bar.classList.remove('busy');
-      fill.style.width = '100%';
-      fill.style.background = '#b8452f';
+    },
+
+    failCrash(crashCount) {
+      // The synchronous frame first: the overlay must appear even if module
+      // loading is broken. The crash copy then upgrades it in place.
+      api.fail('The game client stopped unexpectedly.');
+      const generation = stateGeneration;
+      void import('./failure-messages.js')
+        .then(({ clientCrashPresentation }) => {
+          // A later state — a Retry in progress, another failure — owns the
+          // panel now; upgrading it would repaint stale crash copy over it.
+          if (generation !== stateGeneration) return;
+          const crash = clientCrashPresentation(crashCount);
+          label.textContent = crash.label;
+          detail.textContent = crash.detail;
+          retry.textContent = crash.retryButton;
+          report.textContent = crash.reportButton;
+          report.hidden = false;
+          // After the live-region sentence, not instead of it.
+          setTimeout(() => retry.focus(), 0);
+        })
+        .catch(() => {});
     },
 
     done() {
@@ -198,6 +229,16 @@ window.gwLoading = (function (): LoadingController {
     } finally {
       retry.disabled = false;
     }
+  });
+
+  // Main owns the whole report flow — save dialog, export, follow-up dialog,
+  // and its own failure dialog — so there is nothing to render here beyond
+  // preventing a second dialog while one is up.
+  report.addEventListener('click', () => {
+    report.disabled = true;
+    void window.gwNative.diagnostics.exportReport()
+      .catch(() => {})
+      .finally(() => { report.disabled = false; });
   });
 
   // Project links are enum-selected so the renderer never invents arbitrary URLs.

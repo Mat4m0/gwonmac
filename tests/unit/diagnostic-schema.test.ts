@@ -91,12 +91,15 @@ describe("diagnosticEventRecord", () => {
   it("keeps the socket event name closed and the payload declared", () => {
     // `socket.${event.type}` was a templated name whose error branch carried
     // libuv's message; both parts are now fields of a fixed name.
-    assert.deepEqual(diagnosticEventRecord({ k: "socket.open", socketId: 4 }), {
-      subsystem: "socket",
-      level: "info",
-      name: "socket.open",
-      fields: { socketId: 4 },
-    });
+    assert.deepEqual(
+      diagnosticEventRecord({ k: "socket.open", socketId: 4, port: 6112 }),
+      {
+        subsystem: "socket",
+        level: "info",
+        name: "socket.open",
+        fields: { socketId: 4, port: 6112 },
+      },
+    );
     assert.deepEqual(
       diagnosticEventRecord({ k: "socket.close", socketId: 4, reason: "owner" }),
       {

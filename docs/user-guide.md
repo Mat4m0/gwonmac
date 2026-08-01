@@ -246,6 +246,21 @@ known patterns, so treat it as strong rather than absolute. The export is an
 ordinary ZIP you can open and read before attaching it. GitHub issues are
 public, so review the bug form’s privacy notice as well.
 
+## If the game crashes
+
+When the running game client stops unexpectedly, the launcher screen returns
+with **Retry** and **Report a Problem…**. Retry starts the client again; a
+single crash is usually transient.
+
+If the client crashes again in the same app run, the message changes to say
+so and leads with reporting: **Report a Problem…** on the launcher is the
+same flow as **Help → Report a Problem…** — it exports the diagnostics
+archive (which includes the crashed session and the reason class of the
+crash) and offers to open the GitHub bug form. What the archive does and does
+not contain is described under [Report a problem](#report-a-problem).
+
+The crash count resets when you quit and reopen the app.
+
 ## Recovery behavior
 
 - If startup cannot reach ArenaNet, the previous verified client is restored

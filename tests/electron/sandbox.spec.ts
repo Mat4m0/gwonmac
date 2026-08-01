@@ -65,6 +65,7 @@ test.describe("sandbox boundary", () => {
         diagnosticsKeys: [
           "clockSync",
           "current",
+          "exportReport",
           "recordClockOffset",
           "recordGraphics",
           "recordRendererFrames",

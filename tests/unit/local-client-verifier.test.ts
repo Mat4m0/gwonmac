@@ -70,7 +70,15 @@ function valid(): LocalClientVerification {
     baselineFingerprint: LOCAL_CLIENT_BASELINE_FINGERPRINT,
     officialSha256: TEMPLATE.sha256,
     templateSaveBuild: TEMPLATE,
-    enhancementBuild: ENHANCEMENT,
+    // What deriveEnhancementBuild actually emits: the relocated layout under
+    // the baseline's own buildId, because a locally verified client cannot
+    // prove its build number. The first manifest entry carried the same id as
+    // the baseline until the baseline was corrected to the build its client
+    // self-reports, which is what this spread now makes explicit.
+    enhancementBuild: {
+      ...ENHANCEMENT,
+      buildId: ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!.buildId,
+    },
     reasons: [],
   };
 }

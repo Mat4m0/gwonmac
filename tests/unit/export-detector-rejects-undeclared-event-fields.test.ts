@@ -181,7 +181,9 @@ describe("export detector", () => {
   });
 
   it("skips the blank lines a JSONL document ends with", () => {
-    const result = inspectEventLog(`${recorded({ k: "socket.open", socketId: 1 })}\n\n`);
+    const result = inspectEventLog(
+      `${recorded({ k: "socket.open", socketId: 1, port: 6112 })}\n\n`,
+    );
     assert.equal(result.records, 1);
   });
 });

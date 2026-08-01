@@ -194,6 +194,7 @@ const api = {
         fields,
       ),
     current: () => ipcRenderer.invoke(IPC.diagnosticsCurrent),
+    exportReport: () => ipcRenderer.invoke(IPC.diagnosticsExportReport),
   },
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),

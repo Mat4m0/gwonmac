@@ -87,7 +87,7 @@ describe("socket events carry no error text", () => {
     socket.emit("error", refused);
 
     assert.deepEqual(events, [
-      { type: "open", socketId: 1 },
+      { type: "open", socketId: 1, port: 6112 },
       { type: "error", socketId: 1, code: "refused" },
       { type: "close", socketId: 1, reason: "error" },
     ]);
