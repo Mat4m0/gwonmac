@@ -13,11 +13,12 @@ import {
   isDigest,
   type Digest,
 } from "../../shared/digest.js";
-import type {
-  DiagnosticFields,
-  DiagnosticLevel,
-  DiagnosticScalar,
-  DiagnosticSubsystem,
+import {
+  WASM_ABORT_REASON_KINDS,
+  type DiagnosticFields,
+  type DiagnosticLevel,
+  type DiagnosticScalar,
+  type DiagnosticSubsystem,
 } from "../../shared/diagnostics.js";
 import { AppError, isErrorCode, type ErrorCode } from "../../shared/errors.js";
 import {
@@ -28,6 +29,7 @@ import {
   isProxyRoute,
   type ProxyRoute,
 } from "../core/proxy-routes.js";
+import { ALLOWED_PORTS } from "../core/allowlists.js";
 
 /**
  * The one runtime and compile-time schema for app-authored diagnostic events.
@@ -82,7 +84,7 @@ export function asRendererFingerprint(value: string): RendererFingerprint {
   }
   return value as RendererFingerprint;
 }
-const isRendererFingerprint: FieldGuard<RendererFingerprint> = (
+export const isRendererFingerprint: FieldGuard<RendererFingerprint> = (
   value,
 ): value is RendererFingerprint =>
   typeof value === "string" && RENDERER_FINGERPRINT.test(value);
@@ -891,7 +893,9 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
   "socket.open": {
     subsystem: "socket",
     level: "info",
-    fields: { socketId: finiteNumber },
+    // The port is the closed production allowlist, so a reset on the game
+    // connection (6112) is distinguishable from patch/web traffic (80/443).
+    fields: { socketId: finiteNumber, port: literal([...ALLOWED_PORTS]) },
   },
   "socket.close": {
     subsystem: "socket",
@@ -1127,10 +1131,23 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "info",
     fields: { clockSynchronized: boolean },
   },
+  // The two milestones that are also failures. The abort argument collapses
+  // in the renderer into a closed reason kind plus a non-text fingerprint, so
+  // the export can name the failing native operation class without carrying
+  // prose; a non-zero exit carries only the client's own numeric code.
   "wasm.abort": {
     subsystem: "renderer",
-    level: "info",
-    fields: { clockSynchronized: boolean },
+    level: "error",
+    fields: {
+      clockSynchronized: boolean,
+      reasonKind: literal(WASM_ABORT_REASON_KINDS),
+      fingerprint: isRendererFingerprint,
+    },
+  },
+  "wasm.exit": {
+    subsystem: "renderer",
+    level: "error",
+    fields: { clockSynchronized: boolean, code: finiteNumber },
   },
 } as const satisfies Readonly<Record<string, EventSpec>>;
 

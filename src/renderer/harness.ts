@@ -84,7 +84,7 @@ type GwGameModule = {
   ): void;
   handleFatalReadError(): void;
   setBuildInfo(
-    info: import('../shared/diagnostics.js').RendererMilestoneFields,
+    info: import('../shared/diagnostics.js').RendererMilestoneFieldsByName['build.info'],
   ): void;
   isMobile: boolean;
   requestFullScreen(): void;
@@ -177,14 +177,33 @@ const LOG_LINES = 400;
 const logBuf: string[] = [];
 let gameWasmInstance: WebAssembly.Instance | null = null;
 let gameWasmModule: WebAssembly.Module | null = null;
+let crashRecorded = false;
+
+/**
+ * How many client launches have crashed this app run. Main's flight recorder
+ * owns the tally (it survives the location.reload() a Retry performs and
+ * dies with the process), so the renderer records the crash first and then
+ * reads the count back — browser storage is deliberately not used anywhere
+ * in this app. A count that cannot be read degrades to the first-crash
+ * presentation, never worse than showing no count at all.
+ */
+async function escalateRepeatedCrash(): Promise<void> {
+  const { counters } = await native().diagnostics.current();
+  const count = counters['wasm.crashes'] || 0;
+  if (count > 1) window.gwLoading?.failCrash(count);
+}
 let disposeSocketHost = () => {};
 const native = () => window.gwNative;
-const milestone = (
-  name: import('../shared/diagnostics.js').RendererMilestone,
-  fields?: import('../shared/diagnostics.js').RendererMilestoneFields,
+const milestone = <
+  N extends import('../shared/diagnostics.js').RendererMilestone,
+>(
+  name: N,
+  ...fields: N extends keyof import('../shared/diagnostics.js').RendererMilestoneFieldsByName
+    ? [import('../shared/diagnostics.js').RendererMilestoneFieldsByName[N]]
+    : []
 ) => {
   void native().diagnostics
-    .recordRendererMilestone(name, performance.now() * 1000, fields)
+    .recordRendererMilestone(name, performance.now() * 1000, fields[0])
     .catch(() => {});
 };
 
@@ -628,9 +647,30 @@ Module = {
     }
   },
   onAbort(reason) {
-    milestone('wasm.abort');
     log('[err] WASM aborted:', reason);
-    window.gwLoading?.fail('The game client stopped unexpectedly.');
+    // Emscripten can abort more than once while unwinding; only the first
+    // call presents and records — a repeat would reset the escalated copy
+    // back to first-crash and steal focus again. The prose never crosses
+    // IPC — it collapses into the closed reason vocabulary plus a
+    // fingerprint.
+    if (crashRecorded) return;
+    crashRecorded = true;
+    // The overlay first, with the first-crash presentation; the recorded
+    // count upgrades it below once main has counted this crash.
+    window.gwLoading?.failCrash(1);
+    void (async () => {
+      const { classifyWasmAbortReason, wasmAbortFingerprint } =
+        await import('./wasm-abort-reason.js');
+      await native().diagnostics.recordRendererMilestone(
+        'wasm.abort',
+        performance.now() * 1000,
+        {
+          reasonKind: classifyWasmAbortReason(reason),
+          fingerprint: wasmAbortFingerprint(reason),
+        },
+      );
+      await escalateRepeatedCrash();
+    })().catch(() => {});
   },
   onExit(code) {
     log('WASM exited:', code);
@@ -642,7 +682,25 @@ Module = {
         );
       });
     } else {
-      window.gwLoading?.fail('The game client stopped unexpectedly.');
+      // An abort that unwinds into a non-zero exit was already presented and
+      // counted by onAbort; re-running this branch would reset the copy to
+      // first-crash and count the same death twice.
+      if (crashRecorded) return;
+      crashRecorded = true;
+      window.gwLoading?.failCrash(1);
+      void (async () => {
+        // `code` is declared unknown at the Module boundary; anything the
+        // glue passes that is not a plain integer records as the -1 the
+        // schema can still account for.
+        const exitCode =
+          typeof code === 'number' && Number.isSafeInteger(code) ? code : -1;
+        await native().diagnostics.recordRendererMilestone(
+          'wasm.exit',
+          performance.now() * 1000,
+          { code: exitCode },
+        );
+        await escalateRepeatedCrash();
+      })().catch(() => {});
     }
   },
 };

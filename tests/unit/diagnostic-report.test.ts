@@ -67,6 +67,60 @@ describe("diagnostic report", () => {
     }
   });
 
+  it("treats a game-client abort as abnormal even after a clean app quit", async () => {
+    // The app quitting cleanly used to make the whole session read as normal,
+    // which hid exactly the sessions a crash report needs.
+    const directory = await mkdtemp(path.join(tmpdir(), "gw-report-"));
+    const currentSessionId = randomUUID();
+    const crashedSessionId = randomUUID();
+    try {
+      await writeFile(
+        path.join(directory, `session-${crashedSessionId}.jsonl`),
+        [
+          event(1, "info", "diagnostics.started"),
+          event(2, "error", "wasm.abort"),
+          event(3, "info", "quit.cleanupCompleted"),
+        ].join("\n"),
+      );
+      const previous = await previousAbnormalSession(directory, currentSessionId);
+      assert.equal(previous?.abnormalReason, "wasm.abort");
+      assert.equal(previous?.finalEventName, "quit.cleanupCompleted");
+
+      // The other way the running client dies is a non-zero exit; the
+      // detection is name-based, so a newer crash record wins the reason.
+      await writeFile(
+        path.join(directory, `session-${crashedSessionId}.jsonl`),
+        [
+          event(1, "info", "diagnostics.started"),
+          event(2, "error", "wasm.exit"),
+          event(3, "info", "quit.cleanupCompleted"),
+        ].join("\n"),
+      );
+      const exited = await previousAbnormalSession(directory, currentSessionId);
+      assert.equal(exited?.abnormalReason, "wasm.exit");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reports no abnormal session when the previous run was clean", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "gw-report-"));
+    const currentSessionId = randomUUID();
+    const cleanSessionId = randomUUID();
+    try {
+      await writeFile(
+        path.join(directory, `session-${cleanSessionId}.jsonl`),
+        [
+          event(1, "info", "diagnostics.started"),
+          event(2, "info", "quit.cleanupCompleted"),
+        ].join("\n"),
+      );
+      assert.equal(await previousAbnormalSession(directory, currentSessionId), null);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("derives startup, capture, and performance fields from canonical data", () => {
     const summary: DiagnosticSummary = {
       sessionId: "summary-session",

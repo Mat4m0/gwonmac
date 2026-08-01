@@ -23,11 +23,13 @@ import type {
   RendererMetrics,
   RendererMilestone,
   RendererMilestoneFields,
+  WasmAbortReasonKind,
 } from "../shared/diagnostics.js";
 import {
   isRendererFrameBatch,
   isRendererMetrics,
   RENDERER_MILESTONES,
+  WASM_ABORT_REASON_KINDS,
 } from "../shared/diagnostics.js";
 import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
@@ -60,6 +62,7 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
+import { isRendererFingerprint } from "./diagnostics/schema.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
@@ -84,6 +87,7 @@ export interface IpcContext {
   checkAppUpdates: () => Promise<void>;
   restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
   getClientSession: () => ClientSession;
+  exportProblemReport: (win: BrowserWindow) => Promise<void>;
   acquireSteamToken: (
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
@@ -330,43 +334,60 @@ interface ParsedMilestone {
 const asMilestone: Parser<ParsedMilestone> = (args) => {
   exact(args, 3);
   const [name, rendererTimestampUs, fields] = args;
-  const record = fields as Record<string, unknown> | undefined;
-  const recordIsObject =
-    record !== undefined
-    && record !== null
-    && typeof record === "object"
-    && !Array.isArray(record);
-  const exactBuildInfoFields =
-    recordIsObject
-    && Object.keys(record).length === 2
-    && Object.hasOwn(record, "programId")
-    && Object.hasOwn(record, "buildId");
-  const milestoneFields =
-    recordIsObject &&
-    exactBuildInfoFields &&
-    (typeof record.programId === "string" || typeof record.programId === "number") &&
-    (typeof record.buildId === "string" || typeof record.buildId === "number")
-      ? {
-          programId: record.programId as string | number,
-          buildId: record.buildId as string | number,
-        }
-      : undefined;
   if (
     typeof name !== "string" ||
     !RENDERER_MILESTONES.includes(name as RendererMilestone) ||
     typeof rendererTimestampUs !== "number" ||
     !Number.isFinite(rendererTimestampUs) ||
     rendererTimestampUs < 0 ||
-    rendererTimestampUs > Number.MAX_SAFE_INTEGER ||
-    (name === "build.info" && !milestoneFields) ||
-    (name !== "build.info" && fields !== undefined) ||
-    (milestoneFields &&
-      [milestoneFields.programId, milestoneFields.buildId].some(
-        (value) =>
-          (typeof value === "string" && value.length > 128) ||
-          (typeof value === "number" && (!Number.isSafeInteger(value) || value < 0)),
-      ))
+    rendererTimestampUs > Number.MAX_SAFE_INTEGER
   ) {
+    throw new ValidationError("invalid renderer milestone");
+  }
+  const record = fields as Record<string, unknown> | undefined;
+  const recordIsObject =
+    record !== undefined
+    && record !== null
+    && typeof record === "object"
+    && !Array.isArray(record);
+  let milestoneFields: RendererMilestoneFields | undefined;
+  if (name === "build.info") {
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === 2
+      && (typeof record.programId === "string" || typeof record.programId === "number")
+      && (typeof record.buildId === "string" || typeof record.buildId === "number")
+      && [record.programId, record.buildId].every(
+        (value) =>
+          (typeof value === "string" && value.length <= 128) ||
+          (typeof value === "number" && Number.isSafeInteger(value) && value >= 0),
+      );
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      programId: record.programId as string | number,
+      buildId: record.buildId as string | number,
+    };
+  } else if (name === "wasm.abort") {
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === 2
+      && typeof record.reasonKind === "string"
+      && (WASM_ABORT_REASON_KINDS as readonly string[]).includes(record.reasonKind)
+      && isRendererFingerprint(record.fingerprint);
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      reasonKind: record.reasonKind as WasmAbortReasonKind,
+      fingerprint: record.fingerprint as string,
+    };
+  } else if (name === "wasm.exit") {
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === 1
+      && typeof record.code === "number"
+      && Number.isSafeInteger(record.code);
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = { code: record.code as number };
+  } else if (fields !== undefined) {
     throw new ValidationError("invalid renderer milestone");
   }
   return {
@@ -721,6 +742,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     diagnosticsCurrent: channel(nothing, () => diagnosticSummary()),
+
+    diagnosticsExportReport: channel(nothing, async (win) => {
+      await ctx.exportProblemReport(win);
+    }),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);

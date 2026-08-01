@@ -194,7 +194,7 @@ export class SocketManager {
       entry.opened = true;
       this.metrics?.count("socket.opened");
       this.metrics?.observe("socket.connect", (Date.now() - entry.openedAt) * 1_000);
-      this.emit(ownerId, { type: "open", socketId: id });
+      this.emit(ownerId, { type: "open", socketId: id, port: parsed.port });
     });
 
     socket.on("data", (buf) => {

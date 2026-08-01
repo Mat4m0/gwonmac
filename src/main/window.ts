@@ -425,10 +425,16 @@ export async function resetGameInput(win: BrowserWindow): Promise<void> {
   await sendRendererCommand(win, { type: "input.reset" });
 }
 
+let problemReportInFlight = false;
+
 export async function exportProblemReport(
   win: BrowserWindow,
   exportDiagnostics: () => Promise<string>,
 ): Promise<void> {
+  // One report flow at a time, whichever surface asked: a second invocation
+  // while the save dialog is up would stack sheets and run two exports.
+  if (problemReportInFlight) return;
+  problemReportInFlight = true;
   try {
     const saved = await exportDiagnostics();
     if (!saved) return;
@@ -451,6 +457,8 @@ export async function exportProblemReport(
       "Report export failed",
       error instanceof Error ? error.message : String(error),
     );
+  } finally {
+    problemReportInFlight = false;
   }
 }
 

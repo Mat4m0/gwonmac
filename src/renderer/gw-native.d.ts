@@ -38,6 +38,8 @@ declare global {
     set(message: string, fraction: number | null, detail?: string): void;
     fail(message: string, detail?: string): void;
     failFilesystem(): void;
+    /** The running game client crashed; count is per app run. */
+    failCrash(crashCount: number): void;
     done(): void;
     waitForClient(): Promise<boolean>;
   }

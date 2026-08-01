@@ -139,7 +139,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
     programId: 1,
-    buildId: 38771,
+    // The client behind this hash identifies itself as build 38797 at runtime
+    // (diagnostics build.info); the entry previously carried the baseline's
+    // 38771 by mistake.
+    buildId: 38797,
     hookFunction: 446,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
