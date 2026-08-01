@@ -20,6 +20,24 @@ exact post-template Guild Wars module
 There is no generic hook registry, plugin loader, shared-memory packet ABI, or
 second C++ engine.
 
+## Source ownership
+
+The companion is one Wasm instance, but it is not one source-code monolith:
+
+| Module | Owns |
+| --- | --- |
+| `abi.rs` | fixed feature bits, layout words, snapshot structs, and size assertions |
+| `memory.rs` | overflow-checked, bounds-checked volatile reads from game memory |
+| `cursor.rs` | cursor dirty state, bitmap validation, conversion, and publication |
+| `toolbox.rs` | developer chat/hero state and the typed hero-panel command |
+| `lib.rs` | original-call ordering, world collection, dispatch, and exported ABI |
+
+Renderer ownership is similarly split. `enhancement-manifest.ts` validates the
+derived module's fixed evidence, `companion-observer.ts` projects stable
+snapshots, and `enhancements.ts` owns only transactional installation. Adding a
+domain must not add its decoder, presentation, and command policy to that
+installer.
+
 ## Exact build 38,797
 
 The certificate consumes post-template SHA-256
@@ -94,6 +112,21 @@ Unknown builds run the official client unchanged. Template save may be
 shape-recertified locally, but Enhancement is exact-build only until a future
 verifier independently recovers every hook and address. A common relocation
 alone is not enough evidence for that decision.
+
+This fail-closed behavior is the last safety net, not the desired update
+experience. ArenaNet update continuity needs three operational layers:
+
+1. a scheduled canary detects a new official hash before or immediately after
+   rollout and preserves only bounded structural evidence;
+2. the recertifier derives hook and layout candidates from semantic anchors and
+   runs the complete offline transform/kernel suite;
+3. a bounded live confirmation promotes the new exact certificate in an app
+   update.
+
+The official client remains playable throughout. Automatic relocation is safe
+only for fields independently recovered by their own anchors; accepting one
+shared address delta for the entire tool bundle would turn update continuity
+into silent memory corruption.
 
 ## Commands
 
