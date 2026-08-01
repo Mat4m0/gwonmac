@@ -298,11 +298,10 @@ try {
 } catch (error) {
   keepAlive = true;
   await mkdir(failureDir, { recursive: true });
-  // Neither diagnostic needs pixels. The foundation scenario could capture
-  // visible chat, while the input probe already records exact hit-test state.
+  // The foundation scenario could capture visible chat, so its evidence never
+  // records pixels.
   if (
     plan.name !== "toolbox-foundation"
-    && plan.name !== "input-left-click"
     && failurePage
     && !failurePage.isClosed()
   ) {

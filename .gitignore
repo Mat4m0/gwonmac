@@ -60,4 +60,5 @@ test-results/
 .nuxt
 .output
 
-plans
+plans/*
+!plans/research-tool-architecture.md
