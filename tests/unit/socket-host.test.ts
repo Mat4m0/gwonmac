@@ -73,8 +73,8 @@ describe("renderer socket host", () => {
     native.connects[0]!(11);
     native.connects[1]!(12);
     await turn();
-    native.emit({ type: "open", socketId: 12 });
-    native.emit({ type: "open", socketId: 11 });
+    native.emit({ type: "open", socketId: 12, port: 6112 });
+    native.emit({ type: "open", socketId: 11, port: 6112 });
     native.emit({ type: "data", socketId: 11, data: new Uint8Array([7]) });
     assert.deepEqual(opened, ["two", "one"]);
     assert.equal(socketOpened, 2);
@@ -117,7 +117,7 @@ describe("renderer socket host", () => {
 
     native.connects[0]!(31);
     await turn();
-    native.emit({ type: "open", socketId: 31 });
+    native.emit({ type: "open", socketId: 31, port: 6112 });
     const backing = new Uint8Array(1024);
     backing.set([2, 3, 4, 5], 100);
     await socket.send(backing.subarray(100, 104));
@@ -158,7 +158,7 @@ describe("renderer socket host", () => {
     };
     native.connects[1]!(41);
     await turn();
-    native.emit({ type: "open", socketId: 41 });
+    native.emit({ type: "open", socketId: 41, port: 6112 });
     assert.equal(secondOpened, 1);
     assert.equal(secondClosed, 0);
     host.dispose();

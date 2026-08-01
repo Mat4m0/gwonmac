@@ -498,6 +498,53 @@ test.describe("diagnostics", () => {
     }
   });
 
+  test("a crashed client offers reporting from the launcher", async () => {
+    const fixture = await launchOffline("gw-crash-panel-e2e-");
+    const saveRoot = await mkdtemp(path.join(tmpdir(), "gw-crash-export-"));
+    const target = path.join(saveRoot, "crash-report.zip");
+    try {
+      const { app, page } = fixture;
+      // Offline boot settles into its own generic failure first; the crash
+      // panel is driven on top of that settled state, as a real mid-game
+      // abort would be.
+      await expect(page.locator("#loading-retry")).toBeVisible();
+      await page.evaluate(() => window.gwLoading.failCrash(1));
+      await expect(page.locator("#loading-label")).toHaveText(
+        /stopped unexpectedly/,
+      );
+      await expect(page.locator("#loading-retry")).toBeVisible();
+      await expect(page.locator("#loading-report")).toBeVisible();
+
+      // The second crash of the run escalates the copy, not the actions.
+      await page.evaluate(() => window.gwLoading.failCrash(2));
+      await expect(page.locator("#loading-label")).toHaveText(/keeps stopping/);
+      await expect(page.locator("#loading-report")).toBeVisible();
+
+      // The launcher button drives the same main-owned flow as the Help menu:
+      // save dialog, export, follow-up dialog ("Done" is response 2).
+      await app.evaluate(({ dialog }, filePath) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+        dialog.showMessageBox = async () => ({
+          response: 2,
+          checkboxChecked: false,
+        });
+      }, target);
+      await page.click("#loading-report");
+      await expect
+        .poll(async () => (await stat(target).catch(() => null))?.size ?? 0)
+        .toBeGreaterThan(0);
+
+      // A subsequent progress state clears the crash actions.
+      await page.evaluate(() => {
+        window.gwLoading.set("Checking the game client", null);
+      });
+      await expect(page.locator("#loading-report")).toBeHidden();
+    } finally {
+      await closeOffline(fixture);
+      await rm(saveRoot, { recursive: true, force: true });
+    }
+  });
+
   test("exports a bounded, redacted report with prior crash context", async () => {
     const previousSessionId = randomUUID();
     const fixture = await launchOffline(

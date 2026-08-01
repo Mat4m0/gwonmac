@@ -538,9 +538,42 @@ export function recordRendererMilestone(
     ? Math.max(0, Math.round(rendererTimestampUs + rendererClockOffsetUs))
     : recorder.timestampUs();
   recorder.setLatest(`milestone.${name}Us`, timestampUs);
-  if (name === "build.info" && fields) {
+  if (name === "build.info" && fields && "programId" in fields) {
     recorder.setLatest("client.programId", fields.programId);
     recorder.setLatest("client.buildId", fields.buildId);
+  }
+  if (name === "wasm.abort") {
+    // IPC validation guarantees these fields for this name; a call without
+    // them is unreachable and recording a reasonless abort would be a lie.
+    if (!fields || !("reasonKind" in fields)) return;
+    // The run-scoped crash tally the loading overlay reads back through
+    // diagnostics.current() to decide first-crash vs repeated-crash copy.
+    // The renderer records one crash per client launch, so this counts
+    // launches that crashed, not abort re-entries.
+    recorder.count("wasm.crashes");
+    recordEvent(
+      {
+        k: "wasm.abort",
+        clockSynchronized: rendererClockSynchronized,
+        reasonKind: fields.reasonKind,
+        fingerprint: asRendererFingerprint(fields.fingerprint),
+      },
+      { timestampUs },
+    );
+    return;
+  }
+  if (name === "wasm.exit") {
+    if (!fields || !("code" in fields)) return;
+    recorder.count("wasm.crashes");
+    recordEvent(
+      {
+        k: "wasm.exit",
+        clockSynchronized: rendererClockSynchronized,
+        code: fields.code,
+      },
+      { timestampUs },
+    );
+    return;
   }
   recordEvent(
     { k: name, clockSynchronized: rendererClockSynchronized },

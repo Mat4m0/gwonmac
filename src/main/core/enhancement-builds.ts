@@ -200,6 +200,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       cursorToolbox: "8ba7836b7d27d9a9e31cd85359b2964d5c88b4f577ea3648fb874155fec6da70",
     }),
     programId: 1,
+    // The client behind this hash identifies itself as build 38797 at runtime
+    // (diagnostics build.info); the entry previously carried the baseline's
+    // 38771 by mistake.
     buildId: 38797,
     hookFunction: 446,
     hookParams: Object.freeze(["i32"] as const),

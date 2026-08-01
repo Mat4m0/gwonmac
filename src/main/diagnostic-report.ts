@@ -116,6 +116,11 @@ export async function previousAbnormalSession(
       record.name === "uncaught.exception" ||
       record.name === "uncaught exception" ||
       record.name === "quit.cleanupFailed" ||
+      // A game-client abort or non-zero exit is a crash even when the app
+      // itself then quits cleanly; without these the crashed session
+      // exported as "normal".
+      record.name === "wasm.abort" ||
+      record.name === "wasm.exit" ||
       (record.name === "renderer.processGone" && record.level === "error"),
   );
   if (final.name === "quit.cleanupCompleted" && !abnormal) return null;

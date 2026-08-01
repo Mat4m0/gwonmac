@@ -15,9 +15,10 @@
 //     are the complete set of destinations the app can open.
 //  2. What the recorder is told about a socket cannot contain the bytes. The
 //     manager publishes payloads to exactly one consumer — the game — and the
-//     three socket events the diagnostics schema declares carry an id, a close
-//     reason and a failure code. A record that carries anything else stops the
-//     export instead of being scrubbed on the way out.
+//     three socket events the diagnostics schema declares carry an id, an
+//     allowlisted destination port, a close reason and a failure code. A
+//     record that carries anything else stops the export instead of being
+//     scrubbed on the way out.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { SocketEvent } from "../../src/shared/contracts.ts";
@@ -197,7 +198,9 @@ describe("no game traffic is uploaded: what the recorder may hear", () => {
     // its element type from the first branch, so a socket event that stopped
     // matching the schema would have been widened away instead of rejected.
     const recorded: DiagnosticEvent[] = events.flatMap((event): DiagnosticEvent[] => {
-      if (event.type === "open") return [{ k: "socket.open", socketId: event.socketId }];
+      if (event.type === "open") {
+        return [{ k: "socket.open", socketId: event.socketId, port: event.port }];
+      }
       if (event.type === "close") {
         return [
           { k: "socket.close", socketId: event.socketId, reason: event.reason },
@@ -249,13 +252,13 @@ describe("no game traffic is uploaded: what the recorder may hear", () => {
         fields,
       });
 
-    assert.doesNotThrow(() => inspectEventLog(line({ socketId: 1 })));
+    assert.doesNotThrow(() => inspectEventLog(line({ socketId: 1, port: 6112 })));
     assert.throws(
-      () => inspectEventLog(line({ socketId: 1, bytes: "QUNDT1VOVA==" })),
+      () => inspectEventLog(line({ socketId: 1, port: 6112, bytes: "QUNDT1VOVA==" })),
       /carries undeclared field bytes/,
     );
     assert.throws(
-      () => inspectEventLog(line({ socketId: 1, payload: [65, 66, 67] })),
+      () => inspectEventLog(line({ socketId: 1, port: 6112, payload: [65, 66, 67] })),
       /undeclared field payload/,
     );
   });
