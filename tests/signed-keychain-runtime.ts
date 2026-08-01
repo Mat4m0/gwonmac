@@ -43,6 +43,11 @@ const credentials = {
   username: "signed-runtime@example.invalid",
   password: "synthetic-signed-runtime-secret",
 };
+// The only Steam-token writer is the main process's own interactive OAuth
+// flow. The renderer's `steam.store` is the client's expiry storeback, and
+// against an empty keychain it must be ignored — so this synthetic session is
+// expected to be *refused*, proving a renderer cannot plant a Steam credential
+// in the signed app.
 const steamSession = {
   token: "synthetic-signed-runtime-steam-token",
   expiry: Date.now() + 86_400_000,
@@ -149,8 +154,6 @@ type SecretAction =
   | "save-and-load"
   | "load"
   | "clear-and-load"
-  | "clear-credentials-and-load"
-  | "save-credentials-and-load"
   | "clear-steam-and-load";
 
 async function useSecrets(
@@ -183,15 +186,9 @@ async function useSecrets(
           await api.credentials.save(value.credentials);
           await api.steam.store(value.steam.token, value.steam.expiry);
         }
-        if (next === "save-credentials-and-load") {
-          await api.credentials.save(value.credentials);
-        }
         if (next === "clear-and-load") {
           await api.credentials.clear();
           await api.steam.clear();
-        }
-        if (next === "clear-credentials-and-load") {
-          await api.credentials.clear();
         }
         if (next === "clear-steam-and-load") await api.steam.clear();
         return {
@@ -220,12 +217,13 @@ try {
   createdSyntheticItem = true;
   assert.deepEqual(
     await useSecrets(sourceApp, "save-and-load"),
-    { credentials, steam: { token: steamSession.token } },
+    { credentials, steam: { token: null } },
+    "the renderer storeback planted a Steam token in an empty keychain",
   );
   assert.deepEqual(
     await useSecrets(sourceApp, "load"),
-    { credentials, steam: { token: steamSession.token } },
-    "the signed app did not retain both secrets across relaunch",
+    { credentials, steam: { token: null } },
+    "the signed app did not retain the credentials across relaunch",
   );
 
   const movedApp = path.join(
@@ -237,7 +235,7 @@ try {
   await execFileAsync("ditto", [sourceApp, movedApp]);
   assert.deepEqual(
     await useSecrets(movedApp, "load"),
-    { credentials, steam: { token: steamSession.token } },
+    { credentials, steam: { token: null } },
     "moving the signed app changed its Keychain identity",
   );
 
@@ -265,23 +263,14 @@ try {
   await execFileAsync("codesign", ["--verify", "--deep", "--strict", upgradedApp]);
   assert.deepEqual(
     await useSecrets(upgradedApp, "load"),
-    { credentials, steam: { token: steamSession.token } },
-    "a newly signed build could not read the existing Keychain items",
+    { credentials, steam: { token: null } },
+    "a newly signed build could not read the existing Keychain item",
   );
 
   assert.deepEqual(
-    await useSecrets(upgradedApp, "clear-credentials-and-load"),
-    { credentials: null, steam: { token: steamSession.token } },
-    "clearing credentials also cleared the independent Steam session",
-  );
-  assert.deepEqual(
-    await useSecrets(upgradedApp, "save-credentials-and-load"),
-    { credentials, steam: { token: steamSession.token } },
-  );
-  assert.deepEqual(
     await useSecrets(upgradedApp, "clear-steam-and-load"),
     { credentials, steam: { token: null } },
-    "clearing the Steam session also cleared independent credentials",
+    "clearing the Steam session slot also cleared independent credentials",
   );
   assert.deepEqual(
     await useSecrets(upgradedApp, "clear-and-load"),
@@ -310,7 +299,7 @@ try {
     "chunk-sentinel",
   );
   console.log(
-    `signed ${channel} Data Protection Keychain survived relaunch, move, and upgrade`,
+    `signed ${channel} Data Protection Keychain survived relaunch, move, and upgrade; the renderer storeback never planted a Steam token`,
   );
 } finally {
   if (createdSyntheticItem) {
