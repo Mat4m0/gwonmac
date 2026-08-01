@@ -468,6 +468,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     rememberCheckedAt: async (lastUpdateCheckAt) => {
       await updateAppSettings({ lastUpdateCheckAt });
     },
+    recordFailure: (stage, reason) => {
+      logEvent({ k: "appUpdate.requestFailed", stage, reason });
+    },
     publish: (state) => {
       if (state.phase === "failed") {
         logEvent({ k: "appUpdate.failed", reason: state.reason });

@@ -5,8 +5,12 @@ import {
   PERIODIC_CHECK_DUE_MS,
   PERIODIC_CHECK_TICK_MS,
   periodicCheckDue,
+  type AppUpdateStage,
 } from "../../src/main/app-updater.ts";
-import type { AppUpdateState } from "../../src/shared/contracts.ts";
+import type {
+  AppUpdateErrorCode,
+  AppUpdateState,
+} from "../../src/shared/contracts.ts";
 
 const repo = "https://github.com/Mat4m0/gwonmac";
 const releaseApi =
@@ -71,6 +75,7 @@ function fixture(options: {
   const states: AppUpdateState[] = [];
   const remembered: number[] = [];
   const feeds: string[] = [];
+  const failures: { stage: AppUpdateStage; reason: AppUpdateErrorCode }[] = [];
   let nativeChecks = 0;
   let installs = 0;
   const updater = new AppUpdater({
@@ -98,12 +103,14 @@ function fixture(options: {
       remembered.push(value);
     },
     publish: (state) => states.push(state),
+    recordFailure: (stage, reason) => failures.push({ stage, reason }),
   });
   return {
     updater,
     states,
     remembered,
     feeds,
+    failures,
     nativeChecks: () => nativeChecks,
     installs: () => installs,
   };
@@ -275,6 +282,65 @@ describe("application updater", () => {
       lastCheckedAt: "1970-01-01T00:00:01.234Z",
       reason: "offline",
     });
+    assert.deepEqual(f.failures, [{ stage: "releases", reason: "offline" }]);
+  });
+
+  it("records which request lost its answer, not only that one did", async () => {
+    // The published state cannot say where a fault happened, so a check that
+    // reached GitHub and lost the release's own feed would otherwise read
+    // exactly like one that never reached GitHub at all.
+    const f = fixture({
+      fetch: async (input) => isReleaseApiRequest(input)
+        ? response([release("2026.7.0-beta.2")])
+        : new Response("<html>not json</html>", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+
+    await f.updater.check();
+
+    assert.deepEqual(f.failures, [{ stage: "feed", reason: "unreadable" }]);
+    assert.equal(f.updater.getState().phase, "failed");
+    assert.equal(f.nativeChecks(), 0);
+  });
+
+  it("records an unreadable releases list against the releases request", async () => {
+    const f = fixture({
+      fetch: async () => new Response("<html>not json</html>", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    });
+
+    await f.updater.check();
+
+    assert.deepEqual(f.failures, [{ stage: "releases", reason: "unreadable" }]);
+  });
+
+  it("names the request behind a body that parses but is not a releases list", async () => {
+    const f = fixture({ fetch: async () => response({ message: "nope" }) });
+
+    await f.updater.check();
+
+    const state = f.updater.getState();
+    assert.equal(state.phase === "failed" && state.reason, "unreadable");
+    assert.deepEqual(f.failures, [{ stage: "releases", reason: "unreadable" }]);
+  });
+
+  it("keeps a rejected feed apart from a rejected release list", async () => {
+    const f = fixture({
+      fetch: async (input) => {
+        if (isReleaseApiRequest(input)) {
+          return response([release("2026.7.0-beta.2")]);
+        }
+        throw new Error("offline");
+      },
+    });
+
+    await f.updater.check();
+
+    assert.deepEqual(f.failures, [{ stage: "feed", reason: "offline" }]);
   });
 
   it("classifies a stalled release feed as a timeout", async () => {
@@ -300,6 +366,7 @@ describe("application updater", () => {
       lastCheckedAt: "1970-01-01T00:00:01.234Z",
       reason: "timeout",
     });
+    assert.deepEqual(f.failures, [{ stage: "feed", reason: "timeout" }]);
   });
 
   it("does not duplicate work while downloading or ready", async () => {

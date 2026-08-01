@@ -62,6 +62,52 @@ describe("KeychainJsonStore", () => {
     assert.deepEqual(trace, ["save:start", "clear"]);
   });
 
+  it("keeps the native classification of a refusal instead of collapsing it", async () => {
+    // The native module is the only thing that can tell a locked Keychain from
+    // an unsigned build, and a diagnostics reader is the one who needs it.
+    for (const [nativeCode, expected] of [
+      ["interaction_not_allowed", "keychain_locked"],
+      ["missing_entitlement", "keychain_unentitled"],
+      // An unclassified rejection, and one whose `code` is an identifier this
+      // process does not own, both keep the secret's own code.
+      ["unavailable", "credentials_unavailable"],
+      ["toString", "credentials_unavailable"],
+    ] as const) {
+      const rejection = Object.assign(new Error("Keychain operation unavailable"), {
+        code: nativeCode,
+      });
+      const keychain: NativeKeychain = {
+        load: async () => {
+          throw rejection;
+        },
+        save: async () => {
+          throw rejection;
+        },
+        clear: async () => {
+          throw rejection;
+        },
+      };
+      const store = new KeychainJsonStore("arenaNetCredentials", keychain, secret);
+      for (const operation of [
+        () => store.load(),
+        () => store.save({ value: "secret" }),
+        () => store.clear(),
+      ]) {
+        await assert.rejects(operation(), (error: unknown) => {
+          assert.ok(error instanceof AppError);
+          assert.equal(error.code, expected);
+          // A classified refusal keeps the rejection it came from; the code
+          // is the published part and the cause never becomes one.
+          assert.equal(
+            error.cause,
+            expected === "credentials_unavailable" ? undefined : rejection,
+          );
+          return true;
+        });
+      }
+    }
+  });
+
   it("zeroes native save buffers on success and failure", async () => {
     for (const fail of [false, true]) {
       let captured: Buffer | undefined;
