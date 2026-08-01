@@ -1,5 +1,6 @@
 import {
   enhancementCapabilitiesFor,
+  enhancementCapabilityProfile,
   type EnhancementProgram,
   type EnhancementSelection,
 } from "../shared/contracts.js";
@@ -17,6 +18,10 @@ import {
   recordCompanionLifecycle,
 } from "./companion-observer.js";
 import { decodeEnhancementManifest } from "./enhancement-manifest.js";
+import type {
+  RendererMilestone,
+  RendererMilestoneFields,
+} from "../shared/diagnostics.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
@@ -24,6 +29,20 @@ const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
 const COMPANION_ABI = 6;
 const COMPANION_RUNTIME_BYTES = 65_536;
 let companionInstallations = 0;
+
+/**
+ * The renderer half of the Enhancement crash story: whether the hook was live
+ * when a later wasm.abort fires. Best-effort by design — telemetry must never
+ * fail an installation.
+ */
+const recordMilestone = (
+  name: RendererMilestone,
+  fields?: RendererMilestoneFields,
+) => {
+  void window.gwNative.diagnostics
+    .recordRendererMilestone(name, performance.now() * 1000, fields)
+    .catch(() => {});
+};
 
 function percentile95(samples: readonly number[]): number {
   if (samples.length === 0) return 0;
@@ -144,6 +163,7 @@ export async function installEnhancements(
     const state = Object.freeze({ status: "unsupported" } as const);
     recordCompanionLifecycle(state);
     if (publishObserverState) window.gwCompanionState = state;
+    recordMilestone("enhancement.installFailed");
     return null;
   }
 
@@ -183,6 +203,7 @@ export async function installEnhancements(
   let installedCallback: CallableFunction | null = null;
   let installedRuntime: object | null = null;
   let cleaned = false;
+  let telemetryInstalled = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
@@ -206,6 +227,14 @@ export async function installEnhancements(
     if (runtimePointer) free(runtimePointer);
     if (window.gwCompanionRuntime === installedRuntime) {
       window.gwCompanionRuntime = null;
+    }
+    // Only a completed installation records a withdrawal; a rollback after a
+    // failed install records enhancement.installFailed instead.
+    if (telemetryInstalled) {
+      telemetryInstalled = false;
+      recordMilestone("enhancement.uninstalled", {
+        installation: companionInstallations,
+      });
     }
   };
   try {
@@ -501,9 +530,19 @@ export async function installEnhancements(
       `[enhancement] installed for client build ${manifest.buildId}; ` +
       `companion ABI ${COMPANION_ABI} ${kernelSha256.slice(0, 12)}`,
     );
+    const capabilityProfile = enhancementCapabilityProfile(capabilities);
+    if (capabilityProfile !== null) {
+      telemetryInstalled = true;
+      recordMilestone("enhancement.installed", {
+        companionAbi: COMPANION_ABI,
+        installation,
+        capabilityProfile,
+      });
+    }
     return runtime;
   } catch (error) {
     cleanup();
+    recordMilestone("enhancement.installFailed");
     if (publishObserverState) {
       window.gwCompanionState = Object.freeze({
         status: "error",
