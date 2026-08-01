@@ -149,6 +149,27 @@ test.describe("renderer Tools input", () => {
 
       // The palette never reset game input during any of the above.
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
+
+      // The native game cursor published on the canvas is mirrored over
+      // Tools chrome, and clears back to the system arrow with it.
+      const cursors = await page.evaluate(async () => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const root = globalThis.document.getElementById("toolbox-foundation");
+        if (!(canvas instanceof globalThis.HTMLElement) || !root) {
+          throw new Error("cursor mirror targets are missing");
+        }
+        const observed = () =>
+          new Promise<string>((resolve) => {
+            requestAnimationFrame(() => resolve(root.style.cursor));
+          });
+        canvas.style.cursor = "crosshair";
+        const mirrored = await observed();
+        canvas.style.cursor = "";
+        const cleared = await observed();
+        return { cleared, mirrored };
+      });
+      expect(cursors.mirrored).toBe("crosshair");
+      expect(cursors.cleared).toBe("");
     } finally {
       await closeOffline(fixture);
     }

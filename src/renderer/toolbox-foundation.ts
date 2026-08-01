@@ -29,7 +29,6 @@ const OVERLAY_CSS = `
   font-variant-numeric: tabular-nums;
   user-select: none;
   -webkit-user-select: none;
-  cursor: default;
 }
 #toolbox-foundation .toolbox-surface {
   background: rgba(10, 10, 12, 0.82);
@@ -45,7 +44,7 @@ const OVERLAY_CSS = `
   background: #1d1c19;
   color: inherit;
   font: inherit;
-  cursor: default;
+  cursor: inherit;
   transition: background-color 80ms linear, border-color 80ms linear;
 }
 #toolbox-foundation button:hover {
@@ -295,6 +294,20 @@ export function createToolboxFoundation(parent: HTMLElement) {
     if (overlayOpen) placePanel();
   };
 
+  // The native Guild Wars cursor is published as the canvas's style cursor.
+  // Mirror it so the game cursor stays the cursor over Tools chrome too;
+  // with the native cursor off the mirrored value is empty and the system
+  // arrow shows.
+  const mirrorCursor = () => {
+    root.style.cursor = canvas.style.cursor;
+  };
+  const cursorMirror = new MutationObserver(mirrorCursor);
+  cursorMirror.observe(canvas, {
+    attributes: true,
+    attributeFilter: ["style"],
+  });
+  mirrorCursor();
+
   window.addEventListener("keydown", onToggleChord, true);
   window.addEventListener("resize", onResize);
   open.addEventListener("click", () => setOpen(true));
@@ -322,6 +335,7 @@ export function createToolboxFoundation(parent: HTMLElement) {
       return state;
     },
     dispose() {
+      cursorMirror.disconnect();
       window.removeEventListener("keydown", onToggleChord, true);
       window.removeEventListener("resize", onResize);
       releaseGameInput();
