@@ -99,6 +99,15 @@ message and HeroID. Chromium never calls a game function directly.
 The developer snapshot is fixed at 64 bytes and contains only the two counters,
 first-hero scalar state, panel state, and command request/result numbers.
 
+The developer surface is a same-renderer Chromium overlay, not an injected game
+frame or a second Electron window. Its collapsed status is passive except for
+the explicit Open button. Opening it releases held game input and pointer lock;
+keyboard and pointer events then stop at the overlay, Tab stays within its
+controls, and Escape, Close, or an outside click restores canvas focus. Moving
+focus between the canvas and this one overlay is internal, so it does not run
+the client's canvas-blur audio mute. A real application blur still follows the
+normal input-release and audio behavior.
+
 ## Installation and failure behavior
 
 The renderer validates the one manifest, game exports, table identity, kernel

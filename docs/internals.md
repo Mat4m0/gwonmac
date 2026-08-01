@@ -487,13 +487,15 @@ Enhancement hook, starts no snapshot observer, and contains no Enhancement UI.
 
 The two shipped tools are independent. `nativeCursor` defaults to **true** and
 reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
-owns the only added overlay, `src/renderer/enhancement-readout.ts`: a fixed line at
-the top centre of the game view showing the selected target's distance in game
-units and range band. It is the last stage of the read-only pipeline — manifest
-→ transform/kernel → snapshot → decoder → here — and writes nothing back. It
-renders nothing without a selected target, on a loading screen, after a torn
-read, or on an unsupported build. It is `pointer-events: none` and
-`aria-live="off"`.
+owns the only player-selectable added overlay,
+`src/renderer/enhancement-readout.ts`: a fixed line at the top centre of the
+game view showing the selected target's distance in game units and range band.
+It is the last stage of the read-only pipeline — manifest → transform/kernel →
+snapshot → decoder → here — and writes nothing back. It renders nothing without
+a selected target, on a loading screen, after a torn read, or on an unsupported
+build. It is `pointer-events: none` and `aria-live="off"`. Development automation
+also mounts the interactive foundation proof described in
+`docs/gwonmac-tools-wasm.md`; that surface is unreachable in packaged builds.
 
 `ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. There is
 no stored or transported master switch: `enhancement-policy.ts` derives whether

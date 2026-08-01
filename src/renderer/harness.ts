@@ -759,11 +759,18 @@ function loadGlue() {
     Object.values(Module.oskInput).filter(Boolean),
   );
 
-  // The desktop text proxy is part of the game, not a loss of game focus.
-  // Keep the client's canvas-blur callback from muting audio while chat is
-  // active. Real window blur still reaches the canvas and releases input.
+  // The desktop text proxy and the same-window Toolbox overlay are part of the
+  // game experience, not a loss of application focus. Keep the client's
+  // canvas-blur callback from muting audio for those internal transfers. Real
+  // window blur still reaches the canvas and releases input.
   c.addEventListener('blur', (event) => {
-    if (oskInputs.has(event.relatedTarget)) event.stopImmediatePropagation();
+    const target = event.relatedTarget;
+    if (
+      oskInputs.has(target) ||
+      (target instanceof Element && target.closest('#toolbox-foundation'))
+    ) {
+      event.stopImmediatePropagation();
+    }
   }, true);
 
   for (const type in Module.oskInput) {

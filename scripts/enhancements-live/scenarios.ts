@@ -752,6 +752,13 @@ async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
   });
 }
 
+async function openToolboxOverlay(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Open Toolbox" }).click();
+  await page.waitForFunction(() =>
+    document.getElementById("toolbox-foundation")?.dataset.open === "true",
+  );
+}
+
 async function runToolboxFoundation({ page }: AutomationContext) {
   await page.waitForFunction(() => {
     const toolbox = window.gwCompanionRuntime?.toolbox;
@@ -832,6 +839,7 @@ async function runToolboxFoundation({ page }: AutomationContext) {
     throw new Error("no first owned hero is available for the panel proof");
   }
 
+  await openToolboxOverlay(page);
   const hideStarted = Date.now();
   await page.getByRole("button", { name: "Hide panel" }).click();
   await page.waitForFunction(() => {
@@ -861,6 +869,7 @@ async function runToolboxFoundation({ page }: AutomationContext) {
   }, undefined, { timeout: 1_000 });
   const showLatencyMs = Date.now() - showStarted;
   await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
+  await page.getByRole("button", { name: "Close Toolbox" }).click();
   const final = await readToolboxState(page);
   return {
     baseline: baseline.playerChatCount,
@@ -896,6 +905,7 @@ async function runToolboxHeroPanel({ page }: AutomationContext) {
     "confirm a hero is in the party",
   );
   const initial = await readToolboxState(page);
+  await openToolboxOverlay(page);
   const hideStarted = Date.now();
   await page.getByRole("button", { name: "Hide panel" }).click();
   await page.waitForFunction(() => {
@@ -925,6 +935,7 @@ async function runToolboxHeroPanel({ page }: AutomationContext) {
   }, undefined, { timeout: 1_000 });
   const showLatencyMs = Date.now() - showStarted;
   await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
+  await page.getByRole("button", { name: "Close Toolbox" }).click();
   const final = await readToolboxState(page);
   return {
     heroId: initial.firstHeroId,
