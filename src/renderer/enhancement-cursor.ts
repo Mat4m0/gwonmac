@@ -84,11 +84,20 @@ export function createCursorConsumer({
   memory,
   cursorPointer,
   fallback = "",
+  transitionHold = () => false,
 }: {
   element: HTMLElement;
   memory: WebAssembly.Memory;
   cursorPointer: number;
   fallback?: string;
+  /**
+   * While true, a published hide keeps the last visible art on screen instead
+   * of `cursor: none`. The caller scopes it to a click-armed mode transition,
+   * where the hide is a wait for the server rather than an instruction — the
+   * eye sees one swap to the new art instead of an invisible gap. A hold that
+   * ends is settled on the next poll, republish or not.
+   */
+  transitionHold?: () => boolean;
 }) {
   let applied = fallback;
   let generation = -1;
@@ -96,6 +105,7 @@ export function createCursorConsumer({
   let pixelHash = 0;
   let hidden = false;
   let valid = false;
+  let withheld = false;
 
   // Blink coalesces cursor pushes on a timer, so a changed cursor reaches the
   // OS in 1-31 ms on its own. A real layout invalidation triggers the
@@ -128,13 +138,21 @@ export function createCursorConsumer({
     if (header.status === "waiting") return;
     // The kernel bumps the generation only when pixels are republished, so a
     // header-only invalidation shows up as a flags change alone.
-    if (header.generation === generation && header.flags === flags) return;
+    if (header.generation === generation && header.flags === flags) {
+      // A hold that ended without a republish still owes the hide it withheld.
+      if (withheld && !transitionHold()) {
+        withheld = false;
+        apply("none");
+      }
+      return;
+    }
     if (header.status !== "ready") {
       generation = header.generation;
       flags = header.flags;
       pixelHash = 0;
       hidden = false;
       valid = false;
+      withheld = false;
       apply(fallback);
       return;
     }
@@ -156,6 +174,11 @@ export function createCursorConsumer({
     pixelHash = header.pixelHash;
     hidden = header.hidden;
     valid = true;
+    if (header.hidden && transitionHold()) {
+      withheld = true;
+      return;
+    }
+    withheld = false;
     apply(css);
   };
 

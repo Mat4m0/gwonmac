@@ -20,7 +20,11 @@ import {
 } from "../shared/contracts.js";
 import { createCursorConsumer } from "./enhancement-cursor.js";
 import { createTargetReadout } from "./enhancement-readout.js";
-import { installCursorRefresh } from "./cursor-refresh.js";
+import {
+  createHiddenCursorRetry,
+  installCursorRefresh,
+  type HiddenCursorRetry,
+} from "./cursor-refresh.js";
 import { createToolboxFoundation } from "./toolbox-foundation.js";
 import {
   COMPANION_CURSOR_BYTES,
@@ -425,27 +429,37 @@ export async function installEnhancements(
     }
 
     let cursorRefreshes = 0;
+    let hiddenRetry: HiddenCursorRetry | null = null;
     let cursor: ReturnType<typeof createCursorConsumer> | null = null;
     if (capabilities.nativeCursor) {
       const element = document.getElementById("canvas");
       if (!(element instanceof HTMLCanvasElement)) {
         throw new Error("Enhancement cursor target is missing");
       }
-      cursor = createCursorConsumer({
-        element,
-        memory,
-        cursorPointer,
-        // The empty string hands the canvas back to the stylesheet theme.
-        fallback: "",
-      });
-      disposeCursor = cursor.dispose;
-      disposeCursorRefresh = installCursorRefresh(
+      const refresh = installCursorRefresh(
         element,
         () => Number(cursorEventCount()) >>> 0,
         () => {
           cursorRefreshes += 1;
         },
       );
+      disposeCursorRefresh = refresh.dispose;
+      const retry = createHiddenCursorRetry(refresh.retest);
+      hiddenRetry = retry;
+      cursor = createCursorConsumer({
+        element,
+        memory,
+        cursorPointer,
+        // The empty string hands the canvas back to the stylesheet theme.
+        fallback: "",
+        // Hold the last art through a click-armed transition: the hide is a
+        // wait for the server, not an instruction. `!expired` rather than an
+        // "active" flag, because the retry only learns about the hide after
+        // the consumer's poll — a hold gated on activity would miss the very
+        // frame the hide is applied.
+        transitionHold: () => !retry.expired && refresh.armed(),
+      });
+      disposeCursor = cursor.dispose;
     }
     const readout = observeState
       ? createTargetReadout(document.body)
@@ -495,6 +509,12 @@ export async function installEnhancements(
       get cursorRefreshes() {
         return cursorRefreshes;
       },
+      get cursorHiddenRetests() {
+        return hiddenRetry?.retests ?? 0;
+      },
+      get cursorHiddenGapMs() {
+        return hiddenRetry?.lastGapMs ?? null;
+      },
       get wasmMemoryBytes() {
         return memory.buffer.byteLength;
       },
@@ -527,9 +547,17 @@ export async function installEnhancements(
         })
       : runtimeProjection);
     installedRuntime = runtime;
+    // The retry loop rides the observer's own cadence: it runs exactly when
+    // the consumer polls, and pauses with it when the page is hidden.
+    const polledCursor = cursor === null ? null : {
+      poll: () => {
+        cursor.poll();
+        hiddenRetry?.afterPoll(cursor.state);
+      },
+    };
     stopObserver = observeCompanion(
       observerRuntime,
-      cursor,
+      polledCursor,
       readout,
       toolbox,
       observeState,

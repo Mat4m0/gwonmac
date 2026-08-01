@@ -593,7 +593,15 @@ exactly once before notifying the passive companion. Cursor events
 mark the bitmap dirty; the next tick reads it only when dirty, while a tiny
 show-count check preserves visibility changes. A trusted click that produced
 no cursor callback receives one zero-distance hit-test refresh, fixing mode
-changes such as salvage without moving the physical pointer.
+changes such as salvage without moving the physical pointer. When the click's
+answer is a hidden cursor — a server-validated mode change the game has not
+resolved yet — the refresh asks again on the next observer frame and then
+every 150 ms, following the pointer while it stays on the canvas, until art
+resolves it, the pointer leaves the canvas, or 2.5 s
+passes; while that same window is open, the consumer keeps the last visible
+art on screen instead of `cursor: none`, so the eye sees one swap rather than
+an invisible gap. Every stop lands on the pre-retry behaviour. The gap and
+retry count reach diagnostics through the runtime stats surface.
 
 The build does not publish rustc output directly. Rustc writes an unserved
 candidate; the next build step validates its Wasm, absence of a start function,

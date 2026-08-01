@@ -133,6 +133,10 @@ const DEVELOPER_RUNTIME_KEYS = Object.freeze([
   "buildId",
   "companionAbi",
   "cursor",
+  // The two hidden-transition gauges: how often the re-ask loop fired and how
+  // long the last hidden transition lasted. Presentation counters only.
+  "cursorHiddenGapMs",
+  "cursorHiddenRetests",
   "cursorRefreshes",
   "hertz",
   "installation",
