@@ -115,6 +115,7 @@ jobs:
             echo "APPLE_API_KEY_ID=$API_KEY_ID"
             echo "APPLE_API_ISSUER_ID=$API_ISSUER_ID"
             echo "APPLE_TEAM_ID=$TEAM_ID"
+            echo "APPLE_SIGNING_IDENTITY=7F9A56793C16683742AA7818FE65221A884FA108"
           } >> "$GITHUB_ENV"
           keychain_password="$(openssl rand -hex 32)"
           printf '%s' "$CERTIFICATE_B64" | base64 --decode > "$certificate"
@@ -170,19 +171,20 @@ jobs:
 
       - name: Build, sign, notarize, and staple application
         env:
-          GW_OFFICIAL_RELEASE: "1"
+          GW_PACKAGE_INTENT: release
         run: pnpm make
 
       - name: Smoke-test signed release candidate
         env:
-          GW_EXPECT_OFFICIAL_UPDATER: "1"
+          GW_PACKAGE_INTENT: release
         run: pnpm test:packaged
 
       - name: Prove signed Data Protection Keychain continuity
         run: |
           app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
           test -n "$app"
-          GW_SIGNED_APP_PATH="$app" pnpm test:signed-keychain
+          GW_SIGNED_APP_PATH="$app" GW_SIGNED_CHANNEL=release \
+            pnpm test:signed-keychain
 
       - name: Notarize and staple DMG
         run: |

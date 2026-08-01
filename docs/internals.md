@@ -131,9 +131,11 @@ release list only after a manual request or the once-per-launch automatic check.
 Settings; switched off, a launch reaches github.com zero times. There is no
 timer or polling loop.
 
-Only a packaged macOS build carrying `official-update.json` may update. Forge
-includes that marker only when `GW_OFFICIAL_RELEASE=1`; local, tester, and
-ad-hoc packages fail as `updater-unavailable` before making a request. Stable
+Only a packaged macOS build whose generated `distribution-channel.json` names
+`release` may update. The marker has the exact shape
+`{ schema: 1, repository, channel }`; capabilities are derived from that closed
+channel rather than stored as booleans. Preview, Development, malformed, and
+unmarked packages fail as `updater-unavailable` before making a request. Stable
 installs ignore previews. Preview installs may advance through previews or to
 stable. Drafts, malformed tags, duplicate assets, unexpected download URLs,
 and a `RELEASES.json` that does not name the exact release ZIP fail closed.
@@ -191,33 +193,61 @@ shop.initialize/inAppPurchase
 ```
 
 The generated glue requires all three credential methods. They cross a narrow
-IPC boundary to one native `CredentialsStore`. An official package carrying
-the release marker persists its validated `{ username, password }` JSON in the
-fixed `arenaNetCredentials` slot of the app's Data Protection Keychain access
-group. The Objective-C++ Node-API boundary uses
+IPC boundary to one native `CredentialsStore`. A provisioned Release, Preview,
+or Development package persists its validated `{ username, password }` JSON
+in the fixed `arenaNetCredentials` slot of its private Data Protection Keychain
+access group. The Objective-C++ boundary accepts only the three exact host
+bundle IDs. Release preserves the existing service name; Preview and
+Development use distinct service names and labels. The boundary uses
 `kSecUseDataProtectionKeychain`, `WhenUnlockedThisDeviceOnly`, and a fresh
 noninteractive `LAContext` for every operation. A read failure never deletes or
 replaces an item; the failure is recorded without credential content and the
 game prompts again.
 
-Unpackaged development, ordinary local packages, and explicitly marked release
-smokes use `VolatileNativeKeychain`, so no unstable identity can claim the
-official items and no development secret survives process exit. There is no
-file, `safeStorage`, or mock-Keychain fallback. The first official hard-cutover
-startup attempts to delete exactly `credentials.bin` and `steam-session.bin`;
-volatile and unofficial builds preserve them because they cannot install a
-persistent replacement. Settings,
+Unpackaged development, ordinary local packages, and explicit packaged smokes
+use `VolatileNativeKeychain`, so no unstable identity can claim a provisioned
+item. `pnpm dev:signed` is the intentional persistent developer path. There is
+no file, `safeStorage`, or mock-Keychain fallback. The first Release
+hard-cutover startup attempts to delete exactly `credentials.bin` and
+`steam-session.bin`; Preview, Development, volatile, and unmarked builds
+preserve them. Settings,
 window state, diagnostics, cached clients and chunks, and the `gw://app` IDBFS
 origin are outside that operation. The cleanup is one-way because the retired
 ciphertexts cannot be safely migrated without recreating the prompt it removes.
 
-The official identity is Team `9NN976MFZ4`, bundle
-`io.github.mat4m0.gwonmac`, and application identifier
-`9NN976MFZ4.io.github.mat4m0.gwonmac`. The embedded Developer ID distribution
-profile authorizes that identity. The top-level signature claims only the
-application identifier, team identifier, and JIT entitlement; it does not add
-Keychain Sharing, App Groups, App Sandbox, or `get-task-allow`. Release signing
-pins the G2 certificate fingerprint rather than its non-unique display name.
+The three identities use Team `9NN976MFZ4` and bundle IDs
+`io.github.mat4m0.gwonmac`, `io.github.mat4m0.gwonmac.preview`, and
+`io.github.mat4m0.gwonmac.dev`. Release and Preview use Developer ID profiles;
+Development uses a device-authorized development profile. Every top-level
+signature claims only its application identifier, team identifier, and JIT
+entitlement; none adds Keychain Sharing, App Groups, App Sandbox, or
+`get-task-allow`. Developer ID signing pins the G2 certificate fingerprint
+rather than its non-unique display name.
+
+Forge accepts one closed packaging intent: local ad-hoc, Preview handoff,
+signed Release, or signed Development. It generates `distribution-channel.json`
+only for a signed package and runs a preflight before signing. The trusted
+Preview signer adds the same canonical marker only after it has verified the
+unsigned artifact. Forge rejects an unknown intent, ambiguous identity
+name, unavailable certificate, certificate/profile mismatch, wrong Team ID or
+application identifier, expired profile or certificate, and any top-level
+entitlement outside the three-key allowlist. The marker selects behavior but
+cannot grant Keychain access without Apple's matching signature and profile.
+
+Snapshot verification builds an ad-hoc Preview package with no signing secrets.
+A separate `snapshot-signing` environment job checks its commit and checksums,
+checks out the immutable trusted signer commit recorded by the calling workflow,
+imports signing material only after dependency installation and all target
+build code have finished, signs and notarizes the app plus an upgrade fixture,
+then removes the temporary keychain before executing continuity tests. Only
+that signed and tested Preview ZIP reaches the snapshot publisher. Pull-request
+artifacts remain ad-hoc and volatile. Manual branch snapshots can reach the
+protected signer only when the workflow itself was dispatched from `main` for
+an explicit commit and its `snapshot-signing-approval` deployment was approved.
+The secret-bearing `snapshot-signing` environment itself is restricted to the
+`main` deployment branch, which keeps automatic main snapshots noninteractive.
+The published handoff records and checksums both the selected source commit and
+the trusted signer commit.
 The cookie-encryption fuse is disabled so Chromium never initializes a separate
 Safe Storage Keychain item. The game proxy drops `Cookie` and `Set-Cookie` in
 both directions, and browser cookies are also cleared at startup and quit.

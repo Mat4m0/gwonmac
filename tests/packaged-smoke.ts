@@ -19,24 +19,39 @@ import {
   relativeEsmClosure,
 } from "./helpers/package-inventory.ts";
 import { stopChildProcess } from "./helpers/child-process.ts";
+import {
+  DISTRIBUTION_CHANNEL_CONFIG,
+  distributionMarker,
+} from "../src/shared/distribution-channel.ts";
+import { resolvePackageMode } from "../scripts/package-mode.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
+const packageMode = resolvePackageMode(process.env.GW_PACKAGE_INTENT);
+const channelConfig = DISTRIBUTION_CHANNEL_CONFIG[packageMode.productChannel];
 const appBundle = path.join(
   root,
-  `out/Guild Wars Reforged-darwin-${process.arch}/Guild Wars Reforged.app`,
+  `out/${channelConfig.productName}-darwin-${process.arch}/${channelConfig.productName}.app`,
 );
-const executable = path.join(appBundle, "Contents/MacOS/Guild Wars Reforged");
+const executable = path.join(
+  appBundle,
+  `Contents/MacOS/${channelConfig.productName}`,
+);
 const execFileAsync = promisify(execFile);
 const resources = path.join(appBundle, "Contents/Resources");
 const asarPath = path.join(resources, "app.asar");
-const expectsOfficialUpdater = process.env.GW_EXPECT_OFFICIAL_UPDATER === "1";
-assert.equal(
-  existsSync(path.join(resources, "official-update.json")),
-  expectsOfficialUpdater,
-  expectsOfficialUpdater
-    ? "an official release must carry the updater capability"
-    : "ordinary local packages must not carry the official updater capability",
-);
+const markerPath = path.join(resources, "distribution-channel.json");
+if (packageMode.kind === "adhoc") {
+  assert.equal(
+    existsSync(markerPath),
+    false,
+    "an unsigned package must carry no distribution capability marker",
+  );
+} else {
+  assert.deepEqual(
+    JSON.parse(await readFile(markerPath, "utf8")),
+    distributionMarker(packageMode.channel),
+  );
+}
 const packageVersion = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 ).version;
@@ -105,16 +120,19 @@ const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",
   path.join(appBundle, "Contents/Info.plist"),
 ]);
-assert.match(bundleInfo, /"CFBundleDisplayName" => "Guild Wars Reforged"/);
-assert.match(bundleInfo, /"CFBundleExecutable" => "Guild Wars Reforged"/);
 assert.match(
   bundleInfo,
-  /"CFBundleIdentifier" => "io\.github\.mat4m0\.gwonmac"/,
+  new RegExp(`"CFBundleDisplayName" => "${channelConfig.productName}"`),
 );
+assert.match(
+  bundleInfo,
+  new RegExp(`"CFBundleExecutable" => "${channelConfig.productName}"`),
+);
+assert.match(bundleInfo, new RegExp(`"CFBundleIdentifier" => "${channelConfig.bundleId.replaceAll(".", "\\.")}"`));
 assert.equal(
   existsSync(path.join(appBundle, "Contents/embedded.provisionprofile")),
-  expectsOfficialUpdater,
-  "only an official release carries its Developer ID provisioning profile",
+  packageMode.kind === "signed",
+  "only a signed distribution package carries a provisioning profile",
 );
 assert.match(
   bundleInfo,
@@ -164,8 +182,8 @@ for (const option of [
 }
 assert.equal(fuses[FuseV1Options.EnableCookieEncryption], FuseState.DISABLE);
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
-// Packaged builds are update-capable and the check defaults on; a smoke launch
-// must not reach GitHub, so the profile opts out before the first boot.
+// A release package is update-capable and the check defaults on; every smoke
+// profile opts out so this test remains network-independent for every channel.
 await writeFile(
   path.join(userData, "settings.json"),
   JSON.stringify({ autoCheckUpdates: false }),

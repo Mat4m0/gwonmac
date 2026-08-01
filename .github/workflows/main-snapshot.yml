@@ -17,9 +17,22 @@ jobs:
     with:
       artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
       artifact-retention-days: 1
+      package-intent: preview-handoff
+
+  sign:
+    needs: verify
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sign-preview.yml
+    secrets: inherit
+    with:
+      unsigned-artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
+      signed-artifact-name: signed-snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
+      commit-sha: ${{ github.sha }}
+      signer-sha: ${{ github.sha }}
 
   publish:
-    needs: verify
+    needs: sign
     permissions:
       actions: read
       artifact-metadata: write
@@ -28,7 +41,8 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-snapshot.yml
     with:
-      artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
+      artifact-name: signed-snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
       commit-sha: ${{ github.sha }}
       run-number: ${{ github.run_number }}
       require-current-main: true
+      signer-sha: ${{ github.sha }}

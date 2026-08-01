@@ -52,8 +52,10 @@ const script = (name: string): string => {
 test("macOS identity uses the Reforged name and configured application icon", () => {
   assert.equal(json("package.json").productName, "Guild Wars Reforged");
   const forge = read("forge.config.ts");
-  assert.match(forge, /name: "Guild Wars Reforged"/);
-  assert.match(forge, /executableName: "Guild Wars Reforged"/);
+  const channels = read("src/shared/distribution-channel.ts");
+  assert.match(channels, /release: \{[\s\S]{0,100}productName: "Guild Wars Reforged"/);
+  assert.match(forge, /name: channelConfig\.productName/);
+  assert.match(forge, /executableName: channelConfig\.productName/);
   assert.match(forge, /icon: path\.resolve\("assets\/AppIcon\.icns"\)/);
 });
 
@@ -107,15 +109,17 @@ test("the host has one native automatic application replacement path", () => {
   const updater = read("src/main/app-updater.ts");
   assert.match(main, /import \{[\s\S]{0,80}\bapp,[\s\S]{0,80}\bautoUpdater,/);
   assert.match(main, /new AppUpdater/);
-  assert.match(main, /officialUpdaterCapable\(\)/);
+  assert.match(main, /packagedDistributionChannel\(\)/);
+  assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(main, /autoUpdater\.quitAndInstall\(\)/);
   assert.doesNotMatch(updater, /electron-updater|update-electron-app|Sparkle/);
   assert.deepEqual(json("package.json").dependencies ?? {}, {});
 });
 
-test("official releases use Developer ID, notarization, and a scoped marker", () => {
+test("distribution channels use preflighted signing and a scoped marker", () => {
   const workflow = read(".github/workflows/release.yml");
   const forge = read("forge.config.ts");
+  const signing = read("scripts/apple-signing.ts");
   assert.match(workflow, /environment: release/);
   for (const secret of [
     "APPLE_DEVELOPER_ID_P12",
@@ -128,24 +132,30 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
   ]) {
     assert.match(workflow, new RegExp(secret));
   }
-  assert.match(forge, /osxSign: releaseSigning/);
+  assert.match(forge, /osxSign: distributionSigning/);
   assert.match(forge, /osxNotarize: releaseNotarization/);
-  assert.match(forge, /GW_OFFICIAL_RELEASE/);
-  assert.match(forge, /packaging\/official-update\.json/);
-  assert.match(forge, /appBundleId: "io\.github\.mat4m0\.gwonmac"/);
-  assert.match(forge, /provisioningProfile: requiredReleaseEnvironment/);
-  assert.match(forge, /preAutoEntitlements: false/);
-  assert.match(forge, /preEmbedProvisioningProfile: true/);
-  assert.match(forge, /ignore: ignoreRedundantSigningTarget/);
-  assert.match(forge, /Electron Framework\\\.framework\\\//);
-  assert.match(forge, /packaging\/entitlements\.release\.plist/);
+  assert.match(forge, /GW_PACKAGE_INTENT/);
+  assert.doesNotMatch(forge, /GW_PACKAGE_CHANNEL|GW_SIGN_DISTRIBUTION/);
+  assert.match(forge, /distribution-channel\.json/);
+  assert.match(forge, /if \(packageMode\.kind === "signed"\)/);
+  assert.doesNotMatch(forge, /official-update\.json|GW_OFFICIAL_RELEASE/);
+  assert.match(forge, /appBundleId: channelConfig\.bundleId/);
+  assert.match(signing, /provisioningProfile: input\.profile/);
+  assert.match(signing, /preAutoEntitlements: false/);
+  assert.match(signing, /preEmbedProvisioningProfile: true/);
+  assert.match(signing, /ignore: ignoreRedundantSigningTarget/);
+  assert.match(signing, /Electron Framework\\\.framework\\\//);
+  assert.match(signing, /entitlements\.\$\{channel\}\.plist/);
+  assert.match(signing, /verifyAppleSigningConfiguration/);
+  assert.match(signing, /selected signing identity is not authorized by the profile/);
+  assert.match(signing, /provisioning profile is expired/);
   const dmgVolumeName = forge.match(
     /new MakerDMG\(\{[\s\S]*?\bname: "([^"]+)"/,
   )?.[1];
   assert.equal(dmgVolumeName, "Guild Wars Reforged");
   assert.ok(Buffer.byteLength(dmgVolumeName, "utf8") <= 27);
-  assert.match(forge, /com\.apple\.security\.cs\.allow-jit/);
-  assert.doesNotMatch(forge, /camera|microphone|location|bluetooth|usb/i);
+  assert.match(signing, /com\.apple\.security\.cs\.allow-jit/);
+  assert.doesNotMatch(signing, /camera|microphone|location|bluetooth|usb/i);
   assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
   assert.match(workflow, /security create-keychain/);
   assert.match(workflow, /gwonmac-release-\$\(openssl rand -hex 16\)/);
@@ -174,7 +184,6 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
   assert.match(workflow, /embedded\.provisionprofile/);
   assert.match(workflow, /remaining <= 2 \* 365 \* 86400000/);
   assert.match(workflow, /remaining <= 5 \* 365 \* 86400000/);
-  assert.match(forge, /7F9A56793C16683742AA7818FE65221A884FA108/);
   assert.match(
     workflow,
     /rm -f "\$APPLE_PROVISIONING_PROFILE"[\s\S]*rm -f "\$APPLE_PROFILE_PLIST"/,
@@ -223,11 +232,11 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(
     workflow,
-    /name: Smoke-test signed release candidate[\s\S]*?GW_EXPECT_OFFICIAL_UPDATER: "1"[\s\S]*?run: pnpm test:packaged/,
+    /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: pnpm test:packaged/,
   );
   assert.match(
     workflow,
-    /name: Prove signed Data Protection Keychain continuity[\s\S]*?GW_SIGNED_APP_PATH="\$app" pnpm test:signed-keychain/,
+    /name: Prove signed Data Protection Keychain continuity[\s\S]*?GW_SIGNED_APP_PATH="\$app" GW_SIGNED_CHANNEL=release[\s\S]*?pnpm test:signed-keychain/,
   );
   assert.match(
     json("package.json").scripts?.["test:signed-keychain"] ?? "",
@@ -305,6 +314,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   const main = read(".github/workflows/main-snapshot.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   const publisher = read(".github/workflows/publish-snapshot.yml");
+  const signer = read(".github/workflows/sign-preview.yml");
   const manual = read(".github/workflows/tester-build.yml");
   const retention = read("scripts/snapshot-retention.ts");
   const feedback = read(".github/ISSUE_TEMPLATE/preview-feedback.yml");
@@ -351,9 +361,12 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
   );
   assert.match(main, /run-number: \$\{\{ github\.run_number \}\}/);
+  assert.match(main, /signer-sha: \$\{\{ github\.sha \}\}/);
+  assert.equal((main.match(/signer-sha:/gu) ?? []).length, 2);
+  assert.match(main, /package-intent: preview-handoff/);
   assert.match(
     main,
-    /publish:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
+    /sign:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/sign-preview\.yml[\s\S]*publish:\n {4}needs: sign[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
   );
 
   assert.match(release, /name: Versioned release[\s\S]*workflow_dispatch:/);
@@ -363,8 +376,8 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     /release-build:\n {4}if: github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
   );
 
-  // Tester dispatch is separate from the versioned release dispatch. Both
-  // snapshot callers publish only after the same verification job succeeds.
+  // Tester dispatch is possible only from the trusted main workflow. The
+  // selected source is an exact commit and publishing waits for signing.
   assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
   assert.doesNotMatch(
     manual,
@@ -376,8 +389,48 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
   );
   assert.match(manual, /run-number: \$\{\{ github\.run_number \}\}/);
-  assert.match(manual, /publish:\n {4}needs: verify/);
+  assert.match(manual, /if: github\.ref == 'refs\/heads\/main'/);
+  assert.match(manual, /checkout-ref: \$\{\{ inputs\.commit-sha \}\}/);
+  assert.match(manual, /signer-sha: \$\{\{ github\.sha \}\}/);
+  assert.equal((manual.match(/signer-sha:/gu) ?? []).length, 2);
+  assert.match(manual, /package-intent: preview-handoff/);
+  assert.match(manual, /environment: snapshot-signing-approval/);
+  assert.match(manual, /sign:\n {4}needs: \[verify, approve\]/);
+  assert.match(manual, /publish:\n {4}needs: sign/);
   assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
+
+  // The verification job has no secrets. The trusted signer verifies the
+  // artifact before importing protected-environment credentials, removes the
+  // keychain, and only then executes the signed applications.
+  assert.match(signer, /environment: snapshot-signing/);
+  assert.match(signer, /ref: \$\{\{ inputs\.signer-sha \}\}/);
+  assert.match(signer, /test "\$\(git rev-parse HEAD\)" = "\$SIGNER_SHA"/);
+  assert.match(signer, /Verify handoff without executing artifact code/);
+  assert.ok(
+    signer.indexOf("Verify handoff without executing artifact code")
+      < signer.indexOf("Import protected Preview signing material"),
+  );
+  assert.match(
+    signer,
+    /test ! -e "\$app\/Contents\/Resources\/distribution-channel\.json"/,
+  );
+  assert.ok(
+    signer.indexOf("Remove signing material before runtime tests")
+      < signer.indexOf("Prove signed Preview Keychain continuity"),
+  );
+  assert.match(signer, /GW_SIGNED_REPLACEMENT_APP_PATH/);
+  assert.match(signer, /GW_SIGNED_CHANNEL: preview/);
+  assert.match(signer, /APPLE_PREVIEW_DEVELOPER_ID_PROFILE/);
+  assert.match(signer, /xcrun notarytool submit/);
+  assert.match(signer, /xcrun stapler staple/);
+  assert.match(signer, /SIGNER_COMMIT\.txt/);
+  assert.match(publisher, /SIGNER_COMMIT\.txt/);
+  assert.match(
+    publisher,
+    /test "\$\(tr -d '\\n' < "\$signer_commit"\)" = "\$SIGNER_SHA"/,
+  );
+  assert.doesNotMatch(verification, /secrets\.|APPLE_DEVELOPER_ID_P12/);
+  assert.match(publisher, /Developer ID signed and notarized by Apple/);
 
   // The handoff identity and checksums are checked before attestations and
   // release creation. Cleanup runs last and uses an explicit apply switch.
@@ -409,7 +462,7 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(publisher, /--prerelease[\s\S]*--latest=false/);
   assert.match(
     publisher,
-    /gh release create "\$TAG" "\$ARCHIVE" "\$CHECKSUM" "\$SBOM" "\$SOURCE_COMMIT"/,
+    /gh release create "\$TAG" "\$ARCHIVE" "\$CHECKSUM" "\$SBOM"[\s\S]{0,80}"\$SOURCE_COMMIT" "\$SIGNER_COMMIT"/,
   );
   assert.match(publisher, /scripts\/snapshot-retention\.ts[\s\S]*--apply/);
   assert.match(publisher, /only the newest three are retained/);

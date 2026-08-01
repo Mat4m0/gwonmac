@@ -2,6 +2,11 @@ name: Tester build
 
 on:
   workflow_dispatch:
+    inputs:
+      commit-sha:
+        description: Exact 40-character commit to build as Preview.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,13 +17,43 @@ concurrency:
 
 jobs:
   verify:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/macos-verify.yml
     with:
       artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
       artifact-retention-days: 1
+      checkout-ref: ${{ inputs.commit-sha }}
+      package-intent: preview-handoff
+
+  approve:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: snapshot-signing-approval
+    steps:
+      - name: Record the exact approved commit
+        env:
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+        run: |
+          if ! [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid Preview commit: $COMMIT_SHA" >&2
+            exit 1
+          fi
+          echo "Approved Preview signing for $COMMIT_SHA"
+
+  sign:
+    needs: [verify, approve]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sign-preview.yml
+    secrets: inherit
+    with:
+      unsigned-artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
+      signed-artifact-name: signed-snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
+      commit-sha: ${{ inputs.commit-sha }}
+      signer-sha: ${{ github.sha }}
 
   publish:
-    needs: verify
+    needs: sign
     permissions:
       actions: read
       artifact-metadata: write
@@ -27,6 +62,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-snapshot.yml
     with:
-      artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
-      commit-sha: ${{ github.sha }}
+      artifact-name: signed-snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
+      commit-sha: ${{ inputs.commit-sha }}
       run-number: ${{ github.run_number }}
+      signer-sha: ${{ github.sha }}

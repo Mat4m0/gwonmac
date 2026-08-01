@@ -16,10 +16,11 @@ namespace {
 
 constexpr char kCredentialsSlot[] = "arenaNetCredentials";
 constexpr char kSteamSlot[] = "steamSession";
-NSString *const kService = @"io.github.mat4m0.gwonmac";
 NSString *const kCredentialsAccount = @"arena-net-credentials";
 NSString *const kSteamAccount = @"steam-session";
-NSString *const kItemLabel = @"Guild Wars Reforged saved login";
+NSString *const kReleaseBundle = @"io.github.mat4m0.gwonmac";
+NSString *const kPreviewBundle = @"io.github.mat4m0.gwonmac.preview";
+NSString *const kDevelopmentBundle = @"io.github.mat4m0.gwonmac.dev";
 
 enum class Slot { kCredentials, kSteam };
 enum class Operation { kLoad, kSave, kClear };
@@ -53,12 +54,33 @@ NSString *AccountForSlot(Slot slot) {
   return slot == Slot::kCredentials ? kCredentialsAccount : kSteamAccount;
 }
 
+NSString *ServiceForHostBundle() {
+  NSString *bundle = NSBundle.mainBundle.bundleIdentifier;
+  if ([bundle isEqualToString:kReleaseBundle] ||
+      [bundle isEqualToString:kPreviewBundle] ||
+      [bundle isEqualToString:kDevelopmentBundle]) {
+    return bundle;
+  }
+  return nil;
+}
+
+NSString *LabelForService(NSString *service) {
+  if ([service isEqualToString:kReleaseBundle])
+    return @"Guild Wars Reforged saved login";
+  if ([service isEqualToString:kPreviewBundle])
+    return @"Guild Wars Reforged Preview saved login";
+  return @"Guild Wars Reforged Dev saved login";
+}
+
 NSMutableDictionary *QueryForSlot(Slot slot) {
+  NSString *service = ServiceForHostBundle();
+  if (service == nil)
+    return nil;
   LAContext *context = [[LAContext alloc] init];
   context.interactionNotAllowed = YES;
   return [@{
     (__bridge id)kSecClass : (__bridge id)kSecClassGenericPassword,
-    (__bridge id)kSecAttrService : kService,
+    (__bridge id)kSecAttrService : service,
     (__bridge id)kSecAttrAccount : AccountForSlot(slot),
     (__bridge id)kSecUseDataProtectionKeychain : @YES,
     (__bridge id)kSecUseAuthenticationContext : context,
@@ -80,6 +102,8 @@ Result ResultForStatus(OSStatus status) {
 
 Result Load(Work &work) {
   NSMutableDictionary *query = QueryForSlot(work.slot);
+  if (query == nil)
+    return Result::kUnavailable;
   query[(__bridge id)kSecReturnData] = @YES;
   query[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
 
@@ -100,12 +124,15 @@ Result Load(Work &work) {
 }
 
 Result Save(Work &work) {
+  NSMutableDictionary *query = QueryForSlot(work.slot);
+  if (query == nil)
+    return Result::kUnavailable;
   NSData *data = [[NSData alloc] initWithBytesNoCopy:work.input.data()
                                               length:work.input.size()
                                         freeWhenDone:NO];
   NSDictionary *update = @{(__bridge id)kSecValueData : data};
   OSStatus status =
-      SecItemUpdate((__bridge CFDictionaryRef)QueryForSlot(work.slot),
+      SecItemUpdate((__bridge CFDictionaryRef)query,
                     (__bridge CFDictionaryRef)update);
   if (status == errSecSuccess)
     return Result::kSuccess;
@@ -113,22 +140,27 @@ Result Save(Work &work) {
     return ResultForStatus(status);
 
   NSMutableDictionary *item = QueryForSlot(work.slot);
+  if (item == nil)
+    return Result::kUnavailable;
   item[(__bridge id)kSecAttrAccessible] =
       (__bridge id)kSecAttrAccessibleWhenUnlockedThisDeviceOnly;
-  item[(__bridge id)kSecAttrLabel] = kItemLabel;
+  item[(__bridge id)kSecAttrLabel] =
+      LabelForService(item[(__bridge id)kSecAttrService]);
   item[(__bridge id)kSecValueData] = data;
   status = SecItemAdd((__bridge CFDictionaryRef)item, nullptr);
   if (status != errSecDuplicateItem)
     return ResultForStatus(status);
 
-  status = SecItemUpdate((__bridge CFDictionaryRef)QueryForSlot(work.slot),
+  status = SecItemUpdate((__bridge CFDictionaryRef)query,
                          (__bridge CFDictionaryRef)update);
   return ResultForStatus(status);
 }
 
 Result Clear(Work &work) {
-  OSStatus status =
-      SecItemDelete((__bridge CFDictionaryRef)QueryForSlot(work.slot));
+  NSMutableDictionary *query = QueryForSlot(work.slot);
+  if (query == nil)
+    return Result::kUnavailable;
+  OSStatus status = SecItemDelete((__bridge CFDictionaryRef)query);
   if (status == errSecItemNotFound)
     return Result::kSuccess;
   return ResultForStatus(status);

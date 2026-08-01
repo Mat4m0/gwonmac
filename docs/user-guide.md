@@ -24,6 +24,10 @@ Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
 build/SBOM attestations. Follow [Verify a release](release-verification.md)
 before opening a downloaded build.
 
+Published tester snapshots are a separately signed and notarized Preview app.
+Release and Preview share game data and settings, but each remembers its own
+login. An ad-hoc pull-request artifact remembers login only until it quits.
+
 The first release using the Data Protection Keychain asks an existing preview
 installation to sign in once again. It removes only the two retired encrypted
 secret files. Launcher settings, window state, downloaded game data,
@@ -150,8 +154,9 @@ Reset Window Size and Position** for an immediate window-only reset.
 
 Guild Wars' **Remember Password** checkbox controls saved login. The password
 and account name are kept together as one opaque, device-only item in Apple's
-Data Protection Keychain by an official release. The app's signed identity
-authorizes that item without the repeated legacy Keychain access questions.
+Data Protection Keychain by the provisioned Release or Preview app. Each app's
+signed identity authorizes only its own item without the repeated legacy
+Keychain access questions.
 It does not sync through iCloud or move to another Mac. A source or ad-hoc
 build keeps the value only in memory and forgets it when the process quits.
 The game proxy does not accept or return cookies. Browser cookies are also
@@ -184,8 +189,9 @@ Once you finish signing in, the window closes by itself and the game continues t
 character select. Everything that window stored while it was open, cookies
 included, is destroyed with it.
 
-You normally do this once per machine. An official release remembers the token
-as a second opaque, device-only Data Protection Keychain item and replays it on
+You normally do this once per machine and distribution channel. A provisioned
+Release or Preview app remembers the token as a second opaque, device-only Data
+Protection Keychain item and replays it on
 later launches, so no Steam window appears again until it expires or you sign
 out. A source or ad-hoc build keeps it only for that process. If the item cannot
 be read, or the sign-in has expired or been revoked, you are simply returned to
@@ -322,7 +328,8 @@ normal macOS application-support directory, usually
 `~/Library/Application Support/Guild Wars`. **Settings → Game Data → Show in
 Finder** opens the game-data folder directly.
 
-Saved ArenaNet and Steam login are not profile files. An official release keeps
-them in two fixed Data Protection Keychain items. On the first hard-cutover
-launch, only the retired `credentials.bin` and `steam-session.bin` files are
-removed from the application-support directory; all other local data remains.
+Saved ArenaNet and Steam login are not profile files. Release and Preview each
+keep them in two isolated Data Protection Keychain items. On the first Release
+hard-cutover launch, only the retired `credentials.bin` and
+`steam-session.bin` files are removed from the application-support directory;
+all other local data remains. Preview never performs that legacy cleanup.

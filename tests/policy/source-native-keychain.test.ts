@@ -4,6 +4,10 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { BUILD_STEPS } from "../../scripts/build.mjs";
+import {
+  DISTRIBUTION_CHANNEL_CONFIG,
+  DISTRIBUTION_CHANNELS,
+} from "../../src/shared/distribution-channel.ts";
 
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,8 +28,16 @@ test("the native boundary uses only ABI-stable Node-API", () => {
 });
 
 test("the native boundary owns two fixed Data Protection Keychain items", () => {
+  const nativeBundleIds = [
+    ...source.matchAll(/NSString \*const k\w+Bundle = @"([^"]+)";/gu),
+  ].map((match) => match[1]);
+  assert.deepEqual(
+    nativeBundleIds.sort(),
+    DISTRIBUTION_CHANNELS.map(
+      (channel) => DISTRIBUTION_CHANNEL_CONFIG[channel].bundleId,
+    ).sort(),
+  );
   for (const value of [
-    "io.github.mat4m0.gwonmac",
     "arenaNetCredentials",
     "steamSession",
     "arena-net-credentials",
@@ -40,6 +52,14 @@ test("the native boundary owns two fixed Data Protection Keychain items", () => 
   assert.match(source, /kSecAttrAccessibleWhenUnlockedThisDeviceOnly/u);
   assert.match(source, /interactionNotAllowed = YES/u);
   assert.match(source, /kSecUseAuthenticationContext/u);
+  assert.match(source, /NSBundle\.mainBundle\.bundleIdentifier/u);
+  assert.match(source, /return bundle;/u);
+  assert.match(source, /kSecAttrService : service/u);
+  assert.equal(
+    (source.match(/if \(query == nil\)\s*return Result::kUnavailable/gu) ?? [])
+      .length,
+    3,
+  );
   assert.doesNotMatch(source, /SecKeychain|SecAccess|kSecAttrAccessGroup/u);
   assert.doesNotMatch(source, /\b(?:system|popen|exec[lv]?[pe]?)\s*\(/u);
 });

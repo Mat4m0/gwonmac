@@ -16,6 +16,16 @@ on:
         required: false
         type: boolean
         default: false
+      checkout-ref:
+        description: Exact commit to verify; empty uses the workflow commit.
+        required: false
+        type: string
+        default: ""
+      package-intent:
+        description: Closed packaging intent; empty means local ad-hoc.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -24,9 +34,12 @@ jobs:
   verify:
     runs-on: macos-15
     timeout-minutes: 45
+    env:
+      GW_PACKAGE_INTENT: ${{ inputs.package-intent }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
           persist-credentials: false
       - name: Review dependency changes
         if: inputs.dependency-review
@@ -57,23 +70,24 @@ jobs:
         if: inputs.artifact-name != ''
         id: package
         run: |
-          app_count="$(find out -name 'Guild Wars Reforged.app' -type d | wc -l | tr -d ' ')"
+          app_count="$(find out -mindepth 2 -maxdepth 2 -name '*.app' -type d | wc -l | tr -d ' ')"
           if [ "$app_count" != "1" ]; then
             echo "Expected exactly one packaged app, found $app_count." >&2
             exit 1
           fi
-          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          app="$(find out -mindepth 2 -maxdepth 2 -name '*.app' -type d -print -quit)"
           codesign --verify --deep --strict --verbose=2 "$app"
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
           echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
 
-          short="${GITHUB_SHA:0:7}"
+          commit="$(git rev-parse HEAD)"
+          short="${commit:0:7}"
           mkdir distribution
           archive="$PWD/distribution/Guild-Wars-Reforged-$short-macOS-arm64.zip"
           sbom="$PWD/distribution/Guild-Wars-Reforged-$short-macOS-arm64.spdx.json"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
-          printf '%s\n' "$GITHUB_SHA" > distribution/SOURCE_COMMIT.txt
+          printf '%s\n' "$commit" > distribution/SOURCE_COMMIT.txt
           echo "app=$app" >> "$GITHUB_OUTPUT"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
           echo "sbom=$sbom" >> "$GITHUB_OUTPUT"

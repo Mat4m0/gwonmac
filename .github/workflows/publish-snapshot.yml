@@ -12,6 +12,9 @@ on:
       run-number:
         required: true
         type: string
+      signer-sha:
+        required: true
+        type: string
       require-current-main:
         required: false
         type: boolean
@@ -51,6 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REQUIRE_CURRENT_MAIN: ${{ inputs.require-current-main }}
           RUN_NUMBER: ${{ inputs.run-number }}
+          SIGNER_SHA: ${{ inputs.signer-sha }}
         run: |
           if ! [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Invalid snapshot commit: $COMMIT_SHA" >&2
@@ -58,6 +62,10 @@ jobs:
           fi
           if ! [[ "$RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
             echo "Invalid snapshot run number: $RUN_NUMBER" >&2
+            exit 1
+          fi
+          if ! [[ "$SIGNER_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid trusted signer commit: $SIGNER_SHA" >&2
             exit 1
           fi
           if [ "$REQUIRE_CURRENT_MAIN" = "true" ]; then
@@ -78,9 +86,12 @@ jobs:
           sbom="$(find snapshot-assets -type f -name '*.spdx.json' -print -quit)"
           checksum="snapshot-assets/SHA256SUMS.txt"
           source_commit="snapshot-assets/SOURCE_COMMIT.txt"
+          signer_commit="snapshot-assets/SIGNER_COMMIT.txt"
           test -f "$checksum"
           test -f "$source_commit"
+          test -f "$signer_commit"
           test "$(tr -d '\n' < "$source_commit")" = "$COMMIT_SHA"
+          test "$(tr -d '\n' < "$signer_commit")" = "$SIGNER_SHA"
           (
             cd snapshot-assets
             shasum -a 256 -c SHA256SUMS.txt
@@ -111,6 +122,7 @@ jobs:
           echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
           echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+          echo "signer_commit=$signer_commit" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "short=$short" >> "$GITHUB_OUTPUT"
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
@@ -139,6 +151,8 @@ jobs:
           SBOM: ${{ steps.assets.outputs.sbom }}
           SHORT: ${{ steps.assets.outputs.short }}
           SOURCE_COMMIT: ${{ steps.assets.outputs.source_commit }}
+          SIGNER_COMMIT: ${{ steps.assets.outputs.signer_commit }}
+          SIGNER_SHA: ${{ inputs.signer-sha }}
           TAG: ${{ steps.assets.outputs.tag }}
         run: |
           compare="https://github.com/$GITHUB_REPOSITORY/commit/$COMMIT_SHA"
@@ -153,10 +167,12 @@ jobs:
 
           Commit: [\`$COMMIT_SHA\`](https://github.com/$GITHUB_REPOSITORY/commit/$COMMIT_SHA)
 
+          Trusted signer: [\`$SIGNER_SHA\`](https://github.com/$GITHUB_REPOSITORY/commit/$SIGNER_SHA)
+
           Changes: [$PREVIOUS…$SHORT]($compare)
 
-          This build is ad-hoc signed, not notarized by Apple. Follow the install
-          guide for the one-time per-app approval; do not disable Gatekeeper.
+          This Preview build is Developer ID signed and notarized by Apple. Its
+          saved login is isolated from both the stable and development apps.
 
           Snapshots are temporary: only the newest three are retained, and all
           but the newest expire after 14 days. [Report preview feedback]($feedback)
@@ -164,7 +180,8 @@ jobs:
           explicitly attach the exported file.
           EOF
           )"
-          gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" "$SBOM" "$SOURCE_COMMIT" \
+          gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" "$SBOM" \
+            "$SOURCE_COMMIT" "$SIGNER_COMMIT" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$COMMIT_SHA" \
             --title "Tester snapshot $SHORT" \

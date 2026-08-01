@@ -6,6 +6,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  DISTRIBUTION_CHANNEL_CONFIG,
+  DISTRIBUTION_CHANNELS,
+} from "../../src/shared/distribution-channel.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
@@ -30,7 +34,14 @@ const legacyCleanup = read("src/main/core/legacy-secret-cleanup.ts");
 test("saved login has exactly two Data Protection Keychain items", () => {
   assert.match(native, /kSecUseDataProtectionKeychain/);
   assert.match(native, /kSecAttrAccessibleWhenUnlockedThisDeviceOnly/);
-  assert.match(native, /@"io\.github\.mat4m0\.gwonmac"/);
+  for (const channel of DISTRIBUTION_CHANNELS) {
+    const bundleId = DISTRIBUTION_CHANNEL_CONFIG[channel].bundleId;
+    assert.equal(
+      (native.match(new RegExp(`@"${bundleId.replaceAll(".", "\\.")}"`, "gu")) ?? [])
+        .length,
+      1,
+    );
+  }
   assert.equal((native.match(/@"arena-net-credentials"/gu) ?? []).length, 1);
   assert.equal((native.match(/@"steam-session"/gu) ?? []).length, 1);
   assert.doesNotMatch(shippedApplication, /safeStorage|encryptString|decryptString/);
@@ -43,16 +54,18 @@ test("saved login has exactly two Data Protection Keychain items", () => {
   assert.doesNotMatch(shippedApplication, /plaintext|fallbackKey|masterPassword/);
 });
 
-test("only the official release capability enables persistent secrets", () => {
-  assert.match(main, /const officialReleaseCapability = officialUpdaterCapable\(\)/);
+test("only provisioned distribution channels enable persistent secrets", () => {
+  assert.match(main, /const distributionChannel = packagedDistributionChannel\(\)/);
+  assert.match(main, /distributionCapabilities\(distributionChannel\)/);
   assert.match(
     main,
-    /const persistentSecrets =\s*app\.isPackaged\s*&& officialReleaseCapability\s*&& !app\.commandLine\.hasSwitch\("gw-volatile-secrets"\)/,
+    /const persistentSecrets =\s*app\.isPackaged\s*&& distribution\.persistentSecrets\s*&& !app\.commandLine\.hasSwitch\("gw-volatile-secrets"\)/,
   );
   assert.match(
     main,
-    /if \(persistentSecrets\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
+    /if \(persistentSecrets && distribution\.cleanupLegacySecrets\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
   );
+  assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(main, /persistentSecrets\s*\? loadNativeKeychain/);
   assert.match(main, /: new VolatileNativeKeychain\(\)/);
   assert.doesNotMatch(shippedApplication, /use-mock-keychain/);

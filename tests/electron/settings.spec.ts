@@ -87,7 +87,7 @@ test.describe("settings experience", () => {
   test("a ready update flushes IDBFS before installing", async () => {
     const fixture = await launchOffline(
       "gw-update-restart-e2e-",
-      { GW_TEST_OFFICIAL_UPDATER: "1" },
+      { GW_TEST_DISTRIBUTION_CHANNEL: "release" },
       async (userData) => {
         // Update-capable build: the default launch check would reach the real
         // GitHub before the stub below installs, so this profile opts out and
