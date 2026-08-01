@@ -88,7 +88,13 @@ interface ClientRuntimeOptions {
 
 export class ClientRuntime {
   private readonly activeSlot = new ActiveClientSlot();
-  /** Held by every operation that moves a generation directory. */
+  /**
+   * Held by every operation that moves a generation directory. `update`,
+   * candidate confirmation and crash rollback all rename `artifacts`,
+   * `artifacts.previous` and `artifacts.failed`, and two of them interleaving
+   * at an `await` lets one observe — or rename away — a tree the other had
+   * half moved. The full download stays outside it.
+   */
   private readonly generationLock = new Mutex();
   private progressValue: DownloadProgress = { ...INITIAL_PROGRESS };
   private saveTouchedTimer: ReturnType<typeof setInterval> | null = null;

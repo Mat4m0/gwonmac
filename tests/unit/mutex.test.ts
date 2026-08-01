@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { after, describe, it } from "node:test";
 import { Mutex } from "../../src/main/core/mutex.js";
+import { loadSettings, saveSettings } from "../../src/main/core/settings.js";
+import type { AppSettings, AppSettingsPatch } from "../../src/shared/contracts.js";
 
 const scratchDirs: string[] = [];
 
@@ -162,5 +164,101 @@ describe("generation mutex", () => {
     // Queue order, not completion order: task 0 sleeps longest and still runs
     // first.
     assert.deepEqual(finished, [0, 1, 2, 3]);
+  });
+});
+
+describe("queue drain", () => {
+  it("waits for the work already queued, failure included", async () => {
+    const lock = new Mutex();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const failing = lock.run(async () => {
+      await held;
+      throw new Error("keychain write refused");
+    });
+    let drained = false;
+    const drain = lock.settled.then(() => {
+      drained = true;
+    });
+
+    await sleep(0);
+    assert.equal(drained, false);
+    release();
+    await assert.rejects(failing, /keychain write refused/);
+    // Quit waits for the write to stop touching the slot, not for it to have
+    // succeeded: a drain that rejected would take the shutdown path down with
+    // an error its caller has already been given.
+    await drain;
+    assert.equal(drained, true);
+  });
+});
+
+/**
+ * The shape every settings write in `main.ts` has: read the file, merge a
+ * patch, write the whole object back. `holdMs` stands in for the work between
+ * the read and the write, and decides which of two unserialised patches lands
+ * last rather than leaving that to the filesystem.
+ */
+function patchSettings(
+  path: string,
+  patch: AppSettingsPatch,
+  holdMs: number,
+): () => Promise<AppSettings> {
+  return async () => {
+    const current = await loadSettings(path);
+    await sleep(holdMs);
+    return saveSettings(path, { ...current, ...patch });
+  };
+}
+
+describe("settings write queue", () => {
+  it("keeps both patches when the writes are serialised", async () => {
+    const path = join(await scratch(), "settings.json");
+    const lock = new Mutex();
+
+    await Promise.all([
+      lock.run(patchSettings(path, { renderScale: 1 }, 40)),
+      lock.run(patchSettings(path, { showDiagnostics: true }, 0)),
+    ]);
+
+    const settings = await loadSettings(path);
+    assert.equal(settings.renderScale, 1);
+    assert.equal(settings.showDiagnostics, true);
+  });
+
+  it("drops a patch when the same writes are not serialised", async () => {
+    const path = join(await scratch(), "settings.json");
+
+    // The same two patches without the lock. Both read before either writes,
+    // so the slower one merges onto a value that never carried the faster
+    // one's field and then writes the whole object over it. A player who
+    // toggles two settings in the same moment keeps one of them.
+    await Promise.all([
+      patchSettings(path, { renderScale: 1 }, 40)(),
+      patchSettings(path, { showDiagnostics: true }, 0)(),
+    ]);
+
+    const settings = await loadSettings(path);
+    assert.equal(settings.renderScale, 1);
+    assert.equal(settings.showDiagnostics, false);
+  });
+
+  it("writes the next patch after a write fails", async () => {
+    const path = join(await scratch(), "settings.json");
+    const lock = new Mutex();
+
+    const failed = lock.run(async () => {
+      throw new Error("settings volume is read-only");
+    });
+    const queued = lock.run(patchSettings(path, { renderScale: 1.5 }, 0));
+
+    await assert.rejects(failed, /read-only/);
+    await queued;
+    // A refused write costs its own caller an error and nothing more; the
+    // queue behind it is not the place that failure is allowed to land.
+    assert.equal((await loadSettings(path)).renderScale, 1.5);
   });
 });

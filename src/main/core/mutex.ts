@@ -1,13 +1,9 @@
 /**
- * Serialises the operations that move generation directories.
+ * Runs queued operations one at a time, in the order they were queued.
  *
- * `update`, candidate confirmation and crash rollback all rename
- * `artifacts`, `artifacts.previous` and `artifacts.failed`. Nothing in the
- * process stopped two of them from interleaving at an `await`, so one could
- * observe — or rename away — a tree the other had half moved.
- *
- * Take this only for operations that move a directory. Reads and the full
- * download must stay concurrent with everything else.
+ * Take one for work a concurrent caller could catch half done: a directory
+ * moved aside, a read-modify-write, a rewritten Keychain slot. Work that
+ * tolerates interleaving stays outside it and keeps its concurrency.
  */
 export class Mutex {
   private tail: Promise<unknown> = Promise.resolve();
@@ -23,5 +19,17 @@ export class Mutex {
     const next = this.tail.then(fn, fn);
     this.tail = next;
     return next;
+  }
+
+  /**
+   * Settles when everything queued at the time of the read has finished, and
+   * only that; anything queued afterwards is not waited for. A failed operation
+   * is the caller's business, not the drain's, so this never rejects.
+   */
+  get settled(): Promise<void> {
+    return this.tail.then(
+      () => undefined,
+      () => undefined,
+    );
   }
 }
