@@ -387,6 +387,33 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
       && Number.isSafeInteger(record.code);
     if (!valid) throw new ValidationError("invalid renderer milestone");
     milestoneFields = { code: record.code as number };
+  } else if (name === "enhancement.installed") {
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === 3
+      && typeof record.companionAbi === "number"
+      && Number.isSafeInteger(record.companionAbi)
+      && record.companionAbi >= 0
+      && typeof record.installation === "number"
+      && Number.isSafeInteger(record.installation)
+      && record.installation >= 1
+      && typeof record.capabilityProfile === "string"
+      && record.capabilityProfile.length <= 32;
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      companionAbi: record.companionAbi as number,
+      installation: record.installation as number,
+      capabilityProfile: record.capabilityProfile as string,
+    };
+  } else if (name === "enhancement.uninstalled") {
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === 1
+      && typeof record.installation === "number"
+      && Number.isSafeInteger(record.installation)
+      && record.installation >= 1;
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = { installation: record.installation as number };
   } else if (fields !== undefined) {
     throw new ValidationError("invalid renderer milestone");
   }

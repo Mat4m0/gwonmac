@@ -69,6 +69,15 @@ describe("export detector", () => {
       { k: "proxy.requestFailed", route: "account", code: "http_status" },
       { k: "socket.close", socketId: 7, reason: "peer" },
       { k: "socket.error", socketId: 7, code: "refused" },
+      {
+        k: "enhancement.installed",
+        clockSynchronized: true,
+        companionAbi: 6,
+        installation: 1,
+        capabilityProfile: "cursor",
+      },
+      { k: "enhancement.installFailed", clockSynchronized: false },
+      { k: "enhancement.uninstalled", clockSynchronized: true, installation: 1 },
     ];
     const result = inspectEventLog(events.map(recorded).join("\n"));
     assert.equal(result.records, events.length);
@@ -104,6 +113,17 @@ describe("export detector", () => {
     rejects(
       line({ name: "client.candidatePromoted" }, { fingerprint: "not-a-digest" }),
       /client\.candidatePromoted\.fingerprint is not a declared value/,
+    );
+    // The capability profile is the closed vocabulary from contracts, not a
+    // renderer-supplied string.
+    rejects(
+      line({ name: "enhancement.installed" }, {
+        clockSynchronized: true,
+        companionAbi: 6,
+        installation: 1,
+        capabilityProfile: "everything",
+      }),
+      /enhancement\.installed\.capabilityProfile is not a declared value/,
     );
   });
 
