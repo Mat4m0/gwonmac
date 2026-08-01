@@ -268,3 +268,46 @@ unlearned.
 Use the lowest level that can actually decide the question. Levels 1 and 2 cost
 nothing; the ones with a human in the loop are the expensive ones and should be
 spent on questions the cheap levels cannot answer.
+
+## Round 11 — the salvage cursor that came back stale (2026-08-01)
+
+**Report.** "Use a salvage kit, hold the mouse still: the new cursor does not
+appear." The one-shot hit-test refresh shipped in the Toolbox foundation was
+suspected to have regressed.
+
+- **Hypothesis: a regression since the foundation landed.** Wrong. The only
+  post-foundation change in the path was telemetry; Electron was unchanged;
+  the client hash was the same certified build. Diff archaeology cleared every
+  commit.
+- **Hypothesis: the kernel misses the game's cursor commit (event-driven
+  blindness).** Wrong, and worth remembering how it died: 50 ms sampling of
+  the published header showed every generation relayed to CSS within one
+  frame whenever the game actually published. The pipeline was innocent.
+- **What the sampler actually showed.** The synthetic re-test fires ~15 ms
+  after the click and the game answers it ~25 ms later — with `hidden`,
+  a flags-only publish. The game's own cursor decision arrives 183 ms,
+  1,266 ms, 1,795 ms later (same action, same build): it waits on its server
+  round-trip, then on its idle hover cadence. The one-shot asks exactly one
+  frame too early, and nothing asks again.
+
+**Fix.** A second trigger beside the one-shot: while the published cursor is
+hidden right after a click, repeat the same zero-distance pair every 150 ms
+until art resolves it, a real move takes over, or 2.5 s passes. Every exit is
+the pre-retry behaviour. See defect 7 for the upstream ask.
+
+**Lesson.** When a workaround responds to a question, log the *answer*, not
+just that it was asked. The one-shot counted its firings but nobody looked at
+what the game replied; the reply — hidden — was the whole story.
+
+**Postscript (2026-08-02).** The first cut of the fix was unreliable in play,
+for two reasons the tests had not covered. The hold was gated on the retry
+being "active", which it only becomes *after* the consumer's poll — so the
+hold missed the exact frame the hide was applied, in production but not in
+the spec, because the spec set the flag before polling. And any trusted
+one-pixel pointer tremor erased the stored click, killing the transition for
+a hand that was not perfectly still. Fixed by gating the hold on `!expired`
+(correct before the loop has seen anything, so poll order cannot matter) and
+by re-aiming the stored click on canvas movement instead of forgetting it.
+The lesson joins the list: **test the composition, not only the parts** — a
+predicate proven right in isolation was delivered one frame late by the
+wiring.

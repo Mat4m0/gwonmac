@@ -23,6 +23,8 @@ interface CursorStep {
   dispose?: boolean;
   poll?: boolean;
   measure?: boolean;
+  /** Set the transition-hold answer the consumer reads on its next poll. */
+  hold?: boolean;
 }
 
 /** One decoded `image-set` candidate: its size and the first six pixels of row 0. */
@@ -138,15 +140,18 @@ async function driveCursor(
     };
 
     const resting = cursorOf(canvas);
+    let holding = false;
     const consumer = createCursorConsumer({
       element: canvas,
       memory,
       cursorPointer: 0,
       fallback: "",
+      transitionHold: () => holding,
     });
     const observed: CursorRun = { resting: shapeOf(resting), steps: {} };
     try {
       for (const step of script) {
+        if (step.hold !== undefined) holding = step.hold;
         if (step.publish) publish(step.publish);
         if (step.classList) {
           canvas.classList.toggle(step.classList, step.on === true);
@@ -204,13 +209,16 @@ test.describe("enhancement cursor presentation", () => {
             proof.moves.push({ x: event.clientX, trusted: false });
           }
         });
-        const dispose = installCursorRefresh(
+        const refresh = installCursorRefresh(
           canvas,
           () => proof.eventCount,
           () => { proof.refreshes += 1; },
         );
-        Object.assign(globalThis, { __cursorRefreshProof: proof });
-        globalThis.addEventListener("pagehide", dispose, { once: true });
+        Object.assign(globalThis, {
+          __cursorRefreshProof: proof,
+          __cursorRetest: refresh.retest,
+        });
+        globalThis.addEventListener("pagehide", refresh.dispose, { once: true });
       });
 
       const canvas = page.locator("#cursor-refresh-probe");
@@ -257,6 +265,75 @@ test.describe("enhancement cursor presentation", () => {
         }).__cursorRefreshProof;
         return { refreshes: proof.refreshes, moveCount: proof.moves.length };
       })).toEqual({ refreshes: 1, moveCount: 2 });
+
+      // The manual re-test serves the hidden-transition retry loop: it repeats
+      // the pair at the stored click, and refuses once real movement makes the
+      // game re-evaluate hover on its own.
+      expect(await page.evaluate(() => {
+        const g = globalThis as typeof globalThis & {
+          __cursorRetest: () => boolean;
+          __cursorRefreshProof: { refreshes: number; moves: unknown[] };
+        };
+        const accepted = g.__cursorRetest();
+        return {
+          accepted,
+          refreshes: g.__cursorRefreshProof.refreshes,
+          moveCount: g.__cursorRefreshProof.moves.length,
+        };
+      })).toEqual({ accepted: true, refreshes: 2, moveCount: 4 });
+      // A tremor over the canvas re-aims the re-test at the pointer instead
+      // of abandoning the transition; only leaving the canvas disarms it.
+      await page.mouse.move(x + 30, y + 30);
+      expect(await page.evaluate(() => {
+        const g = globalThis as typeof globalThis & {
+          __cursorRetest: () => boolean;
+          __cursorRefreshProof: { moves: { x: number }[] };
+        };
+        const accepted = g.__cursorRetest();
+        const moves = g.__cursorRefreshProof.moves;
+        return {
+          accepted,
+          moveCount: moves.length,
+          lastX: moves[moves.length - 1]?.x,
+        };
+      })).toEqual({ accepted: true, moveCount: 6, lastX: x + 30 });
+      await page.mouse.move(400, 400);
+      expect(await page.evaluate(() => {
+        const g = globalThis as typeof globalThis & {
+          __cursorRetest: () => boolean;
+          __cursorRefreshProof: { moves: unknown[] };
+        };
+        return {
+          accepted: g.__cursorRetest(),
+          moveCount: g.__cursorRefreshProof.moves.length,
+        };
+      })).toEqual({ accepted: false, moveCount: 6 });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("a click-armed transition holds the last art instead of hiding", async () => {
+    const fixture = await launchOffline("gw-cursor-hold-e2e-");
+    try {
+      const observed = await driveCursor(fixture.page, [
+        { name: "art", publish: { flags: 1, generation: 2, hotspotX: 3, hotspotY: 4, tint: 0x20 }, poll: true },
+        // The hide arrives while the transition is armed: the art must stay.
+        { name: "held", hold: true, publish: { flags: 3, generation: 2, hotspotX: 3, hotspotY: 4, tint: 0x20 }, poll: true },
+        // Resolution is one swap from old art to new art, never through none.
+        { name: "resolved", publish: { flags: 1, generation: 3, hotspotX: 5, hotspotY: 4, tint: 0x2e }, poll: true },
+        // A hold that ends with no republish still owes the hide it withheld.
+        { name: "re-hidden", publish: { flags: 3, generation: 3, hotspotX: 5, hotspotY: 4, tint: 0x2e }, poll: true },
+        { name: "disarmed", hold: false, poll: true },
+      ]);
+      const shape = (name: string) => observed.steps[name]?.canvas;
+      expect(shape("art")).toContain("image-set");
+      expect(shape("held")).toBe(shape("art"));
+      expect(observed.steps["held"]?.state).toMatchObject({ hidden: true });
+      expect(shape("resolved")).toContain("image-set");
+      expect(shape("resolved")).not.toBe(shape("art"));
+      expect(shape("re-hidden")).toBe(shape("resolved"));
+      expect(shape("disarmed")).toBe("none");
     } finally {
       await closeOffline(fixture);
     }

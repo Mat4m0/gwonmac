@@ -241,6 +241,26 @@ missing template creates an empty file rather than failing.
 **Expected.** Mode 1 should open an existing file and fail when it is absent —
 no `O_CREAT`.
 
+## Defect 7 — the cursor is not re-evaluated after a server-acknowledged mode change
+
+**Observed.** Using an item that starts a targeting mode (salvage or
+identification kit) hides the cursor immediately, but the targeting cursor
+only appears on the next pointer input or on the client's idle hover cadence.
+With the pointer held still, the measured gap between the hide and the new
+cursor was 183 ms, 1,266 ms and 1,795 ms for the same action on build 38797 —
+consistent with the server round-trip completing and the cursor decision then
+waiting for the idle cycle.
+
+**Probe.** A synthetic zero-distance `mousemove` pair dispatched after the gap
+resolves the cursor instantly, which is how the host works around it. A pair
+dispatched one frame after the click is answered with the hidden cursor: the
+client re-evaluates on request, but the mode is not resolved until the server
+acknowledges.
+
+**Expected.** After the acknowledgement that completes a mode change, the
+client should re-run pointer hit-testing once on its own, without waiting for
+input or the idle cycle.
+
 ## How to reproduce
 
 Reproduces on a stock client; no host modification required.

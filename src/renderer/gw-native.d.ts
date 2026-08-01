@@ -122,6 +122,8 @@ declare global {
     readonly snapshotReads: number;
     readonly rejectedSnapshots: number;
     readonly cursorRefreshes: number;
+    readonly cursorHiddenRetests: number;
+    readonly cursorHiddenGapMs: number | null;
     readonly wasmMemoryBytes: number;
     readonly cursor: Readonly<{
       generation: number;
