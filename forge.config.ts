@@ -7,14 +7,28 @@ import path from "node:path";
 import { macOSBundleVersions } from "./scripts/macos-version.js";
 
 const packageVersion = (
-  JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")) as {
+  JSON.parse(
+    readFileSync(new URL("package.json", import.meta.url), "utf8"),
+  ) as {
     version: string;
   }
 ).version;
 const macOSVersion = macOSBundleVersions(packageVersion);
 const officialRelease = process.env.GW_OFFICIAL_RELEASE === "1";
-const developerIdIdentity =
-  "Developer ID Application: Matthias Amon (9NN976MFZ4)";
+// Pin the certificate, not its non-unique display name. The old and G2
+// certificates legitimately share that name in Keychain Access.
+const developerIdIdentity = "7F9A56793C16683742AA7818FE65221A884FA108";
+const releaseEntitlements = path.resolve(
+  "packaging/entitlements.release.plist",
+);
+
+function ignoreRedundantSigningTarget(filePath: string): boolean {
+  return (
+    /Electron Framework\.framework\/(?:Versions\/(?:A|Current)\/)?Resources\//u.test(
+      filePath,
+    ) || /\/Versions\/Current(?:\/|$)/u.test(filePath)
+  );
+}
 
 function requiredReleaseEnvironment(name: string): string {
   const value = process.env[name];
@@ -26,16 +40,30 @@ const releaseSigning = officialRelease
   ? {
       identity: developerIdIdentity,
       keychain: requiredReleaseEnvironment("APPLE_KEYCHAIN"),
+      provisioningProfile: requiredReleaseEnvironment(
+        "APPLE_PROVISIONING_PROFILE",
+      ),
+      preAutoEntitlements: false,
+      preEmbedProvisioningProfile: true,
+      // Electron's signer otherwise timestamps every locale resource twice
+      // (through Versions/A and its Current symlink). They are sealed by the
+      // framework signature but are not code-signing targets themselves.
+      ignore: ignoreRedundantSigningTarget,
       hardenedRuntime: true,
       timestamp: "http://timestamp.apple.com/ts01",
       optionsForFile: (filePath: string) => ({
-        entitlements: filePath.includes("Helper (Plugin).app")
-          ? [
-              "com.apple.security.cs.allow-jit",
-              "com.apple.security.cs.allow-unsigned-executable-memory",
-              "com.apple.security.cs.disable-library-validation",
-            ]
-          : ["com.apple.security.cs.allow-jit"],
+        entitlements:
+          path.basename(filePath) === "Guild Wars Reforged.app"
+            ? releaseEntitlements
+            : filePath.includes("Helper (Plugin).app")
+              ? [
+                  "com.apple.security.cs.allow-jit",
+                  "com.apple.security.cs.allow-unsigned-executable-memory",
+                  "com.apple.security.cs.disable-library-validation",
+                ]
+              : filePath.endsWith(".app")
+                ? ["com.apple.security.cs.allow-jit"]
+                : [],
         hardenedRuntime: true,
         timestamp: "http://timestamp.apple.com/ts01",
       }),
@@ -52,17 +80,16 @@ const releaseNotarization = officialRelease
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: { unpack: "**/build/native/keychain.node" },
     name: "Guild Wars Reforged",
     executableName: "Guild Wars Reforged",
     appVersion: macOSVersion.appVersion,
     buildVersion: macOSVersion.buildVersion,
     icon: path.resolve("assets/AppIcon.icns"),
-    appBundleId: "com.gwdevhub.guildwars",
+    appBundleId: "io.github.mat4m0.gwonmac",
     appCategoryType: "public.app-category.games",
     darwinDarkModeSupport: true,
-    appCopyright:
-      "© 2026 gwonmac contributors. Guild Wars © ArenaNet LLC.",
+    appCopyright: "© 2026 gwonmac contributors. Guild Wars © ArenaNet LLC.",
     extraResource: [
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
@@ -79,13 +106,19 @@ const config: ForgeConfig = {
       if (!file || file === "/") return false;
       const p = file.startsWith("/") ? file : `/${file}`;
       if (p === "/package.json") return false;
-      if (p === "/build" || p === "/build/main" || p === "/build/shared") return false;
+      if (p === "/build" || p === "/build/main" || p === "/build/shared")
+        return false;
       if (p.startsWith("/build/main/") || p.startsWith("/build/shared/")) {
-        return p.endsWith(".map") || p.endsWith(".d.ts") || p.endsWith(".d.ts.map");
+        return (
+          p.endsWith(".map") || p.endsWith(".d.ts") || p.endsWith(".d.ts.map")
+        );
       }
       if (p === "/build/renderer") return false;
       if (p.startsWith("/build/renderer/")) return p.endsWith(".d.ts");
-      if (p === "/build/preload" || p === "/build/preload/preload.cjs") return false;
+      if (p === "/build/preload" || p === "/build/preload/preload.cjs")
+        return false;
+      if (p === "/build/native" || p === "/build/native/keychain.node")
+        return false;
       return true;
     },
   },
@@ -104,7 +137,7 @@ const config: ForgeConfig = {
             additionalDMGOptions: {
               "code-sign": {
                 "signing-identity": developerIdIdentity,
-                identifier: "com.gwdevhub.guildwars",
+                identifier: "io.github.mat4m0.gwonmac",
               },
             },
           }),
@@ -112,7 +145,13 @@ const config: ForgeConfig = {
       : []),
   ],
   hooks: {
-    packageAfterCopy: async (_config, resourcesPath, _version, platform, arch) => {
+    packageAfterCopy: async (
+      _config,
+      resourcesPath,
+      _version,
+      platform,
+      arch,
+    ) => {
       if (platform !== "darwin") return;
       await flipFuses(
         path.resolve(resourcesPath, "../..", "MacOS", "Electron"),
@@ -121,7 +160,7 @@ const config: ForgeConfig = {
           resetAdHocDarwinSignature: arch === "arm64",
           strictlyRequireAllFuses: true,
           [FuseV1Options.RunAsNode]: false,
-          [FuseV1Options.EnableCookieEncryption]: true,
+          [FuseV1Options.EnableCookieEncryption]: false,
           [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
           [FuseV1Options.EnableNodeCliInspectArguments]: false,
           [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,

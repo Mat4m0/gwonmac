@@ -24,10 +24,11 @@ Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
 build/SBOM attestations. Follow [Verify a release](release-verification.md)
 before opening a downloaded build.
 
-The first Developer ID release changes saved-login encryption from the
-development mock provider to macOS Keychain-backed protection. An existing
-preview installation may ask you to sign in once; its old encrypted file is
-preserved rather than silently deleted.
+The first release using the Data Protection Keychain asks an existing preview
+installation to sign in once again. It removes only the two retired encrypted
+secret files. Launcher settings, window state, downloaded game data,
+diagnostics, screenshots, chat logs, and build templates remain where they
+were.
 
 The app then:
 
@@ -94,7 +95,10 @@ Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
-on release. Main-block letter, number-row, and punctuation bindings stay on the
+on release. Mouse, trackpad, and Magic Mouse clicks and drags pass through to
+Guild Wars unchanged. A macOS double-click automatically supplies the
+double-tap signal required by the official web client; there is no input mode to
+configure. Main-block letter, number-row, and punctuation bindings stay on the
 same physical keys when the macOS input source changes, while chat and other
 text fields continue to type the active layout. Extra ISO/JIS keys and the
 numeric keypad retain the official web client's layout behavior. The in-game
@@ -118,9 +122,9 @@ your client build is not one this host has certified — you get the normal macO
 pointer. That is a cosmetic difference only: nothing about how the game plays
 changes with the box either way. The rest of the window always keeps the macOS
 pointer.
-Touch compatibility and the local performance overlay stay under
-**Advanced**, outside the normal setup path. Settings reopens to the pane most
-recently used during the current session.
+The local performance overlay stays under **Advanced**, outside the normal
+setup path. Settings reopens to the pane most recently used during the current
+session.
 
 The official WebAssembly client currently requests a WebGL context without
 multisampling, so its in-game antialiasing list may contain only **None**. The
@@ -145,12 +149,13 @@ centered on the primary display instead of opening off-screen. Choose **View →
 Reset Window Size and Position** for an immediate window-only reset.
 
 Guild Wars' **Remember Password** checkbox controls saved login. The password
-is encrypted in an owner-only local file and is not placed in macOS Keychain,
-so the application does not show a Keychain prompt. Because unsigned builds
-use Chromium's local mock encryption provider, this is weaker than Keychain:
-software running as your macOS user may be able to recover it. Leave
-**Remember Password** off if that tradeoff is not acceptable. Browser cookies
-are cleared at startup and quit.
+and account name are kept together as one opaque, device-only item in Apple's
+Data Protection Keychain by an official release. The app's signed identity
+authorizes that item without the repeated legacy Keychain access questions.
+It does not sync through iCloud or move to another Mac. A source or ad-hoc
+build keeps the value only in memory and forgets it when the process quits.
+The game proxy does not accept or return cookies. Browser cookies are also
+cleared at startup and quit.
 
 ## Signing in with Steam
 
@@ -179,13 +184,12 @@ Once you finish signing in, the window closes by itself and the game continues t
 character select. Everything that window stored while it was open, cookies
 included, is destroyed with it.
 
-You only do this once per machine. The sign-in is remembered in an encrypted,
-owner-only local file and replayed on later launches, so no Steam window appears
-again until it expires or you sign out. It carries the same tradeoff as the saved
-password above: it is not in macOS Keychain, and on an unsigned build software
-running as your macOS user may be able to recover it. If the file cannot be read,
-or the sign-in has expired or been revoked, you are simply returned to the login
-screen — the application does not fail to start.
+You normally do this once per machine. An official release remembers the token
+as a second opaque, device-only Data Protection Keychain item and replays it on
+later launches, so no Steam window appears again until it expires or you sign
+out. A source or ad-hoc build keeps it only for that process. If the item cannot
+be read, or the sign-in has expired or been revoked, you are simply returned to
+the login screen — the application does not fail to start.
 
 If an explicit sign-in fails for a reason other than you closing the window, a
 brief status line appears over the login screen saying the sign-in did not
@@ -317,3 +321,8 @@ Settings, cached chunks, client files, and bounded diagnostics live under the
 normal macOS application-support directory, usually
 `~/Library/Application Support/Guild Wars`. **Settings → Game Data → Show in
 Finder** opens the game-data folder directly.
+
+Saved ArenaNet and Steam login are not profile files. An official release keeps
+them in two fixed Data Protection Keychain items. On the first hard-cutover
+launch, only the retired `credentials.bin` and `steam-session.bin` files are
+removed from the application-support directory; all other local data remains.

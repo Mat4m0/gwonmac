@@ -74,20 +74,14 @@ import {
 import { sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
-
-// Ad-hoc builds have no stable code identity, so Chromium's profile encryption
-// repeatedly asks for access to "<app> Safe Storage". The mock provider avoids
-// that OS prompt. The same provider encrypts the owner-only saved-login file;
-// this is intentionally weaker than a signed app's stable Keychain identity.
-if (
-  process.platform === "darwin"
-  && (
-    !app.isPackaged
-    || app.commandLine.hasSwitch("gw-adhoc-test-keychain")
-  )
-) {
-  app.commandLine.appendSwitch("use-mock-keychain");
-}
+import { CredentialsStore } from "./core/credentials.js";
+import { SteamSessionStore } from "./core/steam-session.js";
+import {
+  VolatileNativeKeychain,
+  type NativeKeychain,
+} from "./core/native-keychain.js";
+import { loadNativeKeychain } from "./native-keychain.js";
+import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -374,6 +368,20 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
+  const officialReleaseCapability = officialUpdaterCapable();
+  const persistentSecrets =
+    app.isPackaged
+    && officialReleaseCapability
+    && !app.commandLine.hasSwitch("gw-volatile-secrets");
+  if (persistentSecrets) {
+    const legacySecretFailures = await cleanupLegacySecretFiles(
+      app.getPath("userData"),
+      rm,
+    );
+    for (const failure of legacySecretFailures) {
+      logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
+    }
+  }
   const obsoleteCacheError = await discardObsoleteEnhancementCache(
     gamePaths(),
     rm,
@@ -401,6 +409,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const enhancementSelection = enhancementSelectionFor(settings);
   await prepareWindowState();
   const paths = gamePaths();
+  const keychain: NativeKeychain = persistentSecrets
+    ? loadNativeKeychain({
+        packaged: true,
+        appPath: app.getAppPath(),
+        resourcesPath: process.resourcesPath,
+      })
+    : new VolatileNativeKeychain();
+  const credentialsStore = new CredentialsStore(keychain);
+  const steamSessionStore = new SteamSessionStore(keychain);
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =
     !expectedUserData ||
@@ -417,7 +434,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const sockets = buildSocketManager();
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
-    capable: officialUpdaterCapable(),
+    capable: officialReleaseCapability,
     nativeUpdater: {
       setFeedURL: (options) => autoUpdater.setFeedURL(options),
       checkForUpdates: () => {
@@ -469,6 +486,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   const ipcCleanup = registerIpcHandlers({
     sockets,
+    credentialsStore,
+    steamSessionStore,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
     getSettings: () => loadSettings(gamePaths().settings),

@@ -15,6 +15,7 @@ type PackagerIgnore = NonNullable<ForgeConfig["packagerConfig"]>["ignore"];
 export const PRELOAD_ENTRY = "/build/preload/preload.cjs";
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
+  "/build/native/keychain.node",
   "/build/renderer/companion-kernel.wasm",
   "/build/renderer/enhancements.js",
   "/build/renderer/companion-snapshot.js",
@@ -64,7 +65,11 @@ export function assertNoDeveloperPackageFiles(inventory: PackageInventory): void
   }
 
   for (const file of inventory) {
-    if (!/^\/(?:build\/(?:main|shared|renderer|preload)\/|package\.json$)/u.test(file)) {
+    if (
+      !/^\/(?:build\/(?:main|shared|renderer|preload|native)\/|package\.json$)/u.test(
+        file,
+      )
+    ) {
       throw new Error(`${file} is outside the packaged runtime trees`);
     }
   }

@@ -1,12 +1,6 @@
-// Reads repository text, and says so in its filename.
-//
-// AGENTS.md makes a negative claim about saved login: it lives in one encrypted
-// owner-only file and nowhere else. `CredentialsStore` is executed in
-// tests/unit/credentials.test.ts, and what it does with the file it is given is
-// proved there. What no test can execute is the *absence* of a second store —
-// a `localStorage.setItem` added to the renderer would break no test, because
-// there is no test that a line of code was never written. This scan is that
-// test, and it is honest about being one.
+// Source proof for the negative half of secret persistence: the two native
+// Keychain items are the only persistent surface, and no browser/file fallback
+// can silently become a second home.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -16,85 +10,57 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
-/** Every source file the application ships, repo-relative. */
 function shippedSources(directory = "src"): string[] {
   return readdirSync(path.join(root, directory), { withFileTypes: true })
     .flatMap((entry) => {
       const child = `${directory}/${entry.name}`;
       if (entry.isDirectory()) return shippedSources(child);
-      return /\.(?:ts|mts|mjs|tsx|cjs|js|jsx)$/u.test(entry.name) ? [child] : [];
+      return /\.(?:ts|mts|mjs|tsx|cjs|js|jsx|mm)$/u.test(entry.name) ? [child] : [];
     });
 }
 
-// Every file a credential can pass through: the boundary, the store, the
-// shared mechanism underneath it, both path modules, the bridge, the
-// contracts, and the renderer that asks for it.
-//
-// `encrypted-store.ts` is on this list because the encrypt / atomic-write /
-// chmod mechanism lives there now — `CredentialsStore` and `SteamSessionStore`
-// are both thin instances of it. `steam-session.ts` is here because the Steam
-// token is a second secret held to the same invariant, and a scan that only
-// looked at credentials would not notice a second store growing a weaker home.
-const persistenceOwners = [
-  "src/main/ipc.ts",
-  "src/main/core/credentials.ts",
-  "src/main/core/encrypted-store.ts",
-  "src/main/core/steam-session.ts",
-  "src/main/paths.ts",
-  "src/main/core/paths.ts",
-  "src/preload/preload.body.cjs",
-  "src/shared/contracts.ts",
-  "src/renderer/harness.ts",
-]
-  .map(read)
-  .join("\n");
 const shippedApplication = shippedSources().map(read).join("\n");
+const legacyFilenameOwners = shippedSources().filter((file) =>
+  /credentials\.bin|steam-session\.bin/u.test(read(file)),
+);
+const main = read("src/main/main.ts");
+const native = read("src/native/keychain/keychain.mm");
+const legacyCleanup = read("src/main/core/legacy-secret-cleanup.ts");
 
-test("saved login has one encrypted owner-only persistence surface", () => {
-  assert.match(persistenceOwners, /safeStorage/);
-  assert.match(persistenceOwners, /credentials\.bin/);
-  assert.match(persistenceOwners, /steam-session\.bin/);
-  assert.match(persistenceOwners, /encryptString/);
-  assert.match(persistenceOwners, /writeAtomic\(this\.path, ciphertext, 0o600\)/);
+test("saved login has exactly two Data Protection Keychain items", () => {
+  assert.match(native, /kSecUseDataProtectionKeychain/);
+  assert.match(native, /kSecAttrAccessibleWhenUnlockedThisDeviceOnly/);
+  assert.match(native, /@"io\.github\.mat4m0\.gwonmac"/);
+  assert.equal((native.match(/@"arena-net-credentials"/gu) ?? []).length, 1);
+  assert.equal((native.match(/@"steam-session"/gu) ?? []).length, 1);
+  assert.doesNotMatch(shippedApplication, /safeStorage|encryptString|decryptString/);
+  assert.deepEqual(legacyFilenameOwners, [
+    "src/main/core/legacy-secret-cleanup.ts",
+  ]);
+  assert.doesNotMatch(legacyCleanup, /recursive\s*:|clearStorageData|IndexedDB|IDBFS/);
+  assert.match(legacyCleanup, /remove\(path\.join\(userData, filename\), \{ force: true \}\)/);
   assert.doesNotMatch(shippedApplication, /localStorage|sessionStorage/);
   assert.doesNotMatch(shippedApplication, /plaintext|fallbackKey|masterPassword/);
-  // The three game-facing methods reach the one store, and no fourth path.
+});
+
+test("only the official release capability enables persistent secrets", () => {
+  assert.match(main, /const officialReleaseCapability = officialUpdaterCapable\(\)/);
   assert.match(
-    persistenceOwners,
-    /secureStorage:[\s\S]*getCredentials[\s\S]*storeCredentials[\s\S]*clearCredentials/,
+    main,
+    /const persistentSecrets =\s*app\.isPackaged\s*&& officialReleaseCapability\s*&& !app\.commandLine\.hasSwitch\("gw-volatile-secrets"\)/,
   );
+  assert.match(
+    main,
+    /if \(persistentSecrets\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
+  );
+  assert.match(main, /persistentSecrets\s*\? loadNativeKeychain/);
+  assert.match(main, /: new VolatileNativeKeychain\(\)/);
+  assert.doesNotMatch(shippedApplication, /use-mock-keychain/);
 });
 
 test("no build seeds the Steam token from the environment", () => {
-  // This is a source scan rather than a launch because a
-  // test that starts the app with `GW_STEAM_TOKEN` set and observes nothing
-  // happen proves only that nothing happened *that time*. The claim is that no
-  // code reads it, and absence has no executable form.
-  //
-  // An earlier design shipped exactly this variable to bootstrap login before
-  // acquisition worked, as a documented security deviation. Acquisition is the
-  // acquisition path now, so the deviation is gone and this keeps it gone.
   const readers = shippedSources().filter((file) =>
     /GW_STEAM_TOKEN|process\.env\.[A-Za-z_]*STEAM/u.test(read(file)),
   );
-  assert.deepEqual(
-    readers,
-    [],
-    "the Steam token has one home, the encrypted store — no environment variable may seed it",
-  );
-});
-
-test("only development and explicit ad-hoc tests enable mock keychain", () => {
-  // Ordering, not existence: `appendSwitch` after `whenReady` is a silent
-  // no-op, and the symptom is an OS keychain prompt on a user's machine.
-  const main = read("src/main/main.ts");
-  assert.match(main, /appendSwitch\("use-mock-keychain"\)/);
-  assert.match(main, /!app\.isPackaged/);
-  assert.match(main, /hasSwitch\("gw-adhoc-test-keychain"\)/);
-  assert.match(main, /clearStorageData\(\{ storages: \["cookies"\] \}\)/);
-  assert.ok(
-    main.indexOf('appendSwitch("use-mock-keychain")') <
-      main.indexOf("app.whenReady()"),
-    "mock keychain switch must be installed before Electron becomes ready",
-  );
+  assert.deepEqual(readers, []);
 });

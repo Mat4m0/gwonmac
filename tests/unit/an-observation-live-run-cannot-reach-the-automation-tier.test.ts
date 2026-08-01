@@ -137,7 +137,6 @@ describe("an observation live run cannot reach the automation tier", () => {
     // thirty-minute wait for a hook that never arrives.
     const ready = {
       readyForCachedLive: true,
-      credentials: "saved",
       nativeCursor: false,
       targetReadout: false,
     } as const;
@@ -168,10 +167,6 @@ describe("an observation live run cannot reach the automation tier", () => {
         { cachedOnly: false },
       ),
       "native-cursor-disabled",
-    );
-    assert.equal(
-      liveRunRefusal(planFor("movement"), { ...ready, credentials: "missing" }, options),
-      "saved-login-missing",
     );
     assert.equal(
       liveRunRefusal(planFor("target-readout"), ready, options),

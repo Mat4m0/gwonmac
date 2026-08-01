@@ -743,12 +743,11 @@ export function liveRunRefusal(
   plan: LiveRunPlan,
   preflight: Pick<
     EnhancementDoctorReport,
-    "readyForCachedLive" | "credentials" | "targetReadout" | "nativeCursor"
+    "readyForCachedLive" | "targetReadout" | "nativeCursor"
   >,
   { cachedOnly }: { cachedOnly: boolean },
 ):
   | "cached-client-incomplete"
-  | "saved-login-missing"
   | "target-readout-disabled"
   | "native-cursor-disabled"
   | null
@@ -756,7 +755,6 @@ export function liveRunRefusal(
   if (cachedOnly && !preflight.readyForCachedLive) {
     return "cached-client-incomplete";
   }
-  if (preflight.credentials !== "saved") return "saved-login-missing";
   if (plan.name === "target-readout" && !preflight.targetReadout) {
     return "target-readout-disabled";
   }

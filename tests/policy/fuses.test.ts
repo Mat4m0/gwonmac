@@ -7,12 +7,15 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
 const forge = readFileSync(path.join(root, "forge.config.ts"), "utf8");
 
 const FUSES = {
   RunAsNode: false,
-  EnableCookieEncryption: true,
+  EnableCookieEncryption: false,
   EnableNodeOptionsEnvironmentVariable: false,
   EnableNodeCliInspectArguments: false,
   EnableEmbeddedAsarIntegrityValidation: true,

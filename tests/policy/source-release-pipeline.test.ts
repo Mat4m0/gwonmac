@@ -18,7 +18,10 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
 // Only the manifest fields these assertions read. `JSON.parse` returns `any`,
@@ -39,7 +42,10 @@ const json = (file: string): Manifest => JSON.parse(read(file));
 // the invariant it breaks.
 const script = (name: string): string => {
   const command = json("package.json").scripts?.[name];
-  assert.ok(typeof command === "string", `package.json defines no ${name} script`);
+  assert.ok(
+    typeof command === "string",
+    `package.json defines no ${name} script`,
+  );
   return command;
 };
 
@@ -71,7 +77,10 @@ test("packaged releases carry the project and third-party license notices", () =
   const forge = read("forge.config.ts");
   assert.match(forge, /extraResource:[\s\S]*"LICENSE"/);
   assert.match(forge, /extraResource:[\s\S]*"THIRD-PARTY-NOTICES\.md"/);
-  assert.match(forge, /extraResource:[\s\S]*"src\/renderer\/fonts\/COPYING-QUALITYPE"/);
+  assert.match(
+    forge,
+    /extraResource:[\s\S]*"src\/renderer\/fonts\/COPYING-QUALITYPE"/,
+  );
   const notices = read("THIRD-PARTY-NOTICES.md");
   assert.match(notices, /not relicensed under\s+GPL-3\.0-only/);
   assert.match(
@@ -111,6 +120,7 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
   for (const secret of [
     "APPLE_DEVELOPER_ID_P12",
     "APPLE_DEVELOPER_ID_PASSWORD",
+    "APPLE_DEVELOPER_ID_PROFILE",
     "APPLE_API_KEY_P8",
     "APPLE_API_KEY_ID",
     "APPLE_API_ISSUER_ID",
@@ -122,6 +132,13 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
   assert.match(forge, /osxNotarize: releaseNotarization/);
   assert.match(forge, /GW_OFFICIAL_RELEASE/);
   assert.match(forge, /packaging\/official-update\.json/);
+  assert.match(forge, /appBundleId: "io\.github\.mat4m0\.gwonmac"/);
+  assert.match(forge, /provisioningProfile: requiredReleaseEnvironment/);
+  assert.match(forge, /preAutoEntitlements: false/);
+  assert.match(forge, /preEmbedProvisioningProfile: true/);
+  assert.match(forge, /ignore: ignoreRedundantSigningTarget/);
+  assert.match(forge, /Electron Framework\\\.framework\\\//);
+  assert.match(forge, /packaging\/entitlements\.release\.plist/);
   const dmgVolumeName = forge.match(
     /new MakerDMG\(\{[\s\S]*?\bname: "([^"]+)"/,
   )?.[1];
@@ -138,12 +155,12 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
     /name: Delete temporary signing material\n {8}if: always\(\)/,
   );
   assert.ok(
-    workflow.indexOf('echo "APPLE_KEYCHAIN=$keychain"')
-      < workflow.indexOf("security create-keychain"),
+    workflow.indexOf('echo "APPLE_KEYCHAIN=$keychain"') <
+      workflow.indexOf("security create-keychain"),
   );
   assert.ok(
-    workflow.indexOf('echo "APPLE_CERTIFICATE_PATH=$certificate"')
-      < workflow.indexOf("security create-keychain"),
+    workflow.indexOf('echo "APPLE_CERTIFICATE_PATH=$certificate"') <
+      workflow.indexOf("security create-keychain"),
   );
   assert.match(
     workflow,
@@ -153,13 +170,44 @@ test("official releases use Developer ID, notarization, and a scoped marker", ()
   assert.match(workflow, /xcrun stapler staple/);
   assert.match(workflow, /test "\$TEAM_ID" = "9NN976MFZ4"/);
   assert.match(workflow, /TeamIdentifier=9NN976MFZ4/);
+  assert.match(workflow, /7F9A56793C16683742AA7818FE65221A884FA108/);
+  assert.match(workflow, /embedded\.provisionprofile/);
+  assert.match(workflow, /remaining <= 2 \* 365 \* 86400000/);
+  assert.match(workflow, /remaining <= 5 \* 365 \* 86400000/);
+  assert.match(forge, /7F9A56793C16683742AA7818FE65221A884FA108/);
   assert.match(
-    forge,
-    /Developer ID Application: Matthias Amon \(9NN976MFZ4\)/,
+    workflow,
+    /rm -f "\$APPLE_PROVISIONING_PROFILE"[\s\S]*rm -f "\$APPLE_PROFILE_PLIST"/,
   );
   assert.match(workflow, /Timestamp=/);
+  assert.match(workflow, /test "\$helper_count" -eq 4/);
+  assert.match(workflow, /test "\$plugin_helper_count" -eq 1/);
   assert.match(workflow, /spctl --assess --type execute/);
   assert.match(workflow, /spctl --assess --type open/);
+});
+
+test("release entitlements are an exact three-key allowlist", () => {
+  const entitlements = read("packaging/entitlements.release.plist");
+  const keys = [...entitlements.matchAll(/<key>([^<]+)<\/key>/gu)]
+    .map((match) => match[1])
+    .sort();
+  assert.deepEqual(keys, [
+    "com.apple.application-identifier",
+    "com.apple.developer.team-identifier",
+    "com.apple.security.cs.allow-jit",
+  ]);
+  assert.match(
+    entitlements,
+    /<key>com\.apple\.application-identifier<\/key>\s*<string>9NN976MFZ4\.io\.github\.mat4m0\.gwonmac<\/string>/,
+  );
+  assert.match(
+    entitlements,
+    /<key>com\.apple\.developer\.team-identifier<\/key>\s*<string>9NN976MFZ4<\/string>/,
+  );
+  assert.doesNotMatch(
+    entitlements,
+    /keychain-access-groups|application-groups|app-sandbox|get-task-allow/,
+  );
 });
 
 test("release workflow publishes one tested, attested package version", () => {
@@ -176,6 +224,14 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(
     workflow,
     /name: Smoke-test signed release candidate[\s\S]*?GW_EXPECT_OFFICIAL_UPDATER: "1"[\s\S]*?run: pnpm test:packaged/,
+  );
+  assert.match(
+    workflow,
+    /name: Prove signed Data Protection Keychain continuity[\s\S]*?GW_SIGNED_APP_PATH="\$app" pnpm test:signed-keychain/,
+  );
+  assert.match(
+    json("package.json").scripts?.["test:signed-keychain"] ?? "",
+    /tests\/signed-keychain-runtime\.ts/,
   );
   assert.match(workflow, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(workflow, /anchore\/sbom-action@/);
@@ -211,26 +267,36 @@ test("release workflow publishes one tested, attested package version", () => {
     /actions\/checkout|pnpm install|pnpm make|pnpm test/,
   );
   assert.match(workflow, /--prerelease --latest=false/);
-  assert.match(workflow, /SIGNED_BETA_UPDATE_PROVEN: \$\{\{ vars\.SIGNED_BETA_UPDATE_PROVEN \}\}/);
+  assert.match(
+    workflow,
+    /SIGNED_BETA_UPDATE_PROVEN: \$\{\{ vars\.SIGNED_BETA_UPDATE_PROVEN \}\}/,
+  );
   assert.match(
     workflow,
     /if \[ "\$prerelease" = "false" \]; then\s+test "\$SIGNED_BETA_UPDATE_PROVEN" = "true"/,
   );
   assert.match(workflow, /--draft --generate-notes/);
   assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" = "true"/);
-  assert.match(workflow, /--json targetCommitish --jq '\.targetCommitish'\)" = "\$GITHUB_SHA"/);
+  assert.match(
+    workflow,
+    /--json targetCommitish --jq '\.targetCommitish'\)" = "\$GITHUB_SHA"/,
+  );
   assert.match(
     workflow,
     /name: Create complete draft release\n {8}if: steps\.release-state\.outputs\.create == 'true'/,
   );
   assert.equal(
-    workflow.match(/if: steps\.release-state\.outputs\.create == 'true'/gu)?.length,
+    workflow.match(/if: steps\.release-state\.outputs\.create == 'true'/gu)
+      ?.length,
     3,
   );
   assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
   assert.match(workflow, /\*\.zip \*\.dmg RELEASES\.json \*\.spdx\.json/);
-  assert.match(workflow, /gh release create "\$TAG" "\$\{args\[@\]\}" release-assets\/\*/);
+  assert.match(
+    workflow,
+    /gh release create "\$TAG" "\$\{args\[@\]\}" release-assets\/\*/,
+  );
 });
 
 test("tester snapshots are verified, immutable, bounded, and isolated from releases", () => {
@@ -259,7 +325,10 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(verification, /format: spdx-json/);
   assert.match(verification, /SOURCE_COMMIT\.txt/);
   assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
-  assert.match(verification, /retention-days: \$\{\{ inputs\.artifact-retention-days \}\}/);
+  assert.match(
+    verification,
+    /retention-days: \$\{\{ inputs\.artifact-retention-days \}\}/,
+  );
 
   assert.match(pullRequest, /on:\n {2}pull_request:/);
   assert.doesNotMatch(pullRequest, /workflow_dispatch:|push:/);
@@ -277,7 +346,10 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(main, /on:\n {2}push:\n {4}branches: \[main\]/);
   assert.doesNotMatch(main, /pull_request:|workflow_dispatch:/);
   assert.match(main, /artifact-retention-days: 1/);
-  assert.match(main, /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(
+    main,
+    /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+  );
   assert.match(main, /run-number: \$\{\{ github\.run_number \}\}/);
   assert.match(
     main,
@@ -294,9 +366,15 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   // Tester dispatch is separate from the versioned release dispatch. Both
   // snapshot callers publish only after the same verification job succeeds.
   assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
-  assert.doesNotMatch(manual, /schedule:|release-build|package\.json'\)\.version/);
+  assert.doesNotMatch(
+    manual,
+    /schedule:|release-build|package\.json'\)\.version/,
+  );
   assert.match(manual, /artifact-retention-days: 1/);
-  assert.match(manual, /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(
+    manual,
+    /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+  );
   assert.match(manual, /run-number: \$\{\{ github\.run_number \}\}/);
   assert.match(manual, /publish:\n {4}needs: verify/);
   assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
@@ -305,10 +383,15 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   // release creation. Cleanup runs last and uses an explicit apply switch.
   const handoff = publisher.indexOf("- name: Verify package handoff");
   const attest = publisher.indexOf("- name: Attest snapshot provenance");
-  const publish = publisher.indexOf("- name: Publish immutable snapshot prerelease");
+  const publish = publisher.indexOf(
+    "- name: Publish immutable snapshot prerelease",
+  );
   const prune = publisher.indexOf("- name: Prune expired snapshots");
   assert.ok(handoff < attest && attest < publish && publish < prune);
-  assert.match(publisher, /test "\$\(tr -d '\\n' < "\$source_commit"\)" = "\$COMMIT_SHA"/);
+  assert.match(
+    publisher,
+    /test "\$\(tr -d '\\n' < "\$source_commit"\)" = "\$COMMIT_SHA"/,
+  );
   assert.match(publisher, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(publisher, /tag="snapshot-\$RUN_NUMBER-\$short"/);
   assert.match(publisher, /type: string/);
@@ -335,7 +418,10 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
 
   // Cleanup's authority is the exact snapshot namespace. It deletes a selected
   // release before its unique tag and cannot match any v* release.
-  assert.match(retention, /\/\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\//);
+  assert.match(
+    retention,
+    /\/\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\//,
+  );
   assert.match(retention, /const MAX_SNAPSHOTS = 3/);
   assert.match(retention, /const MAX_AGE_MS = 14 \* 24 \* 60 \* 60 \* 1_000/);
   assert.ok(
@@ -388,7 +474,10 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.equal(workflow.match(/- "src\/shared\/\*\*"/gu)?.length, 2);
   assert.equal(workflow.match(/- "package\.json"/gu)?.length, 2);
   assert.match(workflow, /permissions:\n {2}contents: read/);
-  assert.doesNotMatch(workflow, /contents: write|id-token: write|issues: write/);
+  assert.doesNotMatch(
+    workflow,
+    /contents: write|id-token: write|issues: write/,
+  );
   assert.doesNotMatch(script("verify"), /test:website/);
 });
 

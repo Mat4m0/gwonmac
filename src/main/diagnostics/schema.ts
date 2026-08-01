@@ -516,6 +516,11 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "warn",
     fields: { phase: appPhase, code },
   },
+  "legacySecrets.cleanupFailed": {
+    subsystem: "app",
+    level: "warn",
+    fields: { code },
+  },
   "launcher.strategyChanged": {
     subsystem: "settings",
     level: "info",

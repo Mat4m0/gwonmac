@@ -52,8 +52,9 @@ mid-download with _Play Now Instead_.
   leave your machine if you attach a `.gwdiag` file to a bug report yourself.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
-- Guild Wars' own **Remember Password** writes one encrypted, owner-only local
-  file using Chromium's macOS Keychain-backed encryption in official builds.
+- Guild Wars' own **Remember Password** stores one opaque item in Apple's Data
+  Protection Keychain in official builds. Source and ad-hoc builds keep saved
+  login only in memory for that process.
 - **The app does not poll for updates.** It checks GitHub once per launch — a
   default declared at first run that one checkbox turns off. Switched off, it
   asks GitHub only when you press **Check for Updates**. A downloaded update is
@@ -127,16 +128,19 @@ The GitHub `release` environment must require a maintainer approval and contain
 these secrets:
 
 - `APPLE_DEVELOPER_ID_P12`: base64 of the exported Developer ID Application
-  certificate and private key;
+  G2 certificate and private key;
 - `APPLE_DEVELOPER_ID_PASSWORD`: the export password;
+- `APPLE_DEVELOPER_ID_PROFILE`: base64 of the Developer ID distribution
+  provisioning profile for `io.github.mat4m0.gwonmac`;
 - `APPLE_API_KEY_P8`: base64 of the App Store Connect API key;
 - `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`, and `APPLE_TEAM_ID`: their Apple
   identifiers.
 
-On macOS, `base64 -i DeveloperID.p12 | pbcopy` and
-`base64 -i AuthKey_KEYID.p8 | pbcopy` produce the two encoded secret values.
-Keep the original files outside the repository and remove local export copies
-after the GitHub secrets have been set.
+On macOS, `base64 -i DeveloperID.p12 | pbcopy`,
+`base64 -i gwonmac.provisionprofile | pbcopy`, and
+`base64 -i AuthKey_KEYID.p8 | pbcopy` produce the three encoded secret values.
+Keep the originals outside the repository and remove unneeded local export
+copies after the GitHub secrets have been set.
 
 ### Test snapshots
 
@@ -177,17 +181,20 @@ a single profiler-contaminated trace.
 
 ## Local data
 
-Everything lives under `~/Library/Application Support/Guild Wars`:
+Profile data lives under `~/Library/Application Support/Guild Wars`:
 
 - Cached game chunks and client artifacts — reproducible, safe to delete via
   Settings → Game Data → _Clear game data_.
 - Window size, position, and display mode in an owner-only
   `window-state.json`; missing monitors fall back to a centered window.
-- Saved login, encrypted in an owner-only `credentials.bin`, reachable only
-  through the narrow credential IPC methods.
 - At most five 5 MB diagnostics files.
 
-Browser cookies are cleared at startup and quit. Clearing game data never
+Saved ArenaNet and Steam login are the exception: official releases keep them
+in two fixed, device-only Data Protection Keychain items, reachable only
+through the narrow credential IPC methods.
+
+The game proxy drops cookies in both directions, and browser cookies are also
+cleared at startup and quit. Clearing game data never
 touches your login or settings; resetting launcher settings never deletes
 downloaded data.
 

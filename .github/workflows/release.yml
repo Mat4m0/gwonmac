@@ -86,6 +86,7 @@ jobs:
         env:
           CERTIFICATE_B64: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
+          PROFILE_B64: ${{ secrets.APPLE_DEVELOPER_ID_PROFILE }}
           NOTARY_KEY_B64: ${{ secrets.APPLE_API_KEY_P8 }}
           API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -94,6 +95,7 @@ jobs:
           umask 077
           test -n "$CERTIFICATE_B64"
           test -n "$CERTIFICATE_PASSWORD"
+          test -n "$PROFILE_B64"
           test -n "$NOTARY_KEY_B64"
           test -n "$API_KEY_ID"
           test -n "$API_ISSUER_ID"
@@ -101,10 +103,14 @@ jobs:
           test "$TEAM_ID" = "9NN976MFZ4"
           keychain="$RUNNER_TEMP/gwonmac-release-$(openssl rand -hex 16).keychain-db"
           certificate="$RUNNER_TEMP/developer-id.p12"
+          profile="$RUNNER_TEMP/gwonmac.provisionprofile"
+          profile_plist="$RUNNER_TEMP/gwonmac-profile.plist"
           api_key="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
           {
             echo "APPLE_KEYCHAIN=$keychain"
             echo "APPLE_CERTIFICATE_PATH=$certificate"
+            echo "APPLE_PROVISIONING_PROFILE=$profile"
+            echo "APPLE_PROFILE_PLIST=$profile_plist"
             echo "APPLE_API_KEY_PATH=$api_key"
             echo "APPLE_API_KEY_ID=$API_KEY_ID"
             echo "APPLE_API_ISSUER_ID=$API_ISSUER_ID"
@@ -112,8 +118,39 @@ jobs:
           } >> "$GITHUB_ENV"
           keychain_password="$(openssl rand -hex 32)"
           printf '%s' "$CERTIFICATE_B64" | base64 --decode > "$certificate"
+          printf '%s' "$PROFILE_B64" | base64 --decode > "$profile"
           printf '%s' "$NOTARY_KEY_B64" | base64 --decode > "$api_key"
-          chmod 600 "$certificate" "$api_key"
+          chmod 600 "$certificate" "$profile" "$api_key"
+          security cms -D -i "$profile" > "$profile_plist"
+          test "$(plutil -extract TeamIdentifier.0 raw -o - "$profile_plist")" = \
+            "9NN976MFZ4"
+          test "$(plutil -extract ProvisionsAllDevices raw -o - "$profile_plist")" = \
+            "true"
+          test "$(/usr/libexec/PlistBuddy -c \
+            'Print :Entitlements:com.apple.application-identifier' \
+            "$profile_plist")" = "9NN976MFZ4.io.github.mat4m0.gwonmac"
+          test "$(/usr/libexec/PlistBuddy -c \
+            'Print :Entitlements:com.apple.developer.team-identifier' \
+            "$profile_plist")" = "9NN976MFZ4"
+          expiry="$(plutil -extract ExpirationDate raw -o - "$profile_plist")"
+          node -e '
+            const remaining = Date.parse(process.argv[1]) - Date.now();
+            if (remaining <= 2 * 365 * 86400000) process.exit(1);
+            if (remaining <= 5 * 365 * 86400000) {
+              console.log("::warning::Developer ID profile expires within five years");
+            }
+          ' "$expiry"
+          profile_certificate="$RUNNER_TEMP/profile-certificate.der"
+          plutil -extract DeveloperCertificates.0 raw -o - "$profile_plist" |
+            base64 --decode > "$profile_certificate"
+          test "$(shasum "$profile_certificate" | awk '{print toupper($1)}')" = \
+            "7F9A56793C16683742AA7818FE65221A884FA108"
+          rm -f "$profile_certificate"
+          if plutil -extract DeveloperCertificates.1 raw -o /dev/null \
+            "$profile_plist" 2>/dev/null; then
+            echo "Provisioning profile contains an unexpected certificate." >&2
+            exit 1
+          fi
           security create-keychain -p "$keychain_password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$keychain_password" "$keychain"
@@ -125,7 +162,10 @@ jobs:
           security list-keychains -d user -s "$keychain"
           security default-keychain -d user -s "$keychain"
           security find-identity -v -p codesigning "$keychain" |
-            grep 'Developer ID Application: Matthias Amon (9NN976MFZ4)'
+            grep '7F9A56793C16683742AA7818FE65221A884FA108.*Developer ID Application: Matthias Amon (9NN976MFZ4)'
+          security find-certificate -c \
+            'Developer ID Application: Matthias Amon (9NN976MFZ4)' \
+            -Z "$keychain" | grep '7F9A56793C16683742AA7818FE65221A884FA108'
           rm -f "$certificate"
 
       - name: Build, sign, notarize, and staple application
@@ -137,6 +177,12 @@ jobs:
         env:
           GW_EXPECT_OFFICIAL_UPDATER: "1"
         run: pnpm test:packaged
+
+      - name: Prove signed Data Protection Keychain continuity
+        run: |
+          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          test -n "$app"
+          GW_SIGNED_APP_PATH="$app" pnpm test:signed-keychain
 
       - name: Notarize and staple DMG
         run: |
@@ -162,16 +208,29 @@ jobs:
           echo "$signature" | grep "TeamIdentifier=9NN976MFZ4"
           echo "$signature" | grep "Runtime Version"
           echo "$signature" | grep "Timestamp="
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+            "$app/Contents/Info.plist")" = "io.github.mat4m0.gwonmac"
+          cmp "$APPLE_PROVISIONING_PROFILE" \
+            "$app/Contents/embedded.provisionprofile"
           codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/app-entitlements.plist"
           plutil -convert json -o "$RUNNER_TEMP/app-entitlements.json" \
             "$RUNNER_TEMP/app-entitlements.plist"
           node -e '
             const value = require(process.argv[1]);
-            const allowed = new Set(["com.apple.security.cs.allow-jit"]);
-            if (Object.keys(value).some((key) => !allowed.has(key))) process.exit(1);
-            if (value["com.apple.security.cs.allow-jit"] !== true) process.exit(1);
+            const expected = {
+              "com.apple.application-identifier": "9NN976MFZ4.io.github.mat4m0.gwonmac",
+              "com.apple.developer.team-identifier": "9NN976MFZ4",
+              "com.apple.security.cs.allow-jit": true,
+            };
+            require("node:assert/strict").deepEqual(value, expected);
           ' "$RUNNER_TEMP/app-entitlements.json"
+          helper_count=0
+          plugin_helper_count=0
           while IFS= read -r -d '' helper; do
+            ((helper_count += 1))
+            if [[ "$helper" == *"(Plugin)"* ]]; then
+              ((plugin_helper_count += 1))
+            fi
             entitlements="$RUNNER_TEMP/$(basename "$helper").plist"
             json="$entitlements.json"
             codesign -d --entitlements :- "$helper" > "$entitlements"
@@ -195,6 +254,8 @@ jobs:
             echo "$helper_signature" | grep "Runtime Version"
             echo "$helper_signature" | grep "Timestamp="
           done < <(find "$app/Contents/Frameworks" -name '*Helper*.app' -print0)
+          test "$helper_count" -eq 4
+          test "$plugin_helper_count" -eq 1
           xcrun stapler validate -v "$app"
           spctl --assess --type execute --verbose=4 "$app"
           codesign --verify --verbose=2 "$dmg"
@@ -293,6 +354,12 @@ jobs:
           fi
           if [ -n "${APPLE_API_KEY_PATH:-}" ]; then
             rm -f "$APPLE_API_KEY_PATH"
+          fi
+          if [ -n "${APPLE_PROVISIONING_PROFILE:-}" ]; then
+            rm -f "$APPLE_PROVISIONING_PROFILE"
+          fi
+          if [ -n "${APPLE_PROFILE_PLIST:-}" ]; then
+            rm -f "$APPLE_PROFILE_PLIST"
           fi
 
   release:

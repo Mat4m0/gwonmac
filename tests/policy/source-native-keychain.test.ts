@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { BUILD_STEPS } from "../../scripts/build.mjs";
+
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
+const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+const source = read("src/native/keychain/keychain.mm");
+
+test("the native boundary uses only ABI-stable Node-API", () => {
+  assert.match(source, /#include <node_api\.h>/u);
+  assert.doesNotMatch(
+    source,
+    /#include <(?:node|node_buffer|node_version|node_object_wrap|uv|v8)(?:\.h|\/)/u,
+  );
+  assert.doesNotMatch(source, /\b(?:v8|uv_|node::)/u);
+  assert.match(source, /napi_create_async_work/u);
+  assert.match(source, /napi_queue_async_work/u);
+});
+
+test("the native boundary owns two fixed Data Protection Keychain items", () => {
+  for (const value of [
+    "io.github.mat4m0.gwonmac",
+    "arenaNetCredentials",
+    "steamSession",
+    "arena-net-credentials",
+    "steam-session",
+  ]) {
+    assert.ok(
+      source.includes(`"${value}"`),
+      `${value} is not fixed in native code`,
+    );
+  }
+  assert.match(source, /kSecUseDataProtectionKeychain/u);
+  assert.match(source, /kSecAttrAccessibleWhenUnlockedThisDeviceOnly/u);
+  assert.match(source, /interactionNotAllowed = YES/u);
+  assert.match(source, /kSecUseAuthenticationContext/u);
+  assert.doesNotMatch(source, /SecKeychain|SecAccess|kSecAttrAccessGroup/u);
+  assert.doesNotMatch(source, /\b(?:system|popen|exec[lv]?[pe]?)\s*\(/u);
+});
+
+test("the canonical build emits one host-only Node-API 8 addon", () => {
+  const nativeSteps = BUILD_STEPS.filter(([, args]) =>
+    args.includes("src/native/keychain/keychain.mm"),
+  );
+  assert.equal(nativeSteps.length, 1);
+  const [command, args] = nativeSteps[0]!;
+  assert.equal(command, "xcrun");
+  assert.ok(args.includes("-DNAPI_VERSION=8"));
+  assert.ok(args.includes("node_modules/node-api-headers/include"));
+  assert.ok(args.includes("-mmacosx-version-min=12.0"));
+  assert.deepEqual(args.slice(-2), ["-o", "build/native/keychain.node"]);
+  assert.equal(args.filter((arg) => arg === "-arch").length, 1);
+  assert.equal(
+    JSON.parse(read("package.json")).devDependencies["node-api-headers"],
+    "1.9.0",
+  );
+});
+
+test("Forge unpacks only the native addon from ASAR", () => {
+  const forge = read("forge.config.ts");
+  assert.match(
+    forge,
+    /asar: \{ unpack: "\*\*\/build\/native\/keychain\.node" \}/u,
+  );
+  assert.match(
+    forge,
+    /p === "\/build\/native" \|\| p === "\/build\/native\/keychain\.node"/u,
+  );
+  assert.doesNotMatch(forge, /unpackDir|asarUnpack/u);
+});

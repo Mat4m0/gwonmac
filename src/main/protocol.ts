@@ -7,6 +7,7 @@ import type { SnapshotMetadata } from "../shared/contracts.js";
 import { CLIENT_ARTIFACTS } from "./core/access-key.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
+  isProxyCookieHeader,
   isProxyFetchDestination,
   isProxyRoute,
   type ProxyRoute,
@@ -284,6 +285,7 @@ async function handleProxy(
   for (const [k, v] of request.headers) {
     const key = k.toLowerCase();
     if (
+      isProxyCookieHeader(key) ||
       key === "host" ||
       key === "connection" ||
       key === "keep-alive" ||
@@ -344,6 +346,7 @@ async function handleProxy(
     const out = new Headers(headers());
     for (const [k, v] of res.headers) {
       const key = k.toLowerCase();
+      if (isProxyCookieHeader(key)) continue;
       if (
         key === "content-security-policy"
         || key === "content-security-policy-report-only"

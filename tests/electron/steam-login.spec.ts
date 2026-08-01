@@ -5,7 +5,7 @@
 //
 // Interactive requests replace the production acquirer at the composition
 // boundary with a local OAuth fixture. The renderer, frozen preload bridge,
-// validated IPC handler, coordinator, encrypted store, and BrowserWindow remain
+// validated IPC handler, coordinator, volatile test store, and BrowserWindow remain
 // the real implementations, and the suite never reaches Steam production.
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
@@ -26,7 +26,10 @@ import {
 const execFileAsync = promisify(execFile);
 
 const SESSION_MODULE = path.join(root, "build/main/core/steam-session.js");
-const PATHS_MODULE = path.join(root, "build/main/paths.js");
+const NATIVE_KEYCHAIN_MODULE = path.join(
+  root,
+  "build/main/core/native-keychain.js",
+);
 const IPC_MODULE = path.join(root, "build/main/ipc.js");
 const ACQUIRE_MODULE = path.join(root, "build/main/steam-acquire.js");
 const CONTRACTS_MODULE = path.join(root, "build/shared/contracts.js");
@@ -121,6 +124,7 @@ async function installFixtureAcquirer(
           parent: unknown,
           record: (event: unknown) => void,
         ) => Promise<unknown>,
+        store: unknown,
       ): void;
     };
     const { acquireSteamToken } = load(arg.acquireModule) as {
@@ -128,6 +132,12 @@ async function installFixtureAcquirer(
         config: unknown,
         options: unknown,
       ): Promise<unknown>;
+    };
+    const { SteamSessionStore } = load(arg.sessionModule) as {
+      SteamSessionStore: new (keychain: unknown) => unknown;
+    };
+    const { VolatileNativeKeychain } = load(arg.nativeKeychainModule) as {
+      VolatileNativeKeychain: new () => unknown;
     };
     const { IPC } = load(arg.contractsModule) as {
       IPC: {
@@ -139,12 +149,19 @@ async function installFixtureAcquirer(
     for (const channel of [IPC.steamToken, IPC.steamStore, IPC.steamClear]) {
       ipcMain.removeHandler(channel);
     }
-    registerSteamIpcHandlers((parent, record) =>
-      acquireSteamToken(arg.config, { parent, record }),
+    const store = new SteamSessionStore(new VolatileNativeKeychain());
+    (globalThis as Record<PropertyKey, unknown>)[
+      Symbol.for("gwonmac.test.steamStore")
+    ] = store;
+    registerSteamIpcHandlers(
+      (parent, record) => acquireSteamToken(arg.config, { parent, record }),
+      store,
     );
   }, {
     ipcModule: IPC_MODULE,
     acquireModule: ACQUIRE_MODULE,
+    sessionModule: SESSION_MODULE,
+    nativeKeychainModule: NATIVE_KEYCHAIN_MODULE,
     contractsModule: CONTRACTS_MODULE,
     config,
   });
@@ -161,51 +178,65 @@ async function clearSteam(fixture: OfflineFixture): Promise<void> {
   });
 }
 
-/**
- * Write the real encrypted store, through the real class and the real
- * `safeStorage`, before the client asks for anything.
- *
- * This is how a test seeds a token now that no environment variable can. It
- * lives entirely inside the test -- production source carries no seeding path
- * -- and it exercises the actual persistence rather than standing in for it.
- */
+async function installIsolatedStore(app: OfflineFixture["app"]): Promise<void> {
+  await app.evaluate(async ({ ipcMain }, arg) => {
+    const { createRequire } = process.getBuiltinModule("module");
+    const load = createRequire(arg.ipcModule);
+    const { registerSteamIpcHandlers } = load(arg.ipcModule) as {
+      registerSteamIpcHandlers(acquire: () => Promise<unknown>, store: unknown): void;
+    };
+    const { SteamSessionStore } = load(arg.sessionModule) as {
+      SteamSessionStore: new (keychain: unknown) => unknown;
+    };
+    const { VolatileNativeKeychain } = load(arg.nativeKeychainModule) as {
+      VolatileNativeKeychain: new () => unknown;
+    };
+    const { IPC } = load(arg.contractsModule) as {
+      IPC: { steamToken: string; steamStore: string; steamClear: string };
+    };
+    const key = Symbol.for("gwonmac.test.steamStore");
+    if ((globalThis as Record<PropertyKey, unknown>)[key]) return;
+    const store = new SteamSessionStore(new VolatileNativeKeychain());
+    (globalThis as Record<PropertyKey, unknown>)[key] = store;
+    for (const channel of [IPC.steamToken, IPC.steamStore, IPC.steamClear]) {
+      ipcMain.removeHandler(channel);
+    }
+    registerSteamIpcHandlers(
+      async () => ({ ok: false, reason: "failed" }),
+      store,
+    );
+  }, {
+    ipcModule: IPC_MODULE,
+    sessionModule: SESSION_MODULE,
+    nativeKeychainModule: NATIVE_KEYCHAIN_MODULE,
+    contractsModule: CONTRACTS_MODULE,
+  });
+}
+
+/** Seed only the test-owned volatile provider; production has no seed hook. */
 async function seedStore(
   app: OfflineFixture["app"],
   record: StoredRecord,
 ): Promise<void> {
-  await app.evaluate(async ({ safeStorage }, arg) => {
-    const { createRequire } = process.getBuiltinModule("module");
-    const load = createRequire(arg.sessionModule);
-    const { SteamSessionStore } = load(arg.sessionModule) as {
-      SteamSessionStore: new (path: string, storage: unknown) => {
-        save(value: unknown): Promise<void>;
-      };
-    };
-    const { gamePaths } = load(arg.pathsModule) as {
-      gamePaths: () => { steamSession: string };
-    };
-    await new SteamSessionStore(gamePaths().steamSession, safeStorage).save(
-      arg.record,
-    );
-  }, { sessionModule: SESSION_MODULE, pathsModule: PATHS_MODULE, record });
+  await installIsolatedStore(app);
+  await app.evaluate(async (_electron, record) => {
+    const store = (globalThis as Record<PropertyKey, unknown>)[
+      Symbol.for("gwonmac.test.steamStore")
+    ] as { save(value: unknown): Promise<void> };
+    await store.save(record);
+  }, record);
 }
 
 async function readStore(
   app: OfflineFixture["app"],
 ): Promise<StoredRecord | null> {
-  return (await app.evaluate(async ({ safeStorage }, arg) => {
-    const { createRequire } = process.getBuiltinModule("module");
-    const load = createRequire(arg.sessionModule);
-    const { SteamSessionStore } = load(arg.sessionModule) as {
-      SteamSessionStore: new (path: string, storage: unknown) => {
-        load(): Promise<unknown>;
-      };
-    };
-    const { gamePaths } = load(arg.pathsModule) as {
-      gamePaths: () => { steamSession: string };
-    };
-    return new SteamSessionStore(gamePaths().steamSession, safeStorage).load();
-  }, { sessionModule: SESSION_MODULE, pathsModule: PATHS_MODULE })) as
+  await installIsolatedStore(app);
+  return (await app.evaluate(async () => {
+    const store = (globalThis as Record<PropertyKey, unknown>)[
+      Symbol.for("gwonmac.test.steamStore")
+    ] as { load(): Promise<unknown> };
+    return store.load();
+  })) as
     | StoredRecord
     | null;
 }
@@ -397,9 +428,7 @@ test.describe("the Steam credential seam", () => {
     });
   });
 
-  test("replays the stored token across a relaunch", async () => {
-    // The token survives the process, which is the whole
-    // point of persisting it.
+  test("does not persist a token from an unofficial build", async () => {
     fixture = await launchOffline("gw-steam-relaunch-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
     const userData = fixture.userData;
@@ -407,8 +436,7 @@ test.describe("the Steam credential seam", () => {
 
     fixture = await launchOfflineAt(userData);
     expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "resolved",
-      value: { userId: "1", authCode: TOKEN, refreshToken: "" },
+      settled: "rejected",
     });
   });
 
@@ -594,7 +622,6 @@ test.describe("the Steam credential seam", () => {
           settings: {
             renderScale: 1,
             nativeCursor: false,
-            touchMode: "dbltap",
             showDiagnostics: false,
             dataStrategy: "quick",
           },

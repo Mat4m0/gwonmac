@@ -1,85 +1,83 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { describe, it } from "node:test";
 import { CredentialsStore } from "../../src/main/core/credentials.js";
-import type { SafeStorageApi } from "../../src/main/core/encrypted-store.js";
+import type {
+  NativeKeychain,
+  SecretSlot,
+} from "../../src/main/core/native-keychain.js";
 import { AppError } from "../../src/shared/errors.js";
 
-function fakeStorage(): SafeStorageApi {
-  return {
-    isEncryptionAvailable: () => true,
-    encryptString: (value) =>
-      Buffer.from([...value].reverse().join(""), "utf8"),
-    decryptString: (value) => {
-      return [...value.toString("utf8")].reverse().join("");
-    },
-  };
+class FakeKeychain implements NativeKeychain {
+  readonly values = new Map<SecretSlot, Buffer>();
+  failure: Error | null = null;
+
+  async load(slot: SecretSlot): Promise<Buffer | null> {
+    if (this.failure) throw this.failure;
+    const value = this.values.get(slot);
+    return value ? Buffer.from(value) : null;
+  }
+
+  async save(slot: SecretSlot, value: Buffer): Promise<void> {
+    if (this.failure) throw this.failure;
+    this.values.set(slot, Buffer.from(value));
+  }
+
+  async clear(slot: SecretSlot): Promise<void> {
+    if (this.failure) throw this.failure;
+    this.values.delete(slot);
+  }
 }
 
 describe("credentials", () => {
-  it("round-trips encrypted owner-only credentials and clears them", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "gw-credentials-"));
-    const path = join(dir, "credentials.bin");
-    const store = new CredentialsStore(path, fakeStorage());
+  it("round-trips the fixed credentials slot and clears it", async () => {
+    const keychain = new FakeKeychain();
+    const store = new CredentialsStore(keychain);
     const credentials = { username: "player@example.test", password: "secret" };
 
     assert.equal(await store.load(), null);
     await store.save(credentials);
     assert.deepEqual(await store.load(), credentials);
-
-    const raw = await readFile(path);
-    assert.equal(raw.includes(Buffer.from(credentials.username)), false);
-    assert.equal(raw.includes(Buffer.from(credentials.password)), false);
-    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    assert.equal(keychain.values.has("steamSession"), false);
 
     await store.clear();
     assert.equal(await store.load(), null);
   });
 
-  it("rejects unavailable encryption and unreadable ciphertext", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "gw-credentials-"));
-    const path = join(dir, "credentials.bin");
-    const unavailable = new CredentialsStore(path, {
-      ...fakeStorage(),
-      isEncryptionAvailable: () => false,
-    });
+  it("maps native failure to the credential vocabulary", async () => {
+    const keychain = new FakeKeychain();
+    keychain.failure = new Error("injected native failure");
+    const store = new CredentialsStore(keychain);
     await assert.rejects(
-      unavailable.save({ username: "u", password: "p" }),
+      store.save({ username: "u", password: "p" }),
       (error: unknown) =>
         error instanceof AppError && error.code === "credentials_unavailable",
     );
+  });
 
-    const writer = new CredentialsStore(path, fakeStorage());
-    await writer.save({ username: "u", password: "p" });
-    const wrongKey = new CredentialsStore(path, {
-      ...fakeStorage(),
-      decryptString: () => {
-        throw new Error("wrong key");
-      },
-    });
+  it("retains unreadable Keychain bytes", async () => {
+    const keychain = new FakeKeychain();
+    keychain.values.set("arenaNetCredentials", Buffer.from([0xff]));
+    const store = new CredentialsStore(keychain);
     await assert.rejects(
-      wrongKey.load(),
+      store.load(),
       (error: unknown) =>
         error instanceof AppError && error.code === "credentials_corrupt",
     );
-    assert.ok((await readFile(path)).byteLength > 0, "a failed read must not delete credentials");
+    assert.deepEqual(keychain.values.get("arenaNetCredentials"), Buffer.from([0xff]));
   });
 
-  it("rejects invalid save payloads before replacing stored credentials", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "gw-credentials-"));
-    const path = join(dir, "credentials.bin");
-    const store = new CredentialsStore(path, fakeStorage());
+  it("rejects invalid saves before replacing stored credentials", async () => {
+    const keychain = new FakeKeychain();
+    const store = new CredentialsStore(keychain);
     const credentials = { username: "player@example.test", password: "secret" };
     await store.save(credentials);
-    const before = await readFile(path);
+    const before = Buffer.from(keychain.values.get("arenaNetCredentials")!);
     await assert.rejects(
       store.save({ username: "player@example.test", password: 42 }),
       (error: unknown) =>
         error instanceof AppError && error.code === "credentials_corrupt",
     );
-    assert.deepEqual(await readFile(path), before);
+    assert.deepEqual(keychain.values.get("arenaNetCredentials"), before);
     assert.deepEqual(await store.load(), credentials);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isProxyCookieHeader,
   isProxyFetchDestination,
   PROXY_ROUTES,
   resolveProxyRoute,
@@ -76,5 +77,12 @@ describe("proxy-routes", () => {
     ]) {
       assert.equal(isProxyFetchDestination(destination), false, destination);
     }
+  });
+
+  it("keeps the proxy stateless in both directions", () => {
+    assert.equal(isProxyCookieHeader("Cookie"), true);
+    assert.equal(isProxyCookieHeader("set-cookie"), true);
+    assert.equal(isProxyCookieHeader("Set-Cookie"), true);
+    assert.equal(isProxyCookieHeader("Authorization"), false);
   });
 });
