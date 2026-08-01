@@ -20,28 +20,22 @@ export function projectLiveResult(
     const storage = await window.navigator.storage.estimate();
     const p95 = (metric: string) =>
       diagnostics.histograms[metric]?.p95Us ?? 0;
-    // `window.gwCompanionRuntime` is an open record: the renderer publishes it
-    // for observation and nothing constrains a field's type at this boundary
-    // (src/renderer/gw-native.d.ts). So every number below is narrowed where
-    // it is read. A field the renderer renames then reaches the report as the
-    // same 0 the rest of this projection already uses for "not measured",
-    // rather than as `undefined` or `NaN` in the JSON.
+    // The developer runtime is a frozen scalar projection. Game memory,
+    // allocator pointers, the hook table and mutable counters remain private
+    // to the installer closure.
     const numeric = (value: unknown) => typeof value === "number" ? value : 0;
-    const samples = runtime?.renderSamples;
-    const renderSamples = (Array.isArray(samples) ? samples : [])
-      .map(numeric)
-      .sort((left, right) => left - right);
-    const p95Index = Math.max(0, Math.ceil(renderSamples.length * 0.95) - 1);
     const mib = (bytes: number) => Number((bytes / (1024 ** 2)).toFixed(1));
     const latestMib = (metric: string) =>
       mib(Number(diagnostics.latest[metric]) || 0);
     const milestoneMs = (metric: string) =>
       Number(((Number(diagnostics.latest[metric]) || 0) / 1_000).toFixed(1));
-    const memory = runtime?.memory;
     return {
       scenario: name,
       supported: runtime?.status === "installed",
       buildId: typeof runtime?.buildId === "number" ? runtime.buildId : null,
+      companionAbi: numeric(runtime?.companionAbi),
+      kernelSha256:
+        typeof runtime?.kernelSha256 === "string" ? runtime.kernelSha256 : null,
       hookCount: numeric(state?.tickCount),
       hookHertz: Number(((ticks * 1_000) / elapsedMs).toFixed(2)),
       sequence: numeric(state?.sequence),
@@ -63,16 +57,14 @@ export function projectLiveResult(
           }
         : null,
       renderUs: Number(numeric(runtime?.lastRenderUs).toFixed(2)),
-      renderP95Us: Number((renderSamples[p95Index] ?? 0).toFixed(2)),
+      renderP95Us: Number(numeric(runtime?.renderP95Us).toFixed(2)),
       snapshotReads: numeric(runtime?.snapshotReads),
       rejectedSnapshots: numeric(runtime?.rejectedSnapshots),
       lifecycle: window.gwAutomation?.read() ?? null,
       installation: numeric(runtime?.installation),
       host: {
         renderScale: settings.renderScale,
-        wasmMemoryMiB: mib(
-          memory instanceof WebAssembly.Memory ? memory.buffer.byteLength : 0,
-        ),
+        wasmMemoryMiB: mib(numeric(runtime?.wasmMemoryBytes)),
         browserStorageMiB: mib(storage.usage ?? 0),
         rendererCacheMiB: latestMib("renderer.memoryCacheBytes"),
         mainRssMiB: latestMib("main.rssBytes"),

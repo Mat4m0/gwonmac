@@ -31,11 +31,11 @@ async function baseModule(
   root: string,
   name: string,
   body: string,
-): Promise<{ path: string; sha256: string }> {
+): Promise<{ path: string; sha256: string; bytes: Uint8Array }> {
   const bytes = Buffer.from(body);
   const filePath = join(root, name);
   await writeFile(filePath, bytes);
-  return { path: filePath, sha256: sha256(bytes) };
+  return { path: filePath, sha256: sha256(bytes), bytes };
 }
 
 /** The transform stands in for a WASM rewrite and counts its own runs. */
@@ -54,16 +54,20 @@ function countingTransform(suffix: string): {
 }
 
 function cacheFor(
-  inputSha256: string,
+  input: { sha256: string; bytes: Uint8Array },
   cacheRoot: string,
+  suffix: string,
   overrides: Partial<DerivedWasmCache> = {},
 ): DerivedWasmCache {
   return {
-    inputSha256,
+    inputSha256: input.sha256,
     cacheRoot,
     transformAbi: 1,
     buildFingerprint: "fingerprint-1",
-    expectedOutputSha256: null,
+    expectedOutputSha256: sha256(Buffer.concat([
+      Buffer.from(input.bytes),
+      Buffer.from(suffix),
+    ])),
     ...overrides,
   };
 }
@@ -75,7 +79,7 @@ describe("derived wasm cache", () => {
     const cacheRoot = join(root, "cache");
     const transform = countingTransform("-derived");
 
-    const cache = cacheFor(base.sha256, cacheRoot);
+    const cache = cacheFor(base, cacheRoot, "-derived");
     const first = await prepareDerivedWasm(base.path, cache, transform.run);
     const second = await prepareDerivedWasm(base.path, cache, transform.run);
 
@@ -97,14 +101,14 @@ describe("derived wasm cache", () => {
 
     await prepareDerivedWasm(
       old.path,
-      cacheFor(old.sha256, cacheRoot),
+      cacheFor(old, cacheRoot, "-derived"),
       transform.run,
     );
     assert.deepEqual(await readdir(cacheRoot), [old.sha256]);
 
     await prepareDerivedWasm(
       fresh.path,
-      cacheFor(fresh.sha256, cacheRoot),
+      cacheFor(fresh, cacheRoot, "-derived"),
       transform.run,
     );
 
@@ -123,12 +127,12 @@ describe("derived wasm cache", () => {
 
     await prepareDerivedWasm(
       base.path,
-      cacheFor(base.sha256, cacheRoot, { transformAbi: 1 }),
+      cacheFor(base, cacheRoot, "-derived", { transformAbi: 1 }),
       transform.run,
     );
     await prepareDerivedWasm(
       base.path,
-      cacheFor(base.sha256, cacheRoot, { transformAbi: 2 }),
+      cacheFor(base, cacheRoot, "-derived", { transformAbi: 2 }),
       transform.run,
     );
 
@@ -145,12 +149,12 @@ describe("derived wasm cache", () => {
 
     await prepareDerivedWasm(
       base.path,
-      cacheFor(base.sha256, cacheRoot, { buildFingerprint: "fingerprint-1" }),
+      cacheFor(base, cacheRoot, "-v1", { buildFingerprint: "fingerprint-1" }),
       first.run,
     );
     const rebuilt = await prepareDerivedWasm(
       base.path,
-      cacheFor(base.sha256, cacheRoot, { buildFingerprint: "fingerprint-2" }),
+      cacheFor(base, cacheRoot, "-v2", { buildFingerprint: "fingerprint-2" }),
       second.run,
     );
 
@@ -163,7 +167,7 @@ describe("derived wasm cache", () => {
     const cacheRoot = join(root, "cache");
     const base = await baseModule(root, "official.wasm", "official-bytes");
     const transform = countingTransform("-derived");
-    const cache = cacheFor(base.sha256, cacheRoot);
+    const cache = cacheFor(base, cacheRoot, "-derived");
 
     const wasmPath = await prepareDerivedWasm(base.path, cache, transform.run);
     await writeFile(wasmPath, "tampered");
@@ -181,7 +185,7 @@ describe("derived wasm cache", () => {
     const base = await baseModule(root, "official.wasm", "official-bytes");
     const transform = countingTransform("-derived");
     const pinned = sha256(Buffer.from("official-bytes-derived"));
-    const cache = cacheFor(base.sha256, cacheRoot, {
+    const cache = cacheFor(base, cacheRoot, "-derived", {
       expectedOutputSha256: pinned,
     });
 
@@ -213,7 +217,7 @@ describe("derived wasm cache", () => {
     const root = await scratch();
     const cacheRoot = join(root, "cache");
     const base = await baseModule(root, "official.wasm", "official-bytes");
-    const cache = cacheFor(base.sha256, cacheRoot, {
+    const cache = cacheFor(base, cacheRoot, "-derived", {
       expectedOutputSha256: sha256(Buffer.from("something-else")),
     });
 
@@ -233,12 +237,12 @@ describe("derived wasm cache", () => {
 
     const published = await prepareDerivedWasm(
       old.path,
-      cacheFor(old.sha256, cacheRoot),
+      cacheFor(old, cacheRoot, "-derived"),
       good.run,
     );
 
     await assert.rejects(
-      prepareDerivedWasm(fresh.path, cacheFor(fresh.sha256, cacheRoot), () => {
+      prepareDerivedWasm(fresh.path, cacheFor(fresh, cacheRoot, "-derived"), () => {
         throw new Error("unsupported build");
       }),
       /unsupported build/,
@@ -250,7 +254,7 @@ describe("derived wasm cache", () => {
       "a failed transform destroyed the module the last good build published",
     );
     assert.equal(
-      await inspectDerivedWasmCache(cacheFor(old.sha256, cacheRoot)),
+      await inspectDerivedWasmCache(cacheFor(old, cacheRoot, "-derived")),
       "valid",
     );
   });

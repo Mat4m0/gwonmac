@@ -38,8 +38,8 @@ markup and CSS live under `scripts/enhancements-visual/`; they are not productio
 navigation or packaged renderer assets.
 
 `enhancements:doctor` is local-only. It checks the existing profile, published
-client, exact WASM hash, transformed cache, the profile's `nativeCursor` and
-`targetReadout` settings, and complete snapshot filename presence. It does not
+client, exact WASM hash, transformed cache, the profile's `nativeCursor`
+setting, and complete snapshot filename presence. It does not
 inspect saved login: command-line tooling is outside the signed app's Data
 Protection Keychain boundary. It verifies executable artifacts, but labels
 snapshot chunks as presence-only because it does not hash their contents. It
@@ -58,12 +58,14 @@ GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario reload
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario map-transition
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario performance
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario cursor-capture
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario toolbox-foundation
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario toolbox-hero-panel
 ```
 
 `cursor-capture` is human-assisted. It prints eight prompts (arrow, hover, salvage,
-identify, drag, world map) and records only typed transitions at 20 Hz, bounded to
-192 changes. It pairs the observed scalars with the renderer's published cursor
-state, so one run shows both what the game committed and what reached Chromium.
+identify, drag, world map) and records only the bounded cursor projection at
+20 Hz, capped at 192 changes. No game-memory address or pixel payload is
+accepted or persisted.
 
 `target-readout` is the one deliberate production-client confirmation for the
 player-facing target feature. Enable **Target distance and range** in Settings,
@@ -83,18 +85,20 @@ An **automation** scenario is one that acts on the player's behalf; it gets
 `GW_ENHANCEMENT_AUTOMATION=1`, trusted Playwright input, and the parent-process
 command channel. An **observation** scenario — `cursor-capture` today — gets
 none of the three: it is launched exactly as a player's app is, with no IPC
-channel at all and a scenario context holding only page evaluation, the typed
-`--observe` sampler, and a clock. The Enhancement installs for it because the
-profile's `nativeCursor` setting is on, so the run is refused up front with
-`native-cursor-disabled` when it is off, and it asks the operator to bring the
-client to a playable character rather than pressing Enter itself. The tier the
-run used is the `tier` field of the printed result.
+channel at all and a scenario context holding only one fixed cursor-projection
+read and a clock. The fixed cursor-observer program exposes no
+target snapshot and selects the cursor without changing the saved setting. It
+asks the operator to bring the client to a playable character rather than
+pressing Enter itself. The tier the run used is the `tier` field of the printed
+result.
 
 The default is cached-only. Main skips the client updater, and the chunk store
 is physically unable to fetch a missing chunk. `--allow-update` is the explicit
 escape hatch for a deliberate ArenaNet client update. `--leave-open` keeps a
 successful run visible. Failures and timeouts always leave Electron open and
-write a screenshot plus bounded logs under `test-results/enhancements-live/`.
+write bounded logs under `test-results/enhancements-live/`. They also write a
+screenshot except for every `toolbox-foundation` program run: its typed scalar
+evidence needs no pixels, so retaining game content would add no proof.
 
 The harness launches Electron directly with the normal Guild Wars profile,
 verifies the effective user-data directory in main before startup, connects to
@@ -216,49 +220,35 @@ memory writes, arbitrary function calls, or raw packet export.
 The ordered layout field list in `enhancement-builds.ts` generates the transform
 payload, so a new field must not introduce a renderer-side order table.
 
-## Scoped observations
+## Bounded live evidence
 
-The live scenario runner can compare at most 16 explicitly typed scalar
-addresses before and after its action:
-
-```bash
-GW_LIVE_SMOKE=1 pnpm enhancements:live -- \
-  --scenario target \
-  --observe u32:0x5a388c,u32:0x5a3888
-```
-
-Allowed types are `u8`, `u16`, `u32`, `i32`, and `f32`. There is no string,
-byte-range, pointer-walk, packet, or memory-dump mode. Observations stay in the
-renderer and the compact before/after values return over the local DevTools
-connection. Candidate observations are research evidence, never runtime truth.
-
-Use controlled differentials:
-
-```text
-party target A -> party target B
-stationary -> bounded movement -> stationary
-target visible -> loading with no target fields -> new map
-skill ready -> activated -> recharged
-effect absent -> present -> removed
-```
+The finished live harness accepts no game-memory address. It records only the
+typed scalar projections a scenario owns. Cursor capture persists generation,
+pixel hash, visibility, validity, and CSS length; the Toolbox proof persists
+only counts, hero identity, panel state, and pass/fail evidence. Candidate
+address probing belongs in disposable local research, not this runtime or its
+failure reports.
 
 ## Cursor pipeline
 
-The Enhancement path is no longer developer-only. Its canonical tools are
-`nativeCursor` (on by default) and `targetReadout` (off by default), carried to
-the renderer as one `EnhancementSelection`. `enhancement-policy.ts` derives module
-preparation from whether any tool is selected, plus
-`ENHANCEMENT_AUTOMATION_ENABLED` (non-packaged,
-`GW_ENHANCEMENT_AUTOMATION=1`). The harness does not trust that request as the
-answer: it imports `enhancements.js` only when the actual instantiated module also
+The Enhancement path is no longer developer-only. Its one canonical user tool
+is `nativeCursor` (on by default), carried to the renderer as one
+`EnhancementSelection`; the target readout retired from user settings and runs
+only through the `target-observer` developer program. Main combines that selection with
+one fixed unpackaged developer program, derives the exact capability plan once,
+and fingerprints that plan into the derivative. Automation permission is a
+separate input boundary and selects no hook or feature. The harness does not
+trust launch intent as the answer: it imports `enhancements.js` only when the
+actual instantiated module also
 carries `enhancement_manifest`, so a requested but uncertified build executes no
 Enhancement renderer code.
 
-The kernel receives independent feature bits. A disabled cursor performs no
-cursor collection; a disabled target readout performs no map/player/target
-collection. Development automation may force the core observation snapshot for
-live scenarios, but it does not select either player-facing surface and cannot
-be reached by packaged builds. Settings are read once per launch because the
+The kernel receives independent cursor, target-observation, and Toolbox bits.
+A disabled cursor performs no cursor collection; cursor-observer mode does not
+enable the target scan; Toolbox uses only its game/party fields and allocates no
+target snapshot. The target-observer program is the one developer path that
+explicitly enables map/player/target collection. Every developer program is
+refused in packaged builds. Settings are read once per launch because the
 kernel configuration cannot change while the game is running.
 
 The web client kept ArenaNet's Win32 cursor structure and stubbed only its final
@@ -292,16 +282,37 @@ them and `blob:` is unavailable. A trailing keyword is mandatory.
 Inspect an official candidate:
 
 ```bash
-pnpm enhancements:recertify -- path/to/Gw.jspi.wasm
+pnpm enhancements:recertify
 ```
 
-Pass the official module. The tool applies the template-save transform first
-when that build is known, because main does the same, and reports both the
-official hash and the derived hash it actually inspected.
+Pass the official module. The tool selects either its exact template-save
+record or the same structurally derived record main accepts for a new
+template-compatible build, then applies that transform first. It reports both
+the official hash and the derived hash it actually inspected. If neither proof
+can select a template-save record, it exits without inspecting the raw official
+module as an Enhancement candidate.
 
 The compact report includes the hash, WASM validity, known-build status,
-semantic main-loop export index and signature, table shape, and first empty
-slots. An unknown hash is only a candidate. Certification still requires:
+semantic main-loop export index and signature, table shape, first empty slots,
+and a nested `structuralEvidence` report. That nested report is deterministic,
+review-only evidence: each tick, player-chat/UI, and cursor result is
+`candidate`, `ambiguous`, or `unavailable`, and none of those values can create
+a launch certificate. `bundleVerified` remains true only when an existing
+exact-hash tick/cursor/UI certificate reproduces all four source-pinned
+derivatives: cursor, target, cursor plus target, and cursor plus Toolbox. The
+report includes those derived hashes. Cache metadata cannot certify different
+bytes, and an omitted profile hash fails closed. An unknown hash is only a
+candidate and never inherits the retired common-address relocation.
+
+On the current build 38,797 post-template module, the review locator recovers
+tick `#446` and the player-chat/UI dispatcher `#6842`, but reports cursor
+`unavailable`. That is useful evidence, not a recertification failure: the
+minimal cursor locator accepts only two direct producer calls, while the known
+cursor `#2469` is related to active table slot 922 and its recovered producers
+reach it indirectly. Do not weaken the locator until that indirect relationship
+has its own structural proof. The existing exact certificate may still make
+`bundleVerified` true.
+Certification still requires:
 
 - semantic main-loop cadence and lifecycle proof;
 - original called exactly once;
@@ -333,11 +344,12 @@ model. Add a bounded region only when its first feature requires it:
 ```text
 core snapshot       lifecycle, map, player, target
 cursor snapshot     one 32x32 bitmap, hotspot, generation
+toolbox snapshot    chat/cursor counters, first hero, observed panel state
 party snapshot      fixed-capacity party entries
 agent snapshot      filtered bounded agents
 skill/effect state  bounded domain collections
 event ring          only for state a tick snapshot can miss
-command queue       only after a typed command is approved
+command gateway     absent until an exact game-owned safe point is certified
 ```
 
 Every region needs magic, ABI version, byte size, sequence, count/capacity, and
@@ -360,19 +372,20 @@ evidence has not certified.
 
 | Domain | Foundation | Live evidence | Next proof |
 | --- | --- | --- | --- |
-| Hook lifecycle | Observed | continuous tick, reload, clean shutdown | one live map transition |
+| Hook lifecycle | Observed | tick plus cursor/UI nested paths offline, reload, clean shutdown | one live three-entry run |
 | Map/player | Observed | live identity, 201-unit movement delta | one live map transition |
 | Target identity/distance | Observed | target ID 1 -> 12, loading invalidation offline | hostile/item/gadget and live map invalidation |
 | Cursor | Observed | 79 publishes, 8 bitmaps, 25 hide/show, zero rejected | identify and dragged-item bitmaps |
 | Cursor presentation | Shipped, default-on | offline Electron + `cursor-capture` | play on a fresh certified build |
 | Target readout | Shipped, opt-in | decoder/readout unit suite | one live selected-target run |
-| Party | Not modeled | none | locate bounded roster |
+| Party | Partial | bounded owned HeroID/AgentID offline | live first-owned-hero identity |
 | Skills/recharge | Not modeled | none | locate skill context |
 | Effects/conditions | Not modeled | none | locate bounded effect collection |
 | Nearby agents | Partial array knowledge | player/target only | filtered collection ABI |
 | Inventory/equipment | Not modeled | none | lifecycle and string decoding |
-| Events/combat | No event channel | none | prove snapshot insufficiency first |
-| Game commands | Read-only by design | none | one harmless typed target command |
+| Player chat event | Partial | exact dispatcher, scalar counter | bounded live message/map/reload run |
+| Events/combat | Fixed dispatch, no generic ring | none | prove another event is needed |
+| Game commands | Not safe | tick-time and arbitrary-UI dispatch both trapped live | certify one game-owned gateway before restoring a command |
 | Packet-derived state | No packet hook | none | identify dispatch boundary |
 | Extension modules | Intentionally deferred | none | extract after repeated modules |
 

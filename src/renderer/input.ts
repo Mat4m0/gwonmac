@@ -254,53 +254,57 @@ export const installGameInput = ({
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
 
+  function dispatchKeyRelease(input: HeldKey) {
+    const release = new globalThis.KeyboardEvent('keyup', {
+      bubbles: true,
+      cancelable: true,
+      key: input.key,
+      code: input.code,
+      location: input.location,
+      ctrlKey: input.ctrlKey,
+      shiftKey: input.shiftKey,
+      altKey: input.altKey,
+      metaKey: input.metaKey,
+    });
+    // KeyboardEvent's legacy numeric fields are read-only constructor
+    // outputs. ArenaNet's Emscripten bridge still marshals them, so shadow
+    // the prototype getters with the exact values from the trusted press.
+    Object.defineProperties(release, {
+      charCode: { value: input.charCode },
+      keyCode: { value: input.keyCode },
+      which: { value: input.which },
+    });
+    input.target?.dispatchEvent(release);
+  }
+
   function releaseKeys(matches: (code: string) => boolean = () => true) {
     const inputs = [...heldKeys.entries()].filter(([code]) => matches(code));
     for (const [code] of inputs) heldKeys.delete(code);
-    for (const [, input] of inputs) {
-      const release = new globalThis.KeyboardEvent('keyup', {
-        bubbles: true,
-        cancelable: true,
-        key: input.key,
-        code: input.code,
-        location: input.location,
-        ctrlKey: input.ctrlKey,
-        shiftKey: input.shiftKey,
-        altKey: input.altKey,
-        metaKey: input.metaKey,
-      });
-      // KeyboardEvent's legacy numeric fields are read-only constructor
-      // outputs. ArenaNet's Emscripten bridge still marshals them, so shadow
-      // the prototype getters with the exact values from the trusted press.
-      Object.defineProperties(release, {
-        charCode: { value: input.charCode },
-        keyCode: { value: input.keyCode },
-        which: { value: input.which },
-      });
-      input.target?.dispatchEvent(release);
-    }
+    for (const [, input] of inputs) dispatchKeyRelease(input);
+  }
+
+  function dispatchButtonRelease(input: HeldButton) {
+    input.target?.dispatchEvent(new MouseEvent('mouseup', {
+      bubbles: true,
+      cancelable: true,
+      button: input.button,
+      buttons: 0,
+      clientX: input.clientX,
+      clientY: input.clientY,
+      screenX: input.screenX,
+      screenY: input.screenY,
+      ctrlKey: input.ctrlKey,
+      shiftKey: input.shiftKey,
+      altKey: input.altKey,
+      metaKey: input.metaKey,
+    }));
   }
 
   function releaseButtons() {
     const inputs = [...heldButtons.values()];
     heldButtons.clear();
     releasePointer();
-    for (const input of inputs) {
-      input.target?.dispatchEvent(new MouseEvent('mouseup', {
-        bubbles: true,
-        cancelable: true,
-        button: input.button,
-        buttons: 0,
-        clientX: input.clientX,
-        clientY: input.clientY,
-        screenX: input.screenX,
-        screenY: input.screenY,
-        ctrlKey: input.ctrlKey,
-        shiftKey: input.shiftKey,
-        altKey: input.altKey,
-        metaKey: input.metaKey,
-      }));
-    }
+    for (const input of inputs) dispatchButtonRelease(input);
   }
 
   function releaseAll() {
@@ -339,8 +343,16 @@ export const installGameInput = ({
   }, true);
   window.addEventListener('keyup', (event) => {
     if (!event.isTrusted) return;
-    clientKey(event, heldKeys.get(event.code)?.key);
+    const held = heldKeys.get(event.code);
+    clientKey(event, held?.key);
     heldKeys.delete(event.code);
+    // A release landing on renderer UI (the Tools palette) never bubbles back
+    // to the client's canvas listeners, so a press the canvas received would
+    // stay held forever. Replay exactly those releases at the press target;
+    // presses the UI itself received stay inside its event boundary.
+    if (held && held.target === canvas && event.target !== canvas) {
+      dispatchKeyRelease(held);
+    }
     if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
       releaseKeys((code) =>
         code !== 'MetaLeft' &&
@@ -369,7 +381,12 @@ export const installGameInput = ({
     });
   }, true);
   window.addEventListener('mouseup', (event) => {
-    if (event.isTrusted) heldButtons.delete(event.button);
+    if (!event.isTrusted) return;
+    const held = heldButtons.get(event.button);
+    heldButtons.delete(event.button);
+    if (held && held.target === canvas && event.target !== canvas) {
+      dispatchButtonRelease(held);
+    }
   }, true);
   window.addEventListener('mousemove', (event) => {
     if (!event.isTrusted || heldButtons.size === 0) return;

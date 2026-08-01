@@ -1,138 +1,182 @@
-# GWonMac Tools on the Electron/WASM client
+# GWonMac Tools on the Electron/Wasm client
 
-Certification baseline: official Guild Wars WASM build 38,771, SHA-256
-`b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483`.
+GWonMac Tools is independently developed. GWToolbox++ and GWCA are research
+references; their Win32 hooks, Direct3D renderer, DLL loader, scanners, and C++
+object graph are not compiled or vendored here.
 
-## Relationship to GWToolbox++
-
-GWonMac Tools is independently developed and maintained as part of GWonMac. It
-is not GWToolbox++, and the GWToolbox++ developers are not responsible for it.
-GWToolbox++ cannot be injected or recompiled unchanged: it is a 32-bit Windows
-DLL coupled to Win32, Direct3D 9, MinHook, native GWCA, and native plugin DLLs.
-The Electron client instead implements selected feature behavior with a small
-renderer-local companion WASM. Main continues to own only native platform
-capabilities.
-
-The first developer-only foundation is operational:
+The maintained shape is one deterministic game transform and one dependency-free
+Rust `no_std` companion:
 
 ```text
-official exact-hash WASM
-  -> one-function deterministic transform
-  -> freestanding no_std companion WASM
-  -> versioned seqlock snapshot
-  -> structured Map/Player and Target Info state
+exact post-template Guild Wars module
+  -> clone tick, cursor, and UI-dispatch originals
+  -> three original-first, optional post-observer wrappers
+  -> one fixed (i32 x 6) dispatcher in appended table slot 4683
+  -> one position-independent Rust side module with no game-function imports
+  -> bounded game-memory reads only
+  -> one allocator-owned 64 KiB block for Rust data and stack
+  -> bounded typed snapshots
+  -> Chromium cursor and developer proof UI
 ```
 
-Unknown hashes serve the official client unchanged and do not activate
-enhancement. Official and transformed client binaries are never committed.
-A session with every tool off runs none of this path and presents no enhancement UI.
-The cursor and target readout are selected independently: the cursor is on by
-default, while the readout is off. Only the selected tool is collected and
-presented; `docs/internals.md` owns the pipeline and `docs/user-guide.md` owns
-what the player is told.
+There is no generic hook registry, plugin loader, shared-memory packet ABI, or
+second C++ engine.
 
-## Certified build 38,771
+## Source ownership
 
-| Invariant | Certified value |
+The companion is one Wasm instance, but it is not one source-code monolith:
+
+| Module | Owns |
 | --- | --- |
-| Browser-driven game loop | exported function `EmscriptenExeThreadMainLoop`, index 446 |
-| Hook signature | `(i32) -> void` |
-| Hook table slot | existing null slot 0, encoded as global value 1 |
-| Context root | `0x5a0e20` |
-| Agent array | `0x5a4d98` |
-| Manual target agent ID | `0x5a388c` |
-| Automatic target agent ID | `0x5a3888` |
-| Live map proof | map 133 / Outpost |
-| Live target proof | Living agent, stable ID/position/distance/range |
+| `abi.rs` | fixed feature bits, layout words, snapshot structs, and size assertions |
+| `memory.rs` | overflow-checked, bounds-checked volatile reads from game memory |
+| `cursor.rs` | cursor dirty state, bitmap validation, conversion, and publication |
+| `toolbox.rs` | developer chat and read-only hero/panel state |
+| `lib.rs` | world collection, post-original dispatch, and exported ABI |
 
-The archived GWCA `FrApi.cpp` / `!s_bufferBits` anchor resolves to function
-6656, but live certification rejected it as a tick hook: it ran once during
-startup. Its direct caller chain leads into the client startup/download path.
-The semantic exported main-loop function is both narrower and more stable.
+Renderer ownership is similarly split. `enhancement-manifest.ts` validates the
+derived module's fixed evidence, `companion-observer.ts` projects stable
+snapshots, and `enhancements.ts` owns only transactional installation. Adding a
+domain must not add its decoder, presentation, and command policy to that
+installer.
 
-## Production transform
+## Exact build 38,797
 
-`src/main/core/enhancement-builds.ts` is the one source of build-local truth.
-`enhancement-transform.ts` verifies the exact hash, signature, table limits, and
-empty slot before cloning only the selected function. It adds:
+The certificate consumes post-template SHA-256
+`9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094`.
 
-- a relocated original function export;
-- one mutable hook-slot global;
-- one manifest custom section consumed by the renderer.
+| Boundary | Exact evidence |
+| --- | --- |
+| Tick | function 446, `(i32) -> void` |
+| Cursor event | function 2469, `(i32 x 5) -> void`, existing table slot 922 |
+| UI dispatcher | function 6842, `(i32, i32, i32) -> void` |
+| Shared callback | dedicated appended table slot 4683 |
+| Player chat | `ChCliApi` function 8947, three `0x10000082` sites calling 6842 |
+| Neighbor messages | functions 8942/8945 emit `0x1000007f`/`0x10000080` to 6842 |
+| Hero panel | Hide `0x100001a3`, Show `0x100001a4`, argument is current owned HeroID |
+| Party dirty set | Hero agent/data `0x10000038`, `0x10000039`; map loaded/context/start/change `0x1000008c`, `0x10000098`, `0x100000c2`, `0x10000111`; party add/remove hero/player `0x1000011e`, `0x1000011f`, `0x10000124`, `0x10000126` |
 
-The official file remains untouched. `client-module.ts` owns the complete
-official → template-save → optional enhancement chain. It consumes the exact build
-records selected during certification and atomically caches each derived
-module by its input hash, transform ABI, and build-manifest fingerprint. A
-corrupt or stale cache is rebuilt; an enhancement failure falls back to the verified
-template-save module. The transformer remains a deterministic byte-to-byte
-operation. The manifest's canonical ordered layout fields generate the
-embedded layout words consumed by the renderer, avoiding a second ABI ordering
-table.
+The static addresses and relative structure fields live only in
+`src/main/core/enhancement-builds.ts`. Message IDs are build-local too. The
+transform serializes the ordered memory fields, three direct observer IDs, and
+the ten dirty IDs into one `configWords` array; Rust contains no unversioned
+copy. The dirty set covers hero-data readiness, every certified map-context
+lifecycle boundary, and party membership mutation. Other calls through the
+central dispatcher do not cause a party traversal; the 120-tick reconciliation
+remains the bounded recovery path for a missed signal.
 
-The earlier all-functions dispatcher and table-growth experiments were removed.
-Build 38,771 already has one unused table slot, so no table rewrite is needed.
+## Dispatch and original-call rule
 
-## Companion and snapshot
+The transform appends a common `(i32 x 6) -> void` type and clones the three
+exact functions. Every replacement wrapper calls its game-owned clone first,
+whether the hook is enabled or not. Only after that call returns does an enabled
+wrapper notify Rust, padding unused arguments with zero. All three clones
+remain private. The companion imports no game function and therefore cannot
+re-enter Guild Wars from a callback.
 
-`src/companion-kernel/lib.rs` is dependency-free Rust `no_std`, compiled to
-`wasm32-unknown-unknown`. It imports game memory and the relocated original
-loop function. Runtime installation:
+Rust selects the branch by a fixed kind:
 
-1. allocates the config and 64-byte snapshot through the game's `malloc`;
-2. instantiates the companion against the exported game memory;
-3. verifies table slot 0 is still null;
-4. installs the companion callback;
-5. enables the dispatcher last.
+- tick: collect enabled state after the game tick;
+- cursor: mark the cursor dirty after the game cursor event;
+- UI: observe only certified scalar message IDs after the game dispatch.
 
-The callback calls the original exactly once before collecting state. Every
-pointer, range, array, map, agent ID, type, and coordinate is validated.
-Loading or invalid state publishes flags with zeroed optional fields.
+Post-work does not run if an original traps. Normal game execution never enters
+the side module and then re-enters a game clone, eliminating that cross-instance
+call altitude from the client path.
 
-Snapshot ABI v1 contains magic/version/size, an odd/even sequence lock, status
-flags, tick count, map/instance, player ID/position, and target
-ID/type/position/distance/range. The renderer accepts only two identical even
-sequence reads. No raw pointer, memory view, packet, or per-frame state crosses
-Electron IPC.
+The companion imports game memory because cursor and party state live there,
+but its own memory is not allowed to land at linker-default addresses. It is a
+position-independent side module: the renderer allocates one 64 KiB block with
+the game's allocator and supplies that block as the module's data base and
+stack. Its required table is a separate empty table. The binary verifier pins
+the `dylink.0` requirement, absence of a start function, and proves that
+instantiation leaves the former fixed `0x100000` game region byte-for-byte
+unchanged.
 
-## Live acceptance
+## Three examples
 
-`GW_LIVE_SMOKE=1 pnpm enhancements:live` launches Electron directly—not through a
-temporary Playwright profile—and the app blocks updater work unless its
-effective user-data directory exactly matches the existing Guild Wars profile.
-It uses milestone/DOM state, captures an image only on failure, and never closes
-the app after a timeout or failed probe.
+The native cursor is the production example. The cursor callback is the dirty
+signal, so the 4 KiB bitmap is hashed only after a game cursor event. Ticks do
+only a show-count check when clean. After a trusted click, Chromium asks Guild
+Wars for one zero-distance hit-test refresh only when the click produced no
+cursor callback; this makes modes such as salvage visible without requiring
+physical pointer movement.
 
-The certified run proved:
+The developer chat example observes the real player-chat event after its game
+original. It saturating-increments one scalar. It never dereferences, stores,
+logs, or publishes the pointer-shaped message arguments, so it counts local
+server echoes as well as other players and does not claim sender identity.
 
-- exact build activation and continuous hook execution;
-- Map/Player state and movement-sensitive coordinates;
-- Target Info for a Living party target;
-- corrected Euclidean distance and semantic range;
-- no renderer errors or per-frame IPC;
-- clean application shutdown.
+The developer hero example validates the live party array, selects the first
+hero owned by the current player, and publishes only HeroID/AgentID/count. It
+also observes certified Show/Hide messages emitted by normal game actions. It
+deliberately has no Show/Hide command: live experiments proved that calling the
+UI dispatcher after a tick lacks `PropContext`, while consuming an arbitrary
+later UI event can re-enter a still-active text-parser producer. The companion
+never calls a game function or writes the game's PropContext slot.
 
-## Port boundaries and next order
+The developer snapshot ABI 2 is fixed at 64 bytes and contains only the two
+counters, first-hero scalar state, and observed panel state.
 
-Do not port the injector, native launcher, Win32 input hooks, Direct3D backend,
-native updater/crash dumps, or DLL plugin ABI. Use the Electron lifecycle,
-renderer overlay, diagnostics, and an eventual explicit renderer/WASM plugin
-contract only after core features justify it.
+The developer surface is a same-renderer Chromium overlay, not an injected game
+frame or a second Electron window. It is a non-modal palette: the overlay root
+never intercepts the pointer, so the game keeps owning every click that is not
+on Tools chrome, and the open panel floats beside play instead of blocking it.
+Keyboard focus follows the click — opening exits pointer lock, keyboard and
+pointer events inside the panel stop at the overlay boundary, and clicking the
+canvas hands keyboard input straight back to the game while the panel stays
+open. Held game input carries across the transfer: a movement key held while
+clicking into the panel keeps acting, and the input host replays its eventual
+release at the canvas, so a press the game received can never stay stuck. The panel drags by its titlebar and keeps its
+position for the session. Escape closes it only while it has focus; Close and
+the Control+Shift+Space chord work from anywhere. Moving focus between the
+canvas and this one overlay is internal, so it does not run the client's
+canvas-blur audio mute. A real application blur still follows the normal
+input-release and audio behavior.
 
-Next feature work should remain read-only: enrich validated agent snapshots,
-then port one high-value widget at a time. Add events only where polling the
-already-produced snapshot cannot meet a feature, and introduce game commands
-individually with explicit preconditions and failure tests.
+## Installation and failure behavior
 
-## Analysis tools
+The renderer validates the one manifest, game exports, table identity, kernel
+import surface, kernel ABI, kernel-owned sizes, and pairwise-disjoint allocation
+ranges. It zeroes the private runtime block, instantiates Rust, creates
+consumers, installs slot 4683, publishes the runtime, and enables the global
+last. Teardown reverses safety order: disable,
+stop observers and UI, clear slot 4683 only by callback identity, free regions,
+drop references.
+
+Unknown builds run the official client unchanged. Template save may be
+shape-recertified locally, but Enhancement is exact-build only until a future
+verifier independently recovers every hook and address. A common relocation
+alone is not enough evidence for that decision.
+
+This fail-closed behavior is the last safety net, not the desired update
+experience. ArenaNet update continuity needs three operational layers:
+
+1. a scheduled canary detects a new official hash before or immediately after
+   rollout and preserves only bounded structural evidence;
+2. the recertifier derives hook and layout candidates from semantic anchors and
+   runs the complete offline transform/kernel suite;
+3. a bounded live confirmation promotes the new exact certificate in an app
+   update.
+
+The official client remains playable throughout. Automatic relocation is safe
+only for fields independently recovered by their own anchors; accepting one
+shared address delta for the entire tool bundle would turn update continuity
+into silent memory corruption.
+
+## Commands
 
 ```bash
-python3 tools/wasmscan.py Gw.jspi.wasm "!s_context"
-python3 tools/gensyms.py Gw.jspi.wasm build/
-python3 tools/gwca_anchor_probe.py path/to/GWCA/Source Gw.jspi.wasm
-pnpm enhancements:transform -- Gw.jspi.wasm build/Gw.enhancement.wasm
+pnpm enhancements:kernel:verify
+pnpm enhancements:recertify
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario toolbox-foundation
 ```
 
-The repeatable development loop, live safety gates, scoped observations,
-recertification procedure, and feature readiness register are defined in
+The kernel verifier checks its exact imports/exports, single imported game
+memory with no exported memory/table, ABI sizes and arities, and byte-for-byte
+reproducibility. The recertifier
+reports `bundleVerified: true` only when the exact certificate passes the full
+production transform.
+
+The broader workflow and live safety rules are in
 [`enhancement-development.md`](enhancement-development.md).

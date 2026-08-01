@@ -1,0 +1,192 @@
+use core::mem::size_of;
+
+pub(crate) const SNAPSHOT_BYTES: u32 = size_of::<Snapshot>() as u32;
+pub(crate) const CONFIG_BYTES: u32 = size_of::<Layout>() as u32;
+pub(crate) const MAGIC: u32 = 0x4254_5747;
+pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 1;
+
+pub(crate) const FLAG_READY: u32 = 1 << 0;
+pub(crate) const FLAG_PLAYER_VALID: u32 = 1 << 1;
+pub(crate) const FLAG_TARGET_VALID: u32 = 1 << 2;
+pub(crate) const FLAG_LOADING: u32 = 1 << 3;
+
+pub(crate) const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
+pub(crate) const FEATURE_TARGET_READOUT: u32 = 1 << 1;
+pub(crate) const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
+pub(crate) const KNOWN_FEATURES: u32 =
+    FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION;
+
+pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
+pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
+pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 2;
+pub(crate) const FLAG_HERO_AVAILABLE: u32 = 1 << 0;
+
+pub(crate) const DISPATCH_TICK: u32 = 0;
+pub(crate) const DISPATCH_CURSOR: u32 = 1;
+pub(crate) const DISPATCH_UI: u32 = 2;
+pub(crate) const PANEL_UNKNOWN: u32 = 0;
+pub(crate) const PANEL_HIDDEN: u32 = 1;
+pub(crate) const PANEL_SHOWN: u32 = 2;
+pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
+
+pub(crate) const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
+pub(crate) const CURSOR_MAGIC: u32 = 0x4354_5747;
+pub(crate) const CURSOR_ABI_AND_SIZE: u32 = (CURSOR_BYTES << 16) | 1;
+
+pub(crate) const FLAG_CURSOR_VALID: u32 = 1 << 0;
+pub(crate) const FLAG_CURSOR_HIDDEN: u32 = 1 << 1;
+pub(crate) const FLAG_CURSOR_UNSUPPORTED: u32 = 1 << 2;
+
+pub(crate) const CURSOR_EDGE: u32 = 32;
+pub(crate) const CURSOR_WORDS: u32 = CURSOR_EDGE * CURSOR_EDGE;
+pub(crate) const CURSOR_PIXEL_BYTES: u32 = CURSOR_WORDS * 4;
+// 'grtx', the texture handle's access key.
+pub(crate) const CURSOR_TEXTURE_KEY: u32 = 0x6772_7478;
+pub(crate) const CURSOR_TEXTURE_TYPE: u32 = 10;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct Layout {
+    pub(crate) context_root: u32,
+    pub(crate) agent_array: u32,
+    pub(crate) manual_target_agent_id: u32,
+    pub(crate) automatic_target_agent_id: u32,
+    pub(crate) game_context_slot: u32,
+    pub(crate) character_context: u32,
+    pub(crate) map_id: u32,
+    pub(crate) is_explorable: u32,
+    pub(crate) current_map_id: u32,
+    pub(crate) current_instance_type: u32,
+    pub(crate) player_number: u32,
+    pub(crate) agent_id: u32,
+    pub(crate) agent_x: u32,
+    pub(crate) agent_y: u32,
+    pub(crate) agent_type: u32,
+    pub(crate) agent_player_number: u32,
+    pub(crate) agent_model_type: u32,
+    pub(crate) cursor_active_art: u32,
+    pub(crate) cursor_software_model: u32,
+    pub(crate) cursor_show_count: u32,
+    pub(crate) cursor_color_buffer: u32,
+    pub(crate) cursor_art_hotspot: u32,
+    pub(crate) cursor_art_texture: u32,
+    pub(crate) cursor_handle_key: u32,
+    pub(crate) cursor_handle_object: u32,
+    pub(crate) cursor_view_texture: u32,
+    pub(crate) cursor_texture_type: u32,
+    pub(crate) cursor_texture_width: u32,
+    pub(crate) cursor_texture_height: u32,
+    pub(crate) party_context: u32,
+    pub(crate) player_party: u32,
+    pub(crate) party_heroes: u32,
+    pub(crate) hero_member_stride: u32,
+    pub(crate) hero_agent_id: u32,
+    pub(crate) hero_owner_player_id: u32,
+    pub(crate) hero_id: u32,
+    pub(crate) player_chat_message: u32,
+    pub(crate) hide_hero_panel_message: u32,
+    pub(crate) show_hero_panel_message: u32,
+    pub(crate) party_dirty_messages: [u32; PARTY_DIRTY_MESSAGE_COUNT],
+}
+
+impl Layout {
+    pub(crate) const EMPTY: Self = Self {
+        context_root: 0,
+        agent_array: 0,
+        manual_target_agent_id: 0,
+        automatic_target_agent_id: 0,
+        game_context_slot: 0,
+        character_context: 0,
+        map_id: 0,
+        is_explorable: 0,
+        current_map_id: 0,
+        current_instance_type: 0,
+        player_number: 0,
+        agent_id: 0,
+        agent_x: 0,
+        agent_y: 0,
+        agent_type: 0,
+        agent_player_number: 0,
+        agent_model_type: 0,
+        cursor_active_art: 0,
+        cursor_software_model: 0,
+        cursor_show_count: 0,
+        cursor_color_buffer: 0,
+        cursor_art_hotspot: 0,
+        cursor_art_texture: 0,
+        cursor_handle_key: 0,
+        cursor_handle_object: 0,
+        cursor_view_texture: 0,
+        cursor_texture_type: 0,
+        cursor_texture_width: 0,
+        cursor_texture_height: 0,
+        party_context: 0,
+        player_party: 0,
+        party_heroes: 0,
+        hero_member_stride: 0,
+        hero_agent_id: 0,
+        hero_owner_player_id: 0,
+        hero_id: 0,
+        player_chat_message: 0,
+        hide_hero_panel_message: 0,
+        show_hero_panel_message: 0,
+        party_dirty_messages: [0; PARTY_DIRTY_MESSAGE_COUNT],
+    };
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct Snapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) tick_count: u32,
+    pub(crate) map_id: u32,
+    pub(crate) instance_type: u32,
+    pub(crate) player_id: u32,
+    pub(crate) player_x: f32,
+    pub(crate) player_y: f32,
+    pub(crate) target_id: u32,
+    pub(crate) target_type: u32,
+    pub(crate) target_x: f32,
+    pub(crate) target_y: f32,
+    pub(crate) distance: f32,
+    pub(crate) range_band: u32,
+}
+
+#[repr(C)]
+pub(crate) struct CursorSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) generation: u32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) hotspot_x: u32,
+    pub(crate) hotspot_y: u32,
+    pub(crate) pixel_hash: u32,
+    pub(crate) reserved: [u32; 6],
+    pub(crate) pixels: [u32; 1024],
+}
+
+#[repr(C)]
+pub(crate) struct ToolboxSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) player_chat_count: u32,
+    pub(crate) cursor_event_count: u32,
+    pub(crate) hero_count: u32,
+    pub(crate) first_hero_id: u32,
+    pub(crate) first_hero_agent_id: u32,
+    pub(crate) panel_state: u32,
+    pub(crate) reserved: [u32; 6],
+}
+
+const _: [(); 196] = [(); size_of::<Layout>()];
+const _: [(); 64] = [(); size_of::<Snapshot>()];
+const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
+const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];

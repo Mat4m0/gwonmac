@@ -55,9 +55,13 @@ playwright-report/
 test-results/
 .eslintcache
 
+# Local git worktrees checked out inside the repository.
+.worktrees/
+
 # macOS metadata.
 .DS_Store
 .nuxt
 .output
 
-plans
+plans/*
+!plans/research-tool-architecture.md

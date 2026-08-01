@@ -156,8 +156,8 @@ test("the launch argument prefix comes from the contracts too", () => {
       ]).init,
     ),
     {
-      enhancementAutomation: false,
-      enhancementSelection: { nativeCursor: false, targetReadout: false },
+      enhancementProgram: "none",
+      enhancementSelection: { nativeCursor: false },
       templateFsTrace: false,
     },
   );
@@ -170,7 +170,7 @@ test("the launch argument prefix comes from the contracts too", () => {
           }),
       ]).init.enhancementSelection,
     },
-    { nativeCursor: true, targetReadout: true },
+    { nativeCursor: true },
   );
 });
 
@@ -188,7 +188,6 @@ test("every canonical Enhancement tool crosses without another field list", () =
       JSON.stringify({
         enhancementSelection: {
           nativeCursor: false,
-          targetReadout: false,
           [futureTool]: true,
         },
       }),
@@ -208,6 +207,7 @@ test("a contracts export the body needs but does not have fails the build", () =
     "IPC",
     "RENDERER_INIT_ARGUMENT",
     "ENHANCEMENTS",
+    "ENHANCEMENT_PROGRAMS",
     "WASM_BRIDGE_MARKERS",
   ]);
 });

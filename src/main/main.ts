@@ -13,9 +13,11 @@ import {
   EXTERNAL_URLS,
   DEFAULT_SETTINGS,
   IPC,
+  enhancementCapabilitiesFor,
   type AppSettings,
   type AppSettingsPatch,
   type DownloadProgress,
+  type EnhancementProgram,
   type PrefetchProgress,
   type EnhancementSelection,
 } from "../shared/contracts.js";
@@ -55,8 +57,8 @@ import {
 } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
+  DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
-  enhancementsEnabledFor,
   enhancementSelectionFor,
 } from "./enhancement-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
@@ -328,10 +330,12 @@ function buildWindowHost(
   clientRuntime: ClientRuntime,
   sockets: SocketManager,
   enhancementSelection: EnhancementSelection,
+  enhancementProgram: EnhancementProgram,
 ): WindowHost {
   return {
     sockets,
     enhancementSelection,
+    enhancementProgram,
     getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
@@ -417,6 +421,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   });
   const enhancementSelection = enhancementSelectionFor(settings);
+  const enhancementProgram = DEVELOPER_ENHANCEMENT_PROGRAM;
+  const enhancementCapabilities = enhancementCapabilitiesFor(
+    enhancementSelection,
+    enhancementProgram,
+  );
   await prepareWindowState();
   const paths = gamePaths();
   const keychain: NativeKeychain = persistentSecrets
@@ -437,7 +446,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
-    enhancementsEnabled: enhancementsEnabledFor(settings),
+    enhancementCapabilities,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -576,6 +585,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     clientRuntime,
     sockets,
     enhancementSelection,
+    enhancementProgram,
   ));
   if (settings.autoCheckUpdates) {
     void appUpdaterController.check();
@@ -622,7 +632,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   app.on("activate", () => {
     if (!getMainWindow()) {
-      createMainWindow(buildWindowHost(clientRuntime, sockets, enhancementSelection));
+      createMainWindow(buildWindowHost(
+        clientRuntime,
+        sockets,
+        enhancementSelection,
+        enhancementProgram,
+      ));
     }
   });
   app.on("child-process-gone", (_event, details) => {

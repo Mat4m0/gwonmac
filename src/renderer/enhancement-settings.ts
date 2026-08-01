@@ -18,7 +18,6 @@
 
   const PRESENTATION = Object.freeze({
     nativeCursor: Object.freeze({ noun: 'cursor' }),
-    targetReadout: Object.freeze({ noun: 'target readout' }),
   });
 
   function createEnhancementSettings(options: ToolSettingsOptions) {

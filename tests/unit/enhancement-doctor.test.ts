@@ -95,28 +95,22 @@ describe("Enhancement workspace doctor", () => {
     const settings = path.join(profile, "settings.json");
 
     const initial = await inspectEnhancementWorkspace(profile);
-    assert.deepEqual(
-      {
-        nativeCursor: initial.nativeCursor,
-        targetReadout: initial.targetReadout,
-      },
-      { nativeCursor: true, targetReadout: false },
-    );
+    assert.equal(initial.nativeCursor, true);
 
+    // The retired targetReadout field in a legacy profile is ignored, not an
+    // error, and the values beside it are still read.
     await writeFile(
       settings,
       JSON.stringify({ nativeCursor: false, targetReadout: true }),
     );
     const selected = await inspectEnhancementWorkspace(profile);
     assert.equal(selected.nativeCursor, false);
-    assert.equal(selected.targetReadout, true);
 
     // loadSettings() renames a corrupt file aside and writes a backup. A doctor
     // reads the profile it is asked about and leaves it exactly as it found it.
     await writeFile(settings, "{ not json");
     const defaults = await inspectEnhancementWorkspace(profile);
     assert.equal(defaults.nativeCursor, true);
-    assert.equal(defaults.targetReadout, false);
     assert.equal(await readFile(settings, "utf8"), "{ not json");
     assert.deepEqual(await readdir(profile), ["settings.json"]);
   });

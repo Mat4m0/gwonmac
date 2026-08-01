@@ -177,6 +177,8 @@ const LOG_LINES = 400;
 const logBuf: string[] = [];
 let gameWasmInstance: WebAssembly.Instance | null = null;
 let gameWasmModule: WebAssembly.Module | null = null;
+let runtimeInitialized = false;
+let enhancementInstallationStarted = false;
 let crashRecorded = false;
 
 /**
@@ -217,6 +219,44 @@ const log = (...a: unknown[]) => {
     el.scrollTop = el.scrollHeight;
   }
 };
+
+function maybeInstallEnhancements(): void {
+  if (enhancementInstallationStarted || !runtimeInitialized) return;
+
+  const init = native().init;
+  // Launch intent is the first gate: an all-off launch must not even import
+  // Enhancement code. The served module is the second gate. An uncertified
+  // launch has no manifest, while the installer separately checks that a
+  // manifest's exact hook set matches the selected tools or developer program.
+  const enhancementRequested =
+    init.enhancementProgram !== 'none'
+    || init.enhancementSelection.nativeCursor;
+  if (
+    !enhancementRequested
+    || !gameWasmInstance
+    || !gameWasmModule
+    || WebAssembly.Module.customSections(
+      gameWasmModule,
+      'enhancement_manifest',
+    ).length !== 1
+  ) return;
+
+  enhancementInstallationStarted = true;
+  const enhancementInstance = gameWasmInstance;
+  const enhancementModule = gameWasmModule;
+  void import('./enhancements.js')
+    .then(({ installEnhancements }) =>
+      installEnhancements(
+        enhancementInstance,
+        enhancementModule,
+        init.enhancementSelection,
+        init.enhancementProgram,
+      ))
+    .catch((error) => log(
+      '[enhancement]',
+      error instanceof Error ? error.message : String(error),
+    ));
+}
 
 window.gwLog = (on = true) => {
   const el = document.getElementById('log');
@@ -419,6 +459,7 @@ Module = {
       milestone('wasm.instantiate.end');
       gameWasmInstance = result.instance;
       gameWasmModule = result.module;
+      maybeInstallEnhancements();
       success(result.instance, result.module);
     })().catch((error) => {
       window.gwDiagnostics?.event('client.glueLoadFailed', error);
@@ -612,39 +653,8 @@ Module = {
     milestone('runtime.initialized');
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
-    const init = native().init;
-    // The module is the effective truth. Main may have requested Enhancement for a
-    // selected tool, but an uncertified build is served without the manifest;
-    // that launch must not import Enhancement or fetch its kernel. Conversely, the
-    // selection is one generated record, so adding a canonical tool cannot
-    // leave this gate hand-copying an incomplete list.
-    const enhancementRequested =
-      init.enhancementAutomation ||
-      Object.values(init.enhancementSelection).some(Boolean);
-    if (
-      enhancementRequested
-      && gameWasmInstance
-      && gameWasmModule
-      && WebAssembly.Module.customSections(
-        gameWasmModule,
-        'enhancement_manifest',
-      ).length === 1
-    ) {
-      const enhancementInstance = gameWasmInstance;
-      const enhancementModule = gameWasmModule;
-      void import('./enhancements.js')
-        .then(({ installEnhancements }) =>
-          installEnhancements(
-            enhancementInstance,
-            enhancementModule,
-            init.enhancementSelection,
-            init.enhancementAutomation,
-          ))
-        .catch((error) => log(
-          '[enhancement]',
-          error instanceof Error ? error.message : String(error),
-        ));
-    }
+    runtimeInitialized = true;
+    maybeInstallEnhancements();
   },
   onAbort(reason) {
     log('[err] WASM aborted:', reason);
@@ -817,11 +827,18 @@ function loadGlue() {
     Object.values(Module.oskInput).filter(Boolean),
   );
 
-  // The desktop text proxy is part of the game, not a loss of game focus.
-  // Keep the client's canvas-blur callback from muting audio while chat is
-  // active. Real window blur still reaches the canvas and releases input.
+  // The desktop text proxy and the same-window Toolbox overlay are part of the
+  // game experience, not a loss of application focus. Keep the client's
+  // canvas-blur callback from muting audio for those internal transfers. Real
+  // window blur still reaches the canvas and releases input.
   c.addEventListener('blur', (event) => {
-    if (oskInputs.has(event.relatedTarget)) event.stopImmediatePropagation();
+    const target = event.relatedTarget;
+    if (
+      oskInputs.has(target) ||
+      (target instanceof Element && target.closest('#toolbox-foundation'))
+    ) {
+      event.stopImmediatePropagation();
+    }
   }, true);
 
   for (const type in Module.oskInput) {

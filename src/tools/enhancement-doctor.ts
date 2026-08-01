@@ -10,7 +10,13 @@ import {
 import { certifyClientBuild } from "../main/client-certification.js";
 import { inspectEnhancementCache } from "../main/core/client-module.js";
 import { parseSettings } from "../main/core/settings.js";
-import { DEFAULT_SETTINGS } from "../shared/contracts.js";
+import {
+  DEFAULT_SETTINGS,
+  ENHANCEMENT_PROGRAMS,
+  enhancementCapabilitiesFor,
+  enhancementCapabilitiesRequested,
+  type EnhancementProgram,
+} from "../shared/contracts.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -20,17 +26,10 @@ import {
 export interface EnhancementDoctorReport {
   profile: "ready" | "missing";
   /**
-   * The profile's own setting. An observation-tier live run enables nothing, so
-   * this is the only thing that installs the Enhancement for it (P4.7); an
-   * automation run forces it on through GW_ENHANCEMENT_AUTOMATION and ignores this.
+   * The profile's own player-facing setting. Fixed developer programs do not
+   * mutate or depend on it.
    */
   nativeCursor: boolean;
-  /**
-   * The target-readout scenario exercises the player-facing surface, not only
-   * automation's forced core observer, so it refuses a profile where this
-   * player choice is off.
-   */
-  targetReadout: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -75,19 +74,13 @@ async function isFile(filename: string): Promise<boolean> {
  */
 async function readEnhancementSettings(
   profile: string,
-): Promise<Pick<EnhancementDoctorReport, "nativeCursor" | "targetReadout">> {
+): Promise<Pick<EnhancementDoctorReport, "nativeCursor">> {
   try {
     const text = await readFile(path.join(profile, "settings.json"), "utf8");
     const settings = parseSettings(JSON.parse(text));
-    return {
-      nativeCursor: settings.nativeCursor,
-      targetReadout: settings.targetReadout,
-    };
+    return { nativeCursor: settings.nativeCursor };
   } catch {
-    return {
-      nativeCursor: DEFAULT_SETTINGS.nativeCursor,
-      targetReadout: DEFAULT_SETTINGS.targetReadout,
-    };
+    return { nativeCursor: DEFAULT_SETTINGS.nativeCursor };
   }
 }
 
@@ -123,6 +116,11 @@ async function snapshotResidency(
 
 export async function inspectEnhancementWorkspace(
   profile: string,
+  program: EnhancementProgram = ENHANCEMENT_PROGRAMS.some(
+    (candidate) => candidate === process.env.GW_ENHANCEMENT_PROGRAM,
+  )
+    ? process.env.GW_ENHANCEMENT_PROGRAM as EnhancementProgram
+    : "none",
 ): Promise<EnhancementDoctorReport> {
   const game = path.join(profile, "game");
   const artifactsPath = path.join(game, "artifacts");
@@ -139,7 +137,11 @@ export async function inspectEnhancementWorkspace(
     .map((entry) => entry.name);
   const profileReady = (await isFile(path.join(profile, "settings.json")))
     || missing.length < required.length;
-  const { nativeCursor, targetReadout } = await readEnhancementSettings(profile);
+  const { nativeCursor } = await readEnhancementSettings(profile);
+  const enhancementCapabilities = enhancementCapabilitiesFor(
+    { nativeCursor },
+    program,
+  );
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: EnhancementDoctorReport["artifacts"]["integrity"] =
     "invalid";
@@ -169,10 +171,13 @@ export async function inspectEnhancementWorkspace(
     const certification = certifyClientBuild(sha256);
     if (certification.state === "certified") {
       build = certification.enhancementBuild;
-      transformedCache = await inspectEnhancementCache(
-        build,
-        path.join(game, "enhancements"),
-      );
+      if (enhancementCapabilitiesRequested(enhancementCapabilities)) {
+        transformedCache = await inspectEnhancementCache(
+          build,
+          enhancementCapabilities,
+          path.join(game, "enhancements"),
+        );
+      }
     }
   }
   const snapshot = manifest
@@ -183,7 +188,6 @@ export async function inspectEnhancementWorkspace(
   return {
     profile: profileReady ? "ready" : "missing",
     nativeCursor,
-    targetReadout,
     artifacts: {
       ready: artifactsReady,
       missing,

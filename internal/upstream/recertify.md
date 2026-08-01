@@ -1,11 +1,13 @@
 # Re-certifying a new client build
 
 Every function index, local index and byte offset in these documents belongs to
-build `b0319704…`. A new ArenaNet hash triggers the launcher's isolated local
-verifier. If all understood structures are equivalent, it derives exact records
-for that hash and no app release is needed. If anything is ambiguous or changed,
-the untouched official module is used, so the client keeps working and only the
-unproven compatibility features are disabled. Startup logs the local verifier
+one exact build. A new ArenaNet hash triggers the launcher's isolated local
+verifier. It may derive the template-save record when those complete semantics
+remain equivalent. Enhancement does **not** auto-relocate: a shared address
+delta cannot prove three hook semantics and every structure field. It therefore
+requires a new exact certificate after all three hooks and every address are re-derived. Until
+then the untouched official module is used, so the client keeps working and
+only unproven compatibility features are disabled. Startup logs the verifier
 outcome, and `client.buildCertification` in a `.gwdiag` says `certified`,
 `template-only`, or `uncertified` — **check that first when someone reports a
 regression.**
@@ -41,12 +43,13 @@ Read the `status` field first:
 | `not-applicable` | no create-directory stub — **ArenaNet may have fixed it**, see step 1 below before doing anything else |
 | `failed` | read `diagnostics`; a locator found the wrong number of candidates and named them |
 
-**When this manual procedure is required.** The launcher accepts only unchanged
-complete caller semantics and a static-address relocation whose eight code
-reference contexts are unchanged. A refusal means a maintainer must recover
-semantics, not merely indices. Step 5 below — re-measuring what the path helpers
-actually do — still has to be done by hand, and skipping it is how you ship a
-bridge that resolves cleanly and behaves wrongly. Every one of the six upstream defects in
+**When this manual procedure is required.** The launcher may derive only the
+template-save transform when its complete caller semantics remain unchanged.
+Enhancement accepts only an exact certificate; it performs no address
+relocation. A refusal means a maintainer must recover semantics, not merely
+indices. Step 5 below — re-measuring what the path helpers actually do — still
+has to be done by hand, and skipping it is how you ship a bridge that resolves
+cleanly and behaves wrongly. Every one of the six upstream defects in
 [upstream-defects.md](upstream-defects.md) was a semantic finding, not an index.
 
 ## Manual procedure

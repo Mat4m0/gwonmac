@@ -141,10 +141,9 @@ function harness(argv: string[]) {
 }
 
 const INIT: RendererInit = {
-  enhancementAutomation: true,
+  enhancementProgram: "toolbox-foundation",
   enhancementSelection: {
     nativeCursor: false,
-    targetReadout: true,
   },
   templateFsTrace: true,
 };
@@ -160,10 +159,9 @@ test("launch configuration arrives as a preload argument, not as a URL", () => {
 
 test("a renderer with no readable init argument gets the production posture", () => {
   const missing: RendererInit = {
-    enhancementAutomation: false,
+    enhancementProgram: "none",
     enhancementSelection: {
       nativeCursor: false,
-      targetReadout: false,
     },
     templateFsTrace: false,
   };
@@ -172,11 +170,15 @@ test("a renderer with no readable init argument gets the production posture", ()
     plainInit(harness([`${RENDERER_INIT_ARGUMENT}{not json`]).api.init),
     missing,
   );
+  assert.deepEqual(
+    plainInit(harness([...ARGV, ...ARGV]).api.init),
+    missing,
+  );
   // A parameter that is present but not a boolean is not an opt-in.
   assert.deepEqual(
     plainInit(
       harness([
-        `${RENDERER_INIT_ARGUMENT}{"enhancementAutomation":"1","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
+        `${RENDERER_INIT_ARGUMENT}{"enhancementProgram":"unknown","enhancementSelection":{"nativeCursor":"yes","targetReadout":1}}`,
       ]).api.init,
     ),
     missing,

@@ -29,6 +29,11 @@ import type {
 import {
   DEFAULT_SETTINGS,
   ENHANCEMENTS,
+  ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilityProfile,
+  enhancementCapabilitiesFor,
+  enhancementCapabilitiesRequested,
+  enhancementHooksFor,
 } from "../../src/shared/contracts.ts";
 
 register(
@@ -50,13 +55,21 @@ register(
 // Without it the assertion below passes with the `!app.isPackaged` half of the
 // gate deleted, since the environment half is false either way.
 process.env.GW_ENHANCEMENT_AUTOMATION = "1";
+process.env.GW_ENHANCEMENT_PROGRAM = "toolbox-foundation";
 
 const {
+  DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
-  enhancementsEnabledFor,
   enhancementSelectionFor,
   enhancementSelectionChanged,
 } = await import("../../src/main/enhancement-policy.ts");
+
+const enabledFor = (settings: AppSettings) => enhancementCapabilitiesRequested(
+  enhancementCapabilitiesFor(
+    enhancementSelectionFor(settings),
+    DEVELOPER_ENHANCEMENT_PROGRAM,
+  ),
+);
 
 /** The shipped defaults with every registered tool switched off. */
 const allToolsOff = (): AppSettings => {
@@ -68,17 +81,18 @@ const allToolsOff = (): AppSettings => {
 test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide alone", () => {
   assert.equal(process.env.GW_ENHANCEMENT_AUTOMATION, "1");
   assert.equal(ENHANCEMENT_AUTOMATION_ENABLED, false);
+  assert.equal(DEVELOPER_ENHANCEMENT_PROGRAM, "none");
 });
 
 test("every tool off means the Enhancement is off, and any tool on turns it on", () => {
   const off = allToolsOff();
-  assert.equal(enhancementsEnabledFor(off), false);
+  assert.equal(enabledFor(off), false);
 
   // Written as a loop over the registry on purpose: a tool added later is
   // covered by this test the moment it is declared, and a tool that stops
   // reaching the derivation fails it.
   for (const tool of ENHANCEMENTS) {
-    assert.equal(enhancementsEnabledFor({ ...off, [tool]: true }), true, tool);
+    assert.equal(enabledFor({ ...off, [tool]: true }), true, tool);
   }
 });
 
@@ -89,17 +103,17 @@ test("no non-tool setting can switch the Enhancement on", () => {
   const tools = new Set<string>(ENHANCEMENTS);
   for (const [key, value] of Object.entries(off)) {
     if (typeof value !== "boolean" || tools.has(key)) continue;
-    assert.equal(enhancementsEnabledFor({ ...off, [key]: true }), false, key);
+    assert.equal(enabledFor({ ...off, [key]: true }), false, key);
   }
   // Including a key that looks like the master switch this design refuses.
   assert.equal(
-    enhancementsEnabledFor({ ...off, enhancementsEnabled: true } as AppSettings),
+    enabledFor({ ...off, enhancementsEnabled: true } as AppSettings),
     false,
   );
 });
 
 test("the shipped defaults run the Enhancement with only the cursor selected", () => {
-  assert.equal(enhancementsEnabledFor(DEFAULT_SETTINGS), true);
+  assert.equal(enabledFor(DEFAULT_SETTINGS), true);
   assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
   // Every tool but the cursor defaults off, so a build that adds one does not
   // silently start doing more on a fresh profile.
@@ -108,7 +122,7 @@ test("the shipped defaults run the Enhancement with only the cursor selected", (
     assert.equal(DEFAULT_SETTINGS[tool], false, tool);
   }
   assert.equal(
-    enhancementsEnabledFor({ ...DEFAULT_SETTINGS, nativeCursor: false }),
+    enabledFor({ ...DEFAULT_SETTINGS, nativeCursor: false }),
     false,
   );
 });
@@ -116,11 +130,77 @@ test("the shipped defaults run the Enhancement with only the cursor selected", (
 test("the launch selection carries every tool and no unrelated setting", () => {
   assert.deepEqual(enhancementSelectionFor(DEFAULT_SETTINGS), {
     nativeCursor: true,
-    targetReadout: false,
   });
   assert.deepEqual(
     Object.keys(enhancementSelectionFor(DEFAULT_SETTINGS)).sort(),
     [...ENHANCEMENTS].sort(),
+  );
+});
+
+test("one capability plan derives hooks without losing feature identity", () => {
+  const cursorOnly = enhancementCapabilitiesFor(
+    { nativeCursor: true },
+    "none",
+  );
+  // No user selection reaches cursorTarget any more; it stays certified
+  // developer-side vocabulary with the same hook plan as cursor-only.
+  const cursorTarget = ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget;
+  assert.notDeepEqual(cursorOnly, cursorTarget);
+  assert.deepEqual(enhancementHooksFor(cursorOnly), {
+    tick: true,
+    cursor: true,
+    ui: false,
+  });
+  assert.deepEqual(
+    enhancementHooksFor(cursorTarget),
+    enhancementHooksFor(cursorOnly),
+  );
+
+  // Developer programs replace saved settings for one launch. Exercise both
+  // opposite profiles so live evidence cannot accidentally depend on either.
+  for (const selection of [
+    { nativeCursor: false },
+    { nativeCursor: true },
+  ]) {
+    assert.deepEqual(
+      enhancementCapabilitiesFor(selection, "cursor-observer"),
+      { nativeCursor: true, targetObservation: false, toolbox: false },
+    );
+    assert.deepEqual(
+      enhancementCapabilitiesFor(selection, "target-observer"),
+      { nativeCursor: false, targetObservation: true, toolbox: false },
+    );
+    assert.deepEqual(
+      enhancementCapabilitiesFor(selection, "toolbox-foundation"),
+      { nativeCursor: true, targetObservation: false, toolbox: true },
+    );
+  }
+});
+
+test("launch intent resolves to the canonical frozen capability profiles", () => {
+  const cases = [
+    [{ nativeCursor: true }, "none", "cursor"],
+    [{ nativeCursor: false }, "cursor-observer", "cursor"],
+    [{ nativeCursor: true }, "target-observer", "target"],
+    [{ nativeCursor: false }, "toolbox-foundation", "cursorToolbox"],
+  ] as const;
+  for (const [selection, program, profile] of cases) {
+    const resolved = enhancementCapabilitiesFor(selection, program);
+    assert.equal(resolved, ENHANCEMENT_CAPABILITY_PROFILES[profile]);
+    assert.equal(enhancementCapabilityProfile(resolved), profile);
+    assert.equal(Object.isFrozen(resolved), true);
+  }
+  // cursorTarget keeps its identity even though no launch path selects it.
+  assert.equal(
+    enhancementCapabilityProfile(ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget),
+    "cursorTarget",
+  );
+  assert.equal(
+    enhancementCapabilityProfile(enhancementCapabilitiesFor(
+      { nativeCursor: false },
+      "none",
+    )),
+    null,
   );
 });
 

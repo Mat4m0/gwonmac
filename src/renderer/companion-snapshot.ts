@@ -277,3 +277,138 @@ export function readCompanionCursorPixels(buffer: ArrayBuffer, pointer: number) 
   }
   return Object.freeze({ ...header, pixels });
 }
+
+export const COMPANION_TOOLBOX_ABI = 2;
+export const COMPANION_TOOLBOX_BYTES = 64;
+
+const TOOLBOX_MAGIC = 0x58545747;
+const TOOLBOX_HERO_AVAILABLE = 1 << 0;
+
+function readCompanionToolboxSequence(
+  buffer: ArrayBuffer,
+  pointer: number,
+): number | null {
+  if (
+    !(buffer instanceof ArrayBuffer)
+    || !Number.isInteger(pointer)
+    || pointer < 0
+    || pointer + COMPANION_TOOLBOX_BYTES > buffer.byteLength
+  ) {
+    return null;
+  }
+  const view = new DataView(buffer, pointer, 12);
+  const first = view.getUint32(8, true);
+  if (
+    (first & 1) !== 0
+    || view.getUint32(0, true) !== TOOLBOX_MAGIC
+    || view.getUint16(4, true) !== COMPANION_TOOLBOX_ABI
+    || view.getUint16(6, true) !== COMPANION_TOOLBOX_BYTES
+    || view.getUint32(8, true) !== first
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
+  if (
+    !(buffer instanceof ArrayBuffer)
+    || !Number.isInteger(pointer)
+    || pointer < 0
+    || pointer + COMPANION_TOOLBOX_BYTES > buffer.byteLength
+  ) {
+    return Object.freeze({ status: "waiting", reason: "memory" });
+  }
+  const view = new DataView(buffer, pointer, COMPANION_TOOLBOX_BYTES);
+  const firstSequence = view.getUint32(8, true);
+  if ((firstSequence & 1) !== 0) {
+    return Object.freeze({ status: "waiting", reason: "writing" });
+  }
+  const magic = view.getUint32(0, true);
+  const abi = view.getUint16(4, true);
+  const byteLength = view.getUint16(6, true);
+  const flags = view.getUint32(12, true);
+  const state = {
+    playerChatCount: view.getUint32(16, true),
+    cursorEventCount: view.getUint32(20, true),
+    heroCount: view.getUint32(24, true),
+    firstHeroId: view.getUint32(28, true),
+    firstHeroAgentId: view.getUint32(32, true),
+    panelState: view.getUint32(36, true),
+  };
+  let reserved = 0;
+  for (let offset = 40; offset < COMPANION_TOOLBOX_BYTES; offset += 4) {
+    reserved |= view.getUint32(offset, true);
+  }
+  const secondSequence = view.getUint32(8, true);
+  const heroAvailable = (flags & TOOLBOX_HERO_AVAILABLE) !== 0;
+  if (
+    magic !== TOOLBOX_MAGIC
+    || abi !== COMPANION_TOOLBOX_ABI
+    || byteLength !== COMPANION_TOOLBOX_BYTES
+    || firstSequence !== secondSequence
+    || (secondSequence & 1) !== 0
+    || (flags & ~TOOLBOX_HERO_AVAILABLE) !== 0
+    || reserved !== 0
+    || state.panelState > 2
+    || (heroAvailable
+      ? state.heroCount < 1
+        || state.heroCount > 7
+        || state.firstHeroId < 1
+        || state.firstHeroId > 39
+      : state.heroCount !== 0
+        || state.firstHeroId !== 0
+        || state.firstHeroAgentId !== 0)
+  ) {
+    return Object.freeze({ status: "waiting", reason: "toolbox" });
+  }
+  return Object.freeze({
+    status: "ready",
+    sequence: secondSequence,
+    heroAvailable,
+    ...state,
+  });
+}
+
+export type CompanionToolboxState = ReturnType<typeof readCompanionToolbox>;
+
+export function readChangedCompanionToolbox(
+  buffer: ArrayBuffer,
+  pointer: number,
+  previousSequence: number | null,
+) {
+  const sequence = readCompanionToolboxSequence(buffer, pointer);
+  if (sequence !== null && sequence === previousSequence) {
+    return Object.freeze({ changed: false as const, sequence });
+  }
+  const state = readCompanionToolbox(buffer, pointer);
+  return Object.freeze({
+    changed: true as const,
+    sequence: state.status === "ready" ? state.sequence : null,
+    state,
+  });
+}
+
+/**
+ * Publication sequence protects the read; the decoded fields own identity.
+ * Ignoring sequence here makes an accidental redundant kernel publication
+ * harmless instead of turning it into a renderer update.
+ */
+export function sameCompanionToolboxState(
+  previous: CompanionToolboxState | null,
+  next: CompanionToolboxState,
+) {
+  if (previous === null) return false;
+  if (previous.status !== "ready" || next.status !== "ready") {
+    return previous.status !== "ready"
+      && next.status !== "ready"
+      && previous.reason === next.reason;
+  }
+  return previous.playerChatCount === next.playerChatCount
+    && previous.cursorEventCount === next.cursorEventCount
+    && previous.heroAvailable === next.heroAvailable
+    && previous.heroCount === next.heroCount
+    && previous.firstHeroId === next.firstHeroId
+    && previous.firstHeroAgentId === next.firstHeroAgentId
+    && previous.panelState === next.panelState;
+}

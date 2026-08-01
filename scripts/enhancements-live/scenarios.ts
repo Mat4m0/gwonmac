@@ -6,51 +6,34 @@
 // serves. Both are gated on `GW_ENHANCEMENT_AUTOMATION=1`, which
 // `src/main/enhancement-policy.ts` refuses in a packaged app.
 //
-// **Observation** reads. It runs against the configuration a player has —
-// automation off, the Enhancement installed because `settings.nativeCursor` is on —
-// and is handed no input and no command channel to hold, not merely told not to
-// use them. A cursor-only run deliberately has no target-state tick stream;
-// readiness comes from the independently installed cursor consumer.
+// **Observation** reads. Its fixed cursor-observer program selects only the
+// cursor, independent of saved product settings, and it is handed no input or
+// command channel to hold. It deliberately has no target-state tick stream;
+// readiness comes from the cursor projection itself.
 //
 // Before this split every live run exported `GW_ENHANCEMENT_AUTOMATION=1` and got
 // an IPC channel, so the observation surface could not be exercised without the
 // automation surface being present. That is the property P4.7 asks for.
 
 import type { StdioOptions } from "node:child_process";
+import { createInterface } from "node:readline/promises";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
+import type { EnhancementProgram } from "../../src/shared/contracts.js";
 import type { EnhancementDoctorReport } from "../../src/tools/enhancement-doctor.js";
-import type {
-  EnhancementObservationType,
-} from "../../src/tools/enhancement-observations.js";
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 
 export type LiveTier = "automation" | "observation";
+export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor";
 
 /**
- * One `--observe` address read at the width it declared. `value` is null and
- * `valid` false when the address falls outside the module's memory, so a
- * capture records the refusal rather than a zero it did not read.
- */
-export type ObservationSample = Readonly<{
-  type: EnhancementObservationType;
-  address: number;
-  value: number | null;
-  valid: boolean;
-}>;
-
-/**
- * What every scenario gets: page evaluation, the typed `--observe` sampler, and
- * a clock. `evaluate` is deliberately not `page.evaluate` itself — handing the
- * page over would hand over its input as well.
+ * What every scenario gets: one fixed cursor projection read and a clock.
+ * There is no generic page evaluator: arbitrary renderer code is an action
+ * capability even when the context withholds Playwright's input objects.
  */
 export type ObservationContext = Readonly<{
-  evaluate: <Result>(
-    body: (argument: unknown) => Result | Promise<Result>,
-    argument?: unknown,
-  ) => Promise<Result>;
+  readCursorProjection: () => Promise<CompanionDeveloperRuntime["cursor"]>;
   wait: (milliseconds: number) => Promise<void>;
-  sample: (() => Promise<ObservationSample[]>) | null;
 }>;
 
 /**
@@ -72,7 +55,6 @@ export type LiveCapabilities = Readonly<{
   page: Page;
   cdp: CDPSession;
   sendAutomationCommand: (command: AutomationCommand) => Promise<void>;
-  sampleObservations: (() => Promise<ObservationSample[]>) | null;
 }>;
 
 /**
@@ -84,12 +66,16 @@ export type LiveResult = { evidence?: unknown };
 
 type AutomationScenario = {
   tier: "automation";
+  program: EnhancementProgram;
+  readiness: LiveReadiness;
   run(context: AutomationContext): Promise<unknown>;
   validate(result: LiveResult): void;
 };
 
 type ObservationScenario = {
   tier: "observation";
+  program: EnhancementProgram;
+  readiness: LiveReadiness;
   run(context: ObservationContext): Promise<unknown>;
   validate(result: LiveResult): void;
 };
@@ -122,6 +108,7 @@ const CERTIFIED_PORTAL_ROUTES: Readonly<Record<number, PortalRoute | undefined>>
 export async function waitForPlayable(
   page: Page,
   tier: LiveTier,
+  readiness: LiveReadiness,
 ): Promise<number> {
   await page.waitForFunction(
     async () => {
@@ -148,19 +135,27 @@ export async function waitForPlayable(
   let inputs = 0;
   const ready = () =>
     page.evaluate(
-      (mode) => {
-        // `gwCompanionRuntime` is declared as an open record, so the cursor it
-        // publishes arrives untyped and is narrowed here rather than assumed.
+      (required) => {
+        if (required === "frontend") return true;
+        if (required === "observer") {
+          const state = window.gwCompanionState;
+          return state?.status === "ready" && (state.tickCount ?? 0) > 5;
+        }
+        if (required === "toolbox") {
+          const toolbox = window.gwCompanionRuntime?.toolbox;
+          return typeof toolbox === "object"
+            && toolbox !== null
+            && toolbox.status === "ready"
+            && toolbox.heroAvailable === true;
+        }
         const cursor = window.gwCompanionRuntime?.cursor;
-        const cursorValid = typeof cursor === "object"
+        return window.gwCompanionRuntime?.status === "installed"
+          && typeof cursor === "object"
           && cursor !== null
           && "valid" in cursor
           && cursor.valid === true;
-        return mode === "automation"
-          ? window.gwCompanionState?.status === "ready"
-          : window.gwCompanionRuntime?.status === "installed" && cursorValid;
       },
-      tier,
+      readiness,
     );
   if (tier === "automation") {
     for (const delay of [3_000, 5_000, 20_000]) {
@@ -181,18 +176,27 @@ export async function waitForPlayable(
     }));
   }
   await page.waitForFunction(
-    (mode) => {
-      const state = window.gwCompanionState;
+    (required) => {
+      if (required === "frontend") return true;
+      if (required === "observer") {
+        const state = window.gwCompanionState;
+        return state?.status === "ready" && (state.tickCount ?? 0) > 5;
+      }
+      if (required === "toolbox") {
+        const toolbox = window.gwCompanionRuntime?.toolbox;
+        return typeof toolbox === "object"
+          && toolbox !== null
+          && toolbox.status === "ready"
+          && toolbox.heroAvailable === true;
+      }
       const cursor = window.gwCompanionRuntime?.cursor;
-      const cursorValid = typeof cursor === "object"
+      return window.gwCompanionRuntime?.status === "installed"
+        && typeof cursor === "object"
         && cursor !== null
         && "valid" in cursor
         && cursor.valid === true;
-      return mode === "automation"
-        ? state?.status === "ready" && (state.tickCount ?? 0) > 5
-        : window.gwCompanionRuntime?.status === "installed" && cursorValid;
     },
-    tier,
+    readiness,
     { timeout: 30 * 60_000, polling: 250 },
   );
   return inputs;
@@ -491,11 +495,9 @@ async function runMapTransition({ page }: { page: Page }) {
   };
 }
 
-// Human-assisted cursor evidence. FrCursor decodes the active cursor into two
-// fixed buffers before calling an empty Emscripten sink, so typed scalar reads
-// are enough to prove the buffers are live, identify which cursor is loaded,
-// and settle the colour channel order. Nothing here dumps memory: the caller
-// chooses at most 16 addresses and only their transitions are recorded.
+// Human-assisted cursor evidence reads only the renderer's bounded cursor
+// projection. No address, pointer, pixel payload, or arbitrary memory value is
+// accepted or persisted.
 const CURSOR_PHASES = Object.freeze([
   Object.freeze({ seconds: 20, ask: "leave the plain arrow over open ground" }),
   Object.freeze({ seconds: 12, ask: "open the inventory and hover an item" }),
@@ -509,15 +511,11 @@ const CURSOR_PHASES = Object.freeze([
 const CURSOR_SAMPLE_INTERVAL_MS = 50;
 const CURSOR_MAX_CHANGES = 192;
 
-async function runCursorCapture({ sample, evaluate, wait }: ObservationContext) {
-  if (!sample) {
-    throw new Error("cursor-capture requires at least one --observe address");
-  }
+async function runCursorCapture({ readCursorProjection, wait }: ObservationContext) {
   const changes: {
     atMs: number;
     phase: number;
-    values: ObservationSample[];
-    applied: Record<string, unknown> | null;
+    cursor: CompanionDeveloperRuntime["cursor"];
   }[] = [];
   const startedAt = Date.now();
   let overflow = 0;
@@ -532,25 +530,15 @@ async function runCursorCapture({ sample, evaluate, wait }: ObservationContext) 
     }));
     const until = Date.now() + phase.seconds * 1_000;
     while (Date.now() < until) {
-      const values = await sample();
-      // Renderer-side effect of the same change: what the consumer published
-      // and how long the CSS it handed Chromium is. No pixels, no pointers.
-      const applied = await evaluate(() => {
-        const cursor = window.gwCompanionRuntime?.cursor;
-        const canvas = globalThis.document.getElementById("canvas");
-        return typeof cursor === "object" && cursor !== null
-          ? { ...cursor, inline: canvas?.style.cursor.slice(0, 24) ?? "" }
-          : null;
-      });
-      const key = JSON.stringify([values.map((entry) => entry.value), applied]);
+      const cursor = await readCursorProjection();
+      const key = JSON.stringify(cursor);
       if (key !== previous) {
         previous = key;
         if (changes.length < CURSOR_MAX_CHANGES) {
           changes.push({
             atMs: Date.now() - startedAt,
             phase: index + 1,
-            values,
-            applied,
+            cursor,
           });
         } else {
           overflow += 1;
@@ -560,10 +548,6 @@ async function runCursorCapture({ sample, evaluate, wait }: ObservationContext) 
     }
   }
   return {
-    addresses: changes[0]?.values.map((entry) => ({
-      type: entry.type,
-      address: `0x${entry.address.toString(16)}`,
-    })) ?? [],
     phases: CURSOR_PHASES.length,
     sampleIntervalMs: CURSOR_SAMPLE_INTERVAL_MS,
     changeCount: changes.length + overflow,
@@ -575,13 +559,282 @@ async function runCursorCapture({ sample, evaluate, wait }: ObservationContext) 
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
+async function operatorCheckpoint(please: string): Promise<void> {
+  if (!process.stdin.isTTY) {
+    throw new Error("toolbox foundation live proof requires an interactive terminal");
+  }
+  console.log(JSON.stringify({ checkpoint: "operator", please }));
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    await prompt.question("Press Return when complete. ");
+  } finally {
+    prompt.close();
+  }
+}
+
+type ToolboxLiveState = {
+  status: string;
+  playerChatCount: number;
+  cursorEventCount: number;
+  cursorRefreshes: number;
+  cursorGeneration: number;
+  cursorPixelHash: number;
+  cursorValid: boolean;
+  heroAvailable: boolean;
+  firstHeroId: number;
+  panelState: number;
+};
+
+async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
+  return page.evaluate(() => {
+    const raw = window.gwCompanionRuntime?.toolbox;
+    const value = typeof raw === "object" && raw !== null
+      ? raw as Record<string, unknown>
+      : {};
+    return {
+      status: String(value.status ?? "missing"),
+      playerChatCount: Number(value.playerChatCount) >>> 0,
+      cursorEventCount: Number(value.cursorEventCount) >>> 0,
+      cursorRefreshes: Number(window.gwCompanionRuntime?.cursorRefreshes) >>> 0,
+      cursorGeneration:
+        typeof window.gwCompanionRuntime?.cursor === "object"
+          && window.gwCompanionRuntime.cursor !== null
+          && "generation" in window.gwCompanionRuntime.cursor
+          ? Number(window.gwCompanionRuntime.cursor.generation) >>> 0
+          : 0,
+      cursorPixelHash:
+        typeof window.gwCompanionRuntime?.cursor === "object"
+          && window.gwCompanionRuntime.cursor !== null
+          && "pixelHash" in window.gwCompanionRuntime.cursor
+          ? Number(window.gwCompanionRuntime.cursor.pixelHash) >>> 0
+          : 0,
+      cursorValid:
+        typeof window.gwCompanionRuntime?.cursor === "object"
+        && window.gwCompanionRuntime.cursor !== null
+        && "valid" in window.gwCompanionRuntime.cursor
+        && window.gwCompanionRuntime.cursor.valid === true,
+      heroAvailable: value.heroAvailable === true,
+      firstHeroId: Number(value.firstHeroId) >>> 0,
+      panelState: Number(value.panelState) >>> 0,
+    };
+  });
+}
+
+async function openToolboxOverlay(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Open Toolbox" }).click();
+  await page.waitForFunction(() =>
+    document.getElementById("toolbox-foundation")?.dataset.open === "true",
+  );
+}
+
+async function runToolboxFoundation({ page }: AutomationContext) {
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "status" in toolbox
+      && toolbox.status === "ready";
+  });
+  const runtimeSurface = await page.evaluate(() => ({
+    frozen: Object.isFrozen(window.gwCompanionRuntime),
+    keys: Object.keys(window.gwCompanionRuntime ?? {}).sort(),
+  }));
+  const expectedRuntimeKeys = [
+    "buildId",
+    "companionAbi",
+    "cursor",
+    "cursorRefreshes",
+    "hertz",
+    "installation",
+    "kernelSha256",
+    "lastRenderUs",
+    "programId",
+    "readout",
+    "rejectedSnapshots",
+    "renderP95Us",
+    "snapshotReads",
+    "status",
+    "toolbox",
+    "wasmMemoryBytes",
+  ].sort();
+  if (
+    !runtimeSurface.frozen
+    || JSON.stringify(runtimeSurface.keys) !== JSON.stringify(expectedRuntimeKeys)
+  ) {
+    throw new Error("Toolbox published a mutable or over-broad developer surface");
+  }
+  const baseline = await readToolboxState(page);
+  await page.waitForTimeout(5_000);
+  const quiet = await readToolboxState(page);
+  if (quiet.playerChatCount !== baseline.playerChatCount) {
+    throw new Error("player chat count changed during the quiet baseline");
+  }
+
+  await operatorCheckpoint(
+    "open the inventory, place the pointer over a salvage kit without clicking it, then return here using only the keyboard",
+  );
+  const cursorBefore = await readToolboxState(page);
+  if (!cursorBefore.cursorValid) {
+    throw new Error("the game cursor was not published before the click proof");
+  }
+  console.log(JSON.stringify({
+    checkpoint: "operator-timed",
+    please:
+      "within 10 seconds, switch back using only the keyboard and activate the salvage kit without moving the pointer",
+  }));
+  const cursorDeadline = Date.now() + 10_000;
+  let cursorAfter = cursorBefore;
+  while (
+    Date.now() < cursorDeadline
+    && cursorAfter.cursorRefreshes === cursorBefore.cursorRefreshes
+  ) {
+    await page.waitForTimeout(25);
+    cursorAfter = await readToolboxState(page);
+  }
+  // A double-click may schedule two bounded refreshes. Let both mouse releases
+  // and the following game tick settle before comparing the final publication.
+  await page.waitForTimeout(1_000);
+  cursorAfter = await readToolboxState(page);
+  if (
+    cursorAfter.cursorRefreshes <= cursorBefore.cursorRefreshes
+    || cursorAfter.cursorEventCount <= cursorBefore.cursorEventCount
+    || cursorAfter.cursorGeneration <= cursorBefore.cursorGeneration
+    || cursorAfter.cursorPixelHash === cursorBefore.cursorPixelHash
+    || !cursorAfter.cursorValid
+  ) {
+    throw new Error("the zero-distance click did not publish the salvage cursor");
+  }
+
+  await operatorCheckpoint(
+    "have a second player send exactly one team/group message",
+  );
+  await page.waitForFunction(
+    (expected) => {
+      const toolbox = window.gwCompanionRuntime?.toolbox;
+      return typeof toolbox === "object"
+        && toolbox !== null
+        && "playerChatCount" in toolbox
+        && Number(toolbox.playerChatCount) === expected;
+    },
+    quiet.playerChatCount + 1,
+    { timeout: 5_000 },
+  );
+  await page.waitForTimeout(1_500);
+  const afterChat = await readToolboxState(page);
+  if (afterChat.playerChatCount !== quiet.playerChatCount + 1) {
+    throw new Error("one player chat event did not settle at exactly one increment");
+  }
+
+  await operatorCheckpoint("enter /age in Guild Wars and wait for its response");
+  await page.waitForTimeout(1_000);
+  const afterAge = await readToolboxState(page);
+  if (afterAge.playerChatCount !== afterChat.playerChatCount) {
+    throw new Error("the non-player /age response incremented player chat");
+  }
+  if (!afterAge.heroAvailable || afterAge.firstHeroId === 0) {
+    throw new Error("no first owned hero is available for the panel proof");
+  }
+
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, show the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 2;
+  }, undefined, { timeout: 1_000 });
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, hide the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 1;
+  }, undefined, { timeout: 1_000 });
+  await openToolboxOverlay(page);
+  await page.getByText("Hero panel observed · hidden").waitFor();
+  await page.getByRole("button", { name: "Close Toolbox" }).click();
+  const final = await readToolboxState(page);
+  return {
+    baseline: baseline.playerChatCount,
+    final: final.playerChatCount,
+    delta: final.playerChatCount - baseline.playerChatCount,
+    heroId: final.firstHeroId,
+    panelState: final.panelState,
+    cursorEventDelta:
+      cursorAfter.cursorEventCount - cursorBefore.cursorEventCount,
+    cursorGenerationDelta:
+      cursorAfter.cursorGeneration - cursorBefore.cursorGeneration,
+    cursorRefreshDelta:
+      cursorAfter.cursorRefreshes - cursorBefore.cursorRefreshes,
+    cursorChanged:
+      cursorAfter.cursorPixelHash !== cursorBefore.cursorPixelHash,
+  };
+}
+
+async function runToolboxHeroPanel({ page }: AutomationContext) {
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "status" in toolbox
+      && toolbox.status === "ready"
+      && "heroAvailable" in toolbox
+      && toolbox.heroAvailable === true;
+  });
+  await operatorCheckpoint(
+    "confirm a hero is in the party",
+  );
+  const initial = await readToolboxState(page);
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, show the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 2;
+  }, undefined, { timeout: 1_000 });
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, hide the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 1;
+  }, undefined, { timeout: 1_000 });
+  await openToolboxOverlay(page);
+  await page.getByText("Hero panel observed · hidden").waitFor();
+  await page.getByRole("button", { name: "Close Toolbox" }).click();
+  const final = await readToolboxState(page);
+  return {
+    heroId: initial.firstHeroId,
+    panelState: final.panelState,
+  };
+}
+
 export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   // Reaching a playable character is itself a keypress, so the scenarios that
   // only need the client up are automation too. `tier` names what the run does,
   // not how interesting its evidence is.
-  boot: Object.freeze({ tier: "automation", run: noEvidence, validate: acceptEvidence }),
+  boot: Object.freeze({
+    tier: "automation",
+    program: "none",
+    readiness: "frontend",
+    run: noEvidence,
+    validate: acceptEvidence,
+  }),
   target: Object.freeze({
     tier: "automation",
+    program: "target-observer",
+    readiness: "observer",
     run: runTarget,
     validate(result: { evidence?: Awaited<ReturnType<typeof runTarget>> }) {
       validateTargetAcquisition(result.evidence);
@@ -589,6 +842,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   }),
   "target-readout": Object.freeze({
     tier: "automation",
+    program: "target-observer",
+    readiness: "observer",
     run: runTargetReadout,
     validate(result: { evidence?: Awaited<ReturnType<typeof runTargetReadout>> }) {
       const evidence = result.evidence;
@@ -609,8 +864,47 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
+  "toolbox-foundation": Object.freeze({
+    tier: "automation",
+    program: "toolbox-foundation",
+    readiness: "toolbox",
+    run: runToolboxFoundation,
+    validate(result: { evidence?: Awaited<ReturnType<typeof runToolboxFoundation>> }) {
+      const evidence = result.evidence;
+      if (
+        !evidence
+        || evidence.delta !== 1
+        || evidence.heroId === 0
+        || evidence.panelState !== 1
+        || evidence.cursorEventDelta < 1
+        || evidence.cursorGenerationDelta < 1
+        || evidence.cursorRefreshDelta < 1
+        || !evidence.cursorChanged
+      ) {
+        throw new Error("toolbox foundation live proof did not settle correctly");
+      }
+    },
+  }),
+  "toolbox-hero-panel": Object.freeze({
+    tier: "automation",
+    program: "toolbox-foundation",
+    readiness: "toolbox",
+    run: runToolboxHeroPanel,
+    validate(result: { evidence?: Awaited<ReturnType<typeof runToolboxHeroPanel>> }) {
+      const evidence = result.evidence;
+      if (
+        !evidence
+        || evidence.heroId === 0
+        || evidence.panelState !== 1
+      ) {
+        throw new Error("hero panel observation did not settle correctly");
+      }
+    },
+  }),
   movement: Object.freeze({
     tier: "automation",
+    program: "target-observer",
+    readiness: "observer",
     run: runMovement,
     validate(result: { evidence?: Awaited<ReturnType<typeof runMovement>> }) {
       if (!((result.evidence?.distance ?? 0) > 5)) {
@@ -618,11 +912,19 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
-  reload: Object.freeze({ tier: "automation", run: noEvidence, validate: acceptEvidence }),
-  // The one observation-tier scenario today: it reads typed addresses and the
-  // cursor the renderer published, and asks a human for every state change.
+  reload: Object.freeze({
+    tier: "automation",
+    program: "target-observer",
+    readiness: "observer",
+    run: noEvidence,
+    validate: acceptEvidence,
+  }),
+  // The one observation-tier scenario today: it reads only the fixed cursor
+  // projection the renderer published and asks a human for every state change.
   "cursor-capture": Object.freeze({
     tier: "observation",
+    program: "cursor-observer",
+    readiness: "cursor",
     run: runCursorCapture,
     validate(result: { evidence?: Awaited<ReturnType<typeof runCursorCapture>> }) {
       if (!((result.evidence?.changeCount ?? 0) > 1)) {
@@ -632,6 +934,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   }),
   "map-transition": Object.freeze({
     tier: "automation",
+    program: "target-observer",
+    readiness: "observer",
     run: runMapTransition,
     validate(result: { evidence?: Awaited<ReturnType<typeof runMapTransition>> }) {
       const evidence = result.evidence;
@@ -651,6 +955,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   }),
   performance: Object.freeze({
     tier: "automation",
+    program: "target-observer",
+    readiness: "observer",
     // Imported here rather than at the top of this file: performance.ts is the
     // benchmark harness and the only holder of AUTOMATION_COMMAND, so an
     // observation run never loads the command vocabulary at all.
@@ -702,7 +1008,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
  * The whole tier decision for one live run: which scenario, which environment
  * the app is launched in, and which channels the parent opens to it. An
  * observation run boots the app exactly as a player's cursor-only session does
- * — `nativeCursor` on, `targetReadout` off, `GW_ENHANCEMENT_AUTOMATION` unset even
+ * — `nativeCursor` on, `GW_ENHANCEMENT_AUTOMATION` unset even
  * when the caller's own environment exports it — and gets no IPC channel, so
  * `child.send` does not exist to be called.
  *
@@ -723,6 +1029,8 @@ export function liveRunPlan(
   delete env.ELECTRON_RUN_AS_NODE;
   if (automation) env.GW_ENHANCEMENT_AUTOMATION = "1";
   else delete env.GW_ENHANCEMENT_AUTOMATION;
+  if (scenario.program === "none") delete env.GW_ENHANCEMENT_PROGRAM;
+  else env.GW_ENHANCEMENT_PROGRAM = scenario.program;
   if (cachedOnly) env.GW_REQUIRE_CACHED_CLIENT = "1";
   return {
     name,
@@ -741,36 +1049,19 @@ export function liveRunPlan(
  */
 export function liveRunRefusal(
   plan: LiveRunPlan,
-  preflight: Pick<
-    EnhancementDoctorReport,
-    "readyForCachedLive" | "targetReadout" | "nativeCursor"
-  >,
+  preflight: Pick<EnhancementDoctorReport, "readyForCachedLive">,
   { cachedOnly }: { cachedOnly: boolean },
-):
-  | "cached-client-incomplete"
-  | "target-readout-disabled"
-  | "native-cursor-disabled"
-  | null
-{
+): "cached-client-incomplete" | null {
   if (cachedOnly && !preflight.readyForCachedLive) {
     return "cached-client-incomplete";
-  }
-  if (plan.name === "target-readout" && !preflight.targetReadout) {
-    return "target-readout-disabled";
-  }
-  // An observation run enables nothing: the Enhancement installs only because the
-  // profile's own setting is on. Without it the run would wait half an hour for
-  // a hook that is never installed, so refuse and say which setting.
-  if (plan.tier === "observation" && !preflight.nativeCursor) {
-    return "native-cursor-disabled";
   }
   return null;
 }
 
 /**
- * What a scenario is handed. Observation gets reads: page evaluation, the typed
- * `--observe` sampler, and a clock. Automation additionally gets the page, the
- * CDP session and the command channel — the two capabilities that act on the
+ * What a scenario is handed. Observation gets only one fixed typed cursor
+ * projection read and a clock. Automation additionally gets the page, the CDP
+ * session and the command channel — the two capabilities that act on the
  * player's behalf are objects it holds, not flags it is asked to respect.
  *
  * Overloaded on the tier so that pairing is a compile error and not only a
@@ -788,11 +1079,11 @@ export function scenarioContext(
   tier: LiveTier,
   capabilities: LiveCapabilities,
 ): AutomationContext | ObservationContext {
-  const { page, cdp, sendAutomationCommand, sampleObservations } = capabilities;
+  const { page, cdp, sendAutomationCommand } = capabilities;
   const observation: ObservationContext = {
-    evaluate: (body, argument) => page.evaluate(body, argument),
+    readCursorProjection: () => page.evaluate(() =>
+      window.gwCompanionRuntime?.cursor ?? null),
     wait: (milliseconds) => page.waitForTimeout(milliseconds),
-    sample: sampleObservations,
   };
   return Object.freeze(
     tier === "automation"

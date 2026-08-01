@@ -51,8 +51,12 @@ Refusals, not a backlog.
 - **No Windows or Linux build.**
 - **No modification of ArenaNet's client.** The downloaded artifact stays
   canonical and is never redistributed.
-- **No automation, ever.** The app sends no game input and takes no action on a
-  player's behalf. The development-only automation tier cannot be reached by a
+- **No gameplay automation.** The app never chooses a target, moves a
+  character, uses a skill, sends chat, or takes another gameplay action for the
+  player. After the player's own trusted click, the native-cursor tool may
+  replay one bounded out-and-back pointer hit-test when Guild Wars emitted no
+  cursor event; it cannot originate a click or leave the pointer displaced.
+  The development-only gameplay automation tier cannot be reached by a
   packaged build at all — a gate in code, not a promise.
 - **No account features.** No bots, macros, multiboxing help, or trading tools.
 - **No telemetry.** Nothing leaves the machine unless the player attaches a
@@ -81,6 +85,6 @@ and packaging tests establish, or dropped. Measured frame rates live in
 specific machines, never as a promise.
 
 Three claims cost us more than the rest, and that is the point: the official
-artifact is preserved, no game traffic or account data is uploaded, and nothing
-acts on a player's behalf. A feature that weakens one of those is a feature
-this project does not ship.
+artifact is preserved, no game traffic or account data is uploaded, and no
+gameplay action is chosen or triggered on a player's behalf. A feature that
+weakens one of those is a feature this project does not ship.

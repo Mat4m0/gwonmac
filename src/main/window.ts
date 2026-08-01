@@ -13,6 +13,7 @@ import type {
   AppSettingsPatch,
   DownloadProgress,
   RendererInit,
+  EnhancementProgram,
   EnhancementSelection,
 } from "../shared/contracts.js";
 import { EXTERNAL_URLS, RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
@@ -32,7 +33,6 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { sendRendererCommand } from "./renderer-commands.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
-import { ENHANCEMENT_AUTOMATION_ENABLED } from "./enhancement-policy.js";
 import { isDevBuild } from "./protocol.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
@@ -48,6 +48,8 @@ export interface WindowHost {
   sockets: SocketManager;
   /** Launch-time tool choices; the served module decides whether they can run. */
   enhancementSelection: EnhancementSelection;
+  /** Developer-only feature program; never inferred from automation. */
+  enhancementProgram: EnhancementProgram;
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
@@ -232,9 +234,10 @@ export const RENDERER_URL = "gw://app/";
  */
 export function rendererInitArgument(options: {
   enhancementSelection: EnhancementSelection;
+  enhancementProgram: EnhancementProgram;
 }): string {
   const init: RendererInit = {
-    enhancementAutomation: ENHANCEMENT_AUTOMATION_ENABLED,
+    enhancementProgram: options.enhancementProgram,
     enhancementSelection: options.enhancementSelection,
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",

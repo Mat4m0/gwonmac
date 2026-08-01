@@ -16,7 +16,9 @@ import {
   type LocalClientVerification,
 } from "../../src/main/core/local-client-verifier.js";
 
-const OFFICIAL = TEMPLATE_SAVE_BUILDS[0]!;
+const OFFICIAL = TEMPLATE_SAVE_BUILDS.find(
+  (build) => build.outputSha256 === ENHANCEMENT_BUILDS[0]?.sha256,
+)!;
 const UNKNOWN = "0".repeat(64);
 
 function localVerification(

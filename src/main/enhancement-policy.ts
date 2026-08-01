@@ -1,22 +1,28 @@
 import { app } from "electron";
 import {
   ENHANCEMENTS,
+  ENHANCEMENT_PROGRAMS,
   type AppSettings,
   type AppSettingsPatch,
+  type EnhancementProgram,
   type EnhancementSelection,
 } from "../shared/contracts.js";
 
 export const ENHANCEMENT_AUTOMATION_ENABLED =
   !app.isPackaged && process.env.GW_ENHANCEMENT_AUTOMATION === "1";
 
+const requestedProgram = process.env.GW_ENHANCEMENT_PROGRAM;
+
 /**
- * There is deliberately no stored `enhancementsEnabled` master switch. "Is the
- * Enhancement active" is *derived* below from "is any tool on", so the two cannot
- * disagree — a persisted master flag could say no while a tool it governs says
- * yes, and nothing would be able to tell which one the session obeyed.
+ * Resolved once in main. This is intentionally independent from automation:
+ * automation grants input/IPC capabilities, while the program chooses which
+ * developer example is installed. Packaged applications always get `none`.
  */
-export const enhancementsEnabledFor = (settings: AppSettings): boolean =>
-  ENHANCEMENT_AUTOMATION_ENABLED || ENHANCEMENTS.some((tool) => settings[tool]);
+export const DEVELOPER_ENHANCEMENT_PROGRAM: EnhancementProgram =
+  !app.isPackaged
+  && ENHANCEMENT_PROGRAMS.some((program) => program === requestedProgram)
+    ? requestedProgram as EnhancementProgram
+    : "none";
 
 /** Copy only the selected tools into the launch contract. */
 export const enhancementSelectionFor = (

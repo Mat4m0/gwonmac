@@ -111,6 +111,30 @@ test("production diagnostics do not patch Web Audio prototypes", async () => {
   );
 });
 
+test("the live harness persists no raw addresses or Toolbox screenshots", async () => {
+  const live = await readFile(
+    path.join(root, "scripts/enhancements-live.ts"),
+    "utf8",
+  );
+  const scenarios = await readFile(
+    path.join(root, "scripts/enhancements-live/scenarios.ts"),
+    "utf8",
+  );
+  const renderer = await readFile(
+    path.join(root, "src/renderer/enhancements.ts"),
+    "utf8",
+  );
+  const toolsReadme = await readFile(path.join(root, "tools/README.md"), "utf8");
+  assert.match(
+    live,
+    /plan\.scenario\.program !== "toolbox-foundation"/,
+  );
+  assert.doesNotMatch(
+    `${live}\n${scenarios}\n${renderer}\n${toolsReadme}`,
+    /--observe|readObservation/,
+  );
+});
+
 test("stall attribution markers are fixed-name and Level 2 only", async () => {
   const diagnostics = await readFile(
     path.join(root, "src/renderer/diagnostics.ts"),
@@ -285,6 +309,42 @@ test("a new client build can be re-certified without hand-derivation", async () 
   // is a finding, never a best guess.
 });
 
+test("Enhancement re-certification inspects only post-template bytes", async () => {
+  const recertifier = await readFile(
+    path.join(root, "src/tools/enhancement-recertify.ts"),
+    "utf8",
+  );
+
+  assert.match(recertifier, /preparePostTemplateSaveModule\(official\)/);
+  assert.match(
+    recertifier,
+    /inspectEnhancementCandidate\(postTemplate\.bytes\)/,
+  );
+  assert.doesNotMatch(
+    recertifier,
+    /inspectEnhancementCandidate\(official\)/,
+  );
+});
+
+test("structural Enhancement candidates remain review-only evidence", async () => {
+  const analyzer = await readFile(
+    path.join(root, "src/tools/enhancement-structural-evidence.ts"),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    analyzer,
+    /from "\.\.\/main\/core\/enhancement-(?:builds|transform)\.js"/,
+  );
+  for (const file of [
+    "src/main/client-certification.ts",
+    "src/main/core/client-module.ts",
+    "src/main/core/local-client-verifier.ts",
+  ]) {
+    const source = await readFile(path.join(root, file), "utf8");
+    assert.doesNotMatch(source, /enhancement-structural-evidence/);
+  }
+});
+
 test("the WASM section codec has exactly one home", async () => {
   const shared = await readFile(
     path.join(root, "src/main/core/wasm-binary.ts"),
@@ -297,14 +357,14 @@ test("the WASM section codec has exactly one home", async () => {
   assert.match(shared, /function copyRange/);
   assert.doesNotMatch(shared, /bodies\.push\(bytes\.slice/);
 
-  // The locator is production code now: both the isolated launcher verifier
-  // and the developer CLI reuse it. Every runtime consumer names the same
-  // sibling codec.
+  // Every module that parses or rewrites sections names the same sibling
+  // codec. The local verifier now composes those transforms without parsing a
+  // second time, so it deliberately has no codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
+    ["src/tools/enhancement-structural-evidence.ts", '../main/core/wasm-binary.js'],
     ["src/main/core/enhancement-transform.ts", './wasm-binary.js'],
     ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
     ["src/main/core/template-save-verifier.ts", './wasm-binary.js'],
-    ["src/main/core/local-client-verifier.ts", './wasm-binary.js'],
   ];
   for (const [file, specifier] of sharers) {
     const source = await readFile(path.join(root, file), "utf8");
@@ -353,33 +413,42 @@ test("saved-file recovery defers IndexedDB deletion until before renderer startu
   );
 });
 
-test("the served module, not requested settings, decides whether Enhancement imports", async () => {
+test("the served module decides whether Enhancement imports", async () => {
   const harness = await readFile(
     path.join(root, "src/renderer/harness.ts"),
     "utf8",
   );
-  const initialized = harness.slice(
-    harness.indexOf("onRuntimeInitialized()"),
-    harness.indexOf("onAbort(reason)"),
+  const gate = harness.slice(
+    harness.indexOf("function maybeInstallEnhancements()"),
+    harness.indexOf("window.gwLog"),
   );
-  assert.ok(initialized.length > 0, "runtime initialization was not found");
+  assert.ok(gate.length > 0, "the one-shot installation gate was not found");
+  assert.doesNotMatch(gate, /Object\.values\(init\.enhancementSelection\)/u);
   assert.match(
-    initialized,
-    /Object\.values\(init\.enhancementSelection\)\.some\(Boolean\)/u,
-  );
-  assert.match(
-    initialized,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length === 1/u,
+    gate,
+    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length !== 1/u,
   );
   assert.match(
-    initialized,
-    /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementSelection,\s*init\.enhancementAutomation,/u,
+    gate,
+    /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementSelection,\s*init\.enhancementProgram,/u,
   );
   assert.ok(
-    initialized.indexOf("customSections") < initialized.indexOf("import('./enhancements.js')"),
+    gate.indexOf("customSections") < gate.indexOf("import('./enhancements.js')"),
     "Enhancement was imported before the served module proved its manifest",
   );
-  assert.doesNotMatch(initialized, /init\.nativeCursor/u);
+  assert.doesNotMatch(gate, /init\.nativeCursor/u);
+  // Emscripten may report runtime initialization before or after the
+  // asynchronous instantiateWasm callback stores the module, so both edges
+  // must invoke the same one-shot gate.
+  assert.match(
+    gate,
+    /if \(enhancementInstallationStarted \|\| !runtimeInitialized\) return;/u,
+  );
+  assert.equal(
+    harness.match(/^\s*maybeInstallEnhancements\(\);$/gmu)?.length,
+    2,
+    "the instance-ready and runtime-initialized edges must both call the gate",
+  );
 });
 
 test("a completed client main loop closes the host application", async () => {

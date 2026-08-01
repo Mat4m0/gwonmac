@@ -181,6 +181,87 @@ async function driveCursor(
 }
 
 test.describe("enhancement cursor presentation", () => {
+  test("repeats hit-testing after a click only when the game emitted no cursor event", async () => {
+    const fixture = await launchOffline("gw-cursor-refresh-e2e-");
+    try {
+      const { page } = fixture;
+      await page.evaluate(async () => {
+        const { installCursorRefresh } = await import(
+          new URL("cursor-refresh.js", globalThis.location.href).href
+        ) as typeof import("../../src/renderer/cursor-refresh.js");
+        const canvas = globalThis.document.createElement("canvas");
+        canvas.id = "cursor-refresh-probe";
+        canvas.style.cssText =
+          "position:fixed;left:20px;top:20px;width:100px;height:100px;z-index:9999";
+        globalThis.document.body.append(canvas);
+        const proof = {
+          eventCount: 0,
+          refreshes: 0,
+          moves: [] as { x: number; trusted: boolean }[],
+        };
+        canvas.addEventListener("mousemove", (event) => {
+          if (!event.isTrusted) {
+            proof.moves.push({ x: event.clientX, trusted: false });
+          }
+        });
+        const dispose = installCursorRefresh(
+          canvas,
+          () => proof.eventCount,
+          () => { proof.refreshes += 1; },
+        );
+        Object.assign(globalThis, { __cursorRefreshProof: proof });
+        globalThis.addEventListener("pagehide", dispose, { once: true });
+      });
+
+      const canvas = page.locator("#cursor-refresh-probe");
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error("the game canvas has no bounds");
+      const x = Math.round(box.x + box.width / 2);
+      const y = Math.round(box.y + box.height / 2);
+      await page.mouse.click(x, y);
+      await page.evaluate(() => new Promise<void>((resolve) =>
+        globalThis.requestAnimationFrame(() => resolve())));
+      expect(await page.evaluate(() => {
+        const proof = (globalThis as typeof globalThis & {
+          __cursorRefreshProof: {
+            refreshes: number;
+            moves: { x: number; trusted: boolean }[];
+          };
+        }).__cursorRefreshProof;
+        return proof;
+      })).toMatchObject({
+        refreshes: 1,
+        moves: [
+          { x: x + 1, trusted: false },
+          { x, trusted: false },
+        ],
+      });
+
+      // A real game callback between press and release makes the fallback a
+      // no-op: it exists to fill one missing edge, not duplicate normal work.
+      await page.evaluate(() => {
+        const proof = (globalThis as typeof globalThis & {
+          __cursorRefreshProof: { eventCount: number };
+        }).__cursorRefreshProof;
+        const canvas = globalThis.document.getElementById("cursor-refresh-probe");
+        canvas?.addEventListener("mousedown", () => {
+          proof.eventCount += 1;
+        }, { once: true });
+      });
+      await page.mouse.click(x, y);
+      await page.evaluate(() => new Promise<void>((resolve) =>
+        globalThis.requestAnimationFrame(() => resolve())));
+      expect(await page.evaluate(() => {
+        const proof = (globalThis as typeof globalThis & {
+          __cursorRefreshProof: { refreshes: number; moves: unknown[] };
+        }).__cursorRefreshProof;
+        return { refreshes: proof.refreshes, moveCount: proof.moves.length };
+      })).toEqual({ refreshes: 1, moveCount: 2 });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("renders the game cursor as a 32 px image-set and hands back the plain pointer", async () => {
     const fixture = await launchOffline("gw-enhancement-cursor-e2e-");
     try {
@@ -304,7 +385,7 @@ test.describe("enhancement cursor presentation", () => {
   });
 
   // The choice is real only if a saved `nativeCursor` survives the whole chain:
-  // settings file -> enhancementsEnabledFor -> renderer init payload. Without it,
+  // settings file -> canonical hook derivation -> renderer init payload. Without it,
   // harness.js never imports enhancements.js and no cursor appears.
   test("a saved opt-in reaches the renderer init payload", async () => {
     const seed = (value: boolean) => async (userData: string) => {
@@ -314,7 +395,6 @@ test.describe("enhancement cursor presentation", () => {
         JSON.stringify({
           renderScale: 2,
           nativeCursor: value,
-          targetReadout: false,
           showDiagnostics: false,
           dataStrategy: "quick",
         }),
@@ -330,10 +410,9 @@ test.describe("enhancement cursor presentation", () => {
           search: globalThis.location.search,
         })),
       ).toEqual({
-        enhancementAutomation: false,
+        enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
-          targetReadout: false,
         },
         templateFsTrace: false,
         // The configuration is no longer in the URL the trust root checks.

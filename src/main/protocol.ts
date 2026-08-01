@@ -46,6 +46,10 @@ const CSP =
   "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
   "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
+const RENDERER_SHARED_MODULES = new Set([
+  "contracts.js",
+  "project-identity.js",
+]);
 
 export interface ProtocolDeps {
   getActiveClient: () => {
@@ -115,22 +119,27 @@ async function fileResponse(
   filePath: string,
   request: Request,
   mime: string,
+  cacheControl?: "no-store",
 ): Promise<Response> {
+  const fileHeaders = (extra: Record<string, string> = {}) => headers({
+    ...(cacheControl ? { "Cache-Control": cacheControl } : {}),
+    ...extra,
+  });
   let st;
   try {
     st = await stat(filePath);
   } catch {
-    return new Response("not found", { status: 404, headers: headers() });
+    return new Response("not found", { status: 404, headers: fileHeaders() });
   }
   if (!st.isFile()) {
-    return new Response("not found", { status: 404, headers: headers() });
+    return new Response("not found", { status: 404, headers: fileHeaders() });
   }
 
   const range = parseRangeHeader(request.headers.get("range"), st.size);
   if (range === "unsatisfiable") {
     return new Response(null, {
       status: 416,
-      headers: headers({
+      headers: fileHeaders({
         "Content-Range": `bytes */${st.size}`,
         "Accept-Ranges": "bytes",
       }),
@@ -145,7 +154,7 @@ async function fileResponse(
     const webStream = Readable.toWeb(nodeStream) as ReadableStream;
     return new Response(webStream, {
       status: 206,
-      headers: headers({
+      headers: fileHeaders({
         "Content-Type": mime,
         "Accept-Ranges": "bytes",
         "Content-Range": `bytes ${range.start}-${range.end}/${st.size}`,
@@ -158,7 +167,7 @@ async function fileResponse(
   const webStream = Readable.toWeb(nodeStream) as ReadableStream;
   return new Response(webStream, {
     status: 200,
-    headers: headers({
+    headers: fileHeaders({
       "Content-Type": mime,
       "Accept-Ranges": "bytes",
       "Content-Length": String(st.size),
@@ -420,12 +429,35 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     return fileResponse(file, request, mime);
   }
 
+  // The dynamically loaded Enhancement installer imports the canonical
+  // capability contract. TypeScript emits that contract beside main rather
+  // than copying it into renderer/, so expose only its exact two-module graph.
+  // This is deliberately not a generic build/shared route.
+  if (first === "shared") {
+    const moduleName = base.slice("shared/".length);
+    if (RENDERER_SHARED_MODULES.has(moduleName)) {
+      const sharedFile = path.join(
+        app.getAppPath(),
+        "build",
+        "shared",
+        moduleName,
+      );
+      const mime = MIME[path.extname(moduleName)] ?? "application/octet-stream";
+      return fileResponse(sharedFile, request, mime, "no-store");
+    }
+    return new Response("not found", { status: 404, headers: headers() });
+  }
+
   const rendererFile = safeUnder(rendererRoot(), pathname);
   if (rendererFile) {
     try {
       await stat(rendererFile);
       const mime = MIME[path.extname(rendererFile)] ?? "application/octet-stream";
-      return fileResponse(rendererFile, request, mime);
+      // Renderer code and the companion are local build artifacts. Reusing an
+      // old response across a development rebuild or app replacement can pair
+      // a new transformed game module with an old callback ABI, so these tiny
+      // local files deliberately bypass Chromium's HTTP cache.
+      return fileResponse(rendererFile, request, mime, "no-store");
     } catch {
       /* fall through to proxy */
     }

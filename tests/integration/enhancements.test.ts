@@ -4,9 +4,13 @@ import { describe, it } from "node:test";
 import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
+  readChangedCompanionToolbox,
   readCompanionSnapshot,
+  readCompanionToolbox,
+  sameCompanionToolboxState,
   COMPANION_CURSOR_ABI,
   COMPANION_CURSOR_BYTES,
+  COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
 
 // Every read returns a discriminated union: `reason` belongs to the members
@@ -17,6 +21,7 @@ import {
 type SnapshotRead = ReturnType<typeof readCompanionSnapshot>;
 type CursorHeaderRead = ReturnType<typeof readCompanionCursorHeader>;
 type CursorPixelsRead = ReturnType<typeof readCompanionCursorPixels>;
+type ToolboxRead = ReturnType<typeof readCompanionToolbox>;
 
 function decoded(read: SnapshotRead) {
   if (read.status !== "ready") {
@@ -61,9 +66,17 @@ function publishedPixels(read: CursorPixelsRead) {
   return read;
 }
 
+function readyToolbox(read: ToolboxRead) {
+  if (read.status !== "ready") {
+    throw new Error(`expected a toolbox snapshot, got ${JSON.stringify(read)}`);
+  }
+  return read;
+}
+
 const MAGIC = 0x42545747;
 const FEATURE_NATIVE_CURSOR = 1 << 0;
 const FEATURE_TARGET_READOUT = 1 << 1;
+const FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
 const ALL_FEATURES = FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT;
 
 interface SnapshotOverrides {
@@ -221,9 +234,27 @@ const ADDRESSES = Object.freeze({
   handle: 0x8200,
   textureView: 0x8300,
   texture: 0x8400,
+  toolbox: 0x9000,
+  partyContext: 0xa000,
+  partyInfo: 0xa100,
+  heroBuffer: 0xa200,
+  companionRuntime: 0x30_0000,
 });
-const CONFIG_WORDS = 29;
+const PARTY_DIRTY_MESSAGES = Object.freeze([
+  0x1000_0038,
+  0x1000_0039,
+  0x1000_008c,
+  0x1000_0098,
+  0x1000_00c2,
+  0x1000_0111,
+  0x1000_011e,
+  0x1000_011f,
+  0x1000_0124,
+  0x1000_0126,
+] as const);
+const CONFIG_WORDS = 49;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
+const MESSAGE_CONFIG_START = 36;
 const TEXTURE_KEY = 0x6772_7478;
 
 interface KernelOverrides {
@@ -234,6 +265,8 @@ interface KernelOverrides {
   configSize?: number;
   cursorPointer?: number;
   cursorSize?: number;
+  toolboxPointer?: number;
+  toolboxSize?: number;
 }
 
 /**
@@ -251,32 +284,58 @@ type KernelInit = (
   configSize: number,
   cursorPointer: number,
   cursorSize: number,
+  toolboxPointer: number,
+  toolboxSize: number,
   features: number,
 ) => number;
-type KernelTick = (context: number) => void;
+type KernelDispatch = (
+  kind: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+) => void;
 
 function kernelExports(exports: WebAssembly.Exports) {
   const init = exports["companion_init"];
-  const tick = exports["companion_tick"];
-  if (typeof init !== "function" || typeof tick !== "function") {
-    throw new Error("companion-kernel.wasm did not export companion_init/companion_tick");
+  const dispatch = exports["companion_dispatch"];
+  if (
+    typeof init !== "function"
+    || typeof dispatch !== "function"
+  ) {
+    throw new Error("companion-kernel.wasm did not export its foundation ABI");
   }
-  return { init: init as KernelInit, tick: tick as KernelTick };
+  return {
+    init: init as KernelInit,
+    dispatch: dispatch as KernelDispatch,
+  };
 }
 
 async function createKernel() {
   const bytes = await readFile("build/renderer/companion-kernel.wasm");
   const memory = new WebAssembly.Memory({ initial: 256 });
-  const calls = { original: 0 };
+  const view = new DataView(memory.buffer);
+  const immutableI32 = (value: number) => new WebAssembly.Global(
+    { value: "i32", mutable: false },
+    value,
+  );
   const { instance } = await WebAssembly.instantiate(bytes, {
-    env: { memory },
-    game: {
-      enhancement_tick_original: () => {
-        calls.original += 1;
-      },
+    env: {
+      memory,
+      __indirect_function_table: new WebAssembly.Table({
+        initial: 0,
+        maximum: 0,
+        element: "anyfunc",
+      }),
+      __memory_base: immutableI32(ADDRESSES.companionRuntime),
+      __stack_pointer: new WebAssembly.Global(
+        { value: "i32", mutable: true },
+        ADDRESSES.companionRuntime + 65_536,
+      ),
+      __table_base: immutableI32(0),
     },
   });
-  const view = new DataView(memory.buffer);
   const exports = kernelExports(instance.exports);
   const config = new Uint32Array(memory.buffer, ADDRESSES.config, CONFIG_WORDS);
   config.set([
@@ -287,13 +346,15 @@ async function createKernel() {
     ADDRESSES.activeArt, ADDRESSES.softwareModel, ADDRESSES.showCount,
     ADDRESSES.colorBuffer,
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
+    0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
+    0x1000_0082, 0x1000_01a3, 0x1000_01a4,
+    ...PARTY_DIRTY_MESSAGES,
   ]);
   return {
     instance,
     memory,
     view,
     config,
-    calls,
     init: (overrides: KernelOverrides = {}) => {
       const features = overrides.features ?? ALL_FEATURES;
       return exports.init(
@@ -313,10 +374,24 @@ async function createKernel() {
           ?? ((features & FEATURE_NATIVE_CURSOR) !== 0
             ? COMPANION_CURSOR_BYTES
             : 0),
+        overrides.toolboxPointer
+          ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
+            ? ADDRESSES.toolbox
+            : 0),
+        overrides.toolboxSize
+          ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
+            ? COMPANION_TOOLBOX_BYTES
+            : 0),
         features,
       );
     },
-    tick: () => exports.tick(123),
+    tick: () => exports.dispatch(0, 123, 0, 0, 0, 0),
+    cursorEvent: (...args: number[]) =>
+      exports.dispatch(1, args[0] ?? 1, args[1] ?? 2, args[2] ?? 3,
+        args[3] ?? 4, args[4] ?? 5),
+    uiEvent: (message: number, wparam: number, lparam: number) =>
+      exports.dispatch(2, message, wparam, lparam, 0, 0),
+    toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),
@@ -355,6 +430,17 @@ function installGameGraph(view: DataView) {
   view.setFloat32(ADDRESSES.target + 0x78, 20, true);
   view.setUint32(ADDRESSES.target + 0x9c, 0xdb, true);
   view.setUint32(ADDRESSES.manualTargetId, 9, true);
+  view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+  view.setUint32(ADDRESSES.partyContext + 0x54, ADDRESSES.partyInfo, true);
+  view.setUint32(ADDRESSES.partyInfo + 0x24, ADDRESSES.heroBuffer, true);
+  view.setUint32(ADDRESSES.partyInfo + 0x28, 2, true);
+  view.setUint32(ADDRESSES.partyInfo + 0x2c, 2, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x00, 77, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x04, 42, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x08, 1, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x18, 88, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x1c, 99, true);
+  view.setUint32(ADDRESSES.heroBuffer + 0x20, 2, true);
 }
 
 // s_activeArt -> art -> handle -> view -> GrTex2d, exactly the chain the
@@ -524,7 +610,36 @@ describe("Companion cursor region ABI", () => {
 });
 
 describe("Companion kernel", () => {
-  it("calls the original once and publishes a checked snapshot", async () => {
+  it("returns from adversarial callback scalars without panicking", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    installCursorGraph(kernel.view);
+    paintCursor(kernel.view, 1);
+    assert.equal(
+      kernel.init({
+        features:
+          FEATURE_NATIVE_CURSOR
+          | FEATURE_TARGET_READOUT
+          | FEATURE_TOOLBOX_FOUNDATION,
+      }),
+      1,
+    );
+    const exportedDispatch = kernel.instance.exports.companion_dispatch;
+    assert.equal(typeof exportedDispatch, "function");
+    const dispatch = exportedDispatch as CallableFunction;
+    for (const kind of [0, 1, 2, 3, 0x7fff_ffff, 0xffff_ffff]) {
+      assert.doesNotThrow(() => dispatch(
+        kind,
+        0xffff_ffff,
+        0x8000_0000,
+        0x7fff_ffff,
+        0xffff_ffff,
+        0x8000_0000,
+      ));
+    }
+  });
+
+  it("publishes a checked snapshot after a game tick", async () => {
     const kernel = await createKernel();
     const { view, config, instance } = kernel;
     installGameGraph(view);
@@ -534,7 +649,6 @@ describe("Companion kernel", () => {
     assert.equal(kernel.init({ configSize: CONFIG_BYTES - 4 }), 0);
     assert.equal(kernel.init(), 1);
     kernel.tick();
-    assert.equal(kernel.calls.original, 1);
     const state = decoded(
       readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot),
     );
@@ -606,8 +720,7 @@ describe("Companion kernel", () => {
       rejected(readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot)),
       "game",
     );
-    assert.equal(kernel.calls.original, boundaries.length + 6);
-    assert.equal(typeof instance.exports.companion_tick, "function");
+    assert.equal(typeof instance.exports.companion_dispatch, "function");
   });
 
   it("collects only the explicitly enabled tools", async () => {
@@ -647,14 +760,321 @@ describe("Companion kernel", () => {
     assert.equal(state.tickCount, 1);
     assert.equal(readoutOnly.field(CURSOR.magic), 0);
 
-    assert.equal(cursorOnly.calls.original, 1);
-    assert.equal(readoutOnly.calls.original, 1);
+  });
+
+  it("requires UI message configuration only for the Toolbox capability", async () => {
+    const cursorOnly = await createKernel();
+    cursorOnly.config.fill(0, MESSAGE_CONFIG_START);
+    assert.equal(cursorOnly.init({ features: FEATURE_NATIVE_CURSOR }), 1);
+
+    const readoutOnly = await createKernel();
+    readoutOnly.config.fill(0, MESSAGE_CONFIG_START);
+    assert.equal(readoutOnly.init({ features: FEATURE_TARGET_READOUT }), 1);
+
+    const toolbox = await createKernel();
+    toolbox.config.fill(0, MESSAGE_CONFIG_START);
+    assert.equal(
+      toolbox.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      0,
+    );
+
+    const missingDirty = await createKernel();
+    missingDirty.config[MESSAGE_CONFIG_START + 3] = 0;
+    assert.equal(
+      missingDirty.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      0,
+    );
+
+    const duplicateDirty = await createKernel();
+    duplicateDirty.config[MESSAGE_CONFIG_START + 4] =
+      duplicateDirty.config[MESSAGE_CONFIG_START + 3]!;
+    assert.equal(
+      duplicateDirty.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      0,
+    );
+  });
+
+  it("observes Toolbox heroes without traversing the agent array", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    kernel.view.setUint32(ADDRESSES.agentArray, 0xffff_fffc, true);
+    kernel.view.setUint32(ADDRESSES.agentArray + 4, 0xffff_ffff, true);
+    kernel.view.setUint32(ADDRESSES.agentArray + 8, 0xffff_ffff, true);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const toolbox = readyToolbox(kernel.toolbox());
+    assert.equal(toolbox.heroAvailable, true);
+    assert.equal(toolbox.firstHeroId, 1);
+    assert.equal(toolbox.firstHeroAgentId, 77);
+  });
+
+  it("traverses party state only for the exact dirty-message set", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const ready = readyToolbox(kernel.toolbox());
+    assert.equal(ready.heroAvailable, true);
+
+    // Keep the last published projection but make the canonical party pointer
+    // invalid. An unrelated central-dispatch message must not schedule a walk.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, 0xffff_fffc, true);
+    kernel.uiEvent(0x1000_0080, 0xdead_beef, 0x7fff_fffd);
+    kernel.tick();
+    let state = readyToolbox(kernel.toolbox());
+    assert.equal(state.sequence, ready.sequence);
+    assert.equal(state.heroAvailable, true);
+
+    // The certified party removal is dirty-only: it publishes nothing in the
+    // callback, then the next tick traverses and invalidates stale hero state.
+    kernel.uiEvent(0x1000_011f, 0xdead_beef, 0x7fff_fffd);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, ready.sequence);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.ok(state.sequence > ready.sequence);
+    assert.equal(state.heroAvailable, false);
+
+    // A certified map-loaded boundary also restores a replaced party graph.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+    kernel.uiEvent(0x1000_008c, 0, 0);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, true);
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [1, 77],
+    );
+
+    // Every member of the certificate tuple arms the same coalesced dirty bit;
+    // this also pins the Rust comparison to all ten config positions.
+    for (const [index, message] of PARTY_DIRTY_MESSAGES.entries()) {
+      const heroId = index + 2;
+      const agentId = index + 100;
+      kernel.view.setUint32(ADDRESSES.heroBuffer + 0x00, agentId, true);
+      kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, heroId, true);
+      kernel.uiEvent(message, 0, 0);
+      kernel.tick();
+      state = readyToolbox(kernel.toolbox());
+      assert.deepEqual(
+        [state.firstHeroId, state.firstHeroAgentId],
+        [heroId, agentId],
+      );
+    }
+  });
+
+  it("counts chat and observes hero-panel events without calling back into the game", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(
+      kernel.init({
+        features: FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION,
+      }),
+      1,
+    );
+    kernel.tick();
+    let state = readyToolbox(kernel.toolbox());
+    assert.equal(state.playerChatCount, 0);
+    assert.equal(state.heroAvailable, true);
+    assert.equal(state.heroCount, 1);
+    assert.equal(state.firstHeroId, 1);
+    assert.equal(state.firstHeroAgentId, 77);
+
+    const initialSequence = state.sequence;
+    kernel.uiEvent(0x1000_0080, 0xdead_beef, 0x7fff_fffd);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.playerChatCount, 0);
+    assert.equal(state.sequence, initialSequence);
+    kernel.tick();
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, initialSequence);
+    kernel.uiEvent(0x1000_0082, 0xdead_beef, 0x7fff_fffd);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.playerChatCount, 1);
+    kernel.uiEvent(0x1000_01a4, 1, 0);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.panelState, 2);
+    const shownSequence = state.sequence;
+    kernel.uiEvent(0x1000_01a4, 1, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, shownSequence);
+    kernel.uiEvent(0x1000_01a3, 1, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).panelState, 1);
+  });
+
+  it("observes heroes on UI changes with a bounded quiet reconciliation", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    // The hero observer needs game + party + player-number only. Poisoning the
+    // agent-array ceiling proves Toolbox-only collection cannot fall back to
+    // the target readout's 4,096-entry agent search.
+    kernel.view.setUint32(ADDRESSES.agentArray + 4, 5_000, true);
+    kernel.view.setUint32(ADDRESSES.agentArray + 8, 5_000, true);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+
+    kernel.tick();
+    let state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, true);
+    assert.deepEqual(
+      [state.heroCount, state.firstHeroId, state.firstHeroAgentId],
+      [1, 1, 77],
+    );
+
+    // A canonical change without a callback is intentionally invisible on
+    // quiet ticks: no party traversal and no snapshot publication occurs.
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x00, 99, true);
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, 3, true);
+    const quietSequence = state.sequence;
+    for (let tick = 0; tick < 119; tick += 1) kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.sequence, quietSequence);
+    assert.equal(state.firstHeroId, 1);
+
+    // The 120th quiet tick is the bounded recovery path for a missed event.
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.ok(state.sequence > quietSequence);
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [3, 99],
+    );
+
+    // A certified party mutation is the dirty boundary. It does not publish by
+    // itself; one following tick reconciles canonical state.
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x00, 100, true);
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, 4, true);
+    const beforeDirty = state.sequence;
+    kernel.uiEvent(0x1000_011e, 0, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, beforeDirty);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [4, 100],
+    );
+
+    // Loading invalidates the projection once. Repeated dirty callbacks while
+    // it remains unavailable do not churn the seqlock or renderer.
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 2, true);
+    kernel.uiEvent(0x1000_00c2, 0, 0);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, false);
+    const loadingSequence = state.sequence;
+
+    // Two scheduled reconciliation periods may validate lifecycle state while
+    // loading, but must not walk the party vector or republish. Keep the party
+    // root deliberately invalid throughout that window.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, 0xffff_fffc, true);
+    for (let tick = 0; tick < 240; tick += 1) kernel.tick();
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, loadingSequence);
+
+    kernel.uiEvent(0x1000_0098, 0, 0);
+    kernel.tick();
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, loadingSequence);
+
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 0, true);
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+    kernel.uiEvent(0x1000_008c, 0, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, loadingSequence);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, true);
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [4, 100],
+    );
+  });
+
+  it("compares Toolbox projections by decoded value", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const first = kernel.toolbox();
+    assert.equal(sameCompanionToolboxState(null, first), false);
+    assert.equal(sameCompanionToolboxState(first, kernel.toolbox()), true);
+
+    const sequence = readyToolbox(first).sequence;
+    kernel.view.setUint32(ADDRESSES.toolbox + 8, sequence + 2, true);
+    const republished = kernel.toolbox();
+    assert.equal(sameCompanionToolboxState(first, republished), true);
+    kernel.view.setUint32(ADDRESSES.toolbox + 16, 1, true);
+    assert.equal(sameCompanionToolboxState(republished, kernel.toolbox()), false);
+  });
+
+  it("reads only the Toolbox header while its generation is unchanged", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const first = readChangedCompanionToolbox(
+      kernel.memory.buffer,
+      ADDRESSES.toolbox,
+      null,
+    );
+    assert.equal(first.changed, true);
+    assert.notEqual(first.sequence, null);
+    const unchanged = readChangedCompanionToolbox(
+      kernel.memory.buffer,
+      ADDRESSES.toolbox,
+      first.sequence,
+    );
+    assert.deepEqual(unchanged, {
+      changed: false,
+      sequence: first.sequence,
+    });
+
+    kernel.uiEvent(0x1000_0082, 0, 0);
+    const changed = readChangedCompanionToolbox(
+      kernel.memory.buffer,
+      ADDRESSES.toolbox,
+      first.sequence,
+    );
+    assert.equal(changed.changed, true);
+    assert.notEqual(changed.sequence, first.sequence);
+  });
+
+  it("writes only its explicitly owned regions under mixed callback load", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    installCursorGraph(kernel.view);
+    paintCursor(kernel.view, 7);
+    assert.equal(kernel.init({
+      features: FEATURE_NATIVE_CURSOR
+        | FEATURE_TARGET_READOUT
+        | FEATURE_TOOLBOX_FOUNDATION,
+    }), 1);
+    const before = new Uint8Array(kernel.memory.buffer).slice();
+
+    for (let index = 0; index < 512; index += 1) {
+      kernel.tick();
+      kernel.cursorEvent(index, index + 1, index + 2, index + 3, index + 4);
+      kernel.uiEvent(index % 2 ? 0x1000_0082 : 0x1000_0080, index, 0);
+      kernel.uiEvent(index % 2 ? 0x1000_01a3 : 0x1000_01a4, 1, 0);
+    }
+
+    const owned = [
+      [ADDRESSES.snapshot, ADDRESSES.snapshot + 64],
+      [ADDRESSES.cursor, ADDRESSES.cursor + COMPANION_CURSOR_BYTES],
+      [ADDRESSES.toolbox, ADDRESSES.toolbox + COMPANION_TOOLBOX_BYTES],
+      [ADDRESSES.companionRuntime, ADDRESSES.companionRuntime + 65_536],
+    ] as const;
+    const after = new Uint8Array(kernel.memory.buffer);
+    for (let address = 0; address < after.byteLength; address += 1) {
+      if (owned.some(([start, end]) => address >= start && address < end)) {
+        continue;
+      }
+      assert.equal(
+        after[address],
+        before[address],
+        `companion wrote outside an owned region at 0x${address.toString(16)}`,
+      );
+    }
   });
 
   it("rejects empty, unknown, missing, or unselected feature regions", async () => {
     const kernel = await createKernel();
     assert.equal(kernel.init({ features: 0 }), 0);
-    assert.equal(kernel.init({ features: 1 << 2 }), 0);
+    assert.equal(kernel.init({ features: 1 << 3 }), 0);
     assert.equal(
       kernel.init({
         features: FEATURE_NATIVE_CURSOR,
@@ -689,7 +1109,6 @@ describe("Companion kernel", () => {
     );
 
     kernel.tick();
-    assert.equal(kernel.calls.original, 1);
     assert.equal(kernel.view.getUint32(ADDRESSES.snapshot, true), 0);
     assert.equal(kernel.field(CURSOR.magic), 0);
   });
@@ -706,7 +1125,6 @@ describe("Companion kernel", () => {
     assert.equal(kernel.init({ cursorPointer: 0xffff_f000 }), 0);
     // A rejected init must leave the kernel dormant.
     kernel.tick();
-    assert.equal(kernel.calls.original, 1);
     assert.equal(kernel.field(CURSOR.magic), 0);
     assert.equal(kernel.init(), 1);
   });
@@ -759,6 +1177,7 @@ describe("Companion kernel", () => {
     assert.equal(kernel.field(CURSOR.sequence), sequence);
 
     const second = paintCursor(view, 2);
+    kernel.cursorEvent();
     kernel.tick();
     assert.equal(kernel.field(CURSOR.generation), 2);
     assert.equal(kernel.field(CURSOR.pixelHash), fnv1a(second));
@@ -770,6 +1189,7 @@ describe("Companion kernel", () => {
     // Identical pixels, moved hotspot: the pixel hash cannot see this, so the
     // published identity must carry the hotspot too.
     view.setUint32(ADDRESSES.art + 0x04, 9, true);
+    kernel.cursorEvent();
     kernel.tick();
     assert.equal(kernel.field(CURSOR.generation), 3);
     assert.equal(kernel.field(CURSOR.pixelHash), fnv1a(second));
@@ -791,7 +1211,6 @@ describe("Companion kernel", () => {
     assert.equal(kernel.field(CURSOR.generation), 3);
     assert.deepEqual(kernel.payload(), expectedRgba(second));
 
-    assert.equal(kernel.calls.original, 19);
   });
 
   it("never publishes an uncommitted colour buffer as a cursor", async () => {
@@ -808,6 +1227,7 @@ describe("Companion kernel", () => {
     assert.equal(kernel.published(), null);
 
     paintCursor(kernel.view, 4);
+    kernel.cursorEvent();
     kernel.tick();
     assert.equal(kernel.header().status, "ready");
     assert.equal(kernel.field(CURSOR.generation), 1);
@@ -824,6 +1244,7 @@ describe("Companion kernel", () => {
 
     view.setUint32(ADDRESSES.softwareModel, 1, true);
     const replacement = paintCursor(view, 6);
+    kernel.cursorEvent();
     for (let index = 0; index < 3; index += 1) kernel.tick();
     const unsupported = invalidCursor(kernel.header());
     assert.equal(unsupported.status, "invalid");
@@ -833,6 +1254,7 @@ describe("Companion kernel", () => {
     assert.deepEqual(kernel.payload(), expectedRgba(good));
 
     view.setUint32(ADDRESSES.softwareModel, 0, true);
+    kernel.cursorEvent();
     kernel.tick();
     const recovered = publishedPixels(kernel.published());
     assert.equal(recovered.status, "ready");
@@ -862,6 +1284,7 @@ describe("Companion kernel", () => {
     let generation = 1;
     for (const [name, breakGraph] of rejections) {
       breakGraph();
+      kernel.cursorEvent();
       kernel.tick();
       const broken = invalidCursor(kernel.header());
       assert.equal(broken.status, "invalid", name);
@@ -873,6 +1296,7 @@ describe("Companion kernel", () => {
       assert.deepEqual(kernel.payload(), expectedRgba(words), name);
 
       installCursorGraph(view);
+      kernel.cursorEvent();
       kernel.tick();
       generation += 1;
       assert.equal(kernel.header().status, "ready", name);

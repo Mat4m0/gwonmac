@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import {
+  enhancementCapabilityProfile,
+  enhancementHooksFor,
+  ENHANCEMENT_TRANSFORM_ABI,
+  type EnhancementCapabilities,
+} from "../../shared/contracts.js";
+import {
   findEnhancementBuild,
-  enhancementLayoutWords,
+  enhancementConfigWords,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import {
@@ -29,10 +35,13 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 4;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
-export const ENHANCEMENT_ORIGINAL_EXPORT = "enhancement_tick_original";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
+
+const DISPATCH_PARAMS = 6;
+const DISPATCH_TICK = 0;
+const DISPATCH_CURSOR = 1;
+const DISPATCH_UI = 2;
 
 interface WasmExport {
   name: string;
@@ -42,6 +51,30 @@ interface WasmExport {
 
 function fail(message: string): never {
   throw new Error(`enhancement transform: ${message}`);
+}
+
+function exactCapabilities(value: unknown): EnhancementCapabilities | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== 3
+    || !Object.hasOwn(record, "nativeCursor")
+    || !Object.hasOwn(record, "targetObservation")
+    || !Object.hasOwn(record, "toolbox")
+    || typeof record.nativeCursor !== "boolean"
+    || typeof record.targetObservation !== "boolean"
+    || typeof record.toolbox !== "boolean"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    nativeCursor: record.nativeCursor,
+    targetObservation: record.targetObservation,
+    toolbox: record.toolbox,
+  });
 }
 
 function encodeName(value: string): Uint8Array {
@@ -75,20 +108,35 @@ function vectorPayload(bytes: Uint8Array): {
   return { count, entries: bytes.slice(cursor.offset) };
 }
 
-function parseTable(bytes: Uint8Array): { min: number; max: number | null } {
+function parseTable(bytes: Uint8Array): {
+  flags: number;
+  min: number;
+  max: number | null;
+} {
   const cursor = { offset: 0 };
   if (readUleb(bytes, cursor) !== 1) fail("expected exactly one table");
   if (bytes[cursor.offset++] !== 0x70) fail("expected funcref table");
   const flags = readUleb(bytes, cursor);
   const min = readUleb(bytes, cursor);
   const max = (flags & 1) !== 0 ? readUleb(bytes, cursor) : null;
-  return { min, max };
+  if (cursor.offset !== bytes.byteLength) fail("malformed table section");
+  return { flags, min, max };
 }
 
-function occupiedTableSlots(bytes: Uint8Array): Set<number> {
+function encodeTable(flags: number, min: number, max: number): Uint8Array {
+  return concat(
+    uleb(1),
+    Uint8Array.of(0x70),
+    uleb(flags),
+    uleb(min),
+    uleb(max),
+  );
+}
+
+function tableSlotFunctions(bytes: Uint8Array): Map<number, number> {
   const cursor = { offset: 0 };
   const count = readUleb(bytes, cursor);
-  const occupied = new Set<number>();
+  const slots = new Map<number, number>();
   for (let segment = 0; segment < count; segment += 1) {
     const flags = readUleb(bytes, cursor);
     if (flags !== 0) fail(`unsupported element segment flags ${flags}`);
@@ -97,17 +145,20 @@ function occupiedTableSlots(bytes: Uint8Array): Set<number> {
     if (bytes[cursor.offset++] !== 0x0b) fail("malformed element offset");
     const entries = readUleb(bytes, cursor);
     for (let i = 0; i < entries; i += 1) {
-      readUleb(bytes, cursor);
-      occupied.add(base + i);
+      const functionIndex = readUleb(bytes, cursor);
+      const slot = base + i;
+      if (slots.has(slot)) fail(`duplicate active table slot ${slot}`);
+      slots.set(slot, functionIndex);
     }
   }
   if (cursor.offset !== bytes.byteLength) fail("malformed element section");
-  return occupied;
+  return slots;
 }
 
 function dispatcher(
   paramCount: number,
-  typeIndex: number,
+  dispatchKind: number,
+  dispatchTypeIndex: number,
   originalIndex: number,
   hookGlobalIndex: number,
 ): Uint8Array {
@@ -116,39 +167,80 @@ function dispatcher(
   );
   return concat(
     uleb(0),
-    Uint8Array.of(0x23),
-    uleb(hookGlobalIndex),
-    Uint8Array.of(0x45, 0x04, 0x40),
+    // The game-owned function always runs in the game module and on the
+    // game-owned call stack. The optional companion is a passive observer;
+    // normal game execution must never depend on crossing into a side module
+    // and then re-entering this clone.
     ...args,
     Uint8Array.of(0x10),
     uleb(originalIndex),
+    Uint8Array.of(0x23),
+    uleb(hookGlobalIndex),
+    Uint8Array.of(0x45, 0x04, 0x40),
     Uint8Array.of(0x0f, 0x0b),
+    Uint8Array.of(0x41),
+    sleb(dispatchKind),
     ...args,
+    ...Array.from({ length: DISPATCH_PARAMS - 1 - paramCount }, () =>
+      concat(Uint8Array.of(0x41), sleb(0)),
+    ),
     Uint8Array.of(0x23),
     uleb(hookGlobalIndex),
     Uint8Array.of(0x41),
     sleb(1),
     Uint8Array.of(0x6b, 0x11),
-    uleb(typeIndex),
+    uleb(dispatchTypeIndex),
     uleb(0),
     Uint8Array.of(0x0b),
   );
 }
 
-function buildManifestSection(build: KnownEnhancementBuild): Section {
-  const layoutWords = enhancementLayoutWords(build.layout);
+function buildManifestSection(
+  build: KnownEnhancementBuild,
+  capabilities: EnhancementCapabilities,
+): Section {
+  const selectedHooks = enhancementHooksFor(capabilities);
+  const configWords = enhancementConfigWords(build, capabilities);
   const json = new TextEncoder().encode(
     JSON.stringify({
       transformAbi: ENHANCEMENT_TRANSFORM_ABI,
-      snapshotAbi: 1,
-      snapshotBytes: 64,
-      cursorSnapshotAbi: 1,
-      cursorSnapshotBytes: 4160,
-      configBytes: layoutWords.length * 4,
       programId: build.programId,
       buildId: build.buildId,
       tableSlot: build.tableSlot,
-      layoutWords,
+      capabilities,
+      hooks: {
+        tick: selectedHooks.tick
+          ? {
+              functionIndex: build.hookFunction,
+              params: build.hookParams,
+              results: build.hookResults,
+            }
+          : null,
+        cursor: selectedHooks.cursor
+          ? {
+              functionIndex: build.cursorEvent.functionIndex,
+              params: build.cursorEvent.params,
+              results: build.cursorEvent.results,
+              existingTableSlot: build.cursorEvent.tableSlot,
+            }
+          : null,
+        ui: selectedHooks.ui
+          ? {
+              functionIndex: build.uiDispatcher.functionIndex,
+              params: build.uiDispatcher.params,
+              results: build.uiDispatcher.results,
+            }
+          : null,
+      },
+      messages: selectedHooks.ui
+          ? {
+            playerChat: build.uiDispatcher.playerChatMessage,
+            hideHeroPanel: build.uiDispatcher.hideHeroPanelMessage,
+            showHeroPanel: build.uiDispatcher.showHeroPanelMessage,
+            partyDirty: build.uiDispatcher.partyDirtyMessages,
+          }
+        : null,
+      configWords,
     }),
   );
   return {
@@ -157,18 +249,38 @@ function buildManifestSection(build: KnownEnhancementBuild): Section {
   };
 }
 
-function assertSignature(type: FunctionType, build: KnownEnhancementBuild): void {
+function assertSignature(
+  label: string,
+  type: FunctionType,
+  expectedParams: readonly string[],
+  expectedResults: readonly string[],
+): void {
   const params = type.params.map(valueTypeName);
   const results = type.results.map(valueTypeName);
   if (
-    params.join(",") !== build.hookParams.join(",") ||
-    results.join(",") !== build.hookResults.join(",")
+    params.join(",") !== expectedParams.join(",") ||
+    results.join(",") !== expectedResults.join(",")
   ) {
     fail(
-      `hook signature is (${params.join(",")}) -> (${results.join(",")}), expected ` +
-        `(${build.hookParams.join(",")}) -> (${build.hookResults.join(",")})`,
+      `${label} signature is (${params.join(",")}) -> (${results.join(",")}), expected ` +
+        `(${expectedParams.join(",")}) -> (${expectedResults.join(",")})`,
     );
   }
+}
+
+function encodeTypes(types: readonly FunctionType[]): Uint8Array {
+  return concat(
+    uleb(types.length),
+    ...types.map((type) =>
+      concat(
+        Uint8Array.of(0x60),
+        uleb(type.params.length),
+        Uint8Array.from(type.params),
+        uleb(type.results.length),
+        Uint8Array.from(type.results),
+      ),
+    ),
+  );
 }
 
 export interface EnhancementCandidateReport {
@@ -222,17 +334,17 @@ export function inspectEnhancementCandidate(
   }
   let table: EnhancementCandidateReport["table"];
   try {
-    const shape = parseTable(sectionById(sections, 4));
-    const occupied = occupiedTableSlots(sectionById(sections, 9));
+    const { min, max } = parseTable(sectionById(sections, 4));
+    const occupied = tableSlotFunctions(sectionById(sections, 9));
     const firstEmptySlots: number[] = [];
     for (
       let slot = 0;
-      slot < shape.min && firstEmptySlots.length < 8;
+      slot < min && firstEmptySlots.length < 8;
       slot += 1
     ) {
       if (!occupied.has(slot)) firstEmptySlots.push(slot);
     }
-    table = { ...shape, firstEmptySlots };
+    table = { min, max, firstEmptySlots };
   } catch {
     table = null;
   }
@@ -248,7 +360,14 @@ export function inspectEnhancementCandidate(
 export function transformEnhancementWasm(
   input: Uint8Array,
   build: KnownEnhancementBuild,
+  requestedCapabilities: EnhancementCapabilities,
 ): Uint8Array {
+  const capabilities = exactCapabilities(requestedCapabilities)
+    ?? fail("capability selection is invalid");
+  if (enhancementCapabilityProfile(capabilities) === null) {
+    fail("capability profile is not certified");
+  }
+  const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
 
@@ -259,56 +378,148 @@ export function transformEnhancementWasm(
   const bodies = parseCode(sectionById(sections, 10));
   if (functionTypes.length !== bodies.length) fail("function/code count mismatch");
 
-  const localIndex = build.hookFunction - importCount;
-  if (localIndex < 0 || localIndex >= bodies.length) fail("hook function is out of range");
-  const typeIndex = functionTypes[localIndex]!;
-  const type = types[typeIndex] ?? fail("hook references an unknown type");
-  assertSignature(type, build);
+  const resolveHook = (
+    label: string,
+    functionIndex: number,
+    expectedParams: readonly string[],
+    expectedResults: readonly string[],
+  ): { localIndex: number; typeIndex: number; type: FunctionType } => {
+    const localIndex = functionIndex - importCount;
+    if (localIndex < 0 || localIndex >= bodies.length) {
+      fail(`${label} function is out of range`);
+    }
+    const typeIndex = functionTypes[localIndex]!;
+    const type = types[typeIndex] ?? fail(`${label} references an unknown type`);
+    assertSignature(label, type, expectedParams, expectedResults);
+    return { localIndex, typeIndex, type };
+  };
+  type ResolvedHook = ReturnType<typeof resolveHook> & Readonly<{
+    dispatchKind: number;
+  }>;
+  // This is the transform's one ordering rule. It controls relocated-original
+  // indices and output bytes, so capability selection can never inherit object
+  // iteration order or the order in which a caller happened to request hooks.
+  const selected: ResolvedHook[] = [];
+  if (selectedHooks.tick) {
+    selected.push({
+      ...resolveHook(
+        "tick",
+        build.hookFunction,
+        build.hookParams,
+        build.hookResults,
+      ),
+      dispatchKind: DISPATCH_TICK,
+    });
+  }
+  if (selectedHooks.cursor) {
+    selected.push({
+      ...resolveHook(
+        "cursor",
+        build.cursorEvent.functionIndex,
+        build.cursorEvent.params,
+        build.cursorEvent.results,
+      ),
+      dispatchKind: DISPATCH_CURSOR,
+    });
+  }
+  if (selectedHooks.ui) {
+    selected.push({
+      ...resolveHook(
+        "UI dispatcher",
+        build.uiDispatcher.functionIndex,
+        build.uiDispatcher.params,
+        build.uiDispatcher.results,
+      ),
+      dispatchKind: DISPATCH_UI,
+    });
+  }
+  if (new Set(selected.map((hook) => hook.localIndex)).size !== selected.length) {
+    fail("selected hooks must resolve to distinct functions");
+  }
 
   const table = parseTable(sectionById(sections, 4));
   if (
-    build.tableSlot < 0 ||
-    build.tableSlot >= table.min ||
-    (table.max !== null && build.tableSlot >= table.max)
+    table.flags !== 1 ||
+    table.max === null ||
+    table.min !== table.max ||
+    table.max === 0xffff_ffff
   ) {
-    fail("hook table slot is outside table limits");
+    fail("expected one bounded fixed-size function table");
   }
-  if (occupiedTableSlots(sectionById(sections, 9)).has(build.tableSlot)) {
-    fail(`hook table slot ${build.tableSlot} is occupied`);
+  if (build.tableSlot !== table.min) {
+    fail(`hook table slot ${build.tableSlot} is not the new terminal slot`);
+  }
+  const nextTableSize = table.min + 1;
+  if (selectedHooks.cursor) {
+    const tableSlots = tableSlotFunctions(sectionById(sections, 9));
+    if (
+      tableSlots.get(build.cursorEvent.tableSlot)
+      !== build.cursorEvent.functionIndex
+    ) {
+      fail(
+        `cursor table slot ${build.cursorEvent.tableSlot} does not map to ` +
+          `function ${build.cursorEvent.functionIndex}`,
+      );
+    }
   }
 
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
-  const originalIndex = importCount + bodies.length;
+  const existingExports = parseExports(sectionById(sections, 7));
+  const addedExportNames = [ENHANCEMENT_HOOK_EXPORT];
+  for (const name of addedExportNames) {
+    if (existingExports.some((entry) => entry.name === name)) {
+      fail(`export ${name} already exists`);
+    }
+  }
+  const originalBaseIndex = importCount + bodies.length;
   const hookGlobalIndex = globals.count;
+  const dispatchTypeIndex = types.length;
 
-  const nextFunctionTypes = [...functionTypes, typeIndex];
-  const nextBodies = [...bodies, bodies[localIndex]!];
-  nextBodies[localIndex] = dispatcher(
-    type.params.length,
-    typeIndex,
-    originalIndex,
-    hookGlobalIndex,
-  );
+  const nextTypes = [
+    ...types,
+    { params: Array<number>(DISPATCH_PARAMS).fill(0x7f), results: [] },
+  ];
+  const nextFunctionTypes = [
+    ...functionTypes,
+    ...selected.map((hook) => hook.typeIndex),
+  ];
+  const nextBodies = [
+    ...bodies,
+    ...selected.map((hook) => bodies[hook.localIndex]!),
+  ];
+  selected.forEach((hook, index) => {
+    nextBodies[hook.localIndex] = dispatcher(
+      hook.type.params.length,
+      hook.dispatchKind,
+      dispatchTypeIndex,
+      originalBaseIndex + index,
+      hookGlobalIndex,
+    );
+  });
   const nextGlobals = concat(
     uleb(globals.count + 1),
     globals.entries,
     Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
   );
   const nextExports = concat(
-    uleb(exports.count + 2),
+    uleb(exports.count + 1),
     exports.entries,
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
     uleb(hookGlobalIndex),
-    encodeName(ENHANCEMENT_ORIGINAL_EXPORT),
-    Uint8Array.of(0x00),
-    uleb(originalIndex),
   );
 
   const rewritten = sections.map((section): Section => {
+    if (section.id === 1) return { id: section.id, body: encodeTypes(nextTypes) };
     if (section.id === 3) {
       return { id: section.id, body: encodeIndexVector(nextFunctionTypes) };
+    }
+    if (section.id === 4) {
+      return {
+        id: section.id,
+        body: encodeTable(table.flags, nextTableSize, nextTableSize),
+      };
     }
     if (section.id === 6) return { id: section.id, body: nextGlobals };
     if (section.id === 7) return { id: section.id, body: nextExports };
@@ -318,7 +529,7 @@ export function transformEnhancementWasm(
   const output = concat(
     WASM_HEADER,
     ...rewritten.map(encodeSection),
-    encodeSection(buildManifestSection(build)),
+    encodeSection(buildManifestSection(build, capabilities)),
   );
   if (!WebAssembly.validate(output)) fail("rewritten module failed validation");
   return output;

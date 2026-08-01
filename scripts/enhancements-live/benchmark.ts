@@ -19,7 +19,7 @@
  * total cost against an untransformed client.
  */
 export const BENCHMARK_ARMS = Object.freeze({
-  /** Hook slot 0: the game calls its original tick, the kernel never runs. */
+  /** Hook global zero: the game calls its original tick, the kernel never runs. */
   dispatcherOff: "transformed-dispatcher-off",
   /** Hook slot live: the kernel writes snapshots and the renderer reads them. */
   observerOn: "transformed-observer-on",

@@ -19,8 +19,6 @@ describe("settings", () => {
       // On since P3.34: the game's own cursor is what a Guild Wars player
       // expects to see, so the setting is how it is switched off.
       nativeCursor: true,
-      // The first optional read-only feature stays opt-in.
-      targetReadout: false,
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -54,7 +52,6 @@ describe("settings", () => {
     assert.deepEqual(got, {
       renderScale: 1,
       nativeCursor: true,
-      targetReadout: false,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -84,7 +81,6 @@ describe("settings", () => {
   it("rejects unknown types", () => {
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
     assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
-    assert.throws(() => parseSettings({ targetReadout: 1 }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
@@ -133,16 +129,14 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ nativeCursor: true }), {
       nativeCursor: true,
     });
-    assert.deepEqual(parseSettingsPatch({ targetReadout: true }), {
-      targetReadout: true,
-    });
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
       lastUpdateCheckAt: 1_000,
     });
     assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
     assert.throws(() => parseSettingsPatch({ touchMode: "dbltap" }), AppError);
-    // A renderer that still names the retired key is a bug, not a migration.
+    // A renderer that still names a retired key is a bug, not a migration.
     assert.throws(() => parseSettingsPatch({ cursorTheme: "system" }), AppError);
+    assert.throws(() => parseSettingsPatch({ targetReadout: true }), AppError);
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -182,7 +176,6 @@ describe("settings", () => {
       "nativeCursor",
       "renderScale",
       "showDiagnostics",
-      "targetReadout",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -210,7 +203,6 @@ describe("settings", () => {
     assert.deepEqual(loaded, {
       renderScale: 1.5,
       nativeCursor: true,
-      targetReadout: false,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately

@@ -26,25 +26,33 @@ export type CommonAcceptanceResult = {
 
 /**
  * @param expectedBuildId the build the preflight said is installed.
- * @param options `coreObservation` is false for a run whose scenario does not
- *   read game state, so the cadence, map, and snapshot checks below have
- *   nothing to judge.
+ * @param options `enhancementExpected` is false for a program-free client
+ *   smoke. `coreObservation` is true only for the explicit observer program;
+ *   Toolbox owns a smaller projection and does not allocate the target scan.
  */
 export function validateCommonAcceptance(
   result: CommonAcceptanceResult,
   expectedBuildId: number,
-  { coreObservation = true }: { coreObservation?: boolean } = {},
+  {
+    enhancementExpected = true,
+    coreObservation = true,
+  }: {
+    enhancementExpected?: boolean;
+    coreObservation?: boolean;
+  } = {},
 ): void {
-  if (!result.supported) throw new Error("Enhancement is unsupported");
-  if (result.buildId !== expectedBuildId) {
+  if (enhancementExpected && !result.supported) {
+    throw new Error("Enhancement is unsupported");
+  }
+  if (enhancementExpected && result.buildId !== expectedBuildId) {
     throw new Error(
       `runtime build ${result.buildId} does not match ${expectedBuildId}`,
     );
   }
-  if (result.installation !== 1) {
+  if (enhancementExpected && result.installation !== 1) {
     throw new Error(`expected one hook installation, got ${result.installation}`);
   }
-  if (coreObservation) {
+  if (enhancementExpected && coreObservation) {
     if (result.hookHertz < 1 || result.hookHertz > 240) {
       throw new Error(`invalid hook cadence ${result.hookHertz}`);
     }

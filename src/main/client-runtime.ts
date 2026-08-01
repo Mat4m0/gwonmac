@@ -3,10 +3,15 @@ import type {
   ClientCompatibility,
   ClientHealthToken,
   DownloadProgress,
+  EnhancementCapabilities,
   FullDownloadOutcome,
   NoticeCode,
   PrefetchProgress,
   SnapshotMetadata,
+} from "../shared/contracts.js";
+import {
+  enhancementCapabilitiesRequested,
+  ENHANCEMENT_TRANSFORM_ABI,
 } from "../shared/contracts.js";
 import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
@@ -49,7 +54,6 @@ import {
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
 import { buildSnapshotMetadata } from "./core/snapshot.js";
-import { ENHANCEMENT_TRANSFORM_ABI } from "./core/enhancement-transform.js";
 import {
   count,
   gauge,
@@ -77,7 +81,7 @@ interface ClientRuntimeOptions {
   hostVersion: string;
   cachedOnly: boolean;
   offlineShell: boolean;
-  enhancementsEnabled: boolean;
+  enhancementCapabilities: EnhancementCapabilities;
   onProgress: (progress: DownloadProgress) => void;
   onPrefetch: (progress: PrefetchProgress) => void;
 }
@@ -220,7 +224,7 @@ export class ClientRuntime {
       officialWasmPath: officialWasm,
       officialSha256,
       certification,
-      enhancementRequested: this.options.enhancementsEnabled,
+      enhancementCapabilities: this.options.enhancementCapabilities,
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
     });
@@ -255,7 +259,10 @@ export class ClientRuntime {
         buildId: prepared.enhancementBuild.buildId,
         transformAbi: ENHANCEMENT_TRANSFORM_ABI,
       });
-    } else if (this.options.enhancementsEnabled && state !== "certified") {
+    } else if (
+      enhancementCapabilitiesRequested(this.options.enhancementCapabilities)
+      && state !== "certified"
+    ) {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
     gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);

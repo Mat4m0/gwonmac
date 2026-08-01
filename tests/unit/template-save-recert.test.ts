@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -15,6 +16,7 @@ import {
 } from "../../src/main/core/local-client-verifier.js";
 import {
   deriveEquivalentTemplateSaveBuild,
+  preparePostTemplateSaveModule,
 } from "../../src/main/core/template-save-verifier.js";
 import {
   concat,
@@ -400,6 +402,33 @@ describe("template-save re-certification", () => {
     assert.deepEqual(compareToCertified(entry), [
       `no certified entry for ${entry.sha256}`,
     ]);
+  });
+
+  it("feeds certified and structurally-derived builds through identical rewrites", () => {
+    const { bytes } = build();
+    const entry = deriveTemplateSaveBuild(bytes);
+    const certified = preparePostTemplateSaveModule(bytes, {
+      certified: () => entry,
+      structurallyDerived: () => {
+        throw new Error("the structural resolver must not run");
+      },
+    });
+    const structurallyDerived = preparePostTemplateSaveModule(bytes, {
+      certified: () => null,
+      structurallyDerived: () => entry,
+    });
+
+    assert.equal(certified?.resolution, "certified");
+    assert.equal(
+      structurallyDerived?.resolution,
+      "structurally-derived",
+    );
+    assert.deepEqual(certified?.bytes, structurallyDerived?.bytes);
+    assert.notDeepEqual(certified?.bytes, bytes);
+    assert.equal(
+      createHash("sha256").update(certified!.bytes).digest("hex"),
+      entry.outputSha256,
+    );
   });
 
   it("fingerprints complete caller semantics, not only call offsets", () => {

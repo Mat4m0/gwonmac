@@ -150,8 +150,11 @@ const SCREENSHOTS = [
             Probably not, but we cannot make promises on ArenaNet's behalf. The app downloads and
             preserves ArenaNet's official client artifact, and derives a local copy that repairs
             features the web build left unfinished: saving build templates, and drawing the cursor
-            the client already contains. It does not send game input or act on the player's behalf.
-            It is an interoperability layer that lets the client run on macOS.
+            the client already contains. It never chooses a target, moves the character, uses a
+            skill, sends chat, or performs another gameplay action. After your own click, the
+            cursor tool may replay one bounded out-and-back pointer hit-test when the client did
+            not refresh its cursor. It is an interoperability layer that lets the client run on
+            macOS.
           </p>
           <p>
             Still, use it at your own discretion:
