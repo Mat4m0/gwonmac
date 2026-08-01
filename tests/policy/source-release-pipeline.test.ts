@@ -233,6 +233,10 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
+  assert.match(
+    workflow,
+    /name: Refuse a version that already shipped[\s\S]*?already published; bump the version in package\.json[\s\S]*?- run: pnpm install --frozen-lockfile/,
+  );
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(
     workflow,
@@ -289,7 +293,7 @@ test("release workflow publishes one tested, attested package version", () => {
     /if \[ "\$prerelease" = "false" \]; then\s+test "\$SIGNED_BETA_UPDATE_PROVEN" = "true"/,
   );
   assert.match(workflow, /--draft --generate-notes/);
-  assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" = "true"/);
+  assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" != "true"/);
   assert.match(
     workflow,
     /--json targetCommitish --jq '\.targetCommitish'\)" = "\$GITHUB_SHA"/,

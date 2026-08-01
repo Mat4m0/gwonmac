@@ -80,6 +80,28 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
+      # The same refusal the release job enforces before publishing, moved
+      # ahead of the build so a forgotten version bump fails in seconds, not
+      # after signing and notarization. This job's read-only token cannot see
+      # draft releases, so a resumable draft passes through here and is
+      # verified by the release job's own check.
+      - name: Refuse a version that already shipped
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft --jq '.isDraft')" != "true" ]; then
+              echo "Release $TAG is already published; bump the version in package.json." >&2
+              exit 1
+            fi
+            echo "Draft release $TAG exists; this run will resume it."
+          elif gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG exists without a resumable draft release." >&2
+            exit 1
+          fi
+
       - run: pnpm install --frozen-lockfile
 
       - name: Import Developer ID and notarization credentials
@@ -401,8 +423,11 @@ jobs:
           sbom="$(find release-assets -maxdepth 1 -type f -name '*.spdx.json' -print -quit)"
           echo "sbom=$sbom" >> "$GITHUB_OUTPUT"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --json isDraft --jq '.isDraft')" = "true"
+            if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft --jq '.isDraft')" != "true" ]; then
+              echo "Release $TAG is already published; bump the version in package.json." >&2
+              exit 1
+            fi
             test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
               --json isPrerelease --jq '.isPrerelease')" = "$PRERELEASE"
             test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
