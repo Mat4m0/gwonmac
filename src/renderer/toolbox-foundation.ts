@@ -1,3 +1,14 @@
+/**
+ * The Tools overlay: the HUD chip and the panel behind it, drawn above the game
+ * canvas.
+ *
+ * It renders the state it is handed and asks the game for nothing. There is
+ * deliberately no widget registry, plugin surface or layout engine behind it —
+ * a second tool can introduce one when it exists and needs it.
+ *
+ * The overlay is chrome, so it owns only its own pixels: every click that is
+ * not on Tools chrome still belongs to the game.
+ */
 type ToolboxState = Readonly<{
   status: string;
   playerChatCount?: number;

@@ -1,3 +1,13 @@
+/**
+ * `pnpm template:recertify`: the command around the template-save
+ * recertification report.
+ *
+ * Argument parsing, locating the installed client, printing, and the exit code
+ * — nothing else. It uses the same production locator the application does, so
+ * the module it inspects is the module a launch would serve. `--expect-certified`
+ * turns a difference into a non-zero exit, which is what makes this usable as a
+ * check rather than only as a report.
+ */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

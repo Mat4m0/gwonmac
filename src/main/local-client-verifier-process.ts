@@ -1,3 +1,16 @@
+/**
+ * The utility process the local client proof runs inside: read the module,
+ * confirm it is the one that was asked for, verify it, answer once.
+ *
+ * Isolation is the whole point. The verifier walks a multi-megabyte module this
+ * project did not produce, so it runs where a crash or a runaway loop costs the
+ * launch nothing. The host owns the timeout and the caching; this process holds
+ * no state and writes no files.
+ *
+ * Every refusal is its own exit code, and no message is posted unless the
+ * result also passes the boundary check, so the parent never has to interpret a
+ * partial answer.
+ */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {

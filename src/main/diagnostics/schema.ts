@@ -1,3 +1,11 @@
+/**
+ * The one runtime and compile-time schema for app-authored diagnostic events.
+ *
+ * Event names, subsystem/level ownership, field names, and field validators
+ * live together. Producers receive the type derived from this value, and the
+ * export detector executes these exact validators. There is no permissive
+ * fallback: if an event is absent here, it cannot be recorded or exported.
+ */
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   EVENT_CHANNELS,
@@ -33,15 +41,6 @@ import {
   type ProxyRoute,
 } from "../core/proxy-routes.js";
 import { ALLOWED_PORTS } from "../core/allowlists.js";
-
-/**
- * The one runtime and compile-time schema for app-authored diagnostic events.
- *
- * Event names, subsystem/level ownership, field names, and field validators
- * live together. Producers receive the type derived from this value, and the
- * export detector executes these exact validators. There is no permissive
- * fallback: if an event is absent here, it cannot be recorded or exported.
- */
 
 export type FieldGuard<T extends DiagnosticScalar> = (
   value: unknown,

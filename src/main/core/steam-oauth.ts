@@ -1,3 +1,16 @@
+/**
+ * The Steam sign-in flow as data and pure predicates: the authorize URL, the
+ * set of URLs the window may load, and the one redirect that ends an attempt.
+ *
+ * Nothing here opens a window, stores a token, or imports Electron. That is
+ * what lets the same rules run offline against a fixture server, so every
+ * decision this file makes is testable without a live Steam account.
+ *
+ * Both predicates fail closed and neither repairs its input. Recognising the
+ * redirect and extracting the token are deliberately one operation, so no
+ * caller can accept a matching nonce that arrived from the wrong host, port,
+ * scheme or path.
+ */
 import { randomUUID } from "node:crypto";
 
 /**

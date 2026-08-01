@@ -1,3 +1,14 @@
+/**
+ * The composition root: it constructs the subsystems, wires them to one
+ * another, and owns the order in which a launch happens.
+ *
+ * Nothing here implements a behaviour. Every rule this file appears to make —
+ * what a setting is, when an update may be checked, which module is served,
+ * which secrets are available — belongs to the module it hands the work to, and
+ * a decision that starts growing here belongs somewhere else. What main owns is
+ * sequence and lifetime: the single-instance lock, the work that must precede
+ * `ready`, the profile location, and what is registered to run at quit.
+ */
 import {
   app,
   autoUpdater,

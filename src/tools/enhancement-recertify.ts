@@ -1,3 +1,17 @@
+/**
+ * `pnpm enhancements:recertify`: derives a candidate Enhancement build entry
+ * from a client this repository does not yet know, and prints the evidence
+ * behind it.
+ *
+ * It proposes; a human certifies. The output is a draft table entry plus the
+ * structural findings that produced it, and every output hash is obtained by
+ * actually running the transform rather than by prediction. Nothing here edits
+ * the shipped tables — an entry becomes certified when a person reads the
+ * evidence and commits it.
+ *
+ * It recovers indices, not semantics. What the hooked functions mean still has
+ * to be re-measured; `internal/upstream/recertify.md` owns that work.
+ */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,7 +1,9 @@
-// Confirms a newly published client only after the renderer has shown a frame
-// and opened a game socket. The main-process operation is idempotent, but IPC
-// or filesystem failures can be transient, so this controller makes a small,
-// bounded number of attempts instead of latching the first rejection forever.
+/**
+ * Confirms a newly published client only after the renderer has shown a frame
+ * and opened a game socket. The main-process operation is idempotent, but IPC
+ * or filesystem failures can be transient, so this controller makes a small,
+ * bounded number of attempts instead of latching the first rejection forever.
+ */
 
 import type { ClientHealthToken } from '../shared/contracts.js';
 

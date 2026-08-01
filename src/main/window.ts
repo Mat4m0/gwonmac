@@ -1,3 +1,11 @@
+/**
+ * The game window: its creation, the navigation and permission handlers bound
+ * to it, and the owner-only state persisted beneath it.
+ *
+ * `window-menu.ts` and `problem-report.ts` own the surfaces that act on the
+ * window, so every transition of window state is written here and a menu
+ * handler can only ask for one.
+ */
 import {
   app,
   BrowserWindow,
@@ -30,15 +38,6 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import { installApplicationMenu } from "./window-menu.js";
-
-/**
- * The game window: its creation, the navigation and permission handlers bound
- * to it, and the owner-only state persisted beneath it.
- *
- * `window-menu.ts` and `problem-report.ts` own the surfaces that act on the
- * window, so every transition of window state is written here and a menu
- * handler can only ask for one.
- */
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.

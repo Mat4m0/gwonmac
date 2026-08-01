@@ -1,16 +1,18 @@
-// ArenaNet's Emscripten port ships four unimplemented `Base/Os` file routines.
-// Creating a directory always fails with error 2, so a build cannot be saved.
-// Enumerating a directory does nothing and deriving a name from an entry writes
-// nothing, so "Load from Skills Template" stays empty. Deleting a file is
-// `assert("not implemented")` followed by `unreachable`, so removing or renaming
-// a build aborts the client.
-//
-// None of that can be repaired from JavaScript alone: the client never reaches
-// a syscall, and the module imports no `mkdir`, `getdents`, or `unlink`. So one
-// derived module, accepted only for an exact official hash, appends forwarders
-// and repoints the template, chat-log, and screenshot call sites at them. Each
-// forwarder hands the stub's arguments to `__syscall_newfstatat` behind a dirfd
-// that no real call can produce, where the renderer answers it.
+/**
+ * ArenaNet's Emscripten port ships four unimplemented `Base/Os` file routines.
+ * Creating a directory always fails with error 2, so a build cannot be saved.
+ * Enumerating a directory does nothing and deriving a name from an entry writes
+ * nothing, so "Load from Skills Template" stays empty. Deleting a file is
+ * `assert("not implemented")` followed by `unreachable`, so removing or renaming
+ * a build aborts the client.
+ *
+ * None of that can be repaired from JavaScript alone: the client never reaches
+ * a syscall, and the module imports no `mkdir`, `getdents`, or `unlink`. So one
+ * derived module, accepted only for an exact official hash, appends forwarders
+ * and repoints the template, chat-log, and screenshot call sites at them. Each
+ * forwarder hands the stub's arguments to `__syscall_newfstatat` behind a dirfd
+ * that no real call can produce, where the renderer answers it.
+ */
 import { createHash } from "node:crypto";
 // The dirfd markers are canonical in src/shared because the renderer half needs
 // the same values and cannot import from here; the generated preload carries

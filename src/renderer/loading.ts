@@ -1,8 +1,10 @@
-// Loading screen: owns everything the user sees before the canvas appears.
-// Progress comes from the main-process updater via gwNative, not HTTP polling.
-//
-// index.html loads this as a classic script, so the file carries no top-level
-// import or export and names the contracts through type-only `import(…)`.
+/**
+ * Loading screen: owns everything the user sees before the canvas appears.
+ * Progress comes from the main-process updater via gwNative, not HTTP polling.
+ *
+ * index.html loads this as a classic script, so the file carries no top-level
+ * import or export and names the contracts through type-only `import(…)`.
+ */
 
 window.gwAutomation = (function (): EnhancementAutomation {
   let stage = 'renderer.loading';

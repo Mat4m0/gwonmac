@@ -1,3 +1,16 @@
+/**
+ * The per-frame read of the companion kernel's shared memory, and the only
+ * place that decides how often it happens.
+ *
+ * One direction only: the kernel writes, this reads, and nothing here writes
+ * back into the module. A snapshot that fails its own validity check is counted
+ * and skipped rather than partly believed, so a torn or stale write costs one
+ * frame of readout and never a wrong number on screen.
+ *
+ * The consumers — cursor, readout, toolbox — are passed in and any of them may
+ * be absent, because which ones exist was decided when the module was derived
+ * and is not something to rediscover per frame.
+ */
 import {
   type CompanionToolboxState,
   readChangedCompanionToolbox,

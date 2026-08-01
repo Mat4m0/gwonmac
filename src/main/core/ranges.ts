@@ -1,3 +1,14 @@
+/**
+ * HTTP byte ranges for the virtual snapshot: parsing, clamping, and the one
+ * refusal that matters.
+ *
+ * `Gw.snapshot` is assembled on demand from cached chunks and has no whole-file
+ * representation to fall back to, so `requireSnapshotRange` treats a missing or
+ * unsatisfiable Range as an error rather than serving the entire multi-gigabyte
+ * resource. `assertSafeRead` bounds offset and length against the real size
+ * before any read is attempted, so a malformed request cannot become an
+ * out-of-bounds read.
+ */
 import { AppError, ValidationError } from "../../shared/errors.js";
 
 const RANGE_RE = /^bytes=(\d*)-(\d*)$/;

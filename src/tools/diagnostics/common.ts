@@ -1,3 +1,17 @@
+/**
+ * What every `.gwdiag` reader needs: unpacking one into a temporary directory,
+ * parsing its documents, and the validation each command runs before it prints
+ * a number.
+ *
+ * A capture is opened here and nowhere else, so the tools cannot disagree about
+ * what a valid archive is, and the temporary directory is removed even when the
+ * caller throws. Validation is separate from reading on purpose: a capture with
+ * warnings is still readable, and a command decides for itself whether to
+ * refuse or to print them alongside its output.
+ *
+ * These are developer tools. They read exports; nothing here produces one, and
+ * nothing here reaches into a running application.
+ */
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

@@ -1,3 +1,12 @@
+/**
+ * The Electron-rooted entry to the path table.
+ *
+ * Which paths exist is decided in `./core/paths.ts`, which stays Electron-free
+ * so it can be executed by a test and imported from `src/main/core/**`. This
+ * module adds only what needs `app`: the per-user data root, the compiled
+ * renderer directory, and the preload. Nothing here invents a path that the
+ * core table does not already own.
+ */
 import { app } from "electron";
 import path from "node:path";
 import { gamePaths as resolveGamePaths } from "./core/paths.js";

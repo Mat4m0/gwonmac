@@ -1,11 +1,13 @@
-// The snapshot image behind `Module.image`: metadata, a byte-budgeted LRU over
-// renderer memory, native residency, request coalescing, range assembly, and
-// the eight-request scheduler that lets a demand read overtake prefetch work.
-//
-// harness.js owned all of this until P6.2 and now owns only the wiring: the
-// HTTP range fetch, the WASM heap write, and the console helpers over stats().
-// Nothing here touches `window`, `fetch` or `Module`, which is what makes the
-// algorithms testable.
+/**
+ * The snapshot image behind `Module.image`: metadata, a byte-budgeted LRU over
+ * renderer memory, native residency, request coalescing, range assembly, and
+ * the eight-request scheduler that lets a demand read overtake prefetch work.
+ *
+ * harness.js owned all of this until P6.2 and now owns only the wiring: the
+ * HTTP range fetch, the WASM heap write, and the console helpers over stats().
+ * Nothing here touches `window`, `fetch` or `Module`, which is what makes the
+ * algorithms testable.
+ */
 
 import type { SnapshotMetadata } from '../shared/contracts.js';
 

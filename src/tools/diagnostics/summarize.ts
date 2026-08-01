@@ -1,3 +1,13 @@
+/**
+ * `pnpm diagnostics:summarize`: the readable account of one capture — startup
+ * milestones, frame and read percentiles, cache behaviour, socket volume.
+ *
+ * Presentation only. Every number is read from the export's own summary and
+ * counters; nothing here recomputes a statistic or infers one the recorder did
+ * not measure. Validation warnings are printed rather than suppressed, because
+ * a percentile from an incomplete capture is worth less than the knowledge that
+ * it was incomplete.
+ */
 import { resolve } from "node:path";
 import { withCapture, validateCapture } from "./common.js";
 

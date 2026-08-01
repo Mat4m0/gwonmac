@@ -1,3 +1,19 @@
+/**
+ * The three provisioned distribution channels and what each is allowed to do.
+ *
+ * Their distinct bundle IDs are what give them mutually isolated Data
+ * Protection Keychain groups, so this table decides which secrets an
+ * installation can even reach. The marker is configuration and not
+ * authorization: the host bundle ID, the application-identifier entitlement and
+ * the provisioning profile are what actually grant access, and
+ * `parseDistributionMarker` refuses anything that is not exactly one of the
+ * three — a marker with an extra key, a foreign repository, or an unknown
+ * channel yields `null`, and `null` means volatile secrets and no automatic
+ * updates.
+ *
+ * There is no fourth channel and no way to synthesise one. Adding a channel
+ * means provisioning a bundle ID, not editing a string here.
+ */
 import { APPLE_TEAM_ID, RELEASE_REPO } from "./project-identity.js";
 
 export { APPLE_TEAM_ID } from "./project-identity.js";

@@ -1,3 +1,18 @@
+/**
+ * The persisted window placement: what counts as a valid one, and how a stored
+ * one is fitted back onto the displays that exist right now.
+ *
+ * `mode` is three values and minimized is not among them — a window is never
+ * restored into a state the player cannot see. Placement is re-validated
+ * against the current work areas on every restore, so a window last seen on a
+ * monitor that is now unplugged is centred on the primary display instead of
+ * opening off-screen, while one that still overlaps a display keeps its
+ * position clamped inside that display's work area.
+ *
+ * A file this build cannot read is deleted and reported rather than
+ * reinterpreted: failing to restore a window must never mean failing to open
+ * one.
+ */
 import { readFile, unlink } from "node:fs/promises";
 import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";

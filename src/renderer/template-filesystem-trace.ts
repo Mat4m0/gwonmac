@@ -1,3 +1,16 @@
+/**
+ * A development-only trace of the file syscalls the client makes while saving
+ * or loading a template.
+ *
+ * It wraps the WASM imports in order to watch them and passes every call
+ * through unchanged: it answers nothing, repairs nothing, and alters no result.
+ * Events are bounded and go to the developer console alone — nothing here
+ * reaches the flight recorder, because the paths, descriptors and flags it
+ * records are precisely what a diagnostics export may not contain.
+ *
+ * Installed only when the launch argument says so, which no packaged build
+ * sets.
+ */
 const EVENT_LIMIT = 128;
 const TRACE_PREFIX = '[template-fs-trace]';
 

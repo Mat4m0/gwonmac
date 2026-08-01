@@ -1,3 +1,16 @@
+/**
+ * `pnpm enhancements:doctor`: reports why Enhancement is or is not running on
+ * this machine, before anyone starts guessing.
+ *
+ * It reads the real profile — the installed client, its published manifest, the
+ * derived cache, the settings file — and reports what it found. It repairs
+ * nothing, downloads nothing and writes nothing, so running it can never be the
+ * reason a subsequent launch behaves differently.
+ *
+ * Certification is asked of `client-certification.ts` rather than re-derived
+ * here, so the doctor and the launch cannot disagree about what state a build
+ * is in.
+ */
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";

@@ -1,3 +1,13 @@
+/**
+ * What counts as the renderer document: two paths under `gw://app`, with no
+ * port, credentials, query or fragment.
+ *
+ * Callers decide from this whether a navigation is the application itself, so
+ * it answers yes or no and never repairs a URL into an acceptable one. There is
+ * nothing to allow in a query string — launch configuration reaches the
+ * renderer through `RENDERER_INIT_ARGUMENT`, which is what keeps this boundary
+ * from having to know what any individual setting means.
+ */
 const TRUSTED_PATHS = new Set(["/", "/index.html"]);
 
 /**

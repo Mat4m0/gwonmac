@@ -1,3 +1,16 @@
+/**
+ * Reading sessions back: the one parser for a session's JSONL, and the summary
+ * document an export carries.
+ *
+ * A process killed between a write and its newline leaves one incomplete final
+ * record, and that is ordinary — it costs the reader that record and nothing
+ * else. Interior corruption is not tolerated the same way. Both the current
+ * session's export and the previous session's report come through the same
+ * parser, so one cannot be lenient while the other throws.
+ *
+ * The report is derived entirely from records and counters. It quotes no
+ * message text and reaches for no source outside what was already recorded.
+ */
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type {

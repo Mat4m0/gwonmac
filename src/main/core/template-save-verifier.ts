@@ -1,23 +1,25 @@
-// Re-derive a `KnownTemplateSaveBuild` entry from a client WASM, by shape
-// rather than by remembered index.
-//
-// The launcher runs this logic in a disposable utility process when ArenaNet
-// publishes an unknown client hash. Developer tooling imports the same
-// implementation, so a manual report and the production decision cannot drift.
-//
-// Every number in the certified table belongs to one exact build, and ArenaNet
-// updates the client automatically. Recovering them by hand takes hours; this
-// recovers them in seconds and hands the result to the production transform for
-// validation. It removes the index-recovery work, not the semantic work — see
-// internal/upstream/recertify.md, which still owns re-measuring what the path
-// helpers actually do.
-//
-// Two measured facts make this cheap. Byte-scanning for the six-byte padded
-// `call` needle locates every call site with no false positives, so no
-// whole-module instruction decoder is needed. And caller-set intersection
-// identifies every target, so source-file attribution is not needed either —
-// which is just as well, because the most important call site here references
-// no source string at all.
+/**
+ * Re-derive a `KnownTemplateSaveBuild` entry from a client WASM, by shape
+ * rather than by remembered index.
+ *
+ * The launcher runs this logic in a disposable utility process when ArenaNet
+ * publishes an unknown client hash. Developer tooling imports the same
+ * implementation, so a manual report and the production decision cannot drift.
+ *
+ * Every number in the certified table belongs to one exact build, and ArenaNet
+ * updates the client automatically. Recovering them by hand takes hours; this
+ * recovers them in seconds and hands the result to the production transform for
+ * validation. It removes the index-recovery work, not the semantic work — see
+ * internal/upstream/recertify.md, which still owns re-measuring what the path
+ * helpers actually do.
+ *
+ * Two measured facts make this cheap. Byte-scanning for the six-byte padded
+ * `call` needle locates every call site with no false positives, so no
+ * whole-module instruction decoder is needed. And caller-set intersection
+ * identifies every target, so source-file attribution is not needed either —
+ * which is just as well, because the most important call site here references
+ * no source string at all.
+ */
 import { createHash } from "node:crypto";
 import {
   countFunctionImports,

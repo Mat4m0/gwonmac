@@ -1,15 +1,17 @@
-// Host half of the derived-client bridge in src/main/core/template-save-compat.ts.
-//
-// Four `Base/Os` file routines ship unimplemented in ArenaNet's Emscripten
-// build: creating a directory always fails, enumerating one does nothing,
-// deriving a name from an entry writes nothing, and deleting a file aborts the
-// client. A fifth is implemented but wrong — opening a file to test whether it
-// exists creates it. The derived module forwards all five to
-// `__syscall_newfstatat` behind dirfd markers that no real call produces, and
-// they are answered here against the mounted IDBFS.
-// Not a mirror any more: the canonical values reach this sandboxed renderer
-// module through the generated preload, so the transform that writes the
-// markers into the module and the code that answers them cannot disagree.
+/**
+ * Host half of the derived-client bridge in src/main/core/template-save-compat.ts.
+ *
+ * Four `Base/Os` file routines ship unimplemented in ArenaNet's Emscripten
+ * build: creating a directory always fails, enumerating one does nothing,
+ * deriving a name from an entry writes nothing, and deleting a file aborts the
+ * client. A fifth is implemented but wrong — opening a file to test whether it
+ * exists creates it. The derived module forwards all five to
+ * `__syscall_newfstatat` behind dirfd markers that no real call produces, and
+ * they are answered here against the mounted IDBFS.
+ * Not a mirror any more: the canonical values reach this sandboxed renderer
+ * module through the generated preload, so the transform that writes the
+ * markers into the module and the code that answers them cannot disagree.
+ */
 const {
   ensureDirectory: ENSURE_DIRECTORY,
   findFiles: FIND_FILES,

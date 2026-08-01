@@ -1,15 +1,17 @@
-// The one place a failure becomes a sentence.
-//
-// The main process sends codes and never prose: it cannot see the UI, its
-// strings cannot be tested against what the player actually reads, and free
-// text on a channel is what let an error message reach the diagnostics export
-// in the first place. So every user-facing failure sentence is written here,
-// beside the surface that shows it, and a unit test executes this file.
-//
-// The maps are deliberately partial. Most of the catalogue names a fault in
-// something the player cannot act on, and inventing fifty sentences to say
-// "it broke" fifty ways would be worse than one honest default. A code earns
-// an entry only when it changes what the player should *do*.
+/**
+ * The one place a failure becomes a sentence.
+ *
+ * The main process sends codes and never prose: it cannot see the UI, its
+ * strings cannot be tested against what the player actually reads, and free
+ * text on a channel is what let an error message reach the diagnostics export
+ * in the first place. So every user-facing failure sentence is written here,
+ * beside the surface that shows it, and a unit test executes this file.
+ *
+ * The maps are deliberately partial. Most of the catalogue names a fault in
+ * something the player cannot act on, and inventing fifty sentences to say
+ * "it broke" fifty ways would be worse than one honest default. A code earns
+ * an entry only when it changes what the player should *do*.
+ */
 
 import type { NoticeCode, SteamRefusalReason } from '../shared/contracts.js';
 import type { ErrorCode } from '../shared/errors.js';

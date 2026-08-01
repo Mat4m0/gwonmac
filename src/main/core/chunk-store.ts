@@ -1,3 +1,18 @@
+/**
+ * The resident chunk cache and the scheduler in front of it: what is on disk,
+ * what is being fetched, and in which order.
+ *
+ * Concurrent readers of one content hash share a single in-flight promise, so a
+ * chunk is never fetched twice at once, and every arriving chunk is hash-
+ * verified before it is written — a wrong index or a corrupt response costs a
+ * wasted fetch and never a wrong byte. Demand reads outrank queued prefetch and
+ * the combined concurrency ceiling is ArenaNet's; do not raise it to make a
+ * download feel faster.
+ *
+ * Local write failures that no retry can fix are separated from transport
+ * faults here, because a full disk and an unreachable host need different
+ * things from the player.
+ */
 import { readFile, readdir, stat, statfs, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { PrefetchProgress } from "../../shared/contracts.js";

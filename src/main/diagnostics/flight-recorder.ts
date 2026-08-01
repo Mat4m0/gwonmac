@@ -1,3 +1,17 @@
+/**
+ * The recorder itself: the bounded JSONL of events, the counters, gauges and
+ * histograms, and the binary frame log beside them.
+ *
+ * Every store here is bounded before it is written to — a file count, a byte
+ * ceiling per file, an event ceiling in memory, a byte ceiling on frames — so a
+ * session that misbehaves for hours costs a fixed amount of disk instead of
+ * filling the profile. Overflow is counted and reported rather than silently
+ * dropped, because a summary that omits how much it omitted is not evidence.
+ *
+ * `LogRecord.name` is an open string only because it is the *reader's* type:
+ * a previous session's file may have been written by an older format. Nothing
+ * this build records is open — producers are typed by the closed schema.
+ */
 import { randomUUID } from "node:crypto";
 import {
   appendFile,

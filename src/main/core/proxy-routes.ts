@@ -1,3 +1,18 @@
+/**
+ * The five web-service hosts `gw://app` may proxy to, and the rules that stop a
+ * response from leading anywhere else.
+ *
+ * The route set is closed and its keys are the type, so diagnostics can name a
+ * failing route without introducing an open string. An unrecognised route fails
+ * closed instead of being forwarded. A redirect is rewritten only if it stays
+ * on the same allowlisted host over https, on the default port, with no
+ * credentials in the URL; anything else is refused rather than followed. Cookie
+ * headers are identified here so the proxy can drop them — login state belongs
+ * in the native secret slots, never in Chromium's cookie store.
+ *
+ * These are web services. Game infrastructure is allowlisted separately in
+ * `allowlists.ts`, and the two lists do not merge.
+ */
 import { AppError, AllowlistError } from "../../shared/errors.js";
 
 export const PROXY_ROUTES = {

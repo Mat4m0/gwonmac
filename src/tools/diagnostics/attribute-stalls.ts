@@ -1,3 +1,15 @@
+/**
+ * `pnpm diagnostics:attribute-stalls`: locates long frame gaps inside a Level 2
+ * Chromium trace and names the stack that was running through them.
+ *
+ * This is the causal tool and it is not the measurement tool. The trace it
+ * reads is profiler-contaminated, so its durations may not be quoted as
+ * evidence of a gain — it answers where the time went, and Level 1 answers how
+ * much time there was.
+ *
+ * A capture with no trace-aligned frame marks says so and stops, rather than
+ * attributing stalls to whatever else the trace happened to contain.
+ */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";

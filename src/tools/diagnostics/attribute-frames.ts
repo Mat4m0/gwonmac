@@ -1,13 +1,23 @@
+/**
+ * `pnpm diagnostics:attribute-frames`: attributes long visible-frame gaps in a
+ * Level 1 capture to what the main process was doing around them.
+ *
+ * Level 1 is where gains are judged, because Level 2 traces are
+ * profiler-contaminated — but until this, a Level 1 stall could be seen and not
+ * explained. The join runs against main-process timestamps because the main
+ * process keeps running while the renderer is frozen, so its clock is the
+ * reliable side.
+ *
+ * A gap it cannot account for is reported as uninstrumented rather than
+ * assigned to the nearest event. Continuous per-sample telemetry is excluded
+ * from consideration outright: something that is always happening explains
+ * nothing.
+ */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { withCapture } from "./common.js";
 
-// Level 2 traces locate causes but are profiler-contaminated, so gains are
-// judged at Level 1 — where until now a stall could not be attributed at all.
-// This joins visible-frame gaps to the main-process events that surround them.
-// The main process keeps running while the renderer is frozen, so its
-// timestamps are the reliable side of the join.
 const DEFAULT_THRESHOLD_US = 100_000;
 const CORRELATION_US = 1_500_000;
 const BLOCKED_MAIN_US = 200_000;

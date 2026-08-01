@@ -1,3 +1,15 @@
+/**
+ * The template-save recertification report: run the shape-based derivation over
+ * a client module and say how the result differs from the entry in the table.
+ *
+ * The derivation itself belongs to `template-save-verifier.ts` and is
+ * re-exported rather than reimplemented, so the manual report and the
+ * production decision cannot drift. What this file owns is the comparison and
+ * the shape of its output.
+ *
+ * An empty difference list means the checked-in entry is still exact. A
+ * non-empty one is a finding for a human to read, never an entry to apply.
+ */
 import {
   analyzeTemplateSaveCandidate,
 } from "../main/core/template-save-verifier.js";

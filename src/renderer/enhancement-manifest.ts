@@ -1,3 +1,15 @@
+/**
+ * Reads the fixed evidence section the Enhancement transform wrote into the
+ * derived module, and refuses anything that is not exactly what this build
+ * expects.
+ *
+ * This is the renderer's proof that the module it was handed came from the
+ * transform this build ships. The ABI, the capability set, the hooks and the
+ * whole config-word vector must match, with exact key sets rather than
+ * supersets, and a field that is merely present is not accepted. Installing
+ * hooks against a layout derived from a different client is how a game gets
+ * corrupted memory rather than an error message.
+ */
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_CONFIG_WORD_COUNT,

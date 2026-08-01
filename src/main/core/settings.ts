@@ -1,3 +1,18 @@
+/**
+ * The settings file: its shape rule, its recovery behaviour, and nothing about
+ * what any individual setting means.
+ *
+ * Unknown fields are ignored and unknown types refused, so an older profile
+ * keeps every value it had while a malformed one cannot slip past the type. A
+ * format version this build does not recognise is refused rather than
+ * reinterpreted; the file is then moved aside intact and defaults are used, so
+ * an unreadable profile costs a player their preferences and never their
+ * downloaded game data.
+ *
+ * `parseSettingsPatch` rejects an unknown key outright instead of dropping it,
+ * because a silently ignored key is indistinguishable to the renderer from a
+ * setting that did not stick.
+ */
 import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {

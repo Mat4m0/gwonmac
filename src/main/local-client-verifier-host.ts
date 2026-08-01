@@ -1,3 +1,17 @@
+/**
+ * Runs the local client proof and owns everything the proof itself may not:
+ * the bounded child process, the timeout, and the derived on-disk cache.
+ *
+ * The child gets the module path and the hash it must match, and nothing else.
+ * A result is accepted only if it survives `isLocalClientVerification` against
+ * that same hash, whether it arrived over the message port or came back out of
+ * the cache — a cache file is untrusted input, not a shortcut past the check.
+ * Its checksum catches ordinary corruption; the boundary check is what makes an
+ * edited one useless.
+ *
+ * The timeout is the reason for the process at all: a client this app did not
+ * produce must not be able to hang a launch by hanging the verifier.
+ */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

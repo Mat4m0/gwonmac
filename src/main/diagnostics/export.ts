@@ -1,3 +1,11 @@
+/**
+ * The `.gwdiag` report: what goes in it, which tier of protection covers each
+ * document, and the staging that makes the archive appear whole or not at all.
+ *
+ * Nothing is written before the detector has passed over the event log, and
+ * the log is written byte for byte as the detector saw it — a reader can
+ * reproduce the manifest's counts from the file in the archive.
+ */
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -32,15 +40,6 @@ import {
   redactDiagnosticText as redactText,
   redactTraceStream,
 } from "./text-scan.js";
-
-/**
- * The `.gwdiag` report: what goes in it, which tier of protection covers each
- * document, and the staging that makes the archive appear whole or not at all.
- *
- * Nothing is written before the detector has passed over the event log, and
- * the log is written byte for byte as the detector saw it — a reader can
- * reproduce the manifest's counts from the file in the archive.
- */
 
 const execFileAsync = promisify(execFile);
 

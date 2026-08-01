@@ -1,10 +1,3 @@
-import { dialog, shell, type BrowserWindow } from "electron";
-import { EXTERNAL_URLS } from "../shared/contracts.js";
-import { errorCode } from "../shared/errors.js";
-import { logEvent } from "./diagnostics.js";
-import { resetGameInput } from "./renderer-commands.js";
-import type { WindowHost } from "./window.js";
-
 /**
  * What a player does when something goes wrong: choose between exporting what
  * the recorder already holds and recording the problem as it happens, then be
@@ -14,6 +7,12 @@ import type { WindowHost } from "./window.js";
  * notice — arrives here, so the choice, the prose about what the archive
  * contains, and the one-at-a-time rule are stated once.
  */
+import { dialog, shell, type BrowserWindow } from "electron";
+import { EXTERNAL_URLS } from "../shared/contracts.js";
+import { errorCode } from "../shared/errors.js";
+import { logEvent } from "./diagnostics.js";
+import { resetGameInput } from "./renderer-commands.js";
+import type { WindowHost } from "./window.js";
 
 const BUG_REPORT_URL =
   `${EXTERNAL_URLS.github}/issues/new?template=bug-report.yml`;

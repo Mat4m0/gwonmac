@@ -1,11 +1,13 @@
-// The Enhancement registry reaches the renderer through gwNative.init. This module
-// owns only the Settings-pane surface and the words it needs; it is not a
-// general settings framework. The first-run gate deliberately carries no tool
-// checkboxes: the defaults are right for a first launch, and Settings is where
-// a player who has formed an opinion changes them.
-//
-// index.html loads this as a classic script, so the file carries no top-level
-// import or export and names the contracts through type-only `import(…)`.
+/**
+ * The Enhancement registry reaches the renderer through gwNative.init. This module
+ * owns only the Settings-pane surface and the words it needs; it is not a
+ * general settings framework. The first-run gate deliberately carries no tool
+ * checkboxes: the defaults are right for a first launch, and Settings is where
+ * a player who has formed an opinion changes them.
+ *
+ * index.html loads this as a classic script, so the file carries no top-level
+ * import or export and names the contracts through type-only `import(…)`.
+ */
 
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;

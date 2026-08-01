@@ -1,8 +1,10 @@
-// One owner for launcher strategy, full-download presentation, and Settings.
-// Cache residency is the download-progress truth; dataStrategy is only intent.
-//
-// index.html loads this as a classic script, so the file carries no top-level
-// import or export and names the contracts through type-only `import(…)`.
+/**
+ * One owner for launcher strategy, full-download presentation, and Settings.
+ * Cache residency is the download-progress truth; dataStrategy is only intent.
+ *
+ * index.html loads this as a classic script, so the file carries no top-level
+ * import or export and names the contracts through type-only `import(…)`.
+ */
 
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;

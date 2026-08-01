@@ -1,3 +1,18 @@
+/**
+ * Every native capability the renderer may ask for, and the boundary that
+ * decides whether it may have it.
+ *
+ * A channel exists only as a parser paired with a handler, checked against
+ * `InvokeChannel`, so a channel with no handler and a handler with no channel
+ * are both build failures and nothing can be registered that takes its
+ * arguments unvalidated. The sender is re-checked on every call — the owned
+ * window, its main frame, the canonical renderer URL — because a page that
+ * navigated away is no longer the renderer the capability was granted to.
+ *
+ * Transport, not policy. What a socket, a secret, a setting or a chunk means is
+ * decided behind these handlers; this file validates arguments, names the
+ * subsystem that answers, and returns codes rather than inventing prose.
+ */
 import { BrowserWindow, dialog, ipcMain, shell, app } from "electron";
 import { statfs, writeFile } from "node:fs/promises";
 import type {

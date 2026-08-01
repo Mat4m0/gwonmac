@@ -1,5 +1,7 @@
-// Renderer-owned game input. The Emscripten host installs this once before its
-// glue loads; native interruptions all converge on releaseAll().
+/**
+ * Renderer-owned game input. The Emscripten host installs this once before its
+ * glue loads; native interruptions all converge on releaseAll().
+ */
 
 // Canvases a held drag may wander from the one it started on. The client keeps
 // integrating mouse moves whose coordinates fall outside the canvas, so a drag

@@ -1,10 +1,12 @@
-// Host for Gw.jspi.wasm inside the Electron renderer. Platform services are
-// injected on Module; privileged work goes through window.gwNative.
-//
-// index.html loads this as a classic script, and it must stay one: a top-level
-// import or export would make this an ES module, and the redeclaration below
-// only works between two `var`s in the same global script. Every type here is
-// therefore named through type-only `import(…)`.
+/**
+ * Host for Gw.jspi.wasm inside the Electron renderer. Platform services are
+ * injected on Module; privileged work goes through window.gwNative.
+ *
+ * index.html loads this as a classic script, and it must stay one: a top-level
+ * import or export would make this an ES module, and the redeclaration below
+ * only works between two `var`s in the same global script. Every type here is
+ * therefore named through type-only `import(…)`.
+ */
 
 /**
  * The generated glue's import object. Four renderer modules patch or read it,

@@ -1,3 +1,14 @@
+/**
+ * The interface every persistent secret talks to, and the closed set of slots
+ * it may name.
+ *
+ * `SecretSlot` is a union rather than a string, so a new persistent secret is a
+ * deliberate edit here instead of an ad-hoc item appearing in a player's
+ * Keychain. `VolatileNativeKeychain` is the implementation for builds with no
+ * provisioned signing identity: secrets live in memory and are lost at quit.
+ * It is not a fallback an entitled build may drop to, and no file, encrypted
+ * blob or mock-Keychain implementation stands beside it as one.
+ */
 export const SECRET_SLOTS = ["arenaNetCredentials", "steamSession"] as const;
 
 export type SecretSlot = (typeof SECRET_SLOTS)[number];

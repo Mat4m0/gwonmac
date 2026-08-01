@@ -1,3 +1,18 @@
+/**
+ * The `gw://app` scheme: the renderer's own documents, the virtual
+ * `Gw.snapshot` assembled from cached chunks, and the fail-closed proxy to the
+ * allowlisted web services.
+ *
+ * Every filesystem path is resolved and then proved to still be under its root,
+ * so a traversal, an encoded separator or an embedded NUL cannot reach a file
+ * outside it. The snapshot is served from ranges only. Exactly two shared
+ * modules are reachable from `src/shared`, named here rather than inferred, and
+ * a route the proxy does not recognise is refused rather than forwarded.
+ *
+ * The response headers, including the CSP, are attached here for everything
+ * this scheme serves, so no individual handler can serve a document without
+ * them.
+ */
 import { app, protocol, net } from "electron";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";

@@ -1,3 +1,15 @@
+/**
+ * The fixed identity and limits every request to ArenaNet's patch service
+ * carries.
+ *
+ * `ACCESS_KEY` identifies the official Guild Wars client, not a player and not
+ * an installation; it is public, and the policy tests exempt this one
+ * UUID-shaped value so that every other one still fails. The honest user agent,
+ * the eight-job ceiling and the request timeout are conduct toward shared
+ * production infrastructure, not tuning knobs to be raised when a download
+ * feels slow. `FATAL_HTTP` is the set that no amount of backoff can help, so
+ * retrying those is a defect rather than politeness.
+ */
 export const ACCESS_KEY = "2043FE79-F32D-4FD7-8C27-0D47231C4F03";
 export const PATCH_ROOT = "https://patching.1.arenanetworks.com";
 export const UA = "gwonmac (Guild Wars interoperability client)";

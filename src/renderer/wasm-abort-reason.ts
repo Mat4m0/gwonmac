@@ -1,6 +1,8 @@
-// The renderer-side collapse of an Emscripten abort: prose in, closed
-// vocabulary plus non-text fingerprint out. This is the only shape allowed to
-// cross IPC — the abort message itself stays in this process.
+/**
+ * The renderer-side collapse of an Emscripten abort: prose in, closed
+ * vocabulary plus non-text fingerprint out. This is the only shape allowed to
+ * cross IPC — the abort message itself stays in this process.
+ */
 import type { WasmAbortReasonKind } from '../shared/diagnostics.js';
 
 /**

@@ -1,3 +1,17 @@
+/**
+ * Name resolution for game infrastructure, and the reason it does not simply
+ * call the system resolver.
+ *
+ * A name is refused before any query is sent if it is not on the allowlist, and
+ * an IP literal is refused outright so this cannot be used to launder an
+ * address past the domain check. `geodc.arenanetworks.com` answers with the
+ * datacenter sentinel `0.0.1.2`, which some resolvers drop as bogus; the
+ * hand-built UDP query exists to read that answer verbatim, not to route around
+ * a slow resolver.
+ *
+ * Every attempt that failed is accumulated and reported together, because
+ * "DNS failed" without the list of resolvers tried is not diagnosable.
+ */
 import { createSocket } from "node:dgram";
 import { promises as dns } from "node:dns";
 import { randomBytes } from "node:crypto";
