@@ -1,5 +1,6 @@
 // Repository-contents policy: no ArenaNet binary, generated output, credential,
-// diagnostic export or retired runtime is ever tracked in git.
+// diagnostic export or retired runtime is ever tracked in git, and every
+// tracked path stays inside the repository.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -29,6 +30,26 @@ test("no downloaded game artifacts or generated output are tracked", () => {
   ];
   const hits = tracked.filter((file) => forbidden.some((pattern) => pattern.test(file)));
   assert.deepEqual(hits, []);
+});
+
+test("no tracked symlink resolves outside the repository", () => {
+  // A symlink is tracked as its target string, so a target above the root
+  // resolves to whatever happens to sit at that path on the machine that wrote
+  // it and dangles on every other clone. `tracked` cannot answer this: it drops
+  // dangling entries, which is exactly the state such a link is usually in.
+  const escaping = execFileSync("git", ["ls-files", "-s"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((line) => line.startsWith("120000 "))
+    .map((line) => line.slice(line.indexOf("\t") + 1))
+    .filter((file) => {
+      const link = execFileSync("git", ["cat-file", "blob", `:${file}`], {
+        cwd: root,
+        encoding: "utf8",
+      });
+      const target = path.resolve(root, path.dirname(file), link);
+      return target !== root && !target.startsWith(root + path.sep);
+    });
+  assert.deepEqual(escaping, []);
 });
 
 test("the application does not collect process-memory crash dumps", () => {
