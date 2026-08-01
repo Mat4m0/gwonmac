@@ -1,7 +1,9 @@
 import {
+  ENHANCEMENT_CAPABILITY_PROFILES,
   EVENT_CHANNELS,
   IPC,
   type AppUpdateErrorCode,
+  type EnhancementCapabilityProfile,
   type EventChannel,
   type InvokeChannel,
   type RendererCommand,
@@ -1148,6 +1150,34 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "renderer",
     level: "error",
     fields: { clockSynchronized: boolean, code: finiteNumber },
+  },
+  // The renderer's Enhancement installation lifecycle. `clientPrepared` above
+  // says a transformed module was served; only these say whether the hook was
+  // actually live in the game's call path — the first fact a wasm.abort
+  // triage needs.
+  "enhancement.installed": {
+    subsystem: "renderer",
+    level: "info",
+    fields: {
+      clockSynchronized: boolean,
+      companionAbi: finiteNumber,
+      installation: finiteNumber,
+      capabilityProfile: literal(
+        Object.keys(
+          ENHANCEMENT_CAPABILITY_PROFILES,
+        ) as EnhancementCapabilityProfile[],
+      ),
+    },
+  },
+  "enhancement.installFailed": {
+    subsystem: "renderer",
+    level: "warn",
+    fields: { clockSynchronized: boolean },
+  },
+  "enhancement.uninstalled": {
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean, installation: finiteNumber },
   },
 } as const satisfies Readonly<Record<string, EventSpec>>;
 
