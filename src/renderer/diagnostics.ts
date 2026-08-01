@@ -7,25 +7,17 @@
   'use strict';
 
   type Metrics = import('../shared/diagnostics.js').RendererMetrics;
+  type Histogram = import('../shared/diagnostics.js').DiagnosticHistogram;
   type RendererEventName = import('../shared/diagnostics.js').RendererEventName;
-  // Every RendererMetrics field that is a plain counter, derived from the
-  // contract rather than listed again here: a second copy of forty field names
-  // is a second source of truth, and this one would be free to drift.
+  // Every RendererMetrics field that is a plain counter, and every one that is
+  // a histogram, derived from the contract rather than listed again here: a
+  // second copy of the field names is a second source of truth, and this one
+  // would be free to drift.
   type CounterKey = {
     [K in keyof Metrics]: Metrics[K] extends number ? K : never;
   }[keyof Metrics];
-  // Every metric family the histogram helper below can be asked for: a name P
-  // for which the contract declares all four of `${P}Histogram`, `${P}TotalUs`,
-  // `${P}MinUs` and `${P}MaxUs`. Derived for the same reason, and it is what
-  // makes the computed field names safe — a family RendererMetrics does not
-  // declare fails to compile at the call site instead of the recorder adding
-  // to a field that is not there.
-  type MetricFamily = {
-    [K in keyof Metrics]: K extends `${infer P}Histogram`
-      ? `${P}TotalUs` | `${P}MinUs` | `${P}MaxUs` extends keyof Metrics
-        ? P
-        : never
-      : never;
+  type HistogramKey = {
+    [K in keyof Metrics]: Metrics[K] extends Histogram ? K : never;
   }[keyof Metrics];
 
   const histogramLimitsUs = [
@@ -44,34 +36,33 @@
     'audio.resumeFailed',
     'pointerLock.failed',
   ]);
-  const histogram = (): number[] =>
-    new Array<number>(histogramLimitsUs.length).fill(0);
+  const histogram = (): Histogram => ({
+    buckets: new Array<number>(histogramLimitsUs.length).fill(0),
+    totalUs: 0,
+    minUs: 0,
+    maxUs: 0,
+  });
 
-  // Dynamic metric keys are confined to this histogram helper, and the family
-  // it is asked for is checked rather than trusted. The counter is a separate
-  // argument because it is not always `${prefix}Count` — bitmapOut and
-  // bitmapPresent share swapCount, snapshot has snapshotReads — so the default
-  // that used to compute it was right for five of the ten call sites and
-  // unchecked for all ten. Naming it makes it the contract's key too.
+  // The counter is a separate argument because it is not always
+  // `${name}Count`: bitmapOut and bitmapPresent are measured once per swap,
+  // and snapshot, socketSync and socketSettle each ride a counter of their
+  // own. A computed default would be silently wrong for those five.
   const observe = (
     target: Metrics,
-    prefix: MetricFamily,
+    name: HistogramKey,
     valueUs: number,
     countKey: CounterKey,
     increment = true,
   ) => {
     const first = increment ? target[countKey] === 0 : target[countKey] === 1;
     if (increment) target[countKey]++;
-    const total = `${prefix}TotalUs` as const;
-    target[total] += valueUs;
-    const min = `${prefix}MinUs` as const;
-    target[min] = first ? valueUs : Math.min(target[min], valueUs);
-    const max = `${prefix}MaxUs` as const;
-    target[max] = Math.max(target[max], valueUs);
+    const entry = target[name];
+    entry.totalUs += valueUs;
+    entry.minUs = first ? valueUs : Math.min(entry.minUs, valueUs);
+    entry.maxUs = Math.max(entry.maxUs, valueUs);
     const index = histogramLimitsUs.findIndex((limit) => valueUs <= limit);
     const bucket = index < 0 ? histogramLimitsUs.length - 1 : index;
-    const buckets = target[`${prefix}Histogram` as const];
-    buckets[bucket] = (buckets[bucket] ?? 0) + 1;
+    entry.buckets[bucket] = (entry.buckets[bucket] ?? 0) + 1;
   };
 
   const fresh = (): Metrics => ({
@@ -79,39 +70,15 @@
     visible: !document.hidden,
     focused: document.hasFocus(),
     rafCount: 0,
-    rafTotalUs: 0,
-    rafMinUs: 0,
-    rafMaxUs: 0,
     rafOver33: 0,
     rafOver50: 0,
     swapCount: 0,
-    swapTotalUs: 0,
-    swapMinUs: 0,
-    swapMaxUs: 0,
     presentationFailures: 0,
     submitIntervalCount: 0,
-    submitIntervalTotalUs: 0,
-    submitIntervalMinUs: 0,
-    submitIntervalMaxUs: 0,
     visibleSubmitIntervalCount: 0,
-    visibleSubmitIntervalTotalUs: 0,
-    visibleSubmitIntervalMinUs: 0,
-    visibleSubmitIntervalMaxUs: 0,
     hiddenSubmitIntervalCount: 0,
-    hiddenSubmitIntervalTotalUs: 0,
-    hiddenSubmitIntervalMinUs: 0,
-    hiddenSubmitIntervalMaxUs: 0,
-    bitmapOutTotalUs: 0,
-    bitmapOutMinUs: 0,
-    bitmapOutMaxUs: 0,
-    bitmapPresentTotalUs: 0,
-    bitmapPresentMinUs: 0,
-    bitmapPresentMaxUs: 0,
     snapshotReads: 0,
     snapshotBytes: 0,
-    snapshotTotalUs: 0,
-    snapshotMinUs: 0,
-    snapshotMaxUs: 0,
     snapshotMemoryReads: 0,
     memoryHits: 0,
     nativeHits: 0,
@@ -131,30 +98,21 @@
     socketPayloadBytes: 0,
     socketSourceBackingMaxBytes: 0,
     socketCompactBytes: 0,
-    socketSyncTotalUs: 0,
-    socketSyncMinUs: 0,
-    socketSyncMaxUs: 0,
     socketSettles: 0,
-    socketSettleTotalUs: 0,
-    socketSettleMinUs: 0,
-    socketSettleMaxUs: 0,
     inputToSubmitCount: 0,
-    inputToSubmitTotalUs: 0,
-    inputToSubmitMinUs: 0,
-    inputToSubmitMaxUs: 0,
     droppedRecords: 0,
     rendererEvents: [],
-    rafHistogram: histogram(),
-    swapHistogram: histogram(),
-    submitIntervalHistogram: histogram(),
-    visibleSubmitIntervalHistogram: histogram(),
-    hiddenSubmitIntervalHistogram: histogram(),
-    bitmapOutHistogram: histogram(),
-    bitmapPresentHistogram: histogram(),
-    snapshotHistogram: histogram(),
-    socketSyncHistogram: histogram(),
-    socketSettleHistogram: histogram(),
-    inputToSubmitHistogram: histogram(),
+    raf: histogram(),
+    swap: histogram(),
+    submitInterval: histogram(),
+    visibleSubmitInterval: histogram(),
+    hiddenSubmitInterval: histogram(),
+    bitmapOut: histogram(),
+    bitmapPresent: histogram(),
+    snapshot: histogram(),
+    socketSync: histogram(),
+    socketSettle: histogram(),
+    inputToSubmit: histogram(),
     socketSendEvents: [],
   });
 

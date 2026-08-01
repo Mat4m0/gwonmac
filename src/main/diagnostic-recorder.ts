@@ -12,6 +12,7 @@ import {
 import path from "node:path";
 import type {
   DiagnosticFields,
+  DiagnosticHistogram,
   DiagnosticHistogramSummary,
   DiagnosticLevel,
   DiagnosticSubsystem,
@@ -74,16 +75,16 @@ class Histogram {
     this.buckets[index < 0 ? this.buckets.length - 1 : index]! += 1;
   }
 
-  merge(counts: number[], sumUs: number, minUs: number, maxUs: number): void {
-    const count = counts.reduce((total, value) => total + value, 0);
+  merge(other: DiagnosticHistogram): void {
+    const count = other.buckets.reduce((total, value) => total + value, 0);
     if (!count) return;
-    counts.forEach((value, index) => {
+    other.buckets.forEach((value, index) => {
       this.buckets[index]! += value;
     });
     this.total += count;
-    this.sum += sumUs;
-    this.min = Math.min(this.min, minUs);
-    this.max = Math.max(this.max, maxUs);
+    this.sum += other.totalUs;
+    this.min = Math.min(this.min, other.minUs);
+    this.max = Math.max(this.max, other.maxUs);
   }
 
   summary(): DiagnosticHistogramSummary {
@@ -202,15 +203,9 @@ export class FlightRecorder {
     this.captureHistogram(name)?.record(durationUs);
   }
 
-  mergeHistogram(
-    name: string,
-    counts: number[],
-    sumUs: number,
-    minUs: number,
-    maxUs: number,
-  ): void {
-    this.histogram(name).merge(counts, sumUs, minUs, maxUs);
-    this.captureHistogram(name)?.merge(counts, sumUs, minUs, maxUs);
+  mergeHistogram(name: string, other: DiagnosticHistogram): void {
+    this.histogram(name).merge(other);
+    this.captureHistogram(name)?.merge(other);
   }
 
   setLatest(name: string, value: string | number | boolean | null): void {

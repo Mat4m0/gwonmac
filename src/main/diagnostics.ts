@@ -32,12 +32,14 @@ import {
   type RendererCommand,
 } from "../shared/contracts.js";
 import { errorCode, type ErrorCode } from "../shared/errors.js";
-import type {
-  DiagnosticSummary,
-  RendererFrameBatch,
-  RendererMilestone,
-  RendererMilestoneFields,
-  RendererMetrics,
+import {
+  RENDERER_HISTOGRAMS,
+  type DiagnosticSummary,
+  type RendererFrameBatch,
+  type RendererHistogramMetric,
+  type RendererMilestone,
+  type RendererMilestoneFields,
+  type RendererMetrics,
 } from "../shared/diagnostics.js";
 import { gamePaths } from "./paths.js";
 import { loadSettings } from "./core/settings.js";
@@ -309,6 +311,25 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
   });
 }
 
+/**
+ * Where each renderer histogram lands in the recorder's namespace, which is
+ * organised by subsystem rather than by the reporting side. Exhaustive by
+ * type: a new renderer histogram does not compile without a home here.
+ */
+const RENDERER_HISTOGRAM_NAMES: Record<RendererHistogramMetric, string> = {
+  raf: "renderer.rafInterval",
+  swap: "renderer.swap",
+  submitInterval: "renderer.submitInterval",
+  visibleSubmitInterval: "renderer.visibleSubmitInterval",
+  hiddenSubmitInterval: "renderer.hiddenSubmitInterval",
+  bitmapOut: "renderer.bitmapOut",
+  bitmapPresent: "renderer.bitmapPresent",
+  snapshot: "snapshot.rendererRead",
+  socketSync: "socket.rendererSync",
+  socketSettle: "socket.rendererSettle",
+  inputToSubmit: "renderer.inputToSubmit",
+};
+
 export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("renderer.raf", value.rafCount);
   recorder.count("renderer.rafOver33", value.rafOver33);
@@ -354,85 +375,9 @@ export function recordRendererMetrics(value: RendererMetrics): void {
         break;
     }
   }
-  recorder.mergeHistogram(
-    "renderer.rafInterval",
-    value.rafHistogram,
-    value.rafTotalUs,
-    value.rafMinUs,
-    value.rafMaxUs,
-  );
-  if (value.swapCount) {
-    recorder.mergeHistogram(
-      "renderer.swap",
-      value.swapHistogram,
-      value.swapTotalUs,
-      value.swapMinUs,
-      value.swapMaxUs,
-    );
-    recorder.mergeHistogram(
-      "renderer.bitmapOut",
-      value.bitmapOutHistogram,
-      value.bitmapOutTotalUs,
-      value.bitmapOutMinUs,
-      value.bitmapOutMaxUs,
-    );
-    recorder.mergeHistogram(
-      "renderer.bitmapPresent",
-      value.bitmapPresentHistogram,
-      value.bitmapPresentTotalUs,
-      value.bitmapPresentMinUs,
-      value.bitmapPresentMaxUs,
-    );
+  for (const { name } of RENDERER_HISTOGRAMS) {
+    recorder.mergeHistogram(RENDERER_HISTOGRAM_NAMES[name], value[name]);
   }
-  recorder.mergeHistogram(
-    "renderer.submitInterval",
-    value.submitIntervalHistogram,
-    value.submitIntervalTotalUs,
-    value.submitIntervalMinUs,
-    value.submitIntervalMaxUs,
-  );
-  recorder.mergeHistogram(
-    "renderer.visibleSubmitInterval",
-    value.visibleSubmitIntervalHistogram,
-    value.visibleSubmitIntervalTotalUs,
-    value.visibleSubmitIntervalMinUs,
-    value.visibleSubmitIntervalMaxUs,
-  );
-  recorder.mergeHistogram(
-    "renderer.hiddenSubmitInterval",
-    value.hiddenSubmitIntervalHistogram,
-    value.hiddenSubmitIntervalTotalUs,
-    value.hiddenSubmitIntervalMinUs,
-    value.hiddenSubmitIntervalMaxUs,
-  );
-  recorder.mergeHistogram(
-    "snapshot.rendererRead",
-    value.snapshotHistogram,
-    value.snapshotTotalUs,
-    value.snapshotMinUs,
-    value.snapshotMaxUs,
-  );
-  recorder.mergeHistogram(
-    "socket.rendererSync",
-    value.socketSyncHistogram,
-    value.socketSyncTotalUs,
-    value.socketSyncMinUs,
-    value.socketSyncMaxUs,
-  );
-  recorder.mergeHistogram(
-    "socket.rendererSettle",
-    value.socketSettleHistogram,
-    value.socketSettleTotalUs,
-    value.socketSettleMinUs,
-    value.socketSettleMaxUs,
-  );
-  recorder.mergeHistogram(
-    "renderer.inputToSubmit",
-    value.inputToSubmitHistogram,
-    value.inputToSubmitTotalUs,
-    value.inputToSubmitMinUs,
-    value.inputToSubmitMaxUs,
-  );
   recorder.setLatest("renderer.visible", value.visible);
   recorder.setLatest("renderer.focused", value.focused);
   recorder.setLatest("renderer.memoryCacheBytes", value.memoryCacheBytes);
@@ -478,16 +423,16 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       visible: value.visible,
       intervalMs: Math.round(value.intervalMs),
       rafCount: value.rafCount,
-      rafMaxUs: Math.round(value.rafMaxUs),
+      rafMaxUs: Math.round(value.raf.maxUs),
       swapCount: value.swapCount,
       presentationFailures: value.presentationFailures,
-      swapMaxUs: Math.round(value.swapMaxUs),
-      submitIntervalMaxUs: Math.round(value.submitIntervalMaxUs),
+      swapMaxUs: Math.round(value.swap.maxUs),
+      submitIntervalMaxUs: Math.round(value.submitInterval.maxUs),
       snapshotReads: value.snapshotReads,
       snapshotBytes: value.snapshotBytes,
-      snapshotMaxUs: Math.round(value.snapshotMaxUs),
+      snapshotMaxUs: Math.round(value.snapshot.maxUs),
       inputToSubmitCount: value.inputToSubmitCount,
-      inputToSubmitMaxUs: Math.round(value.inputToSubmitMaxUs),
+      inputToSubmitMaxUs: Math.round(value.inputToSubmit.maxUs),
       memoryCacheBytes: value.memoryCacheBytes,
       memoryCacheChunks: value.memoryCacheChunks,
       pendingChunks: value.pendingChunks,
@@ -499,9 +444,9 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       socketPayloadBytes: value.socketPayloadBytes,
       socketSourceBackingMaxBytes: value.socketSourceBackingMaxBytes,
       socketCompactBytes: value.socketCompactBytes,
-      socketSyncMaxUs: Math.round(value.socketSyncMaxUs),
+      socketSyncMaxUs: Math.round(value.socketSync.maxUs),
       socketSettles: value.socketSettles,
-      socketSettleMaxUs: Math.round(value.socketSettleMaxUs),
+      socketSettleMaxUs: Math.round(value.socketSettle.maxUs),
       droppedRecords: value.droppedRecords,
     });
   }
