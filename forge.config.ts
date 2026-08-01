@@ -111,8 +111,17 @@ const config: ForgeConfig = {
             // finished asset its versioned immutable filename.
             name: "Guild Wars Reforged",
             icon: path.resolve("assets/AppIcon.icns"),
+            // appdmg picks up the Retina variant from the sibling
+            // dmg-background@2x.png automatically.
+            background: path.resolve("assets/dmg-background.png"),
+            iconSize: 100,
+            contents: (opts) => [
+              { x: 150, y: 360, type: "file", path: opts.appPath },
+              { x: 495, y: 360, type: "link", path: "/Applications" },
+            ],
             overwrite: true,
             additionalDMGOptions: {
+              window: { size: { width: 640, height: 480 } },
               "code-sign": {
                 "signing-identity": requiredSigningEnvironment(
                   "APPLE_SIGNING_IDENTITY",
