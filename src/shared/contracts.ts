@@ -6,6 +6,9 @@ import type {
   RendererMetrics,
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
+import { RELEASE_REPO } from "./project-identity.js";
+
+export { RELEASE_REPO } from "./project-identity.js";
 
 export type BuildKind = "jspi";
 
@@ -286,8 +289,6 @@ export type ExternalLinkKind =
 export type RevealKind = "gameData";
 
 // The application and website both use this canonical release location.
-export const RELEASE_REPO = "Mat4m0/gwonmac";
-
 export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   github: `https://github.com/${RELEASE_REPO}`,
   discord: "https://discord.gg/Z9ft52RBD3",

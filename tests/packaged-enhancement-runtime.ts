@@ -35,6 +35,10 @@ import {
   COMPANION_SNAPSHOT_BYTES,
 } from "../src/renderer/companion-snapshot.ts";
 import { root } from "./electron/fixtures.mts";
+import {
+  DISTRIBUTION_CHANNEL_CONFIG,
+} from "../src/shared/distribution-channel.ts";
+import { resolvePackageMode } from "../scripts/package-mode.ts";
 
 /**
  * The host `Module` the renderer publishes for ArenaNet's generated glue. Only
@@ -78,9 +82,12 @@ type ReadoutPageGlobals = PageGlobals & {
   __targetReadoutFixture: TargetReadoutFixture;
 };
 
+const packageMode = resolvePackageMode(process.env.GW_PACKAGE_INTENT);
+const productName =
+  DISTRIBUTION_CHANNEL_CONFIG[packageMode.productChannel].productName;
 const packagedExecutable = path.join(
   root,
-  `out/Guild Wars Reforged-darwin-${process.arch}/Guild Wars Reforged.app/Contents/MacOS/Guild Wars Reforged`,
+  `out/${productName}-darwin-${process.arch}/${productName}.app/Contents/MacOS/${productName}`,
 );
 assert.ok(
   existsSync(packagedExecutable),

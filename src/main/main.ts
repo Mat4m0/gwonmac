@@ -82,6 +82,12 @@ import {
 } from "./core/native-keychain.js";
 import { loadNativeKeychain } from "./native-keychain.js";
 import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
+import {
+  distributionCapabilities,
+  isDistributionChannel,
+  parseDistributionMarker,
+  type DistributionChannel,
+} from "../shared/distribution-channel.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -228,24 +234,22 @@ function sendToRenderer(channel: string, value: unknown): void {
   }
 }
 
-function officialUpdaterCapable(): boolean {
+function packagedDistributionChannel(): DistributionChannel | null {
   if (!app.isPackaged) {
-    return process.env.GW_TEST_OFFICIAL_UPDATER === "1";
+    const channel = process.env.GW_TEST_DISTRIBUTION_CHANNEL;
+    return isDistributionChannel(channel) ? channel : null;
   }
-  if (process.platform !== "darwin") return false;
+  if (process.platform !== "darwin") return null;
   try {
     const marker = JSON.parse(
-      readFileSync(path.join(process.resourcesPath, "official-update.json"), "utf8"),
+      readFileSync(
+        path.join(process.resourcesPath, "distribution-channel.json"),
+        "utf8",
+      ),
     ) as unknown;
-    return (
-      typeof marker === "object"
-      && marker !== null
-      && !Array.isArray(marker)
-      && (marker as Record<string, unknown>).schema === 1
-      && (marker as Record<string, unknown>).repository === "Mat4m0/gwonmac"
-    );
+    return parseDistributionMarker(marker)?.channel ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -355,7 +359,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     throw new Error("injected startup failure");
   }
   app.setAboutPanelOptions({
-    applicationName: "Guild Wars Reforged",
+    applicationName: app.getName(),
     applicationVersion: HOST_VERSION,
     version: HOST_VERSION,
     copyright:
@@ -368,12 +372,18 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await applyPendingGameStorageClear();
   await ensureDirs();
   await startDiagnostics();
-  const officialReleaseCapability = officialUpdaterCapable();
+  const distributionChannel = packagedDistributionChannel();
+  const distribution = distributionCapabilities(distributionChannel);
+  if (!app.isPackaged) {
+    console.warn(
+      "Saved login is memory-only in pnpm dev; use pnpm dev:signed for persistent development credentials.",
+    );
+  }
   const persistentSecrets =
     app.isPackaged
-    && officialReleaseCapability
+    && distribution.persistentSecrets
     && !app.commandLine.hasSwitch("gw-volatile-secrets");
-  if (persistentSecrets) {
+  if (persistentSecrets && distribution.cleanupLegacySecrets) {
     const legacySecretFailures = await cleanupLegacySecretFiles(
       app.getPath("userData"),
       rm,
@@ -434,7 +444,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const sockets = buildSocketManager();
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
-    capable: officialReleaseCapability,
+    capable: distribution.automaticUpdates,
     nativeUpdater: {
       setFeedURL: (options) => autoUpdater.setFeedURL(options),
       checkForUpdates: () => {

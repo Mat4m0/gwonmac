@@ -2,9 +2,18 @@ import { MakerDMG } from "@electron-forge/maker-dmg";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { macOSBundleVersions } from "./scripts/macos-version.js";
+import { resolvePackageMode } from "./scripts/package-mode.js";
+import {
+  distributionEntitlementsPath,
+  distributionSigningOptions,
+} from "./scripts/apple-signing.js";
+import {
+  DISTRIBUTION_CHANNEL_CONFIG,
+  distributionMarker,
+} from "./src/shared/distribution-channel.js";
 
 const packageVersion = (
   JSON.parse(
@@ -14,79 +23,49 @@ const packageVersion = (
   }
 ).version;
 const macOSVersion = macOSBundleVersions(packageVersion);
-const officialRelease = process.env.GW_OFFICIAL_RELEASE === "1";
-// Pin the certificate, not its non-unique display name. The old and G2
-// certificates legitimately share that name in Keychain Access.
-const developerIdIdentity = "7F9A56793C16683742AA7818FE65221A884FA108";
-const releaseEntitlements = path.resolve(
-  "packaging/entitlements.release.plist",
-);
+const packageMode = resolvePackageMode(process.env.GW_PACKAGE_INTENT);
+const channelConfig = DISTRIBUTION_CHANNEL_CONFIG[packageMode.productChannel];
 
-function ignoreRedundantSigningTarget(filePath: string): boolean {
-  return (
-    /Electron Framework\.framework\/(?:Versions\/(?:A|Current)\/)?Resources\//u.test(
-      filePath,
-    ) || /\/Versions\/Current(?:\/|$)/u.test(filePath)
-  );
-}
-
-function requiredReleaseEnvironment(name: string): string {
+function requiredSigningEnvironment(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for an official release`);
+  if (!value) throw new Error(`${name} is required for signed packaging`);
   return value;
 }
 
-const releaseSigning = officialRelease
-  ? {
-      identity: developerIdIdentity,
-      keychain: requiredReleaseEnvironment("APPLE_KEYCHAIN"),
-      provisioningProfile: requiredReleaseEnvironment(
-        "APPLE_PROVISIONING_PROFILE",
-      ),
-      preAutoEntitlements: false,
-      preEmbedProvisioningProfile: true,
-      // Electron's signer otherwise timestamps every locale resource twice
-      // (through Versions/A and its Current symlink). They are sealed by the
-      // framework signature but are not code-signing targets themselves.
-      ignore: ignoreRedundantSigningTarget,
-      hardenedRuntime: true,
-      timestamp: "http://timestamp.apple.com/ts01",
-      optionsForFile: (filePath: string) => ({
-        entitlements:
-          path.basename(filePath) === "Guild Wars Reforged.app"
-            ? releaseEntitlements
-            : filePath.includes("Helper (Plugin).app")
-              ? [
-                  "com.apple.security.cs.allow-jit",
-                  "com.apple.security.cs.allow-unsigned-executable-memory",
-                  "com.apple.security.cs.disable-library-validation",
-                ]
-              : filePath.endsWith(".app")
-                ? ["com.apple.security.cs.allow-jit"]
-                : [],
-        hardenedRuntime: true,
-        timestamp: "http://timestamp.apple.com/ts01",
-      }),
-    }
+const distributionSigning = packageMode.kind === "signed"
+  ? (() => {
+      const { channel } = packageMode;
+      const identity = requiredSigningEnvironment("APPLE_SIGNING_IDENTITY");
+      const profile = requiredSigningEnvironment("APPLE_PROVISIONING_PROFILE");
+      const keychain = process.env.APPLE_KEYCHAIN;
+      const entitlements = distributionEntitlementsPath(channel);
+      return distributionSigningOptions({
+        channel,
+        identity,
+        ...(keychain ? { keychain } : {}),
+        profile,
+        entitlements,
+      });
+    })()
   : undefined;
 
-const releaseNotarization = officialRelease
+const releaseNotarization = packageMode.intent === "release"
   ? {
-      appleApiKey: requiredReleaseEnvironment("APPLE_API_KEY_PATH"),
-      appleApiKeyId: requiredReleaseEnvironment("APPLE_API_KEY_ID"),
-      appleApiIssuer: requiredReleaseEnvironment("APPLE_API_ISSUER_ID"),
+      appleApiKey: requiredSigningEnvironment("APPLE_API_KEY_PATH"),
+      appleApiKeyId: requiredSigningEnvironment("APPLE_API_KEY_ID"),
+      appleApiIssuer: requiredSigningEnvironment("APPLE_API_ISSUER_ID"),
     }
   : undefined;
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: { unpack: "**/build/native/keychain.node" },
-    name: "Guild Wars Reforged",
-    executableName: "Guild Wars Reforged",
+    name: channelConfig.productName,
+    executableName: channelConfig.productName,
     appVersion: macOSVersion.appVersion,
     buildVersion: macOSVersion.buildVersion,
     icon: path.resolve("assets/AppIcon.icns"),
-    appBundleId: "io.github.mat4m0.gwonmac",
+    appBundleId: channelConfig.bundleId,
     appCategoryType: "public.app-category.games",
     darwinDarkModeSupport: true,
     appCopyright: "© 2026 gwonmac contributors. Guild Wars © ArenaNet LLC.",
@@ -94,9 +73,8 @@ const config: ForgeConfig = {
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
       "src/renderer/fonts/COPYING-QUALITYPE",
-      ...(officialRelease ? ["packaging/official-update.json"] : []),
     ],
-    ...(releaseSigning ? { osxSign: releaseSigning } : {}),
+    ...(distributionSigning ? { osxSign: distributionSigning } : {}),
     ...(releaseNotarization ? { osxNotarize: releaseNotarization } : {}),
     extendInfo: {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
@@ -125,7 +103,7 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerZIP({}, ["darwin"]),
-    ...(officialRelease
+    ...(packageMode.intent === "release"
       ? [
           new MakerDMG({
             // appdmg also uses this as the mounted volume name and rejects
@@ -136,7 +114,9 @@ const config: ForgeConfig = {
             overwrite: true,
             additionalDMGOptions: {
               "code-sign": {
-                "signing-identity": developerIdIdentity,
+                "signing-identity": requiredSigningEnvironment(
+                  "APPLE_SIGNING_IDENTITY",
+                ),
                 identifier: "io.github.mat4m0.gwonmac",
               },
             },
@@ -153,6 +133,13 @@ const config: ForgeConfig = {
       arch,
     ) => {
       if (platform !== "darwin") return;
+      if (packageMode.kind === "signed") {
+        writeFileSync(
+          path.resolve(resourcesPath, "..", "distribution-channel.json"),
+          `${JSON.stringify(distributionMarker(packageMode.channel))}\n`,
+          { mode: 0o644 },
+        );
+      }
       await flipFuses(
         path.resolve(resourcesPath, "../..", "MacOS", "Electron"),
         {
@@ -172,10 +159,10 @@ const config: ForgeConfig = {
       );
     },
     postPackage: async (_config, result) => {
-      if (result.platform !== "darwin" || officialRelease) return;
+      if (result.platform !== "darwin" || packageMode.kind === "signed") return;
       const { spawnSync } = await import("node:child_process");
       for (const outputPath of result.outputPaths) {
-        const appPath = path.join(outputPath, "Guild Wars Reforged.app");
+        const appPath = path.join(outputPath, `${channelConfig.productName}.app`);
         const signed = spawnSync(
           "codesign",
           ["--force", "--deep", "--sign", "-", appPath],

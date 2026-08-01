@@ -5,24 +5,47 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import {
+  DISTRIBUTION_CHANNEL_CONFIG,
+  isDistributionChannel,
+} from "../src/shared/distribution-channel.ts";
 
 const execFileAsync = promisify(execFile);
 const sourceApp = process.env.GW_SIGNED_APP_PATH;
+const replacementApp = process.env.GW_SIGNED_REPLACEMENT_APP_PATH;
 const signingKeychain = process.env.APPLE_KEYCHAIN;
-if (process.env.GITHUB_ACTIONS !== "true") {
+const channel = process.env.GW_SIGNED_CHANNEL;
+if (
+  process.env.GITHUB_ACTIONS !== "true"
+  && process.env.GW_ALLOW_LOCAL_SIGNED_KEYCHAIN_TEST !== "1"
+) {
   throw new Error(
-    "the production-identity Keychain test is restricted to an ephemeral GitHub Actions runner",
+    "the signed Keychain test requires an ephemeral GitHub Actions runner or the explicit local signed-development test command",
   );
 }
-if (!sourceApp || !signingKeychain) {
-  throw new Error("GW_SIGNED_APP_PATH and APPLE_KEYCHAIN are required");
+if (
+  !sourceApp
+  || !isDistributionChannel(channel)
+  || (!replacementApp && !signingKeychain)
+) {
+  throw new Error(
+    "GW_SIGNED_APP_PATH, a known GW_SIGNED_CHANNEL, and either GW_SIGNED_REPLACEMENT_APP_PATH or APPLE_KEYCHAIN are required",
+  );
 }
 
-const identity = "7F9A56793C16683742AA7818FE65221A884FA108";
-const entitlements = path.resolve("packaging/entitlements.release.plist");
+const identity = process.env.APPLE_SIGNING_IDENTITY;
+if (!replacementApp && !identity) {
+  throw new Error("APPLE_SIGNING_IDENTITY is required to create a replacement");
+}
+const channelConfig = DISTRIBUTION_CHANNEL_CONFIG[channel];
+const entitlements = path.resolve(`packaging/entitlements.${channel}.plist`);
 const credentials = {
   username: "signed-runtime@example.invalid",
   password: "synthetic-signed-runtime-secret",
+};
+const steamSession = {
+  token: "synthetic-signed-runtime-steam-token",
+  expiry: Date.now() + 86_400_000,
 };
 const profile = await mkdtemp(
   path.join(tmpdir(), "gw-signed-keychain-profile-"),
@@ -63,7 +86,7 @@ async function waitUntil<T>(
 async function launch(appPath: string): Promise<RunningApp> {
   const executablePath = path.join(
     appPath,
-    "Contents/MacOS/Guild Wars Reforged",
+    `Contents/MacOS/${channelConfig.productName}`,
   );
   const activePort = path.join(profile, "DevToolsActivePort");
   await rm(activePort, { force: true });
@@ -122,9 +145,17 @@ async function closeApp({ browser, child, page }: RunningApp): Promise<void> {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-async function useCredentials(
+type SecretAction =
+  | "save-and-load"
+  | "load"
+  | "clear-and-load"
+  | "clear-credentials-and-load"
+  | "save-credentials-and-load"
+  | "clear-steam-and-load";
+
+async function useSecrets(
   appPath: string,
-  action: "save-and-load" | "load" | "clear-and-load",
+  action: SecretAction,
 ): Promise<unknown> {
   console.log(`signed keychain: ${action}: launching`);
   const running = await launch(appPath);
@@ -140,14 +171,35 @@ async function useCredentials(
                 save(value: unknown): Promise<void>;
                 clear(): Promise<void>;
               };
+              steam: {
+                getToken(silent: boolean): Promise<{ token: string | null }>;
+                store(token: string, expiry: number | null): Promise<void>;
+                clear(): Promise<void>;
+              };
             };
           }
-        ).gwNative.credentials;
-        if (next === "save-and-load") await api.save(value);
-        if (next === "clear-and-load") await api.clear();
-        return api.load();
+        ).gwNative;
+        if (next === "save-and-load") {
+          await api.credentials.save(value.credentials);
+          await api.steam.store(value.steam.token, value.steam.expiry);
+        }
+        if (next === "save-credentials-and-load") {
+          await api.credentials.save(value.credentials);
+        }
+        if (next === "clear-and-load") {
+          await api.credentials.clear();
+          await api.steam.clear();
+        }
+        if (next === "clear-credentials-and-load") {
+          await api.credentials.clear();
+        }
+        if (next === "clear-steam-and-load") await api.steam.clear();
+        return {
+          credentials: await api.credentials.load(),
+          steam: await api.steam.getToken(true),
+        };
       },
-      { action, value: credentials },
+      { action, value: { credentials, steam: steamSession } },
     );
     console.log(`signed keychain: ${action}: completed`);
     return result;
@@ -160,59 +212,95 @@ async function useCredentials(
 
 let createdSyntheticItem = false;
 try {
-  assert.equal(
-    await useCredentials(sourceApp, "load"),
-    null,
+  assert.deepEqual(
+    await useSecrets(sourceApp, "load"),
+    { credentials: null, steam: { token: null } },
     "refusing to overwrite an existing production credential",
   );
   createdSyntheticItem = true;
   assert.deepEqual(
-    await useCredentials(sourceApp, "save-and-load"),
-    credentials,
+    await useSecrets(sourceApp, "save-and-load"),
+    { credentials, steam: { token: steamSession.token } },
   );
   assert.deepEqual(
-    await useCredentials(sourceApp, "load"),
-    credentials,
-    "the signed app did not retain credentials across relaunch",
+    await useSecrets(sourceApp, "load"),
+    { credentials, steam: { token: steamSession.token } },
+    "the signed app did not retain both secrets across relaunch",
   );
 
-  const movedApp = path.join(appCopies, "moved", "Guild Wars Reforged.app");
+  const movedApp = path.join(
+    appCopies,
+    "moved",
+    `${channelConfig.productName}.app`,
+  );
   await mkdir(path.dirname(movedApp), { recursive: true });
   await execFileAsync("ditto", [sourceApp, movedApp]);
   assert.deepEqual(
-    await useCredentials(movedApp, "load"),
-    credentials,
+    await useSecrets(movedApp, "load"),
+    { credentials, steam: { token: steamSession.token } },
     "moving the signed app changed its Keychain identity",
   );
 
-  await writeFile(
-    path.join(movedApp, "Contents/Resources/upgrade-proof"),
-    "newly signed build",
-  );
-  await execFileAsync("codesign", [
-    "--force",
-    "--sign",
-    identity,
-    "--keychain",
-    signingKeychain,
-    "--options",
-    "runtime",
-    "--timestamp",
-    "--entitlements",
-    entitlements,
-    movedApp,
-  ]);
-  await execFileAsync("codesign", ["--verify", "--deep", "--strict", movedApp]);
+  let upgradedApp = replacementApp;
+  if (!upgradedApp) {
+    await writeFile(
+      path.join(movedApp, "Contents/Resources/upgrade-proof"),
+      "newly signed build",
+    );
+    await execFileAsync("codesign", [
+      "--force",
+      "--sign",
+      identity!,
+      "--keychain",
+      signingKeychain!,
+      "--options",
+      "runtime",
+      "--timestamp",
+      "--entitlements",
+      entitlements,
+      movedApp,
+    ]);
+    upgradedApp = movedApp;
+  }
+  await execFileAsync("codesign", ["--verify", "--deep", "--strict", upgradedApp]);
   assert.deepEqual(
-    await useCredentials(movedApp, "load"),
-    credentials,
-    "a newly signed build could not read the existing Keychain item",
+    await useSecrets(upgradedApp, "load"),
+    { credentials, steam: { token: steamSession.token } },
+    "a newly signed build could not read the existing Keychain items",
   );
 
-  assert.equal(await useCredentials(movedApp, "clear-and-load"), null);
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "clear-credentials-and-load"),
+    { credentials: null, steam: { token: steamSession.token } },
+    "clearing credentials also cleared the independent Steam session",
+  );
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "save-credentials-and-load"),
+    { credentials, steam: { token: steamSession.token } },
+  );
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "clear-steam-and-load"),
+    { credentials, steam: { token: null } },
+    "clearing the Steam session also cleared independent credentials",
+  );
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "clear-and-load"),
+    { credentials: null, steam: { token: null } },
+  );
   createdSyntheticItem = false;
-  await assert.rejects(readFile(path.join(profile, "credentials.bin")));
-  await assert.rejects(readFile(path.join(profile, "steam-session.bin")));
+  if (channel === "release") {
+    await assert.rejects(readFile(path.join(profile, "credentials.bin")));
+    await assert.rejects(readFile(path.join(profile, "steam-session.bin")));
+  } else {
+    assert.equal(
+      await readFile(path.join(profile, "credentials.bin"), "utf8"),
+      "retired",
+    );
+    assert.equal(
+      await readFile(path.join(profile, "steam-session.bin"), "utf8"),
+      "retired",
+    );
+  }
   assert.equal(
     await readFile(path.join(profile, "settings.json"), "utf8"),
     settings,
@@ -222,11 +310,11 @@ try {
     "chunk-sentinel",
   );
   console.log(
-    "signed Data Protection Keychain survived relaunch, move, and upgrade",
+    `signed ${channel} Data Protection Keychain survived relaunch, move, and upgrade`,
   );
 } finally {
   if (createdSyntheticItem) {
-    await useCredentials(sourceApp, "clear-and-load").catch(() => {});
+    await useSecrets(sourceApp, "clear-and-load").catch(() => {});
   }
   await rm(profile, { recursive: true, force: true });
   await rm(appCopies, { recursive: true, force: true });

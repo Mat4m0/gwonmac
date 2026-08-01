@@ -50,37 +50,50 @@ function countGithubRequests() {
 }
 
 test.describe("release check network policy", () => {
-  test("a default launch has the check on and attempts it once", async () => {
-    // No GW_TEST_OFFICIAL_UPDATER: this build is not update-capable, so the
-    // launch check finishes as `updater-unavailable` with no network path at
-    // all — which is exactly what lets a default profile launch under test.
-    const fixture = await launchOffline("gw-release-check-default-e2e-");
-    try {
-      const { page } = fixture;
-      // The shipped default is on.
-      await expect
-        .poll(() => page.evaluate(() => window.gwNative.settings.get()))
-        .toMatchObject({ autoCheckUpdates: true });
-      // The launch check ran without being asked: its answer is on the
-      // launcher, and the attempt was remembered.
-      await expect(page.locator("#loading-update-status")).toContainText(
-        "can't update itself",
+  for (const channel of [null, "preview", "development"] as const) {
+    test(`${channel ?? "unmarked"} cannot reach GitHub with checks enabled`, async () => {
+      const environment = channel
+        ? { GW_TEST_DISTRIBUTION_CHANNEL: channel }
+        : {};
+      const fixture = await launchOffline(
+        `gw-release-check-${channel ?? "unmarked"}-e2e-`,
+        environment,
       );
-      await expect
-        .poll(async () =>
-          page.evaluate(async () =>
-            (await window.gwNative.settings.get()).lastUpdateCheckAt),
-        )
-        .not.toBeNull();
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
+      try {
+        const { app, page } = fixture;
+        await expect
+          .poll(() => page.evaluate(() => window.gwNative.settings.get()))
+          .toMatchObject({ autoCheckUpdates: true });
+        // `updater-unavailable` is produced before the updater's fetch branch,
+        // proving the default launch did not reach GitHub.
+        await expect(page.locator("#loading-update-status")).toContainText(
+          "can't update itself",
+        );
+        await expect
+          .poll(async () =>
+            page.evaluate(async () =>
+              (await window.gwNative.settings.get()).lastUpdateCheckAt),
+          )
+          .not.toBeNull();
+
+        // Prove the same denial for fresh user intent, after installing a
+        // counter around the main process's actual fetch implementation.
+        await app.evaluate(countGithubRequests);
+        await page.locator("#loading-update-check").click();
+        await expect(page.locator("#loading-update-status")).toContainText(
+          "can't update itself",
+        );
+        expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(0);
+      } finally {
+        await closeOffline(fixture);
+      }
+    });
+  }
 
   test("opted out means zero requests; opting back in checks exactly once", async () => {
     const fixture = await launchOffline(
       "gw-release-check-optout-e2e-",
-      { GW_TEST_OFFICIAL_UPDATER: "1" },
+      { GW_TEST_DISTRIBUTION_CHANNEL: "release" },
       async (userData) => {
         // The player who unticked the box, preserved across upgrades: the
         // launch gate must not fire before the counter can prove it.
