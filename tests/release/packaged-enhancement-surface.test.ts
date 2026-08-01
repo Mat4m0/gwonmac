@@ -133,18 +133,26 @@ writeFileSync(
   `import { register } from "node:module";
 register(new URL("./resolve.mjs", import.meta.url));
 const policy = await import(process.env.GW_PROBE_POLICY);
+const contracts = await import(process.env.GW_PROBE_CONTRACTS);
+const enabled = (selection) => contracts.enhancementCapabilitiesRequested(
+  contracts.enhancementCapabilitiesFor(
+    selection,
+    policy.DEVELOPER_ENHANCEMENT_PROGRAM,
+  ),
+);
 console.log(
   JSON.stringify({
     automation: policy.ENHANCEMENT_AUTOMATION_ENABLED,
-    none: policy.enhancementsEnabledFor({
+    program: policy.DEVELOPER_ENHANCEMENT_PROGRAM,
+    none: enabled({
       nativeCursor: false,
       targetReadout: false,
     }),
-    cursorOnly: policy.enhancementsEnabledFor({
+    cursorOnly: enabled({
       nativeCursor: true,
       targetReadout: false,
     }),
-    readoutOnly: policy.enhancementsEnabledFor({
+    readoutOnly: enabled({
       nativeCursor: false,
       targetReadout: true,
     }),
@@ -156,6 +164,11 @@ console.log(
 /** What probe.mjs above prints: the gate's answer for one launch posture. */
 interface EnhancementGate {
   automation: boolean;
+  program:
+    | "none"
+    | "cursor-observer"
+    | "target-observer"
+    | "toolbox-foundation";
   none: boolean;
   cursorOnly: boolean;
   readoutOnly: boolean;
@@ -165,18 +178,27 @@ interface EnhancementGate {
 function enhancementGate({
   isPackaged,
   automationVariable,
+  programVariable,
 }: {
   isPackaged: boolean;
   automationVariable: string | undefined;
+  programVariable?: string | undefined;
 }): EnhancementGate {
   const environment = { ...process.env };
   delete environment.GW_ENHANCEMENT_AUTOMATION;
   if (automationVariable !== undefined) {
     environment.GW_ENHANCEMENT_AUTOMATION = automationVariable;
   }
+  delete environment.GW_ENHANCEMENT_PROGRAM;
+  if (programVariable !== undefined) {
+    environment.GW_ENHANCEMENT_PROGRAM = programVariable;
+  }
   environment.GW_PROBE_PACKAGED = isPackaged ? "1" : "0";
   environment.GW_PROBE_POLICY = pathToFileURL(
     path.join(root, "build/main/enhancement-policy.js"),
+  ).href;
+  environment.GW_PROBE_CONTRACTS = pathToFileURL(
+    path.join(root, "build/shared/contracts.js"),
   ).href;
 
   return JSON.parse(
@@ -187,12 +209,18 @@ function enhancementGate({
   );
 }
 
-test("automation is the one tier a packaged build cannot reach", () => {
-  // The public claim: a packaged build sends no game input, whatever the
-  // environment says.
+test("packaged builds refuse automation and developer programs independently", () => {
+  // The public claim: no environment variable can grant a packaged build the
+  // gameplay-automation or developer-program surfaces. Cursor presentation's
+  // bounded post-click hit-test is independently pinned in the Electron suite.
   for (const automationVariable of ["1", "true", undefined]) {
-    const gate = enhancementGate({ isPackaged: true, automationVariable });
+    const gate = enhancementGate({
+      isPackaged: true,
+      automationVariable,
+      programVariable: "toolbox-foundation",
+    });
     assert.equal(gate.automation, false, `GW_ENHANCEMENT_AUTOMATION=${automationVariable}`);
+    assert.equal(gate.program, "none");
     // Such a build gets the Enhancement from either independently selected tool,
     // and only from those tools — never from the environment.
     assert.equal(gate.none, false);
@@ -200,15 +228,25 @@ test("automation is the one tier a packaged build cannot reach", () => {
     assert.equal(gate.readoutOnly, true);
   }
 
-  // Unpackaged, the variable is the switch, and only the exact value "1".
+  // Unpackaged automation grants input/IPC only. It does not select hooks.
   const enabled = enhancementGate({ isPackaged: false, automationVariable: "1" });
   assert.equal(enabled.automation, true);
-  assert.equal(enabled.none, true);
+  assert.equal(enabled.program, "none");
+  assert.equal(enabled.none, false);
   for (const automationVariable of ["true", "0", "", undefined]) {
     const gate = enhancementGate({ isPackaged: false, automationVariable });
     assert.equal(gate.automation, false, `GW_ENHANCEMENT_AUTOMATION=${automationVariable}`);
     assert.equal(gate.none, false);
   }
+
+  const foundation = enhancementGate({
+    isPackaged: false,
+    automationVariable: undefined,
+    programVariable: "toolbox-foundation",
+  });
+  assert.equal(foundation.automation, false);
+  assert.equal(foundation.program, "toolbox-foundation");
+  assert.equal(foundation.none, true);
 });
 
 test("the tools keep independent defaults and explicit choices", async () => {

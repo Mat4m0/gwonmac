@@ -16,15 +16,11 @@ import {
 } from "../src/tools/enhancement-doctor.js";
 import type { AutomationCommand } from "../src/shared/automation.js";
 import {
-  parseEnhancementObservations,
-} from "../src/tools/enhancement-observations.js";
-import {
   liveRunPlan,
   liveRunRefusal,
   scenarioContext,
   waitForPlayable,
 } from "./enhancements-live/scenarios.js";
-import type { ObservationSample } from "./enhancements-live/scenarios.js";
 import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
@@ -61,11 +57,10 @@ if (!plan) {
   process.exit(2);
 }
 const selectedScenario = plan.scenario;
-const observeArgument = process.argv.indexOf("--observe");
-const observations = parseEnhancementObservations(
-  observeArgument >= 0 ? process.argv[observeArgument + 1] ?? null : null,
+const preflight = await inspectEnhancementWorkspace(
+  userData,
+  plan.scenario.program,
 );
-const preflight = await inspectEnhancementWorkspace(userData);
 const blocked = liveRunRefusal(plan, preflight, { cachedOnly: !allowUpdate });
 if (blocked) {
   console.error(JSON.stringify({ preflight, blocked }));
@@ -104,39 +99,6 @@ function sendAutomationCommand(command: AutomationCommand): Promise<void> {
       else resolve();
     });
   });
-}
-
-async function sampleObservations(
-  targetPage: Page,
-): Promise<ObservationSample[]> {
-  if (observations.length === 0) return [];
-  return targetPage.evaluate((requested) => {
-    // The runtime is declared as an open record, so the module's memory arrives
-    // untyped; `WebAssembly.Memory` is the thing being asked for, and asking
-    // for it is also the check that the Enhancement is installed at all.
-    const memory = window.gwCompanionRuntime?.memory;
-    if (!(memory instanceof WebAssembly.Memory)) return [];
-    const view = new DataView(memory.buffer);
-    const widths = { u8: 1, u16: 2, u32: 4, i32: 4, f32: 4 };
-    return requested.map(({ type, address }) => {
-      const width = widths[type];
-      if (address + width > view.byteLength) {
-        return { type, address, value: null, valid: false };
-      }
-      let value: number;
-      if (type === "u8") value = view.getUint8(address);
-      else if (type === "u16") value = view.getUint16(address, true);
-      else if (type === "u32") value = view.getUint32(address, true);
-      else if (type === "i32") value = view.getInt32(address, true);
-      else value = view.getFloat32(address, true);
-      return {
-        type,
-        address,
-        value: Number.isFinite(value) ? value : null,
-        valid: Number.isFinite(value),
-      };
-    });
-  }, observations);
 }
 
 const MAX_PROCESS_OUTPUT_BYTES = 256 * 1024;
@@ -205,10 +167,18 @@ try {
   });
   page.on("pageerror", (error) => rendererErrors.push(error.message));
   await page.waitForLoadState("domcontentloaded");
-  let loginInputs = await waitForPlayable(page, plan.tier);
+  let loginInputs = await waitForPlayable(
+    page,
+    plan.tier,
+    plan.scenario.readiness,
+  );
   if (plan.name === "reload") {
     await page.reload({ waitUntil: "domcontentloaded" });
-    loginInputs += await waitForPlayable(page, plan.tier);
+    loginInputs += await waitForPlayable(
+      page,
+      plan.tier,
+      plan.scenario.readiness,
+    );
   }
 
   const before = await page.evaluate(() => ({
@@ -231,14 +201,10 @@ try {
       elapsedMs: performance.now() - start.at,
     };
   }, before);
-  const observationsBefore = await sampleObservations(page);
   const capabilities = {
     page,
     cdp,
     sendAutomationCommand,
-    sampleObservations: observations.length > 0
-      ? () => sampleObservations(page)
-      : null,
   };
   // The tier decides both halves at once, so the automation capabilities cannot
   // reach an observation scenario even by mistake.
@@ -253,14 +219,6 @@ try {
     tier: plan.tier,
     loginInputs,
     ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
-    ...(observations.length > 0
-      ? {
-          observations: {
-            before: observationsBefore,
-            after: await sampleObservations(page),
-          },
-        }
-      : {}),
     preflight: {
       cached: !allowUpdate,
       snapshotComplete: preflight.snapshot?.complete === true,
@@ -271,7 +229,8 @@ try {
   };
   failureResult = result;
   validateCommonAcceptance(result, expectedBuildId, {
-    coreObservation: plan.tier === "automation",
+    enhancementExpected: plan.scenario.program !== "none",
+    coreObservation: plan.scenario.program === "target-observer",
   });
   selectedScenario.validate(result);
   console.log(JSON.stringify(result));
@@ -298,10 +257,10 @@ try {
 } catch (error) {
   keepAlive = true;
   await mkdir(failureDir, { recursive: true });
-  // The foundation scenario could capture visible chat, so its evidence never
-  // records pixels.
+  // Every Toolbox-program scenario can expose visible chat, so none records
+  // pixels on failure.
   if (
-    plan.name !== "toolbox-foundation"
+    plan.scenario.program !== "toolbox-foundation"
     && failurePage
     && !failurePage.isClosed()
   ) {

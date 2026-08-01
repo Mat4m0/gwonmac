@@ -20,7 +20,7 @@ import type {
 const FEATURES = 'build templates, screenshots and chat logs';
 
 const GAMEPLAY =
-  'Gameplay itself is unaffected: no stat, no timing and no input path changes.';
+  'Gameplay itself is unaffected: no stat or timing changes, and no gameplay command is generated.';
 
 /**
  * Recovery is an app update, and the notice offers that check right beside

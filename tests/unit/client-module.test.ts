@@ -12,6 +12,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import {
+  ENHANCEMENT_CAPABILITY_PROFILES,
+  ENHANCEMENT_TRANSFORM_ABI,
+  type EnhancementCapabilityProfile,
+  type EnhancementCapabilities,
+} from "../../src/shared/contracts.js";
+import {
   inspectEnhancementCache,
   prepareClientModule,
   type ClientCertification,
@@ -21,11 +27,36 @@ import {
   TEMPLATE_SAVE_TRANSFORM_ABI,
   type KnownTemplateSaveBuild,
 } from "../../src/main/core/template-save-compat.js";
-import type { KnownEnhancementBuild } from "../../src/main/core/enhancement-builds.js";
+import {
+  type EnhancementOutputHashes,
+  type KnownEnhancementBuild,
+} from "../../src/main/core/enhancement-builds.js";
 import {
   ENHANCEMENT_HOOK_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
+  transformEnhancementWasm,
 } from "../../src/main/core/enhancement-transform.js";
+
+const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  toolbox: true,
+});
+const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  toolbox: false,
+});
+const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: true,
+  toolbox: false,
+});
+const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  toolbox: false,
+});
 
 const scratchDirs: string[] = [];
 after(async () => {
@@ -144,9 +175,15 @@ function certifyTemplate(input: Uint8Array): KnownTemplateSaveBuild {
   return assert.fail("fixture did not produce a template-save output hash");
 }
 
-function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
-  return {
-    sha256: inputSha256,
+function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
+  const draft: KnownEnhancementBuild = {
+    sha256: sha256(input),
+    outputSha256: Object.freeze({
+      cursor: "0".repeat(64),
+      target: "0".repeat(64),
+      cursorTarget: "0".repeat(64),
+      cursorToolbox: "0".repeat(64),
+    }),
     programId: 1,
     buildId: 1,
     hookFunction: 3,
@@ -167,8 +204,21 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
       playerChatMessage: 0x1000_0082,
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
+      partyDirtyMessages: [
+        0x1000_0038,
+        0x1000_0039,
+        0x1000_008c,
+        0x1000_0098,
+        0x1000_00c2,
+        0x1000_0111,
+        0x1000_011e,
+        0x1000_011f,
+        0x1000_0124,
+        0x1000_0126,
+      ],
       playerChatProducer: 5,
       playerChatSites: 3,
+      nearbyPlayerMessages: [0x1000_007f, 0x1000_0080],
       nearbyPlayerMessageProducers: [5, 5],
     },
     layout: {
@@ -210,6 +260,19 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
       heroId: 8,
     },
   };
+  const derived = {} as Record<EnhancementCapabilityProfile, string>;
+  for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
+    EnhancementCapabilityProfile[]) {
+    derived[profile] = sha256(transformEnhancementWasm(
+      input,
+      draft,
+      ENHANCEMENT_CAPABILITY_PROFILES[profile],
+    ));
+  }
+  return {
+    ...draft,
+    outputSha256: Object.freeze(derived) as EnhancementOutputHashes,
+  };
 }
 
 async function fixture() {
@@ -219,7 +282,8 @@ async function fixture() {
   const officialWasmPath = join(root, "official.wasm");
   await writeFile(officialWasmPath, official);
   const templateSaveBuild = certifyTemplate(official);
-  const enhancement = enhancementBuild(templateSaveBuild.outputSha256);
+  const templateOutput = rewriteTemplateSaveWasm(official, templateSaveBuild);
+  const enhancement = enhancementBuild(templateOutput);
   return {
     root,
     official,
@@ -237,13 +301,13 @@ type ModuleFixture = Awaited<ReturnType<typeof fixture>>;
 function options(
   value: ModuleFixture,
   certification: ClientCertification,
-  enhancementRequested: boolean,
+  enhancementCapabilities: EnhancementCapabilities,
 ) {
   return {
     officialWasmPath: value.officialWasmPath,
     officialSha256: value.officialSha256,
     certification,
-    enhancementRequested,
+    enhancementCapabilities,
     compatibilityCacheRoot: value.compatibilityCacheRoot,
     enhancementCacheRoot: value.enhancementCacheRoot,
   };
@@ -269,7 +333,7 @@ describe("client module preparation", () => {
     };
 
     const prepared = await prepareClientModule(
-      options(value, certification, true),
+      options(value, certification, CURSOR_TOOLBOX),
     );
 
     assert.equal(prepared.state, "certified");
@@ -279,6 +343,7 @@ describe("client module preparation", () => {
     assert.equal(
       await inspectEnhancementCache(
         value.enhancementBuild,
+        CURSOR_TOOLBOX,
         value.enhancementCacheRoot,
       ),
       "valid",
@@ -324,7 +389,7 @@ describe("client module preparation", () => {
           state: "template-only",
           templateSaveBuild: value.templateSaveBuild,
         },
-        true,
+        CURSOR_TOOLBOX,
       ),
     );
 
@@ -346,7 +411,7 @@ describe("client module preparation", () => {
     ]);
 
     const prepared = await prepareClientModule(
-      options(value, { state: "uncertified" }, true),
+      options(value, { state: "uncertified" }, CURSOR_TOOLBOX),
     );
 
     assert.deepEqual(prepared, {
@@ -373,7 +438,7 @@ describe("client module preparation", () => {
           templateSaveBuild: value.templateSaveBuild,
           enhancementBuild: value.enhancementBuild,
         },
-        false,
+        NO_CAPABILITIES,
       ),
     );
 
@@ -398,7 +463,7 @@ describe("client module preparation", () => {
       options(
         templateFailure,
         { state: "template-only", templateSaveBuild: brokenTemplate },
-        true,
+        CURSOR_TOOLBOX,
       ),
     );
     assert.equal(afterTemplateFailure.wasmPath, templateFailure.officialWasmPath);
@@ -419,7 +484,7 @@ describe("client module preparation", () => {
           templateSaveBuild: enhancementFailure.templateSaveBuild,
           enhancementBuild: brokenEnhancement,
         },
-        true,
+        CURSOR_TOOLBOX,
       ),
     );
     assert.equal(afterEnhancementFailure.state, "certified");
@@ -439,7 +504,7 @@ describe("client module preparation", () => {
       enhancementBuild: value.enhancementBuild,
     };
     const first = await prepareClientModule(
-      options(value, certification, true),
+      options(value, certification, CURSOR_TOOLBOX),
     );
     const compatibilityWasm = join(
       value.compatibilityCacheRoot,
@@ -453,7 +518,7 @@ describe("client module preparation", () => {
     ]);
 
     const rebuilt = await prepareClientModule(
-      options(value, certification, true),
+      options(value, certification, CURSOR_TOOLBOX),
     );
 
     assert.equal(rebuilt.failure, null);
@@ -465,9 +530,143 @@ describe("client module preparation", () => {
     assert.equal(
       await inspectEnhancementCache(
         value.enhancementBuild,
+        CURSOR_TOOLBOX,
         value.enhancementCacheRoot,
       ),
       "valid",
+    );
+  });
+
+  it("rejects a replacement module even when writable metadata matches it", async () => {
+    const value = await fixture();
+    const certification: ClientCertification = {
+      state: "certified",
+      templateSaveBuild: value.templateSaveBuild,
+      enhancementBuild: value.enhancementBuild,
+    };
+    const first = await prepareClientModule(
+      options(value, certification, CURSOR_TOOLBOX),
+    );
+    const metadataPath = join(
+      value.enhancementCacheRoot,
+      value.enhancementBuild.sha256,
+      String(ENHANCEMENT_TRANSFORM_ABI),
+      "metadata.json",
+    );
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+      outputSha256: string;
+    };
+    const planted = Buffer.from("attacker-controlled-wasm");
+    metadata.outputSha256 = sha256(planted);
+    await Promise.all([
+      writeFile(first.wasmPath, planted),
+      writeFile(metadataPath, JSON.stringify(metadata)),
+    ]);
+
+    assert.equal(
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        CURSOR_TOOLBOX,
+        value.enhancementCacheRoot,
+      ),
+      "missing-or-invalid",
+    );
+    const rebuilt = await prepareClientModule(
+      options(value, certification, CURSOR_TOOLBOX),
+    );
+    assert.equal(rebuilt.failure, null);
+    assert.equal(
+      sha256(await readFile(rebuilt.wasmPath)),
+      value.enhancementBuild.outputSha256.cursorToolbox,
+    );
+  });
+
+  it("fails closed when a certified build omits the selected profile hash", async () => {
+    const value = await fixture();
+    const complete = value.enhancementBuild.outputSha256;
+    const incomplete = {
+      cursor: complete.cursor,
+      target: complete.target,
+      cursorTarget: complete.cursorTarget,
+    } as EnhancementOutputHashes;
+    const missingProfile = {
+      ...value.enhancementBuild,
+      outputSha256: incomplete as EnhancementOutputHashes,
+    };
+
+    const prepared = await prepareClientModule(
+      options(
+        value,
+        {
+          state: "certified",
+          templateSaveBuild: value.templateSaveBuild,
+          enhancementBuild: missingProfile,
+        },
+        CURSOR_TOOLBOX,
+      ),
+    );
+
+    assert.equal(prepared.state, "certified");
+    assert.equal(prepared.enhancementBuild, null);
+    assert.equal(prepared.failure?.stage, "enhancement");
+    assert.match(String(prepared.failure?.error), /no certified output/);
+    assert.equal(
+      sha256(await readFile(prepared.wasmPath)),
+      value.templateSaveBuild.outputSha256,
+    );
+    await assertMissing(value.enhancementCacheRoot);
+  });
+
+  it("replaces the cache when capabilities change but hooks do not", async () => {
+    const value = await fixture();
+    const certification: ClientCertification = {
+      state: "certified",
+      templateSaveBuild: value.templateSaveBuild,
+      enhancementBuild: value.enhancementBuild,
+    };
+
+    const cursorOnly = await prepareClientModule(
+      options(value, certification, CURSOR_ONLY),
+    );
+    const cursorBytes = await readFile(cursorOnly.wasmPath);
+    assert.equal(
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        CURSOR_ONLY,
+        value.enhancementCacheRoot,
+      ),
+      "valid",
+    );
+    assert.equal(
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        CURSOR_TARGET,
+        value.enhancementCacheRoot,
+      ),
+      "missing-or-invalid",
+    );
+
+    const cursorTarget = await prepareClientModule(
+      options(value, certification, CURSOR_TARGET),
+    );
+    const cursorTargetBytes = await readFile(cursorTarget.wasmPath);
+    assert.equal(cursorTarget.wasmPath, cursorOnly.wasmPath);
+    assert.notEqual(sha256(cursorTargetBytes), sha256(cursorBytes));
+    assert.equal(
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        CURSOR_TARGET,
+        value.enhancementCacheRoot,
+      ),
+      "valid",
+    );
+    assert.equal(
+      await inspectEnhancementCache(
+        value.enhancementBuild,
+        CURSOR_ONLY,
+        value.enhancementCacheRoot,
+      ),
+      "missing-or-invalid",
     );
   });
 });

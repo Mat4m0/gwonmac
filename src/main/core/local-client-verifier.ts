@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/contracts.js";
 import {
   ENHANCEMENT_BUILDS,
   findEnhancementBuild,
@@ -10,13 +11,13 @@ import {
 } from "./enhancement-transform.js";
 import {
   TEMPLATE_SAVE_BUILDS,
-  rewriteTemplateSaveWasm,
   type BridgeKind,
   type KnownTemplateSaveBuild,
 } from "./template-save-compat.js";
 import {
-  deriveEquivalentTemplateSaveBuild,
+  preparePostTemplateSaveModule,
   TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
+  type PostTemplateSaveModule,
 } from "./template-save-verifier.js";
 
 declare const WebAssembly: {
@@ -84,7 +85,11 @@ function deriveEnhancementBuild(
   // independently shape-verifiable.
   const build = findEnhancementBuild(report.sha256);
   if (!build) return null;
-  transformEnhancementWasm(templateOutput, build);
+  transformEnhancementWasm(
+    templateOutput,
+    build,
+    ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox,
+  );
   return build;
 }
 
@@ -111,19 +116,9 @@ export function verifyLocalClientBytes(
     };
   }
 
-  const templateSaveBuild = deriveEquivalentTemplateSaveBuild(official);
-  if (!templateSaveBuild) {
-    return {
-      ...base,
-      templateSaveBuild: null,
-      enhancementBuild: null,
-      reasons: ["template-shape-changed"],
-    };
-  }
-
-  let templateOutput: Uint8Array;
+  let postTemplate: PostTemplateSaveModule | null;
   try {
-    templateOutput = rewriteTemplateSaveWasm(official, templateSaveBuild);
+    postTemplate = preparePostTemplateSaveModule(official);
   } catch {
     return {
       ...base,
@@ -132,6 +127,17 @@ export function verifyLocalClientBytes(
       reasons: ["template-transform-failed"],
     };
   }
+  if (!postTemplate) {
+    return {
+      ...base,
+      templateSaveBuild: null,
+      enhancementBuild: null,
+      reasons: ["template-shape-changed"],
+    };
+  }
+
+  const templateSaveBuild = postTemplate.build;
+  const templateOutput = postTemplate.bytes;
 
   let enhancementBuild: KnownEnhancementBuild | null = null;
   try {

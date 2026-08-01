@@ -46,6 +46,10 @@ const CSP =
   "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
   "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
+const RENDERER_SHARED_MODULES = new Set([
+  "contracts.js",
+  "project-identity.js",
+]);
 
 export interface ProtocolDeps {
   getActiveClient: () => {
@@ -423,6 +427,25 @@ export async function handleGwRequest(request: Request): Promise<Response> {
           );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
     return fileResponse(file, request, mime);
+  }
+
+  // The dynamically loaded Enhancement installer imports the canonical
+  // capability contract. TypeScript emits that contract beside main rather
+  // than copying it into renderer/, so expose only its exact two-module graph.
+  // This is deliberately not a generic build/shared route.
+  if (first === "shared") {
+    const moduleName = base.slice("shared/".length);
+    if (RENDERER_SHARED_MODULES.has(moduleName)) {
+      const sharedFile = path.join(
+        app.getAppPath(),
+        "build",
+        "shared",
+        moduleName,
+      );
+      const mime = MIME[path.extname(moduleName)] ?? "application/octet-stream";
+      return fileResponse(sharedFile, request, mime, "no-store");
+    }
+    return new Response("not found", { status: 404, headers: headers() });
   }
 
   const rendererFile = safeUnder(rendererRoot(), pathname);

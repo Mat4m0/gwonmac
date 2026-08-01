@@ -36,7 +36,11 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
-            enhancementsEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
             onProgress: (value: DownloadProgress) => progress.push(value),
             onPrefetch: () => undefined,
           });
@@ -128,7 +132,11 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
-            enhancementsEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -215,7 +223,11 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
-            enhancementsEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -299,7 +311,11 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: true,
-            enhancementsEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });
@@ -432,7 +448,11 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: true,
-            enhancementsEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
           });

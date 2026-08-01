@@ -10,6 +10,37 @@ if (nativeArchitecture === null) {
 }
 
 /**
+ * The one reproducible freestanding-kernel compile recipe.
+ * @param {string} output
+ */
+export function companionKernelRustcArgs(output) {
+  return [
+    "src/companion-kernel/lib.rs",
+    "--edition=2021",
+    "--target",
+    "wasm32-unknown-unknown",
+    "--crate-type",
+    "cdylib",
+    "-C",
+    "opt-level=s",
+    "-C",
+    "panic=abort",
+    "-C",
+    "relocation-model=pic",
+    "-C",
+    "link-arg=--import-memory",
+    "-C",
+    "link-arg=--experimental-pic",
+    "-C",
+    "link-arg=--shared",
+    "-C",
+    "link-arg=--strip-all",
+    "-o",
+    output,
+  ];
+}
+
+/**
  * Every command that produces a package input, in order. Exported so the step
  * list itself is assertable: the kernel is compiled by exactly one of them.
  *
@@ -96,34 +127,13 @@ export const BUILD_STEPS = [
     ],
   ],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
-  // It writes into build/renderer, so it goes after everything that fills it.
+  // rustc writes an unserved candidate. The next step validates its fixed ABI,
+  // seals its digest into the emitted renderer, and only then publishes it.
   [
     "rustc",
-    [
-      "src/companion-kernel/lib.rs",
-      "--edition=2021",
-      "--target",
-      "wasm32-unknown-unknown",
-      "--crate-type",
-      "cdylib",
-      "-C",
-      "opt-level=s",
-      "-C",
-      "panic=abort",
-      "-C",
-      "relocation-model=pic",
-      "-C",
-      "link-arg=--import-memory",
-      "-C",
-      "link-arg=--experimental-pic",
-      "-C",
-      "link-arg=--shared",
-      "-C",
-      "link-arg=--strip-all",
-      "-o",
-      "build/renderer/companion-kernel.wasm",
-    ],
+    companionKernelRustcArgs("build/.companion-kernel.unsealed.wasm"),
   ],
+  [process.execPath, ["scripts/seal-companion-kernel.mjs"]],
 ];
 
 function build() {

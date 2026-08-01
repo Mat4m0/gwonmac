@@ -1,6 +1,8 @@
 import {
+  type CompanionToolboxState,
+  readChangedCompanionToolbox,
   readCompanionSnapshot,
-  readCompanionToolbox,
+  sameCompanionToolboxState,
 } from "./companion-snapshot.js";
 
 type SnapshotObserverTarget = {
@@ -18,9 +20,8 @@ type StateConsumer = {
   update(state: CompanionState): void;
 };
 
-type ToolboxState = ReturnType<typeof readCompanionToolbox>;
 type ToolboxConsumer = {
-  update(state: ToolboxState): void;
+  update(state: CompanionToolboxState): void;
 };
 
 export function recordCompanionLifecycle(state: CompanionState) {
@@ -41,10 +42,14 @@ export function observeCompanion(
   readout: StateConsumer | null,
   toolbox: ToolboxConsumer | null,
   observeState: boolean,
+  publishState: boolean,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
   let cadenceTick = 0;
+  let previousToolbox: CompanionToolboxState | null = null;
+  let toolboxSequence: number | null = null;
+  let publishedState: CompanionState | null = null;
   const observe = () => {
     if (observeState) {
       const started = performance.now();
@@ -60,7 +65,10 @@ export function observeCompanion(
       ) {
         runtime.rejectedSnapshots += 1;
       }
-      window.gwCompanionState = state;
+      if (publishState) {
+        publishedState = state;
+        window.gwCompanionState = state;
+      }
       const now = performance.now();
       if (state.status === "ready" && now - cadenceAt >= 1_000) {
         runtime.hertz =
@@ -74,15 +82,28 @@ export function observeCompanion(
       readout?.update(state);
     }
     if (toolbox) {
-      toolbox.update(readCompanionToolbox(
+      const change = readChangedCompanionToolbox(
         runtime.memory.buffer,
         runtime.toolboxPointer,
-      ));
+        toolboxSequence,
+      );
+      if (change.changed) {
+        toolboxSequence = change.sequence;
+        if (!sameCompanionToolboxState(previousToolbox, change.state)) {
+          previousToolbox = change.state;
+          toolbox.update(change.state);
+        }
+      }
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
     cursor?.poll();
     frame = requestAnimationFrame(observe);
   };
   frame = requestAnimationFrame(observe);
-  return () => cancelAnimationFrame(frame);
+  return () => {
+    cancelAnimationFrame(frame);
+    if (publishedState !== null && window.gwCompanionState === publishedState) {
+      delete window.gwCompanionState;
+    }
+  };
 }

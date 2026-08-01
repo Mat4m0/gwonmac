@@ -1,4 +1,9 @@
-import type { ClientCompatibilityState } from "../../shared/contracts.js";
+import {
+  type ClientCompatibilityState,
+  enhancementCapabilitiesRequested,
+  ENHANCEMENT_TRANSFORM_ABI,
+  type EnhancementCapabilities,
+} from "../../shared/contracts.js";
 import {
   buildFingerprint,
   type DerivedWasmCache,
@@ -11,11 +16,11 @@ import {
   TEMPLATE_SAVE_TRANSFORM_ABI,
   type KnownTemplateSaveBuild,
 } from "./template-save-compat.js";
-import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import {
-  ENHANCEMENT_TRANSFORM_ABI,
-  transformEnhancementWasm,
-} from "./enhancement-transform.js";
+  enhancementOutputSha256,
+  type KnownEnhancementBuild,
+} from "./enhancement-builds.js";
+import { transformEnhancementWasm } from "./enhancement-transform.js";
 
 /**
  * The exact records matched while certifying the official client hash. The
@@ -50,7 +55,7 @@ export interface PrepareClientModuleOptions {
   readonly officialWasmPath: string;
   readonly officialSha256: string;
   readonly certification: ClientCertification;
-  readonly enhancementRequested: boolean;
+  readonly enhancementCapabilities: EnhancementCapabilities;
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
 }
@@ -70,24 +75,38 @@ function templateSaveCache(
 
 function enhancementCache(
   build: KnownEnhancementBuild,
+  capabilities: EnhancementCapabilities,
   cacheRoot: string,
 ): DerivedWasmCache {
+  const expectedOutputSha256 = enhancementOutputSha256(build, capabilities);
+  if (expectedOutputSha256 === null) {
+    throw new Error("Enhancement capability profile has no certified output");
+  }
+  const capabilityIdentity = {
+    nativeCursor: capabilities.nativeCursor,
+    targetObservation: capabilities.targetObservation,
+    toolbox: capabilities.toolbox,
+  };
   return {
     inputSha256: build.sha256,
     cacheRoot,
     transformAbi: ENHANCEMENT_TRANSFORM_ABI,
-    buildFingerprint: buildFingerprint(build),
-    // The kernel is built from source, so its output is verified against the
-    // hash recorded during atomic publication rather than a source constant.
-    expectedOutputSha256: null,
+    // One cache root owns one derivative. Capabilities are the identity, not
+    // their derived hooks: cursor-only and cursor+target use the same entry
+    // points but must never share config or a manifest.
+    buildFingerprint: buildFingerprint({ build, capabilities: capabilityIdentity }),
+    expectedOutputSha256,
   };
 }
 
 export async function inspectEnhancementCache(
   build: KnownEnhancementBuild,
+  capabilities: EnhancementCapabilities,
   cacheRoot: string,
 ): Promise<"valid" | "missing-or-invalid"> {
-  return inspectDerivedWasmCache(enhancementCache(build, cacheRoot));
+  return inspectDerivedWasmCache(
+    enhancementCache(build, capabilities, cacheRoot),
+  );
 }
 
 async function discardUnsupportedCaches(
@@ -132,7 +151,7 @@ export async function prepareClientModule(
     officialWasmPath,
     officialSha256,
     certification,
-    enhancementRequested,
+    enhancementCapabilities,
     compatibilityCacheRoot,
     enhancementCacheRoot,
   } = options;
@@ -205,7 +224,7 @@ export async function prepareClientModule(
     };
   }
 
-  if (!enhancementRequested) {
+  if (!enhancementCapabilitiesRequested(enhancementCapabilities)) {
     return {
       wasmPath: templateSaveWasm,
       state: "certified",
@@ -218,8 +237,16 @@ export async function prepareClientModule(
     return {
       wasmPath: await prepareDerivedWasm(
         templateSaveWasm,
-        enhancementCache(enhancementBuild, enhancementCacheRoot),
-        (base) => transformEnhancementWasm(base, enhancementBuild),
+        enhancementCache(
+          enhancementBuild,
+          enhancementCapabilities,
+          enhancementCacheRoot,
+        ),
+        (base) => transformEnhancementWasm(
+          base,
+          enhancementBuild,
+          enhancementCapabilities,
+        ),
       ),
       state: "certified",
       enhancementBuild,

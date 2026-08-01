@@ -83,7 +83,8 @@ matches. It is a triage tool for choosing re-derivation targets.
 
 `enhancements:doctor` is local-only. `enhancements:recertify` reports semantic hook and
 table candidates without publishing a transformed client. The live runner is
-cached-only unless `--allow-update` is explicitly supplied and supports at
-most 16 typed scalar observations through `--observe`.
+cached-only unless `--allow-update` is explicitly supplied. Observation-tier
+scenarios receive only the fixed typed cursor projection and a clock; scenarios
+that need the page, CDP, input, or the command channel are explicitly automation-tier.
 Its coordinator, fixed gameplay scenarios, and paired performance capture are
 kept in separate modules under `scripts/enhancements-live/`.

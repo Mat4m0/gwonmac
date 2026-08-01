@@ -594,14 +594,14 @@ Module = {
     window.gwAutomation?.set('client.frontend');
     log('runtime initialised');
     const init = native().init;
-    // The module is the effective truth. Main may have requested Enhancement for a
-    // selected tool, but an uncertified build is served without the manifest;
-    // that launch must not import Enhancement or fetch its kernel. Conversely, the
-    // selection is one generated record, so adding a canonical tool cannot
-    // leave this gate hand-copying an incomplete list.
+    // Launch intent is the first gate: an all-off launch must not even import
+    // Enhancement code. The served module is the second gate. An uncertified
+    // launch has no manifest, while the installer separately checks that a
+    // manifest's exact hook set matches the selected tools or developer program.
     const enhancementRequested =
-      init.enhancementAutomation ||
-      Object.values(init.enhancementSelection).some(Boolean);
+      init.enhancementProgram !== 'none'
+      || init.enhancementSelection.nativeCursor
+      || init.enhancementSelection.targetReadout;
     if (
       enhancementRequested
       && gameWasmInstance
@@ -619,7 +619,7 @@ Module = {
             enhancementInstance,
             enhancementModule,
             init.enhancementSelection,
-            init.enhancementAutomation,
+            init.enhancementProgram,
           ))
         .catch((error) => log(
           '[enhancement]',

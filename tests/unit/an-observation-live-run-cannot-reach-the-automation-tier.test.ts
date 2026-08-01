@@ -92,6 +92,13 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.ok(tiers.includes("automation"));
   });
 
+  it("declares readiness independently from automation permission", () => {
+    assert.equal(planFor("boot").scenario.readiness, "frontend");
+    assert.equal(planFor("target").scenario.readiness, "observer");
+    assert.equal(planFor("toolbox-foundation").scenario.readiness, "toolbox");
+    assert.equal(planFor("cursor-capture").scenario.readiness, "cursor");
+  });
+
   it("launches the app with the automation gate off, whatever the caller exports", () => {
     // The developer's own shell may export the variable; inheriting it would
     // silently turn an observation run back into an automation run.
@@ -132,25 +139,16 @@ describe("an observation live run cannot reach the automation tier", () => {
     );
   });
 
-  it("refuses an observation run against a profile with the cursor turned off", () => {
-    // Nothing else would install the Enhancement for it, so the run would sit in a
-    // thirty-minute wait for a hook that never arrives.
+  it("keeps developer-program preflight independent from saved cursor settings", () => {
     const ready = {
       readyForCachedLive: true,
       nativeCursor: false,
       targetReadout: false,
     } as const;
     const options = { cachedOnly: true };
-    assert.equal(
-      liveRunRefusal(planFor("cursor-capture"), ready, options),
-      "native-cursor-disabled",
-    );
-    // An automation run forces the Enhancement on regardless of the setting.
+    assert.equal(liveRunRefusal(planFor("cursor-capture"), ready, options), null);
+    assert.equal(liveRunRefusal(planFor("toolbox-foundation"), ready, options), null);
     assert.equal(liveRunRefusal(planFor("movement"), ready, options), null);
-    assert.equal(
-      liveRunRefusal(planFor("cursor-capture"), { ...ready, nativeCursor: true }, options),
-      null,
-    );
     // The two refusals that predate the split still come first.
     assert.equal(
       liveRunRefusal(
@@ -166,7 +164,7 @@ describe("an observation live run cannot reach the automation tier", () => {
         { ...ready, readyForCachedLive: false },
         { cachedOnly: false },
       ),
-      "native-cursor-disabled",
+      null,
     );
     assert.equal(
       liveRunRefusal(planFor("target-readout"), ready, options),
@@ -190,11 +188,18 @@ describe("an observation live run cannot reach the automation tier", () => {
       }),
       cdp: asCdp({ send: async () => undefined }),
       sendAutomationCommand: async () => undefined,
-      sampleObservations: async () => [],
     };
     const observation = scenarioContext("observation", capabilities);
-    assert.deepEqual(Object.keys(observation).sort(), ["evaluate", "sample", "wait"]);
-    for (const capability of ["page", "cdp", "sendAutomationCommand"]) {
+    assert.deepEqual(
+      Object.keys(observation).sort(),
+      ["readCursorProjection", "wait"],
+    );
+    for (const capability of [
+      "page",
+      "cdp",
+      "sendAutomationCommand",
+      "evaluate",
+    ]) {
       assert.equal(capability in observation, false);
     }
     // It is frozen, so a scenario cannot add one back for itself.
@@ -212,7 +217,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(automation.sendAutomationCommand, capabilities.sendAutomationCommand);
   });
 
-  it("still lets an observation scenario read", async () => {
+  it("lets an observation scenario read only the fixed cursor projection", async () => {
     const context = scenarioContext("observation", {
       page: asPage({
         evaluate: async (_body: unknown, argument: unknown) => argument ?? "read",
@@ -220,18 +225,11 @@ describe("an observation live run cannot reach the automation tier", () => {
       }),
       cdp: asCdp(null),
       sendAutomationCommand: async () => undefined,
-      sampleObservations: async () => [
-        { type: "u8", address: 0, value: 7, valid: true },
-      ],
     }) as {
-      evaluate: (body: unknown, argument?: unknown) => Promise<unknown>;
+      readCursorProjection: () => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
-      sample: () => Promise<unknown>;
     };
-    assert.equal(await context.evaluate(() => undefined), "read");
-    assert.deepEqual(await context.sample(), [
-      { type: "u8", address: 0, value: 7, valid: true },
-    ]);
+    assert.equal(await context.readCursorProjection(), "read");
     assert.equal(await context.wait(1), "waited");
   });
 
@@ -239,17 +237,17 @@ describe("an observation live run cannot reach the automation tier", () => {
     // The pre-split runner pressed Enter up to three times to get an idle
     // client past its login screen, for every scenario.
     const page = recordingPage(false);
-    assert.equal(await waitForPlayable(asPage(page), "observation"), 0);
+    assert.equal(await waitForPlayable(asPage(page), "observation", "cursor"), 0);
     assert.deepEqual(page.touched, []);
   });
 
   it("still nudges an automation run, so the double above would have caught it", async () => {
     const page = automatablePage(false);
-    assert.equal(await waitForPlayable(asPage(page), "automation"), 3);
+    assert.equal(await waitForPlayable(asPage(page), "automation", "observer"), 3);
     assert.equal(page.presses, 3);
 
     const playable = automatablePage(true);
-    assert.equal(await waitForPlayable(asPage(playable), "automation"), 0);
+    assert.equal(await waitForPlayable(asPage(playable), "automation", "observer"), 0);
     assert.equal(playable.presses, 0);
   });
 
@@ -271,6 +269,23 @@ describe("an observation live run cannot reach the automation tier", () => {
       () => validateCommonAcceptance(result, 38_771),
       /hook cadence/,
     );
+  });
+
+  it("does not pretend a program-free boot smoke installed Enhancement", () => {
+    const result = {
+      supported: false,
+      buildId: null,
+      installation: 0,
+      hookHertz: 0,
+      map: null,
+      renderP95Us: 0,
+      rejectedSnapshots: 0,
+      rendererErrors: [],
+    };
+    assert.doesNotThrow(() => validateCommonAcceptance(result, 38_771, {
+      enhancementExpected: false,
+      coreObservation: false,
+    }));
   });
 
   it("accepts the target-readout run only when the real surface matches its snapshot", () => {

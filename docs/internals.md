@@ -493,19 +493,30 @@ game view showing the selected target's distance in game units and range band.
 It is the last stage of the read-only pipeline — manifest → transform/kernel →
 snapshot → decoder → here — and writes nothing back. It renders nothing without
 a selected target, on a loading screen, after a torn read, or on an unsupported
-build. It is `pointer-events: none` and `aria-live="off"`. Development automation
-also mounts the interactive foundation proof described in
+build. It is `pointer-events: none` and `aria-live="off"`. Automation selects no
+feature. One explicit unpackaged `toolbox-foundation` program mounts the proof in
 `docs/gwonmac-tools-wasm.md`; that surface is unreachable in packaged builds.
 
 `ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. There is
-no stored or transported master switch: `enhancement-policy.ts` derives whether
-main should prepare the transformed module from whether any tool is selected,
-plus the development-only automation gate. Main snapshots the per-tool record
-once at startup and sends that one record in `RendererInit`; the generated
-preload iterates the canonical tool list rather than copying its names.
-Automation remains unreachable from a packaged build whatever the environment
-says, which keeps "does not send game input or act on the player's behalf" a
-mechanically testable claim.
+no stored or transported master switch. Main snapshots the per-tool record and
+one fixed developer program at startup, then derives the exact cursor,
+target-observation, and Toolbox capabilities with the shared canonical
+function. That capability set owns the transform, manifest, config, and cache
+identity. The renderer recomputes it from the same immutable launch intent and
+requires an exact manifest match. Automation is independent permission for the
+live harness to act on the player's behalf; it selects no capability. Both
+automation and every developer program remain unreachable from a packaged
+build whatever the environment says. Program `none` uses the saved tools;
+cursor-observer is cursor-only, target-observer is target-only, and
+toolbox-foundation is cursor plus Toolbox. A developer program replaces rather
+than merges with saved tool choices and never changes those settings.
+
+Those inputs resolve to four and only four executable derivatives: cursor,
+target, cursor plus target, and cursor plus Toolbox. Each exact Enhancement
+certificate pins the output SHA-256 for all four. Cache metadata records what
+was published but is never authority: reuse requires the bytes and metadata to
+match the capability-specific hash shipped in the application. A missing hash
+or any other capability combination fails closed before transformation.
 
 A running session cannot honour a tool change because the kernel feature flags
 are fixed at initialization, so the write and restart are one action:
@@ -514,16 +525,14 @@ confirms before saving, and relaunches immediately. Both launcher and Settings
 re-render from main's returned settings, so a declined restart cannot leave a
 checkbox claiming something the session is not doing.
 
-The harness uses request and effective state without conflating them. A tool
-selection or development automation requests Enhancement, while the
-`enhancement_manifest` on the actual instantiated WebAssembly module proves that
-this launch received a certified transform. Only when both are true does it
-import `enhancements.js`. A requested but uncertified launch therefore imports no
-Enhancement module and fetches no kernel. The kernel receives one bit per
-shipped tool plus one non-packaged foundation bit; disabled tools perform no
-collection. Development automation enables the bounded chat/hero proof and may
-force the core observation snapshot for live scenarios, but it neither selects
-a player-facing surface nor couples the two tools in packaged builds.
+The harness uses request and effective state without conflating them. A selected
+tool or fixed developer program requests a capability, while the
+`enhancement_manifest` on the instantiated WebAssembly module proves that this
+launch received exactly that certified derivative. A requested but uncertified
+launch imports no Enhancement module and fetches no kernel. Cursor-observer mode
+publishes the selected cursor without a target scan; target-observer mode
+explicitly enables map/player/target state; Toolbox uses tick and UI callbacks
+without allocating the target snapshot.
 
 After publication, certification matches the official hash to the exact
 template-save record and then matches that record's output hash to the exact
@@ -536,9 +545,12 @@ cache. An Enhancement transform failure serves the verified template-save
 module; an uncertified build serves the official module, so the game stays
 playable and the cursor falls back to the plain macOS pointer.
 
-`enhancement-transform.ts` is the pure byte transform. The certificate's
-ordered layout and UI-message fields generate the embedded `configWords`; the
-renderer does not maintain a second field-order list.
+`enhancement-transform.ts` is the pure byte transform. The exact capability set
+chooses the fixed hooks and masks every inactive layout/message word to zero;
+the set is also part of the manifest and cache fingerprint. The renderer does
+not maintain a second field-order list. Recertification derives and compares all
+four output hashes, so adding a capability profile is an explicit certificate
+change rather than a cache-metadata convention.
 
 Build 38,797 hooks three certified functions: exported
 `EmscriptenExeThreadMainLoop` at 446, the five-argument cursor publisher at
@@ -566,7 +578,17 @@ show-count check preserves visibility changes. A trusted click that produced
 no cursor callback receives one zero-distance hit-test refresh, fixing mode
 changes such as salvage without moving the physical pointer.
 
-Snapshot ABI v1 uses a named 156-byte `repr(C)` configuration and 64-byte core
+The build does not publish rustc output directly. Rustc writes an unserved
+candidate; the next build step validates its Wasm, absence of a start function,
+exact `dylink.0` footprint, import surface, and eight-function export surface.
+It also instantiates the candidate against sentinel-filled memory and permits
+active-data writes only inside the declared private footprint, which must fit
+one 64 KiB page. Only then does it publish the module and seal its SHA-256 into
+the emitted renderer. The renderer hashes fetched bytes and compares that seal
+before `WebAssembly.compile`, while the canonical kernel verifier independently
+checks exact function types and reproducible rustc output.
+
+Snapshot ABI v1 uses a named 196-byte `repr(C)` configuration and 64-byte core
 `Snapshot`,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
 sequence lock. It contains no pointers. When target observation is enabled, the
@@ -576,14 +598,21 @@ flags, invalid IDs/types/bands, and non-finite values. It publishes structured
 cursor consumer is installed and polled only when `nativeCursor` is selected,
 and reaches production DOM only as an inline `cursor` on the game canvas;
 losing the cursor clears that value and nothing else. No memory view or
-per-frame call crosses preload or IPC. Development automation additionally
-allocates one 64-byte Toolbox snapshot. It carries only scalar chat count,
+per-frame call crosses preload or IPC. The explicit Toolbox program allocates
+one 64-byte Toolbox snapshot and no core target snapshot. It carries only scalar chat count,
 cursor event count, first-owned-hero identity, and observed panel state. The UI
 dispatcher observes player-chat and hero-panel events without retaining either
-pointer-shaped argument. There is no hero Show/Hide command: the companion has
+pointer-shaped argument. Exactly ten build-certified hero-readiness, map
+lifecycle, and party-membership messages mark party state dirty; unrelated
+traffic through the central UI dispatcher does not schedule a traversal. The
+next tick resolves only the game/party vector and at most seven owned heroes,
+with one low-rate reconciliation every 120 ticks. It never scans the agent array
+for Toolbox. The kernel republishes only changed scalar state, and the renderer
+updates the Toolbox DOM only when decoded values change. There is no hero
+Show/Hide command: the companion has
 no game-function imports and never writes the game's PropContext slot. The
-three message IDs come from the exact build certificate through the kernel
-config; Rust contains no second unversioned copy.
+thirteen observed/dirty message IDs come from the exact build certificate
+through the kernel config; Rust contains no second unversioned copy.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on
@@ -962,7 +991,7 @@ two that read _none_ today are recorded rather than quietly kept.
 
 | Claim | Where it is made | What executes to prove it |
 | --- | --- | --- |
-| "It does not send game input or act on the player's behalf" | website FAQ | `tests/release/packaged-enhancement-surface.test.ts` — *automation is the one tier a packaged build cannot reach*: it loads the compiled `build/main/enhancement-policy.js` in a child process with `app.isPackaged` forced true and reads `ENHANCEMENT_AUTOMATION_ENABLED` as `false` for every value of `GW_ENHANCEMENT_AUTOMATION`, leaving `enhancementsEnabledFor` and the player's explicit per-tool selection as the only way in |
+| No target, movement, skill, chat, or other gameplay action is performed for the player; cursor reconciliation is one bounded post-click out-and-back hit-test | website FAQ, `PRODUCT.md`, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` loads the compiled policy with `app.isPackaged` forced true and proves both gameplay automation and every developer program are refused; `tests/electron/enhancement-cursor.spec.ts` proves cursor reconciliation requires a trusted click, emits exactly the out-and-back pair, and becomes a no-op when the game published its normal cursor event |
 | The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.ts` for publication, corruption repair and rollback |
 | No telemetry, credentials, account identifiers, or game traffic are uploaded | website features list and FAQ | `tests/unit/no-game-traffic-is-uploaded.test.ts` — the test named for the claim: *refuses every destination that is not a public ArenaNet-shaped address* (loopback, private ranges, this project's own host, every port outside 6112/80/443), and *exports a socket's lifetime with no trace of what it carried*; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` for the boundaries underneath it |

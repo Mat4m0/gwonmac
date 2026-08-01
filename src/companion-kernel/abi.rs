@@ -27,6 +27,7 @@ pub(crate) const DISPATCH_UI: u32 = 2;
 pub(crate) const PANEL_UNKNOWN: u32 = 0;
 pub(crate) const PANEL_HIDDEN: u32 = 1;
 pub(crate) const PANEL_SHOWN: u32 = 2;
+pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
 pub(crate) const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
 pub(crate) const CURSOR_MAGIC: u32 = 0x4354_5747;
@@ -85,6 +86,7 @@ pub(crate) struct Layout {
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
+    pub(crate) party_dirty_messages: [u32; PARTY_DIRTY_MESSAGE_COUNT],
 }
 
 impl Layout {
@@ -128,6 +130,7 @@ impl Layout {
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
+        party_dirty_messages: [0; PARTY_DIRTY_MESSAGE_COUNT],
     };
 }
 
@@ -183,7 +186,7 @@ pub(crate) struct ToolboxSnapshot {
     pub(crate) reserved: [u32; 6],
 }
 
-const _: [(); 156] = [(); size_of::<Layout>()];
+const _: [(); 196] = [(); size_of::<Layout>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];

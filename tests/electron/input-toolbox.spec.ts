@@ -65,14 +65,38 @@ test.describe("renderer Toolbox input", () => {
       const root = page.locator("#toolbox-foundation");
       const panel = page.getByRole("dialog", { name: "Toolbox" });
       await expect(root).not.toHaveAttribute("data-open");
+      await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-toolbox-game-mouse-downs",
+        "1",
+      );
       await page.getByRole("button", { name: "Open Toolbox" }).click();
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(panel).toBeVisible();
       await expect(page.getByRole("button", { name: "Close Toolbox" })).toBeFocused();
       await expect(page.locator("body")).toHaveAttribute("data-toolbox-canvas-blurs", "0");
 
+      const close = page.getByRole("button", { name: "Close Toolbox" });
+      for (const target of ["canvas", "osk-input-text", "toolbox-future-focus"]) {
+        await page.evaluate((id) => {
+          let element = globalThis.document.getElementById(id);
+          if (!element && id === "toolbox-future-focus") {
+            element = globalThis.document.createElement("button");
+            element.id = id;
+            globalThis.document.body.append(element);
+          }
+          if (!(element instanceof globalThis.HTMLElement)) {
+            throw new Error(`focus escape target #${id} is missing`);
+          }
+          element.focus();
+        }, target);
+        await expect(close).toBeFocused();
+        await page.keyboard.press("x");
+        await expect(page.locator("body")).toHaveAttribute("data-toolbox-game-keys", "0");
+      }
+
       await page.keyboard.press("Tab");
-      await expect(page.getByRole("button", { name: "Close Toolbox" })).toBeFocused();
+      await expect(close).toBeFocused();
       await page.keyboard.press("x");
       await expect(page.locator("body")).toHaveAttribute("data-toolbox-game-keys", "0");
       await expect(page.getByText("Hero panel observed · hidden")).toBeVisible();
@@ -87,7 +111,7 @@ test.describe("renderer Toolbox input", () => {
       await page.mouse.click(8, 8);
       await expect(panel).toBeHidden();
       await expect(page.locator("#canvas")).toBeFocused();
-      await expect(page.locator("body")).toHaveAttribute("data-toolbox-game-mouse-downs", "0");
+      await expect(page.locator("body")).toHaveAttribute("data-toolbox-game-mouse-downs", "1");
       expect(
         Number(await page.locator("body").getAttribute("data-toolbox-input-resets")),
       ).toBeGreaterThanOrEqual(4);

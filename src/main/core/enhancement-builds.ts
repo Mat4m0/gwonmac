@@ -1,3 +1,26 @@
+import {
+  enhancementCapabilityProfile,
+  enhancementConfigWordActive,
+  type EnhancementCapabilityProfile,
+  type EnhancementCapabilities,
+} from "../../shared/contracts.js";
+
+export type EnhancementOutputHashes = Readonly<
+  Record<EnhancementCapabilityProfile, string>
+>;
+
+export function enhancementOutputSha256(
+  build: KnownEnhancementBuild,
+  capabilities: EnhancementCapabilities,
+): string | null {
+  const profile = enhancementCapabilityProfile(capabilities);
+  if (profile === null) return null;
+  const output = build.outputSha256?.[profile];
+  return typeof output === "string" && /^[0-9a-f]{64}$/.test(output)
+    ? output
+    : null;
+}
+
 export interface EnhancementLayout {
   contextRoot: number;
   agentArray: number;
@@ -37,7 +60,25 @@ export interface EnhancementLayout {
   heroId: number;
 }
 
-export const ENHANCEMENT_LAYOUT_FIELDS = [
+/**
+ * Build-local UI messages that can replace or mutate the party/hero graph.
+ * Tuple order is part of the companion config ABI; the labels keep the
+ * certificate reviewable without teaching Rust unversioned message IDs.
+ */
+export type EnhancementPartyDirtyMessages = readonly [
+  heroAgentAdded: number,
+  heroDataAdded: number,
+  mapLoaded: number,
+  loadMapContext: number,
+  startMapLoad: number,
+  mapChange: number,
+  partyAddHero: number,
+  partyRemoveHero: number,
+  partyAddPlayer: number,
+  partyRemovePlayer: number,
+];
+
+export const ENHANCEMENT_CORE_LAYOUT_FIELDS = [
   "contextRoot",
   "agentArray",
   "manualTargetAgentId",
@@ -55,6 +96,9 @@ export const ENHANCEMENT_LAYOUT_FIELDS = [
   "agentType",
   "agentPlayerNumber",
   "agentModelType",
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
+export const ENHANCEMENT_CURSOR_LAYOUT_FIELDS = [
   "cursorActiveArt",
   "cursorSoftwareModel",
   "cursorShowCount",
@@ -67,6 +111,9 @@ export const ENHANCEMENT_LAYOUT_FIELDS = [
   "cursorTextureType",
   "cursorTextureWidth",
   "cursorTextureHeight",
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
+export const ENHANCEMENT_PARTY_LAYOUT_FIELDS = [
   "partyContext",
   "playerParty",
   "partyHeroes",
@@ -76,21 +123,34 @@ export const ENHANCEMENT_LAYOUT_FIELDS = [
   "heroId",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
+export const ENHANCEMENT_LAYOUT_FIELDS = [
+  ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
+  ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
+  ...ENHANCEMENT_PARTY_LAYOUT_FIELDS,
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
   return ENHANCEMENT_LAYOUT_FIELDS.map((field) => layout[field]);
 }
 
-export function enhancementConfigWords(build: KnownEnhancementBuild): number[] {
-  return [
-    ...enhancementLayoutWords(build.layout),
+export function enhancementConfigWords(
+  build: KnownEnhancementBuild,
+  capabilities: EnhancementCapabilities,
+): number[] {
+  const words = [
+    ...ENHANCEMENT_LAYOUT_FIELDS.map((field) => build.layout[field]),
     build.uiDispatcher.playerChatMessage,
     build.uiDispatcher.hideHeroPanelMessage,
     build.uiDispatcher.showHeroPanelMessage,
+    ...build.uiDispatcher.partyDirtyMessages,
   ];
+  return words.map((word, index) =>
+    enhancementConfigWordActive(capabilities, index) ? word : 0);
 }
 
 export interface KnownEnhancementBuild {
   sha256: string;
+  outputSha256: EnhancementOutputHashes;
   programId: number;
   buildId: number;
   hookFunction: number;
@@ -111,8 +171,10 @@ export interface KnownEnhancementBuild {
     playerChatMessage: number;
     hideHeroPanelMessage: number;
     showHeroPanelMessage: number;
+    partyDirtyMessages: EnhancementPartyDirtyMessages;
     playerChatProducer: number;
     playerChatSites: 3;
+    nearbyPlayerMessages: readonly [number, number];
     nearbyPlayerMessageProducers: readonly [number, number];
   }>;
   layout: EnhancementLayout;
@@ -131,6 +193,12 @@ export interface KnownEnhancementBuild {
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
+    outputSha256: Object.freeze({
+      cursor: "a29b20f64cffff774b554787bf595a6aa8a6d56ff25e66ee73bf944cff5a1da3",
+      target: "d2b6970f61026b48f01defd4fbb59032544c27c89684abffed77987b06292f11",
+      cursorTarget: "63a330bc7b922ce2432298e8b6f30eb2e4940a218acc999c243c1b0653b28997",
+      cursorToolbox: "8ba7836b7d27d9a9e31cd85359b2964d5c88b4f577ea3648fb874155fec6da70",
+    }),
     programId: 1,
     buildId: 38797,
     hookFunction: 446,
@@ -156,11 +224,33 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       playerChatMessage: 0x1000_0082,
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
+      // This is the smallest domain-complete dirty set: two hero-readiness
+      // notifications, four distinct map-context lifecycle boundaries, and
+      // the four party membership mutations that can replace playerParty or
+      // its hero vector. Everything else through #6842 remains a no-op for
+      // party traversal and the 120-tick reconciliation is the missed-event
+      // recovery path.
+      partyDirtyMessages: Object.freeze([
+        0x1000_0038, // kHeroAgentAdded
+        0x1000_0039, // kHeroDataAdded
+        0x1000_008c, // kMapLoaded
+        0x1000_0098, // kLoadMapContext
+        0x1000_00c2, // kStartMapLoad
+        0x1000_0111, // kMapChange
+        0x1000_011e, // kPartyAddHero
+        0x1000_011f, // kPartyRemoveHero
+        0x1000_0124, // kPartyAddPlayer
+        0x1000_0126, // kPartyRemovePlayer
+      ] as const),
       // ChCliApi #8947 contains three independent kPlayerChatMessage sites;
       // each directly calls #6842. Nearby ChCliApi producers #8942/#8945
       // emit 0x1000007f/0x10000080 to that same dispatcher.
       playerChatProducer: 8947,
       playerChatSites: 3,
+      nearbyPlayerMessages: Object.freeze([
+        0x1000_007f,
+        0x1000_0080,
+      ] as const),
       nearbyPlayerMessageProducers: Object.freeze([8942, 8945] as const),
     }),
     layout: Object.freeze({

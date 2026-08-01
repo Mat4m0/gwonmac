@@ -97,6 +97,44 @@ declare global {
     [key: string]: unknown;
   }
 
+  interface CompanionDeveloperRuntime {
+    readonly status: "installed";
+    readonly buildId: number;
+    readonly programId: number;
+    readonly companionAbi: number;
+    readonly kernelSha256: string;
+    readonly installation: number;
+    readonly hertz: number;
+    readonly lastRenderUs: number;
+    readonly renderP95Us: number;
+    readonly snapshotReads: number;
+    readonly rejectedSnapshots: number;
+    readonly cursorRefreshes: number;
+    readonly wasmMemoryBytes: number;
+    readonly cursor: Readonly<{
+      generation: number;
+      pixelHash: number;
+      hidden: boolean;
+      valid: boolean;
+      cssLength: number;
+    }> | null;
+    readonly readout: Readonly<{ visible: boolean; line: string }> | null;
+    readonly toolbox: Readonly<{
+      status: string;
+      playerChatCount?: number;
+      cursorEventCount?: number;
+      heroAvailable?: boolean;
+      heroCount?: number;
+      firstHeroId?: number;
+      firstHeroAgentId?: number;
+      panelState?: number;
+    }> | null;
+  }
+
+  interface CompanionObserverRuntime extends CompanionDeveloperRuntime {
+    setHookEnabledForBenchmark(enabled: boolean): void;
+  }
+
   interface EnhancementAutomation {
     set(stage: string): void;
     read(): Readonly<{
@@ -147,8 +185,7 @@ declare global {
       programId: number;
       buildId: number;
     }>;
-    gwCompanionInstallations?: number;
-    gwCompanionRuntime?: Record<string, unknown> | null;
+    gwCompanionRuntime?: CompanionDeveloperRuntime | CompanionObserverRuntime | null;
     gwCompanionState?: CompanionState;
     readonly gwEnhancementSettings: Readonly<{
       create(options: {

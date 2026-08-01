@@ -385,7 +385,7 @@ test.describe("enhancement cursor presentation", () => {
   });
 
   // The choice is real only if a saved `nativeCursor` survives the whole chain:
-  // settings file -> enhancementsEnabledFor -> renderer init payload. Without it,
+  // settings file -> canonical hook derivation -> renderer init payload. Without it,
   // harness.js never imports enhancements.js and no cursor appears.
   test("a saved opt-in reaches the renderer init payload", async () => {
     const seed = (value: boolean) => async (userData: string) => {
@@ -411,7 +411,7 @@ test.describe("enhancement cursor presentation", () => {
           search: globalThis.location.search,
         })),
       ).toEqual({
-        enhancementAutomation: false,
+        enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
           targetReadout: false,

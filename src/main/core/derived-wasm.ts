@@ -25,13 +25,11 @@ export interface DerivedWasmCache {
   /** Identity of the certified build; any change to it is a cache miss. */
   buildFingerprint: string;
   /**
-   * The output hash pinned in the source for transforms that know it ahead of
-   * time, or `null` when the transform derives it. When it is pinned, a cache
-   * entry must match the constant in the binary and not merely its own
-   * metadata, so an attacker who can write the cache cannot certify a module
-   * by writing the hash next to it.
+   * The output hash pinned in the source. A cache entry must match this
+   * constant and not merely its own metadata, so a writer of the cache cannot
+   * certify a replacement module by writing its hash beside it.
    */
-  expectedOutputSha256: string | null;
+  expectedOutputSha256: string;
 }
 
 interface DerivedWasmMetadata {
@@ -80,8 +78,7 @@ async function isUsable(cache: DerivedWasmCache): Promise<boolean> {
       || metadata.transformAbi !== cache.transformAbi
       || metadata.buildFingerprint !== cache.buildFingerprint
       || typeof metadata.outputSha256 !== "string"
-      || (cache.expectedOutputSha256 !== null
-        && metadata.outputSha256 !== cache.expectedOutputSha256)
+      || metadata.outputSha256 !== cache.expectedOutputSha256
     ) {
       return false;
     }
@@ -117,10 +114,7 @@ export async function prepareDerivedWasm(
   const outputSha256 = createHash("sha256")
     .update(transformed)
     .digest("hex");
-  if (
-    cache.expectedOutputSha256 !== null
-    && outputSha256 !== cache.expectedOutputSha256
-  ) {
+  if (outputSha256 !== cache.expectedOutputSha256) {
     throw new Error(`derived module has unexpected output ${outputSha256}`);
   }
 

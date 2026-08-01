@@ -87,14 +87,15 @@ function readTickCount(page: Page): Promise<number> {
 /**
  * The benchmark's one lever on the renderer: the enabled arm restores the
  * kernel's table slot, while the disabled arm writes zero to the hook global and
- * the game calls its original tick. The runtime object is assembled in enhancements.js and declared as
- * an open record, so the lever is narrowed here — and a session whose runtime
- * never published one fails with that sentence rather than quietly measuring
- * the same arm twice.
+ * the game calls its original tick. Only the explicit observer program owns
+ * this lever; a Toolbox projection cannot mutate its hook.
  */
 function setHookEnabled(page: Page, enabled: boolean): Promise<void> {
   return page.evaluate((value) => {
-    const setForBenchmark = window.gwCompanionRuntime?.setHookEnabledForBenchmark;
+    const runtime = window.gwCompanionRuntime;
+    const setForBenchmark = runtime && "setHookEnabledForBenchmark" in runtime
+      ? runtime.setHookEnabledForBenchmark
+      : null;
     if (typeof setForBenchmark !== "function") {
       throw new Error("Enhancement runtime published no benchmark hook switch");
     }

@@ -1,7 +1,7 @@
 // P4.2 — scripts/build.mjs is the single build producer. copy-renderer.mjs runs
 // to completion without rustc, copies assets and no code, and emits no kernel;
 // the canonical build step list holds exactly one rustc invocation, and orders
-// the three producers that write into build/renderer so none erases another.
+// the producers that write into build/renderer so none erases another.
 // The last block covers the other shared directory: the two compiler projects
 // both emit build/shared, so the step list has to say which of them wins.
 import assert from "node:assert/strict";
@@ -20,7 +20,10 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { BUILD_STEPS } from "../../scripts/build.mjs";
+import {
+  BUILD_STEPS,
+  companionKernelRustcArgs,
+} from "../../scripts/build.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -181,22 +184,36 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
     assert.equal(rustc.length, 1);
   });
 
-  it("writes it into the renderer output", () => {
+  it("writes only an unserved candidate", () => {
     const kernel = rustc[0];
     assert.ok(kernel, "no rustc step to inspect");
     const args = stepArgs(kernel);
     assert.deepEqual(args.slice(-2), [
       "-o",
-      "build/renderer/companion-kernel.wasm",
+      "build/.companion-kernel.unsealed.wasm",
     ]);
     assert.ok(args.includes("src/companion-kernel/lib.rs"));
+    assert.deepEqual(
+      args,
+      companionKernelRustcArgs("build/.companion-kernel.unsealed.wasm"),
+    );
+  });
+
+  it("publishes it through one immediate build-time sealing step", () => {
+    const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
+    const sealers = BUILD_STEPS.map((step, index) => ({ step, index })).filter(
+      ({ step }) => stepArgs(step).includes("scripts/seal-companion-kernel.mjs"),
+    );
+    assert.equal(sealers.length, 1);
+    assert.equal(sealers[0]!.index, kernel + 1);
   });
 });
 
-describe("scripts/build.mjs orders the three producers of build/renderer", () => {
+describe("scripts/build.mjs orders the producers of build/renderer", () => {
   const assets = stepPosition("scripts/copy-renderer.mjs");
   const renderer = stepPosition("tsconfig.renderer.json");
   const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
+  const sealer = stepPosition("scripts/seal-companion-kernel.mjs");
 
   it("copies the assets before the renderer is compiled into the same directory", () => {
     // The reverse order is the defect this ordering exists to prevent: the copy
@@ -208,10 +225,10 @@ describe("scripts/build.mjs orders the three producers of build/renderer", () =>
     );
   });
 
-  it("compiles the kernel into that directory after both of them", () => {
+  it("compiles and seals the kernel after both of them", () => {
     assert.ok(kernel >= 0, "no rustc step to inspect");
     assert.ok(
-      assets < kernel && renderer < kernel,
+      assets < kernel && renderer < kernel && kernel < sealer,
       `kernel written at ${kernel}, before assets ${assets} or renderer ${renderer}`,
     );
   });

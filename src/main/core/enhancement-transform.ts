@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
 import {
+  enhancementCapabilityProfile,
+  enhancementHooksFor,
+  ENHANCEMENT_TRANSFORM_ABI,
+  type EnhancementCapabilities,
+} from "../../shared/contracts.js";
+import {
   findEnhancementBuild,
   enhancementConfigWords,
   type KnownEnhancementBuild,
@@ -29,7 +35,6 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 8;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
@@ -46,6 +51,30 @@ interface WasmExport {
 
 function fail(message: string): never {
   throw new Error(`enhancement transform: ${message}`);
+}
+
+function exactCapabilities(value: unknown): EnhancementCapabilities | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== 3
+    || !Object.hasOwn(record, "nativeCursor")
+    || !Object.hasOwn(record, "targetObservation")
+    || !Object.hasOwn(record, "toolbox")
+    || typeof record.nativeCursor !== "boolean"
+    || typeof record.targetObservation !== "boolean"
+    || typeof record.toolbox !== "boolean"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    nativeCursor: record.nativeCursor,
+    targetObservation: record.targetObservation,
+    toolbox: record.toolbox,
+  });
 }
 
 function encodeName(value: string): Uint8Array {
@@ -166,31 +195,51 @@ function dispatcher(
   );
 }
 
-function buildManifestSection(build: KnownEnhancementBuild): Section {
-  const configWords = enhancementConfigWords(build);
+function buildManifestSection(
+  build: KnownEnhancementBuild,
+  capabilities: EnhancementCapabilities,
+): Section {
+  const selectedHooks = enhancementHooksFor(capabilities);
+  const configWords = enhancementConfigWords(build, capabilities);
   const json = new TextEncoder().encode(
     JSON.stringify({
       transformAbi: ENHANCEMENT_TRANSFORM_ABI,
       programId: build.programId,
       buildId: build.buildId,
       tableSlot: build.tableSlot,
+      capabilities,
       hooks: {
-        tick: { functionIndex: build.hookFunction, params: build.hookParams },
-        cursor: {
-          functionIndex: build.cursorEvent.functionIndex,
-          params: build.cursorEvent.params,
-          existingTableSlot: build.cursorEvent.tableSlot,
-        },
-        ui: {
-          functionIndex: build.uiDispatcher.functionIndex,
-          params: build.uiDispatcher.params,
-        },
+        tick: selectedHooks.tick
+          ? {
+              functionIndex: build.hookFunction,
+              params: build.hookParams,
+              results: build.hookResults,
+            }
+          : null,
+        cursor: selectedHooks.cursor
+          ? {
+              functionIndex: build.cursorEvent.functionIndex,
+              params: build.cursorEvent.params,
+              results: build.cursorEvent.results,
+              existingTableSlot: build.cursorEvent.tableSlot,
+            }
+          : null,
+        ui: selectedHooks.ui
+          ? {
+              functionIndex: build.uiDispatcher.functionIndex,
+              params: build.uiDispatcher.params,
+              results: build.uiDispatcher.results,
+            }
+          : null,
       },
-      messages: {
-        playerChat: build.uiDispatcher.playerChatMessage,
-        hideHeroPanel: build.uiDispatcher.hideHeroPanelMessage,
-        showHeroPanel: build.uiDispatcher.showHeroPanelMessage,
-      },
+      messages: selectedHooks.ui
+          ? {
+            playerChat: build.uiDispatcher.playerChatMessage,
+            hideHeroPanel: build.uiDispatcher.hideHeroPanelMessage,
+            showHeroPanel: build.uiDispatcher.showHeroPanelMessage,
+            partyDirty: build.uiDispatcher.partyDirtyMessages,
+          }
+        : null,
       configWords,
     }),
   );
@@ -311,7 +360,14 @@ export function inspectEnhancementCandidate(
 export function transformEnhancementWasm(
   input: Uint8Array,
   build: KnownEnhancementBuild,
+  requestedCapabilities: EnhancementCapabilities,
 ): Uint8Array {
+  const capabilities = exactCapabilities(requestedCapabilities)
+    ?? fail("capability selection is invalid");
+  if (enhancementCapabilityProfile(capabilities) === null) {
+    fail("capability profile is not certified");
+  }
+  const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
 
@@ -337,24 +393,49 @@ export function transformEnhancementWasm(
     assertSignature(label, type, expectedParams, expectedResults);
     return { localIndex, typeIndex, type };
   };
-  const tick = resolveHook(
-    "tick",
-    build.hookFunction,
-    build.hookParams,
-    build.hookResults,
-  );
-  const cursor = resolveHook(
-    "cursor",
-    build.cursorEvent.functionIndex,
-    build.cursorEvent.params,
-    build.cursorEvent.results,
-  );
-  const ui = resolveHook(
-    "UI dispatcher",
-    build.uiDispatcher.functionIndex,
-    build.uiDispatcher.params,
-    build.uiDispatcher.results,
-  );
+  type ResolvedHook = ReturnType<typeof resolveHook> & Readonly<{
+    dispatchKind: number;
+  }>;
+  // This is the transform's one ordering rule. It controls relocated-original
+  // indices and output bytes, so capability selection can never inherit object
+  // iteration order or the order in which a caller happened to request hooks.
+  const selected: ResolvedHook[] = [];
+  if (selectedHooks.tick) {
+    selected.push({
+      ...resolveHook(
+        "tick",
+        build.hookFunction,
+        build.hookParams,
+        build.hookResults,
+      ),
+      dispatchKind: DISPATCH_TICK,
+    });
+  }
+  if (selectedHooks.cursor) {
+    selected.push({
+      ...resolveHook(
+        "cursor",
+        build.cursorEvent.functionIndex,
+        build.cursorEvent.params,
+        build.cursorEvent.results,
+      ),
+      dispatchKind: DISPATCH_CURSOR,
+    });
+  }
+  if (selectedHooks.ui) {
+    selected.push({
+      ...resolveHook(
+        "UI dispatcher",
+        build.uiDispatcher.functionIndex,
+        build.uiDispatcher.params,
+        build.uiDispatcher.results,
+      ),
+      dispatchKind: DISPATCH_UI,
+    });
+  }
+  if (new Set(selected.map((hook) => hook.localIndex)).size !== selected.length) {
+    fail("selected hooks must resolve to distinct functions");
+  }
 
   const table = parseTable(sectionById(sections, 4));
   if (
@@ -369,15 +450,17 @@ export function transformEnhancementWasm(
     fail(`hook table slot ${build.tableSlot} is not the new terminal slot`);
   }
   const nextTableSize = table.min + 1;
-  const tableSlots = tableSlotFunctions(sectionById(sections, 9));
-  if (
-    tableSlots.get(build.cursorEvent.tableSlot)
-    !== build.cursorEvent.functionIndex
-  ) {
-    fail(
-      `cursor table slot ${build.cursorEvent.tableSlot} does not map to ` +
-        `function ${build.cursorEvent.functionIndex}`,
-    );
+  if (selectedHooks.cursor) {
+    const tableSlots = tableSlotFunctions(sectionById(sections, 9));
+    if (
+      tableSlots.get(build.cursorEvent.tableSlot)
+      !== build.cursorEvent.functionIndex
+    ) {
+      fail(
+        `cursor table slot ${build.cursorEvent.tableSlot} does not map to ` +
+          `function ${build.cursorEvent.functionIndex}`,
+      );
+    }
   }
 
   const globals = vectorPayload(sectionById(sections, 6));
@@ -390,9 +473,6 @@ export function transformEnhancementWasm(
     }
   }
   const originalBaseIndex = importCount + bodies.length;
-  const tickOriginalIndex = originalBaseIndex;
-  const cursorOriginalIndex = originalBaseIndex + 1;
-  const uiOriginalIndex = originalBaseIndex + 2;
   const hookGlobalIndex = globals.count;
   const dispatchTypeIndex = types.length;
 
@@ -402,37 +482,21 @@ export function transformEnhancementWasm(
   ];
   const nextFunctionTypes = [
     ...functionTypes,
-    tick.typeIndex,
-    cursor.typeIndex,
-    ui.typeIndex,
+    ...selected.map((hook) => hook.typeIndex),
   ];
   const nextBodies = [
     ...bodies,
-    bodies[tick.localIndex]!,
-    bodies[cursor.localIndex]!,
-    bodies[ui.localIndex]!,
+    ...selected.map((hook) => bodies[hook.localIndex]!),
   ];
-  nextBodies[tick.localIndex] = dispatcher(
-    tick.type.params.length,
-    DISPATCH_TICK,
-    dispatchTypeIndex,
-    tickOriginalIndex,
-    hookGlobalIndex,
-  );
-  nextBodies[cursor.localIndex] = dispatcher(
-    cursor.type.params.length,
-    DISPATCH_CURSOR,
-    dispatchTypeIndex,
-    cursorOriginalIndex,
-    hookGlobalIndex,
-  );
-  nextBodies[ui.localIndex] = dispatcher(
-    ui.type.params.length,
-    DISPATCH_UI,
-    dispatchTypeIndex,
-    uiOriginalIndex,
-    hookGlobalIndex,
-  );
+  selected.forEach((hook, index) => {
+    nextBodies[hook.localIndex] = dispatcher(
+      hook.type.params.length,
+      hook.dispatchKind,
+      dispatchTypeIndex,
+      originalBaseIndex + index,
+      hookGlobalIndex,
+    );
+  });
   const nextGlobals = concat(
     uleb(globals.count + 1),
     globals.entries,
@@ -465,7 +529,7 @@ export function transformEnhancementWasm(
   const output = concat(
     WASM_HEADER,
     ...rewritten.map(encodeSection),
-    encodeSection(buildManifestSection(build)),
+    encodeSection(buildManifestSection(build, capabilities)),
   );
   if (!WebAssembly.validate(output)) fail("rewritten module failed validation");
   return output;

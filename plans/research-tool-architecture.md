@@ -46,10 +46,13 @@ not a safe general command gateway. No game command should be reintroduced
 until a
 natural game-owned execution boundary is found and certified for that command.
 
-The next implementation milestone should be an event-invalidated party
-snapshot. The next research milestone should be a privacy-safe developer event
-inspector. The highest product risk remains cross-build recovery; it needs a
-second real client module before portability can honestly be claimed.
+The foundation now implements the event-invalidated party snapshot: UI events
+coalesce one dirty bit, the next certified tick scans at most seven party hero
+entries, and unchanged state publishes nothing. The next feature should be
+chosen only after its own natural observation or command boundary is proven;
+there is deliberately no generic raw-memory event inspector. The highest
+product risk remains cross-build recovery, which needs a second real client
+module before portability can honestly be claimed.
 
 ## Scope and exact artifact
 
@@ -60,10 +63,10 @@ All exact-module statements in this ledger concern one official client:
 | Program/build | `1` / `38,797` |
 | Official Wasm SHA-256 | `3229678d3fd7d2f0e309530086a614d97f02e7eeb3ca12650ababfd2eb360817` |
 | Post-template SHA-256 | `9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094` |
-| Enhancement transform ABI | `8` |
-| Companion ABI | `5` |
-| Audited derived SHA-256 | `7434dd6eae46ff672fa7df95409d0acf3e7147db05901db5703a689162fd86e0` |
-| Companion SHA-256 | `29ff8d8a9aaa705474a52673da4d57d75ed04af33f8e2162be2b9d152a90cc06` |
+| Enhancement transform ABI | `11` |
+| Companion ABI | `6` |
+| Derived SHA-256 | capability-specific; sealed by its cache fingerprint and manifest |
+| Companion SHA-256 | `9612283b5a2227ac264b4a7bf373e463dfe5ef07d856a6acb609a5de64e2caf0` |
 
 The official module is archived privately outside Git at:
 
@@ -104,8 +107,8 @@ Two rules prevent research guesses from becoming production facts:
 The transcript's latest `TextParser.cpp:724 IsParam(data)` run is overwhelmingly
 associated with the stale, detached worktree at
 `/Users/matthias/.codex/worktrees/703d/gwonmac`: its earlier build output names
-that path, the profile has no ABI 8 cache, and its console line has the old
-format. That makes a stale pre-ABI-5 process/artifact the leading inference,
+that path, the profile had no ABI 8 cache, and its console line had the old
+format. In that historical run, a stale pre-ABI-5 process/artifact was the leading inference,
 not a proven source from the stack alone. The tree's current contents are
 massively dirty and user-owned and cannot establish which earlier artifact was
 running; it must not be edited or used for another live run. The maintained
@@ -115,11 +118,12 @@ worktree is:
 /Users/matthias/.codex/worktrees/toolbox-foundation-v2/gwonmac
 ```
 
-The real profile currently contains only transform cache ABI 7. The passive
-branch requires ABI 8, so no successful fresh passive launch has populated an
-ABI 8 cache. The old console line says only `installed for client build
-38797`; the passive build identifies itself with `companion ABI 5` and the
-first twelve hexadecimal characters of the kernel hash.
+At the time of that failure, the real profile contained only transform cache
+ABI 7 while the passive branch required ABI 8. The old console line said only
+`installed for client build 38797`; that historical passive build identified
+itself with `companion ABI 5` and the first twelve hexadecimal characters of
+the kernel hash. Current transform ABI 11 and companion ABI 6 cannot reuse any
+of those derivatives.
 
 The failure history is architectural evidence:
 
@@ -131,7 +135,10 @@ The failure history is architectural evidence:
 | Save/install a guessed context and send after any later UI event | Visible delay; a later stale-ABI run reported `TextParser::IsParam` | Static tracing independently proves an arbitrary nested UI producer is not a valid command gateway. **Rejected.** |
 | Passive, original-first observer | Offline ABI, memory, ordering, and lifecycle suites pass | This is the current safe baseline; a fresh live confirmation is still pending. |
 
-Transform ABI 8 and companion ABI 5 remove every known command path:
+The historical transform-ABI-8/companion-ABI-5 passive cutover removed every
+known command path. Current transform ABI 11 and companion ABI 6 retain those
+constraints while adding capability-specific identities and the closed
+party-dirty message set:
 
 - exact wrappers replace tick `#446`, cursor `#2469`, and UI dispatcher
   `#6842` while their clones remain private;
@@ -158,18 +165,19 @@ the removed hero command an implausible cause of the stale crash, but the stack
 alone cannot mathematically exclude an unrelated official-client or cursor
 defect. A current-ABI reproduction would need hook-off/hook-on isolation.
 
-One residual risk remains important: a companion trap or infinite Rust panic
-still occurs on the game's call stack. Wasm does not provide a useful recovery
-boundary here. Kernel callbacks therefore need to be total, allocation-free,
-bounded, and exhaustively fixture-tested; feature-level compatibility avoids
-installing uncertain code but cannot recover after a live callback traps.
+One residual risk remains important: a companion trap, including panic
+fail-stop, still occurs on the game's call stack. Wasm does not provide a
+useful recovery boundary here. Kernel callbacks therefore need to be total,
+allocation-free, bounded, and covered by broad adversarial fixtures;
+feature-level compatibility avoids installing uncertain code but cannot
+recover after a live callback traps.
 
 ## What the three examples actually prove
 
 | Example | Proven mechanism | Live status | Does not prove |
 | --- | --- | --- | --- |
 | Cursor | Game event marks cursor dirty; the next tick validates and hashes a 32x32 image; trusted click can request one bounded zero-distance refresh. | Item, arrow, salvage, restored arrow, and click refresh were observed on 38,797. | Cross-build discovery, every cursor kind, or zero tick reconciliation. |
-| Player chat | Three `0x10000082` producer sites call the central dispatcher; callback preserves the game event and increments one scalar without reading payload pointers. | One ordinary player event incremented once; `/age` did not increment. | Text decoding, sender identity, channel semantics, or ABI 5 fresh-process safety. |
+| Player chat | Three `0x10000082` producer sites call the central dispatcher; callback preserves the game event and increments one scalar without reading payload pointers. | One ordinary player event incremented once; `/age` did not increment under the historical ABI-5 proof. | Text decoding, sender identity, channel semantics, or current ABI-6 fresh-process confirmation. |
 | Hero/party | Validated context and party chains publish owned hero count/ID/agent ID; normal Show/Hide events can be observed. | The corrected context root and Koss ownership were observed; normal panel changes were observed before the passive cutover. | A safe Show/Hide command, complete party state, dirty-event completeness, or a current-ABI live run. |
 
 The developer hero example is now deliberately read-only. That is a successful
@@ -295,7 +303,7 @@ wire-emission order.
 | Skillbar changed | `0x1000005e` | `#8708`–`#8710`, `#8718`, `#8724`, `#8725`, `#9080` | Primary BUILD dirty signal. | Prove complete coverage for template load, manual slot edit, hero bars, and profession changes. |
 | Skills available | `0x1000005f` | `#8743` | Dirty availability/profession metadata. | Separate unlock/map-load noise from actual bar changes. |
 | Skill activity | `0x1000005b` | `#8729`, `#8732` | Combat activity only, not structural build state. | None for party/build snapshot; do not over-invalidate. |
-| Start map load | `0x100000c2` | `#9005` | Immediately invalidate all pointer-backed snapshots. | Live transition ordering under ABI 5. |
+| Start map load | `0x100000c2` | `#9005` | Immediately invalidate all pointer-backed snapshots. | Historical ABI-5 ordering evidence; re-confirm under ABI 6. |
 | Map loaded | `0x1000008c` | `#9583` | Reconcile all map-scoped domains. | Determine which contexts are already valid at callback return. |
 | Load map context | `0x10000098` | `#9927` | Reconcile map/player/party candidates. | Establish relation to `MapLoaded`. |
 | Map change | `0x10000111` | `#9856` | Reconcile identity and map metadata. | Establish ordering and duplicate behaviour. |
@@ -389,19 +397,14 @@ The current proof is bounded but not yet shaped for dozens of features.
 
 ### Current costs
 
-The Rust `collect` path can walk the agent array from 1 to a certified maximum
-of 4,096 entries on every relevant game tick. The hero path then validates a
-party array with a certified maximum capacity of 64. That is acceptable for a
-walking skeleton, but adding inventory, skillbar, effects, quests, and party
-details to the same unconditional traversal would multiply work and make one
-large fragile snapshot.
-
-The coupling is currently worse in developer mode: enabling the Toolbox
-foundation also forces `FEATURE_TARGET_READOUT`, so party observation pays the
-full agent/player/target scan even when no target readout is requested. The
-dirty-party cutover must split fixed-cost lifecycle/GameContext/player-number
-validation from continuous target-position collection. A party-only launch must
-never touch the agent array in quiet state.
+The Rust target-observation `collect` path can walk the agent array from 1 to a
+certified maximum of 4,096 entries on each game tick. It is now enabled only by
+the target capability. Toolbox has a separate dirty path: a fixed developer
+program selects cursor plus Toolbox and never target observation; UI callbacks
+coalesce a party-dirty signal for the next tick, and one 120-tick reconciliation
+recovers from a missed callback. Its hero walk reads only the party vector and
+at most seven owned heroes; a synthetic invalid agent array proves it is not a
+dependency.
 
 The cursor already demonstrates the desired split:
 
@@ -411,17 +414,13 @@ The cursor already demonstrates the desired split:
 - the renderer reads the small header first and touches 4 KiB of pixels only
   when the published generation changes.
 
-The core and developer snapshots are still decoded from `requestAnimationFrame`
-on every renderer frame. The core snapshot is 64 bytes and the developer
-snapshot is 64 bytes, so the byte cost is small, but the developer UI currently
-assigns its text on each frame. The next snapshot observer should read only an
-8- or 16-byte header first, decode the full region only on a new generation,
-and skip all DOM writes for an unchanged rendered value.
-
-The current UI observer also republishes the 64-byte developer snapshot after
-every UI message, including unrelated IDs. Its work is bounded, but the scaled
-version should publish only when a counter, panel observation, dirty bit, or
-domain generation actually changes.
+The continuously changing core target snapshot remains a 64-byte frame read
+while that capability is enabled. Toolbox reads only its 12-byte header on an
+unchanged frame, performs the full 64-byte seqlock decode on a new generation,
+and skips DOM updates when decoded values are equal. Only the ten exact-build
+hero-readiness, map-lifecycle, and party-membership UI IDs mark party state
+dirty; unrelated dispatcher traffic stays on the clean path. Callbacks publish
+only when chat, panel, hero, or cursor scalar state actually changes.
 
 Target distance is intentionally different. Player and target coordinates can
 change continuously without a useful UI message, so it may remain a per-tick
@@ -449,8 +448,8 @@ available:
 - inspector table: exactly 512 counters for IDs `0x10000000`–`0x100001ff`;
 - counter behaviour: saturating `u32`, plus one saturating aggregate for IDs
   outside the table; no dynamic allocation or collision probing;
-- UI callback: one range check, at most one counter increment, and one fixed
-  dirty-domain switch; no loop over registered handlers;
+- UI callback: at most one counter increment and one fixed ten-ID dirty-domain
+  comparison; no loop over registered handlers;
 - first party rebuild: inspect no more than the already certified 64 source
   entries and publish no more than seven owned heroes;
 - reconciliation: at most once per 60 certified ticks while lifecycle state is
@@ -527,15 +526,16 @@ Party needs the UI dirty set, tick, context root, and party layout. A failed
 party layout must not remove a separately certified chat counter; a failed UI
 dispatcher may legitimately disable all features that depend on it.
 
-The present 39-word config and `companion_init` are still coupled: even inactive
-features carry fields, and chat/hero message IDs are validated unconditionally.
-The partial-capability cutover must prove all of the following:
+The config remains one fixed 49-word ABI, while its contents are capability
+scoped. The transform/cache/manifest identity encodes the exact capability
+set; inactive words must be zero and are neither validated as game evidence nor
+read by the kernel. Hooks are emitted only for active capabilities. Tests prove:
 
 - the manifest, config, and derived-cache fingerprint encode the exact selected
   capability subset;
 - a hook is transformed only when its evidence and all dependencies are valid;
-- inactive feature fields are absent or ignored and are neither validated nor
-  read;
+- inactive feature fields are zero, rejected when nonzero, and neither
+  validated as evidence nor read;
 - inactive callback branches are unreachable under the capability bits;
 - an ambiguous cursor hook can be omitted while a valid chat hook still
   installs and works, and the inverse is tested where dependencies permit;
@@ -739,23 +739,23 @@ making a trap on the game call stack recoverable. Reconsider modules only after
 repeated features demonstrate an isolation requirement they can actually
 serve.
 
-The current panic handler loops forever. Before calling the foundation robust,
-every exported callback needs adversarial bounded-completion tests, and binary
-verification must account for all panic/unreachable paths reachable from the
-eight exports. Capability bits reduce exposed code; they do not isolate a
-failure. The exact Wasm type of all eight function exports must also be parsed
-and checked structurally before any is called; JavaScript `Function.length` is
-not sufficient for init or scalar exports any more than it was for dispatch.
+The panic handler now terminates as a Wasm trap instead of spinning forever on
+the game callback stack. The build sealer and browser boundary verify the exact
+Wasm type and surface of all eight exports without `Function.length`, and
+adversarial tests exercise every dispatch kind plus malformed scalar/pointer
+state. This is bounded failure behavior, not a proof that no compiler-generated
+panic path is reachable: a trap still aborts the client, so checked total
+callbacks and fail-closed initialization remain primary.
 
 The manifest should remain fixed and typed. Feature independence is a real
 requirement; a generic `hooks[]` registry or plugin loader is not.
 
-The current developer `window.gwCompanionRuntime` still carries the shared
-memory object and numeric region pointers so the live harness can observe the
-prototype. Before a player-facing Toolbox foundation, close those values inside
-the installer/observer and expose only typed scalar status, compatibility,
-generation, and bounded snapshot results to the harness. This is surface
-reduction, not a second state model.
+Shared memory, region pointers, the table, and mutable counters now remain in
+the installer/observer closure. Toolbox publishes one frozen scalar/projection
+runtime with an exact key set. The raw-address `--observe` path was deleted;
+cursor capture receives only one fixed cursor-projection read and persists no
+address or pixel payload. The target-observer benchmark alone gets its explicit
+hook switch.
 
 ## Chromium overlay and input boundary
 
@@ -962,15 +962,15 @@ the highest-upside unknown.
 
 ### Phase 0 — close the passive safety cutover
 
-The passive containment suites are complete for ABI 5; exact-type verification
-for every export remains before live promotion. When the operator is available,
+The passive containment suites and exact-type verification are complete
+offline for ABI 6. When the operator is available,
 perform one fresh-process run from the authoritative worktree only:
 
 1. fully quit every Electron/Guild Wars process;
-2. build and launch transform ABI 8;
-3. before launch, make the verifier structurally check the exact Wasm type of
-   all eight companion exports, not only dispatch;
-4. require the console install line to contain `companion ABI 5` and the kernel
+2. build and launch transform ABI 11;
+3. confirm the verifier structurally accepts the exact Wasm type of all eight
+   companion exports;
+4. require the console install line to contain `companion ABI 6` and the kernel
    hash prefix;
 5. enter a character and confirm normal click-to-move;
 6. observe arrow/item/salvage cursor transitions;
@@ -1066,7 +1066,7 @@ teardown.
 
 The foundation is ready to scale when all statements below are true:
 
-- a fresh ABI 5 live run passes without parser, signature, input, or shutdown
+- a fresh ABI 6 live run passes without parser, signature, input, or shutdown
   failure;
 - party and build domains traverse only when dirty or explicitly reconciling;
 - event callbacks are constant-time, bounded, and allocation-free;
@@ -1084,12 +1084,13 @@ The foundation is ready to scale when all statements below are true:
   and inactive hooks/fields are never transformed, validated, or read;
 - no game command exists without its own certified execution-point/gateway
   evidence;
-- all eight companion exports have exact structurally verified Wasm types and
-  adversarial tests prove bounded completion without a reachable panic path;
+- all eight companion exports have exact structurally verified Wasm types, the
+  panic handler cannot spin, and adversarial dispatch/pointer cases return or
+  trap in bounded time without claiming exhaustive panic reachability;
 - no pointer-shaped argument, packet, content string, or raw memory appears in
   the presentation, diagnostic, IPC, preload, or persisted API. The private
-  developer runtime may hold game memory and numeric region addresses only for
-  its installer/observer ownership;
+  installer/observer closure may hold game memory and numeric region addresses
+  only for private ownership;
 - one source of truth exists for certification, game state, publication
   generation, and presentation.
 
@@ -1103,14 +1104,12 @@ The foundation is ready to scale when all statements below are true:
    drains one typed intent without fabricating `PropContext`?
 4. Can a game-owned domain counter be proved across all writers, or is bounded
    reconciliation permanently required?
-5. How should one transform compose a variable subset of fixed, certified hooks
-   without becoming a generic hook framework?
-6. Can observer panics be changed from the current infinite loop to a safer
-   fail-stop that does not create a frozen game callback? A Wasm trap still
-   aborts the client, so prevention remains primary.
-7. What is the measured callback/rebuild/renderer cost during combat, map load,
+5. Can every enabled callback path be shown panic-free without mistaking a Wasm
+   trap for runtime isolation? A trap still aborts the client, so prevention
+   remains primary.
+6. What is the measured callback/rebuild/renderer cost during combat, map load,
    and chat bursts?
-8. If Asyncify becomes a supported runtime requirement, does it preserve JSPI
+7. If Asyncify becomes a supported runtime requirement, does it preserve JSPI
    game semantics/data layout or require independent feature evidence?
 
 ## Source index

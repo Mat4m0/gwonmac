@@ -27,7 +27,7 @@ test.describe("sandbox boundary", () => {
         search: "",
         // The game cursor ships on, so a default launch asks for it here.
         init: {
-          enhancementAutomation: false,
+          enhancementProgram: "none",
           enhancementSelection: {
             nativeCursor: true,
             targetReadout: false,
@@ -204,7 +204,7 @@ test.describe("sandbox boundary", () => {
     }
   });
 
-  test("accepts explicit automation without adding production Enhancement UI", async () => {
+  test("automation alone does not select a developer Enhancement program", async () => {
     const fixture = await launchOffline("gw-enhancement-developer-e2e-", {
       GW_ENHANCEMENT_AUTOMATION: "1",
     });
@@ -213,7 +213,7 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
-        enhancementAutomation: true,
+        enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
           targetReadout: false,
@@ -235,7 +235,7 @@ test.describe("sandbox boundary", () => {
       expect(
         await fixture.page.evaluate(() => ({ ...window.gwNative.init })),
       ).toEqual({
-        enhancementAutomation: false,
+        enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
           targetReadout: false,

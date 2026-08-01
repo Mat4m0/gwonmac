@@ -4,8 +4,10 @@ import { describe, it } from "node:test";
 import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
+  readChangedCompanionToolbox,
   readCompanionSnapshot,
   readCompanionToolbox,
+  sameCompanionToolboxState,
   COMPANION_CURSOR_ABI,
   COMPANION_CURSOR_BYTES,
   COMPANION_TOOLBOX_BYTES,
@@ -238,8 +240,21 @@ const ADDRESSES = Object.freeze({
   heroBuffer: 0xa200,
   companionRuntime: 0x30_0000,
 });
-const CONFIG_WORDS = 39;
+const PARTY_DIRTY_MESSAGES = Object.freeze([
+  0x1000_0038,
+  0x1000_0039,
+  0x1000_008c,
+  0x1000_0098,
+  0x1000_00c2,
+  0x1000_0111,
+  0x1000_011e,
+  0x1000_011f,
+  0x1000_0124,
+  0x1000_0126,
+] as const);
+const CONFIG_WORDS = 49;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
+const MESSAGE_CONFIG_START = 36;
 const TEXTURE_KEY = 0x6772_7478;
 
 interface KernelOverrides {
@@ -333,6 +348,7 @@ async function createKernel() {
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
     0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
     0x1000_0082, 0x1000_01a3, 0x1000_01a4,
+    ...PARTY_DIRTY_MESSAGES,
   ]);
   return {
     instance,
@@ -594,6 +610,35 @@ describe("Companion cursor region ABI", () => {
 });
 
 describe("Companion kernel", () => {
+  it("returns from adversarial callback scalars without panicking", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    installCursorGraph(kernel.view);
+    paintCursor(kernel.view, 1);
+    assert.equal(
+      kernel.init({
+        features:
+          FEATURE_NATIVE_CURSOR
+          | FEATURE_TARGET_READOUT
+          | FEATURE_TOOLBOX_FOUNDATION,
+      }),
+      1,
+    );
+    const exportedDispatch = kernel.instance.exports.companion_dispatch;
+    assert.equal(typeof exportedDispatch, "function");
+    const dispatch = exportedDispatch as CallableFunction;
+    for (const kind of [0, 1, 2, 3, 0x7fff_ffff, 0xffff_ffff]) {
+      assert.doesNotThrow(() => dispatch(
+        kind,
+        0xffff_ffff,
+        0x8000_0000,
+        0x7fff_ffff,
+        0xffff_ffff,
+        0x8000_0000,
+      ));
+    }
+  });
+
   it("publishes a checked snapshot after a game tick", async () => {
     const kernel = await createKernel();
     const { view, config, instance } = kernel;
@@ -717,6 +762,106 @@ describe("Companion kernel", () => {
 
   });
 
+  it("requires UI message configuration only for the Toolbox capability", async () => {
+    const cursorOnly = await createKernel();
+    cursorOnly.config.fill(0, MESSAGE_CONFIG_START);
+    assert.equal(cursorOnly.init({ features: FEATURE_NATIVE_CURSOR }), 1);
+
+    const readoutOnly = await createKernel();
+    readoutOnly.config.fill(0, MESSAGE_CONFIG_START);
+    assert.equal(readoutOnly.init({ features: FEATURE_TARGET_READOUT }), 1);
+
+    const toolbox = await createKernel();
+    toolbox.config.fill(0, MESSAGE_CONFIG_START);
+    assert.equal(
+      toolbox.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      0,
+    );
+
+    const missingDirty = await createKernel();
+    missingDirty.config[MESSAGE_CONFIG_START + 3] = 0;
+    assert.equal(
+      missingDirty.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      0,
+    );
+
+    const duplicateDirty = await createKernel();
+    duplicateDirty.config[MESSAGE_CONFIG_START + 4] =
+      duplicateDirty.config[MESSAGE_CONFIG_START + 3]!;
+    assert.equal(
+      duplicateDirty.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      0,
+    );
+  });
+
+  it("observes Toolbox heroes without traversing the agent array", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    kernel.view.setUint32(ADDRESSES.agentArray, 0xffff_fffc, true);
+    kernel.view.setUint32(ADDRESSES.agentArray + 4, 0xffff_ffff, true);
+    kernel.view.setUint32(ADDRESSES.agentArray + 8, 0xffff_ffff, true);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const toolbox = readyToolbox(kernel.toolbox());
+    assert.equal(toolbox.heroAvailable, true);
+    assert.equal(toolbox.firstHeroId, 1);
+    assert.equal(toolbox.firstHeroAgentId, 77);
+  });
+
+  it("traverses party state only for the exact dirty-message set", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const ready = readyToolbox(kernel.toolbox());
+    assert.equal(ready.heroAvailable, true);
+
+    // Keep the last published projection but make the canonical party pointer
+    // invalid. An unrelated central-dispatch message must not schedule a walk.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, 0xffff_fffc, true);
+    kernel.uiEvent(0x1000_0080, 0xdead_beef, 0x7fff_fffd);
+    kernel.tick();
+    let state = readyToolbox(kernel.toolbox());
+    assert.equal(state.sequence, ready.sequence);
+    assert.equal(state.heroAvailable, true);
+
+    // The certified party removal is dirty-only: it publishes nothing in the
+    // callback, then the next tick traverses and invalidates stale hero state.
+    kernel.uiEvent(0x1000_011f, 0xdead_beef, 0x7fff_fffd);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, ready.sequence);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.ok(state.sequence > ready.sequence);
+    assert.equal(state.heroAvailable, false);
+
+    // A certified map-loaded boundary also restores a replaced party graph.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+    kernel.uiEvent(0x1000_008c, 0, 0);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, true);
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [1, 77],
+    );
+
+    // Every member of the certificate tuple arms the same coalesced dirty bit;
+    // this also pins the Rust comparison to all ten config positions.
+    for (const [index, message] of PARTY_DIRTY_MESSAGES.entries()) {
+      const heroId = index + 2;
+      const agentId = index + 100;
+      kernel.view.setUint32(ADDRESSES.heroBuffer + 0x00, agentId, true);
+      kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, heroId, true);
+      kernel.uiEvent(message, 0, 0);
+      kernel.tick();
+      state = readyToolbox(kernel.toolbox());
+      assert.deepEqual(
+        [state.firstHeroId, state.firstHeroAgentId],
+        [heroId, agentId],
+      );
+    }
+  });
+
   it("counts chat and observes hero-panel events without calling back into the game", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
@@ -734,15 +879,158 @@ describe("Companion kernel", () => {
     assert.equal(state.firstHeroId, 1);
     assert.equal(state.firstHeroAgentId, 77);
 
+    const initialSequence = state.sequence;
     kernel.uiEvent(0x1000_0080, 0xdead_beef, 0x7fff_fffd);
-    assert.equal(readyToolbox(kernel.toolbox()).playerChatCount, 0);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.playerChatCount, 0);
+    assert.equal(state.sequence, initialSequence);
+    kernel.tick();
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, initialSequence);
     kernel.uiEvent(0x1000_0082, 0xdead_beef, 0x7fff_fffd);
     state = readyToolbox(kernel.toolbox());
     assert.equal(state.playerChatCount, 1);
     kernel.uiEvent(0x1000_01a4, 1, 0);
-    assert.equal(readyToolbox(kernel.toolbox()).panelState, 2);
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.panelState, 2);
+    const shownSequence = state.sequence;
+    kernel.uiEvent(0x1000_01a4, 1, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, shownSequence);
     kernel.uiEvent(0x1000_01a3, 1, 0);
     assert.equal(readyToolbox(kernel.toolbox()).panelState, 1);
+  });
+
+  it("observes heroes on UI changes with a bounded quiet reconciliation", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    // The hero observer needs game + party + player-number only. Poisoning the
+    // agent-array ceiling proves Toolbox-only collection cannot fall back to
+    // the target readout's 4,096-entry agent search.
+    kernel.view.setUint32(ADDRESSES.agentArray + 4, 5_000, true);
+    kernel.view.setUint32(ADDRESSES.agentArray + 8, 5_000, true);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+
+    kernel.tick();
+    let state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, true);
+    assert.deepEqual(
+      [state.heroCount, state.firstHeroId, state.firstHeroAgentId],
+      [1, 1, 77],
+    );
+
+    // A canonical change without a callback is intentionally invisible on
+    // quiet ticks: no party traversal and no snapshot publication occurs.
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x00, 99, true);
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, 3, true);
+    const quietSequence = state.sequence;
+    for (let tick = 0; tick < 119; tick += 1) kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.sequence, quietSequence);
+    assert.equal(state.firstHeroId, 1);
+
+    // The 120th quiet tick is the bounded recovery path for a missed event.
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.ok(state.sequence > quietSequence);
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [3, 99],
+    );
+
+    // A certified party mutation is the dirty boundary. It does not publish by
+    // itself; one following tick reconciles canonical state.
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x00, 100, true);
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, 4, true);
+    const beforeDirty = state.sequence;
+    kernel.uiEvent(0x1000_011e, 0, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, beforeDirty);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [4, 100],
+    );
+
+    // Loading invalidates the projection once. Repeated dirty callbacks while
+    // it remains unavailable do not churn the seqlock or renderer.
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 2, true);
+    kernel.uiEvent(0x1000_00c2, 0, 0);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, false);
+    const loadingSequence = state.sequence;
+
+    // Two scheduled reconciliation periods may validate lifecycle state while
+    // loading, but must not walk the party vector or republish. Keep the party
+    // root deliberately invalid throughout that window.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, 0xffff_fffc, true);
+    for (let tick = 0; tick < 240; tick += 1) kernel.tick();
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, loadingSequence);
+
+    kernel.uiEvent(0x1000_0098, 0, 0);
+    kernel.tick();
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, loadingSequence);
+
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 0, true);
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+    kernel.uiEvent(0x1000_008c, 0, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).sequence, loadingSequence);
+    kernel.tick();
+    state = readyToolbox(kernel.toolbox());
+    assert.equal(state.heroAvailable, true);
+    assert.deepEqual(
+      [state.firstHeroId, state.firstHeroAgentId],
+      [4, 100],
+    );
+  });
+
+  it("compares Toolbox projections by decoded value", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const first = kernel.toolbox();
+    assert.equal(sameCompanionToolboxState(null, first), false);
+    assert.equal(sameCompanionToolboxState(first, kernel.toolbox()), true);
+
+    const sequence = readyToolbox(first).sequence;
+    kernel.view.setUint32(ADDRESSES.toolbox + 8, sequence + 2, true);
+    const republished = kernel.toolbox();
+    assert.equal(sameCompanionToolboxState(first, republished), true);
+    kernel.view.setUint32(ADDRESSES.toolbox + 16, 1, true);
+    assert.equal(sameCompanionToolboxState(republished, kernel.toolbox()), false);
+  });
+
+  it("reads only the Toolbox header while its generation is unchanged", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const first = readChangedCompanionToolbox(
+      kernel.memory.buffer,
+      ADDRESSES.toolbox,
+      null,
+    );
+    assert.equal(first.changed, true);
+    assert.notEqual(first.sequence, null);
+    const unchanged = readChangedCompanionToolbox(
+      kernel.memory.buffer,
+      ADDRESSES.toolbox,
+      first.sequence,
+    );
+    assert.deepEqual(unchanged, {
+      changed: false,
+      sequence: first.sequence,
+    });
+
+    kernel.uiEvent(0x1000_0082, 0, 0);
+    const changed = readChangedCompanionToolbox(
+      kernel.memory.buffer,
+      ADDRESSES.toolbox,
+      first.sequence,
+    );
+    assert.equal(changed.changed, true);
+    assert.notEqual(changed.sequence, first.sequence);
   });
 
   it("writes only its explicitly owned regions under mixed callback load", async () => {

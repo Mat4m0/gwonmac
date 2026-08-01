@@ -156,7 +156,7 @@ test("the launch argument prefix comes from the contracts too", () => {
       ]).init,
     ),
     {
-      enhancementAutomation: false,
+      enhancementProgram: "none",
       enhancementSelection: { nativeCursor: false, targetReadout: false },
       templateFsTrace: false,
     },
@@ -208,6 +208,7 @@ test("a contracts export the body needs but does not have fails the build", () =
     "IPC",
     "RENDERER_INIT_ARGUMENT",
     "ENHANCEMENTS",
+    "ENHANCEMENT_PROGRAMS",
     "WASM_BRIDGE_MARKERS",
   ]);
 });

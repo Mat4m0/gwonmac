@@ -16,6 +16,10 @@ import { gamePaths } from "../../src/main/core/paths.js";
 import { loadSettings } from "../../src/main/core/settings.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
 import {
+  enhancementCapabilitiesFor,
+  enhancementCapabilitiesRequested,
+} from "../../src/shared/contracts.js";
+import {
   closeOffline,
   launchOffline,
 } from "./fixtures.mjs";
@@ -76,16 +80,20 @@ test.describe("Enhancement runtime selection", () => {
     try {
       const init = await fixture.page.evaluate(() => window.gwNative.init);
       expect(init).toEqual({
-        enhancementAutomation: false,
+        enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: false,
           targetReadout: false,
         },
         templateFsTrace: false,
       });
-      const enhancementRequested =
-        init.enhancementAutomation
-        || Object.values(init.enhancementSelection).some(Boolean);
+      const enhancementCapabilities = enhancementCapabilitiesFor(
+        init.enhancementSelection,
+        init.enhancementProgram,
+      );
+      const enhancementRequested = enhancementCapabilitiesRequested(
+        enhancementCapabilities,
+      );
       const paths = gamePaths(fixture.userData);
       const settings = await loadSettings(paths.settings);
       expect(settings).toMatchObject(init.enhancementSelection);
@@ -106,7 +114,7 @@ test.describe("Enhancement runtime selection", () => {
             sha256: OFFICIAL_SHA256,
           },
         },
-        enhancementRequested,
+        enhancementCapabilities,
         compatibilityCacheRoot: paths.compatibility,
         enhancementCacheRoot: paths.enhancements,
       });

@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
+  enhancementCapabilityProfile,
+  ENHANCEMENT_CAPABILITY_PROFILES,
+  ENHANCEMENT_TRANSFORM_ABI,
+  type EnhancementCapabilities,
+} from "../../src/shared/contracts.js";
+import {
   enhancementConfigWords,
+  enhancementOutputSha256,
   ENHANCEMENT_BUILDS,
+  type EnhancementOutputHashes,
   type KnownEnhancementBuild,
 } from "../../src/main/core/enhancement-builds.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
@@ -11,9 +19,59 @@ import {
   inspectEnhancementCandidate,
   ENHANCEMENT_HOOK_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
-  ENHANCEMENT_TRANSFORM_ABI,
   transformEnhancementWasm,
 } from "../../src/main/core/enhancement-transform.js";
+import { decodeEnhancementManifest } from "../../src/renderer/enhancement-manifest.js";
+
+const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: true,
+  toolbox: true,
+});
+const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  toolbox: false,
+});
+const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: true,
+  toolbox: false,
+});
+const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: true,
+  toolbox: false,
+});
+const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  toolbox: true,
+});
+const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  toolbox: false,
+});
+const PARTY_DIRTY_MESSAGES = Object.freeze([
+  0x1000_0038,
+  0x1000_0039,
+  0x1000_008c,
+  0x1000_0098,
+  0x1000_00c2,
+  0x1000_0111,
+  0x1000_011e,
+  0x1000_011f,
+  0x1000_0124,
+  0x1000_0126,
+] as const);
+
+const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
+  cursor: "0".repeat(64),
+  target: "0".repeat(64),
+  cursorTarget: "0".repeat(64),
+  cursorToolbox: "0".repeat(64),
+});
 
 function uleb(value: number): number[] {
   const out: number[] = [];
@@ -28,6 +86,15 @@ function uleb(value: number): number[] {
 
 function section(id: number, body: number[]): number[] {
   return [id, ...uleb(body.length), ...body];
+}
+
+function moduleWithManifest(value: unknown): WebAssembly.Module {
+  const name = [...new TextEncoder().encode(ENHANCEMENT_MANIFEST_SECTION)];
+  const payload = [...new TextEncoder().encode(JSON.stringify(value))];
+  return new WebAssembly.Module(new Uint8Array([
+    ...fixture(),
+    ...section(0, [...uleb(name.length), ...name, ...payload]),
+  ]));
 }
 
 // `hookParamType` is the WebAssembly value type of the main loop's single
@@ -87,6 +154,7 @@ function fixture(hookParamType = 0x7f): Uint8Array {
 function manifest(bytes: Uint8Array): KnownEnhancementBuild {
   return {
     sha256: createHash("sha256").update(bytes).digest("hex"),
+    outputSha256: PLACEHOLDER_OUTPUTS,
     programId: 1,
     buildId: 1,
     hookFunction: 3,
@@ -107,8 +175,10 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       playerChatMessage: 0x1000_0082,
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
+      partyDirtyMessages: PARTY_DIRTY_MESSAGES,
       playerChatProducer: 5,
       playerChatSites: 3,
+      nearbyPlayerMessages: [0x1000_007f, 0x1000_0080],
       nearbyPlayerMessageProducers: [5, 5],
     },
     layout: {
@@ -154,8 +224,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
   it("is deterministic, valid, and exports only the hook contract", () => {
     const input = fixture();
     const build = manifest(input);
-    const first = transformEnhancementWasm(input, build);
-    const second = transformEnhancementWasm(input, build);
+    const first = transformEnhancementWasm(input, build, CURSOR_TOOLBOX);
+    const second = transformEnhancementWasm(input, build, CURSOR_TOOLBOX);
     assert.deepEqual(first, second);
     // The transform returns a plain Uint8Array, which says nothing about the
     // buffer behind it, and WebAssembly takes only an unshared one. The copy
@@ -174,27 +244,42 @@ describe("targeted Enhancement WebAssembly transform", () => {
     );
     assert.equal(sections.length, 1);
     assert.deepEqual(
+      decodeEnhancementManifest(module, CURSOR_TOOLBOX)?.hooks,
+      { tick: true, cursor: true, ui: true },
+    );
+    assert.equal(
+      decodeEnhancementManifest(module, CURSOR_ONLY),
+      null,
+    );
+    assert.deepEqual(
       JSON.parse(new TextDecoder().decode(sections[0])),
       {
         transformAbi: ENHANCEMENT_TRANSFORM_ABI,
         programId: build.programId,
         buildId: build.buildId,
         tableSlot: build.tableSlot,
+        capabilities: CURSOR_TOOLBOX,
         hooks: {
-          tick: { functionIndex: 3, params: ["i32"] },
+          tick: { functionIndex: 3, params: ["i32"], results: [] },
           cursor: {
             functionIndex: 4,
             params: ["i32", "i32", "i32", "i32", "i32"],
+            results: [],
             existingTableSlot: 1,
           },
-          ui: { functionIndex: 5, params: ["i32", "i32", "i32"] },
+          ui: {
+            functionIndex: 5,
+            params: ["i32", "i32", "i32"],
+            results: [],
+          },
         },
         messages: {
           playerChat: 0x1000_0082,
           hideHeroPanel: 0x1000_01a3,
           showHeroPanel: 0x1000_01a4,
+          partyDirty: PARTY_DIRTY_MESSAGES,
         },
-        configWords: enhancementConfigWords(build),
+        configWords: enhancementConfigWords(build, CURSOR_TOOLBOX),
       },
     );
   });
@@ -217,7 +302,11 @@ describe("targeted Enhancement WebAssembly transform", () => {
   it("preserves every argument and calls each relocated original once", () => {
     const input = fixture();
     const build = manifest(input);
-    const transformed = transformEnhancementWasm(input, build);
+    const transformed = transformEnhancementWasm(
+      input,
+      build,
+      CURSOR_TOOLBOX,
+    );
     const originals: number[][] = [];
     const dispatches: number[][] = [];
     const order: string[] = [];
@@ -327,22 +416,337 @@ describe("targeted Enhancement WebAssembly transform", () => {
   it("rejects a non-terminal slot, hash mismatch, and signature mismatch", () => {
     const input = fixture();
     assert.throws(
-      () => transformEnhancementWasm(input, { ...manifest(input), tableSlot: 0 }),
+      () => transformEnhancementWasm(
+        input,
+        { ...manifest(input), tableSlot: 0 },
+        CURSOR_TOOLBOX,
+      ),
       /terminal/,
     );
     assert.throws(
-      () => transformEnhancementWasm(input, { ...manifest(input), sha256: "0".repeat(64) }),
+      () => transformEnhancementWasm(
+        input,
+        { ...manifest(input), sha256: "0".repeat(64) },
+        CURSOR_TOOLBOX,
+      ),
       /unsupported/,
     );
     const wrongSignature = fixture(0x7e);
     assert.throws(
-      () => transformEnhancementWasm(wrongSignature, manifest(wrongSignature)),
+      () => transformEnhancementWasm(
+        wrongSignature,
+        manifest(wrongSignature),
+        CURSOR_TOOLBOX,
+      ),
       /signature/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        manifest(input),
+        NO_CAPABILITIES,
+      ),
+      /capability profile is not certified/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        manifest(input),
+        { ...TARGET_ONLY, futureCapability: true } as EnhancementCapabilities,
+      ),
+      /capability selection is invalid/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        manifest(input),
+        UNSUPPORTED_ALL_CAPABILITIES,
+      ),
+      /capability profile is not certified/,
+    );
+  });
+
+  it("uses only selected hook evidence in deterministic hook order", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const brokenUi = {
+      ...build,
+      uiDispatcher: { ...build.uiDispatcher, functionIndex: 4 },
+    };
+
+    const first = transformEnhancementWasm(
+      input,
+      brokenUi,
+      CURSOR_ONLY,
+    );
+    const second = transformEnhancementWasm(
+      input,
+      brokenUi,
+      CURSOR_ONLY,
+    );
+    assert.deepEqual(first, second);
+    const module = new WebAssembly.Module(new Uint8Array(first));
+    const manifestSection = WebAssembly.Module.customSections(
+      module,
+      ENHANCEMENT_MANIFEST_SECTION,
+    );
+    assert.equal(manifestSection.length, 1);
+    const evidence = JSON.parse(
+      new TextDecoder().decode(manifestSection[0]),
+    ) as Record<string, unknown>;
+    assert.deepEqual(evidence.hooks, {
+      tick: { functionIndex: 3, params: ["i32"], results: [] },
+      cursor: {
+        functionIndex: 4,
+        params: ["i32", "i32", "i32", "i32", "i32"],
+        results: [],
+        existingTableSlot: 1,
+      },
+      ui: null,
+    });
+    assert.equal(evidence.messages, null);
+    const configWords = evidence.configWords as number[];
+    assert.deepEqual(evidence.capabilities, CURSOR_ONLY);
+    assert.deepEqual(configWords.slice(0, 17), Array<number>(17).fill(0));
+    assert.deepEqual(configWords.slice(29), Array<number>(20).fill(0));
+    assert.deepEqual(
+      decodeEnhancementManifest(module, CURSOR_ONLY)?.hooks,
+      { tick: true, cursor: true, ui: false },
+    );
+
+    const cursorTargetBytes = transformEnhancementWasm(
+      input,
+      brokenUi,
+      CURSOR_TARGET,
+    );
+    const cursorTargetModule = new WebAssembly.Module(
+      new Uint8Array(cursorTargetBytes),
+    );
+    assert.notDeepEqual(cursorTargetBytes, first);
+    assert.deepEqual(
+      decodeEnhancementManifest(cursorTargetModule, CURSOR_TARGET)?.hooks,
+      { tick: true, cursor: true, ui: false },
+    );
+    assert.equal(
+      decodeEnhancementManifest(cursorTargetModule, CURSOR_ONLY),
+      null,
+    );
+
+    const tickOnlyModule = new WebAssembly.Module(new Uint8Array(
+      transformEnhancementWasm(input, brokenUi, TARGET_ONLY),
+    ));
+    const tickOnly = decodeEnhancementManifest(tickOnlyModule, TARGET_ONLY);
+    assert.ok(tickOnly);
+    assert.deepEqual(tickOnly.configWords.slice(17), Array<number>(32).fill(0));
+
+    const originals: number[][] = [];
+    const dispatches: number[][] = [];
+    const callback = new WebAssembly.Instance(
+      new WebAssembly.Module(new Uint8Array(callbackFixture())),
+      { env: { dispatch: (...args: number[]) => dispatches.push(args) } },
+    );
+    const game = new WebAssembly.Instance(module, {
+      env: {
+        t: (value: number) => originals.push([0, value]),
+        c: (...args: number[]) => originals.push([1, ...args]),
+        u: (...args: number[]) => originals.push([2, ...args]),
+      },
+    }).exports as Record<string, unknown>;
+    (game.tbl as WebAssembly.Table).set(
+      build.tableSlot,
+      callback.exports.callback as CallableFunction,
+    );
+    (game[ENHANCEMENT_HOOK_EXPORT] as WebAssembly.Global).value =
+      build.tableSlot + 1;
+    (game.EmscriptenExeThreadMainLoop as (value: number) => void)(41);
+    (game.cursor as (...args: number[]) => void)(51, 52, 53, 54, 55);
+    (game.ui as (...args: number[]) => void)(61, 62, 63);
+    assert.deepEqual(originals, [
+      [0, 41],
+      [1, 51, 52, 53, 54, 55],
+      [2, 61, 62, 63],
+    ]);
+    assert.deepEqual(dispatches, [
+      [0, 41, 0, 0, 0, 0],
+      [1, 51, 52, 53, 54, 55],
+    ]);
+
+    assert.throws(
+      () => transformEnhancementWasm(input, brokenUi, CURSOR_TOOLBOX),
+      /UI dispatcher signature/,
+    );
+  });
+
+  it("rejects nonzero configuration for inactive capabilities", () => {
+    const input = fixture();
+    const transformed = transformEnhancementWasm(
+      input,
+      manifest(input),
+      TARGET_ONLY,
+    );
+    const sectionBytes = WebAssembly.Module.customSections(
+      new WebAssembly.Module(new Uint8Array(transformed)),
+      ENHANCEMENT_MANIFEST_SECTION,
+    )[0];
+    assert.ok(sectionBytes);
+    const evidence = JSON.parse(
+      new TextDecoder().decode(sectionBytes),
+    ) as { configWords: number[] };
+
+    for (const inactiveIndex of [17, 29, 36]) {
+      const changed = structuredClone(evidence);
+      changed.configWords[inactiveIndex] = 1;
+      assert.equal(decodeEnhancementManifest(moduleWithManifest(changed)), null);
+    }
+
+    const cursorOnly = transformEnhancementWasm(
+      input,
+      manifest(input),
+      CURSOR_ONLY,
+    );
+    const cursorSection = WebAssembly.Module.customSections(
+      new WebAssembly.Module(new Uint8Array(cursorOnly)),
+      ENHANCEMENT_MANIFEST_SECTION,
+    )[0];
+    assert.ok(cursorSection);
+    const cursorEvidence = JSON.parse(
+      new TextDecoder().decode(cursorSection),
+    ) as { configWords: number[] };
+    cursorEvidence.configWords[0] = 1;
+    assert.equal(
+      decodeEnhancementManifest(moduleWithManifest(cursorEvidence)),
+      null,
+    );
+  });
+
+  it("binds the exact party-dirty set to the Toolbox manifest and config", () => {
+    const input = fixture();
+    const transformed = transformEnhancementWasm(
+      input,
+      manifest(input),
+      CURSOR_TOOLBOX,
+    );
+    const sectionBytes = WebAssembly.Module.customSections(
+      new WebAssembly.Module(new Uint8Array(transformed)),
+      ENHANCEMENT_MANIFEST_SECTION,
+    )[0];
+    assert.ok(sectionBytes);
+    const evidence = JSON.parse(
+      new TextDecoder().decode(sectionBytes),
+    ) as {
+      messages: { partyDirty: number[] };
+      configWords: number[];
+    };
+
+    const mismatched = structuredClone(evidence);
+    mismatched.messages.partyDirty[0] = 0x1000_ffff;
+    assert.equal(decodeEnhancementManifest(moduleWithManifest(mismatched)), null);
+
+    const duplicate = structuredClone(evidence);
+    duplicate.messages.partyDirty[1] = duplicate.messages.partyDirty[0]!;
+    duplicate.configWords[40] = duplicate.configWords[39]!;
+    assert.equal(decodeEnhancementManifest(moduleWithManifest(duplicate)), null);
+  });
+
+  it("gives Toolbox only the target-core words its hero path reads", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const transformed = transformEnhancementWasm(
+      input,
+      build,
+      CURSOR_TOOLBOX,
+    );
+    const module = new WebAssembly.Module(new Uint8Array(transformed));
+    const decoded = decodeEnhancementManifest(module, CURSOR_TOOLBOX);
+    assert.ok(decoded);
+    assert.deepEqual(decoded.configWords.slice(0, 17), [
+      build.layout.contextRoot,
+      0,
+      0,
+      0,
+      build.layout.gameContextSlot,
+      build.layout.characterContext,
+      build.layout.mapId,
+      build.layout.isExplorable,
+      build.layout.currentMapId,
+      build.layout.currentInstanceType,
+      build.layout.playerNumber,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+    ]);
+    assert.deepEqual(
+      decoded.configWords.slice(17, 29),
+      enhancementConfigWords(build, CURSOR_TOOLBOX).slice(17, 29),
+    );
+
+    const section = WebAssembly.Module.customSections(
+      module,
+      ENHANCEMENT_MANIFEST_SECTION,
+    )[0];
+    assert.ok(section);
+    const evidence = JSON.parse(
+      new TextDecoder().decode(section),
+    ) as { configWords: number[] };
+    evidence.configWords[1] = 1;
+    assert.equal(decodeEnhancementManifest(moduleWithManifest(evidence)), null);
+  });
+
+  it("checks the existing cursor table relation only when cursor is selected", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const wrongCursorSlot = {
+      ...build,
+      cursorEvent: { ...build.cursorEvent, tableSlot: 0 },
+    };
+    assert.equal(
+      WebAssembly.validate(
+        new Uint8Array(
+          transformEnhancementWasm(input, wrongCursorSlot, TARGET_ONLY),
+        ),
+      ),
+      true,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        wrongCursorSlot,
+        CURSOR_ONLY,
+      ),
+      /cursor table slot/,
     );
   });
 });
 
 describe("Enhancement client chain", () => {
+  it("has exactly four source-pinned executable capability profiles", () => {
+    assert.deepEqual(Object.keys(ENHANCEMENT_CAPABILITY_PROFILES), [
+      "cursor",
+      "target",
+      "cursorTarget",
+      "cursorToolbox",
+    ]);
+    for (const [profile, capabilities] of Object.entries(
+      ENHANCEMENT_CAPABILITY_PROFILES,
+    )) {
+      assert.equal(enhancementCapabilityProfile(capabilities), profile);
+      for (const build of ENHANCEMENT_BUILDS) {
+        const output = enhancementOutputSha256(build, capabilities);
+        assert.match(output ?? "", /^[0-9a-f]{64}$/);
+      }
+    }
+    for (const unsupported of [
+      NO_CAPABILITIES,
+      UNSUPPORTED_ALL_CAPABILITIES,
+      { nativeCursor: false, targetObservation: false, toolbox: true },
+    ]) {
+      assert.equal(enhancementCapabilityProfile(unsupported), null);
+    }
+  });
+
   it("certifies the Enhancement transform against the template-save output", () => {
     // The Enhancement transform is layered on the template-save client so opting
     // into the game cursor never costs template save/load. If either manifest

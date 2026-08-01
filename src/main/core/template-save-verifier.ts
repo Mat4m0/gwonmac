@@ -36,6 +36,7 @@ import {
   type FunctionType,
 } from "./wasm-binary.js";
 import {
+  findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
   TEMPLATE_SAVE_BUILDS,
   type BridgeKind,
@@ -839,4 +840,47 @@ export function deriveEquivalentTemplateSaveBuild(
     }
   }
   return entry;
+}
+
+export type TemplateSaveResolution = "certified" | "structurally-derived";
+
+export interface PostTemplateSaveModule {
+  readonly resolution: TemplateSaveResolution;
+  readonly build: KnownTemplateSaveBuild;
+  readonly bytes: Uint8Array;
+}
+
+interface TemplateSaveResolvers {
+  readonly certified: (sha256: string) => KnownTemplateSaveBuild | null;
+  readonly structurallyDerived: (
+    input: Uint8Array,
+  ) => KnownTemplateSaveBuild | null;
+}
+
+const TEMPLATE_SAVE_RESOLVERS: TemplateSaveResolvers = Object.freeze({
+  certified: findTemplateSaveBuild,
+  structurallyDerived: deriveEquivalentTemplateSaveBuild,
+});
+
+/**
+ * Produce the exact module on which every later transform is layered.
+ *
+ * A checked-in build and a locally shape-verified build differ only in how
+ * their transform record is selected. Both must pass through the same
+ * template-save rewrite; returning `null` is the fail-closed answer when
+ * neither proof can select a record. The injectable resolvers make those two
+ * otherwise mutually exclusive branches executable with small CI fixtures.
+ */
+export function preparePostTemplateSaveModule(
+  input: Uint8Array,
+  resolvers: TemplateSaveResolvers = TEMPLATE_SAVE_RESOLVERS,
+): PostTemplateSaveModule | null {
+  const certified = resolvers.certified(sha256(input));
+  const build = certified ?? resolvers.structurallyDerived(input);
+  if (!build) return null;
+  return {
+    resolution: certified ? "certified" : "structurally-derived",
+    build,
+    bytes: rewriteTemplateSaveWasm(input, build),
+  };
 }

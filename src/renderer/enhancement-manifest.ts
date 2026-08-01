@@ -1,70 +1,207 @@
-const ENHANCEMENT_TRANSFORM_ABI = 8;
-const CONFIG_WORDS = 39;
+import {
+  enhancementCapabilitiesRequested,
+  ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
+  ENHANCEMENT_TRANSFORM_ABI,
+  enhancementConfigWordActive,
+  enhancementHooksFor,
+  type EnhancementCapabilities,
+  type EnhancementHooks,
+} from "../shared/contracts.js";
+
+const MESSAGE_CONFIG_START = 36;
+const PARTY_DIRTY_CONFIG_START = MESSAGE_CONFIG_START + 3;
 
 /** The validated subset of the derived module's fixed evidence. */
 export type EnhancementManifest = Readonly<{
   buildId: number;
   programId: number;
   tableSlot: number;
+  capabilities: EnhancementCapabilities;
+  hooks: EnhancementHooks;
   configWords: readonly number[];
 }>;
 
+function exactRecord(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, unknown> | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const actual = Object.keys(record);
+  return actual.length === keys.length
+    && keys.every((key) => Object.hasOwn(record, key))
+    ? record
+    : null;
+}
+
+function uint32(value: unknown, allowZero = true): value is number {
+  return Number.isInteger(value)
+    && Number(value) >= (allowZero ? 0 : 1)
+    && Number(value) <= 0xffff_ffff;
+}
+
+function exactStrings(value: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(value)
+    && value.length === expected.length
+    && value.every((entry, index) => entry === expected[index]);
+}
+
+function functionEvidence(
+  value: unknown,
+  params: readonly string[],
+  cursor: boolean,
+): boolean {
+  const record = exactRecord(
+    value,
+    cursor
+      ? ["functionIndex", "params", "results", "existingTableSlot"]
+      : ["functionIndex", "params", "results"],
+  );
+  return record !== null
+    && uint32(record.functionIndex)
+    && exactStrings(record.params, params)
+    && exactStrings(record.results, [])
+    && (!cursor || uint32(record.existingTableSlot));
+}
+
+function sameHooks(left: EnhancementHooks, right: EnhancementHooks): boolean {
+  return left.tick === right.tick
+    && left.cursor === right.cursor
+    && left.ui === right.ui;
+}
+
+function sameCapabilities(
+  left: EnhancementCapabilities,
+  right: EnhancementCapabilities,
+): boolean {
+  return left.nativeCursor === right.nativeCursor
+    && left.targetObservation === right.targetObservation
+    && left.toolbox === right.toolbox;
+}
+
 export function decodeEnhancementManifest(
   module: WebAssembly.Module,
+  expectedCapabilities?: EnhancementCapabilities,
 ): EnhancementManifest | null {
   const sections = WebAssembly.Module.customSections(module, "enhancement_manifest");
   if (sections.length !== 1) return null;
   try {
-    const value: Record<string, unknown> | null = JSON.parse(
-      new TextDecoder().decode(sections[0]),
+    const value = exactRecord(
+      JSON.parse(new TextDecoder().decode(sections[0])),
+      [
+        "transformAbi",
+        "programId",
+        "buildId",
+        "tableSlot",
+        "capabilities",
+        "hooks",
+        "messages",
+        "configWords",
+      ],
     );
     if (value === null) return null;
-    const { buildId, programId, tableSlot, configWords } = value;
-    const hooks = value.hooks as Record<string, unknown> | null;
-    const messages = value.messages as Record<string, unknown> | null;
-    const tick = hooks?.tick as Record<string, unknown> | null;
-    const cursor = hooks?.cursor as Record<string, unknown> | null;
-    const ui = hooks?.ui as Record<string, unknown> | null;
+    const capabilityRecord = exactRecord(value.capabilities, [
+      "nativeCursor",
+      "targetObservation",
+      "toolbox",
+    ]);
+    const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
+    if (
+      capabilityRecord === null
+      || hooks === null
+      || typeof capabilityRecord.nativeCursor !== "boolean"
+      || typeof capabilityRecord.targetObservation !== "boolean"
+      || typeof capabilityRecord.toolbox !== "boolean"
+    ) {
+      return null;
+    }
+
+    const capabilities: EnhancementCapabilities = Object.freeze({
+      nativeCursor: capabilityRecord.nativeCursor,
+      targetObservation: capabilityRecord.targetObservation,
+      toolbox: capabilityRecord.toolbox,
+    });
+    const selectedHooks: EnhancementHooks = Object.freeze({
+      tick: hooks.tick !== null,
+      cursor: hooks.cursor !== null,
+      ui: hooks.ui !== null,
+    });
+    const expectedHooks = enhancementHooksFor(capabilities);
+    const configWords = value.configWords;
+    const messages = capabilities.toolbox
+      ? exactRecord(value.messages, [
+          "playerChat",
+          "hideHeroPanel",
+          "showHeroPanel",
+          "partyDirty",
+        ])
+      : null;
+    const partyDirty = messages?.partyDirty;
     if (
       value.transformAbi !== ENHANCEMENT_TRANSFORM_ABI
-      || !Number.isSafeInteger(buildId)
-      || Number(buildId) <= 0
-      || !Number.isSafeInteger(programId)
-      || Number(programId) <= 0
-      || !Number.isSafeInteger(tableSlot)
-      || Number(tableSlot) < 0
+      || !uint32(value.buildId, false)
+      || !uint32(value.programId, false)
+      || !uint32(value.tableSlot)
+      || !enhancementCapabilitiesRequested(capabilities)
+      || !sameHooks(selectedHooks, expectedHooks)
       || !Array.isArray(configWords)
-      || configWords.length !== CONFIG_WORDS
+      || configWords.length !== ENHANCEMENT_CONFIG_WORD_COUNT
+      || configWords.some((word: unknown) => !uint32(word))
       || configWords.some(
-        (word: unknown) =>
-          !Number.isInteger(word)
-          || Number(word) < 0
-          || Number(word) > 0xffff_ffff,
+        (word: unknown, index: number) =>
+          !enhancementConfigWordActive(capabilities, index) && word !== 0,
       )
-      || !tick
-      || !cursor
-      || !ui
-      || JSON.stringify(tick.params) !== JSON.stringify(["i32"])
-      || JSON.stringify(cursor.params)
-        !== JSON.stringify(["i32", "i32", "i32", "i32", "i32"])
-      || JSON.stringify(ui.params) !== JSON.stringify(["i32", "i32", "i32"])
-      || !messages
-      || ![messages.playerChat, messages.hideHeroPanel, messages.showHeroPanel]
-        .every((message) =>
-          Number.isInteger(message)
-          && Number(message) > 0
-          && Number(message) <= 0xffff_ffff)
-      || configWords[36] !== messages.playerChat
-      || configWords[37] !== messages.hideHeroPanel
-      || configWords[38] !== messages.showHeroPanel
+      || (hooks.tick !== null
+        && !functionEvidence(hooks.tick, ["i32"], false))
+      || (hooks.cursor !== null
+        && !functionEvidence(
+          hooks.cursor,
+          ["i32", "i32", "i32", "i32", "i32"],
+          true,
+        ))
+      || (hooks.ui !== null
+        && !functionEvidence(hooks.ui, ["i32", "i32", "i32"], false))
+      || (!capabilities.toolbox && value.messages !== null)
+      || (capabilities.toolbox
+        && (
+          messages === null
+          || ![
+            messages.playerChat,
+            messages.hideHeroPanel,
+            messages.showHeroPanel,
+          ].every((message) => uint32(message, false))
+          || !Array.isArray(partyDirty)
+          || partyDirty.length !== ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT
+          || !partyDirty.every((message: unknown) => uint32(message, false))
+          || new Set([
+            messages.playerChat,
+            messages.hideHeroPanel,
+            messages.showHeroPanel,
+            ...partyDirty,
+          ]).size !== ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT + 3
+          || configWords[MESSAGE_CONFIG_START] !== messages.playerChat
+          || configWords[MESSAGE_CONFIG_START + 1] !== messages.hideHeroPanel
+          || configWords[MESSAGE_CONFIG_START + 2] !== messages.showHeroPanel
+          || partyDirty.some(
+            (message: number, index: number) =>
+              configWords[PARTY_DIRTY_CONFIG_START + index] !== message,
+          )
+        ))
+      || (expectedCapabilities !== undefined
+        && !sameCapabilities(capabilities, expectedCapabilities))
     ) {
       return null;
     }
     return Object.freeze({
-      buildId: Number(buildId),
-      programId: Number(programId),
-      tableSlot: Number(tableSlot),
-      configWords: configWords.map(Number),
+      buildId: Number(value.buildId),
+      programId: Number(value.programId),
+      tableSlot: Number(value.tableSlot),
+      capabilities,
+      hooks: selectedHooks,
+      configWords: Object.freeze(configWords.map(Number)),
     });
   } catch {
     return null;

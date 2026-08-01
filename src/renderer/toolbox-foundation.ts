@@ -155,6 +155,17 @@ export function createToolboxFoundation(parent: HTMLElement) {
     controls[next]?.focus({ preventScroll: true });
   };
 
+  const containOverlayFocus = (event: FocusEvent) => {
+    if (
+      !overlayOpen
+      || !(event.target instanceof Node)
+      || root.contains(event.target)
+    ) {
+      return;
+    }
+    close.focus({ preventScroll: true });
+  };
+
   // Events from controls stop at this renderer-owned boundary. The game's
   // canvas listeners continue to own every event outside it.
   const stopAtOverlay = (event: Event) => event.stopPropagation();
@@ -177,6 +188,7 @@ export function createToolboxFoundation(parent: HTMLElement) {
     if (overlayOpen && event.target === root) setOpen(false);
   });
   root.addEventListener("keydown", trapOverlayFocus);
+  document.addEventListener("focusin", containOverlayFocus, true);
   window.addEventListener("keydown", onKeyDown, true);
   open.addEventListener("click", () => setOpen(true));
   close.addEventListener("click", () => setOpen(false));
@@ -203,6 +215,7 @@ export function createToolboxFoundation(parent: HTMLElement) {
       return state;
     },
     dispose() {
+      document.removeEventListener("focusin", containOverlayFocus, true);
       window.removeEventListener("keydown", onKeyDown, true);
       releaseGameInput();
       if (root.contains(document.activeElement)) {

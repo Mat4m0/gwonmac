@@ -10,7 +10,13 @@ import {
 import { certifyClientBuild } from "../main/client-certification.js";
 import { inspectEnhancementCache } from "../main/core/client-module.js";
 import { parseSettings } from "../main/core/settings.js";
-import { DEFAULT_SETTINGS } from "../shared/contracts.js";
+import {
+  DEFAULT_SETTINGS,
+  ENHANCEMENT_PROGRAMS,
+  enhancementCapabilitiesFor,
+  enhancementCapabilitiesRequested,
+  type EnhancementProgram,
+} from "../shared/contracts.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -20,9 +26,8 @@ import {
 export interface EnhancementDoctorReport {
   profile: "ready" | "missing";
   /**
-   * The profile's own setting. An observation-tier live run enables nothing, so
-   * this is the only thing that installs the Enhancement for it (P4.7); an
-   * automation run forces it on through GW_ENHANCEMENT_AUTOMATION and ignores this.
+   * The profile's own player-facing setting. Fixed developer programs do not
+   * mutate or depend on it.
    */
   nativeCursor: boolean;
   /**
@@ -123,6 +128,11 @@ async function snapshotResidency(
 
 export async function inspectEnhancementWorkspace(
   profile: string,
+  program: EnhancementProgram = ENHANCEMENT_PROGRAMS.some(
+    (candidate) => candidate === process.env.GW_ENHANCEMENT_PROGRAM,
+  )
+    ? process.env.GW_ENHANCEMENT_PROGRAM as EnhancementProgram
+    : "none",
 ): Promise<EnhancementDoctorReport> {
   const game = path.join(profile, "game");
   const artifactsPath = path.join(game, "artifacts");
@@ -140,6 +150,10 @@ export async function inspectEnhancementWorkspace(
   const profileReady = (await isFile(path.join(profile, "settings.json")))
     || missing.length < required.length;
   const { nativeCursor, targetReadout } = await readEnhancementSettings(profile);
+  const enhancementCapabilities = enhancementCapabilitiesFor(
+    { nativeCursor, targetReadout },
+    program,
+  );
   let manifest: PublishedClientManifest | null = null;
   let artifactIntegrity: EnhancementDoctorReport["artifacts"]["integrity"] =
     "invalid";
@@ -169,10 +183,13 @@ export async function inspectEnhancementWorkspace(
     const certification = certifyClientBuild(sha256);
     if (certification.state === "certified") {
       build = certification.enhancementBuild;
-      transformedCache = await inspectEnhancementCache(
-        build,
-        path.join(game, "enhancements"),
-      );
+      if (enhancementCapabilitiesRequested(enhancementCapabilities)) {
+        transformedCache = await inspectEnhancementCache(
+          build,
+          enhancementCapabilities,
+          path.join(game, "enhancements"),
+        );
+      }
     }
   }
   const snapshot = manifest

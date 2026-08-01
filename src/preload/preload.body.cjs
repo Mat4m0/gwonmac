@@ -8,9 +8,9 @@
 // here may start with the gw channel prefix — tests/policy asserts that.
 // `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
-// binding the preload may read. The four spliced constants are declared for the
+// binding the preload may read. The five spliced constants are declared for the
 // type checker in scripts/preload-injected-constants.mts.
-/* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, WASM_BRIDGE_MARKERS, process */
+/* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, ENHANCEMENT_PROGRAMS, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -33,12 +33,15 @@ function rendererInit() {
   // `process` is injected into the sandboxed preload's own scope; it is not a
   // property of `globalThis`. Reading it off `globalThis` found nothing, so
   // every launch silently took the production defaults — no game cursor, no
-  // Enhancement automation, no template trace — and only tests/electron could see
+  // developer program, no template trace — and only tests/electron could see
   // it, because a `vm` fixture's `process` global answers to either spelling.
   const argv = typeof process === "undefined" ? undefined : process.argv;
-  const raw = Array.isArray(argv)
-    ? argv.find((value) => value.startsWith(RENDERER_INIT_ARGUMENT))
-    : undefined;
+  const matching = Array.isArray(argv)
+    ? argv.filter((value) => value.startsWith(RENDERER_INIT_ARGUMENT))
+    : [];
+  // Main emits exactly one argument. Ambiguity is a malformed boundary, not a
+  // reason to let argv order choose a developer posture.
+  const raw = matching.length === 1 ? matching[0] : undefined;
   /** @type {Record<string, unknown>} */
   let parsed = {};
   try {
@@ -63,8 +66,16 @@ function rendererInit() {
     enhancementSelection[tool] = selected[tool] === true;
   }
   Object.freeze(enhancementSelection);
+  const requestedProgram = parsed.enhancementProgram;
+  /** @type {import("../shared/contracts.js").EnhancementProgram} */
+  const enhancementProgram = typeof requestedProgram === "string"
+      && ENHANCEMENT_PROGRAMS.some((program) => program === requestedProgram)
+    ? /** @type {import("../shared/contracts.js").EnhancementProgram} */ (
+        requestedProgram
+      )
+    : "none";
   return {
-    enhancementAutomation: parsed.enhancementAutomation === true,
+    enhancementProgram,
     enhancementSelection,
     templateFsTrace: parsed.templateFsTrace === true,
   };

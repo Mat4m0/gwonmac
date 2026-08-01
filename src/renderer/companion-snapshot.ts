@@ -284,6 +284,32 @@ export const COMPANION_TOOLBOX_BYTES = 64;
 const TOOLBOX_MAGIC = 0x58545747;
 const TOOLBOX_HERO_AVAILABLE = 1 << 0;
 
+function readCompanionToolboxSequence(
+  buffer: ArrayBuffer,
+  pointer: number,
+): number | null {
+  if (
+    !(buffer instanceof ArrayBuffer)
+    || !Number.isInteger(pointer)
+    || pointer < 0
+    || pointer + COMPANION_TOOLBOX_BYTES > buffer.byteLength
+  ) {
+    return null;
+  }
+  const view = new DataView(buffer, pointer, 12);
+  const first = view.getUint32(8, true);
+  if (
+    (first & 1) !== 0
+    || view.getUint32(0, true) !== TOOLBOX_MAGIC
+    || view.getUint16(4, true) !== COMPANION_TOOLBOX_ABI
+    || view.getUint16(6, true) !== COMPANION_TOOLBOX_BYTES
+    || view.getUint32(8, true) !== first
+  ) {
+    return null;
+  }
+  return first;
+}
+
 export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
   if (
     !(buffer instanceof ArrayBuffer)
@@ -342,4 +368,47 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
     heroAvailable,
     ...state,
   });
+}
+
+export type CompanionToolboxState = ReturnType<typeof readCompanionToolbox>;
+
+export function readChangedCompanionToolbox(
+  buffer: ArrayBuffer,
+  pointer: number,
+  previousSequence: number | null,
+) {
+  const sequence = readCompanionToolboxSequence(buffer, pointer);
+  if (sequence !== null && sequence === previousSequence) {
+    return Object.freeze({ changed: false as const, sequence });
+  }
+  const state = readCompanionToolbox(buffer, pointer);
+  return Object.freeze({
+    changed: true as const,
+    sequence: state.status === "ready" ? state.sequence : null,
+    state,
+  });
+}
+
+/**
+ * Publication sequence protects the read; the decoded fields own identity.
+ * Ignoring sequence here makes an accidental redundant kernel publication
+ * harmless instead of turning it into a renderer update.
+ */
+export function sameCompanionToolboxState(
+  previous: CompanionToolboxState | null,
+  next: CompanionToolboxState,
+) {
+  if (previous === null) return false;
+  if (previous.status !== "ready" || next.status !== "ready") {
+    return previous.status !== "ready"
+      && next.status !== "ready"
+      && previous.reason === next.reason;
+  }
+  return previous.playerChatCount === next.playerChatCount
+    && previous.cursorEventCount === next.cursorEventCount
+    && previous.heroAvailable === next.heroAvailable
+    && previous.heroCount === next.heroCount
+    && previous.firstHeroId === next.firstHeroId
+    && previous.firstHeroAgentId === next.firstHeroAgentId
+    && previous.panelState === next.panelState;
 }

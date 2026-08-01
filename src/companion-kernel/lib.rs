@@ -20,7 +20,10 @@ static mut SEQUENCE: u32 = 0;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    loop {}
+    // A panic on the game callback stack must terminate as a bounded trap.
+    // Spinning here would freeze the renderer and turn a diagnosable callback
+    // failure into an unbounded hang.
+    core::arch::wasm32::unreachable()
 }
 
 fn finite_position(value: f32) -> bool {
@@ -29,6 +32,29 @@ fn finite_position(value: f32) -> bool {
 
 fn valid_agent_type(value: u32) -> bool {
     value & (0x400 | 0x200 | 0xdb) != 0
+}
+
+fn valid_toolbox_messages(layout: Layout) -> bool {
+    if layout.player_chat_message == 0
+        || layout.hide_hero_panel_message == 0
+        || layout.show_hero_panel_message == 0
+        || layout.player_chat_message == layout.hide_hero_panel_message
+        || layout.player_chat_message == layout.show_hero_panel_message
+        || layout.hide_hero_panel_message == layout.show_hero_panel_message
+    {
+        return false;
+    }
+    for (index, message) in layout.party_dirty_messages.iter().enumerate() {
+        if *message == 0
+            || *message == layout.player_chat_message
+            || *message == layout.hide_hero_panel_message
+            || *message == layout.show_hero_panel_message
+            || layout.party_dirty_messages[..index].contains(message)
+        {
+            return false;
+        }
+    }
+    true
 }
 
 fn square_root(value: f32) -> f32 {
@@ -69,14 +95,24 @@ struct AgentState {
 #[derive(Clone, Copy)]
 struct State {
     flags: u32,
-    game: u32,
     map_id: u32,
     instance_type: u32,
-    player_number: u32,
     player: AgentState,
     target: AgentState,
     distance: f32,
     band: u32,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum GameState {
+    Unavailable,
+    Loading,
+    Ready {
+        game: u32,
+        map_id: u32,
+        instance_type: u32,
+        player_number: u32,
+    },
 }
 
 impl State {
@@ -89,10 +125,8 @@ impl State {
         };
         Self {
             flags: 0,
-            game: 0,
             map_id: 0,
             instance_type: 0,
-            player_number: 0,
             player: EMPTY_AGENT,
             target: EMPTY_AGENT,
             distance: 0.0,
@@ -119,47 +153,45 @@ unsafe fn read_agent(layout: Layout, agent_buffer: u32, size: u32, id: u32) -> O
     Some(AgentState { id, kind, x, y })
 }
 
-unsafe fn collect(layout: Layout) -> State {
-    let mut state = State::empty();
+pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
     let contexts = match unsafe { pointer(layout.context_root, 28) } {
         Some(value) => value,
-        None => return state,
+        None => return GameState::Unavailable,
     };
     let game_slot = match indexed(contexts, layout.game_context_slot, 4) {
         Some(value) => value,
-        None => return state,
+        None => return GameState::Unavailable,
     };
     let game = match unsafe { pointer(game_slot, 0x50) } {
         Some(value) => value,
-        None => return state,
+        None => return GameState::Unavailable,
     };
     let character = match offset(game, layout.character_context)
         .and_then(|address| unsafe { pointer(address, 0x2b0) })
     {
         Some(value) => value,
-        None => return state,
+        None => return GameState::Unavailable,
     };
 
     let read_character =
         |field| offset(character, field).and_then(|address| unsafe { read_u32(address) });
     let Some(base_map) = read_character(layout.map_id) else {
-        return state;
+        return GameState::Unavailable;
     };
     let Some(is_explorable) = read_character(layout.is_explorable) else {
-        return state;
+        return GameState::Unavailable;
     };
     let Some(map_id) = read_character(layout.current_map_id) else {
-        return state;
+        return GameState::Unavailable;
     };
     let Some(instance_type) = read_character(layout.current_instance_type) else {
-        return state;
+        return GameState::Unavailable;
     };
     let Some(player_number) = read_character(layout.player_number) else {
-        return state;
+        return GameState::Unavailable;
     };
     if instance_type == 2 {
-        state.flags = FLAG_LOADING;
-        return state;
+        return GameState::Loading;
     }
     if map_id == 0
         || map_id > 2_000
@@ -169,8 +201,32 @@ unsafe fn collect(layout: Layout) -> State {
         || player_number == 0
         || player_number > u16::MAX as u32
     {
-        return state;
+        return GameState::Unavailable;
     }
+
+    GameState::Ready {
+        game,
+        map_id,
+        instance_type,
+        player_number,
+    }
+}
+
+unsafe fn collect(layout: Layout) -> State {
+    let mut state = State::empty();
+    let (map_id, instance_type, player_number) = match unsafe { resolve_game(layout) } {
+        GameState::Unavailable => return state,
+        GameState::Loading => {
+            state.flags = FLAG_LOADING;
+            return state;
+        }
+        GameState::Ready {
+            map_id,
+            instance_type,
+            player_number,
+            ..
+        } => (map_id, instance_type, player_number),
+    };
 
     if !contains(layout.agent_array, 16) {
         return state;
@@ -223,10 +279,8 @@ unsafe fn collect(layout: Layout) -> State {
             return state;
         };
         state.flags = FLAG_READY | FLAG_PLAYER_VALID;
-        state.game = game;
         state.map_id = map_id;
         state.instance_type = instance_type;
-        state.player_number = player_number;
         state.player = player;
         break;
     }
@@ -255,10 +309,13 @@ unsafe fn collect(layout: Layout) -> State {
     state
 }
 
-unsafe fn collect_first_owned_hero(layout: Layout, state: State) -> (u32, u32, u32) {
-    if state.flags & (FLAG_READY | FLAG_PLAYER_VALID) != (FLAG_READY | FLAG_PLAYER_VALID)
-        || state.game == 0
-        || state.player_number == 0
+pub(crate) unsafe fn collect_first_owned_hero(
+    layout: Layout,
+    game: u32,
+    player_number: u32,
+) -> (u32, u32, u32) {
+    if game == 0
+        || player_number == 0
         || layout.hero_member_stride < 12
         || layout.hero_member_stride > 64
         || layout.hero_agent_id + 4 > layout.hero_member_stride
@@ -275,7 +332,7 @@ unsafe fn collect_first_owned_hero(layout: Layout, state: State) -> (u32, u32, u
         Some(value) => value,
         None => return (0, 0, 0),
     };
-    let party = match offset(state.game, layout.party_context)
+    let party = match offset(game, layout.party_context)
         .and_then(|at| unsafe { pointer(at, party_required) })
     {
         Some(value) => value,
@@ -337,7 +394,7 @@ unsafe fn collect_first_owned_hero(layout: Layout, state: State) -> (u32, u32, u
         if !(1..=39).contains(&hero_id) {
             return (0, 0, 0);
         }
-        if owner != state.player_number {
+        if owner != player_number {
             continue;
         }
         if count >= 7 || owned_ids[..count as usize].contains(&hero_id) {
@@ -417,11 +474,7 @@ pub unsafe extern "C" fn companion_init(
         return 0;
     }
     let layout = unsafe { read_volatile(config_ptr as *const Layout) };
-    if layout.player_chat_message == 0
-        || layout.hide_hero_panel_message == 0
-        || layout.show_hero_panel_message == 0
-        || layout.hide_hero_panel_message == layout.show_hero_panel_message
-    {
+    if features & FEATURE_TOOLBOX_FOUNDATION != 0 && !valid_toolbox_messages(layout) {
         return 0;
     }
     unsafe {
@@ -445,14 +498,7 @@ pub unsafe extern "C" fn companion_init(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn companion_dispatch(
-    kind: u32,
-    a: u32,
-    b: u32,
-    _c: u32,
-    _d: u32,
-    _e: u32,
-) {
+pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, _d: u32, _e: u32) {
     match kind {
         DISPATCH_TICK => {
             if !unsafe { INITIALIZED } {
@@ -460,19 +506,17 @@ pub unsafe extern "C" fn companion_dispatch(
             }
             let features = unsafe { FEATURES };
             let layout = unsafe { LAYOUT };
-            let state = if features & (FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION) != 0 {
+            unsafe { TICK_COUNT = TICK_COUNT.wrapping_add(1) };
+            let state = if features & FEATURE_TARGET_READOUT != 0 {
                 unsafe { collect(layout) }
             } else {
                 State::empty()
             };
             if features & FEATURE_TARGET_READOUT != 0 {
-                unsafe {
-                    TICK_COUNT = TICK_COUNT.wrapping_add(1);
-                    publish(state);
-                }
+                unsafe { publish(state) };
             }
             if features & FEATURE_TOOLBOX_FOUNDATION != 0 {
-                unsafe { toolbox::tick(layout, state) };
+                unsafe { toolbox::tick(layout, TICK_COUNT) };
             }
             if features & FEATURE_NATIVE_CURSOR != 0 {
                 unsafe { cursor::tick(layout) };
@@ -503,7 +547,7 @@ pub unsafe extern "C" fn companion_dispatch(
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    5
+    6
 }
 
 #[no_mangle]

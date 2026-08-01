@@ -300,23 +300,28 @@ GWonMac Tools you selected — the loading screen says so once for that build,
 names exactly what is affected, and offers **Play Guild Wars** as the primary
 action. The notice explains; it does not block you.
 
-Gameplay is unaffected either way: no stat, no timing, and no input path
-changes. If the local check refuses a changed structure, support may need a new
-app release; retrying, reinstalling, or clearing downloaded game data will not
-change that decision. The same status is always visible under **Settings →
-Controls**. An uncertified client build does not mean the app is out of date —
-whether a newer release exists is the separate question above, which the
-notice's own **Check for Updates** button answers.
+Gameplay is unaffected either way: no stat or timing changes, and no gameplay
+command is generated. If the local check refuses a changed structure, support
+may need a new app release; retrying, reinstalling, or clearing downloaded game
+data will not change that decision. The same status is always visible under
+**Settings → Controls**. An uncertified client build does not mean the app is
+out of date — whether a newer release exists is the separate question above,
+which the notice's own **Check for Updates** button answers.
 
 The two GWonMac Tools choices control their observations independently. The cursor
 choice reads only the cursor Guild Wars is drawing. The target-readout choice
 reads map, player, and selected-target state and shows a small line at the top
 of the game view; it disappears with no target, cannot be clicked, and never
 covers anything interactive. A disabled tool performs no per-tick collection.
-With both choices off, no enhancement hook is installed, no companion kernel loads,
-and nothing observes game memory. Either way nothing the app does sends game
-input or acts on your behalf. On a certified build the app derives one narrowly
-patched module that connects the client's missing file operations to its
+With both choices off, no enhancement hook is installed, no companion kernel
+loads, and nothing observes game memory. Neither tool chooses a target, moves
+the character, uses a skill, sends chat, or performs another gameplay action.
+The native-cursor tool has one bounded exception: after your own trusted click,
+if Guild Wars emitted no cursor event, it replays an out-and-back pointer
+hit-test so an interaction-mode cursor appears without waiting for physical
+movement. It cannot originate a click and ends at the same coordinates. On a
+certified build the app derives one narrowly patched module that connects the
+client's missing file operations to its
 sandboxed persistent filesystem, which
 is what makes build templates, screenshots, and chat logs work; the downloaded
 official artifact is unchanged whichever way the box is set.
