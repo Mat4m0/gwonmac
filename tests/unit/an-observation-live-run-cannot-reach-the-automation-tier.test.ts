@@ -143,13 +143,14 @@ describe("an observation live run cannot reach the automation tier", () => {
     const ready = {
       readyForCachedLive: true,
       nativeCursor: false,
-      targetReadout: false,
     } as const;
     const options = { cachedOnly: true };
     assert.equal(liveRunRefusal(planFor("cursor-capture"), ready, options), null);
     assert.equal(liveRunRefusal(planFor("toolbox-foundation"), ready, options), null);
     assert.equal(liveRunRefusal(planFor("movement"), ready, options), null);
-    // The two refusals that predate the split still come first.
+    // The target-readout scenario runs on its developer program, so a profile
+    // with every tool off refuses nothing beyond the cache gate.
+    assert.equal(liveRunRefusal(planFor("target-readout"), ready, options), null);
     assert.equal(
       liveRunRefusal(
         planFor("cursor-capture"),
@@ -163,18 +164,6 @@ describe("an observation live run cannot reach the automation tier", () => {
         planFor("cursor-capture"),
         { ...ready, readyForCachedLive: false },
         { cachedOnly: false },
-      ),
-      null,
-    );
-    assert.equal(
-      liveRunRefusal(planFor("target-readout"), ready, options),
-      "target-readout-disabled",
-    );
-    assert.equal(
-      liveRunRefusal(
-        planFor("target-readout"),
-        { ...ready, targetReadout: true },
-        options,
       ),
       null,
     );

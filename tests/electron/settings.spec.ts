@@ -262,17 +262,8 @@ test.describe("settings experience", () => {
         .toMatchObject({
           renderScale: 1.5,
           nativeCursor: true,
-          targetReadout: false,
           showDiagnostics: true,
         });
-      // The second tool is independent and defaults off. Declining its restart
-      // cannot change the cursor choice or leave the readout box ticked.
-      await page.locator('input[name="targetReadout"]').click();
-      await expect(page.locator("#settings-feedback")).toHaveText(
-        "The target readout was not changed.",
-      );
-      await expect(page.locator('input[name="targetReadout"]')).not.toBeChecked();
-      await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
       // Nothing about the running session's cursor may change.
       expect(
         await page.locator("#canvas").evaluate((canvas) =>
@@ -299,7 +290,6 @@ test.describe("settings experience", () => {
       const { page } = fixture;
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
         nativeCursor: true,
-        targetReadout: false,
       });
       await page.evaluate(() =>
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
@@ -308,15 +298,14 @@ test.describe("settings experience", () => {
       // A fresh profile arrives with the box already ticked, so the control is
       // how a player turns the cursor off rather than how they find it.
       await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
-      await expect(page.locator('input[name="targetReadout"]')).not.toBeChecked();
+      // The retired target readout offers no control at all.
+      await expect(page.locator('input[name="targetReadout"]')).toHaveCount(0);
 
       // Each tool has its own label and default; the cursor note has to say
       // where its artwork comes from and what changing it costs.
       const controls = page.locator("#settings-pane-controls");
       await expect(controls).toContainText("your own installed Guild Wars");
       await expect(controls).toContainText("no artwork ships with this app");
-      await expect(controls).toContainText("Show target distance and range");
-      await expect(controls).toContainText("Off by default");
       // The write and the restart are one action (P7.6), so the note must not
       // say the change waits quietly for the next launch.
       await expect(controls).toContainText("restarts the app");
@@ -335,11 +324,6 @@ test.describe("settings experience", () => {
           () => window.gwNative.init.enhancementSelection.nativeCursor,
         ),
       ).toBe(true);
-      expect(
-        await page.evaluate(
-          () => window.gwNative.init.enhancementSelection.targetReadout,
-        ),
-      ).toBe(false);
       // The generated launch selection carries the canonical Enhancement registry
       // into the renderer. Every member must bind the Settings pane — and only
       // the Settings pane: the first-run gate asks one question, so a tool
@@ -362,7 +346,6 @@ test.describe("settings experience", () => {
         ),
       ).toEqual([
         { name: "nativeCursor", settings: true, launcher: false },
-        { name: "targetReadout", settings: true, launcher: false },
       ]);
     } finally {
       await closeOffline(fixture);
@@ -415,7 +398,6 @@ test.describe("settings experience", () => {
       expect(reset).toMatchObject({
         renderScale: 2,
         nativeCursor: true,
-        targetReadout: false,
       });
       expect(
         await app.evaluate(() => {

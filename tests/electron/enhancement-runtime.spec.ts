@@ -61,7 +61,6 @@ test.describe("Enhancement runtime selection", () => {
             path.join(userData, "settings.json"),
             JSON.stringify({
               nativeCursor: false,
-              targetReadout: false,
             }),
             { mode: 0o600 },
           ),
@@ -83,7 +82,6 @@ test.describe("Enhancement runtime selection", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: false,
-          targetReadout: false,
         },
         templateFsTrace: false,
       });

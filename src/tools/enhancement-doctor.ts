@@ -30,12 +30,6 @@ export interface EnhancementDoctorReport {
    * mutate or depend on it.
    */
   nativeCursor: boolean;
-  /**
-   * The target-readout scenario exercises the player-facing surface, not only
-   * automation's forced core observer, so it refuses a profile where this
-   * player choice is off.
-   */
-  targetReadout: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -80,19 +74,13 @@ async function isFile(filename: string): Promise<boolean> {
  */
 async function readEnhancementSettings(
   profile: string,
-): Promise<Pick<EnhancementDoctorReport, "nativeCursor" | "targetReadout">> {
+): Promise<Pick<EnhancementDoctorReport, "nativeCursor">> {
   try {
     const text = await readFile(path.join(profile, "settings.json"), "utf8");
     const settings = parseSettings(JSON.parse(text));
-    return {
-      nativeCursor: settings.nativeCursor,
-      targetReadout: settings.targetReadout,
-    };
+    return { nativeCursor: settings.nativeCursor };
   } catch {
-    return {
-      nativeCursor: DEFAULT_SETTINGS.nativeCursor,
-      targetReadout: DEFAULT_SETTINGS.targetReadout,
-    };
+    return { nativeCursor: DEFAULT_SETTINGS.nativeCursor };
   }
 }
 
@@ -149,9 +137,9 @@ export async function inspectEnhancementWorkspace(
     .map((entry) => entry.name);
   const profileReady = (await isFile(path.join(profile, "settings.json")))
     || missing.length < required.length;
-  const { nativeCursor, targetReadout } = await readEnhancementSettings(profile);
+  const { nativeCursor } = await readEnhancementSettings(profile);
   const enhancementCapabilities = enhancementCapabilitiesFor(
-    { nativeCursor, targetReadout },
+    { nativeCursor },
     program,
   );
   let manifest: PublishedClientManifest | null = null;
@@ -200,7 +188,6 @@ export async function inspectEnhancementWorkspace(
   return {
     profile: profileReady ? "ready" : "missing",
     nativeCursor,
-    targetReadout,
     artifacts: {
       ready: artifactsReady,
       missing,

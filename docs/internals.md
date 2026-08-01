@@ -485,9 +485,9 @@ switched off applies only the certified template-save compatibility transform
 described above: it does no Enhancement transform, fetches no kernel, installs no
 Enhancement hook, starts no snapshot observer, and contains no Enhancement UI.
 
-The two shipped tools are independent. `nativeCursor` defaults to **true** and
-reads only Guild Wars' cursor state. `targetReadout` defaults to **false** and
-owns the only player-selectable added overlay,
+The one shipped tool is `nativeCursor`: it defaults to **true** and reads only
+Guild Wars' cursor state. The target readout is developer-only — reachable
+through the `target-observer` program, never from user settings — and owns
 `src/renderer/enhancement-readout.ts`: a fixed line at the top centre of the
 game view showing the selected target's distance in game units and range band.
 It is the last stage of the read-only pipeline — manifest → transform/kernel →

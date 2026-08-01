@@ -29,21 +29,11 @@ const compatibility = (
 
 const NONE: EnhancementSelection = {
   nativeCursor: false,
-  targetReadout: false,
 };
 const CURSOR: EnhancementSelection = {
   nativeCursor: true,
-  targetReadout: false,
 };
-const READOUT: EnhancementSelection = {
-  nativeCursor: false,
-  targetReadout: true,
-};
-const BOTH: EnhancementSelection = {
-  nativeCursor: true,
-  targetReadout: true,
-};
-const SELECTIONS = [NONE, CURSOR, READOUT, BOTH];
+const SELECTIONS = [NONE, CURSOR];
 
 const STATES: ClientCompatibilityState[] = [
   "certified",
@@ -99,14 +89,10 @@ const text = (state: ClientCompatibilityState, selection: EnhancementSelection) 
 
 describe("client compatibility notice", () => {
   it("degrades only where the session actually lost something", () => {
-    assert.equal(compatibilityReport(compatibility("certified", BOTH), BOTH).degraded, false);
+    assert.equal(compatibilityReport(compatibility("certified", CURSOR), CURSOR).degraded, false);
     assert.equal(compatibilityReport(compatibility("certified", NONE), NONE).degraded, false);
     assert.equal(
       compatibilityReport(compatibility("template-only", CURSOR), CURSOR).degraded,
-      true,
-    );
-    assert.equal(
-      compatibilityReport(compatibility("template-only", READOUT), READOUT).degraded,
       true,
     );
     assert.equal(
@@ -115,7 +101,7 @@ describe("client compatibility notice", () => {
     );
     // An uncertified build breaks saving even when no Enhancement tool was wanted.
     assert.equal(
-      compatibilityReport(compatibility("uncertified", BOTH), BOTH).degraded,
+      compatibilityReport(compatibility("uncertified", CURSOR), CURSOR).degraded,
       true,
     );
     assert.equal(
@@ -126,15 +112,15 @@ describe("client compatibility notice", () => {
 
   it("reports a certified Enhancement preparation failure as retryable", () => {
     const report = compatibilityReport(
-      compatibility("certified", BOTH, false),
-      BOTH,
+      compatibility("certified", CURSOR, false),
+      CURSOR,
     );
     const said = [report.summary, ...report.details].join(" ");
 
     assert.equal(report.degraded, true);
     assert.equal(report.enhancementDegraded, true);
     assert.match(said, /could not be prepared/);
-    assert.match(said, /game cursor and target readout/);
+    assert.match(said, /game cursor/);
     assert.match(said, /Restart the app/);
     assert.match(said, /export diagnostics/);
     // A runtime failure is retryable; it must not borrow the certification
@@ -145,12 +131,12 @@ describe("client compatibility notice", () => {
   it("speaks player language, never project vocabulary", () => {
     for (const said of [
       text("uncertified", CURSOR),
-      text("template-only", READOUT),
+      text("template-only", CURSOR),
       text("certified", NONE),
       [
         compatibilityReport(
-          compatibility("certified", BOTH, false),
-          BOTH,
+          compatibility("certified", CURSOR, false),
+          CURSOR,
         ).summary,
       ].join(" "),
     ]) {
@@ -205,7 +191,6 @@ describe("client compatibility notice", () => {
         assert.equal(report.enhancementDegraded, degraded);
         if (!degraded) continue;
         assert.equal(/game cursor/.test(said), selection.nativeCursor);
-        assert.equal(/target readout/.test(said), selection.targetReadout);
       }
     }
   });

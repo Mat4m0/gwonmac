@@ -157,7 +157,7 @@ test("the launch argument prefix comes from the contracts too", () => {
     ),
     {
       enhancementProgram: "none",
-      enhancementSelection: { nativeCursor: false, targetReadout: false },
+      enhancementSelection: { nativeCursor: false },
       templateFsTrace: false,
     },
   );
@@ -170,7 +170,7 @@ test("the launch argument prefix comes from the contracts too", () => {
           }),
       ]).init.enhancementSelection,
     },
-    { nativeCursor: true, targetReadout: true },
+    { nativeCursor: true },
   );
 });
 
@@ -188,7 +188,6 @@ test("every canonical Enhancement tool crosses without another field list", () =
       JSON.stringify({
         enhancementSelection: {
           nativeCursor: false,
-          targetReadout: false,
           [futureTool]: true,
         },
       }),

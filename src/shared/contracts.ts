@@ -197,7 +197,6 @@ export interface ClockSyncResponse {
  */
 export const ENHANCEMENTS = [
   "nativeCursor",
-  "targetReadout",
 ] as const;
 
 export type Enhancement = (typeof ENHANCEMENTS)[number];
@@ -324,16 +323,13 @@ export function enhancementCapabilitiesFor(
   program: EnhancementProgram,
 ): EnhancementCapabilities {
   switch (program) {
-    case "none": {
-      if (selection.nativeCursor) {
-        return selection.targetReadout
-          ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget
-          : ENHANCEMENT_CAPABILITY_PROFILES.cursor;
-      }
-      return selection.targetReadout
-        ? ENHANCEMENT_CAPABILITY_PROFILES.target
+    case "none":
+      // The target readout retired from user settings, so a launch without a
+      // developer program can select nothing but the cursor. The other
+      // profiles stay certified as developer-side capability vocabulary.
+      return selection.nativeCursor
+        ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
         : NO_ENHANCEMENT_CAPABILITIES;
-    }
     case "cursor-observer":
       return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
     case "target-observer":
@@ -397,7 +393,6 @@ export type AppSettingsPatch = Partial<AppSettings>;
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   nativeCursor: true,
-  targetReadout: false,
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,

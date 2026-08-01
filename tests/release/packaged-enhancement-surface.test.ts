@@ -146,15 +146,9 @@ console.log(
     program: policy.DEVELOPER_ENHANCEMENT_PROGRAM,
     none: enabled({
       nativeCursor: false,
-      targetReadout: false,
     }),
     cursorOnly: enabled({
       nativeCursor: true,
-      targetReadout: false,
-    }),
-    readoutOnly: enabled({
-      nativeCursor: false,
-      targetReadout: true,
     }),
   }),
 );
@@ -171,7 +165,6 @@ interface EnhancementGate {
     | "toolbox-foundation";
   none: boolean;
   cursorOnly: boolean;
-  readoutOnly: boolean;
 }
 
 /** Loads the packaged policy module in a build that is, or is not, packaged. */
@@ -221,11 +214,10 @@ test("packaged builds refuse automation and developer programs independently", (
     });
     assert.equal(gate.automation, false, `GW_ENHANCEMENT_AUTOMATION=${automationVariable}`);
     assert.equal(gate.program, "none");
-    // Such a build gets the Enhancement from either independently selected tool,
-    // and only from those tools — never from the environment.
+    // Such a build gets the Enhancement from the cursor tool alone — the one
+    // shipped selection — and never from the environment.
     assert.equal(gate.none, false);
     assert.equal(gate.cursorOnly, true);
-    assert.equal(gate.readoutOnly, true);
   }
 
   // Unpackaged automation grants input/IPC only. It does not select hooks.
@@ -261,16 +253,22 @@ test("the tools keep independent defaults and explicit choices", async () => {
     await import(new URL("../../build/main/core/settings.js", import.meta.url).href);
 
   assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
-  assert.equal(DEFAULT_SETTINGS.targetReadout, false);
   // A profile from before the flip never wrote the key; it gets the default.
   assert.equal(parseSettings({ renderScale: 1 }).nativeCursor, true);
-  assert.equal(parseSettings({ renderScale: 1 }).targetReadout, false);
   // A player who turned it off keeps it off across the same read path. The
   // default must never be re-applied over a recorded "no".
   assert.equal(parseSettings({ nativeCursor: false }).nativeCursor, false);
-  assert.equal(parseSettings({ targetReadout: true }).targetReadout, true);
+  // The retired target readout stays retired: a legacy value is ignored and
+  // the shipped UI offers no checkbox for it.
+  assert.equal(
+    "targetReadout" in parseSettings({ targetReadout: true }),
+    false,
+  );
 
   // Every choice is reachable from the shipped UI, not only from the file.
   assert.match(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
-  assert.match(shippedText("/build/renderer/index.html"), /name="targetReadout"/u);
+  assert.doesNotMatch(
+    shippedText("/build/renderer/index.html"),
+    /name="targetReadout"/u,
+  );
 });

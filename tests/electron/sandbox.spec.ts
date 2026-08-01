@@ -30,7 +30,6 @@ test.describe("sandbox boundary", () => {
           enhancementProgram: "none",
           enhancementSelection: {
             nativeCursor: true,
-            targetReadout: false,
           },
           templateFsTrace: false,
         },
@@ -216,7 +215,6 @@ test.describe("sandbox boundary", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
-          targetReadout: false,
         },
         templateFsTrace: false,
       });
@@ -238,7 +236,6 @@ test.describe("sandbox boundary", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
-          targetReadout: false,
         },
         templateFsTrace: true,
       });

@@ -130,7 +130,6 @@ test("the shipped defaults run the Enhancement with only the cursor selected", (
 test("the launch selection carries every tool and no unrelated setting", () => {
   assert.deepEqual(enhancementSelectionFor(DEFAULT_SETTINGS), {
     nativeCursor: true,
-    targetReadout: false,
   });
   assert.deepEqual(
     Object.keys(enhancementSelectionFor(DEFAULT_SETTINGS)).sort(),
@@ -140,13 +139,12 @@ test("the launch selection carries every tool and no unrelated setting", () => {
 
 test("one capability plan derives hooks without losing feature identity", () => {
   const cursorOnly = enhancementCapabilitiesFor(
-    { nativeCursor: true, targetReadout: false },
+    { nativeCursor: true },
     "none",
   );
-  const cursorTarget = enhancementCapabilitiesFor(
-    { nativeCursor: true, targetReadout: true },
-    "none",
-  );
+  // No user selection reaches cursorTarget any more; it stays certified
+  // developer-side vocabulary with the same hook plan as cursor-only.
+  const cursorTarget = ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget;
   assert.notDeepEqual(cursorOnly, cursorTarget);
   assert.deepEqual(enhancementHooksFor(cursorOnly), {
     tick: true,
@@ -161,8 +159,8 @@ test("one capability plan derives hooks without losing feature identity", () => 
   // Developer programs replace saved settings for one launch. Exercise both
   // opposite profiles so live evidence cannot accidentally depend on either.
   for (const selection of [
-    { nativeCursor: false, targetReadout: false },
-    { nativeCursor: true, targetReadout: true },
+    { nativeCursor: false },
+    { nativeCursor: true },
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
@@ -181,16 +179,10 @@ test("one capability plan derives hooks without losing feature identity", () => 
 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
-    [{ nativeCursor: true, targetReadout: false }, "none", "cursor"],
-    [{ nativeCursor: false, targetReadout: true }, "none", "target"],
-    [{ nativeCursor: true, targetReadout: true }, "none", "cursorTarget"],
-    [{ nativeCursor: false, targetReadout: false }, "cursor-observer", "cursor"],
-    [{ nativeCursor: true, targetReadout: true }, "target-observer", "target"],
-    [
-      { nativeCursor: false, targetReadout: false },
-      "toolbox-foundation",
-      "cursorToolbox",
-    ],
+    [{ nativeCursor: true }, "none", "cursor"],
+    [{ nativeCursor: false }, "cursor-observer", "cursor"],
+    [{ nativeCursor: true }, "target-observer", "target"],
+    [{ nativeCursor: false }, "toolbox-foundation", "cursorToolbox"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
@@ -198,9 +190,14 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     assert.equal(enhancementCapabilityProfile(resolved), profile);
     assert.equal(Object.isFrozen(resolved), true);
   }
+  // cursorTarget keeps its identity even though no launch path selects it.
+  assert.equal(
+    enhancementCapabilityProfile(ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget),
+    "cursorTarget",
+  );
   assert.equal(
     enhancementCapabilityProfile(enhancementCapabilitiesFor(
-      { nativeCursor: false, targetReadout: false },
+      { nativeCursor: false },
       "none",
     )),
     null,

@@ -54,7 +54,6 @@ export type CompatibilityReport = {
 function selectedToolNames(selection: EnhancementSelection): string[] {
   return [
     selection.nativeCursor ? 'game cursor' : '',
-    selection.targetReadout ? 'target readout' : '',
   ].filter(Boolean);
 }
 

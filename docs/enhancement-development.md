@@ -38,8 +38,8 @@ markup and CSS live under `scripts/enhancements-visual/`; they are not productio
 navigation or packaged renderer assets.
 
 `enhancements:doctor` is local-only. It checks the existing profile, published
-client, exact WASM hash, transformed cache, the profile's `nativeCursor` and
-`targetReadout` settings, and complete snapshot filename presence. It does not
+client, exact WASM hash, transformed cache, the profile's `nativeCursor`
+setting, and complete snapshot filename presence. It does not
 inspect saved login: command-line tooling is outside the signed app's Data
 Protection Keychain boundary. It verifies executable artifacts, but labels
 snapshot chunks as presence-only because it does not hash their contents. It
@@ -231,9 +231,10 @@ failure reports.
 
 ## Cursor pipeline
 
-The Enhancement path is no longer developer-only. Its canonical tools are
-`nativeCursor` (on by default) and `targetReadout` (off by default), carried to
-the renderer as one `EnhancementSelection`. Main combines that selection with
+The Enhancement path is no longer developer-only. Its one canonical user tool
+is `nativeCursor` (on by default), carried to the renderer as one
+`EnhancementSelection`; the target readout retired from user settings and runs
+only through the `target-observer` developer program. Main combines that selection with
 one fixed unpackaged developer program, derives the exact capability plan once,
 and fingerprints that plan into the derivative. Automation permission is a
 separate input boundary and selects no hook or feature. The harness does not

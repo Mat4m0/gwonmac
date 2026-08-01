@@ -395,7 +395,6 @@ test.describe("enhancement cursor presentation", () => {
         JSON.stringify({
           renderScale: 2,
           nativeCursor: value,
-          targetReadout: false,
           showDiagnostics: false,
           dataStrategy: "quick",
         }),
@@ -414,7 +413,6 @@ test.describe("enhancement cursor presentation", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
-          targetReadout: false,
         },
         templateFsTrace: false,
         // The configuration is no longer in the URL the trust root checks.

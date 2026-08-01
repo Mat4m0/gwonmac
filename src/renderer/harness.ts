@@ -211,8 +211,7 @@ function maybeInstallEnhancements(): void {
   // manifest's exact hook set matches the selected tools or developer program.
   const enhancementRequested =
     init.enhancementProgram !== 'none'
-    || init.enhancementSelection.nativeCursor
-    || init.enhancementSelection.targetReadout;
+    || init.enhancementSelection.nativeCursor;
   if (
     !enhancementRequested
     || !gameWasmInstance

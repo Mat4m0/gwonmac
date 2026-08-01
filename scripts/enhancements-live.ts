@@ -223,7 +223,6 @@ try {
       cached: !allowUpdate,
       snapshotComplete: preflight.snapshot?.complete === true,
       transformedCache: preflight.client.transformedCache,
-      targetReadout: preflight.targetReadout,
     },
     rendererErrors: [...rendererErrors],
   };

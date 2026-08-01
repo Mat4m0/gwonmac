@@ -1008,7 +1008,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
  * The whole tier decision for one live run: which scenario, which environment
  * the app is launched in, and which channels the parent opens to it. An
  * observation run boots the app exactly as a player's cursor-only session does
- * — `nativeCursor` on, `targetReadout` off, `GW_ENHANCEMENT_AUTOMATION` unset even
+ * — `nativeCursor` on, `GW_ENHANCEMENT_AUTOMATION` unset even
  * when the caller's own environment exports it — and gets no IPC channel, so
  * `child.send` does not exist to be called.
  *
@@ -1049,21 +1049,11 @@ export function liveRunPlan(
  */
 export function liveRunRefusal(
   plan: LiveRunPlan,
-  preflight: Pick<
-    EnhancementDoctorReport,
-    "readyForCachedLive" | "targetReadout"
-  >,
+  preflight: Pick<EnhancementDoctorReport, "readyForCachedLive">,
   { cachedOnly }: { cachedOnly: boolean },
-):
-  | "cached-client-incomplete"
-  | "target-readout-disabled"
-  | null
-{
+): "cached-client-incomplete" | null {
   if (cachedOnly && !preflight.readyForCachedLive) {
     return "cached-client-incomplete";
-  }
-  if (plan.name === "target-readout" && !preflight.targetReadout) {
-    return "target-readout-disabled";
   }
   return null;
 }

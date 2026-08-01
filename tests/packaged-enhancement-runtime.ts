@@ -146,6 +146,12 @@ const DEVELOPER_RUNTIME_KEYS = Object.freeze([
   "toolbox",
   "wasmMemoryBytes",
 ]);
+// The readout fixture drives the bundled installer as the target-observer
+// program — the only path to the readout since the user setting retired — and
+// that program alone carries the explicit benchmark hook control.
+const OBSERVER_RUNTIME_KEYS = Object.freeze(
+  [...DEVELOPER_RUNTIME_KEYS, "setHookEnabledForBenchmark"].sort(),
+);
 const SNAPSHOT_BYTES = Uint8Array.of(0);
 const SNAPSHOT_HASH = createHash("md5")
   .update(SNAPSHOT_BYTES)
@@ -449,7 +455,6 @@ async function assertPackagedOffSession() {
       compatibilityNoticeSeenFor: OFFICIAL_SHA256,
       dataStrategy: "quick",
       nativeCursor: false,
-      targetReadout: false,
     },
     {
       cachedOnly: true,
@@ -476,7 +481,6 @@ async function assertPackagedOffSession() {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: false,
-          targetReadout: false,
         },
         templateFsTrace: false,
       },
@@ -630,8 +634,10 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
         },
       },
       module,
-      { nativeCursor: false, targetReadout: true },
-      "none",
+      // The retired user setting cannot request the readout; its developer
+      // program derives the same `target` capability profile.
+      { nativeCursor: false },
+      "target-observer",
     );
     if (!runtime) throw new Error("target readout did not install");
 
@@ -676,7 +682,9 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
     };
     return {
       allocations: allocations.map(({ size }) => size),
-      globalRuntime: window.gwCompanionRuntime,
+      // The observer program publishes the developer runtime; teardown below
+      // proves pagehide withdraws it again.
+      globalRuntimeIsRuntime: window.gwCompanionRuntime === runtime,
       hook: hookSlot.value,
       installed: runtime.status,
       readout: runtime.readout,
@@ -692,7 +700,6 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
 async function assertTargetReadoutLifecycle() {
   const fixture = await launchPackaged("gw-packaged-target-readout-", {
     nativeCursor: false,
-    targetReadout: true,
   });
   try {
     const resources: string[] = [];
@@ -703,7 +710,7 @@ async function assertTargetReadoutLifecycle() {
     });
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init.enhancementSelection),
-      { nativeCursor: false, targetReadout: true },
+      { nativeCursor: false },
     );
 
     assert.deepEqual(
@@ -717,12 +724,12 @@ async function assertTargetReadoutLifecycle() {
           64,
           CONFIG_BYTES,
         ],
-        globalRuntime: undefined,
+        globalRuntimeIsRuntime: true,
         hook: ENHANCEMENT_BUILD.tableSlot + 1,
         installed: "installed",
         readout: { visible: false, line: "" },
         runtimeFrozen: true,
-        runtimeKeys: DEVELOPER_RUNTIME_KEYS,
+        runtimeKeys: OBSERVER_RUNTIME_KEYS,
       },
     );
     assert.equal(
@@ -734,10 +741,19 @@ async function assertTargetReadoutLifecycle() {
     await fixture.page.evaluate(() =>
       (globalThis as ReadoutPageGlobals).__targetReadoutFixture.publish());
     await fixture.page.locator("#enhancement-target").waitFor({ state: "visible" });
-    assert.equal(
-      await fixture.page.evaluate(() => window.gwCompanionState),
-      undefined,
-      "the packaged target readout published its internal observation globally",
+    // The observer program publishes the companion state globally — that is
+    // the harness surface the live runner reads. Teardown below proves the
+    // publication is withdrawn with the installation.
+    assert.deepEqual(
+      await fixture.page.evaluate(() => ({
+        status: window.gwCompanionState?.status,
+        targetValid:
+          window.gwCompanionState !== undefined
+          && "targetValid" in window.gwCompanionState
+          && window.gwCompanionState.targetValid,
+      })),
+      { status: "ready", targetValid: true },
+      "the observer program did not publish its observation",
     );
     assert.equal(
       await fixture.page.locator("#enhancement-target").innerText(),
@@ -777,6 +793,7 @@ async function assertTargetReadoutLifecycle() {
         freed: [...probe.freed].sort((left, right) => left - right),
         hook: probe.hookSlot.value,
         runtime: window.gwCompanionRuntime,
+        state: window.gwCompanionState,
         tableEmpty: probe.table.get(probe.table.length - 1) === null,
       };
     });
@@ -788,7 +805,9 @@ async function assertTargetReadoutLifecycle() {
     assert.deepEqual(disposed, {
       freed: [0x1000, 0x11_000, 0x11_040],
       hook: 0,
-      runtime: undefined,
+      // Cleanup withdraws the published runtime by writing null over it.
+      runtime: null,
+      state: undefined,
       tableEmpty: true,
     });
     assert.ok(
@@ -825,7 +844,6 @@ async function assertTargetReadoutLifecycle() {
 async function assertToolboxFoundationLifecycle() {
   const fixture = await launchPackaged("gw-packaged-toolbox-foundation-", {
     nativeCursor: false,
-    targetReadout: false,
   });
   try {
     await fixture.page.waitForFunction(() => {
@@ -1004,7 +1022,7 @@ async function assertToolboxFoundationLifecycle() {
         module,
         // A fixed developer program replaces the saved selection: Toolbox
         // must include cursor and exclude target observation for this launch.
-        { nativeCursor: false, targetReadout: true },
+        { nativeCursor: false },
         "toolbox-foundation",
       );
       if (!runtime) throw new Error("Toolbox foundation did not install");
@@ -1182,7 +1200,6 @@ async function assertToolboxFoundationLifecycle() {
 async function assertRollbackAfterTablePublication() {
   const fixture = await launchPackaged("gw-packaged-foundation-rollback-", {
     nativeCursor: false,
-    targetReadout: false,
   });
   try {
     await fixture.page.waitForFunction(() => {
@@ -1280,7 +1297,7 @@ async function assertRollbackAfterTablePublication() {
             },
           },
           module,
-          { nativeCursor: false, targetReadout: true },
+          { nativeCursor: false },
           "toolbox-foundation",
         );
       } catch {
