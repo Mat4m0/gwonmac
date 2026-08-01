@@ -418,25 +418,37 @@ test("the served module decides whether Enhancement imports", async () => {
     path.join(root, "src/renderer/harness.ts"),
     "utf8",
   );
-  const initialized = harness.slice(
-    harness.indexOf("onRuntimeInitialized()"),
-    harness.indexOf("onAbort(reason)"),
+  const gate = harness.slice(
+    harness.indexOf("function maybeInstallEnhancements()"),
+    harness.indexOf("window.gwLog"),
   );
-  assert.ok(initialized.length > 0, "runtime initialization was not found");
-  assert.doesNotMatch(initialized, /Object\.values\(init\.enhancementSelection\)/u);
+  assert.ok(gate.length > 0, "the one-shot installation gate was not found");
+  assert.doesNotMatch(gate, /Object\.values\(init\.enhancementSelection\)/u);
   assert.match(
-    initialized,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length === 1/u,
+    gate,
+    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length !== 1/u,
   );
   assert.match(
-    initialized,
+    gate,
     /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementSelection,\s*init\.enhancementProgram,/u,
   );
   assert.ok(
-    initialized.indexOf("customSections") < initialized.indexOf("import('./enhancements.js')"),
+    gate.indexOf("customSections") < gate.indexOf("import('./enhancements.js')"),
     "Enhancement was imported before the served module proved its manifest",
   );
-  assert.doesNotMatch(initialized, /init\.nativeCursor/u);
+  assert.doesNotMatch(gate, /init\.nativeCursor/u);
+  // Emscripten may report runtime initialization before or after the
+  // asynchronous instantiateWasm callback stores the module, so both edges
+  // must invoke the same one-shot gate.
+  assert.match(
+    gate,
+    /if \(enhancementInstallationStarted \|\| !runtimeInitialized\) return;/u,
+  );
+  assert.equal(
+    harness.match(/^\s*maybeInstallEnhancements\(\);$/gmu)?.length,
+    2,
+    "the instance-ready and runtime-initialized edges must both call the gate",
+  );
 });
 
 test("a completed client main loop closes the host application", async () => {
