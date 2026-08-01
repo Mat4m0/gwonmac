@@ -11,7 +11,7 @@ Rust `no_std` companion:
 exact post-template Guild Wars module
   -> clone tick, cursor, and UI-dispatch originals
   -> three disabled-direct / enabled-indirect wrappers
-  -> one fixed (i32 x 6) dispatcher in table slot 0
+  -> one fixed (i32 x 6) dispatcher in appended table slot 4683
   -> one Rust kernel over the game's existing memory
   -> bounded typed snapshots
   -> Chromium cursor and developer proof UI
@@ -48,7 +48,7 @@ The certificate consumes post-template SHA-256
 | Tick | function 446, `(i32) -> void` |
 | Cursor event | function 2469, `(i32 x 5) -> void`, existing table slot 922 |
 | UI dispatcher | function 6842, `(i32, i32, i32) -> void` |
-| Shared callback | sole empty fixed table slot 0 |
+| Shared callback | dedicated appended table slot 4683 |
 | Player chat | `ChCliApi` function 8947, three `0x10000082` sites calling 6842 |
 | Neighbor messages | functions 8942/8945 emit `0x1000007f`/`0x10000080` to 6842 |
 | Hero panel | Hide `0x100001a3`, Show `0x100001a4`, argument is current owned HeroID |
@@ -112,9 +112,9 @@ normal input-release and audio behavior.
 
 The renderer validates the one manifest, game exports, table identity, kernel
 import surface, kernel ABI, and kernel-owned sizes. It allocates through the
-game, instantiates Rust, creates consumers, installs slot 0, publishes the
+game, instantiates Rust, creates consumers, installs slot 4683, publishes the
 runtime, and enables the global last. Teardown reverses safety order: disable,
-stop observers and UI, clear slot 0 only by callback identity, free regions,
+stop observers and UI, clear slot 4683 only by callback identity, free regions,
 drop references.
 
 Unknown builds run the official client unchanged. Template save may be

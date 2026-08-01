@@ -542,11 +542,13 @@ renderer does not maintain a second field-order list.
 
 Build 38,797 hooks three certified functions: exported
 `EmscriptenExeThreadMainLoop` at 446, the five-argument cursor publisher at
-2469, and the three-argument UI dispatcher at 6842. The stock table's sole null
-slot 0 holds one fixed `(i32 × 6) -> void` Rust dispatcher; the mutable global
+2469, and the three-argument UI dispatcher at 6842. The transform extends the
+stock fixed table from 4,683 to 4,684 entries and reserves only the new terminal
+slot 4,683 for one fixed `(i32 × 6) -> void` Rust dispatcher. The mutable global
 stores `slot + 1`, preserving zero as disabled. Existing cursor table slot 922
-continues to point to function 2469. The transform grows neither table nor
-plugin surface.
+continues to point to function 2469, and stock slot 0 remains untouched: live
+character entry proved that its static null value is a runtime sentinel rather
+than spare plugin capacity.
 
 After runtime initialization in an enabled, manifested session, the renderer
 dynamically loads the Enhancement runtime, allocates its enabled bounded regions

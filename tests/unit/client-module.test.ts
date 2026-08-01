@@ -152,7 +152,7 @@ function enhancementBuild(inputSha256: string): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
-    tableSlot: 0,
+    tableSlot: 4,
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],

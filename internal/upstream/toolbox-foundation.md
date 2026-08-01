@@ -11,11 +11,19 @@ This is the investigation record. The executable certificate is
   `9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094`
 - game program/build: `1` / `38797`
 - function imports: 219
-- table min=max: 4683; slot 0 is the sole empty slot
+- input table min=max: 4683; slot 0 is the sole statically empty slot
 
 The normal template recertifier produced the post-template identity. Applying
 the production three-entry transform to that exact module validates as
-WebAssembly and leaves both table limits unchanged.
+WebAssembly and extends both table limits once, reserving new terminal slot
+4683.
+
+The original plan treated static slot 0 as reusable. A bounded live login on
+this exact build disproved that assumption: character entry reached an indirect
+call expecting a game callback and trapped with `function signature mismatch`
+when slot 0 contained the six-argument companion dispatcher. Slot 0 is therefore
+a dynamic game sentinel. The transform ABI 7 correction leaves every input
+entry untouched and owns only the appended slot.
 
 ## Tick and cursor
 

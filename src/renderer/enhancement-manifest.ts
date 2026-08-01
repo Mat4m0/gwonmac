@@ -1,4 +1,4 @@
-const ENHANCEMENT_TRANSFORM_ABI = 6;
+const ENHANCEMENT_TRANSFORM_ABI = 7;
 const CONFIG_WORDS = 40;
 
 /** The validated subset of the derived module's fixed evidence. */

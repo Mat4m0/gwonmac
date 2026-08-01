@@ -538,11 +538,14 @@ async function assertPackagedOffSession() {
 }
 
 async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
-  return page.evaluate(async (bytes: number[]) => {
+  return page.evaluate(async ({ bytes, tableSize }: {
+    bytes: number[];
+    tableSize: number;
+  }) => {
     const memory = new WebAssembly.Memory({ initial: 256 });
     const table = new WebAssembly.Table({
-      initial: 1,
-      maximum: 1,
+      initial: tableSize,
+      maximum: tableSize,
       element: "anyfunc",
     });
     const hookSlot = new WebAssembly.Global(
@@ -640,7 +643,10 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
       installed: runtime.status,
       readout: runtime.readout,
     };
-  }, [...moduleBytes]);
+  }, {
+    bytes: [...moduleBytes],
+    tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
+  });
 }
 
 async function assertTargetReadoutLifecycle() {
@@ -667,7 +673,7 @@ async function assertTargetReadoutLifecycle() {
           64,
           CONFIG_WORDS.length * Uint32Array.BYTES_PER_ELEMENT,
         ],
-        hook: 1,
+        hook: ENHANCEMENT_BUILD.tableSlot + 1,
         installed: "installed",
         readout: { visible: false, line: "" },
       },
@@ -720,7 +726,7 @@ async function assertTargetReadoutLifecycle() {
         freed: [...probe.freed].sort((left, right) => left - right),
         hook: probe.hookSlot.value,
         runtime: window.gwCompanionRuntime,
-        tableEmpty: probe.table.get(0) === null,
+        tableEmpty: probe.table.get(probe.table.length - 1) === null,
       };
     });
     assert.equal(
@@ -759,11 +765,14 @@ async function assertRollbackAfterTablePublication() {
       const { Module } = globalThis as PageGlobals;
       return typeof Module?.socket?.connect === "function";
     });
-    const result = await fixture.page.evaluate(async (bytes: number[]) => {
+    const result = await fixture.page.evaluate(async ({ bytes, tableSize }: {
+      bytes: number[];
+      tableSize: number;
+    }) => {
       const memory = new WebAssembly.Memory({ initial: 256 });
       const table = new WebAssembly.Table({
-        initial: 1,
-        maximum: 1,
+        initial: tableSize,
+        maximum: tableSize,
         element: "anyfunc",
       });
       const hookSlot = new WebAssembly.Global(
@@ -829,12 +838,15 @@ async function assertRollbackAfterTablePublication() {
         hook: hookSlot.value,
         rejected,
         runtime: window.gwCompanionRuntime,
-        tableEmpty: table.get(0) === null,
+        tableEmpty: table.get(tableSize - 1) === null,
         toolboxCount: globalThis.document.querySelectorAll(
           "#toolbox-foundation",
         ).length,
       };
-    }, [...installableManifestModule()]);
+    }, {
+      bytes: [...installableManifestModule()],
+      tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
+    });
     assert.deepEqual(result, {
       allocations: [
         { pointer: 0x1000, size: 64 },

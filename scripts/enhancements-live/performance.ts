@@ -86,8 +86,8 @@ function readTickCount(page: Page): Promise<number> {
 
 /**
  * The benchmark's one lever on the renderer: the enabled arm restores the
- * kernel's table slot, the disabled arm writes slot 0 and the game calls its
- * original tick. The runtime object is assembled in enhancements.js and declared as
+ * kernel's table slot, while the disabled arm writes zero to the hook global and
+ * the game calls its original tick. The runtime object is assembled in enhancements.js and declared as
  * an open record, so the lever is narrowed here — and a session whose runtime
  * never published one fails with that sentence rather than quietly measuring
  * the same arm twice.

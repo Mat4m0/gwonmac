@@ -29,7 +29,7 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 6;
+export const ENHANCEMENT_TRANSFORM_ABI = 7;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_TICK_ORIGINAL_EXPORT = "enhancement_tick_original";
 export const ENHANCEMENT_CURSOR_ORIGINAL_EXPORT = "enhancement_cursor_original";
@@ -83,14 +83,29 @@ function vectorPayload(bytes: Uint8Array): {
   return { count, entries: bytes.slice(cursor.offset) };
 }
 
-function parseTable(bytes: Uint8Array): { min: number; max: number | null } {
+function parseTable(bytes: Uint8Array): {
+  flags: number;
+  min: number;
+  max: number | null;
+} {
   const cursor = { offset: 0 };
   if (readUleb(bytes, cursor) !== 1) fail("expected exactly one table");
   if (bytes[cursor.offset++] !== 0x70) fail("expected funcref table");
   const flags = readUleb(bytes, cursor);
   const min = readUleb(bytes, cursor);
   const max = (flags & 1) !== 0 ? readUleb(bytes, cursor) : null;
-  return { min, max };
+  if (cursor.offset !== bytes.byteLength) fail("malformed table section");
+  return { flags, min, max };
+}
+
+function encodeTable(flags: number, min: number, max: number): Uint8Array {
+  return concat(
+    uleb(1),
+    Uint8Array.of(0x70),
+    uleb(flags),
+    uleb(min),
+    uleb(max),
+  );
 }
 
 function tableSlotFunctions(bytes: Uint8Array): Map<number, number> {
@@ -270,17 +285,17 @@ export function inspectEnhancementCandidate(
   }
   let table: EnhancementCandidateReport["table"];
   try {
-    const shape = parseTable(sectionById(sections, 4));
+    const { min, max } = parseTable(sectionById(sections, 4));
     const occupied = tableSlotFunctions(sectionById(sections, 9));
     const firstEmptySlots: number[] = [];
     for (
       let slot = 0;
-      slot < shape.min && firstEmptySlots.length < 8;
+      slot < min && firstEmptySlots.length < 8;
       slot += 1
     ) {
       if (!occupied.has(slot)) firstEmptySlots.push(slot);
     }
-    table = { ...shape, firstEmptySlots };
+    table = { min, max, firstEmptySlots };
   } catch {
     table = null;
   }
@@ -343,22 +358,18 @@ export function transformEnhancementWasm(
 
   const table = parseTable(sectionById(sections, 4));
   if (
-    build.tableSlot < 0 ||
-    build.tableSlot >= table.min ||
-    (table.max !== null && build.tableSlot >= table.max)
+    table.flags !== 1 ||
+    table.max === null ||
+    table.min !== table.max ||
+    table.max === 0xffff_ffff
   ) {
-    fail("hook table slot is outside table limits");
+    fail("expected one bounded fixed-size function table");
   }
+  if (build.tableSlot !== table.min) {
+    fail(`hook table slot ${build.tableSlot} is not the new terminal slot`);
+  }
+  const nextTableSize = table.min + 1;
   const tableSlots = tableSlotFunctions(sectionById(sections, 9));
-  if (tableSlots.has(build.tableSlot)) {
-    fail(`hook table slot ${build.tableSlot} is occupied`);
-  }
-  const emptySlots = Array.from({ length: table.min }, (_, slot) => slot).filter(
-    (slot) => !tableSlots.has(slot),
-  );
-  if (emptySlots.length !== 1 || emptySlots[0] !== build.tableSlot) {
-    fail(`hook table slot ${build.tableSlot} is not the sole empty slot`);
-  }
   if (
     tableSlots.get(build.cursorEvent.tableSlot)
     !== build.cursorEvent.functionIndex
@@ -453,6 +464,12 @@ export function transformEnhancementWasm(
     if (section.id === 1) return { id: section.id, body: encodeTypes(nextTypes) };
     if (section.id === 3) {
       return { id: section.id, body: encodeIndexVector(nextFunctionTypes) };
+    }
+    if (section.id === 4) {
+      return {
+        id: section.id,
+        body: encodeTable(table.flags, nextTableSize, nextTableSize),
+      };
     }
     if (section.id === 6) return { id: section.id, body: nextGlobals };
     if (section.id === 7) return { id: section.id, body: nextExports };

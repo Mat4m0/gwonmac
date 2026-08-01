@@ -126,8 +126,9 @@ export interface KnownEnhancementBuild {
 // The input is the template-save client, not the raw official module: that
 // transform is the floor every launch lands on, and the Enhancement transform is
 // layered on top so opting in never costs template save/load. It only appends
-// functions, so the main-loop index, the free table slot and every data address
-// below are certified separately for each exact template-save output. Unknown
+// functions and reserves one new terminal table entry, so the main-loop index,
+// original table size and every data address below are certified separately for
+// each exact template-save output. Unknown
 // Enhancement builds remain off until another complete exact entry is added.
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
   Object.freeze({
@@ -137,7 +138,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     hookFunction: 446,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
-    tableSlot: 0,
+    // The input table is fixed at 4,683 entries. The transform extends both
+    // limits once and owns only this new terminal entry; statically empty input
+    // slot 0 is a game runtime sentinel and must remain untouched.
+    tableSlot: 4683,
     cursorEvent: Object.freeze({
       functionIndex: 2469,
       params: Object.freeze(

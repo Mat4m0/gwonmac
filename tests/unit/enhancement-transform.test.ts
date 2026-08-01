@@ -39,7 +39,7 @@ function section(id: number, body: number[]): number[] {
 // does not certify, which is the only side the mismatch can come from: a
 // KnownEnhancementBuild's hookParams is the literal ["i32"] and cannot say
 // otherwise.
-function fixture(occupied = false, hookParamType = 0x7f): Uint8Array {
+function fixture(hookParamType = 0x7f): Uint8Array {
   const type = section(1, [
     3,
     0x60, 1, hookParamType, 0,
@@ -67,15 +67,8 @@ function fixture(occupied = false, hookParamType = 0x7f): Uint8Array {
     ...uleb(cursorName.length), ...cursorName, 0, 4,
     ...uleb(uiName.length), ...uiName, 0, 5,
   ]);
-  const occupiedSegment = occupied
-    ? [1, 0, 0x41, 0, 0x0b, 1, 3]
-    : [0];
   const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
-  const elements = section(9, [
-    occupied ? 2 : 1,
-    ...(occupied ? occupiedSegment.slice(1) : []),
-    ...mappedSegment,
-  ]);
+  const elements = section(9, [1, ...mappedSegment]);
   const tick = [0, 0x20, 0, 0x10, 0, 0x0b];
   const cursor = [
     0, 0x20, 0, 0x20, 1, 0x20, 2, 0x20, 3, 0x20, 4, 0x10, 1, 0x0b,
@@ -102,7 +95,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
-    tableSlot: 0,
+    tableSlot: 4,
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],
@@ -226,7 +219,9 @@ describe("targeted Enhancement WebAssembly transform", () => {
   });
 
   it("preserves every argument and calls each relocated original once", () => {
-    const transformed = transformEnhancementWasm(fixture(), manifest(fixture()));
+    const input = fixture();
+    const build = manifest(input);
+    const transformed = transformEnhancementWasm(input, build);
     const originals: number[][] = [];
     const dispatches: number[][] = [];
     const game = { exports: {} as Record<string, unknown> };
@@ -272,6 +267,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       },
     );
     game.exports = gameInstance.exports as Record<string, unknown>;
+    const table = game.exports.tbl as WebAssembly.Table;
     const tick = game.exports.EmscriptenExeThreadMainLoop as (a: number) => void;
     const cursor = game.exports.cursor as (...args: number[]) => void;
     const ui = game.exports.ui as (...args: number[]) => void;
@@ -286,11 +282,17 @@ describe("targeted Enhancement WebAssembly transform", () => {
     ]);
     assert.deepEqual(dispatches, []);
 
-    (game.exports.tbl as WebAssembly.Table).set(
-      0,
+    assert.equal(table.length, 5);
+    const slotZeroSentinel = game.exports[
+      ENHANCEMENT_ORIGINAL_EXPORT
+    ] as CallableFunction;
+    table.set(0, slotZeroSentinel);
+    table.set(
+      build.tableSlot,
       callbackInstance.exports.callback as CallableFunction,
     );
-    (game.exports[ENHANCEMENT_HOOK_EXPORT] as WebAssembly.Global).value = 1;
+    (game.exports[ENHANCEMENT_HOOK_EXPORT] as WebAssembly.Global).value =
+      build.tableSlot + 1;
     originals.length = 0;
     tick(41);
     cursor(51, 52, 53, 54, 55);
@@ -305,20 +307,20 @@ describe("targeted Enhancement WebAssembly transform", () => {
       [1, 51, 52, 53, 54, 55],
       [2, 61, 62, 63],
     ]);
+    assert.equal(table.get(0), slotZeroSentinel);
   });
 
-  it("rejects an occupied slot, hash mismatch, and signature mismatch", () => {
-    const occupied = fixture(true);
-    assert.throws(
-      () => transformEnhancementWasm(occupied, manifest(occupied)),
-      /occupied/,
-    );
+  it("rejects a non-terminal slot, hash mismatch, and signature mismatch", () => {
     const input = fixture();
+    assert.throws(
+      () => transformEnhancementWasm(input, { ...manifest(input), tableSlot: 0 }),
+      /terminal/,
+    );
     assert.throws(
       () => transformEnhancementWasm(input, { ...manifest(input), sha256: "0".repeat(64) }),
       /unsupported/,
     );
-    const wrongSignature = fixture(false, 0x7e);
+    const wrongSignature = fixture(0x7e);
     assert.throws(
       () => transformEnhancementWasm(wrongSignature, manifest(wrongSignature)),
       /signature/,
