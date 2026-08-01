@@ -199,7 +199,6 @@ export function createToolboxFoundation(parent: HTMLElement) {
 
   const setOpen = (next: boolean) => {
     if (next === overlayOpen) return;
-    releaseGameInput();
     overlayOpen = next;
     panel.hidden = !next;
     panel.style.display = next ? "grid" : "none";
@@ -258,13 +257,10 @@ export function createToolboxFoundation(parent: HTMLElement) {
     setOpen(false);
   });
 
-  // Focus follows click. Entering the overlay releases held game input so a
-  // key held while clicking into the panel cannot keep the character moving.
-  root.addEventListener("focusin", (event) => {
-    const from = event.relatedTarget;
-    if (from instanceof Node && root.contains(from)) return;
-    releaseGameInput();
-  });
+  // Focus follows click. Held game input deliberately carries across the
+  // focus transfer — a movement key held while clicking into the panel keeps
+  // the character moving, and the input host replays its eventual release at
+  // the canvas, so nothing sticks.
   panel.addEventListener("pointerdown", () => {
     if (!root.contains(document.activeElement)) {
       panel.focus({ preventScroll: true });

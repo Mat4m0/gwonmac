@@ -122,10 +122,12 @@ The developer surface is a same-renderer Chromium overlay, not an injected game
 frame or a second Electron window. It is a non-modal palette: the overlay root
 never intercepts the pointer, so the game keeps owning every click that is not
 on Tools chrome, and the open panel floats beside play instead of blocking it.
-Keyboard focus follows the click — entering the panel releases held game input
-and pointer lock, keyboard and pointer events inside it stop at the overlay
-boundary, and clicking the canvas hands keyboard input straight back to the
-game while the panel stays open. The panel drags by its titlebar and keeps its
+Keyboard focus follows the click — opening exits pointer lock, keyboard and
+pointer events inside the panel stop at the overlay boundary, and clicking the
+canvas hands keyboard input straight back to the game while the panel stays
+open. Held game input carries across the transfer: a movement key held while
+clicking into the panel keeps acting, and the input host replays its eventual
+release at the canvas, so a press the game received can never stay stuck. The panel drags by its titlebar and keeps its
 position for the session. Escape closes it only while it has focus; Close and
 the Control+Shift+Space chord work from anywhere. Moving focus between the
 canvas and this one overlay is internal, so it does not run the client's

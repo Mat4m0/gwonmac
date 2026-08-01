@@ -23,6 +23,7 @@ test.describe("renderer Tools input", () => {
           };
         };
         let gameKeys = 0;
+        let gameKeyUps = 0;
         let gameMouseDowns = 0;
         let inputResets = 0;
         window.addEventListener("gw:input-reset", () => {
@@ -40,10 +41,16 @@ test.describe("renderer Tools input", () => {
         });
         // Registered after the Tools capture/bubble boundary, standing in for
         // the game's global handlers. Events on Tools chrome must never reach
-        // them; events on the game canvas always must.
+        // them; events on the game canvas always must, and a release for a
+        // press the canvas received must arrive even when it lands elsewhere.
         window.addEventListener("keydown", () => {
           gameKeys += 1;
           document.body.dataset.toolboxGameKeys = String(gameKeys);
+        });
+        window.addEventListener("keyup", (event) => {
+          gameKeyUps += 1;
+          document.body.dataset.toolboxGameKeyUps = String(gameKeyUps);
+          document.body.dataset.toolboxLastKeyUp = event.code;
         });
         window.addEventListener("mousedown", () => {
           gameMouseDowns += 1;
@@ -51,6 +58,7 @@ test.describe("renderer Tools input", () => {
         });
         Object.assign(document.body.dataset, {
           toolboxGameKeys: "0",
+          toolboxGameKeyUps: "0",
           toolboxGameMouseDowns: "0",
           toolboxInputResets: "0",
         });
@@ -66,13 +74,26 @@ test.describe("renderer Tools input", () => {
       await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "1");
 
-      // Opening focuses the palette and releases held game input.
+      // A movement key held across opening keeps acting: opening neither
+      // resets game input nor swallows the eventual release. The release
+      // lands on the focused panel, and the input host replays it at the
+      // canvas so the game lets go of the key.
+      await page.keyboard.down("KeyW");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
       await page.getByRole("button", { name: "Open Tools" }).click();
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(panel).toBeVisible();
       await expect(panel).toBeFocused();
+      await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
+      await page.keyboard.up("KeyW");
+      await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
+      await expect(body).toHaveAttribute("data-toolbox-last-key-up", "KeyW");
+
+      // Keys pressed inside the panel stay inside it — including their
+      // releases, which the replay must not forward.
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "0");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
+      await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
       await expect(page.getByText("Hero panel observed · hidden")).toBeVisible();
 
       // Non-modal: a game click lands in the game, the palette stays open,
@@ -82,14 +103,14 @@ test.describe("renderer Tools input", () => {
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
       await expect(page.locator("#canvas")).toBeFocused();
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
 
       // Clicking the palette takes keyboard focus back without leaking the
       // click or subsequent keys into the game.
       await panel.click({ position: { x: 8, y: 60 } });
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
 
       // Dragging the titlebar moves the panel and the position survives
       // closing and reopening.
@@ -117,7 +138,7 @@ test.describe("renderer Tools input", () => {
       await expect(panel).toBeHidden();
       await expect(page.locator("#canvas")).toBeFocused();
       await page.keyboard.press("Escape");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
       // The chord toggles from anywhere.
       await page.keyboard.press("Control+Shift+Space");
@@ -126,9 +147,8 @@ test.describe("renderer Tools input", () => {
       await expect(panel).toBeHidden();
       await expect(page.locator("#canvas")).toBeFocused();
 
-      expect(
-        Number(await body.getAttribute("data-toolbox-input-resets")),
-      ).toBeGreaterThanOrEqual(4);
+      // The palette never reset game input during any of the above.
+      await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
     } finally {
       await closeOffline(fixture);
     }
