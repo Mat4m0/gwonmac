@@ -138,12 +138,17 @@ export function describeSteamRefusal(
  * Whether the failure is worth a bug report. Network and disk conditions are
  * the player's to fix — suggesting "Report a Problem" for them blames the app
  * for the Wi-Fi. Anything else might genuinely be ours.
+ *
+ * A locked Keychain belongs here for the same reason and `keychain_unentitled`
+ * deliberately does not: that one says the installed application is signed
+ * wrongly, which no player can fix and we want to hear about.
  */
 const PLAYER_SIDE: ReadonlySet<string> = new Set<ErrorCode>([
   'net_offline',
   'http_status',
   'disk_full',
   'not_ready',
+  'keychain_locked',
   'chunk_offline',
   'dns_failed',
   'dns_timeout',

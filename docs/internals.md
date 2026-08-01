@@ -153,6 +153,11 @@ multi-release format because its native numeric comparison cannot represent
 this project's SemVer preview suffixes. It publishes one discriminated
 `AppUpdateState`: `idle`, `checking`, `up-to-date`, `downloading`, `ready`, or
 `failed` with a closed reason. The renderer receives no network text or URL.
+A check left without a readable answer — `offline`, `timeout`, or `unreadable`,
+whether the body never parsed or parsed into something that is not a releases
+list — also records `appUpdate.requestFailed` naming which request lost it, the
+releases list or one release's own feed, beside the same closed reason. An
+error behind the fault is redacted and logged, never recorded.
 `lastUpdateCheckAt` is persisted by main after a catalog check completes.
 
 A ready update is offered nonmodally. Restart is explicit; choosing Later lets
@@ -208,7 +213,13 @@ Development use distinct service names and labels. The boundary uses
 `kSecUseDataProtectionKeychain`, `WhenUnlockedThisDeviceOnly`, and a fresh
 noninteractive `LAContext` for every operation. A read failure never deletes or
 replaces an item; the failure is recorded without credential content and the
-game prompts again.
+game prompts again. The native module classifies a refusal, and
+`KeychainJsonStore` keeps that classification on the error it raises:
+`keychain_locked` for an item the Keychain would only release with user
+interaction, `keychain_unentitled` for a process with no application identifier
+for the access group, and the secret's own `*_unavailable` code otherwise. The
+underlying rejection is logged by classification and error name only and never
+becomes an exported field.
 
 Unpackaged development, ordinary local packages, and explicit packaged smokes
 use `VolatileNativeKeychain`, so no unstable identity can claim a provisioned

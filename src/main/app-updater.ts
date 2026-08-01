@@ -11,6 +11,14 @@ import {
   parseReleaseVersion,
   type ReleaseVersion,
 } from "../shared/release.js";
+import { redactDiagnosticText } from "./diagnostics/text-scan.js";
+
+/**
+ * Which of the two requests a check makes was the one that lost its answer.
+ * The state a check publishes says only what went wrong, and the same reason
+ * reads very differently for the releases list than for one release's feed.
+ */
+export type AppUpdateStage = "releases" | "feed";
 
 const API_URL =
   `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=100`;
@@ -46,6 +54,11 @@ export interface AppUpdaterOptions {
   timeoutMs?: number;
   rememberCheckedAt: (checkedAt: number) => Promise<void>;
   publish: (state: AppUpdateState) => void;
+  /**
+   * Keeps the cause of a discarded transport or parse fault. Injected rather
+   * than recorded here, so this class stays constructible without Electron.
+   */
+  recordFailure: (stage: AppUpdateStage, reason: AppUpdateErrorCode) => void;
 }
 
 export class AppUpdater {
@@ -165,9 +178,13 @@ export class AppUpdater {
           signal: controller.signal,
           headers: { accept: "application/vnd.github+json" },
         });
-      } catch {
+      } catch (error) {
         await this.failAndRemember(
-          controller.signal.aborted ? "timeout" : "offline",
+          this.noteFailure(
+            "releases",
+            controller.signal.aborted ? "timeout" : "offline",
+            error,
+          ),
         );
         return;
       }
@@ -182,13 +199,15 @@ export class AppUpdater {
       let body: unknown;
       try {
         body = await response.json();
-      } catch {
-        await this.failAndRemember("unreadable");
+      } catch (error) {
+        await this.failAndRemember(
+          this.noteFailure("releases", "unreadable", error),
+        );
         return;
       }
       const candidates = parseCandidates(body, current);
       if (candidates === null) {
-        await this.failAndRemember("unreadable");
+        await this.failAndRemember(this.noteFailure("releases", "unreadable"));
         return;
       }
       const latest = candidates[0] ?? null;
@@ -249,16 +268,22 @@ export class AppUpdater {
     let response: Response;
     try {
       response = await this.fetchImpl(manifestUrl, { signal });
-    } catch {
-      return { reason: signal.aborted ? "timeout" : "offline" };
+    } catch (error) {
+      return {
+        reason: this.noteFailure(
+          "feed",
+          signal.aborted ? "timeout" : "offline",
+          error,
+        ),
+      };
     }
     if (isRateLimited(response)) return { reason: "rate-limited" };
     if (!response.ok) return { reason: "server" };
     let body: unknown;
     try {
       body = await response.json();
-    } catch {
-      return { reason: "unreadable" };
+    } catch (error) {
+      return { reason: this.noteFailure("feed", "unreadable", error) };
     }
     return validManifest(
       body,
@@ -268,6 +293,25 @@ export class AppUpdater {
     )
       ? { url: manifestUrl }
       : { reason: "feed-invalid" };
+  }
+
+  /**
+   * The one place a fault that stops a check is kept rather than dropped. The
+   * stage and reason are bounded and reach diagnostics; an error is text this
+   * process did not author, so it is redacted and goes no further than the
+   * console. A body that parses as JSON but is not the document expected
+   * raises none, and every stage still names itself.
+   */
+  private noteFailure(
+    stage: AppUpdateStage,
+    reason: AppUpdateErrorCode,
+    error?: unknown,
+  ): AppUpdateErrorCode {
+    this.options.recordFailure(stage, reason);
+    const summary = `Update check failed at ${stage}: ${reason}`;
+    if (error === undefined) console.warn(summary);
+    else console.warn(summary, redactDiagnosticText(String(error)));
+    return reason;
   }
 
   private async remember(checkedAt: number): Promise<void> {

@@ -143,6 +143,22 @@ describe("renderer failure messages", () => {
       "You can retry, or choose Help → Report a Problem.",
     );
   });
+
+  it("tells a locked Keychain apart from a build that may not use one", () => {
+    // Unlocking is the player's to do; a missing entitlement is a signing
+    // fault in what we shipped, and the two must not share one answer.
+    assert.equal(suggestReport("keychain_locked"), false);
+    assert.doesNotMatch(failureDetail("keychain_locked"), /Report a Problem/);
+    assert.equal(suggestReport("keychain_unentitled"), true);
+    assert.match(failureDetail("keychain_unentitled"), /Report a Problem/);
+    // Neither reaches a transfer surface, so both take its honest default
+    // rather than a sentence invented for a screen that never shows them.
+    for (const code of ["keychain_locked", "keychain_unentitled"] as const) {
+      assert.equal(launch(code), launch("unknown"));
+      assert.equal(download(code), download("unknown"));
+    }
+  });
+
   it("stops promising a retry once the client crashes twice in one run", () => {
     const first = clientCrashPresentation(1);
     const repeated = clientCrashPresentation(2);

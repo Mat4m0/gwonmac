@@ -27,6 +27,7 @@ import {
   formatReleaseVersion,
   parseReleaseVersion,
 } from "../../shared/release.js";
+import type { AppUpdateStage } from "../app-updater.js";
 import {
   isProxyRoute,
   type ProxyRoute,
@@ -152,6 +153,10 @@ const appUpdateErrorCode = literal([
   "feed-invalid",
   "download-failed",
 ] as const satisfies readonly AppUpdateErrorCode[]);
+const appUpdateStage = literal([
+  "releases",
+  "feed",
+] as const satisfies readonly AppUpdateStage[]);
 const closeReason = literal([
   "requested",
   "peer",
@@ -293,6 +298,14 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "app",
     level: "error",
     fields: { reason: appUpdateErrorCode },
+  },
+  // The published state names the reason but not the request it came from, and
+  // "offline" against the releases list is a different report from "offline"
+  // against one release's own feed.
+  "appUpdate.requestFailed": {
+    subsystem: "app",
+    level: "warn",
+    fields: { stage: appUpdateStage, reason: appUpdateErrorCode },
   },
   "orphanTemps.swept": {
     subsystem: "app",
@@ -558,17 +571,17 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
   "credentials.loadFailed": {
     subsystem: "credentials",
     level: "error",
-    fields: none,
+    fields: { code },
   },
   "credentials.saveFailed": {
     subsystem: "credentials",
     level: "error",
-    fields: none,
+    fields: { code },
   },
   "credentials.clearFailed": {
     subsystem: "credentials",
     level: "error",
-    fields: none,
+    fields: { code },
   },
   "steam.tokenRequested": {
     subsystem: "steam",

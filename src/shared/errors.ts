@@ -42,6 +42,15 @@ export const ERROR_CODES = [
   "hash_format",
   "hash_mismatch",
   "http_status",
+  /** The Data Protection Keychain refused an item it would only release with
+   * user interaction. The secret is intact and readable once the device is
+   * unlocked, so this is not the same fault as a store that cannot be
+   * reached at all. */
+  "keychain_locked",
+  /** The Keychain refused because the running process carries no application
+   * identifier for the item's access group. Nothing the build does at runtime
+   * recovers from that; only a re-signed one does. */
+  "keychain_unentitled",
   "manifest_chunks",
   "manifest_cycle",
   "manifest_directories",

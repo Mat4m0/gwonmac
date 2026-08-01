@@ -648,7 +648,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       try {
         return await secretOperation(() => credentials.load());
       } catch (error) {
-        logEvent({ k: "credentials.loadFailed" });
+        logEvent({ k: "credentials.loadFailed", code: errorCode(error) });
         throw error;
       }
     }),
@@ -661,7 +661,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
         try {
           await secretOperation(() => credentials.save(value));
         } catch (error) {
-          logEvent({ k: "credentials.saveFailed" });
+          logEvent({ k: "credentials.saveFailed", code: errorCode(error) });
           throw error;
         }
       },
@@ -671,7 +671,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       try {
         await secretOperation(() => credentials.clear());
       } catch (error) {
-        logEvent({ k: "credentials.clearFailed" });
+        logEvent({ k: "credentials.clearFailed", code: errorCode(error) });
         throw error;
       }
     }),

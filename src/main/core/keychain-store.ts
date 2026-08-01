@@ -1,5 +1,24 @@
-import { AppError } from "../../shared/errors.js";
+import { AppError, type ErrorCode } from "../../shared/errors.js";
 import type { NativeKeychain, SecretSlot } from "./native-keychain.js";
+
+/**
+ * The refusals the native module classifies, keyed by the identifier it puts
+ * on its rejection. A `Map` rather than an object literal: the lookup runs on
+ * a `code` this process did not write, and `Object.prototype` members would
+ * otherwise answer it.
+ */
+const NATIVE_REFUSALS = new Map<string, ErrorCode>([
+  ["interaction_not_allowed", "keychain_locked"],
+  ["missing_entitlement", "keychain_unentitled"],
+]);
+
+function nativeRefusal(error: unknown): ErrorCode | null {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return null;
+  }
+  const { code } = error;
+  return typeof code === "string" ? NATIVE_REFUSALS.get(code) ?? null : null;
+}
 
 export interface KeychainSecret<T> {
   parse(value: unknown): T;
@@ -59,8 +78,22 @@ export class KeychainJsonStore<T> {
   private async native<R>(operation: () => Promise<R>): Promise<R> {
     try {
       return await operation();
-    } catch {
-      throw this.secret.unavailable();
+    } catch (error) {
+      const refusal = nativeRefusal(error);
+      // This module is below the diagnostics redactor and cannot reach it, so
+      // the rejection is logged as the two bounded parts of it: how the
+      // Keychain refused, and what kind of thing was thrown. Its message and
+      // stack are text this process did not author and stay on the error.
+      console.warn(
+        "Keychain operation failed",
+        this.slot,
+        refusal ?? "unclassified",
+        error instanceof Error ? error.name : typeof error,
+      );
+      if (refusal === null) throw this.secret.unavailable();
+      throw new AppError(refusal, "the Keychain refused this secret", {
+        cause: error,
+      });
     }
   }
 
