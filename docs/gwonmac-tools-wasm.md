@@ -119,13 +119,18 @@ The developer snapshot ABI 2 is fixed at 64 bytes and contains only the two
 counters, first-hero scalar state, and observed panel state.
 
 The developer surface is a same-renderer Chromium overlay, not an injected game
-frame or a second Electron window. Its collapsed status is passive except for
-the explicit Open button. Opening it releases held game input and pointer lock;
-keyboard and pointer events then stop at the overlay, Tab stays within its
-controls, and Escape, Close, or an outside click restores canvas focus. Moving
-focus between the canvas and this one overlay is internal, so it does not run
-the client's canvas-blur audio mute. A real application blur still follows the
-normal input-release and audio behavior.
+frame or a second Electron window. It is a non-modal palette: the overlay root
+never intercepts the pointer, so the game keeps owning every click that is not
+on Tools chrome, and the open panel floats beside play instead of blocking it.
+Keyboard focus follows the click — entering the panel releases held game input
+and pointer lock, keyboard and pointer events inside it stop at the overlay
+boundary, and clicking the canvas hands keyboard input straight back to the
+game while the panel stays open. The panel drags by its titlebar and keeps its
+position for the session. Escape closes it only while it has focus; Close and
+the Control+Shift+Space chord work from anywhere. Moving focus between the
+canvas and this one overlay is internal, so it does not run the client's
+canvas-blur audio mute. A real application blur still follows the normal
+input-release and audio behavior.
 
 ## Installation and failure behavior
 
