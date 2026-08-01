@@ -43,7 +43,11 @@ import {
 } from "./diagnostics.js";
 import type { AppPhase } from "./diagnostics/schema.js";
 import { emitSocketEvent, registerIpcHandlers } from "./ipc.js";
-import { AppUpdater } from "./app-updater.js";
+import {
+  AppUpdater,
+  PERIODIC_CHECK_TICK_MS,
+  periodicCheckDue,
+} from "./app-updater.js";
 import {
   enableSandboxBeforeReady,
   onAppQuit,
@@ -590,6 +594,27 @@ if (primaryInstance) void app.whenReady().then(async () => {
   if (settings.autoCheckUpdates) {
     void appUpdaterController.check();
   }
+  // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
+  // a laptop waking past the boundary checks within half an hour, with no
+  // resume handler and no new diagnostic event. check() already coalesces,
+  // so a due tick during a download or a ready update is a no-op.
+  const periodicCheckTick = setInterval(() => {
+    void (async () => {
+      const current = await loadSettings(gamePaths().settings);
+      if (!periodicCheckDue({
+        capable: distribution.automaticUpdates,
+        autoCheckUpdates: current.autoCheckUpdates,
+        activeSockets: sockets.size(),
+        lastUpdateCheckAt: current.lastUpdateCheckAt,
+        now: Date.now(),
+      })) return;
+      void appUpdaterController?.check();
+    })().catch(() => {
+      // A periodic check is silent by contract; an unreadable settings file
+      // already surfaces on the next explicit settings read.
+    });
+  }, PERIODIC_CHECK_TICK_MS);
+  onAppQuit(() => clearInterval(periodicCheckTick));
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {

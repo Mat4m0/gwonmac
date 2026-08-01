@@ -36,7 +36,7 @@ test.describe("launcher recovery", () => {
       // only — a first launch must not ask about restarts.
       await expect(page.locator("#data-choice-auto-updates")).toBeChecked();
       await expect(page.locator("#data-choice")).toContainText(
-        "contacts GitHub once per start",
+        "about every six hours",
       );
       await expect(page.locator("#data-choice")).not.toContainText("cursor");
       await expect(page.locator("#data-choice")).not.toContainText("restart");

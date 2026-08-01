@@ -112,6 +112,10 @@ test("the host has one native automatic application replacement path", () => {
   assert.match(main, /packagedDistributionChannel\(\)/);
   assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(main, /autoUpdater\.quitAndInstall\(\)/);
+  // The periodic re-check must run through the one audited predicate; a
+  // deleted tick or a bypassed gate stays green in unit tests, not here.
+  assert.match(main, /setInterval\([\s\S]{0,600}periodicCheckDue\(/);
+  assert.match(main, /PERIODIC_CHECK_TICK_MS/);
   assert.doesNotMatch(updater, /electron-updater|update-electron-app|Sparkle/);
   assert.deepEqual(json("package.json").dependencies ?? {}, {});
 });

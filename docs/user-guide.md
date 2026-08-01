@@ -283,12 +283,13 @@ The crash count resets when you quit and reopen the app.
 The first Developer ID release must be installed manually from its notarized
 DMG. Later official releases can update themselves.
 
-The app never polls. **Automatically check for and download app updates** is
-on by default — it performs one check per launch, and the first-run screen
-says so before the first one happens. Turn it off and the app contacts GitHub
-only when you choose **Check for Updates** — on the loading screen, in the
-application menu, on a client-compatibility notice, or under
-**Settings → Updates**. Turning it back on immediately checks once.
+The app checks on a declared schedule. **Automatically check for and download
+app updates** is on by default — it checks once at launch and then about every
+six hours while the app stays open, never while a game connection is open, and
+the first-run screen says so before the first check happens. Turn it off and
+the app contacts GitHub only when you choose **Check for Updates** — on the
+loading screen, in the application menu, on a client-compatibility notice, or
+under **Settings → Updates**. Turning it back on immediately checks once.
 
 An eligible update downloads in the background. When it is ready, choose
 **Restart to Update** or choose Later and let it install on the next ordinary

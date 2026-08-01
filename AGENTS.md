@@ -146,10 +146,11 @@ not only happy paths.
   closed intent is what makes unsupported package states unrepresentable.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
-  run and in Settings → Updates) performs one release check per launch and
-  governs **every** automatic check without exception, including the one on an
-  unrecognised client build; switched off, a launch reaches github.com zero
-  times, forever. `src/main/app-updater.ts` is the only
+  run and in Settings → Updates) performs one release check at launch, then at
+  most one every six hours while the app stays open — never while a game
+  connection is open — and governs **every** automatic check without
+  exception, including the one on an unrecognised client build; switched off,
+  a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of discovery, feed
   validation, download, ready, and install state. Only an official package
   carrying the release marker may reach Squirrel.Mac. Stable installs never

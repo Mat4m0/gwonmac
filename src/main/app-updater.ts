@@ -309,6 +309,33 @@ export class AppUpdater {
   }
 }
 
+export const PERIODIC_CHECK_TICK_MS = 30 * 60 * 1000;
+export const PERIODIC_CHECK_DUE_MS = 6 * 60 * 60 * 1000;
+
+export interface PeriodicCheckInput {
+  capable: boolean;
+  autoCheckUpdates: boolean;
+  activeSockets: number;
+  lastUpdateCheckAt: number | null;
+  now: number;
+}
+
+/**
+ * Whether a scheduler tick becomes an automatic check. Pure by design:
+ * main.ts owns when ticks fire; this owns every gate, so the gates are
+ * provable without timers. An open game socket defers the check — a
+ * Squirrel zip download must not compete with live game traffic.
+ */
+export function periodicCheckDue(input: PeriodicCheckInput): boolean {
+  if (!input.capable || !input.autoCheckUpdates) return false;
+  if (input.activeSockets > 0) return false;
+  if (input.lastUpdateCheckAt === null) return true;
+  const elapsed = input.now - input.lastUpdateCheckAt;
+  // A recorded check far in the future means the clock moved backwards;
+  // waiting for it to become the past would suppress checks indefinitely.
+  return elapsed >= PERIODIC_CHECK_DUE_MS || -elapsed >= PERIODIC_CHECK_DUE_MS;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

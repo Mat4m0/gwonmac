@@ -56,9 +56,10 @@ mid-download with _Play Now Instead_.
   Protection Keychain in provisioned Release, Preview, and signed Development
   builds. Each channel is isolated. Source and ad-hoc builds keep saved login
   only in memory for that process.
-- **The app does not poll for updates.** It checks GitHub once per launch — a
-  default declared at first run that one checkbox turns off. Switched off, it
-  asks GitHub only when you press **Check for Updates**. A downloaded update is
+- **Updates check on a declared schedule, or not at all.** The app checks
+  GitHub at launch and about every six hours while it stays open — a default
+  declared at first run that one checkbox turns off. Switched off, it asks
+  GitHub only when you press **Check for Updates**. A downloaded update is
   offered as a restart and otherwise installs on the next restart. See
   [Updates](docs/user-guide.md#updates).
 

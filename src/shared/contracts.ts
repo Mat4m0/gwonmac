@@ -365,10 +365,11 @@ export interface AppSettings extends EnhancementSelection {
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
-   * Automatic release checks: one GitHub request per launch, on by default so
-   * players stay current, and declared plainly wherever the checkbox appears.
-   * `false` means this app makes no network request to GitHub unless the user
-   * asks for one — with no exceptions, including the check on an uncertified
+   * Automatic release checks: a GitHub request at launch, then at most one
+   * every six hours while the app stays open, on by default so players stay
+   * current, and declared plainly wherever the checkbox appears. `false`
+   * means this app makes no network request to GitHub unless the user asks
+   * for one — with no exceptions, including the check on an uncertified
    * client build. Opting out is one checkbox, honored forever.
    */
   autoCheckUpdates: boolean;
