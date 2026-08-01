@@ -68,7 +68,8 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { enhancementSelectionChanged } from "./enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
-import { getMainWindow, resetGameInput, resetWindowState } from "./window.js";
+import { getMainWindow, resetWindowState } from "./window.js";
+import { resetGameInput } from "./renderer-commands.js";
 
 export interface IpcContext {
   sockets: SocketManager;

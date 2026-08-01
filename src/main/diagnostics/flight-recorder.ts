@@ -18,16 +18,16 @@ import type {
   DiagnosticSubsystem,
   DiagnosticSummary,
   RendererFrameBatch,
-} from "../shared/diagnostics.js";
-import { DIAGNOSTIC_BUCKETS_US } from "../shared/diagnostics.js";
-import { diagnosticFramesPath } from "./core/paths.js";
-import { parseLogRecords } from "./diagnostic-report.js";
+} from "../../shared/diagnostics.js";
+import { DIAGNOSTIC_BUCKETS_US } from "../../shared/diagnostics.js";
+import { diagnosticFramesPath } from "../core/paths.js";
+import { parseLogRecords } from "./report.js";
 import {
   diagnosticEventRecord,
   type CaptureStopReason,
   type DiagnosticEvent,
-} from "./diagnostics/schema.js";
-import { gamePaths } from "./paths.js";
+} from "./schema.js";
+import { gamePaths } from "../paths.js";
 
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;

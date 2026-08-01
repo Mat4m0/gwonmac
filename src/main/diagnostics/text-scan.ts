@@ -9,7 +9,7 @@ import { homedir } from "node:os";
  * environment/summary/settings documents whose leaves come from OS and
  * Chromium APIs. A pattern scanner is the weakest tool here, and it is the
  * only one that applies — so it lives on its own, says so, and is testable
- * without Electron. It used to sit inside `diagnostic-recorder.ts`, where no
+ * without Electron. It used to sit inside `./flight-recorder.ts`, where no
  * unit test could reach it because that module resolves Electron paths at
  * import time.
  */
@@ -33,7 +33,7 @@ const ABSOLUTE_PATH =
 
 /**
  * The one sensitive-key vocabulary, and the only one. `redactFields` in
- * `../diagnostic-recorder.ts` drops a field whose *name* contains one of these
+ * `./flight-recorder.ts` drops a field whose *name* contains one of these
  * words; the patterns below scan text for the same words. It used to be
  * spelled out twice, and the two spellings had drifted: `login` was in the
  * scanner and missing from the recorder, so a field named `login` reached

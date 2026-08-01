@@ -53,11 +53,22 @@ test("no tracked symlink resolves outside the repository", () => {
 });
 
 test("the application does not collect process-memory crash dumps", () => {
-  const diagnostics = readFileSync(
-    path.join(root, "src/main/diagnostics.ts"),
-    "utf8",
+  // The whole subsystem, enumerated from git: its entry point composes the
+  // modules beneath it, and a crash-dump API reached from any of them would
+  // ship just as surely as one written in the entry point itself.
+  const subsystem = tracked.filter(
+    (file) =>
+      file === "src/main/diagnostics.ts" ||
+      file.startsWith("src/main/diagnostics/"),
   );
-  assert.doesNotMatch(diagnostics, /crashReporter|crashDumps|\.dmp/u);
+  assert.ok(subsystem.length > 1, "the diagnostics subsystem is not tracked");
+  for (const file of subsystem) {
+    assert.doesNotMatch(
+      readFileSync(path.join(root, file), "utf8"),
+      /crashReporter|crashDumps|\.dmp/u,
+      file,
+    );
+  }
 });
 
 test("no second production runtime remains", () => {

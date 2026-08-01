@@ -45,8 +45,8 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/core/wasm-binary.ts` | WASM section codec shared by both transforms and the re-certifier |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
-| `src/main/diagnostics.ts` | bounded flight recorder, captures, export                         |
-| `src/main/diagnostics/`   | closed event schema, export detector, pattern scanner             |
+| `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                       |
+| `src/main/diagnostics/`   | flight recorder, capture, samplers, schema, detector, export      |
 | `src/preload/preload.body.cjs` | sandbox-compatible bridge; `scripts/generate-preload.ts` splices the canonical constants above it |
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
 | `src/companion-kernel/`     | freestanding read-only game-state companion WASM                  |
