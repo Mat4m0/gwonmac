@@ -278,7 +278,7 @@ export function readCompanionCursorPixels(buffer: ArrayBuffer, pointer: number) 
   return Object.freeze({ ...header, pixels });
 }
 
-export const COMPANION_TOOLBOX_ABI = 1;
+export const COMPANION_TOOLBOX_ABI = 2;
 export const COMPANION_TOOLBOX_BYTES = 64;
 
 const TOOLBOX_MAGIC = 0x58545747;
@@ -309,12 +309,9 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
     firstHeroId: view.getUint32(28, true),
     firstHeroAgentId: view.getUint32(32, true),
     panelState: view.getUint32(36, true),
-    commandRequest: view.getUint32(40, true),
-    commandComplete: view.getUint32(44, true),
-    commandStatus: view.getUint32(48, true),
   };
   let reserved = 0;
-  for (let offset = 52; offset < COMPANION_TOOLBOX_BYTES; offset += 4) {
+  for (let offset = 40; offset < COMPANION_TOOLBOX_BYTES; offset += 4) {
     reserved |= view.getUint32(offset, true);
   }
   const secondSequence = view.getUint32(8, true);
@@ -328,7 +325,6 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
     || (flags & ~TOOLBOX_HERO_AVAILABLE) !== 0
     || reserved !== 0
     || state.panelState > 2
-    || state.commandStatus > 2
     || (heroAvailable
       ? state.heroCount < 1
         || state.heroCount > 7

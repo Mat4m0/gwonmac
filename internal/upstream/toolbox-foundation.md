@@ -22,7 +22,7 @@ The original plan treated static slot 0 as reusable. A bounded live login on
 this exact build disproved that assumption: character entry reached an indirect
 call expecting a game callback and trapped with `function signature mismatch`
 when slot 0 contained the six-argument companion dispatcher. Slot 0 is therefore
-a dynamic game sentinel. The transform ABI 7 correction leaves every input
+a dynamic game sentinel. The transform ABI 8 correction leaves every input
 entry untouched and owns only the appended slot.
 
 The next live login exposed a separate `TextParser.cpp:724 IsParam(data)`
@@ -33,7 +33,7 @@ Instantiation wrote 28 bytes there and every callback used that unreserved
 game region as its stack. The kernel is now a position-independent WebAssembly
 side module. The renderer reserves one 64 KiB block with the game allocator and
 injects its data base and stack pointer; the side module receives a separate
-empty table. ABI 4 verification pins a 288-byte, four-byte-aligned `dylink.0`
+empty table. ABI 5 verification pins a 268-byte, four-byte-aligned `dylink.0`
 memory requirement, no table entries, deterministic bytes, and proves that
 instantiation does not change the former fixed region.
 
@@ -79,8 +79,7 @@ HeroPartyMember stride 0x18
 ```
 
 Ownership is compared with `CharacterContext + 0x2ac`. At most seven unique
-owned HeroIDs are accepted. The developer command uses only the first current
-owned HeroID.
+owned HeroIDs are accepted. Only these scalars are published.
 
 The relocated UI dispatcher is safe for preserving a game-owned dispatch, but
 not as a naked tick-time sender. A live Show attempt from the main-loop hook
@@ -88,14 +87,22 @@ aborted at `EmscriptenExeProp.cpp`'s `s_propContext` assertion, and deferring it
 until the next game-owned UI dispatch avoided the abort but introduced a
 visible multi-second delay.
 
-Static function 228 identifies the missing boundary: `PropGet` loads the
-active context from `0x28cc20` and asserts at `EmscriptenExeProp.cpp:32` when
-the slot is null. This matches GWCAjs's independently proven internal-call
-runtime for an earlier exact build. The command now saves that certified slot,
-temporarily installs the already validated GameContext, calls the relocated UI
-original synchronously on the next tick, and restores the exact previous slot
-value before publishing completion. No pointer wake-up or passive UI-event
-wait remains.
+Static function 228 identifies the missing boundary: `PropGet` loads the active
+context from `0x28cc20` and asserts at `EmscriptenExeProp.cpp:32` when the slot
+is null. Functions 230/231 get and set it, and official scoped wrappers perform
+save → install → call → restore. That proves the mechanism exists, but not that
+an arbitrary post-main-loop call has the correct lifecycle and parser state.
+
+A later live report again reached `TextParser.cpp:724 IsParam(data)`. A
+game-owned UI dispatch is not automatically a safe command gateway: its caller
+may still be a nested text-parser producer, and the cached hero can become stale
+between a tick and that event. ABI 5 therefore makes the companion strictly
+passive. Every wrapper calls its game clone first and only then notifies Rust;
+all clones remain private, the side module imports no game function, and the
+Show/Hide command and synthetic mouse nudge are removed. No tick-time
+PropContext write or companion-to-game re-entry remains. A fresh-process live
+run must confirm login, cursor, chat, and read-only hero/panel observation; it
+must not automate Show/Hide.
 
 ## Live correction and update policy
 

@@ -10,9 +10,10 @@ Rust `no_std` companion:
 ```text
 exact post-template Guild Wars module
   -> clone tick, cursor, and UI-dispatch originals
-  -> three disabled-direct / enabled-indirect wrappers
+  -> three original-first, optional post-observer wrappers
   -> one fixed (i32 x 6) dispatcher in appended table slot 4683
-  -> one position-independent Rust side module over bounded game-memory reads
+  -> one position-independent Rust side module with no game-function imports
+  -> bounded game-memory reads only
   -> one allocator-owned 64 KiB block for Rust data and stack
   -> bounded typed snapshots
   -> Chromium cursor and developer proof UI
@@ -30,8 +31,8 @@ The companion is one Wasm instance, but it is not one source-code monolith:
 | `abi.rs` | fixed feature bits, layout words, snapshot structs, and size assertions |
 | `memory.rs` | overflow-checked, bounds-checked volatile reads from game memory |
 | `cursor.rs` | cursor dirty state, bitmap validation, conversion, and publication |
-| `toolbox.rs` | developer chat/hero state and the typed hero-panel command |
-| `lib.rs` | original-call ordering, world collection, dispatch, and exported ABI |
+| `toolbox.rs` | developer chat and read-only hero/panel state |
+| `lib.rs` | world collection, post-original dispatch, and exported ABI |
 
 Renderer ownership is similarly split. `enhancement-manifest.ts` validates the
 derived module's fixed evidence, `companion-observer.ts` projects stable
@@ -61,21 +62,22 @@ transform serializes the ordered memory fields and those three IDs into one
 
 ## Dispatch and original-call rule
 
-The transform appends a common `(i32 x 6) -> void` type, clones the three exact
-functions, replaces their bodies, and exports the clones. With the hook global
-at zero, each wrapper calls its clone directly once. With the hook enabled, it
-calls only the Rust dispatcher and pads unused arguments with zero.
+The transform appends a common `(i32 x 6) -> void` type and clones the three
+exact functions. Every replacement wrapper calls its game-owned clone first,
+whether the hook is enabled or not. Only after that call returns does an enabled
+wrapper notify Rust, padding unused arguments with zero. All three clones
+remain private. The companion imports no game function and therefore cannot
+re-enter Guild Wars from a callback.
 
 Rust selects the branch by a fixed kind:
 
-- tick: call the tick clone, then collect enabled state and execute one queued
-  typed command;
-- cursor: call the cursor clone, then mark the cursor dirty;
-- UI: call the UI clone, then observe only certified scalar message IDs.
+- tick: collect enabled state after the game tick;
+- cursor: mark the cursor dirty after the game cursor event;
+- UI: observe only certified scalar message IDs after the game dispatch.
 
-Post-work does not run if an original traps. No mutable Rust borrow is held
-across an imported game call, so synchronous nested dispatch cannot alias
-kernel state.
+Post-work does not run if an original traps. Normal game execution never enters
+the side module and then re-enters a game clone, eliminating that cross-instance
+call altitude from the client path.
 
 The companion imports game memory because cursor and party state live there,
 but its own memory is not allowed to land at linker-default addresses. It is a
@@ -101,13 +103,15 @@ logs, or publishes the pointer-shaped message arguments, so it counts local
 server echoes as well as other players and does not claim sender identity.
 
 The developer hero example validates the live party array, selects the first
-hero owned by the current player, and publishes only HeroID/AgentID/count.
-Chromium can enqueue Show or Hide through one boolean export. The next game tick
-revalidates the roster and calls the relocated UI original with the certified
-message and HeroID. Chromium never calls a game function directly.
+hero owned by the current player, and publishes only HeroID/AgentID/count. It
+also observes certified Show/Hide messages emitted by normal game actions. It
+deliberately has no Show/Hide command: live experiments proved that calling the
+UI dispatcher after a tick lacks `PropContext`, while consuming an arbitrary
+later UI event can re-enter a still-active text-parser producer. The companion
+never calls a game function or writes the game's PropContext slot.
 
-The developer snapshot is fixed at 64 bytes and contains only the two counters,
-first-hero scalar state, panel state, and command request/result numbers.
+The developer snapshot ABI 2 is fixed at 64 bytes and contains only the two
+counters, first-hero scalar state, and observed panel state.
 
 The developer surface is a same-renderer Chromium overlay, not an injected game
 frame or a second Electron window. Its collapsed status is passive except for
@@ -121,9 +125,10 @@ normal input-release and audio behavior.
 ## Installation and failure behavior
 
 The renderer validates the one manifest, game exports, table identity, kernel
-import surface, kernel ABI, and kernel-owned sizes. It allocates through the
-game, instantiates Rust, creates consumers, installs slot 4683, publishes the
-runtime, and enables the global last. Teardown reverses safety order: disable,
+import surface, kernel ABI, kernel-owned sizes, and pairwise-disjoint allocation
+ranges. It zeroes the private runtime block, instantiates Rust, creates
+consumers, installs slot 4683, publishes the runtime, and enables the global
+last. Teardown reverses safety order: disable,
 stop observers and UI, clear slot 4683 only by callback identity, free regions,
 drop references.
 

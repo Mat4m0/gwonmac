@@ -52,5 +52,5 @@ pub(crate) unsafe fn read_f32(address: u32) -> Option<f32> {
 
 pub(crate) unsafe fn pointer(address: u32, required_bytes: u32) -> Option<u32> {
     let value = unsafe { read_u32(address)? };
-    (value & 3 == 0 && contains(value, required_bytes)).then_some(value)
+    (value != 0 && value & 3 == 0 && contains(value, required_bytes)).then_some(value)
 }

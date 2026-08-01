@@ -17,8 +17,31 @@ import { decodeEnhancementManifest } from "./enhancement-manifest.js";
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const COMPANION_ABI = 4;
+const COMPANION_ABI = 5;
 const COMPANION_RUNTIME_BYTES = 65_536;
+// A Wasm import is the platform's exact function-type check. JavaScript
+// `Function.length` cannot distinguish i32 from f32/f64, which matters because
+// the game reaches this export through call_indirect.
+const DISPATCH_SIGNATURE_MODULE = new WebAssembly.Module(Uint8Array.of(
+  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+  0x01, 0x0a, 0x01, 0x60, 0x06,
+  0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x00,
+  0x02, 0x13, 0x01, 0x06,
+  0x6b, 0x65, 0x72, 0x6e, 0x65, 0x6c,
+  0x08, 0x64, 0x69, 0x73, 0x70, 0x61, 0x74, 0x63, 0x68,
+  0x00, 0x00,
+));
+
+function hasExactDispatchSignature(dispatch: CallableFunction): boolean {
+  try {
+    new WebAssembly.Instance(DISPATCH_SIGNATURE_MODULE, {
+      kernel: { dispatch },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function installEnhancements(
   instance: WebAssembly.Instance,
@@ -45,12 +68,6 @@ export async function installEnhancements(
     || !(exports?.__indirect_function_table instanceof WebAssembly.Table)
     || typeof exports?.malloc !== "function"
     || typeof exports?.free !== "function"
-    || typeof exports?.enhancement_tick_original !== "function"
-    || exports.enhancement_tick_original.length !== 1
-    || typeof exports?.enhancement_cursor_original !== "function"
-    || exports.enhancement_cursor_original.length !== 5
-    || typeof exports?.enhancement_ui_original !== "function"
-    || exports.enhancement_ui_original.length !== 3
     || !(exports?.enhancement_hook_slot instanceof WebAssembly.Global)
   ) {
     window.gwCompanionState = Object.freeze({ status: "unsupported" });
@@ -140,14 +157,50 @@ export async function installEnhancements(
     ) {
       throw new Error("Companion allocation failed");
     }
-    const runtimeEnd = runtimePointer + COMPANION_RUNTIME_BYTES;
-    if (
-      runtimePointer % 16 !== 0
-      || runtimeEnd > exports.memory.buffer.byteLength
-      || runtimeEnd > 0x7fff_ffff
-    ) {
-      throw new Error("Companion runtime allocation is invalid");
+    const ownedRegions = [
+      { name: "runtime", pointer: runtimePointer, size: COMPANION_RUNTIME_BYTES, align: 16 },
+      ...(observeState
+        ? [{ name: "snapshot", pointer: snapshotPointer, size: COMPANION_SNAPSHOT_BYTES, align: 4 }]
+        : []),
+      { name: "config", pointer: configPointer, size: configBytes, align: 4 },
+      ...(selection.nativeCursor
+        ? [{ name: "cursor", pointer: cursorPointer, size: COMPANION_CURSOR_BYTES, align: 4 }]
+        : []),
+      ...(foundation
+        ? [{ name: "toolbox", pointer: toolboxPointer, size: COMPANION_TOOLBOX_BYTES, align: 4 }]
+        : []),
+    ];
+    for (const region of ownedRegions) {
+      const end = region.pointer + region.size;
+      if (
+        !Number.isSafeInteger(region.pointer)
+        || region.pointer <= 0
+        || region.pointer % region.align !== 0
+        || !Number.isSafeInteger(end)
+        || end > exports.memory.buffer.byteLength
+        || end > 0x7fff_ffff
+      ) {
+        throw new Error(`Companion ${region.name} allocation is invalid`);
+      }
     }
+    for (let left = 0; left < ownedRegions.length; left += 1) {
+      const a = ownedRegions[left]!;
+      for (let right = left + 1; right < ownedRegions.length; right += 1) {
+        const b = ownedRegions[right]!;
+        if (a.pointer < b.pointer + b.size && b.pointer < a.pointer + a.size) {
+          throw new Error(`Companion ${a.name}/${b.name} allocations overlap`);
+        }
+      }
+    }
+    const runtimeEnd = runtimePointer + COMPANION_RUNTIME_BYTES;
+    // A side module is normally loaded by Emscripten's dynamic linker, which
+    // supplies zeroed BSS. We are the loader here, so establish that invariant
+    // for this whole private block before its active data segment is applied.
+    new Uint8Array(
+      exports.memory.buffer,
+      runtimePointer,
+      COMPANION_RUNTIME_BYTES,
+    ).fill(0);
     new Uint32Array(
       exports.memory.buffer,
       configPointer,
@@ -156,16 +209,17 @@ export async function installEnhancements(
 
     const response = await fetch("companion-kernel.wasm");
     if (!response.ok) throw new Error("Companion kernel is unavailable");
-    const kernelModule = await WebAssembly.compile(await response.arrayBuffer());
+    const kernelBytes = await response.arrayBuffer();
+    const kernelSha256 = [...new Uint8Array(
+      await crypto.subtle.digest("SHA-256", kernelBytes),
+    )].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const kernelModule = await WebAssembly.compile(kernelBytes);
     const expectedImports = [
       "env.__indirect_function_table:table",
       "env.__memory_base:global",
       "env.__stack_pointer:global",
       "env.__table_base:global",
       "env.memory:memory",
-      "game.enhancement_cursor_original:function",
-      "game.enhancement_tick_original:function",
-      "game.enhancement_ui_original:function",
     ];
     const imports = WebAssembly.Module.imports(kernelModule)
       .map((entry) => `${entry.module}.${entry.name}:${entry.kind}`)
@@ -192,15 +246,9 @@ export async function installEnhancements(
         ),
         __table_base: immutableI32(0),
       },
-      game: {
-        enhancement_tick_original: exports.enhancement_tick_original,
-        enhancement_cursor_original: exports.enhancement_cursor_original,
-        enhancement_ui_original: exports.enhancement_ui_original,
-      },
     });
     const kernelInit = kernel.exports.companion_init;
     const kernelDispatch = kernel.exports.companion_dispatch;
-    const setFirstHeroPanel = kernel.exports.companion_set_first_hero_panel;
     const cursorEventCount = kernel.exports.companion_cursor_event_count;
     const kernelAbi = kernel.exports.companion_abi;
     const kernelConfigBytes = kernel.exports.companion_config_bytes;
@@ -212,8 +260,7 @@ export async function installEnhancements(
       || kernelInit.length !== 9
       || typeof kernelDispatch !== "function"
       || kernelDispatch.length !== 6
-      || typeof setFirstHeroPanel !== "function"
-      || setFirstHeroPanel.length !== 1
+      || !hasExactDispatchSignature(kernelDispatch)
       || typeof cursorEventCount !== "function"
       || cursorEventCount.length !== 0
       || typeof kernelAbi !== "function"
@@ -272,10 +319,7 @@ export async function installEnhancements(
     if (readout) disposeReadout = readout.dispose;
 
     const toolbox = foundation
-      ? createToolboxFoundation(
-          document.body,
-          (shown) => Number(setFirstHeroPanel(shown ? 1 : 0)) >>> 0,
-        )
+      ? createToolboxFoundation(document.body)
       : null;
     if (toolbox) disposeToolbox = toolbox.dispose;
 
@@ -285,6 +329,8 @@ export async function installEnhancements(
       status: "installed",
       buildId: manifest.buildId,
       programId: manifest.programId,
+      companionAbi: COMPANION_ABI,
+      kernelSha256,
       memory: exports.memory,
       snapshotPointer,
       toolboxPointer,
@@ -310,6 +356,9 @@ export async function installEnhancements(
       },
       installation: (window.gwCompanionInstallations ?? 0) + 1,
       setHookEnabledForBenchmark(enabled: boolean) {
+        if (cleaned || table.get(manifest.tableSlot) !== installedCallback) {
+          throw new Error("Enhancement installation is no longer active");
+        }
         hookSlot.value = enabled
           ? manifest.tableSlot + 1
           : 0;
@@ -328,7 +377,10 @@ export async function installEnhancements(
     hookSlot.value = manifest.tableSlot + 1;
 
     window.addEventListener("pagehide", cleanup, { once: true });
-    console.info(`[enhancement] installed for client build ${manifest.buildId}`);
+    console.info(
+      `[enhancement] installed for client build ${manifest.buildId}; ` +
+      `companion ABI ${COMPANION_ABI} ${kernelSha256.slice(0, 12)}`,
+    );
     return runtime;
   } catch (error) {
     cleanup();

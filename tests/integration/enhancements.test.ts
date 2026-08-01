@@ -238,7 +238,7 @@ const ADDRESSES = Object.freeze({
   heroBuffer: 0xa200,
   companionRuntime: 0x30_0000,
 });
-const CONFIG_WORDS = 40;
+const CONFIG_WORDS = 39;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
 const TEXTURE_KEY = 0x6772_7478;
 
@@ -285,18 +285,15 @@ type KernelDispatch = (
 function kernelExports(exports: WebAssembly.Exports) {
   const init = exports["companion_init"];
   const dispatch = exports["companion_dispatch"];
-  const setPanel = exports["companion_set_first_hero_panel"];
   if (
     typeof init !== "function"
     || typeof dispatch !== "function"
-    || typeof setPanel !== "function"
   ) {
     throw new Error("companion-kernel.wasm did not export its foundation ABI");
   }
   return {
     init: init as KernelInit,
     dispatch: dispatch as KernelDispatch,
-    setPanel: setPanel as (shown: number) => number,
   };
 }
 
@@ -304,12 +301,6 @@ async function createKernel() {
   const bytes = await readFile("build/renderer/companion-kernel.wasm");
   const memory = new WebAssembly.Memory({ initial: 256 });
   const view = new DataView(memory.buffer);
-  const calls = {
-    original: 0,
-    cursor: [] as number[][],
-    ui: [] as number[][],
-    uiContext: [] as number[],
-  };
   const immutableI32 = (value: number) => new WebAssembly.Global(
     { value: "i32", mutable: false },
     value,
@@ -329,16 +320,6 @@ async function createKernel() {
       ),
       __table_base: immutableI32(0),
     },
-    game: {
-      enhancement_tick_original: () => {
-        calls.original += 1;
-      },
-      enhancement_cursor_original: (...args: number[]) => calls.cursor.push(args),
-      enhancement_ui_original: (...args: number[]) => {
-        calls.ui.push(args);
-        calls.uiContext.push(view.getUint32(0x28cc20, true));
-      },
-    },
   });
   const exports = kernelExports(instance.exports);
   const config = new Uint32Array(memory.buffer, ADDRESSES.config, CONFIG_WORDS);
@@ -350,7 +331,7 @@ async function createKernel() {
     ADDRESSES.activeArt, ADDRESSES.softwareModel, ADDRESSES.showCount,
     ADDRESSES.colorBuffer,
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
-    0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08, 0x28cc20,
+    0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
     0x1000_0082, 0x1000_01a3, 0x1000_01a4,
   ]);
   return {
@@ -358,7 +339,6 @@ async function createKernel() {
     memory,
     view,
     config,
-    calls,
     init: (overrides: KernelOverrides = {}) => {
       const features = overrides.features ?? ALL_FEATURES;
       return exports.init(
@@ -395,7 +375,6 @@ async function createKernel() {
         args[3] ?? 4, args[4] ?? 5),
     uiEvent: (message: number, wparam: number, lparam: number) =>
       exports.dispatch(2, message, wparam, lparam, 0, 0),
-    setPanel: (shown: boolean) => exports.setPanel(shown ? 1 : 0),
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
@@ -615,7 +594,7 @@ describe("Companion cursor region ABI", () => {
 });
 
 describe("Companion kernel", () => {
-  it("calls the original once and publishes a checked snapshot", async () => {
+  it("publishes a checked snapshot after a game tick", async () => {
     const kernel = await createKernel();
     const { view, config, instance } = kernel;
     installGameGraph(view);
@@ -625,7 +604,6 @@ describe("Companion kernel", () => {
     assert.equal(kernel.init({ configSize: CONFIG_BYTES - 4 }), 0);
     assert.equal(kernel.init(), 1);
     kernel.tick();
-    assert.equal(kernel.calls.original, 1);
     const state = decoded(
       readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot),
     );
@@ -697,7 +675,6 @@ describe("Companion kernel", () => {
       rejected(readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot)),
       "game",
     );
-    assert.equal(kernel.calls.original, boundaries.length + 6);
     assert.equal(typeof instance.exports.companion_dispatch, "function");
   });
 
@@ -738,11 +715,9 @@ describe("Companion kernel", () => {
     assert.equal(state.tickCount, 1);
     assert.equal(readoutOnly.field(CURSOR.magic), 0);
 
-    assert.equal(cursorOnly.calls.original, 1);
-    assert.equal(readoutOnly.calls.original, 1);
   });
 
-  it("counts chat and applies hero commands on tick inside a restored PropContext", async () => {
+  it("counts chat and observes hero-panel events without calling back into the game", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
     assert.equal(
@@ -764,28 +739,48 @@ describe("Companion kernel", () => {
     kernel.uiEvent(0x1000_0082, 0xdead_beef, 0x7fff_fffd);
     state = readyToolbox(kernel.toolbox());
     assert.equal(state.playerChatCount, 1);
-    assert.deepEqual(kernel.calls.ui.slice(0, 2), [
-      [0x1000_0080, 0xdead_beef | 0, 0x7fff_fffd],
-      [0x1000_0082, 0xdead_beef | 0, 0x7fff_fffd],
-    ]);
-    assert.deepEqual(kernel.calls.uiContext, [0, 0]);
-
-    const request = kernel.setPanel(true);
-    assert.equal(request, 1);
-    assert.equal(kernel.calls.ui.length, 2);
-    assert.equal(readyToolbox(kernel.toolbox()).commandRequest, request);
-    kernel.view.setUint32(0x28cc20, 0x1234_5678, true);
-    kernel.tick();
-    assert.deepEqual(kernel.calls.ui[2], [0x1000_01a4, 1, 0]);
-    assert.equal(kernel.calls.uiContext[2], ADDRESSES.game);
-    assert.equal(kernel.view.getUint32(0x28cc20, true), 0x1234_5678);
-    state = readyToolbox(kernel.toolbox());
-    assert.equal(state.panelState, 2);
-    assert.equal(state.commandComplete, request);
-    assert.equal(state.commandStatus, 1);
-
+    kernel.uiEvent(0x1000_01a4, 1, 0);
+    assert.equal(readyToolbox(kernel.toolbox()).panelState, 2);
     kernel.uiEvent(0x1000_01a3, 1, 0);
     assert.equal(readyToolbox(kernel.toolbox()).panelState, 1);
+  });
+
+  it("writes only its explicitly owned regions under mixed callback load", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    installCursorGraph(kernel.view);
+    paintCursor(kernel.view, 7);
+    assert.equal(kernel.init({
+      features: FEATURE_NATIVE_CURSOR
+        | FEATURE_TARGET_READOUT
+        | FEATURE_TOOLBOX_FOUNDATION,
+    }), 1);
+    const before = new Uint8Array(kernel.memory.buffer).slice();
+
+    for (let index = 0; index < 512; index += 1) {
+      kernel.tick();
+      kernel.cursorEvent(index, index + 1, index + 2, index + 3, index + 4);
+      kernel.uiEvent(index % 2 ? 0x1000_0082 : 0x1000_0080, index, 0);
+      kernel.uiEvent(index % 2 ? 0x1000_01a3 : 0x1000_01a4, 1, 0);
+    }
+
+    const owned = [
+      [ADDRESSES.snapshot, ADDRESSES.snapshot + 64],
+      [ADDRESSES.cursor, ADDRESSES.cursor + COMPANION_CURSOR_BYTES],
+      [ADDRESSES.toolbox, ADDRESSES.toolbox + COMPANION_TOOLBOX_BYTES],
+      [ADDRESSES.companionRuntime, ADDRESSES.companionRuntime + 65_536],
+    ] as const;
+    const after = new Uint8Array(kernel.memory.buffer);
+    for (let address = 0; address < after.byteLength; address += 1) {
+      if (owned.some(([start, end]) => address >= start && address < end)) {
+        continue;
+      }
+      assert.equal(
+        after[address],
+        before[address],
+        `companion wrote outside an owned region at 0x${address.toString(16)}`,
+      );
+    }
   });
 
   it("rejects empty, unknown, missing, or unselected feature regions", async () => {
@@ -826,7 +821,6 @@ describe("Companion kernel", () => {
     );
 
     kernel.tick();
-    assert.equal(kernel.calls.original, 1);
     assert.equal(kernel.view.getUint32(ADDRESSES.snapshot, true), 0);
     assert.equal(kernel.field(CURSOR.magic), 0);
   });
@@ -843,7 +837,6 @@ describe("Companion kernel", () => {
     assert.equal(kernel.init({ cursorPointer: 0xffff_f000 }), 0);
     // A rejected init must leave the kernel dormant.
     kernel.tick();
-    assert.equal(kernel.calls.original, 1);
     assert.equal(kernel.field(CURSOR.magic), 0);
     assert.equal(kernel.init(), 1);
   });
@@ -930,7 +923,6 @@ describe("Companion kernel", () => {
     assert.equal(kernel.field(CURSOR.generation), 3);
     assert.deepEqual(kernel.payload(), expectedRgba(second));
 
-    assert.equal(kernel.calls.original, 19);
   });
 
   it("never publishes an uncommitted colour buffer as a cursor", async () => {

@@ -18,16 +18,6 @@ static mut FEATURES: u32 = 0;
 static mut TICK_COUNT: u32 = 0;
 static mut SEQUENCE: u32 = 0;
 
-#[link(wasm_import_module = "game")]
-extern "C" {
-    #[link_name = "enhancement_tick_original"]
-    fn tick_original(context: u32);
-    #[link_name = "enhancement_cursor_original"]
-    fn cursor_original(a: u32, b: u32, c: u32, d: u32, e: u32);
-    #[link_name = "enhancement_ui_original"]
-    fn ui_original(message: u32, wparam: u32, lparam: u32);
-}
-
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     loop {}
@@ -431,8 +421,6 @@ pub unsafe extern "C" fn companion_init(
         || layout.hide_hero_panel_message == 0
         || layout.show_hero_panel_message == 0
         || layout.hide_hero_panel_message == layout.show_hero_panel_message
-        || (features & FEATURE_TOOLBOX_FOUNDATION != 0
-            && (layout.prop_context_slot & 3 != 0 || !contains(layout.prop_context_slot, 4)))
     {
         return 0;
     }
@@ -457,10 +445,16 @@ pub unsafe extern "C" fn companion_init(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d: u32, e: u32) {
+pub unsafe extern "C" fn companion_dispatch(
+    kind: u32,
+    a: u32,
+    b: u32,
+    _c: u32,
+    _d: u32,
+    _e: u32,
+) {
     match kind {
         DISPATCH_TICK => {
-            unsafe { tick_original(a) };
             if !unsafe { INITIALIZED } {
                 return;
             }
@@ -485,7 +479,6 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             }
         }
         DISPATCH_CURSOR => {
-            unsafe { cursor_original(a, b, c, d, e) };
             if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_NATIVE_CURSOR != 0 {
                 unsafe {
                     cursor::mark_dirty();
@@ -496,7 +489,6 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             }
         }
         DISPATCH_UI => {
-            unsafe { ui_original(a, b, c) };
             if !unsafe { INITIALIZED } || unsafe { FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0 {
                 return;
             }
@@ -510,16 +502,8 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn companion_set_first_hero_panel(shown: u32) -> u32 {
-    if !unsafe { INITIALIZED } || unsafe { FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0 {
-        return 0;
-    }
-    unsafe { toolbox::request_first_hero_panel(shown) }
-}
-
-#[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    4
+    5
 }
 
 #[no_mangle]

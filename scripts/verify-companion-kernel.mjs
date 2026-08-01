@@ -11,9 +11,6 @@ const expectedImports = [
   "env.__stack_pointer:global",
   "env.__table_base:global",
   "env.memory:memory",
-  "game.enhancement_cursor_original:function",
-  "game.enhancement_tick_original:function",
-  "game.enhancement_ui_original:function",
 ];
 const expectedFunctions = [
   "companion_abi",
@@ -22,10 +19,18 @@ const expectedFunctions = [
   "companion_cursor_event_count",
   "companion_dispatch",
   "companion_init",
-  "companion_set_first_hero_panel",
   "companion_snapshot_bytes",
   "companion_toolbox_bytes",
 ];
+const dispatchSignatureModule = new WebAssembly.Module(Uint8Array.of(
+  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+  0x01, 0x0a, 0x01, 0x60, 0x06,
+  0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x00,
+  0x02, 0x13, 0x01, 0x06,
+  0x6b, 0x65, 0x72, 0x6e, 0x65, 0x6c,
+  0x08, 0x64, 0x69, 0x73, 0x70, 0x61, 0x74, 0x63, 0x68,
+  0x00, 0x00,
+));
 
 /** @param {Uint8Array} binary */
 function sectionIds(binary) {
@@ -91,8 +96,8 @@ assert.deepEqual(
   WebAssembly.Module.customSections(module, "dylink.0").map((section) => [
     ...new Uint8Array(section),
   ]),
-  [[0x01, 0x05, 0xa0, 0x02, 0x02, 0x00, 0x00]],
-  "kernel must reserve exactly 288 aligned bytes and no table entries",
+  [[0x01, 0x05, 0x8c, 0x02, 0x02, 0x00, 0x00]],
+  "kernel must reserve exactly 268 aligned bytes and no table entries",
 );
 assert.deepEqual(
   WebAssembly.Module.imports(module)
@@ -135,11 +140,6 @@ const instance = new WebAssembly.Instance(module, {
     ),
     __table_base: immutableI32(0),
   },
-  game: {
-    enhancement_tick_original() {},
-    enhancement_cursor_original() {},
-    enhancement_ui_original() {},
-  },
 });
 assert.deepEqual(
   lowGameMemory,
@@ -152,13 +152,21 @@ function exportedFunction(name) {
   if (typeof value !== "function") throw new Error(`missing function ${name}`);
   return value;
 }
-assert.equal(exportedFunction("companion_abi")(), 4);
-assert.equal(exportedFunction("companion_config_bytes")(), 160);
+assert.equal(exportedFunction("companion_abi")(), 5);
+assert.equal(exportedFunction("companion_config_bytes")(), 156);
 assert.equal(exportedFunction("companion_snapshot_bytes")(), 64);
 assert.equal(exportedFunction("companion_cursor_bytes")(), 4_160);
 assert.equal(exportedFunction("companion_toolbox_bytes")(), 64);
 assert.equal(exportedFunction("companion_init").length, 9);
 assert.equal(exportedFunction("companion_dispatch").length, 6);
+assert.doesNotThrow(() => new WebAssembly.Instance(dispatchSignatureModule, {
+  kernel: { dispatch: exportedFunction("companion_dispatch") },
+}));
+assert.equal(
+  exportedFunction("companion_dispatch")(0xffff_ffff, 0, 0, 0, 0, 0),
+  undefined,
+  "companion dispatch must return void for the game table signature",
+);
 
 const scratch = mkdtempSync(join(tmpdir(), "gw-companion-kernel-"));
 try {

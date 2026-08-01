@@ -29,12 +29,8 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const ENHANCEMENT_TRANSFORM_ABI = 7;
+export const ENHANCEMENT_TRANSFORM_ABI = 8;
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
-export const ENHANCEMENT_TICK_ORIGINAL_EXPORT = "enhancement_tick_original";
-export const ENHANCEMENT_CURSOR_ORIGINAL_EXPORT = "enhancement_cursor_original";
-export const ENHANCEMENT_UI_ORIGINAL_EXPORT = "enhancement_ui_original";
-export const ENHANCEMENT_ORIGINAL_EXPORT = ENHANCEMENT_TICK_ORIGINAL_EXPORT;
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 const DISPATCH_PARAMS = 6;
@@ -142,12 +138,16 @@ function dispatcher(
   );
   return concat(
     uleb(0),
-    Uint8Array.of(0x23),
-    uleb(hookGlobalIndex),
-    Uint8Array.of(0x45, 0x04, 0x40),
+    // The game-owned function always runs in the game module and on the
+    // game-owned call stack. The optional companion is a passive observer;
+    // normal game execution must never depend on crossing into a side module
+    // and then re-entering this clone.
     ...args,
     Uint8Array.of(0x10),
     uleb(originalIndex),
+    Uint8Array.of(0x23),
+    uleb(hookGlobalIndex),
+    Uint8Array.of(0x45, 0x04, 0x40),
     Uint8Array.of(0x0f, 0x0b),
     Uint8Array.of(0x41),
     sleb(dispatchKind),
@@ -383,12 +383,7 @@ export function transformEnhancementWasm(
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
   const existingExports = parseExports(sectionById(sections, 7));
-  const addedExportNames = [
-    ENHANCEMENT_HOOK_EXPORT,
-    ENHANCEMENT_TICK_ORIGINAL_EXPORT,
-    ENHANCEMENT_CURSOR_ORIGINAL_EXPORT,
-    ENHANCEMENT_UI_ORIGINAL_EXPORT,
-  ];
+  const addedExportNames = [ENHANCEMENT_HOOK_EXPORT];
   for (const name of addedExportNames) {
     if (existingExports.some((entry) => entry.name === name)) {
       fail(`export ${name} already exists`);
@@ -444,20 +439,11 @@ export function transformEnhancementWasm(
     Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
   );
   const nextExports = concat(
-    uleb(exports.count + 4),
+    uleb(exports.count + 1),
     exports.entries,
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
     uleb(hookGlobalIndex),
-    encodeName(ENHANCEMENT_TICK_ORIGINAL_EXPORT),
-    Uint8Array.of(0x00),
-    uleb(tickOriginalIndex),
-    encodeName(ENHANCEMENT_CURSOR_ORIGINAL_EXPORT),
-    Uint8Array.of(0x00),
-    uleb(cursorOriginalIndex),
-    encodeName(ENHANCEMENT_UI_ORIGINAL_EXPORT),
-    Uint8Array.of(0x00),
-    uleb(uiOriginalIndex),
   );
 
   const rewritten = sections.map((section): Section => {

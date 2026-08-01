@@ -10,10 +10,7 @@ import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.j
 import {
   inspectEnhancementCandidate,
   ENHANCEMENT_HOOK_EXPORT,
-  ENHANCEMENT_CURSOR_ORIGINAL_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
-  ENHANCEMENT_ORIGINAL_EXPORT,
-  ENHANCEMENT_UI_ORIGINAL_EXPORT,
   ENHANCEMENT_TRANSFORM_ABI,
   transformEnhancementWasm,
 } from "../../src/main/core/enhancement-transform.js";
@@ -126,7 +123,6 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
       partyContext: 28, playerParty: 32, partyHeroes: 36,
       heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
-      propContextSlot: 40,
     },
   };
 }
@@ -169,9 +165,9 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const module = new WebAssembly.Module(bytes);
     const names = WebAssembly.Module.exports(module).map((entry) => entry.name);
     assert.ok(names.includes(ENHANCEMENT_HOOK_EXPORT));
-    assert.ok(names.includes(ENHANCEMENT_ORIGINAL_EXPORT));
-    assert.ok(names.includes(ENHANCEMENT_CURSOR_ORIGINAL_EXPORT));
-    assert.ok(names.includes(ENHANCEMENT_UI_ORIGINAL_EXPORT));
+    assert.equal(names.includes("enhancement_tick_original"), false);
+    assert.equal(names.includes("enhancement_cursor_original"), false);
+    assert.equal(names.includes("enhancement_ui_original"), false);
     const sections = WebAssembly.Module.customSections(
       module,
       ENHANCEMENT_MANIFEST_SECTION,
@@ -224,7 +220,9 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const transformed = transformEnhancementWasm(input, build);
     const originals: number[][] = [];
     const dispatches: number[][] = [];
-    const game = { exports: {} as Record<string, unknown> };
+    const order: string[] = [];
+    let trapTick = false;
+    let trapCallback = false;
     const callbackInstance = new WebAssembly.Instance(
       new WebAssembly.Module(
         new Uint8Array(callbackFixture()).buffer as ArrayBuffer,
@@ -233,23 +231,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
         env: {
           dispatch: (...args: number[]) => {
             dispatches.push(args);
-            if (args[0] === 0) {
-              (game.exports[ENHANCEMENT_ORIGINAL_EXPORT] as (a: number) => void)(
-                args[1]!,
-              );
-            } else if (args[0] === 1) {
-              (game.exports[ENHANCEMENT_CURSOR_ORIGINAL_EXPORT] as (
-                ...a: number[]
-              ) => void)(
-                ...args.slice(1),
-              );
-            } else {
-              (game.exports[ENHANCEMENT_UI_ORIGINAL_EXPORT] as (
-                ...a: number[]
-              ) => void)(
-                ...args.slice(1, 4),
-              );
-            }
+            order.push(`callback:${args[0]}`);
+            if (trapCallback) throw new Error("observer trapped");
           },
         },
       },
@@ -260,17 +243,27 @@ describe("targeted Enhancement WebAssembly transform", () => {
       ),
       {
         env: {
-          t: (a: number) => originals.push([0, a]),
-          c: (...args: number[]) => originals.push([1, ...args]),
-          u: (...args: number[]) => originals.push([2, ...args]),
+          t: (a: number) => {
+            originals.push([0, a]);
+            order.push("original:0");
+            if (trapTick) throw new Error("original tick trapped");
+          },
+          c: (...args: number[]) => {
+            originals.push([1, ...args]);
+            order.push("original:1");
+          },
+          u: (...args: number[]) => {
+            originals.push([2, ...args]);
+            order.push("original:2");
+          },
         },
       },
     );
-    game.exports = gameInstance.exports as Record<string, unknown>;
-    const table = game.exports.tbl as WebAssembly.Table;
-    const tick = game.exports.EmscriptenExeThreadMainLoop as (a: number) => void;
-    const cursor = game.exports.cursor as (...args: number[]) => void;
-    const ui = game.exports.ui as (...args: number[]) => void;
+    const game = gameInstance.exports as Record<string, unknown>;
+    const table = game.tbl as WebAssembly.Table;
+    const tick = game.EmscriptenExeThreadMainLoop as (a: number) => void;
+    const cursor = game.cursor as (...args: number[]) => void;
+    const ui = game.ui as (...args: number[]) => void;
 
     tick(11);
     cursor(21, 22, 23, 24, 25);
@@ -281,19 +274,19 @@ describe("targeted Enhancement WebAssembly transform", () => {
       [2, 31, 32, 33],
     ]);
     assert.deepEqual(dispatches, []);
+    assert.deepEqual(order, ["original:0", "original:1", "original:2"]);
 
     assert.equal(table.length, 5);
-    const slotZeroSentinel = game.exports[
-      ENHANCEMENT_ORIGINAL_EXPORT
-    ] as CallableFunction;
+    const slotZeroSentinel = tick as CallableFunction;
     table.set(0, slotZeroSentinel);
     table.set(
       build.tableSlot,
       callbackInstance.exports.callback as CallableFunction,
     );
-    (game.exports[ENHANCEMENT_HOOK_EXPORT] as WebAssembly.Global).value =
+    (game[ENHANCEMENT_HOOK_EXPORT] as WebAssembly.Global).value =
       build.tableSlot + 1;
     originals.length = 0;
+    order.length = 0;
     tick(41);
     cursor(51, 52, 53, 54, 55);
     ui(61, 62, 63);
@@ -307,7 +300,28 @@ describe("targeted Enhancement WebAssembly transform", () => {
       [1, 51, 52, 53, 54, 55],
       [2, 61, 62, 63],
     ]);
+    assert.deepEqual(order, [
+      "original:0", "callback:0",
+      "original:1", "callback:1",
+      "original:2", "callback:2",
+    ]);
     assert.equal(table.get(0), slotZeroSentinel);
+
+    trapTick = true;
+    dispatches.length = 0;
+    order.length = 0;
+    assert.throws(() => tick(71), /original tick trapped/);
+    assert.deepEqual(order, ["original:0"]);
+    assert.deepEqual(dispatches, []);
+
+    trapTick = false;
+    trapCallback = true;
+    originals.length = 0;
+    dispatches.length = 0;
+    order.length = 0;
+    assert.throws(() => cursor(81, 82, 83, 84, 85), /observer trapped/);
+    assert.deepEqual(originals, [[1, 81, 82, 83, 84, 85]]);
+    assert.deepEqual(order, ["original:1", "callback:1"]);
   });
 
   it("rejects a non-terminal slot, hash mismatch, and signature mismatch", () => {

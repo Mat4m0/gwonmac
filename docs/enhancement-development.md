@@ -350,12 +350,12 @@ model. Add a bounded region only when its first feature requires it:
 ```text
 core snapshot       lifecycle, map, player, target
 cursor snapshot     one 32x32 bitmap, hotspot, generation
-toolbox snapshot    chat/cursor counters, first hero, typed command result
+toolbox snapshot    chat/cursor counters, first hero, observed panel state
 party snapshot      fixed-capacity party entries
 agent snapshot      filtered bounded agents
 skill/effect state  bounded domain collections
 event ring          only for state a tick snapshot can miss
-command queue       only after a typed command is approved
+command gateway     absent until an exact game-owned safe point is certified
 ```
 
 Every region needs magic, ABI version, byte size, sequence, count/capacity, and
@@ -391,7 +391,7 @@ evidence has not certified.
 | Inventory/equipment | Not modeled | none | lifecycle and string decoding |
 | Player chat event | Partial | exact dispatcher, scalar counter | bounded live message/map/reload run |
 | Events/combat | Fixed dispatch, no generic ring | none | prove another event is needed |
-| Game commands | Partial | typed queued hero-panel Show/Hide offline | live panel confirmation |
+| Game commands | Not safe | tick-time and arbitrary-UI dispatch both trapped live | certify one game-owned gateway before restoring a command |
 | Packet-derived state | No packet hook | none | identify dispatch boundary |
 | Extension modules | Intentionally deferred | none | extract after repeated modules |
 

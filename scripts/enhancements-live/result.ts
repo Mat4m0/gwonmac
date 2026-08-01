@@ -42,6 +42,9 @@ export function projectLiveResult(
       scenario: name,
       supported: runtime?.status === "installed",
       buildId: typeof runtime?.buildId === "number" ? runtime.buildId : null,
+      companionAbi: numeric(runtime?.companionAbi),
+      kernelSha256:
+        typeof runtime?.kernelSha256 === "string" ? runtime.kernelSha256 : null,
       hookCount: numeric(state?.tickCount),
       hookHertz: Number(((ticks * 1_000) / elapsedMs).toFixed(2)),
       sequence: numeric(state?.sequence),

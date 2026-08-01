@@ -709,9 +709,6 @@ type ToolboxLiveState = {
   heroAvailable: boolean;
   firstHeroId: number;
   panelState: number;
-  commandRequest: number;
-  commandComplete: number;
-  commandStatus: number;
 };
 
 async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
@@ -745,9 +742,6 @@ async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
       heroAvailable: value.heroAvailable === true,
       firstHeroId: Number(value.firstHeroId) >>> 0,
       panelState: Number(value.panelState) >>> 0,
-      commandRequest: Number(value.commandRequest) >>> 0,
-      commandComplete: Number(value.commandComplete) >>> 0,
-      commandStatus: Number(value.commandStatus) >>> 0,
     };
   });
 }
@@ -839,36 +833,28 @@ async function runToolboxFoundation({ page }: AutomationContext) {
     throw new Error("no first owned hero is available for the panel proof");
   }
 
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, show the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 2;
+  }, undefined, { timeout: 1_000 });
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, hide the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 1;
+  }, undefined, { timeout: 1_000 });
   await openToolboxOverlay(page);
-  const hideStarted = Date.now();
-  await page.getByRole("button", { name: "Hide panel" }).click();
-  await page.waitForFunction(() => {
-    const toolbox = window.gwCompanionRuntime?.toolbox;
-    return typeof toolbox === "object"
-      && toolbox !== null
-      && "panelState" in toolbox
-      && toolbox.panelState === 1
-      && "commandRequest" in toolbox
-      && "commandComplete" in toolbox
-      && toolbox.commandRequest === toolbox.commandComplete;
-  }, undefined, { timeout: 1_000 });
-  const hideLatencyMs = Date.now() - hideStarted;
-  await operatorCheckpoint("confirm the first owned hero's real game panel is hidden");
-
-  const showStarted = Date.now();
-  await page.getByRole("button", { name: "Show panel" }).click();
-  await page.waitForFunction(() => {
-    const toolbox = window.gwCompanionRuntime?.toolbox;
-    return typeof toolbox === "object"
-      && toolbox !== null
-      && "panelState" in toolbox
-      && toolbox.panelState === 2
-      && "commandRequest" in toolbox
-      && "commandComplete" in toolbox
-      && toolbox.commandRequest === toolbox.commandComplete;
-  }, undefined, { timeout: 1_000 });
-  const showLatencyMs = Date.now() - showStarted;
-  await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
+  await page.getByText("Hero panel observed · hidden").waitFor();
   await page.getByRole("button", { name: "Close Toolbox" }).click();
   const final = await readToolboxState(page);
   return {
@@ -877,9 +863,6 @@ async function runToolboxFoundation({ page }: AutomationContext) {
     delta: final.playerChatCount - baseline.playerChatCount,
     heroId: final.firstHeroId,
     panelState: final.panelState,
-    commandStatus: final.commandStatus,
-    hideLatencyMs,
-    showLatencyMs,
     cursorEventDelta:
       cursorAfter.cursorEventCount - cursorBefore.cursorEventCount,
     cursorGenerationDelta:
@@ -905,44 +888,33 @@ async function runToolboxHeroPanel({ page }: AutomationContext) {
     "confirm a hero is in the party",
   );
   const initial = await readToolboxState(page);
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, show the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 2;
+  }, undefined, { timeout: 1_000 });
+  await operatorCheckpoint(
+    "using only Guild Wars' own controls, hide the first owned hero's panel",
+  );
+  await page.waitForFunction(() => {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && "panelState" in toolbox
+      && toolbox.panelState === 1;
+  }, undefined, { timeout: 1_000 });
   await openToolboxOverlay(page);
-  const hideStarted = Date.now();
-  await page.getByRole("button", { name: "Hide panel" }).click();
-  await page.waitForFunction(() => {
-    const toolbox = window.gwCompanionRuntime?.toolbox;
-    return typeof toolbox === "object"
-      && toolbox !== null
-      && "panelState" in toolbox
-      && toolbox.panelState === 1
-      && "commandRequest" in toolbox
-      && "commandComplete" in toolbox
-      && toolbox.commandRequest === toolbox.commandComplete;
-  }, undefined, { timeout: 1_000 });
-  const hideLatencyMs = Date.now() - hideStarted;
-  await operatorCheckpoint("confirm the first owned hero's real game panel is hidden");
-
-  const showStarted = Date.now();
-  await page.getByRole("button", { name: "Show panel" }).click();
-  await page.waitForFunction(() => {
-    const toolbox = window.gwCompanionRuntime?.toolbox;
-    return typeof toolbox === "object"
-      && toolbox !== null
-      && "panelState" in toolbox
-      && toolbox.panelState === 2
-      && "commandRequest" in toolbox
-      && "commandComplete" in toolbox
-      && toolbox.commandRequest === toolbox.commandComplete;
-  }, undefined, { timeout: 1_000 });
-  const showLatencyMs = Date.now() - showStarted;
-  await operatorCheckpoint("confirm the first owned hero's real game panel is shown");
+  await page.getByText("Hero panel observed · hidden").waitFor();
   await page.getByRole("button", { name: "Close Toolbox" }).click();
   const final = await readToolboxState(page);
   return {
     heroId: initial.firstHeroId,
     panelState: final.panelState,
-    commandStatus: final.commandStatus,
-    hideLatencyMs,
-    showLatencyMs,
   };
 }
 
@@ -989,8 +961,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         !evidence
         || evidence.delta !== 1
         || evidence.heroId === 0
-        || evidence.panelState !== 2
-        || evidence.commandStatus !== 1
+        || evidence.panelState !== 1
         || evidence.cursorEventDelta < 1
         || evidence.cursorGenerationDelta < 1
         || evidence.cursorRefreshDelta < 1
@@ -1008,12 +979,9 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       if (
         !evidence
         || evidence.heroId === 0
-        || evidence.panelState !== 2
-        || evidence.commandStatus !== 1
-        || evidence.hideLatencyMs > 1_000
-        || evidence.showLatencyMs > 1_000
+        || evidence.panelState !== 1
       ) {
-        throw new Error("hero panel live proof did not settle promptly");
+        throw new Error("hero panel observation did not settle correctly");
       }
     },
   }),

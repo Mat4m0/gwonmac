@@ -115,22 +115,27 @@ async function fileResponse(
   filePath: string,
   request: Request,
   mime: string,
+  cacheControl?: "no-store",
 ): Promise<Response> {
+  const fileHeaders = (extra: Record<string, string> = {}) => headers({
+    ...(cacheControl ? { "Cache-Control": cacheControl } : {}),
+    ...extra,
+  });
   let st;
   try {
     st = await stat(filePath);
   } catch {
-    return new Response("not found", { status: 404, headers: headers() });
+    return new Response("not found", { status: 404, headers: fileHeaders() });
   }
   if (!st.isFile()) {
-    return new Response("not found", { status: 404, headers: headers() });
+    return new Response("not found", { status: 404, headers: fileHeaders() });
   }
 
   const range = parseRangeHeader(request.headers.get("range"), st.size);
   if (range === "unsatisfiable") {
     return new Response(null, {
       status: 416,
-      headers: headers({
+      headers: fileHeaders({
         "Content-Range": `bytes */${st.size}`,
         "Accept-Ranges": "bytes",
       }),
@@ -145,7 +150,7 @@ async function fileResponse(
     const webStream = Readable.toWeb(nodeStream) as ReadableStream;
     return new Response(webStream, {
       status: 206,
-      headers: headers({
+      headers: fileHeaders({
         "Content-Type": mime,
         "Accept-Ranges": "bytes",
         "Content-Range": `bytes ${range.start}-${range.end}/${st.size}`,
@@ -158,7 +163,7 @@ async function fileResponse(
   const webStream = Readable.toWeb(nodeStream) as ReadableStream;
   return new Response(webStream, {
     status: 200,
-    headers: headers({
+    headers: fileHeaders({
       "Content-Type": mime,
       "Accept-Ranges": "bytes",
       "Content-Length": String(st.size),
@@ -425,7 +430,11 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     try {
       await stat(rendererFile);
       const mime = MIME[path.extname(rendererFile)] ?? "application/octet-stream";
-      return fileResponse(rendererFile, request, mime);
+      // Renderer code and the companion are local build artifacts. Reusing an
+      // old response across a development rebuild or app replacement can pair
+      // a new transformed game module with an old callback ABI, so these tiny
+      // local files deliberately bypass Chromium's HTTP cache.
+      return fileResponse(rendererFile, request, mime, "no-store");
     } catch {
       /* fall through to proxy */
     }

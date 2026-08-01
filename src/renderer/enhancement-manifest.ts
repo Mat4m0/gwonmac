@@ -1,5 +1,5 @@
-const ENHANCEMENT_TRANSFORM_ABI = 7;
-const CONFIG_WORDS = 40;
+const ENHANCEMENT_TRANSFORM_ABI = 8;
+const CONFIG_WORDS = 39;
 
 /** The validated subset of the derived module's fixed evidence. */
 export type EnhancementManifest = Readonly<{
@@ -54,9 +54,9 @@ export function decodeEnhancementManifest(
           Number.isInteger(message)
           && Number(message) > 0
           && Number(message) <= 0xffff_ffff)
-      || configWords[37] !== messages.playerChat
-      || configWords[38] !== messages.hideHeroPanel
-      || configWords[39] !== messages.showHeroPanel
+      || configWords[36] !== messages.playerChat
+      || configWords[37] !== messages.hideHeroPanel
+      || configWords[38] !== messages.showHeroPanel
     ) {
       return null;
     }

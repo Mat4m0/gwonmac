@@ -62,6 +62,7 @@ interface TargetReadoutFixture {
     rangeBand?: number;
     target?: boolean;
   }): void;
+  setHookEnabledForBenchmark(enabled: boolean): void;
   table: WebAssembly.Table;
 }
 
@@ -577,19 +578,6 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
           __indirect_function_table: table,
           malloc,
           free,
-          enhancement_tick_original: (context: number) => void context,
-          enhancement_cursor_original: (
-            a: number,
-            b: number,
-            c: number,
-            d: number,
-            e: number,
-          ) => void [a, b, c, d, e],
-          enhancement_ui_original: (
-            message: number,
-            wparam: number,
-            lparam: number,
-          ) => void [message, wparam, lparam],
           enhancement_hook_slot: hookSlot,
         },
       },
@@ -635,6 +623,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
       freed,
       hookSlot,
       publish,
+      setHookEnabledForBenchmark: runtime.setHookEnabledForBenchmark,
       table,
     };
     return {
@@ -723,9 +712,16 @@ async function assertTargetReadoutLifecycle() {
     const disposed = await fixture.page.evaluate(() => {
       globalThis.dispatchEvent(new globalThis.Event("pagehide"));
       const probe = (globalThis as ReadoutPageGlobals).__targetReadoutFixture;
+      let reenableError = "";
+      try {
+        probe.setHookEnabledForBenchmark(true);
+      } catch (error) {
+        reenableError = error instanceof Error ? error.message : String(error);
+      }
       return {
         freed: [...probe.freed].sort((left, right) => left - right),
         hook: probe.hookSlot.value,
+        reenableError,
         runtime: window.gwCompanionRuntime,
         tableEmpty: probe.table.get(probe.table.length - 1) === null,
       };
@@ -738,6 +734,7 @@ async function assertTargetReadoutLifecycle() {
     assert.deepEqual(disposed, {
       freed: [0x1000, 0x11_000, 0x11_040],
       hook: 0,
+      reenableError: "Enhancement installation is no longer active",
       runtime: null,
       tableEmpty: true,
     });
@@ -808,19 +805,6 @@ async function assertRollbackAfterTablePublication() {
               __indirect_function_table: table,
               malloc,
               free,
-              enhancement_tick_original: (context: number) => void context,
-              enhancement_cursor_original: (
-                a: number,
-                b: number,
-                c: number,
-                d: number,
-                e: number,
-              ) => void [a, b, c, d, e],
-              enhancement_ui_original: (
-                message: number,
-                wparam: number,
-                lparam: number,
-              ) => void [message, wparam, lparam],
               enhancement_hook_slot: hookSlot,
             },
           },

@@ -558,15 +558,16 @@ the companion's own data and stack. The dependency-free
 imports the exported game memory for bounded reads, while injected memory-base
 and stack globals confine its writes to that reserved block. A private empty
 table satisfies the side-module ABI without consuming a game table entry. The
-renderer then installs its callback and enables the dispatcher last. Each dispatch branch calls its
-matching relocated original exactly once before bounded work. Cursor events
+renderer then installs its callback and enables the dispatcher last. Each
+dispatch branch calls its matching relocated original in the game module
+exactly once before notifying the passive companion. Cursor events
 mark the bitmap dirty; the next tick reads it only when dirty, while a tiny
 show-count check preserves visibility changes. A trusted click that produced
 no cursor callback receives one zero-distance hit-test refresh, fixing mode
 changes such as salvage without moving the physical pointer.
 
-Snapshot ABI v1 uses a named 160-byte `repr(C)` configuration and 64-byte core
-Snapshot,
+Snapshot ABI v1 uses a named 156-byte `repr(C)` configuration and 64-byte core
+`Snapshot`,
 compile-time size assertions, checked pointer arithmetic, and an odd/even
 sequence lock. It contains no pointers. When target observation is enabled, the
 snapshot observer reads at most once per animation frame and rejects unknown
@@ -577,12 +578,12 @@ and reaches production DOM only as an inline `cursor` on the game canvas;
 losing the cursor clears that value and nothing else. No memory view or
 per-frame call crosses preload or IPC. Development automation additionally
 allocates one 64-byte Toolbox snapshot. It carries only scalar chat count,
-cursor event count, first-owned-hero identity, and typed command status. The UI
-dispatcher observes player-chat events without retaining either pointer-shaped
-argument. Hero Show/Hide requests enter through one boolean Rust export and
-call the exact-build UI original on the next game tick with the current owned
-HeroID. The three message IDs come from the exact build certificate through
-the kernel config; Rust contains no second unversioned copy.
+cursor event count, first-owned-hero identity, and observed panel state. The UI
+dispatcher observes player-chat and hero-panel events without retaining either
+pointer-shaped argument. There is no hero Show/Hide command: the companion has
+no game-function imports and never writes the game's PropContext slot. The
+three message IDs come from the exact build certificate through the kernel
+config; Rust contains no second unversioned copy.
 
 The native socket manager owns all TCP handles. It permits only public-unicast
 destinations and ports `6112`, `80`, and `443`, and closes an owner’s sockets on

@@ -18,7 +18,6 @@ test.describe("renderer Toolbox input", () => {
         const module = (await import(specifier)) as {
           createToolboxFoundation(
             parent: HTMLElement,
-            setPanel: (shown: boolean) => number,
           ): {
             update(state: object): void;
           };
@@ -35,13 +34,7 @@ test.describe("renderer Toolbox input", () => {
           inputResets += 1;
           document.body.dataset.toolboxInputResets = String(inputResets);
         });
-        const toolbox = module.createToolboxFoundation(
-          document.body,
-          (shown) => {
-            document.body.dataset.toolboxPanelRequest = shown ? "show" : "hide";
-            return 1;
-          },
-        );
+        const toolbox = module.createToolboxFoundation(document.body);
         toolbox.update({
           status: "ready",
           playerChatCount: 3,
@@ -49,9 +42,6 @@ test.describe("renderer Toolbox input", () => {
           heroCount: 1,
           firstHeroId: 7,
           panelState: 1,
-          commandRequest: 1,
-          commandComplete: 1,
-          commandStatus: 1,
         });
         // Registered after the Toolbox capture/bubble boundary, standing in for
         // the game's global handlers. Interactive events must never reach it.
@@ -82,11 +72,10 @@ test.describe("renderer Toolbox input", () => {
       await expect(page.locator("body")).toHaveAttribute("data-toolbox-canvas-blurs", "0");
 
       await page.keyboard.press("Tab");
-      await expect(page.getByRole("button", { name: "Hide panel" })).toBeFocused();
+      await expect(page.getByRole("button", { name: "Close Toolbox" })).toBeFocused();
       await page.keyboard.press("x");
       await expect(page.locator("body")).toHaveAttribute("data-toolbox-game-keys", "0");
-      await page.getByRole("button", { name: "Show panel" }).click();
-      await expect(page.locator("body")).toHaveAttribute("data-toolbox-panel-request", "show");
+      await expect(page.getByText("Hero panel observed · hidden")).toBeVisible();
 
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();

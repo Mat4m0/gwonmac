@@ -18,7 +18,7 @@ pub(crate) const KNOWN_FEATURES: u32 =
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
-pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 1;
+pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 2;
 pub(crate) const FLAG_HERO_AVAILABLE: u32 = 1 << 0;
 
 pub(crate) const DISPATCH_TICK: u32 = 0;
@@ -27,9 +27,6 @@ pub(crate) const DISPATCH_UI: u32 = 2;
 pub(crate) const PANEL_UNKNOWN: u32 = 0;
 pub(crate) const PANEL_HIDDEN: u32 = 1;
 pub(crate) const PANEL_SHOWN: u32 = 2;
-pub(crate) const COMMAND_IDLE: u32 = 0;
-pub(crate) const COMMAND_APPLIED: u32 = 1;
-pub(crate) const COMMAND_UNAVAILABLE: u32 = 2;
 
 pub(crate) const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
 pub(crate) const CURSOR_MAGIC: u32 = 0x4354_5747;
@@ -85,7 +82,6 @@ pub(crate) struct Layout {
     pub(crate) hero_agent_id: u32,
     pub(crate) hero_owner_player_id: u32,
     pub(crate) hero_id: u32,
-    pub(crate) prop_context_slot: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -129,7 +125,6 @@ impl Layout {
         hero_agent_id: 0,
         hero_owner_player_id: 0,
         hero_id: 0,
-        prop_context_slot: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -185,13 +180,10 @@ pub(crate) struct ToolboxSnapshot {
     pub(crate) first_hero_id: u32,
     pub(crate) first_hero_agent_id: u32,
     pub(crate) panel_state: u32,
-    pub(crate) command_request: u32,
-    pub(crate) command_complete: u32,
-    pub(crate) command_status: u32,
-    pub(crate) reserved: [u32; 3],
+    pub(crate) reserved: [u32; 6],
 }
 
-const _: [(); 160] = [(); size_of::<Layout>()];
+const _: [(); 156] = [(); size_of::<Layout>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];

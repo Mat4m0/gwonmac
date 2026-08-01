@@ -92,6 +92,17 @@ test.describe("sandbox boundary", () => {
         status: 503,
         cacheControl: "no-store",
       });
+      const companionResponse = await fixture.page.evaluate(async () => {
+        const response = await window.fetch("companion-kernel.wasm");
+        return {
+          status: response.status,
+          cacheControl: response.headers.get("cache-control"),
+        };
+      });
+      expect(companionResponse).toEqual({
+        status: 200,
+        cacheControl: "no-store",
+      });
 
       await fixture.page.evaluate(() => {
         globalThis.location.assign("gw://app/account/login");

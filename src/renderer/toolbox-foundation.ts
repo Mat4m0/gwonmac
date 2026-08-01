@@ -5,9 +5,6 @@ type ToolboxState = Readonly<{
   heroCount?: number;
   firstHeroId?: number;
   panelState?: number;
-  commandRequest?: number;
-  commandComplete?: number;
-  commandStatus?: number;
 }>;
 
 const ROOT_STYLE = [
@@ -46,10 +43,7 @@ const BUTTON_STYLE = [
 const PANEL_NAMES = ["unknown", "hidden", "shown"] as const;
 const TOGGLE_CODE = "Space";
 
-export function createToolboxFoundation(
-  parent: HTMLElement,
-  setPanel: (shown: boolean) => number,
-) {
+export function createToolboxFoundation(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) {
@@ -106,18 +100,7 @@ export function createToolboxFoundation(
   const chat = document.createElement("div");
   const hero = document.createElement("div");
   const panel = document.createElement("div");
-  const actions = document.createElement("div");
-  actions.style.cssText = "display:flex;gap:6px";
-  const hide = document.createElement("button");
-  hide.type = "button";
-  hide.textContent = "Hide panel";
-  hide.style.cssText = BUTTON_STYLE;
-  const show = document.createElement("button");
-  show.type = "button";
-  show.textContent = "Show panel";
-  show.style.cssText = BUTTON_STYLE;
-  actions.append(hide, show);
-  dialog.append(heading, chat, hero, panel, actions);
+  dialog.append(heading, chat, hero, panel);
   root.append(hud, dialog);
   parent.append(root);
 
@@ -147,12 +130,6 @@ export function createToolboxFoundation(
     }
   };
 
-  const request = (shown: boolean) => {
-    if (setPanel(shown) === 0) {
-      panel.textContent = "Hero panel · command unavailable";
-    }
-  };
-
   const onKeyDown = (event: KeyboardEvent) => {
     const toggles =
       event.code === TOGGLE_CODE &&
@@ -169,7 +146,7 @@ export function createToolboxFoundation(
   const trapOverlayFocus = (event: KeyboardEvent) => {
     if (!overlayOpen || event.key !== "Tab") return;
     event.preventDefault();
-    const controls = [close, hide, show].filter((control) => !control.disabled);
+    const controls = [close];
     const current = controls.findIndex(
       (control) => control === document.activeElement,
     );
@@ -203,8 +180,6 @@ export function createToolboxFoundation(
   window.addEventListener("keydown", onKeyDown, true);
   open.addEventListener("click", () => setOpen(true));
   close.addEventListener("click", () => setOpen(false));
-  hide.addEventListener("click", () => request(false));
-  show.addEventListener("click", () => request(true));
 
   return {
     update(next: ToolboxState) {
@@ -214,8 +189,6 @@ export function createToolboxFoundation(
         chat.textContent = "Player chat events · waiting";
         hero.textContent = "First owned hero · waiting";
         panel.textContent = "Hero panel · waiting";
-        hide.disabled = true;
-        show.disabled = true;
         return;
       }
       const chatCount = next.playerChatCount ?? 0;
@@ -224,15 +197,7 @@ export function createToolboxFoundation(
       hero.textContent = next.heroAvailable
         ? `First owned hero · ${next.firstHeroId} (${next.heroCount} owned)`
         : "First owned hero · unavailable";
-      const pending = next.commandRequest !== next.commandComplete;
-      const command = pending
-        ? " · pending"
-        : next.commandStatus === 2
-          ? " · unavailable"
-          : "";
-      panel.textContent = `Hero panel · ${PANEL_NAMES[next.panelState ?? 0] ?? "unknown"}${command}`;
-      hide.disabled = !next.heroAvailable || pending;
-      show.disabled = !next.heroAvailable || pending;
+      panel.textContent = `Hero panel observed · ${PANEL_NAMES[next.panelState ?? 0] ?? "unknown"}`;
     },
     get state() {
       return state;
