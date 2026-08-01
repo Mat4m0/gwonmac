@@ -1,3 +1,15 @@
+//! The shared wire format: the configuration the host installs, the three
+//! snapshots the kernel publishes, and the constants both sides compare
+//! against. Declarations only — no logic and no unsafe code.
+//!
+//! Every published type is `repr(C)` and none of them contains a pointer, so a
+//! snapshot is meaningful to a reader that only knows the byte layout. The
+//! size assertions at the end of the file pin the exact byte counts the
+//! renderer decodes: a field added, widened, or reordered fails the build
+//! instead of silently shifting every value after it. Those same sizes are
+//! what `companion_init` measures the host's regions against, so the
+//! assertions are also the reason a bounds check here is a bounds check there.
+
 use core::mem::size_of;
 
 pub(crate) const SNAPSHOT_BYTES: u32 = size_of::<Snapshot>() as u32;

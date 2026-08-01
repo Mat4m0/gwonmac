@@ -1,3 +1,20 @@
+//! The cursor observer and the sole writer of the cursor region. It reads the
+//! game's active cursor art, its texture handle chain, and its colour buffer,
+//! and republishes a 32x32 RGBA bitmap when the identity it derives changes.
+//!
+//! The invariant is the crate's: every step of the handle chase goes through
+//! `memory.rs`, so a cursor the game has not committed, a texture that is not
+//! 32x32, or a chain that no longer resolves ends the read at `None` instead of
+//! loading past the heap. The only address this file writes is `POINTER`, the
+//! host region `companion_init` validated.
+//!
+//! `publish` and `tick` write through `POINTER`, so each requires an
+//! `initialize` from a `FEATURE_NATIVE_CURSOR` init; every one of their call
+//! sites sits behind that flag, and `initialize` itself writes only the region
+//! it is handed. `event_count` and `mark_dirty` reach the statics below and
+//! nothing else, so they carry no precondition and are reachable without the
+//! flag.
+
 use core::ptr::write_volatile;
 
 use crate::abi::*;
@@ -101,6 +118,11 @@ unsafe fn collect(layout: Layout) -> Result<State, u32> {
 // disturbing the last good pixels.
 unsafe fn publish(published: Published, source: Option<u32>) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
+    // SAFETY: `POINTER` holds the region `companion_init` accepted through
+    // `valid_region` for `FEATURE_NATIVE_CURSOR` — non-null, four-byte-aligned,
+    // and exactly `CURSOR_BYTES` inside linear memory, which cannot shrink. The
+    // indexed pixel writes stay inside it because `CURSOR_WORDS` is the length
+    // `CursorSnapshot::pixels` declares.
     let cursor = unsafe { POINTER as *mut CursorSnapshot };
     unsafe {
         write_volatile(&mut (*cursor).sequence, next.wrapping_sub(1));
@@ -185,6 +207,10 @@ pub(crate) unsafe fn initialize(pointer: u32) {
         DIRTY = true;
         EVENT_COUNT = 0;
     }
+    // SAFETY: `pointer` is the caller's validated `CURSOR_BYTES` region, and
+    // the header, the six reserved words, and `CURSOR_WORDS` pixels are the
+    // whole of `CursorSnapshot`. Zeroing it before the first publish is what
+    // keeps a reader from decoding whatever the game's allocator left behind.
     let cursor = pointer as *mut CursorSnapshot;
     unsafe {
         write_volatile(&mut (*cursor).generation, 0);
