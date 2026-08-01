@@ -128,15 +128,22 @@ not only happy paths.
   inspection. Do not write docs or UI that tell a player to verify the origin.
   `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
   pins the presentation.
-- Persistent secrets are available only when a package carries the official
-  release marker and Developer ID identity. Unpackaged development and
-  ordinary/ad-hoc packages use the volatile in-memory implementation and lose
-  secrets at quit; there is no file, mock-Keychain, or `safeStorage` fallback.
-  The first hard-cutover launch deletes exactly the retired
-  `credentials.bin` and `steam-session.bin`, never other profile data. The
+- Persistent secrets are available only to the provisioned `release`,
+  `preview`, and `development` distribution channels. Their distinct bundle
+  IDs give them mutually isolated Data Protection Keychain groups. The marker
+  is configuration, not authorization; the host bundle ID, application
+  identifier entitlement, and provisioning profile are the authorization.
+  Unpackaged development and ordinary/ad-hoc packages use the volatile
+  in-memory implementation and lose secrets at quit; there is no file,
+  mock-Keychain, or `safeStorage` fallback. Only Release deletes exactly the
+  retired `credentials.bin` and `steam-session.bin`, never other profile data;
+  Preview and Development preserve them. The
   cookie-encryption fuse is disabled so Chromium cannot create its separate
   Safe Storage Keychain item. All builds clear browser cookies at startup and
   quit.
+- Forge accepts one `GW_PACKAGE_INTENT`: `local`, `preview-handoff`, `release`,
+  or `development`. Do not recreate independent channel/signing flags; the
+  closed intent is what makes unsupported package states unrepresentable.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check per launch and

@@ -53,8 +53,9 @@ mid-download with _Play Now Instead_.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
 - Guild Wars' own **Remember Password** stores one opaque item in Apple's Data
-  Protection Keychain in official builds. Source and ad-hoc builds keep saved
-  login only in memory for that process.
+  Protection Keychain in provisioned Release, Preview, and signed Development
+  builds. Each channel is isolated. Source and ad-hoc builds keep saved login
+  only in memory for that process.
 - **The app does not poll for updates.** It checks GitHub once per launch — a
   default declared at first run that one checkbox turns off. Switched off, it
   asks GitHub only when you press **Check for Updates**. A downloaded update is
@@ -81,9 +82,33 @@ Rust is a build prerequisite, not an optional extra: every entry point runs
 
 The first online run fetches the small JSPI client artifacts.
 
+Ordinary `pnpm dev` deliberately forgets saved login when the process exits.
+For persistent developer-only login, register the `.dev` App ID, install its
+Apple Development identity, keep its device-authorized profile outside this
+repository, then run:
+
+```bash
+export APPLE_DEVELOPMENT_PROFILE=/absolute/path/gwonmac-dev.provisionprofile
+export APPLE_DEVELOPMENT_IDENTITY=0123456789ABCDEF0123456789ABCDEF01234567
+pnpm dev:signed
+```
+
+Use the 40-character identity fingerprint printed by
+`security find-identity -v -p codesigning`. The Dev app shares settings,
+templates, diagnostics, and game downloads with Release, but not credentials.
+Because those channels intentionally share one profile, quit Release or
+Preview before starting a signed Dev session.
+
+On a clean macOS test account with no saved Dev login, `pnpm test:signed-dev`
+packages the same provisioned app and proves both ArenaNet and Steam secrets
+survive relaunch, moving the app, and a replacement signature. It refuses to
+overwrite an existing Dev login.
+
 | Command                                                                  | Purpose                                     |
 | ------------------------------------------------------------------------ | ------------------------------------------- |
 | `pnpm dev`                                                               | Build and launch the app via Electron Forge |
+| `pnpm dev:signed`                                                        | Package and launch the provisioned Dev app  |
+| `pnpm test:signed-dev`                                                   | Test provisioned Dev Keychain continuity    |
 | `pnpm package`                                                           | Build a local `.app` under `out/`           |
 | `pnpm make`                                                              | Build a local ad-hoc `.zip`                  |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
@@ -189,9 +214,10 @@ Profile data lives under `~/Library/Application Support/Guild Wars`:
   `window-state.json`; missing monitors fall back to a centered window.
 - At most five 5 MB diagnostics files.
 
-Saved ArenaNet and Steam login are the exception: official releases keep them
-in two fixed, device-only Data Protection Keychain items, reachable only
-through the narrow credential IPC methods.
+Saved ArenaNet and Steam login are the exception: provisioned Release, Preview,
+and Development apps keep them in two fixed, device-only Data Protection
+Keychain items per channel, reachable only through the narrow credential IPC
+methods.
 
 The game proxy drops cookies in both directions, and browser cookies are also
 cleared at startup and quit. Clearing game data never
