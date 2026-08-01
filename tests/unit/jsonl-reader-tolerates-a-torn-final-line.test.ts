@@ -5,7 +5,7 @@
 // execute it with the shapes a killed process actually leaves behind.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseLogRecords } from "../../src/main/diagnostic-report.ts";
+import { parseLogRecords } from "../../src/main/diagnostics/report.ts";
 
 function line(seq: number, name = "app.event"): string {
   return JSON.stringify({

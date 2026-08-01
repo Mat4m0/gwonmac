@@ -50,7 +50,8 @@ not only happy paths.
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
-| `src/main/diagnostics.ts` | bounded flight recorder, captures, export                     |
+| `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
+| `src/main/diagnostics/`   | flight recorder, capture, samplers, schema, detector, export  |
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |

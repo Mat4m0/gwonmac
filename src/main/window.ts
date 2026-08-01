@@ -2,11 +2,8 @@ import {
   app,
   BrowserWindow,
   dialog,
-  Menu,
   powerSaveBlocker,
   screen,
-  shell,
-  type MenuItemConstructorOptions,
 } from "electron";
 import type {
   AppSettings,
@@ -16,7 +13,7 @@ import type {
   EnhancementProgram,
   EnhancementSelection,
 } from "../shared/contracts.js";
-import { EXTERNAL_URLS, RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
+import { RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
@@ -30,19 +27,23 @@ import {
 } from "./core/window-state.js";
 import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { sendRendererCommand } from "./renderer-commands.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
-import { isDevBuild } from "./protocol.js";
+import { installApplicationMenu } from "./window-menu.js";
+
+/**
+ * The game window: its creation, the navigation and permission handlers bound
+ * to it, and the owner-only state persisted beneath it.
+ *
+ * `window-menu.ts` and `problem-report.ts` own the surfaces that act on the
+ * window, so every transition of window state is written here and a menu
+ * handler can only ask for one.
+ */
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.
 const BACKGROUND_LAUNCH =
   !app.isPackaged && process.env.GW_BACKGROUND_LAUNCH === "1";
-
-const BUG_REPORT_URL =
-  `${EXTERNAL_URLS.github}/issues/new?template=bug-report.yml`;
-const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface WindowHost {
   sockets: SocketManager;
@@ -419,256 +420,11 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     if (mainWindow === win) mainWindow = null;
   });
 
-  installMenu(host, win);
+  installApplicationMenu({
+    host,
+    win,
+    resetWindowState: () => resetWindowState(win),
+  });
   void win.loadURL(RENDERER_URL);
   return win;
-}
-
-export async function resetGameInput(win: BrowserWindow): Promise<void> {
-  await sendRendererCommand(win, { type: "input.reset" });
-}
-
-let problemReportInFlight = false;
-
-export async function exportProblemReport(
-  win: BrowserWindow,
-  exportDiagnostics: () => Promise<string>,
-): Promise<void> {
-  // One report flow at a time, whichever surface asked: a second invocation
-  // while the save dialog is up would stack sheets and run two exports.
-  if (problemReportInFlight) return;
-  problemReportInFlight = true;
-  try {
-    const saved = await exportDiagnostics();
-    if (!saved) return;
-    logEvent({ k: "diagnostics.exported" });
-    const { response } = await dialog.showMessageBox(win, {
-      type: "info",
-      buttons: ["Open Bug Report", "Reveal in Finder", "Done"],
-      defaultId: 0,
-      cancelId: 2,
-      message: "Problem report ready",
-      detail:
-        "Diagnostics are optional. The .zip can be attached to the GitHub bug report as it is. It is redacted and contains no credentials.",
-    });
-    if (response === 0) await shell.openExternal(BUG_REPORT_URL);
-    if (response === 1) shell.showItemInFolder(saved);
-  } catch (error) {
-    logEvent({ k: "diagnostics.exportFailed", code: errorCode(error) });
-    // The prose is for the person in front of the screen, not for the export.
-    dialog.showErrorBox(
-      "Report export failed",
-      error instanceof Error ? error.message : String(error),
-    );
-  } finally {
-    problemReportInFlight = false;
-  }
-}
-
-function installMenu(host: WindowHost, win: BrowserWindow): void {
-  const isMac = process.platform === "darwin";
-  const dev = isDevBuild();
-  const reportProblem = async (): Promise<void> => {
-    await resetGameInput(win);
-    const { response } = await dialog.showMessageBox(win, {
-      type: "info",
-      buttons: [
-        "Export Recent Diagnostics…",
-        "Record Performance Problem",
-        "Cancel",
-      ],
-      defaultId: 0,
-      cancelId: 2,
-      message: "Report a problem",
-      detail:
-        "Export immediately for crashes, startup, downloads, or general bugs. For stutter, record the problem, press Cmd+Shift+M when it happens, then stop the capture.",
-    });
-    if (response === 0) {
-      await exportProblemReport(win, host.exportDiagnostics);
-    }
-    if (response === 1) {
-      try {
-        await host.startCapture(1);
-      } catch (error) {
-        dialog.showErrorBox(
-          "Capture could not start",
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    }
-  };
-
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: "about" as const },
-              { type: "separator" as const },
-              {
-                label: "Check for Updates…",
-                click: async () => {
-                  await resetGameInput(win);
-                  await sendRendererCommand(win, {
-                    type: "settings.open",
-                    pane: "updates",
-                    checkForUpdates: true,
-                  });
-                },
-              },
-              {
-                label: "Settings…",
-                accelerator: "CmdOrCtrl+,",
-                click: async () => {
-                  await resetGameInput(win);
-                  await sendRendererCommand(win, { type: "settings.open" });
-                },
-              },
-              { type: "separator" as const },
-              { role: "hide" as const },
-              { role: "hideOthers" as const },
-              { role: "unhide" as const },
-              { type: "separator" as const },
-              { role: "quit" as const },
-            ],
-          },
-        ]
-      : []),
-    {
-      label: "Edit",
-      submenu: [
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
-      ],
-    },
-    {
-      label: "View",
-      submenu: [
-        { role: "togglefullscreen" },
-        {
-          id: "reset-window-state",
-          label: "Reset Window Size and Position",
-          click: async () => {
-            await resetGameInput(win);
-            void resetWindowState(win).catch(() => {
-              logEvent({ k: "window.stateResetFailed" });
-            });
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Toggle Diagnostics",
-          click: async () => {
-            await resetGameInput(win);
-            const cur = await host.getSettings();
-            await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
-            await sendRendererCommand(win, { type: "diagnostics.toggle" });
-          },
-        },
-        {
-          label: "Reload Game",
-          accelerator: "CmdOrCtrl+R",
-          click: async () => {
-            await resetGameInput(win);
-            if (host.sockets.size(win.webContents.id) > 0) {
-              const { response } = await dialog.showMessageBox(win, {
-                type: "warning",
-                buttons: ["Reload", "Cancel"],
-                defaultId: 1,
-                cancelId: 1,
-                message: "Reload the game?",
-                detail: "Live game sockets are open and will be closed.",
-              });
-              if (response !== 0) return;
-            }
-            host.reloadGame(win);
-          },
-        },
-        ...(dev
-          ? [
-              { type: "separator" as const },
-              { role: "toggleDevTools" as const },
-            ]
-          : []),
-      ],
-    },
-    {
-      label: "Help",
-      submenu: [
-        {
-          label: "User Guide",
-          click: () => {
-            void shell.openExternal(USER_GUIDE_URL);
-          },
-        },
-        {
-          label: "Project Website",
-          click: () => {
-            void shell.openExternal(EXTERNAL_URLS.github);
-          },
-        },
-        {
-          id: "report-problem",
-          label: "Report a Problem…",
-          click: () => void reportProblem(),
-        },
-        // Capture tooling supports Report a Problem, so it lives beside it
-        // rather than in View next to everyday commands. Ids are the test
-        // contract and survive the move; ⌘⇧M stays global.
-        {
-          label: "Diagnostics",
-          submenu: [
-            {
-              id: "start-performance-capture",
-              label: "Start Performance Capture",
-              click: async () => {
-                await resetGameInput(win);
-                void host.startCapture(1).catch((error) => {
-                  dialog.showErrorBox(
-                    "Capture could not start",
-                    error instanceof Error ? error.message : String(error),
-                  );
-                });
-              },
-            },
-            {
-              id: "mark-performance-problem",
-              label: "Mark Performance Problem",
-              accelerator: "CmdOrCtrl+Shift+M",
-              click: async () => {
-                await resetGameInput(win);
-                host.markPerformanceProblem();
-              },
-            },
-            {
-              id: "start-chromium-trace",
-              label: "Start Chromium Trace",
-              click: async () => {
-                await resetGameInput(win);
-                void host.startCapture(2).catch((error) => {
-                  dialog.showErrorBox(
-                    "Trace could not start",
-                    error instanceof Error ? error.message : String(error),
-                  );
-                });
-              },
-            },
-            {
-              id: "stop-capture",
-              label: "Stop Capture",
-              click: async () => {
-                await resetGameInput(win);
-                void host.stopCapture();
-              },
-            },
-          ],
-        },
-      ],
-    },
-  ];
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

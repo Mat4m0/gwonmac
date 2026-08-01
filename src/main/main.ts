@@ -69,16 +69,15 @@ import {
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,
-  exportProblemReport,
   flushWindowState,
   getMainWindow,
   prepareWindowState,
   RENDERER_URL,
-  resetGameInput,
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
-import { sendRendererCommand } from "./renderer-commands.js";
+import { exportProblemReport } from "./problem-report.js";
+import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
 import { CredentialsStore } from "./core/credentials.js";

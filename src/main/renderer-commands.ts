@@ -114,3 +114,12 @@ export function sendRendererCommand(
     }
   });
 }
+
+/**
+ * Held keys and a captured pointer belong to the game, not to the sheet or the
+ * menu that just took focus. Every surface that opens one clears input first,
+ * so the command has a name here instead of being spelled out at each caller.
+ */
+export async function resetGameInput(win: BrowserWindow): Promise<void> {
+  await sendRendererCommand(win, { type: "input.reset" });
+}

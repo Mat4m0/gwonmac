@@ -3,12 +3,12 @@ import path from "node:path";
 import type {
   DiagnosticReport,
   DiagnosticSummary,
-} from "../shared/diagnostics.js";
+} from "../../shared/diagnostics.js";
 import type {
   CaptureMetadata,
   LogRecord,
-} from "./diagnostic-recorder.js";
-import { ValidationError } from "../shared/errors.js";
+} from "./flight-recorder.js";
+import { ValidationError } from "../../shared/errors.js";
 
 export interface PreviousSessionExport {
   sessionId: string;

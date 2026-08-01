@@ -141,7 +141,7 @@ test("stall attribution markers are fixed-name and Level 2 only", async () => {
     "utf8",
   );
   const main = await readFile(
-    path.join(root, "src/main/diagnostics.ts"),
+    path.join(root, "src/main/diagnostics/capture.ts"),
     "utf8",
   );
 
