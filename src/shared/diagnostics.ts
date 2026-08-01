@@ -62,101 +62,89 @@ export const DIAGNOSTIC_BUCKETS_US = [
   Number.MAX_SAFE_INTEGER,
 ] as const;
 
-/**
- * The metric fields that share runtime validation rules. The public type and
- * the boundary predicate both derive from this descriptor, so a field cannot
- * be declared without also being validated.
- */
-const RENDERER_METRIC_FIELDS = {
-  numbers: [
-    "intervalMs",
-    "rafCount",
-    "rafTotalUs",
-    "rafMinUs",
-    "rafMaxUs",
-    "rafOver33",
-    "rafOver50",
-    "swapCount",
-    "swapTotalUs",
-    "swapMinUs",
-    "swapMaxUs",
-    "presentationFailures",
-    "submitIntervalCount",
-    "submitIntervalTotalUs",
-    "submitIntervalMinUs",
-    "submitIntervalMaxUs",
-    "visibleSubmitIntervalCount",
-    "visibleSubmitIntervalTotalUs",
-    "visibleSubmitIntervalMinUs",
-    "visibleSubmitIntervalMaxUs",
-    "hiddenSubmitIntervalCount",
-    "hiddenSubmitIntervalTotalUs",
-    "hiddenSubmitIntervalMinUs",
-    "hiddenSubmitIntervalMaxUs",
-    "bitmapOutTotalUs",
-    "bitmapOutMinUs",
-    "bitmapOutMaxUs",
-    "bitmapPresentTotalUs",
-    "bitmapPresentMinUs",
-    "bitmapPresentMaxUs",
-    "snapshotReads",
-    "snapshotBytes",
-    "snapshotTotalUs",
-    "snapshotMinUs",
-    "snapshotMaxUs",
-    "snapshotMemoryReads",
-    "memoryHits",
-    "nativeHits",
-    "coalesced",
-    "glProgramQueryHits",
-    "glProgramQueryMisses",
-    "memoryCacheBytes",
-    "memoryCacheChunks",
-    "pendingChunks",
-    "activeDemand",
-    "activePrefetch",
-    "queuedDemand",
-    "queuedPrefetch",
-    "cacheEvictions",
-    "queuePromotions",
-    "socketSendCalls",
-    "socketPayloadBytes",
-    "socketSourceBackingMaxBytes",
-    "socketCompactBytes",
-    "socketSyncTotalUs",
-    "socketSyncMinUs",
-    "socketSyncMaxUs",
-    "socketSettles",
-    "socketSettleTotalUs",
-    "socketSettleMinUs",
-    "socketSettleMaxUs",
-    "inputToSubmitCount",
-    "inputToSubmitTotalUs",
-    "inputToSubmitMinUs",
-    "inputToSubmitMaxUs",
-    "droppedRecords",
-  ],
-  histograms: [
-    "rafHistogram",
-    "swapHistogram",
-    "submitIntervalHistogram",
-    "visibleSubmitIntervalHistogram",
-    "hiddenSubmitIntervalHistogram",
-    "bitmapOutHistogram",
-    "bitmapPresentHistogram",
-    "snapshotHistogram",
-    "socketSyncHistogram",
-    "socketSettleHistogram",
-    "inputToSubmitHistogram",
-  ],
-} as const;
+/** One bucket per `DIAGNOSTIC_BUCKETS_US` limit, with the extremes and the sum
+ * the buckets are too coarse to recover. The observation count is not here: it
+ * is the bucket total, and it is also a counter of its own that other metrics
+ * are expressed against. */
+export interface DiagnosticHistogram {
+  buckets: number[];
+  totalUs: number;
+  minUs: number;
+  maxUs: number;
+}
 
-type RendererNumericMetric = (typeof RENDERER_METRIC_FIELDS.numbers)[number];
-type RendererHistogramMetric =
-  (typeof RENDERER_METRIC_FIELDS.histograms)[number];
-const RENDERER_METRIC_KEYS: ReadonlySet<string> = new Set([
-  ...RENDERER_METRIC_FIELDS.numbers,
-  ...RENDERER_METRIC_FIELDS.histograms,
+/**
+ * The plain counters. The public type and the boundary predicate both derive
+ * from this list, so a field cannot be declared without also being validated.
+ */
+const RENDERER_NUMERIC_METRICS = [
+  "intervalMs",
+  "rafCount",
+  "rafOver33",
+  "rafOver50",
+  "swapCount",
+  "presentationFailures",
+  "submitIntervalCount",
+  "visibleSubmitIntervalCount",
+  "hiddenSubmitIntervalCount",
+  "snapshotReads",
+  "snapshotBytes",
+  "snapshotMemoryReads",
+  "memoryHits",
+  "nativeHits",
+  "coalesced",
+  "glProgramQueryHits",
+  "glProgramQueryMisses",
+  "memoryCacheBytes",
+  "memoryCacheChunks",
+  "pendingChunks",
+  "activeDemand",
+  "activePrefetch",
+  "queuedDemand",
+  "queuedPrefetch",
+  "cacheEvictions",
+  "queuePromotions",
+  "socketSendCalls",
+  "socketPayloadBytes",
+  "socketSourceBackingMaxBytes",
+  "socketCompactBytes",
+  "socketSettles",
+  "inputToSubmitCount",
+  "droppedRecords",
+] as const;
+
+type RendererNumericMetric = (typeof RENDERER_NUMERIC_METRICS)[number];
+
+/**
+ * Every histogram the renderer reports, against the counter its buckets must
+ * add up to. The counter is not always `${name}Count`: bitmapOut and
+ * bitmapPresent are measured once per swap, and snapshot, socketSync and
+ * socketSettle each ride a counter of their own. This is the one list a new
+ * histogram is added to.
+ */
+export const RENDERER_HISTOGRAMS = [
+  { name: "raf", countKey: "rafCount" },
+  { name: "swap", countKey: "swapCount" },
+  { name: "submitInterval", countKey: "submitIntervalCount" },
+  { name: "visibleSubmitInterval", countKey: "visibleSubmitIntervalCount" },
+  { name: "hiddenSubmitInterval", countKey: "hiddenSubmitIntervalCount" },
+  { name: "bitmapOut", countKey: "swapCount" },
+  { name: "bitmapPresent", countKey: "swapCount" },
+  { name: "snapshot", countKey: "snapshotReads" },
+  { name: "socketSync", countKey: "socketSendCalls" },
+  { name: "socketSettle", countKey: "socketSettles" },
+  { name: "inputToSubmit", countKey: "inputToSubmitCount" },
+] as const satisfies readonly {
+  name: string;
+  countKey: RendererNumericMetric;
+}[];
+
+export type RendererHistogramMetric =
+  (typeof RENDERER_HISTOGRAMS)[number]["name"];
+
+const RENDERER_METRIC_KEYS: ReadonlySet<string> = new Set<string>([
+  ...RENDERER_NUMERIC_METRICS,
+  ...RENDERER_HISTOGRAMS.map((histogram) => histogram.name),
   "visible",
   "focused",
   "rendererEvents",
@@ -164,7 +152,7 @@ const RENDERER_METRIC_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 export type RendererMetrics = Record<RendererNumericMetric, number> &
-  Record<RendererHistogramMetric, number[]> & {
+  Record<RendererHistogramMetric, DiagnosticHistogram> & {
     visible: boolean;
     /** Window focus, which `visible` cannot report: an unfocused or occluded
      * macOS window stops being composited while `document.hidden` stays false. */
@@ -297,30 +285,45 @@ export interface DiagnosticReport {
   };
 }
 
-export function isRendererMetrics(value: unknown): value is RendererMetrics {
+function isHistogram(value: unknown): value is DiagnosticHistogram {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const elapsed = (item: unknown) =>
+    typeof item === "number" &&
+    Number.isFinite(item) &&
+    item >= 0 &&
+    item <= Number.MAX_SAFE_INTEGER;
+  return (
+    Object.keys(record).length === 4 &&
+    Array.isArray(record.buckets) &&
+    record.buckets.length === DIAGNOSTIC_BUCKETS_US.length &&
+    record.buckets.every(
+      (count) => Number.isSafeInteger(count) && (count as number) >= 0,
+    ) &&
+    elapsed(record.totalUs) &&
+    elapsed(record.minUs) &&
+    elapsed(record.maxUs)
+  );
+}
+
+/** Every declared field present and within its own bounds. Relationships
+ * between fields are `isConsistent`'s job, which this narrowing lets it state
+ * against the contract instead of against an untyped record. */
+function hasRendererMetricShape(value: unknown): value is RendererMetrics {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   if (!(
     Object.keys(record).every((key) => RENDERER_METRIC_KEYS.has(key)) &&
     typeof record.visible === "boolean" &&
     typeof record.focused === "boolean" &&
-    RENDERER_METRIC_FIELDS.numbers.every(
+    RENDERER_NUMERIC_METRICS.every(
       (key) =>
         typeof record[key] === "number" &&
         Number.isFinite(record[key]) &&
         (record[key] as number) >= 0 &&
         (record[key] as number) <= Number.MAX_SAFE_INTEGER,
     ) &&
-    RENDERER_METRIC_FIELDS.histograms
-      .map((key) => record[key])
-      .every(
-        (histogram) =>
-          Array.isArray(histogram) &&
-          histogram.length === DIAGNOSTIC_BUCKETS_US.length &&
-          histogram.every(
-            (count) => Number.isSafeInteger(count) && (count as number) >= 0,
-          ),
-      )
+    RENDERER_HISTOGRAMS.every((histogram) => isHistogram(record[histogram.name]))
   )) {
     return false;
   }
@@ -346,11 +349,11 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
   ) {
     return false;
   }
-  if (
-    !Array.isArray(record.socketSendEvents) ||
-    record.socketSendEvents.length > 7 * 256 ||
-    record.socketSendEvents.length % 7 !== 0 ||
-    !record.socketSendEvents.every(
+  return (
+    Array.isArray(record.socketSendEvents) &&
+    record.socketSendEvents.length <= 7 * 256 &&
+    record.socketSendEvents.length % 7 === 0 &&
+    record.socketSendEvents.every(
       (item, index) =>
         typeof item === "number" &&
         Number.isFinite(item) &&
@@ -358,36 +361,12 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
         item <= Number.MAX_SAFE_INTEGER &&
         (index % 7 !== 6 || item === 0 || item === 1),
     )
-  ) {
-    return false;
-  }
-  if (
-    record.socketCompactBytes !== record.socketPayloadBytes ||
-    !record.socketSendEvents.every((_item, index, events) => {
-      if (index % 7 !== 0) return true;
-      return (
-        events[index + 4]! >= events[index + 3]! &&
-        events[index + 5] === events[index + 3]
-      );
-    })
-  ) {
-    return false;
-  }
-  const bounded = (prefix: string, countKey = `${prefix}Count`): boolean => {
-    const count = record[countKey] as number;
-    const total = record[`${prefix}TotalUs`] as number;
-    const min = record[`${prefix}MinUs`] as number;
-    const max = record[`${prefix}MaxUs`] as number;
-    const buckets = record[`${prefix}Histogram`] as number[];
-    return (
-      Number.isSafeInteger(count) &&
-      buckets.reduce((sum, value) => sum + value, 0) === count &&
-      (count === 0
-        ? total === 0 && min === 0 && max === 0
-        : min <= max && total >= min * count && total <= max * count)
-    );
-  };
-  const counters = [
+  );
+}
+
+/** What one field implies about another. */
+function isConsistent(metrics: RendererMetrics): boolean {
+  const counters: readonly RendererNumericMetric[] = [
     "rafCount",
     "rafOver33",
     "rafOver50",
@@ -417,27 +396,41 @@ export function isRendererMetrics(value: unknown): value is RendererMetrics {
     "inputToSubmitCount",
     "droppedRecords",
   ];
+  const bounded = ({ name, countKey }: (typeof RENDERER_HISTOGRAMS)[number]) => {
+    const count = metrics[countKey];
+    const { buckets, totalUs, minUs, maxUs } = metrics[name];
+    return (
+      Number.isSafeInteger(count) &&
+      buckets.reduce((sum, value) => sum + value, 0) === count &&
+      (count === 0
+        ? totalUs === 0 && minUs === 0 && maxUs === 0
+        : minUs <= maxUs &&
+          totalUs >= minUs * count &&
+          totalUs <= maxUs * count)
+    );
+  };
   return (
-    bounded("raf") &&
-    bounded("swap") &&
-    bounded("submitInterval") &&
-    bounded("visibleSubmitInterval") &&
-    bounded("hiddenSubmitInterval") &&
-    (record.visibleSubmitIntervalCount as number) +
-      (record.hiddenSubmitIntervalCount as number) ===
-      (record.submitIntervalCount as number) &&
-    bounded("bitmapOut", "swapCount") &&
-    bounded("bitmapPresent", "swapCount") &&
-    bounded("snapshot", "snapshotReads") &&
-    bounded("socketSync", "socketSendCalls") &&
-    bounded("socketSettle", "socketSettles") &&
-    bounded("inputToSubmit") &&
-    counters.every((key) => Number.isSafeInteger(record[key])) &&
-    (record.rafOver50 as number) <= (record.rafOver33 as number) &&
-    (record.rafOver33 as number) <= (record.rafCount as number) &&
-    (record.snapshotMemoryReads as number) <= (record.snapshotReads as number) &&
-    (record.presentationFailures as number) <= (record.swapCount as number)
+    metrics.socketCompactBytes === metrics.socketPayloadBytes &&
+    metrics.socketSendEvents.every((_item, index, events) => {
+      if (index % 7 !== 0) return true;
+      return (
+        events[index + 4]! >= events[index + 3]! &&
+        events[index + 5] === events[index + 3]
+      );
+    }) &&
+    RENDERER_HISTOGRAMS.every(bounded) &&
+    metrics.visibleSubmitIntervalCount + metrics.hiddenSubmitIntervalCount ===
+      metrics.submitIntervalCount &&
+    counters.every((key) => Number.isSafeInteger(metrics[key])) &&
+    metrics.rafOver50 <= metrics.rafOver33 &&
+    metrics.rafOver33 <= metrics.rafCount &&
+    metrics.snapshotMemoryReads <= metrics.snapshotReads &&
+    metrics.presentationFailures <= metrics.swapCount
   );
+}
+
+export function isRendererMetrics(value: unknown): value is RendererMetrics {
+  return hasRendererMetricShape(value) && isConsistent(value);
 }
 
 export function isRendererFrameBatch(
