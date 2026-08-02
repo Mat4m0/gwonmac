@@ -64,7 +64,8 @@ is meant to inherit the dead ends rather than walk back into them.
 | ------------------------- | ------------------------------------------------------------- |
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
-| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches |
+| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed |
+| `certificates/`           | the pinned certificate-feed public key and its key ceremony    |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -171,6 +172,27 @@ is meant to inherit the dead ends rather than walk back into them.
 - Forge accepts one `GW_PACKAGE_INTENT`: `local`, `preview-handoff`, `release`,
   or `development`. Do not recreate independent channel/signing flags; the
   closed intent is what makes unsupported package states unrepresentable.
+- The certificate feed is data only — hashes, addresses, indices, message
+  identifiers — and it only ever proposes. No instruction byte, expression or
+  path may be added to its schema, and nothing it delivers enables a feature
+  until it is re-established on the machine. The two halves are not equally
+  re-derivable and must not be trusted as if they were. Template-save facts are
+  proved: the transform re-checks every stub body and call-site signature
+  against the client bytes and must reproduce the claimed output hash, so a feed
+  may certify a build no release has seen. Enhancement facts are not — the
+  layout words are client-memory addresses the companion kernel reads and
+  writes, no structural anchor re-derives them, and an `outputSha256` computed
+  over the signer's own addresses would reproduce and prove nothing. So a feed's
+  enhancement half is accepted only as an exact restatement of the shipped
+  `ENHANCEMENT_BUILDS` table, which is the same exact-build-only rule the
+  isolated local proof already applies. That restriction is what makes the
+  invariant true: a compromised signing key must be able to deny service and
+  nothing else. Do not relax it without giving layout facts their own structural
+  anchor first. Fetched feeds are signed and ordered by a monotonic
+  `sequence`; the bundled snapshot is not, because it is derived from tables
+  compiled into the signed application.
+  `certificates/public-key.txt` holds a placeholder, which means no
+  remote feed is trusted at all. `docs/wasm-host.md` owns the mechanism.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check at launch, then at

@@ -22,6 +22,16 @@ export const ERROR_CODES = [
   "bad_settings",
   "bad_window_state",
   "candidate_pending",
+  /** Certificate-feed bytes that are not a feed: an unknown field, a value
+   * outside its declared range, a cap exceeded, or a non-canonical encoding.
+   * Named for the certificate feed because `app-updater.ts` validates a
+   * different feed and the two refusals must not compare equal. */
+  "certificate_feed_format",
+  /** A certificate feed whose detached Ed25519 signature does not verify under
+   * the pinned key, or which arrived while no pinned key exists at all. Kept
+   * apart from the format code because it is the only one that means the bytes
+   * came from somebody other than the key holder. */
+  "certificate_feed_signature",
   "chunk_count",
   "chunk_decode",
   "chunk_index",

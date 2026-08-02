@@ -217,6 +217,58 @@ certified build whose transform failed from being reported as available.
 `src/renderer/client-compatibility-notice.ts` turns them into the sentences
 both surfaces show.
 
+## The certificate feed
+
+The tables above are compiled in, so today a new ArenaNet build waits for an
+application release. The feed is how that changes without moving any authority:
+it is a versioned, signed **data-only** document — hashes, addresses, function
+indices, message identifiers, and nothing that could be an instruction or a
+path — carrying the same two records `certifyClientBuild` already consumes.
+`src/main/certification/certificate-feed.ts` owns the schema, one hand-written
+parser that refuses rather than repairs, and the snapshot the shipped tables
+derive. The TypeScript tables stay the authoring source, because the isolated
+proof runs in a process that cannot read a file; `pnpm build` writes the derived
+copy to `build/certificates/feed.json`.
+
+A feed only ever **proposes**, and its two halves are held to different rules
+because they are not equally re-derivable.
+`src/main/certification/certificate-feed-proof.ts` owns both and answers in the
+same three states as the rest of the chain.
+
+The template-save half is **proved**: the transform re-checks each stub body and
+call-site signature against the client bytes on the machine and must reproduce
+the claimed output hash. Nothing about it is taken on the signature's word, so a
+feed may certify template saving for a build no release has seen.
+
+The enhancement half is **exact-build only**. Its hook signatures and table slot
+are structurally checked, but the layout words are client-memory addresses the
+companion kernel reads and writes and the message identifiers are numbers;
+neither has a structural anchor, so a profile hash computed over the signer's own
+chosen addresses would reproduce and prove only that the signer is consistent. A
+feed's enhancement record is therefore accepted only as an exact restatement of
+the shipped `ENHANCEMENT_BUILDS` table — the same rule the isolated local proof
+applies to an unrecognised client — and the four certified profile hashes are
+then still re-derived against these bytes. Extending a feed to certify
+enhancement for a new build waits on layout facts gaining anchors of their own.
+
+So the worst a stolen signing key achieves is withholding a certificate; it
+cannot mint one for a transform that does something else.
+
+Only fetched feeds are signed. `src/main/certification/certificate-feed-trust.ts`
+verifies a detached Ed25519 signature over the exact bytes under the key pinned
+in [`certificates/public-key.txt`](../certificates/public-key.txt), whose
+committed content is a placeholder — so a clone of this repository trusts no
+remote feed at all and uses the bundled snapshot.
+[`certificates/README.md`](../certificates/README.md) owns the one-time key
+ceremony. The bundled snapshot carries no signature of its own: it is derived
+from tables compiled into an application that is already signed and notarised,
+so there is nothing an attacker could replace independently.
+
+Two feeds are ordered by an unsigned, monotonic `sequence` and nothing else. A
+candidate must be strictly newer to replace the feed in hand, so a captured
+older feed replayed at the application cannot withdraw a certificate it already
+holds.
+
 ## Enhancement instrumentation
 
 The official `Gw.jspi.wasm` remains canonical. A session with the Enhancement

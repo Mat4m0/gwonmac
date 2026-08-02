@@ -47,6 +47,20 @@ export type BridgeKind =
   | "deleteFile"
   | "fileExists";
 
+/**
+ * The closed set, in the order a certified entry lists it. Order is
+ * load-bearing: `certificate-feed.ts` requires an entry's bridges in exactly
+ * this sequence, so a certificate has one canonical spelling rather than 120.
+ * Reordering here rewrites every serialised feed.
+ */
+export const BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
+  "ensureDirectory",
+  "findFiles",
+  "fileBaseName",
+  "deleteFile",
+  "fileExists",
+]);
+
 export interface CallSite {
   /** Index into the code section, i.e. function index minus import count. */
   readonly localFunction: number;
