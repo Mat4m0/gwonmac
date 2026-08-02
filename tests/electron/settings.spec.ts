@@ -74,7 +74,11 @@ test.describe("settings experience", () => {
       await expect(page.locator("#settings-update-version")).toHaveText(
         packageVersion,
       );
-      await expect(page.locator("#settings-update-channel")).toHaveText("Preview");
+      // The label follows the running version's shape, so this test holds on
+      // both sides of a stable release.
+      await expect(page.locator("#settings-update-channel")).toHaveText(
+        /^\d+\.\d+\.\d+$/u.test(packageVersion) ? "Stable" : "Preview",
+      );
       await expect(page.locator("#settings-update-status")).toContainText(
         "can't update itself",
       );
@@ -115,7 +119,11 @@ test.describe("settings experience", () => {
               ? [{
                   tag_name: tag,
                   draft: false,
-                  prerelease: true,
+                  // A stable offer is the one shape every install accepts: a
+                  // preview may advance to stable, while a stable install is
+                  // never offered a preview — so a preview fixture would be
+                  // refused the day the app version loses its suffix.
+                  prerelease: false,
                   assets: [
                     {
                       name: "RELEASES.json",
