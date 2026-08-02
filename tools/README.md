@@ -35,15 +35,15 @@ forward slashes — so Win32-form paths need normalising and tail-matching.
 ### Production targeted transform
 
 The application and developer CLI share the TypeScript transformer in
-`src/main/core/enhancement-transform.ts`. It accepts only an exact supported hash,
+`src/main/certification/enhancement-transform.ts`. It accepts only an exact supported hash,
 clones one selected function, inserts one typed dispatcher, and uses the
 verified null table slot without growing the table:
 
-    pnpm enhancements:transform -- dist/Gw.jspi.wasm build/Gw.enhancement.wasm
+    pnpm certification transform dist/Gw.jspi.wasm build/Gw.enhancement.wasm
 
 The former table-growth and all-functions detour experiments were removed.
 They rewrote far more of the client than the production hook requires.
-`src/main/core/client-module.ts` owns the production transform chain,
+`src/main/certification/client-module.ts` owns the production transform chain,
 derived-cache validation, and atomic publication. The CLI invokes the same
 pure byte transform directly for an explicit input and output.
 
@@ -73,15 +73,15 @@ matches. It is a triage tool for choosing re-derivation targets.
 
     python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
     python3 tools/gensyms.py dist/Gw.jspi.wasm build/
-    pnpm enhancements:transform -- dist/Gw.jspi.wasm build/Gw.enhancement.wasm
+    pnpm certification transform dist/Gw.jspi.wasm build/Gw.enhancement.wasm
 
 ## enhancement workspace
 
-    pnpm enhancements:doctor
-    pnpm enhancements:recertify -- path/to/Gw.jspi.wasm
+    pnpm certification doctor
+    pnpm certification recertify path/to/Gw.jspi.wasm
     GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario target
 
-`enhancements:doctor` is local-only. `enhancements:recertify` reports semantic hook and
+`certification doctor` is local-only. `certification recertify` reports semantic hook and
 table candidates without publishing a transformed client. The live runner is
 cached-only unless `--allow-update` is explicitly supplied. Observation-tier
 scenarios receive only the fixed typed cursor projection and a clock; scenarios

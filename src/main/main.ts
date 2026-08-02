@@ -61,6 +61,10 @@ import {
   periodicCheckDue,
 } from "./app-updater.js";
 import {
+  CertificateFeedDelivery,
+  CERTIFICATE_FEED_REFUSALS,
+} from "./certification/certificate-feed-delivery.js";
+import {
   enableSandboxBeforeReady,
   onAppQuit,
   runQuitCleanup,
@@ -76,7 +80,7 @@ import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
-} from "./enhancement-policy.js";
+} from "./certification/enhancement-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,
@@ -147,6 +151,7 @@ const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
+let certificateFeedDelivery: CertificateFeedDelivery | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
 const INJECT_STARTUP_FAILURE =
@@ -165,20 +170,47 @@ function revealMainWindow(): void {
   win.focus();
 }
 
+/**
+ * The one "ask this project what is new" action, and the only thing that makes
+ * either request. A new application and a newer certificate feed are two
+ * answers to that one question — the second is how a recovery arrives as data
+ * rather than as an install — so they share a trigger, a schedule and a
+ * consent switch instead of acquiring a second of each.
+ */
+async function checkForProjectUpdates(): Promise<void> {
+  await Promise.allSettled([
+    appUpdaterController?.check() ?? Promise.resolve(),
+    certificateFeedDelivery?.refresh() ?? Promise.resolve(),
+  ]);
+}
+
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   return settingsLock.run(async () => {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
     const saved = await saveSettings(settingsPath, { ...current, ...patch });
-    if (
-      !current.autoCheckUpdates
-      && saved.autoCheckUpdates
-      && appUpdaterController
-    ) {
-      void appUpdaterController.check();
+    if (!current.autoCheckUpdates && saved.autoCheckUpdates) {
+      void checkForProjectUpdates();
     }
     return saved;
   });
+}
+
+/**
+ * The pinned certificate-feed key. A packaged build reads it from the bundle's
+ * Resources, where the code signature seals it; an unpackaged one reads the
+ * committed file, which holds the placeholder.
+ *
+ * The unpackaged override is how the Electron suite exercises a signed feed
+ * with a keypair it generates per run, because the committed placeholder is a
+ * value it must not change. It is unreachable from a packaged build.
+ */
+function pinnedCertificateFeedKeyPath(): string {
+  if (app.isPackaged) return path.join(process.resourcesPath, "public-key.txt");
+  return (
+    process.env.GW_TEST_CERTIFICATE_FEED_KEY
+    ?? path.join(app.getAppPath(), "certificates", "public-key.txt")
+  );
 }
 
 function resetAppSettings(): Promise<AppSettings> {
@@ -447,12 +479,40 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const profileMatches =
     !expectedUserData ||
     path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
+  certificateFeedDelivery = new CertificateFeedDelivery({
+    storePath: paths.certificateFeed,
+    pinnedKeyPath: pinnedCertificateFeedKeyPath(),
+    // The same answer that decides whether an automatic release check may
+    // reach the network. One predicate, so the two cannot disagree about what
+    // the player consented to.
+    enabled: distribution.automaticUpdates,
+    publish: (status) => {
+      gauge("certificateFeed.source", status.source);
+      gauge("certificateFeed.sequence", status.sequence);
+      gauge("certificateFeed.outcome", status.outcome);
+      gauge("certificateFeed.lastSuccessAt", status.lastSuccessAt);
+      if (CERTIFICATE_FEED_REFUSALS.has(status.outcome)) {
+        logEvent({ k: "certificateFeed.refused", outcome: status.outcome });
+      } else {
+        logEvent({
+          k: "certificateFeed.resolved",
+          source: status.source,
+          sequence: status.sequence,
+          outcome: status.outcome,
+        });
+      }
+    },
+  });
+  // Before the first certification pass: a feed that governs only after the
+  // launch it arrived on would answer one question two ways in one session.
+  await certificateFeedDelivery.load();
   const clientRuntime = new ClientRuntime({
     paths,
     hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementCapabilities,
+    certificateFeed: () => certificateFeedDelivery!.feed,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -530,7 +590,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     // reads it — a second, thrown answer would have been a second owner.
     retryClient: () => clientRuntime.requestUpdate(),
     getAppUpdateState: () => appUpdaterController!.getState(),
-    checkAppUpdates: () => appUpdaterController!.check(),
+    checkAppUpdates: () => checkForProjectUpdates(),
     restartAndInstallUpdate: (win) => {
       if (updateRestartInFlight) return updateRestartInFlight;
       const operation = (async () => {
@@ -597,7 +657,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   ));
   if (settings.autoCheckUpdates) {
-    void appUpdaterController.check();
+    void checkForProjectUpdates();
   }
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
@@ -613,7 +673,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         lastUpdateCheckAt: current.lastUpdateCheckAt,
         now: Date.now(),
       })) return;
-      void appUpdaterController?.check();
+      void checkForProjectUpdates();
     })().catch(() => {
       // A periodic check is silent by contract; an unreadable settings file
       // already surfaces on the next explicit settings read.

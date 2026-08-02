@@ -34,7 +34,7 @@ import { stopChildProcess } from "./helpers/child-process.ts";
 import {
   ENHANCEMENT_BUILDS,
   enhancementConfigWords,
-} from "../src/main/core/enhancement-builds.ts";
+} from "../src/main/certification/enhancement-builds.ts";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_TOOLBOX_BYTES,

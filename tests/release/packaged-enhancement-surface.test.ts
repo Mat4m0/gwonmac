@@ -64,7 +64,7 @@ test("every relative ESM dependency reachable from a shipped entry point is pack
 
   // These are deliberately transitive rather than entry-point imports. They
   // prove the walk reached both the main and renderer dependency graphs.
-  assert.ok(closure.has("/build/main/core/enhancement-builds.js"));
+  assert.ok(closure.has("/build/main/certification/enhancement-builds.js"));
   assert.ok(closure.has("/build/renderer/enhancement-readout.js"));
 });
 
@@ -188,7 +188,7 @@ function enhancementGate({
   }
   environment.GW_PROBE_PACKAGED = isPackaged ? "1" : "0";
   environment.GW_PROBE_POLICY = pathToFileURL(
-    path.join(root, "build/main/enhancement-policy.js"),
+    path.join(root, "build/main/certification/enhancement-policy.js"),
   ).href;
   environment.GW_PROBE_CONTRACTS = pathToFileURL(
     path.join(root, "build/shared/contracts.js"),

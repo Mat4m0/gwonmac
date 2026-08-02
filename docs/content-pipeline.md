@@ -101,6 +101,16 @@ six-hour spacing. `autoCheckUpdates` defaults on and is declared plainly at
 first run and in Settings; switched off, a launch reaches github.com zero
 times.
 
+That one trigger asks for two things. `main.ts` calls the updater and
+`src/main/certification/certificate-feed-delivery.ts` from the same place, so
+the certificate feed inherits the schedule, the deferral behind a game socket
+and the consent switch instead of acquiring its own. The feed's request is two
+GETs for release assets published at
+`releases/latest/download/` — the same host and redirect chain the updater's own
+asset requests follow, so there is no second egress destination — and the
+application adds nothing to either: no body, no header, no query, no credential.
+`docs/wasm-host.md` owns what arrives and what it is allowed to do.
+
 Only a packaged macOS build whose generated `distribution-channel.json` names
 `release` may update. The marker has the exact shape
 `{ schema: 1, repository, channel }`; capabilities are derived from that closed

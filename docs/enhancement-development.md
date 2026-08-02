@@ -1,7 +1,7 @@
 # Enhancement development runbook
 
 This is the working procedure for extending the Electron/WASM Enhancement. The
-certified build manifest in `src/main/core/enhancement-builds.ts` is the only
+certified build manifest in `src/main/certification/enhancement-builds.ts` is the only
 runtime source of build-local addresses, signatures, and table slots.
 
 ## The short loop
@@ -20,7 +20,7 @@ Most feature work should finish its first four layers without contacting
 ArenaNet. A live run certifies semantics; it is not the primary debugger.
 
 ```bash
-pnpm enhancements:doctor
+pnpm certification doctor
 pnpm check
 pnpm build && pnpm test:integration
 ```
@@ -37,7 +37,7 @@ screenshot under `test-results/enhancements-visual/`, and closes Chromium. Its
 markup and CSS live under `scripts/enhancements-visual/`; they are not production
 navigation or packaged renderer assets.
 
-`enhancements:doctor` is local-only. It checks the existing profile, published
+`certification doctor` is local-only. It checks the existing profile, published
 client, exact WASM hash, transformed cache, the profile's `nativeCursor`
 setting, and complete snapshot filename presence. It does not
 inspect saved login: command-line tooling is outside the signed app's Data
@@ -282,7 +282,7 @@ them and `blob:` is unavailable. A trailing keyword is mandatory.
 Inspect an official candidate:
 
 ```bash
-pnpm enhancements:recertify
+pnpm certification recertify
 ```
 
 Pass the official module. The tool selects either its exact template-save

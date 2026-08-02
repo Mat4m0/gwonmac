@@ -83,6 +83,24 @@ test("no second production runtime remains", () => {
   }
 });
 
+test("no private key material is tracked", () => {
+  // The certificate feed's signing key lives in a gated CI environment secret
+  // and nowhere else; `certificates/public-key.txt` holds the public half or
+  // its placeholder. Tests generate throwaway keypairs per run, so no fixture
+  // needs one either — which makes any encoded private key in the tree a
+  // mistake rather than a special case.
+  const material = /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/;
+  const hits = tracked.filter((file) => {
+    if (file === "tests/policy/forbidden-artifacts.test.ts") return false;
+    try {
+      return material.test(readFileSync(path.join(root, file), "utf8"));
+    } catch {
+      return false;
+    }
+  });
+  assert.deepEqual(hits, []);
+});
+
 test("only the public client access key is UUID-shaped", () => {
   const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
   // One entry, the public client access key. The RFC 6455 WebSocket GUID used

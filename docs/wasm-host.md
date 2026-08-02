@@ -99,8 +99,8 @@ re-certification procedure for a new client build, and the investigation log.
 Read it before changing anything below.
 
 Every index and offset the transform carries belongs to one exact client build.
-The shape locator is production code under `src/main/core`; both the launcher
-and `pnpm template:recertify` call that one implementation. It re-derives
+The shape locator is production code under `src/main/certification`; both the launcher
+and `pnpm certification template` call that one implementation. It re-derives
 indices from body bytes, resolved signatures, and caller-set intersections,
 then fingerprints every complete caller body the transform will modify. Only
 the five selected call-index operands are normalised. A changed path
@@ -179,6 +179,18 @@ deleted when the selected client changes.
 
 ## Which of three states a client build is in
 
+`src/main/certification/` is the one directory the whole chain lives in: the two
+certified build tables, the two transforms, the module the launch actually
+serves, the pure structural proof, the utility process it runs in, and the
+developer switches over the Enhancement half. `src/main/core/` keeps only what
+is not about certification and what certification depends on — the WASM section
+codec and the derived-artifact cache — so the dependency runs one way and there
+is no second place to look. `src/tools/certification.ts` is the one command
+line over it, with `doctor`, `recertify`, `template` and `transform`
+subcommands; `scripts/verify-companion-kernel.mjs` stays separate because it
+certifies the Rust companion kernel against the compile recipe in
+`scripts/build.mjs`, not a client build.
+
 The two transforms are chained but keyed by **different** hashes: template-save
 by the official build's hash, Enhancement by the hash of what the template-save
 transform produces. Certification can therefore succeed at step one and fail at
@@ -186,11 +198,11 @@ step two — templates saved, cursors gone — which is the normal intermediate
 during a recertification, because the transform that breaks saving is fixed
 before the one that draws a pointer.
 
-`src/main/client-certification.ts` composes the shipped lookups or one local
+`src/main/certification/client-certification.ts` composes the shipped lookups or one local
 proof into the same answer: `uncertified`, `template-only`, or `certified`. It
 is the single owner, and every consumer asks it rather than composing the chain
 again — the launcher notice, the settings status, the diagnostics gauges, the
-weekly canary, and `pnpm enhancements:doctor`. A certified build whose
+weekly canary, and `pnpm certification doctor`. A certified build whose
 template-save transform throws is published as `uncertified`, because it is
 degraded exactly that far.
 
@@ -204,6 +216,154 @@ facts with the canonical per-tool selection; the effective bit keeps a
 certified build whose transform failed from being reported as available.
 `src/renderer/client-compatibility-notice.ts` turns them into the sentences
 both surfaces show.
+
+## Noticing the patch
+
+Everything above decides correctly on a machine that already has the new bytes.
+What it does not do is tell anyone a new build exists, and a certificate nobody
+starts deriving is a week of `template-only` for every player.
+
+`.github/workflows/client-recertification.yml` is that first layer, and it is
+built to be boring. A quarter-hourly job fetches one patch manifest, fingerprints
+`Gw.jspi.js` and `Gw.jspi.wasm` through `fingerprintClientGeneration`, and
+compares the result against `certificates/certified-client.json`. Matching, it
+ends in about a second having installed nothing, compiled nothing, and
+downloaded no client byte — Node runs the detector script directly, because
+`pnpm <script>` would resolve this repository's whole dependency tree first and
+that install, not the fetch, is what a cheap path has to exclude. A scheduled
+run that cannot reach the patch service fails, and that visible failure is how a
+silently dead detector is noticed.
+
+A generation that already has a branch or an open tracking issue is treated the
+same way as an unchanged one. Certifying a new build takes a person, and every
+quarter hour of that latency would otherwise re-run the whole derivation and
+file the proposal again; the red runs it produced would bury the heartbeat the
+paragraph above depends on.
+
+The identity is deliberately narrower than `clientFingerprint`, which also
+covers `Gw.snapshot` and `version.json` because it answers a different question —
+whether an *installed* generation may be rolled back to. Game content moves
+constantly; folding it in here would run a full derivation every content patch to
+conclude nothing changed.
+
+On a change, a macOS job downloads the code artifacts through the same
+`PatchClient` the application uses — chunk-hash verified, and `Gw.snapshot` is
+never assembled — and runs `certification template --write` and
+`certification recertify` against them. What it can derive it derives; what it
+cannot, it reports. Then a third job pushes a branch carrying the regenerated
+authoring table and the recorded generation, opens a pull request, and opens a
+tracking issue either way: *auto-derived, PR ready*, or *layout changed,
+investigation needed*. The issue closes itself on the first detector run that
+finds the published generation recorded on `main`.
+
+The pull request is a proposal and nothing more, and it says so out loud: GitHub
+starts no workflow for a pull request opened by a run's own token, so the body
+asks whoever picks it up to close and reopen it. The alternative is a personal
+access token, which is a secret this workflow would then be holding for a job
+whose whole point is that it cannot do anything on its own.
+
+Three properties make this safe to leave running unattended. It holds no secret;
+its only credential is the run's own `GITHUB_TOKEN` and the strongest thing it
+can do is propose. It uploads evidence — reports, the candidate feed, the source
+diff — and never client bytes, because this project does not redistribute
+ArenaNet's binaries. And its branch certifies nothing until the pull request's
+own `pnpm verify` gate passes on it, which is the same gate every other change
+faces. The Enhancement table stays untouched by machine for the reason the feed's
+enhancement half is exact-build only: its layout words are client-memory
+addresses no structural anchor re-derives.
+
+## The certificate feed
+
+The tables above are compiled in, so today a new ArenaNet build waits for an
+application release. The feed is how that changes without moving any authority:
+it is a versioned, signed **data-only** document — hashes, addresses, function
+indices, message identifiers, and nothing that could be an instruction or a
+path — carrying the same two records `certifyClientBuild` already consumes.
+`src/main/certification/certificate-feed.ts` owns the schema, one hand-written
+parser that refuses rather than repairs, and the snapshot the shipped tables
+derive. The TypeScript tables stay the authoring source, because the isolated
+proof runs in a process that cannot read a file; `pnpm build` writes the derived
+copy to `build/certificates/feed.json`.
+
+A feed only ever **proposes**, and its two halves are held to different rules
+because they are not equally re-derivable.
+`src/main/certification/certificate-feed-proof.ts` owns both and answers in the
+same three states as the rest of the chain.
+
+The template-save half is **proved**: the transform re-checks each stub body and
+call-site signature against the client bytes on the machine and must reproduce
+the claimed output hash. Nothing about it is taken on the signature's word, so a
+feed may certify template saving for a build no release has seen.
+
+The enhancement half is **exact-build only**. Its hook signatures and table slot
+are structurally checked, but the layout words are client-memory addresses the
+companion kernel reads and writes and the message identifiers are numbers;
+neither has a structural anchor, so a profile hash computed over the signer's own
+chosen addresses would reproduce and prove only that the signer is consistent. A
+feed's enhancement record is therefore accepted only as an exact restatement of
+the shipped `ENHANCEMENT_BUILDS` table — the same rule the isolated local proof
+applies to an unrecognised client — and the four certified profile hashes are
+then still re-derived against these bytes. Extending a feed to certify
+enhancement for a new build waits on layout facts gaining anchors of their own.
+
+So the worst a stolen signing key achieves is withholding a certificate; it
+cannot mint one for a transform that does something else.
+
+Only fetched feeds are signed. `src/main/certification/certificate-feed-trust.ts`
+verifies a detached Ed25519 signature over the exact bytes under the key pinned
+in [`certificates/public-key.txt`](../certificates/public-key.txt), whose
+committed content is a placeholder — so a clone of this repository trusts no
+remote feed at all and uses the bundled snapshot.
+[`certificates/README.md`](../certificates/README.md) owns the one-time key
+ceremony. The bundled snapshot carries no signature of its own: it is derived
+from tables compiled into an application that is already signed and notarised,
+so there is nothing an attacker could replace independently.
+
+Two feeds are ordered by an unsigned, monotonic `sequence` and nothing else. A
+candidate must be strictly newer to replace the feed in hand, so a captured
+older feed replayed at the application cannot withdraw a certificate it already
+holds.
+
+### How a feed arrives
+
+`src/main/certification/certificate-feed-delivery.ts` owns where a feed is
+fetched from, how a verified one is stored, and which of the feeds in hand
+governs a session.
+
+A check is two GETs — `certificate-feed.json` and `certificate-feed.json.sig`,
+published as assets on the current release and addressed through
+`latestReleaseAssetUrl`. It is the same host and redirect chain the updater's
+own asset requests already follow, so the feed adds no egress destination, and
+the application adds nothing to either request: no body, no header, no query, no
+credential.
+`tests/unit/no-game-traffic-is-uploaded.test.ts` executes that.
+
+There is no second scheduler. `main.ts` triggers the delivery from the same
+place it triggers the release check — at launch, on the periodic tick that
+`periodicCheckDue` gates, when the player switches automatic checks on, and when
+they press **Check for Updates** — so one predicate governs both and
+`docs/content-pipeline.md` owns it. With no pinned key the module makes no
+request at all: refusing an answer to a question already decided would spend a
+connection for nothing.
+
+A verified feed is stored in the profile at `game/certificate-feed.json` as one
+versioned record holding the exact bytes and the exact detached signature. That
+record is verified by the same code path as a fresh fetch at every launch, so a
+file edited on this machine is refused and rotating the pin retroactively
+refuses everything the old key signed — there is no weaker rule for a feed that
+is already ours. A record the application does not fully understand is deleted
+rather than partially read, and the bundled snapshot governs.
+
+The governing feed is read once per certification pass. A build the shipped
+tables already certify is unaffected: the feed is consulted only where the
+answer would otherwise be `uncertified`, and what it proposes still has to
+survive `certificate-feed-proof.ts` against the client bytes. So a feed can
+widen where a certificate comes from and can never withdraw one.
+
+`.gwdiag` carries `certificateFeed.source`, `certificateFeed.sequence`,
+`certificateFeed.outcome` and `certificateFeed.lastSuccessAt`, which is what
+makes a stuck feed visible rather than silent — `outcome` is a closed
+vocabulary naming exactly what stopped the last check.
 
 ## Enhancement instrumentation
 

@@ -2,13 +2,18 @@
  * The single owner of application updates: discovery, feed validation,
  * download, ready, and install.
  *
- * It is also the only caller of the releases API in this project, which is what
- * makes the consent promise checkable rather than merely stated — with
- * automatic checks off there is no second code path that could still reach
- * github.com. `periodicCheckDue` holds every gate on an automatic check and is
- * pure, so the gates are provable without running a timer; an open game socket
- * defers a check because a Squirrel download must not compete with live game
- * traffic.
+ * It is also the only caller of the releases API in this project.
+ * `periodicCheckDue` holds every gate on an automatic check and is pure, so the
+ * gates are provable without running a timer; an open game socket defers a
+ * check because a Squirrel download must not compete with live game traffic.
+ *
+ * One other module reads from this project's releases:
+ * `certification/certificate-feed-delivery.ts` fetches two published assets.
+ * It does not ask the releases API, it makes no install decision, and it fires
+ * on this class's trigger rather than on one of its own — `main.ts` calls both
+ * from one place. The consent promise therefore stays checkable: the same
+ * predicate gates both, and with automatic checks off a launch reaches
+ * github.com zero times.
  *
  * Only a package carrying the release marker may reach Squirrel.Mac. A stable
  * install is never offered a preview, a preview may advance to stable, and a
@@ -19,6 +24,7 @@ import type {
   AppUpdateState,
 } from "../shared/contracts.js";
 import { RELEASE_REPO } from "../shared/contracts.js";
+import { releaseAssetUrl } from "../shared/project-identity.js";
 import {
   compareReleaseVersions,
   formatReleaseVersion,
@@ -430,10 +436,6 @@ function parseCandidates(
   }
   candidates.sort((a, b) => compareReleaseVersions(b.version, a.version));
   return candidates;
-}
-
-function releaseAssetUrl(tag: string, name: string): string {
-  return `https://github.com/${RELEASE_REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`;
 }
 
 function validManifest(

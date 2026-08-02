@@ -13,14 +13,14 @@ import {
   ENHANCEMENT_BUILDS,
   type EnhancementOutputHashes,
   type KnownEnhancementBuild,
-} from "../../src/main/core/enhancement-builds.js";
-import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
+} from "../../src/main/certification/enhancement-builds.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import {
   inspectEnhancementCandidate,
   ENHANCEMENT_HOOK_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
   transformEnhancementWasm,
-} from "../../src/main/core/enhancement-transform.js";
+} from "../../src/main/certification/enhancement-transform.js";
 import { decodeEnhancementManifest } from "../../src/renderer/enhancement-manifest.js";
 
 const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({

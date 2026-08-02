@@ -64,6 +64,8 @@ is meant to inherit the dead ends rather than walk back into them.
 | ------------------------- | ------------------------------------------------------------- |
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
+| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed and its delivery |
+| `certificates/`           | the pinned certificate-feed public key, its key ceremony, how a signed feed is published, and the client generation this repository has certified |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -71,6 +73,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
+| `src/tools/certification.ts` | the one certification command line: `doctor`, `recertify`, `template`, `transform` |
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
 | `tests/`                  | unit, integration, Electron, packaged, and release invariants |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                |
@@ -169,6 +172,36 @@ is meant to inherit the dead ends rather than walk back into them.
 - Forge accepts one `GW_PACKAGE_INTENT`: `local`, `preview-handoff`, `release`,
   or `development`. Do not recreate independent channel/signing flags; the
   closed intent is what makes unsupported package states unrepresentable.
+- The certificate feed is data only — hashes, addresses, indices, message
+  identifiers — and it only ever proposes. No instruction byte, expression or
+  path may be added to its schema, and nothing it delivers enables a feature
+  until it is re-established on the machine. The two halves are not equally
+  re-derivable and must not be trusted as if they were. Template-save facts are
+  proved: the transform re-checks every stub body and call-site signature
+  against the client bytes and must reproduce the claimed output hash, so a feed
+  may certify a build no release has seen. Enhancement facts are not — the
+  layout words are client-memory addresses the companion kernel reads and
+  writes, no structural anchor re-derives them, and an `outputSha256` computed
+  over the signer's own addresses would reproduce and prove nothing. So a feed's
+  enhancement half is accepted only as an exact restatement of the shipped
+  `ENHANCEMENT_BUILDS` table, which is the same exact-build-only rule the
+  isolated local proof already applies. That restriction is what makes the
+  invariant true: a compromised signing key must be able to deny service and
+  nothing else. Do not relax it without giving layout facts their own structural
+  anchor first. Fetched feeds are signed and ordered by a monotonic
+  `sequence`; the bundled snapshot is not, because it is derived from tables
+  compiled into the signed application.
+  `certificates/public-key.txt` holds a placeholder, which means no
+  remote feed is trusted at all — and no request is made either. A feed is
+  fetched as two release assets on the same host the updater already reads,
+  on the update check's own trigger and behind the same consent switch; there
+  is no second scheduler and no second egress destination. A verified feed is
+  stored in the profile as one versioned record carrying the exact bytes and
+  signature, re-verified by the same path at every launch, and deleted rather
+  than partially read when it no longer holds. The governing feed is consulted
+  only where the shipped tables answer `uncertified`, so a feed widens where a
+  certificate may come from and can never withdraw one.
+  `docs/wasm-host.md` owns the mechanism.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check at launch, then at
@@ -177,7 +210,10 @@ is meant to inherit the dead ends rather than walk back into them.
   exception, including the one on an unrecognised client build; switched off,
   a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of discovery, feed
-  validation, download, ready, and install state. Only an official package
+  validation, download, ready, and install state. The certificate feed's two
+  asset requests are the only other reads from this project's releases; they
+  fire on the same trigger, behind the same switch, and decide nothing about
+  installing anything. Only an official package
   carrying the release marker may reach Squirrel.Mac. Stable installs never
   receive previews; a preview may advance to stable. A ready update waits for
   an explicit or ordinary restart. ArenaNet client updates remain separate and
@@ -280,9 +316,9 @@ pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
 When an ArenaNet client update lands, a build is in one of three states and
-`src/main/client-certification.ts` is the only thing that decides which. Known
+`src/main/certification/client-certification.ts` is the only thing that decides which. Known
 hashes use the shipped tables. An unknown hash is checked by the bounded
-isolated process in `src/main/local-client-verifier-host.ts`; only an exact
+isolated process in `src/main/certification/local-client-verifier-host.ts`; only an exact
 structural proof may supply locally derived records. The template proof hashes
 the complete affected caller bodies after normalising only the selected call
 indices; the Enhancement proof requires all eight static addresses in the same
@@ -291,12 +327,39 @@ official module. The
 `client.buildCertification` gauge in a `.gwdiag` names it —
 `certified`, `template-only` (templates save, enhancement tools cannot load), or
 `uncertified` — and `wasm.templateSaveCompatible` is the older boolean
-derived from that same answer. `pnpm template:recertify` re-derives the
-template build entry with the same production locator.
+derived from that same answer. `pnpm certification template` re-derives the
+template build entry with the same production locator, and `--write` puts a
+derived entry into the authoring table so a patch-day branch and a developer's
+paste produce the same text. It never writes `ENHANCEMENT_BUILDS`: those layout
+words are client-memory addresses no structural anchor re-derives.
 `internal/upstream/recertify.md` owns investigation when the local proof
 refuses.
 
-For enhancement work, begin with `pnpm enhancements:doctor`, use the offline layers in
+`.github/workflows/client-recertification.yml` runs that derivation without
+being asked. Every quarter hour it fetches one patch manifest and compares the
+published JSPI code generation against `certificates/certified-client.json`;
+matching, it exits in about a second, and a scheduled run that cannot fetch
+fails loudly, which is the heartbeat. On a change it downloads the code
+artifacts — never `Gw.snapshot` — runs the same certification command line, and
+pushes a branch with a pull request and a tracking issue, or an issue alone when
+the layout stopped being derivable. It holds no secret, uploads evidence and
+never client bytes, and its branch is worth nothing until the pull request's
+`pnpm verify` gate passes on it. The recorded generation carries no authority;
+it decides only whether that job runs.
+
+`.github/workflows/certificate-feed-publication.yml` is the only path from a
+merged table to a signed feed. Two runners derive the candidate from the tree
+alone and their bytes must be identical; a disagreement publishes nothing and
+files both hashes. The candidate's `sequence` is one past the higher of the feed
+in force and the bundled snapshot, resolved in the one job that sees both. One
+isolated job holds the private key, checks nothing out, refuses a candidate the
+published feed has caught up with while a person was approving it, and uploads
+the two assets. Template-save facts reach the approval gate on the push that
+produced them; Enhancement facts reach it only on a dispatch that says so,
+because nothing on the receiving machine re-derives them. `certificates/README.md` owns
+that mechanism and the go-live checklist the repository owner performs by hand.
+
+For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
 scenario. Live enhancement runs are cached-only unless `--allow-update` is
 explicit; do not bypass that guard or use a temporary Electron profile.

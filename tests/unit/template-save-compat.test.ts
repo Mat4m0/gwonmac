@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
   rewriteTemplateSaveWasm,
   type KnownTemplateSaveBuild,
-} from "../../src/main/core/template-save-compat.js";
+} from "../../src/main/certification/template-save-compat.js";
 
 function uleb(value: number): number[] {
   const output: number[] = [];

@@ -211,7 +211,7 @@ test.describe("live client", () => {
         expect(compatibility.clientSha256).toMatch(/^[a-f0-9]{64}$/);
         // Certification is keyed by hash, so a new ArenaNet build fails here
         // even though every other assertion in this file still passes. That is
-        // the alert: run `pnpm template:recertify`, then recertify the Enhancement
+        // the alert: run `pnpm certification template`, then recertify the Enhancement
         // build. `template-only` means saving works and selected Enhancement tools
         // do not.
         expect(

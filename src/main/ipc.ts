@@ -80,7 +80,7 @@ import {
 import { isRendererFingerprint } from "./diagnostics/schema.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { enhancementSelectionChanged } from "./enhancement-policy.js";
+import { enhancementSelectionChanged } from "./certification/enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { getMainWindow, resetWindowState } from "./window.js";

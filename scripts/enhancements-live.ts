@@ -13,7 +13,7 @@ import type { Browser, Page } from "playwright";
 import {
   defaultGuildWarsProfile,
   inspectEnhancementWorkspace,
-} from "../src/tools/enhancement-doctor.js";
+} from "../src/tools/enhancement-workspace.js";
 import type { AutomationCommand } from "../src/shared/automation.js";
 import {
   liveRunPlan,

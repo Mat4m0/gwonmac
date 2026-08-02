@@ -32,7 +32,7 @@ import {
   uleb,
   WASM_HEADER,
   type Section,
-} from "./wasm-binary.js";
+} from "../core/wasm-binary.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -46,6 +46,20 @@ export type BridgeKind =
   | "fileBaseName"
   | "deleteFile"
   | "fileExists";
+
+/**
+ * The closed set, in the order a certified entry lists it. Order is
+ * load-bearing: `certificate-feed.ts` requires an entry's bridges in exactly
+ * this sequence, so a certificate has one canonical spelling rather than 120.
+ * Reordering here rewrites every serialised feed.
+ */
+export const BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
+  "ensureDirectory",
+  "findFiles",
+  "fileBaseName",
+  "deleteFile",
+  "fileExists",
+]);
 
 export interface CallSite {
   /** Index into the code section, i.e. function index minus import count. */
@@ -79,6 +93,12 @@ export interface KnownTemplateSaveBuild {
   readonly bridges: readonly StubBridge[];
 }
 
+/**
+ * Oldest first. The order is load-bearing: the last member is the shape
+ * baseline `deriveEquivalentTemplateSaveBuild` and `local-client-verifier.ts`
+ * measure an unknown client against, so a new build is appended and never
+ * inserted. `certification template --write` appends for the same reason.
+ */
 export const TEMPLATE_SAVE_BUILDS: readonly KnownTemplateSaveBuild[] =
   Object.freeze([
     Object.freeze({

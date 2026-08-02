@@ -558,7 +558,7 @@ export type SettingsPane =
  * - `template-only`  those three work; Enhancement may not load
  * - `uncertified`    ArenaNet's untouched module is served; nothing is repaired
  *
- * `src/main/client-certification.ts` is the only producer.
+ * `src/main/certification/client-certification.ts` is the only producer.
  */
 export type ClientCompatibilityState =
   | "certified"
@@ -626,7 +626,7 @@ export const RENDERER_INIT_ARGUMENT = "--gw-renderer-init=";
 
 /**
  * dirfd markers by which ArenaNet's derived client reaches the renderer.
- * `src/main/core/template-save-compat.ts` appends forwarders that hand the
+ * `src/main/certification/template-save-compat.ts` appends forwarders that hand the
  * stub's arguments to `__syscall_newfstatat` behind one of these, and
  * `src/renderer/template-save-compatibility.ts` answers them against the
  * mounted IDBFS. No real call can produce a negative dirfd.

@@ -3,8 +3,9 @@
  * still be transformed, and what it may be transformed for.
  *
  * Pure: it reads the bytes it is handed and nothing else — no profile state, no
- * filesystem, no caching. The utility-process host owns all of that, which is
- * what allows this to run inside a bounded isolated process.
+ * filesystem, no caching, and no Electron, which a utility process could not
+ * resolve anyway. The host owns all of that, which is what allows this to run
+ * inside a bounded isolated process.
  *
  * The two answers are not symmetric and must not be merged. Template save is
  * shape-verifiable, so a client whose affected call sites still match is
@@ -30,6 +31,7 @@ import {
   transformEnhancementWasm,
 } from "./enhancement-transform.js";
 import {
+  BRIDGE_KINDS,
   TEMPLATE_SAVE_BUILDS,
   type BridgeKind,
   type KnownTemplateSaveBuild,
@@ -51,12 +53,20 @@ declare const WebAssembly: {
  */
 export const LOCAL_CLIENT_VERIFIER_ABI = 3;
 
-export type LocalVerificationReason =
-  | "invalid-wasm"
-  | "template-shape-changed"
-  | "template-transform-failed"
-  | "enhancement-layout-changed"
-  | "enhancement-transform-failed";
+/**
+ * Declared as a list rather than a union so the boundary check below and the
+ * diagnostics schema can both execute it. A union nobody can enumerate gets
+ * restated wherever it has to be checked, and the restatements drift.
+ */
+export const LOCAL_VERIFICATION_REASONS = [
+  "invalid-wasm",
+  "template-shape-changed",
+  "template-transform-failed",
+  "enhancement-layout-changed",
+  "enhancement-transform-failed",
+] as const;
+
+export type LocalVerificationReason = (typeof LOCAL_VERIFICATION_REASONS)[number];
 
 export interface LocalClientVerification {
   readonly verifierAbi: number;
@@ -67,13 +77,6 @@ export interface LocalClientVerification {
   readonly reasons: readonly LocalVerificationReason[];
 }
 
-const TEMPLATE_BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
-  "ensureDirectory",
-  "findFiles",
-  "fileBaseName",
-  "deleteFile",
-  "fileExists",
-]);
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -203,7 +206,7 @@ function isTemplateSaveBuild(
   for (const bridge of build.bridges) {
     if (
       !bridge
-      || !TEMPLATE_BRIDGE_KINDS.includes(bridge.kind)
+      || !BRIDGE_KINDS.includes(bridge.kind)
       || kinds.has(bridge.kind)
       || !isIndex(bridge.stubFunction)
       || !Array.isArray(bridge.callSites)
@@ -236,7 +239,7 @@ function isTemplateSaveBuild(
     }
     kinds.add(bridge.kind);
   }
-  return kinds.size === TEMPLATE_BRIDGE_KINDS.length;
+  return kinds.size === BRIDGE_KINDS.length;
 }
 
 function isExactEnhancementBuild(
@@ -263,15 +266,9 @@ export function isLocalClientVerification(
     || result.officialSha256 !== officialSha256
     || !isDigest(result.officialSha256)
     || !Array.isArray(result.reasons)
-    || !result.reasons.every((reason) =>
+    || !result.reasons.every((reason): reason is LocalVerificationReason =>
       typeof reason === "string"
-      && [
-        "invalid-wasm",
-        "template-shape-changed",
-        "template-transform-failed",
-        "enhancement-layout-changed",
-        "enhancement-transform-failed",
-      ].includes(reason)
+      && (LOCAL_VERIFICATION_REASONS as readonly string[]).includes(reason)
     )
   ) {
     return false;

@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { RELEASE_REPO } from "../src/shared/contracts.js";
+import { releaseAssetUrl } from "../src/shared/project-identity.js";
 import {
   formatReleaseVersion,
   parseReleaseVersion,
@@ -31,9 +31,7 @@ export function releaseManifest(options: {
   if (Number.isNaN(publishedAt.valueOf())) {
     throw new Error("release publication timestamp is invalid");
   }
-  const url =
-    `https://github.com/${RELEASE_REPO}/releases/download/`
-    + `${encodeURIComponent(options.tag)}/${encodeURIComponent(options.zipName)}`;
+  const url = releaseAssetUrl(options.tag, options.zipName);
   return `${JSON.stringify({
     url,
     name: `Guild Wars Reforged v${options.version}`,
