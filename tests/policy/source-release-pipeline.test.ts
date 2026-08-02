@@ -303,6 +303,27 @@ test("release workflow publishes one tested, attested package version", () => {
     releasePublish,
     /actions\/checkout|pnpm install|pnpm make|pnpm test/,
   );
+
+  // A dry run is only evidence about the real release if it is the real
+  // release minus its publishing: the flag is read once, by the job that tags,
+  // attests, and uploads, and no step that builds or verifies may consult it.
+  // What the run produced is recorded where a skipped release cannot record
+  // it.
+  assert.match(workflow, /workflow_dispatch:\n {4}inputs:\n {6}dry_run:/);
+  assert.match(
+    workflow,
+    /description: Build and verify the release, then publish nothing\.\n {8}default: false\n {8}type: boolean/,
+  );
+  assert.match(
+    releasePublish,
+    /release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
+  );
+  assert.equal(workflow.match(/if: [^\n]*dry_run/gu)?.length, 1);
+  assert.match(
+    releaseBuild,
+    /name: Summarize built and verified assets[\s\S]*?cat "\$ASSET_DIR\/SHA256SUMS\.txt"[\s\S]*?>> "\$GITHUB_STEP_SUMMARY"/,
+  );
+
   assert.match(workflow, /--prerelease --latest=false/);
   assert.match(
     workflow,

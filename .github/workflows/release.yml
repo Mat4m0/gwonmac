@@ -4,6 +4,16 @@ name: Versioned release
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        # Proves the whole release path — the same build, signing,
+        # notarization, stapling, and verification a release runs — without
+        # creating a tag, a release, or an attestation. It gates the publish
+        # job alone, so a passing dry run is evidence about the real path
+        # rather than about a second one.
+        description: Build and verify the release, then publish nothing.
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -290,6 +300,30 @@ jobs:
             shasum -a 256 -c SHA256SUMS.txt
           )
 
+      # A dry run publishes nothing, so this is the only account it leaves of
+      # what it built and what the verification covered.
+      - name: Summarize built and verified assets
+        env:
+          ASSET_DIR: ${{ steps.assets.outputs.asset_dir }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          outcome="built, signed, notarized, stapled, and verified"
+          if [ "$DRY_RUN" = "true" ]; then
+            headline="Dry run of $TAG: $outcome. Nothing published."
+          else
+            headline="$TAG: $outcome."
+          fi
+          {
+            echo "### Release assets"
+            echo
+            echo "$headline"
+            echo
+            echo '```'
+            cat "$ASSET_DIR/SHA256SUMS.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Retain debug symbols
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -326,8 +360,11 @@ jobs:
             rm -f "$APPLE_PROFILE_PLIST"
           fi
 
+  # Every step below tags, attests, uploads, or publishes, and this is the only
+  # job holding the write permissions to do it. A dry run skips the job whole;
+  # nothing above it is conditional.
   release:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && !inputs.dry_run
     needs: release-build
     runs-on: macos-15
     timeout-minutes: 15
