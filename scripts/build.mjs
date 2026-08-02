@@ -154,6 +154,19 @@ export const BUILD_STEPS = [
       "scripts/generate-preload.ts",
     ],
   ],
+  // Reads the certified build tables under src/main/certification and writes
+  // build/certificates/feed.json, which nothing else here produces — so its
+  // position is free. Spawned the same way as the preload generator, and for
+  // the same reason: it is TypeScript read by the loader.
+  [
+    process.execPath,
+    [
+      "--import",
+      "./scripts/ts-hook.mjs",
+      "--experimental-strip-types",
+      "scripts/generate-certificate-feed.ts",
+    ],
+  ],
   // No Cargo.toml: no dependencies, and rust-toolchain.toml pins the toolchain.
   // rustc writes an unserved candidate. The next step validates its fixed ABI,
   // seals its digest into the emitted renderer, and only then publishes it.

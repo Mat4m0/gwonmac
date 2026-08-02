@@ -31,6 +31,7 @@ import {
   transformEnhancementWasm,
 } from "./enhancement-transform.js";
 import {
+  BRIDGE_KINDS,
   TEMPLATE_SAVE_BUILDS,
   type BridgeKind,
   type KnownTemplateSaveBuild,
@@ -68,13 +69,6 @@ export interface LocalClientVerification {
   readonly reasons: readonly LocalVerificationReason[];
 }
 
-const TEMPLATE_BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
-  "ensureDirectory",
-  "findFiles",
-  "fileBaseName",
-  "deleteFile",
-  "fileExists",
-]);
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -204,7 +198,7 @@ function isTemplateSaveBuild(
   for (const bridge of build.bridges) {
     if (
       !bridge
-      || !TEMPLATE_BRIDGE_KINDS.includes(bridge.kind)
+      || !BRIDGE_KINDS.includes(bridge.kind)
       || kinds.has(bridge.kind)
       || !isIndex(bridge.stubFunction)
       || !Array.isArray(bridge.callSites)
@@ -237,7 +231,7 @@ function isTemplateSaveBuild(
     }
     kinds.add(bridge.kind);
   }
-  return kinds.size === TEMPLATE_BRIDGE_KINDS.length;
+  return kinds.size === BRIDGE_KINDS.length;
 }
 
 function isExactEnhancementBuild(
