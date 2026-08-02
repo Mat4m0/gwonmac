@@ -3,7 +3,7 @@
 One page of decisions. Behaviour is documented elsewhere:
 [`README.md`](README.md) for the overview,
 [`docs/user-guide.md`](docs/user-guide.md) for what the app does,
-[`docs/internals.md`](docs/internals.md) for how.
+[`docs/`](docs/README.md) for how.
 
 ## What this is
 
@@ -73,7 +73,7 @@ Refusals, not a backlog.
 ## Claims we stand behind
 
 Exactly the ones with a test behind them.
-[`docs/internals.md`](docs/internals.md#verification-boundaries) maps each
+[`docs/diagnostics.md`](docs/diagnostics.md#verification-boundaries) maps each
 public claim to something that executes, and its rule is the product rule: **a
 public claim with no row does not ship, and a row whose proof reads _none_ is a
 claim to narrow or delete, not a claim to explain.**

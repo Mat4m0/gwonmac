@@ -218,7 +218,7 @@ test("the file list covers tracked docs and excludes gitignored scratch", () => 
 
   assert.ok(files.includes("README.md"));
   assert.ok(files.includes("PRODUCT.md"));
-  assert.ok(files.includes("docs/internals.md"));
+  assert.ok(files.includes("docs/process-model.md"));
   assert.ok(files.includes("plans/research-tool-architecture.md"));
   assert.ok(
     files.every((file) =>
