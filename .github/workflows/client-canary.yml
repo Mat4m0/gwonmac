@@ -1,3 +1,5 @@
+# ArenaNet ships client builds on no schedule this project can see, and every
+# certified index belongs to one exact build: this is what notices the change.
 name: ArenaNet client canary
 
 on:

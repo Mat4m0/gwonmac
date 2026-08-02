@@ -1,3 +1,5 @@
+# The only path to a public versioned release: dispatched by hand, refused off
+# main, and gated on the approval environment holding the Developer ID material.
 name: Versioned release
 
 on:

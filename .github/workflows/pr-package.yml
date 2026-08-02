@@ -1,3 +1,5 @@
+# A reviewer gets the packaged application and not only a green tick; three days
+# is long enough to run it and short enough that unmerged builds do not pile up.
 name: PR package
 
 on:

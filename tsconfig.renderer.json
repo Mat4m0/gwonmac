@@ -40,7 +40,10 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": [],
+    // tsconfig.json owns why each of these is on; src is one tree, and the half
+    // of it that compiles for Chromium is held to the same bar.
     "strict": true,
+    "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     // `pnpm typecheck` overrides this back to --noEmit. Checking is not

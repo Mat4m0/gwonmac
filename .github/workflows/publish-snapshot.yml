@@ -1,3 +1,5 @@
+# Split from signing so the permission to write releases and attestations sits
+# in one job at the end of the chain, reachable by nothing that builds or signs.
 name: Publish tester snapshot
 
 on:

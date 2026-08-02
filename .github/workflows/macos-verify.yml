@@ -1,3 +1,5 @@
+# The one definition of "verified" that every shipping path calls, so nothing
+# reaches a tester or a release having passed a weaker gate than a review does.
 name: Reusable macOS verification
 
 on:
