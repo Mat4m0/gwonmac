@@ -3,13 +3,17 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   compareToCertified,
   deriveTemplateSaveBuild,
   draftTemplateSaveBuild,
   formatBuildEntry,
+  insertBuildEntry,
   inspectTemplateSaveCandidate,
+  TEMPLATE_SAVE_TABLE,
 } from "../../src/tools/template-save-recert.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
@@ -575,5 +579,78 @@ describe("template-save re-certification", () => {
     assert.ok(addressDecision.templateSaveBuild);
     assert.equal(addressDecision.enhancementBuild, null);
     assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
+  });
+});
+
+describe("adding a derived entry to the authoring table", () => {
+  const candidate = {
+    sha256: "0".repeat(64),
+    outputSha256: "1".repeat(64),
+    importCount: 219,
+    carrierImport: 207,
+    bridges: [
+      {
+        kind: "ensureDirectory" as const,
+        stubFunction: 185,
+        stubBody: [0x00, 0x41, 0x02, 0x0b],
+        callSites: [{ localFunction: 9538, bodyOffset: 171 }],
+      },
+    ],
+  };
+
+  const table = async () =>
+    readFile(
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../..",
+        TEMPLATE_SAVE_TABLE,
+      ),
+      "utf8",
+    );
+
+  // The last member is the shape baseline every structurally derived candidate
+  // is measured against, so a derived entry that lands anywhere but the end
+  // quietly makes an older build the standard.
+  it("appends the formatted entry to the end of the real table", async () => {
+    const source = await table();
+    const written = insertBuildEntry(source, candidate);
+    assert.ok(
+      written.includes(`${formatBuildEntry(candidate)}\n  ]);\n`),
+      "the derived entry is not the last table member",
+    );
+    assert.ok(
+      written.indexOf(`"${candidate.sha256}"`)
+        > written.indexOf(`"${TEMPLATE_SAVE_BUILDS.at(-1)!.sha256}"`),
+      "the derived entry does not follow the previous baseline",
+    );
+    // Everything the table already said is still there, in order: an insertion
+    // is the only edit this makes.
+    assert.equal(written.replace(`${formatBuildEntry(candidate)}\n`, ""), source);
+    for (const build of TEMPLATE_SAVE_BUILDS) {
+      assert.ok(written.includes(`"${build.sha256}"`), build.sha256);
+    }
+  });
+
+  it("refuses to restate a build somebody already certified", async () => {
+    const source = await table();
+    const certified = TEMPLATE_SAVE_BUILDS[0]!;
+    assert.throws(
+      () => insertBuildEntry(source, { ...candidate, sha256: certified.sha256 }),
+      /already lists/,
+    );
+  });
+
+  // A silent no-op here produces a branch that changes nothing and a pull
+  // request that reads as a successful derivation.
+  it("refuses a source with no table to extend", () => {
+    const opened =
+      "export const TEMPLATE_SAVE_BUILDS: readonly KnownTemplateSaveBuild[] =\n"
+      + "  Object.freeze([\n";
+    for (const source of ["export const TEMPLATE_SAVE_BUILDS = [];\n", opened]) {
+      assert.throws(
+        () => insertBuildEntry(source, candidate),
+        /no TEMPLATE_SAVE_BUILDS table/,
+      );
+    }
   });
 });

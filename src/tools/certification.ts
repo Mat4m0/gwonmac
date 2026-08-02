@@ -8,6 +8,14 @@
  * separate commands this replaced cannot drift apart in how they locate the
  * installed client or spell a failure.
  *
+ * `template --write` is the one subcommand that changes a tracked file. It
+ * adds a derived entry to the authoring table so a patch-day branch is opened
+ * by the same derivation a developer would run by hand, and it refuses every
+ * case but a new structurally derived build — including one already certified.
+ * It never touches `ENHANCEMENT_BUILDS`: those layout words are client-memory
+ * addresses no structural anchor re-derives, so nothing may add them without a
+ * person measuring them.
+ *
  * Machine-readable output goes to stdout and human findings go to stderr, so a
  * caller can pipe one without losing the other. A misuse exits 2 and a refusal
  * the chain itself made exits 1, uniformly across the four subcommands; only a
@@ -37,14 +45,16 @@ import {
 } from "./enhancement-workspace.js";
 import {
   formatBuildEntry,
+  insertBuildEntry,
   inspectTemplateSaveCandidate,
+  TEMPLATE_SAVE_TABLE,
 } from "./template-save-recert.js";
 
 const USAGE =
   "usage: certification <command>\n"
   + "  doctor [--profile PATH]              why Enhancement is or is not running here\n"
   + "  recertify [PATH/Gw.jspi.wasm]        draft an Enhancement build entry, with evidence\n"
-  + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--expect-certified]\n"
+  + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
   + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n";
 
@@ -96,6 +106,7 @@ async function recertify(argv: readonly string[]): Promise<void> {
 
 async function template(argv: readonly string[]): Promise<void> {
   const emitTypeScript = argv.includes("--emit-ts");
+  const writeEntry = argv.includes("--write");
   const expectCertified = argv.includes("--expect-certified");
   const positional = positionalArguments(argv);
   if (positional.length > 1) {
@@ -129,6 +140,27 @@ async function template(argv: readonly string[]): Promise<void> {
   if (report.status === "failed") {
     process.exitCode = 1;
     return;
+  }
+
+  // `--write` edits the authoring source, so it refuses everything except the
+  // one case it was written for: a structurally derived entry for a build the
+  // table does not list. An already-certified build is not a smaller version
+  // of that case — it is the answer "nothing to do", and writing anything
+  // would produce a branch whose diff nobody asked for.
+  if (writeEntry) {
+    if (!report.entry || report.certified) {
+      process.stderr.write(
+        `certification template --write: nothing to add for ${report.sha256}\n`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const table = path.resolve(TEMPLATE_SAVE_TABLE);
+    await writeAtomic(
+      table,
+      insertBuildEntry(await readFile(table, "utf8"), report.entry),
+    );
+    process.stderr.write(`certification template: added ${report.sha256} to ${TEMPLATE_SAVE_TABLE}\n`);
   }
   if (expectCertified && report.matchesCertifiedEntry !== true) {
     process.stderr.write(

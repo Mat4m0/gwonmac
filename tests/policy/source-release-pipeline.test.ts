@@ -594,6 +594,135 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.doesNotMatch(script("verify"), /test:website/);
 });
 
+test("the patch detector is cheap, secretless, and only ever proposes", () => {
+  const workflow = read(".github/workflows/client-recertification.yml");
+  // Blanked rather than dropped, so a reported offset is the one an editor
+  // shows. A job's prose sits above its key and would otherwise be scanned as
+  // part of the job before it.
+  const body = workflow
+    .split("\n")
+    .map((line) => (/^\s*#/u.test(line) ? "" : line))
+    .join("\n");
+  const detect = body.slice(body.indexOf("\n  detect:"), body.indexOf("\n  derive:"));
+  const derive = body.slice(body.indexOf("\n  derive:"), body.indexOf("\n  publish:"));
+  const publish = body.slice(body.indexOf("\n  publish:"));
+  assert.ok(detect && derive && publish, "the three jobs are not all present");
+
+  // No secret of any kind reaches this workflow. `github.token` is the run's
+  // own credential and is what keeps `secrets.` absent rather than merely
+  // narrow, so the scan can be exact.
+  assert.doesNotMatch(workflow, /secrets\./);
+  assert.match(workflow, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(workflow, /^permissions:\n {2}contents: read$/mu);
+  assert.match(workflow, /schedule:[\s\S]*cron: "\*\/15 \* \* \* \*"/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /group: arenanet-client-recertification/);
+
+  // The unchanged path runs ninety-six times a day. It reads one manifest:
+  // no packages, no compiler, no client bytes, and nothing out of the
+  // certification command line, which builds the companion kernel first.
+  assert.match(detect, /runs-on: ubuntu-latest/);
+  // Node runs the script, not `pnpm <script>`: the run wrapper resolves this
+  // repository's dependency tree before the script starts, so the word `pnpm`
+  // anywhere in this job is the install the cheap path exists to avoid. That
+  // makes the absence the assertion rather than the absence of one spelling
+  // of it — `pnpm/action-setup` and `pnpm install` are the same defect here.
+  assert.match(
+    detect,
+    /run: node --import \.\/scripts\/ts-hook\.mjs --experimental-strip-types scripts\/official-client\.ts$/mu,
+  );
+  assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
+  assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);
+  assert.match(
+    detect,
+    /if: steps\.published\.outputs\.changed == 'false'[\s\S]*gh issue close/,
+  );
+  // A generation with a branch or an open issue is already proposed, and
+  // re-deriving it every quarter hour costs a macOS job and buries the
+  // fetch-failure heartbeat under a run that fails on the push it repeats.
+  assert.match(detect, /changed: \$\{\{ steps\.unproposed\.outputs\.changed \}\}/);
+  assert.match(
+    detect,
+    /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/heads\/client-recertification\/\$short"/,
+  );
+  assert.match(detect, /gh issue list --state open --label client-recertification[\s\S]*?changed=false/);
+
+  // Derivation is macOS, on change only, and installs the pinned toolchain
+  // before the compiler runs. tests/policy/toolchain-floors.test.ts scans every
+  // workflow for that ordering; this pins the job's reason to exist beside it.
+  assert.match(derive, /if: needs\.detect\.outputs\.changed == 'true'/);
+  assert.match(derive, /runs-on: macos-15/);
+  assert.ok(
+    derive.indexOf("run: rustup toolchain install") < derive.indexOf("run: pnpm build"),
+    "the kernel is compiled on the runner's own toolchain",
+  );
+  assert.match(derive, /permissions:\n {6}contents: read/);
+  assert.doesNotMatch(derive, /contents: write|issues: write|pull-requests: write/);
+  assert.match(derive, /pnpm client:official --download "\$RUNNER_TEMP\/official"/);
+  assert.match(derive, /certification\.js template "\$WASM" --emit-ts --write/);
+  assert.match(derive, /certification\.js recertify "\$WASM"/);
+  // The report is printed before `--write` edits the table, so the exit code is
+  // the only thing that separates a written entry from one that threw on the
+  // way to disk. Dropping it lets the branch claim a certificate it lacks.
+  assert.match(derive, /template_exit=\$\?/);
+  assert.match(
+    derive,
+    /if \[ "\$status" = "derived" \] && \[ "\$template_exit" -eq 0 \]/,
+  );
+  assert.match(
+    derive,
+    /elif \[ "\$status" = "certified" \] && \[ "\$template_exit" -eq 1 \]/,
+  );
+  // One fetch per derivation: the recorded generation is the one whose bytes
+  // were downloaded and certified, never whatever a later fetch would return.
+  assert.match(derive, /FINGERPRINT: \$\{\{ steps\.official\.outputs\.fingerprint \}\}/);
+  assert.match(derive, /pnpm client:official --record "\$FINGERPRINT"/);
+
+  // Evidence only: the sole upload path is the evidence directory, and the
+  // downloaded client artifacts live somewhere no upload names.
+  const uploaded = [...derive.matchAll(/^ {10}path: (.+)$/gmu)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(uploaded, ["${{ runner.temp }}/evidence"]);
+  assert.doesNotMatch(derive, /path:[^\n]*(?:Gw\.|official)/);
+
+  // Stage one only. It pushes a branch and proposes; a rejected pull request
+  // still leaves the branch and an issue naming it.
+  assert.match(publish, /permissions:\n {6}actions: read\n {6}contents: write/);
+  assert.doesNotMatch(publish, /pnpm install|pnpm build|pnpm certification/);
+  assert.match(publish, /if: always\(\) && needs\.derive\.result != 'skipped'/);
+  assert.equal(body.match(/persist-credentials: true/gu)?.length, 1);
+  assert.match(publish, /persist-credentials: true/);
+  assert.match(
+    publish,
+    /test "\$\(tr -d '\\n' < evidence\/SOURCE_COMMIT\.txt\)" = "\$GITHUB_SHA"/,
+  );
+  assert.match(publish, /git apply evidence\/tables\.patch/);
+  // The branch and the issue name the generation the deriver certified, not the
+  // one the detector saw a job earlier; those differ when ArenaNet republishes.
+  assert.match(
+    publish,
+    /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}/,
+  );
+  assert.match(
+    publish,
+    /if gh pr create[\s\S]*?opened=true[\s\S]*?else[\s\S]*?opened=false/,
+  );
+  assert.match(publish, /continue-on-error: true/);
+  // A pull request opened by the run's own token starts no workflow, so the
+  // proposal has to say how its gate gets run rather than imply it already is.
+  assert.match(publish, /Close and reopen this pull request/);
+  assert.match(publish, /auto-derived, PR ready/);
+  assert.match(publish, /layout changed, investigation needed/);
+  assert.match(publish, /gh issue create --label client-recertification/);
+
+  // The record the detector compares against is data with no authority: one
+  // format version and one digest, and no field a decision could hide in.
+  const record: unknown = JSON.parse(read("certificates/certified-client.json"));
+  assert.ok(record !== null && typeof record === "object");
+  assert.deepEqual(Object.keys(record).sort(), ["codeGeneration", "formatVersion"]);
+});
+
 test("the scheduled canary exercises the latest ArenaNet client conservatively", () => {
   const workflow = read(".github/workflows/client-canary.yml");
   assert.match(workflow, /schedule:[\s\S]*cron:/);

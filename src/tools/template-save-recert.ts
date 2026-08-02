@@ -8,7 +8,13 @@
  * the shape of its output.
  *
  * An empty difference list means the checked-in entry is still exact. A
- * non-empty one is a finding for a human to read, never an entry to apply.
+ * non-empty one is a finding for a human to read, never an entry to apply: a
+ * build already in the table was certified by somebody, and this file refuses
+ * to overwrite it.
+ *
+ * It also owns how a *new* entry is spelled into the authoring table, so the
+ * text a developer pastes and the text CI splices in are produced by the same
+ * function and cannot drift into two formats of the same fact.
  */
 import {
   analyzeTemplateSaveCandidate,
@@ -106,6 +112,47 @@ export function inspectTemplateSaveCandidate(
       ),
     ],
   };
+}
+
+/** The authoring table, as `certification template --write` addresses it. */
+export const TEMPLATE_SAVE_TABLE =
+  "src/main/certification/template-save-compat.ts";
+
+const TABLE_OPEN =
+  "export const TEMPLATE_SAVE_BUILDS: readonly KnownTemplateSaveBuild[] =\n"
+  + "  Object.freeze([\n";
+const TABLE_CLOSE = "\n  ]);\n";
+
+/**
+ * The derived entry appended to `TEMPLATE_SAVE_BUILDS`.
+ *
+ * Appended, not prepended: the *last* member is the shape baseline that
+ * `deriveEquivalentTemplateSaveBuild` and `local-client-verifier.ts` compare a
+ * structurally derived candidate against, so a newer entry anywhere else
+ * silently makes an older build the standard every unknown client is measured
+ * by.
+ *
+ * Only ever an insertion. An entry already in the table is a build somebody
+ * certified, and overwriting it here would let a derivation quietly replace a
+ * reviewed fact. A table this cannot find is a refusal too — a silent no-op
+ * would produce a branch that changes nothing and reads as success.
+ */
+export function insertBuildEntry(
+  source: string,
+  entry: KnownTemplateSaveBuild,
+): string {
+  if (source.includes(`"${entry.sha256}"`)) {
+    throw new Error(`${TEMPLATE_SAVE_TABLE} already lists ${entry.sha256}`);
+  }
+  const open = source.indexOf(TABLE_OPEN);
+  const close = open < 0
+    ? -1
+    : source.indexOf(TABLE_CLOSE, open + TABLE_OPEN.length);
+  if (close < 0) {
+    throw new Error(`${TEMPLATE_SAVE_TABLE} has no TEMPLATE_SAVE_BUILDS table to extend`);
+  }
+  const at = close + 1;
+  return `${source.slice(0, at)}${formatBuildEntry(entry)}\n${source.slice(at)}`;
 }
 
 /** Paste-ready TypeScript for the entry, emitted to stderr by the CLI. */

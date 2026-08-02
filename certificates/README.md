@@ -1,4 +1,10 @@
-# The certificate feed's pinned key
+# Certificates
+
+Two files: the key that decides whether a fetched certificate feed may be
+believed, and the record of which ArenaNet client generation this repository has
+already certified.
+
+## The feed's pinned key
 
 `public-key.txt` is the one place this application decides whether a certificate
 feed fetched from anywhere may be believed. Its committed content is the
@@ -23,7 +29,7 @@ with no structural anchor — so they are accepted only as an exact restatement 
 the table compiled into this application. So the worst a stolen key achieves is
 withholding a certificate. It cannot mint one.
 
-## What the file holds
+### What the file holds
 
 One line, and nothing else: the placeholder, or the base64 of a raw 32-byte
 Ed25519 public key — 43 base64 characters and one `=`. The algorithm is not
@@ -32,7 +38,7 @@ Ed25519 and wraps the raw key in its SPKI header. Anything that is neither the
 placeholder nor a canonical key line is a refusal, not a fall back to the
 placeholder: a mistyped key must be visible as a mistake.
 
-## The one-time key ceremony
+### The one-time key ceremony
 
 Run once, on a machine that is offline and stays offline for the duration. The
 private half must never exist in this repository, in a test, in a fixture, or on
@@ -61,7 +67,7 @@ a machine that builds anything.
 4. Destroy every copy of the private half outside the signing environment,
    including the file written in step 1 and the machine's shell history.
 
-## What a signed feed is published as
+### What a signed feed is published as
 
 Two assets on the release the application resolves as current:
 
@@ -80,7 +86,7 @@ Replacing those two assets on an existing release is the whole of what it takes
 to reach installations. No application release is involved, which is the point:
 recovery arrives as data.
 
-## Rotation and loss
+### Rotation and loss
 
 There is no revocation list and no second pinned key, deliberately: a second key
 is a second thing that can be stolen, and the failure it would cover — a lost
@@ -92,3 +98,30 @@ being what decides whether any of them enables anything.
 A feed's `sequence` only ever increases. A captured older feed replayed at an
 application that already holds a newer one is refused, so a replay cannot
 withdraw a certificate.
+
+## The certified client generation
+
+`certified-client.json` records one digest: the identity of the ArenaNet JSPI
+code artifacts — `Gw.jspi.js` and `Gw.jspi.wasm` — whose certificate is on
+`main`. `Gw.snapshot` and `version.json` are deliberately outside it, because
+game content is republished on schedules that have nothing to do with the WASM.
+
+It carries no authority whatsoever. Nothing reads it at run time; it decides
+only whether the scheduled recertification workflow does any work this quarter
+hour. A wrong digest costs a redundant derivation or a late one, and what a
+build may actually be transformed for is still decided by the tables compiled
+into the application and by the local structural proof.
+
+```json
+{ "formatVersion": 1, "codeGeneration": "<64 hex characters>" }
+```
+
+`pnpm client:official` prints what is published now beside what is recorded, and
+`pnpm client:official --record <digest>` writes the generation it is handed.
+The digest is an argument and not a fresh fetch on purpose: a derivation is
+several minutes of downloading and certifying, ArenaNet may republish inside
+that window, and a record naming a generation nothing certified would leave the
+detector reading published == recorded and hiding the new build until the patch
+after it. A record this file's parser cannot read is a failure rather than a
+mismatch — reporting it as changed would chase a client that may already be
+certified, and reporting it as unchanged would hide a patch forever.

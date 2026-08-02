@@ -93,6 +93,12 @@ export interface KnownTemplateSaveBuild {
   readonly bridges: readonly StubBridge[];
 }
 
+/**
+ * Oldest first. The order is load-bearing: the last member is the shape
+ * baseline `deriveEquivalentTemplateSaveBuild` and `local-client-verifier.ts`
+ * measure an unknown client against, so a new build is appended and never
+ * inserted. `certification template --write` appends for the same reason.
+ */
 export const TEMPLATE_SAVE_BUILDS: readonly KnownTemplateSaveBuild[] =
   Object.freeze([
     Object.freeze({
