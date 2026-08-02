@@ -4,7 +4,9 @@
 // keeps that true rather than this comment.
 //
 // The committed pinned-key file is read here rather than restated, so the
-// placeholder and the code that recognises it cannot drift apart.
+// canonical-key rule and the file the application ships cannot drift apart.
+// The placeholder state every fresh clone starts in stays covered through the
+// exported sentinel constant, because the committed file has left that state.
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -49,14 +51,30 @@ function refusal(run: () => unknown): AppError {
 }
 
 describe("the pinned key that ships in this repository", () => {
-  it("is the placeholder, so no remote feed is trusted", () => {
+  it("is one canonical Ed25519 key line, so remote feeds are trusted", () => {
     const committed = readFileSync(PINNED_KEY_FILE, "utf8");
-    assert.equal(committed.trim(), CERTIFICATE_FEED_KEY_SENTINEL);
-    assert.deepEqual(certificateFeedTrust(committed), { remote: false });
+    const line = committed.trim();
+    // Canonical spelling: exactly the base64 of 32 raw key bytes, no second
+    // spelling of the same key, nothing else in the file.
+    assert.equal(Buffer.from(line, "base64").toString("base64"), line);
+    assert.equal(Buffer.from(line, "base64").byteLength, 32);
+    assert.equal(certificateFeedTrust(committed).remote, true);
   });
 
-  it("refuses every fetched feed while the placeholder is there", () => {
+  it("refuses a feed signed by anyone but the pinned key's holder", () => {
     const trust = certificateFeedTrust(readFileSync(PINNED_KEY_FILE, "utf8"));
+    const { signature } = signer();
+    assert.match(
+      refusal(() => verifyFetchedCertificateFeed(trust, FEED, signature)).message,
+      /does not verify under the pinned key/,
+    );
+  });
+
+  it("trusts no remote feed while the placeholder sentinel is the pin", () => {
+    assert.deepEqual(certificateFeedTrust(CERTIFICATE_FEED_KEY_SENTINEL), {
+      remote: false,
+    });
+    const trust = certificateFeedTrust(`${CERTIFICATE_FEED_KEY_SENTINEL}\n`);
     const { signature } = signer();
     assert.match(
       refusal(() => verifyFetchedCertificateFeed(trust, FEED, signature)).message,
