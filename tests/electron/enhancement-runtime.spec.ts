@@ -11,10 +11,10 @@ import path from "node:path";
 // copy made `tsc -p tsconfig.tests.json` depend on a current build — the exact
 // second source of truth Phase 0b removed from the tooling scripts, and the
 // reason `pnpm typecheck` can run before `pnpm build` in `pnpm verify`.
-import { prepareClientModule } from "../../src/main/core/client-module.js";
+import { prepareClientModule } from "../../src/main/certification/client-module.js";
 import { gamePaths } from "../../src/main/core/paths.js";
 import { loadSettings } from "../../src/main/core/settings.js";
-import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
   enhancementCapabilitiesFor,
   enhancementCapabilitiesRequested,

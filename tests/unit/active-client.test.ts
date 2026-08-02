@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import {
   ActiveClientSlot,
   type ClientGeneration,
-} from "../../src/main/core/active-client.js";
+} from "../../src/main/active-client.js";
 import type { SnapshotMetadata } from "../../src/shared/contracts.js";
 
 function snapshot(size: number): SnapshotMetadata {

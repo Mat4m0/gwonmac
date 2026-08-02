@@ -145,6 +145,74 @@ const REJECTED = [
     source: 'import { log } from "../shared/log.js";\nexport const probe = log;\n',
   },
   {
+    // The proof runs in a utilityProcess, which resolves no `electron` module.
+    // While it lived in src/main/core/** the directory rule said so; here only
+    // the two named Electron callers are exempt.
+    what: "src/main/certification imports electron",
+    file: "src/main/certification/probe.ts",
+    source: 'import { app } from "electron";\nexport const probe = app;\n',
+  },
+  {
+    what: "src/main/certification dynamically imports electron",
+    file: "src/main/certification/probe.ts",
+    source: 'export const probe = async () => import("electron");\n',
+  },
+  {
+    // Banning the `electron` specifier alone leaves every file in src/main that
+    // imports it one `../` away, and the utilityProcess graph would break at
+    // runtime rather than at lint.
+    what: "src/main/certification imports upward from src/main",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { createWindow } from "../window.js";\nexport const probe = createWindow;\n',
+  },
+  {
+    what: "src/main/certification imports upward from src/main, spelled through src/main",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { createWindow } from "../../main/window.js";\nexport const probe = createWindow;\n',
+  },
+  {
+    what: "src/main/certification imports upward from src/main, spelled from the repository root",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { createWindow } from "../../../src/main/window.js";\nexport const probe = createWindow;\n',
+  },
+  {
+    what: "src/main/certification dynamically imports upward from src/main",
+    file: "src/main/certification/probe.ts",
+    source: 'export const probe = async () => import("../ipc.js");\n',
+  },
+  {
+    what: "src/main/certification dynamically imports upward, spelled with a template literal",
+    file: "src/main/certification/probe.ts",
+    source: "export const probe = async () => import(`../ipc.js`);\n",
+  },
+  {
+    what: "src/main/certification imports one level up into a sibling of src/main/certification named shared",
+    file: "src/main/certification/probe.ts",
+    source: 'import { log } from "../shared/log.js";\nexport const probe = log;\n',
+  },
+  {
+    // The two exempt files are the chain's outside. A sibling specifier climbs
+    // out of nothing, so only naming them keeps them off the proof's graph.
+    what: "src/main/certification imports the exempt verifier host",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { verifyLocally } from "./local-client-verifier-host.js";\nexport const probe = verifyLocally;\n',
+  },
+  {
+    what: "src/main/certification imports the exempt enhancement policy",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { enhancementPolicy } from "./enhancement-policy.js";\nexport const probe = enhancementPolicy;\n',
+  },
+  {
+    what: "src/main/certification dynamically imports the exempt enhancement policy",
+    file: "src/main/certification/probe.ts",
+    source: 'export const probe = async () => import("./enhancement-policy.js");\n',
+  },
+  {
     what: "src/renderer imports src/main",
     file: "src/renderer/probe.js",
     source:
@@ -264,6 +332,29 @@ const ALLOWED = [
     what: "src/main imports electron",
     file: "src/main/probe.ts",
     source: 'import { app } from "electron";\nexport const probe = app;\n',
+  },
+  {
+    what: "the certification host imports electron",
+    file: "src/main/certification/local-client-verifier-host.ts",
+    source:
+      'import { utilityProcess } from "electron";\nexport const probe = utilityProcess;\n',
+  },
+  {
+    what: "src/main/certification imports the codec that stayed in src/main/core",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { splitSections } from "../core/wasm-binary.js";\nexport const probe = splitSections;\n',
+  },
+  {
+    what: "src/main/certification imports src/shared",
+    file: "src/main/certification/probe.ts",
+    source: 'import { IPC } from "../../shared/contracts.js";\nexport const probe = IPC;\n',
+  },
+  {
+    what: "src/main/certification imports a sibling that is not an Electron caller",
+    file: "src/main/certification/probe.ts",
+    source:
+      'import { findEnhancementBuild } from "./enhancement-builds.js";\nexport const probe = findEnhancementBuild;\n',
   },
   {
     what: "src/renderer imports src/shared",

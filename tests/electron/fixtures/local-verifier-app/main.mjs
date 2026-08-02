@@ -4,7 +4,7 @@ import { app, BrowserWindow } from "electron";
 // the compiled host at runtime so this fixture exercises the shipped entry
 // without making generated output a typecheck prerequisite.
 const hostUrl = new URL(
-  "../../../../build/main/local-client-verifier-host.js",
+  "../../../../build/main/certification/local-client-verifier-host.js",
   import.meta.url,
 );
 const { verifyClientLocally } = await import(hostUrl.href);

@@ -12,18 +12,18 @@
  */
 import {
   analyzeTemplateSaveCandidate,
-} from "../main/core/template-save-verifier.js";
+} from "../main/certification/template-save-verifier.js";
 import {
   findTemplateSaveBuild,
   TEMPLATE_SAVE_BUILDS,
   type CallSite,
   type KnownTemplateSaveBuild,
-} from "../main/core/template-save-compat.js";
+} from "../main/certification/template-save-compat.js";
 
 export {
   deriveTemplateSaveBuild,
   draftTemplateSaveBuild,
-} from "../main/core/template-save-verifier.js";
+} from "../main/certification/template-save-verifier.js";
 
 function sortSites(sites: readonly CallSite[]): CallSite[] {
   return [...sites].sort(

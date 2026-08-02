@@ -38,7 +38,7 @@ import { INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   certificationFromLocalVerification,
   certifyClientBuild,
-} from "./client-certification.js";
+} from "./certification/client-certification.js";
 import {
   PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
@@ -48,11 +48,11 @@ import {
 import {
   ActiveClientSlot,
   type ActiveClient,
-} from "./core/active-client.js";
+} from "./active-client.js";
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
-import { prepareClientModule } from "./core/client-module.js";
+import { prepareClientModule } from "./certification/client-module.js";
 import {
   confirmClientCandidate,
   readRejectedClient,
@@ -82,9 +82,9 @@ import {
   startClientUpdateSpan,
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
-import { verifyClientLocally } from "./local-client-verifier-host.js";
+import { verifyClientLocally } from "./certification/local-client-verifier-host.js";
 
-export type { ActiveClient } from "./core/active-client.js";
+export type { ActiveClient } from "./active-client.js";
 
 /**
  * Client fingerprints are parsed as 64-hex where they are read, so this only

@@ -62,7 +62,7 @@ const {
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
   enhancementSelectionChanged,
-} = await import("../../src/main/enhancement-policy.ts");
+} = await import("../../src/main/certification/enhancement-policy.ts");
 
 const enabledFor = (settings: AppSettings) => enhancementCapabilitiesRequested(
   enhancementCapabilitiesFor(

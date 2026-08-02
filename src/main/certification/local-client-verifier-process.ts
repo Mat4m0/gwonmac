@@ -16,7 +16,7 @@ import { readFile } from "node:fs/promises";
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
-} from "./core/local-client-verifier.js";
+} from "./local-client-verifier.js";
 
 interface ParentPort {
   postMessage(value: unknown): void;

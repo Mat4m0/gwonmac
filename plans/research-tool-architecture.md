@@ -1116,8 +1116,8 @@ The foundation is ready to scale when all statements below are true:
 
 Canonical gwonmac evidence:
 
-- [Enhancement build certificate](../src/main/core/enhancement-builds.ts)
-- [Transform and candidate inspector](../src/main/core/enhancement-transform.ts)
+- [Enhancement build certificate](../src/main/certification/enhancement-builds.ts)
+- [Transform and candidate inspector](../src/main/certification/enhancement-transform.ts)
 - [Passive Rust kernel](../src/companion-kernel/lib.rs)
 - [Cursor dirty-domain implementation](../src/companion-kernel/cursor.rs)
 - [Toolbox scalar snapshot](../src/companion-kernel/toolbox.rs)

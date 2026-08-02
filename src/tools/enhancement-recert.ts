@@ -1,7 +1,7 @@
 /**
- * `pnpm enhancements:recertify`: derives a candidate Enhancement build entry
- * from a client this repository does not yet know, and prints the evidence
- * behind it.
+ * The Enhancement recertification report behind `certification recertify`: a
+ * candidate build entry derived from a client this repository does not yet
+ * know, plus the evidence behind it.
  *
  * It proposes; a human certifies. The output is a draft table entry plus the
  * structural findings that produced it, and every output hash is obtained by
@@ -11,10 +11,10 @@
  *
  * It recovers indices, not semantics. What the hooked functions mean still has
  * to be re-measured; `internal/upstream/recertify.md` owns that work.
+ *
+ * Argument parsing, printing and the exit code belong to `certification.ts`;
+ * this module owns no command line.
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
@@ -24,24 +24,23 @@ import {
   inspectEnhancementCandidate,
   transformEnhancementWasm,
   type EnhancementCandidateReport,
-} from "../main/core/enhancement-transform.js";
+} from "../main/certification/enhancement-transform.js";
 import {
   ENHANCEMENT_BUILDS,
   enhancementOutputSha256,
   findEnhancementBuild,
   type EnhancementOutputHashes,
-} from "../main/core/enhancement-builds.js";
+} from "../main/certification/enhancement-builds.js";
 import {
   inspectEnhancementStructuralEvidence,
   type EnhancementStructuralEvidenceReport,
   type PlayerChatMessageAnchors,
 } from "./enhancement-structural-evidence.js";
-import { defaultGuildWarsProfile } from "./enhancement-doctor.js";
 import {
   preparePostTemplateSaveModule,
   type PostTemplateSaveModule,
   type TemplateSaveResolution,
-} from "../main/core/template-save-verifier.js";
+} from "../main/certification/template-save-verifier.js";
 
 interface EnhancementRecertificationFailure {
   readonly officialSha256: string;
@@ -201,7 +200,8 @@ function finishPostTemplateEnhancementReport(
   };
 }
 
-function currentMessageAnchors(): PlayerChatMessageAnchors {
+/** The semantic anchors a candidate is measured against: today's baseline. */
+export function currentMessageAnchors(): PlayerChatMessageAnchors {
   const baseline = ENHANCEMENT_BUILDS.at(-1);
   if (!baseline) {
     throw new Error("enhancement recertification has no semantic baseline");
@@ -213,32 +213,4 @@ function currentMessageAnchors(): PlayerChatMessageAnchors {
       baseline.uiDispatcher.nearbyPlayerMessages[1],
     ] as [number, number]),
   });
-}
-
-async function main(): Promise<void> {
-  const positional = process.argv.slice(2)
-    .filter((argument) => argument !== "--")
-    .filter((argument) => !argument.startsWith("--"));
-  if (positional.length > 1) {
-    process.stderr.write("usage: enhancements:recertify [path/to/Gw.jspi.wasm]\n");
-    process.exitCode = 2;
-    return;
-  }
-  const filename = positional[0] ?? path.join(
-    defaultGuildWarsProfile(),
-    "game",
-    "artifacts",
-    "Gw.jspi.wasm",
-  );
-  const official = await readFile(filename);
-  const report = recertifyEnhancementBytes(official, currentMessageAnchors());
-  process.stdout.write(`${JSON.stringify(report)}\n`);
-  if (!report.candidateInspected) process.exitCode = 2;
-}
-
-if (
-  process.argv[1]
-  && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
-) {
-  await main();
 }

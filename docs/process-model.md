@@ -48,6 +48,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/client-runtime.ts` | atomic generation, update, rollback, cache, selected WASM       |
 | `src/main/core/`          | updater, cache, DNS, sockets, credentials, settings, window state |
 | `src/main/core/wasm-binary.ts` | WASM section codec shared by both transforms and the re-certifier |
+| `src/main/certification/` | certified build tables, both transforms, the isolated local proof |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
 | `src/main/ipc.ts`         | validated native capability handlers                              |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                       |
@@ -56,6 +57,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/renderer/`           | launcher, `Module` host, input, graphics, diagnostics             |
 | `src/companion-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
+| `src/tools/certification.ts` | the one certification command line over that chain              |
 | `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
 

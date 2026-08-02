@@ -36,7 +36,7 @@ import {
   uleb,
   valueTypeName,
   type FunctionType,
-} from "./wasm-binary.js";
+} from "../core/wasm-binary.js";
 import {
   findTemplateSaveBuild,
   rewriteTemplateSaveWasm,

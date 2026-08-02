@@ -9,11 +9,11 @@ Two halves, one contract:
 
 | Half | File | Job |
 | --- | --- | --- |
-| Main | [`src/main/core/template-save-compat.ts`](../../src/main/core/template-save-compat.ts) | derive one module from the certified official hash |
+| Main | [`src/main/certification/template-save-compat.ts`](../../src/main/certification/template-save-compat.ts) | derive one module from the certified official hash |
 | Renderer | [`src/renderer/template-save-compatibility.ts`](../../src/renderer/template-save-compatibility.ts) | answer the derived module's calls against the mounted IDBFS |
 
 Selection and caching live in
-[`client-module.ts`](../../src/main/core/client-module.ts) and
+[`client-module.ts`](../../src/main/certification/client-module.ts) and
 [`client-runtime.ts`](../../src/main/client-runtime.ts). Installation is
 [`harness.ts`](../../src/renderer/harness.ts) inside `Module.instantiateWasm`,
 before instantiation, so the import object can be wrapped.

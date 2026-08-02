@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import {
   inspectPostTemplateEnhancementBytes,
   recertifyEnhancementBytes,
-} from "../../src/tools/enhancement-recertify.js";
+} from "../../src/tools/enhancement-recert.js";
 import {
   concat,
   encodeCode,

@@ -9,22 +9,22 @@
  * breaks saving gets fixed before the one that draws a pointer.
  *
  * This is the single owner of that answer: the launcher notice, the settings
- * status, the diagnostics gauges and `enhancements:doctor` all ask here, so the
- * intermediate state has one name and one user-facing sentence rather than
+ * status, the diagnostics gauges and `certification doctor` all ask here, so
+ * the intermediate state has one name and one user-facing sentence rather than
  * being reassembled from two independent gauges at each surface.
  */
-import type { ClientCertification } from "./core/client-module.js";
+import type { ClientCertification } from "./client-module.js";
 import {
   findTemplateSaveBuild,
   type KnownTemplateSaveBuild,
-} from "./core/template-save-compat.js";
+} from "./template-save-compat.js";
 import {
   findEnhancementBuild,
   type KnownEnhancementBuild,
-} from "./core/enhancement-builds.js";
-import type { LocalClientVerification } from "./core/local-client-verifier.js";
+} from "./enhancement-builds.js";
+import type { LocalClientVerification } from "./local-client-verifier.js";
 
-export type { ClientCertification } from "./core/client-module.js";
+export type { ClientCertification } from "./client-module.js";
 
 /**
  * The two lookups the chain composes. Injectable because the shipped tables

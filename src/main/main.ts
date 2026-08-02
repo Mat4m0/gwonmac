@@ -76,7 +76,7 @@ import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
-} from "./enhancement-policy.js";
+} from "./certification/enhancement-policy.js";
 import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
 import {
   createMainWindow,

@@ -4,7 +4,7 @@
 // Playwright input (`page.mouse`, `page.keyboard`, `page.locator`) and the
 // parent-process command channel that main's `process.on("message")` handler
 // serves. Both are gated on `GW_ENHANCEMENT_AUTOMATION=1`, which
-// `src/main/enhancement-policy.ts` refuses in a packaged app.
+// `src/main/certification/enhancement-policy.ts` refuses in a packaged app.
 //
 // **Observation** reads. Its fixed cursor-observer program selects only the
 // cursor, independent of saved product settings, and it is handed no input or
@@ -20,7 +20,7 @@ import { createInterface } from "node:readline/promises";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
 import type { EnhancementProgram } from "../../src/shared/contracts.js";
-import type { EnhancementDoctorReport } from "../../src/tools/enhancement-doctor.js";
+import type { EnhancementDoctorReport } from "../../src/tools/enhancement-workspace.js";
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 
 export type LiveTier = "automation" | "observation";

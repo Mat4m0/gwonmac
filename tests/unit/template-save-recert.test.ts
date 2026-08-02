@@ -13,11 +13,11 @@ import {
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
-} from "../../src/main/core/local-client-verifier.js";
+} from "../../src/main/certification/local-client-verifier.js";
 import {
   deriveEquivalentTemplateSaveBuild,
   preparePostTemplateSaveModule,
-} from "../../src/main/core/template-save-verifier.js";
+} from "../../src/main/certification/template-save-verifier.js";
 import {
   concat,
   encodeCode,
@@ -28,8 +28,8 @@ import {
   splitSections,
   WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
-import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
-import { defaultGuildWarsProfile } from "../../src/tools/enhancement-doctor.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
+import { defaultGuildWarsProfile } from "../../src/tools/enhancement-workspace.js";
 
 function uleb(value: number): number[] {
   const out: number[] = [];

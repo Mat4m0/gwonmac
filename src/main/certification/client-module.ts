@@ -23,7 +23,7 @@ import {
   discardDerivedWasm,
   inspectDerivedWasmCache,
   prepareDerivedWasm,
-} from "./derived-wasm.js";
+} from "../core/derived-wasm.js";
 import {
   rewriteTemplateSaveWasm,
   TEMPLATE_SAVE_TRANSFORM_ABI,
