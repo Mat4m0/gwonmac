@@ -1,4 +1,10 @@
 [toolchain]
 channel = "1.88.0"
+# rustup owns what a profile contains and can redefine it; these are the pieces
+# this repository needs, named here so the pin does not depend on that
+# definition: the compiler that enforces the lints src/companion-kernel/lib.rs
+# denies, and the `core` that `targets` below installs for wasm32. Cargo,
+# clippy, and rustfmt are absent because no build step or gate runs them.
+components = ["rustc", "rust-std"]
 targets = ["wasm32-unknown-unknown"]
 profile = "minimal"
