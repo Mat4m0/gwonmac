@@ -9,6 +9,7 @@
 import { computed } from "vue";
 import { useFetch, useI18n, useSeoMeta } from "#imports";
 import { useTracking, type DownloadSource } from "../composables/useTracking";
+import type { LatestRelease } from "../../server/utils/release-select";
 import { getLocalizedSiteText } from "#ginko-docs/config/site.utils";
 import { useGinkoDocsConfig } from "#ginko-docs/composables/useGinkoDocsConfig";
 import { useSchemaJsonLd } from "#ginko-docs/composables/useSchemaJsonLd";
@@ -24,7 +25,7 @@ const RELEASES_URL = "https://github.com/Mat4m0/gwonmac/releases/latest";
 // server-side, beta channel during the launch phase). Fetched in the browser so
 // the prerendered page never bakes in a stale version; until it answers, the
 // buttons link to the releases page.
-const { data: latestRelease } = useFetch("/api/latest", { server: false });
+const { data: latestRelease } = useFetch<LatestRelease>("/api/latest", { server: false });
 const downloadUrl = computed(() => latestRelease.value?.url ?? RELEASES_URL);
 
 const { trackDownload, trackFaqOpen } = useTracking();
