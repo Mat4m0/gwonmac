@@ -24,6 +24,18 @@ import vueParser from "vue-eslint-parser";
 // the exact depth needs a second config block per level, which is more
 // structure than the hole is worth until one exists.
 const OUT_OF_CORE = String.raw`^(?!(?:\.\./){2,}shared/)\.\./|(?:^|/)(?:\.\.|src)/main/`;
+// Leaving src/main/certification: the same property as OUT_OF_CORE with one
+// more exemption, because the chain reads the WASM codec that stayed behind in
+// src/main/core. Both exemptions name one spelling — `../core/` and
+// `../../shared/` — and every other spelling of the same targets is rejected,
+// exactly as OUT_OF_CORE already rejects `../../../src/shared/`. One spelling
+// per allowed target is what keeps the boundary a single regular expression.
+const OUT_OF_CERTIFICATION = String.raw`^(?!(?:\.\./){2,}shared/)(?!\.\./core/)\.\./|(?:^|/)(?:\.\.|src)/main/`;
+// The two Electron callers, named as siblings. They are exempt from the
+// Electron ban because they are the outside of the chain; importing one from
+// the inside would put Electron back on the utilityProcess graph, and the
+// upward ban above cannot see a sibling.
+const CERTIFICATION_ELECTRON_CALLERS = String.raw`(?:^|/)(?:enhancement-policy|local-client-verifier-host)(?:\.js)?$`;
 const INTO_MAIN = String.raw`(?:^|/)(?:\.\.|src)/main/`;
 // Leaving apps/website: any escape into the host application's src/ other than
 // src/shared. Naming main/renderer/preload alone let src/tools/** through while
@@ -62,6 +74,12 @@ const crossings = (pattern, message) => {
 
 const NO_ELECTRON =
   "src/main/core/** must stay Electron-free. Keep Electron behind src/main/*.ts.";
+const NO_ELECTRON_IN_CERTIFICATION =
+  "src/main/certification/** must stay Electron-free apart from enhancement-policy.ts and local-client-verifier-host.ts. The proof runs in a utilityProcess, which has no Electron module.";
+const NO_UPWARD_FROM_CERTIFICATION =
+  "src/main/certification/** must not import upward out of src/main/certification, other than `../core/` and `../../shared/`. Invert the dependency.";
+const NO_CERTIFICATION_ELECTRON_CALLERS =
+  "src/main/certification/** must not import enhancement-policy.ts or local-client-verifier-host.ts; they are the chain's Electron callers, and the utilityProcess graph must not reach them.";
 const NO_UPWARD =
   "src/main/core/** must not import upward out of src/main/core. Invert the dependency.";
 const NO_MAIN_FROM_RENDERER =
@@ -110,6 +128,49 @@ export default tseslint.config(
         "error",
         ...crossings(ELECTRON, NO_ELECTRON),
         ...crossings(OUT_OF_CORE, NO_UPWARD),
+      ],
+    },
+  },
+  {
+    // The certification chain moved out of src/main/core/**, where being
+    // Electron-free was a property of the directory. The verifier is forked
+    // with `utilityProcess`, which runs plain Node and resolves no `electron`
+    // module, so the whole graph its entry point reaches has to stay free of
+    // one — and that graph is every file here but the two named below, which
+    // are the Electron callers the chain is driven from.
+    //
+    // Banning the `electron` specifier alone would only ban the shortest route:
+    // src/main/*.ts is full of Electron, so the upward ban core enforced by
+    // being a directory has to be spelled out here, and the two exempt siblings
+    // have to be unreachable from the inside. Those three together are what
+    // makes "Electron-free" a property of the graph rather than of one line.
+    files: ["src/main/certification/**/*.ts"],
+    ignores: [
+      "src/main/certification/enhancement-policy.ts",
+      "src/main/certification/local-client-verifier-host.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { regex: ELECTRON, message: NO_ELECTRON_IN_CERTIFICATION },
+            { regex: OUT_OF_CERTIFICATION, message: NO_UPWARD_FROM_CERTIFICATION },
+            {
+              regex: CERTIFICATION_ELECTRON_CALLERS,
+              message: NO_CERTIFICATION_ELECTRON_CALLERS,
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        ...crossings(ELECTRON, NO_ELECTRON_IN_CERTIFICATION),
+        ...crossings(OUT_OF_CERTIFICATION, NO_UPWARD_FROM_CERTIFICATION),
+        ...crossings(
+          CERTIFICATION_ELECTRON_CALLERS,
+          NO_CERTIFICATION_ELECTRON_CALLERS,
+        ),
       ],
     },
   },

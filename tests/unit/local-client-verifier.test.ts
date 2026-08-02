@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
   isLocalClientVerification,
   LOCAL_CLIENT_BASELINE_FINGERPRINT,
   LOCAL_CLIENT_VERIFIER_ABI,
   type LocalClientVerification,
-} from "../../src/main/core/local-client-verifier.js";
-import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
+} from "../../src/main/certification/local-client-verifier.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 
 const ENHANCEMENT = ENHANCEMENT_BUILDS[0]!;
 const TEMPLATE = TEMPLATE_SAVE_BUILDS.find(

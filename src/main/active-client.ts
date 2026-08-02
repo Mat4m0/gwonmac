@@ -9,9 +9,9 @@
  *
  * The slot records what is current and decides nothing about readiness.
  */
-import type { SnapshotMetadata } from "../../shared/contracts.js";
-import type { ChunkStore } from "./chunk-store.js";
-import type { KnownEnhancementBuild } from "./enhancement-builds.js";
+import type { SnapshotMetadata } from "../shared/contracts.js";
+import type { ChunkStore } from "./core/chunk-store.js";
+import type { KnownEnhancementBuild } from "./certification/enhancement-builds.js";
 
 export interface ActiveClient {
   readonly generation: number;

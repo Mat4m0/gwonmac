@@ -99,8 +99,8 @@ re-certification procedure for a new client build, and the investigation log.
 Read it before changing anything below.
 
 Every index and offset the transform carries belongs to one exact client build.
-The shape locator is production code under `src/main/core`; both the launcher
-and `pnpm template:recertify` call that one implementation. It re-derives
+The shape locator is production code under `src/main/certification`; both the launcher
+and `pnpm certification template` call that one implementation. It re-derives
 indices from body bytes, resolved signatures, and caller-set intersections,
 then fingerprints every complete caller body the transform will modify. Only
 the five selected call-index operands are normalised. A changed path
@@ -179,6 +179,18 @@ deleted when the selected client changes.
 
 ## Which of three states a client build is in
 
+`src/main/certification/` is the one directory the whole chain lives in: the two
+certified build tables, the two transforms, the module the launch actually
+serves, the pure structural proof, the utility process it runs in, and the
+developer switches over the Enhancement half. `src/main/core/` keeps only what
+is not about certification and what certification depends on — the WASM section
+codec and the derived-artifact cache — so the dependency runs one way and there
+is no second place to look. `src/tools/certification.ts` is the one command
+line over it, with `doctor`, `recertify`, `template` and `transform`
+subcommands; `scripts/verify-companion-kernel.mjs` stays separate because it
+certifies the Rust companion kernel against the compile recipe in
+`scripts/build.mjs`, not a client build.
+
 The two transforms are chained but keyed by **different** hashes: template-save
 by the official build's hash, Enhancement by the hash of what the template-save
 transform produces. Certification can therefore succeed at step one and fail at
@@ -186,11 +198,11 @@ step two — templates saved, cursors gone — which is the normal intermediate
 during a recertification, because the transform that breaks saving is fixed
 before the one that draws a pointer.
 
-`src/main/client-certification.ts` composes the shipped lookups or one local
+`src/main/certification/client-certification.ts` composes the shipped lookups or one local
 proof into the same answer: `uncertified`, `template-only`, or `certified`. It
 is the single owner, and every consumer asks it rather than composing the chain
 again — the launcher notice, the settings status, the diagnostics gauges, the
-weekly canary, and `pnpm enhancements:doctor`. A certified build whose
+weekly canary, and `pnpm certification doctor`. A certified build whose
 template-save transform throws is published as `uncertified`, because it is
 degraded exactly that far.
 

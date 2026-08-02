@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { fingerprintClientGeneration } from "../../src/main/core/client-fingerprint.js";
-import { inspectEnhancementWorkspace } from "../../src/tools/enhancement-doctor.js";
+import { inspectEnhancementWorkspace } from "../../src/tools/enhancement-workspace.js";
 
 describe("Enhancement workspace doctor", () => {
   it("fails closed for a missing profile", async () => {

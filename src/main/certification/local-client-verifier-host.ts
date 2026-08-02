@@ -16,11 +16,11 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { utilityProcess } from "electron";
-import { writeAtomicJson } from "./core/atomic-file.js";
+import { writeAtomicJson } from "../core/atomic-file.js";
 import {
   isLocalClientVerification,
   type LocalClientVerification,
-} from "./core/local-client-verifier.js";
+} from "./local-client-verifier.js";
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 

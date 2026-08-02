@@ -1,7 +1,7 @@
 # Toolbox foundation evidence — build 38,797
 
 This is the investigation record. The executable certificate is
-`src/main/core/enhancement-builds.ts`.
+`src/main/certification/enhancement-builds.ts`.
 
 ## Module identity
 

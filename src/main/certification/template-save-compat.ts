@@ -32,7 +32,7 @@ import {
   uleb,
   WASM_HEADER,
   type Section,
-} from "./wasm-binary.js";
+} from "../core/wasm-binary.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;

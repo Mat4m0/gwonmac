@@ -1,5 +1,5 @@
 /**
- * Host half of the derived-client bridge in src/main/core/template-save-compat.ts.
+ * Host half of the derived-client bridge in src/main/certification/template-save-compat.ts.
  *
  * Four `Base/Os` file routines ship unimplemented in ArenaNet's Emscripten
  * build: creating a directory always fails, enumerating one does nothing,

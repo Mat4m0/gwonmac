@@ -64,6 +64,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | ------------------------- | ------------------------------------------------------------- |
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
+| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -71,6 +72,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
+| `src/tools/certification.ts` | the one certification command line: `doctor`, `recertify`, `template`, `transform` |
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
 | `tests/`                  | unit, integration, Electron, packaged, and release invariants |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                |
@@ -280,9 +282,9 @@ pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
 ```
 
 When an ArenaNet client update lands, a build is in one of three states and
-`src/main/client-certification.ts` is the only thing that decides which. Known
+`src/main/certification/client-certification.ts` is the only thing that decides which. Known
 hashes use the shipped tables. An unknown hash is checked by the bounded
-isolated process in `src/main/local-client-verifier-host.ts`; only an exact
+isolated process in `src/main/certification/local-client-verifier-host.ts`; only an exact
 structural proof may supply locally derived records. The template proof hashes
 the complete affected caller bodies after normalising only the selected call
 indices; the Enhancement proof requires all eight static addresses in the same
@@ -291,12 +293,12 @@ official module. The
 `client.buildCertification` gauge in a `.gwdiag` names it —
 `certified`, `template-only` (templates save, enhancement tools cannot load), or
 `uncertified` — and `wasm.templateSaveCompatible` is the older boolean
-derived from that same answer. `pnpm template:recertify` re-derives the
+derived from that same answer. `pnpm certification template` re-derives the
 template build entry with the same production locator.
 `internal/upstream/recertify.md` owns investigation when the local proof
 refuses.
 
-For enhancement work, begin with `pnpm enhancements:doctor`, use the offline layers in
+For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
 scenario. Live enhancement runs are cached-only unless `--allow-update` is
 explicit; do not bypass that guard or use a temporary Electron profile.

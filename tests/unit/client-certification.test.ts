@@ -7,14 +7,14 @@ import {
   certificationFromLocalVerification,
   certifyClientBuild,
   type CertifiedBuildTables,
-} from "../../src/main/client-certification.js";
-import { TEMPLATE_SAVE_BUILDS } from "../../src/main/core/template-save-compat.js";
-import { ENHANCEMENT_BUILDS } from "../../src/main/core/enhancement-builds.js";
+} from "../../src/main/certification/client-certification.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
   LOCAL_CLIENT_BASELINE_FINGERPRINT,
   LOCAL_CLIENT_VERIFIER_ABI,
   type LocalClientVerification,
-} from "../../src/main/core/local-client-verifier.js";
+} from "../../src/main/certification/local-client-verifier.js";
 
 const OFFICIAL = TEMPLATE_SAVE_BUILDS.find(
   (build) => build.outputSha256 === ENHANCEMENT_BUILDS[0]?.sha256,

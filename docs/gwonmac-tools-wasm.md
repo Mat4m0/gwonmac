@@ -57,7 +57,7 @@ The certificate consumes post-template SHA-256
 | Party dirty set | Hero agent/data `0x10000038`, `0x10000039`; map loaded/context/start/change `0x1000008c`, `0x10000098`, `0x100000c2`, `0x10000111`; party add/remove hero/player `0x1000011e`, `0x1000011f`, `0x10000124`, `0x10000126` |
 
 The static addresses and relative structure fields live only in
-`src/main/core/enhancement-builds.ts`. Message IDs are build-local too. The
+`src/main/certification/enhancement-builds.ts`. Message IDs are build-local too. The
 transform serializes the ordered memory fields, three direct observer IDs, and
 the ten dirty IDs into one `configWords` array; Rust contains no unversioned
 copy. The dirty set covers hero-data readiness, every certified map-context
@@ -168,7 +168,7 @@ into silent memory corruption.
 
 ```bash
 pnpm enhancements:kernel:verify
-pnpm enhancements:recertify
+pnpm certification recertify
 GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario toolbox-foundation
 ```
 

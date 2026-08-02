@@ -21,21 +21,21 @@ import {
   inspectEnhancementCache,
   prepareClientModule,
   type ClientCertification,
-} from "../../src/main/core/client-module.js";
+} from "../../src/main/certification/client-module.js";
 import {
   rewriteTemplateSaveWasm,
   TEMPLATE_SAVE_TRANSFORM_ABI,
   type KnownTemplateSaveBuild,
-} from "../../src/main/core/template-save-compat.js";
+} from "../../src/main/certification/template-save-compat.js";
 import {
   type EnhancementOutputHashes,
   type KnownEnhancementBuild,
-} from "../../src/main/core/enhancement-builds.js";
+} from "../../src/main/certification/enhancement-builds.js";
 import {
   ENHANCEMENT_HOOK_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
   transformEnhancementWasm,
-} from "../../src/main/core/enhancement-transform.js";
+} from "../../src/main/certification/enhancement-transform.js";
 
 const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,

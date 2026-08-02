@@ -3,8 +3,9 @@
  * still be transformed, and what it may be transformed for.
  *
  * Pure: it reads the bytes it is handed and nothing else — no profile state, no
- * filesystem, no caching. The utility-process host owns all of that, which is
- * what allows this to run inside a bounded isolated process.
+ * filesystem, no caching, and no Electron, which a utility process could not
+ * resolve anyway. The host owns all of that, which is what allows this to run
+ * inside a bounded isolated process.
  *
  * The two answers are not symmetric and must not be merged. Template save is
  * shape-verifiable, so a client whose affected call sites still match is

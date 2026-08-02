@@ -21,7 +21,7 @@ import {
   type AppSettingsPatch,
   type EnhancementProgram,
   type EnhancementSelection,
-} from "../shared/contracts.js";
+} from "../../shared/contracts.js";
 
 export const ENHANCEMENT_AUTOMATION_ENABLED =
   !app.isPackaged && process.env.GW_ENHANCEMENT_AUTOMATION === "1";

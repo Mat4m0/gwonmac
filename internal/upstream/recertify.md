@@ -16,13 +16,13 @@ regression.**
 
 ```bash
 # 0. Prove the tool still reproduces today's certified entry. Exits 0.
-pnpm template:recertify -- --expect-certified
+pnpm certification template --expect-certified
 
 # 1. Point it at the new client and read the JSON.
-pnpm template:recertify -- "<path>/Gw.jspi.wasm"
+pnpm certification template "<path>/Gw.jspi.wasm"
 
 # 2. Get a paste-ready entry for TEMPLATE_SAVE_BUILDS (goes to stderr).
-pnpm template:recertify -- "<path>/Gw.jspi.wasm" --emit-ts
+pnpm certification template "<path>/Gw.jspi.wasm" --emit-ts
 ```
 
 The command calls the same production locator as the launcher. It re-derives
@@ -171,7 +171,7 @@ for at least:
 
 ### 6. Update, pin, verify
 
-`pnpm template:recertify -- <wasm> --emit-ts` does steps 1 and 2 for you.
+`pnpm certification template <wasm> --emit-ts` does steps 1 and 2 for you.
 
 1. Add the new entry to `TEMPLATE_SAVE_BUILDS` with `outputSha256: ""`.
 2. Run the transform; the thrown error reports the actual derived hash. Pin it.

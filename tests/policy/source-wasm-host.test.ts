@@ -227,7 +227,7 @@ test("the GL program cache memoizes only shader-completion state, and only once 
 
 test("template saving uses one exact-build derived WASM and a restricted mkdir bridge", async () => {
   const transform = await readFile(
-    path.join(root, "src/main/core/template-save-compat.ts"),
+    path.join(root, "src/main/certification/template-save-compat.ts"),
     "utf8",
   );
   const bridge = await readFile(
@@ -271,7 +271,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
 
 test("a new client build can be re-certified without hand-derivation", async () => {
   const locator = await readFile(
-    path.join(root, "src/main/core/template-save-verifier.ts"),
+    path.join(root, "src/main/certification/template-save-verifier.ts"),
     "utf8",
   );
   const recert = await readFile(
@@ -279,7 +279,7 @@ test("a new client build can be re-certified without hand-derivation", async () 
     "utf8",
   );
   const cli = await readFile(
-    path.join(root, "src/tools/template-save-recertify.ts"),
+    path.join(root, "src/tools/certification.ts"),
     "utf8",
   );
   // Only the field this assertion reads; `JSON.parse` returns `any`, which
@@ -295,8 +295,8 @@ test("a new client build can be re-certified without hand-derivation", async () 
   assert.match(recert, /formatBuildEntry/);
   assert.doesNotMatch(locator, /formatBuildEntry|compareToCertified/);
   assert.equal(
-    manifest.scripts?.["template:recertify"],
-    "pnpm build && node build/tools/template-save-recertify.js",
+    manifest.scripts?.["certification"],
+    "pnpm build && node build/tools/certification.js",
   );
 
   // Derivation must stay shape-based. A remembered index would defeat the point.
@@ -311,7 +311,7 @@ test("a new client build can be re-certified without hand-derivation", async () 
 
 test("Enhancement re-certification inspects only post-template bytes", async () => {
   const recertifier = await readFile(
-    path.join(root, "src/tools/enhancement-recertify.ts"),
+    path.join(root, "src/tools/enhancement-recert.ts"),
     "utf8",
   );
 
@@ -333,12 +333,12 @@ test("structural Enhancement candidates remain review-only evidence", async () =
   );
   assert.doesNotMatch(
     analyzer,
-    /from "\.\.\/main\/core\/enhancement-(?:builds|transform)\.js"/,
+    /from "\.\.\/main\/certification\/enhancement-(?:builds|transform)\.js"/,
   );
   for (const file of [
-    "src/main/client-certification.ts",
-    "src/main/core/client-module.ts",
-    "src/main/core/local-client-verifier.ts",
+    "src/main/certification/client-certification.ts",
+    "src/main/certification/client-module.ts",
+    "src/main/certification/local-client-verifier.ts",
   ]) {
     const source = await readFile(path.join(root, file), "utf8");
     assert.doesNotMatch(source, /enhancement-structural-evidence/);
@@ -357,14 +357,15 @@ test("the WASM section codec has exactly one home", async () => {
   assert.match(shared, /function copyRange/);
   assert.doesNotMatch(shared, /bodies\.push\(bytes\.slice/);
 
-  // Every module that parses or rewrites sections names the same sibling
-  // codec. The local verifier now composes those transforms without parsing a
-  // second time, so it deliberately has no codec dependency of its own.
+  // Every module that parses or rewrites sections names the same codec in
+  // src/main/core, whichever tree it sits in. The local verifier now composes
+  // those transforms without parsing a second time, so it deliberately has no
+  // codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
     ["src/tools/enhancement-structural-evidence.ts", '../main/core/wasm-binary.js'],
-    ["src/main/core/enhancement-transform.ts", './wasm-binary.js'],
-    ["src/main/core/template-save-compat.ts", './wasm-binary.js'],
-    ["src/main/core/template-save-verifier.ts", './wasm-binary.js'],
+    ["src/main/certification/enhancement-transform.ts", '../core/wasm-binary.js'],
+    ["src/main/certification/template-save-compat.ts", '../core/wasm-binary.js'],
+    ["src/main/certification/template-save-verifier.ts", '../core/wasm-binary.js'],
   ];
   for (const [file, specifier] of sharers) {
     const source = await readFile(path.join(root, file), "utf8");

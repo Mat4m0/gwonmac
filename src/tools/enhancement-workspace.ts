@@ -1,6 +1,6 @@
 /**
- * `pnpm enhancements:doctor`: reports why Enhancement is or is not running on
- * this machine, before anyone starts guessing.
+ * The workspace report behind `certification doctor`: why Enhancement is or is
+ * not running on this machine, before anyone starts guessing.
  *
  * It reads the real profile — the installed client, its published manifest, the
  * derived cache, the settings file — and reports what it found. It repairs
@@ -9,19 +9,19 @@
  *
  * Certification is asked of `client-certification.ts` rather than re-derived
  * here, so the doctor and the launch cannot disagree about what state a build
- * is in.
+ * is in. Argument parsing, printing and the exit code belong to
+ * `certification.ts`; this module owns no command line.
  */
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   COMMON_ARTIFACTS,
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
-import { certifyClientBuild } from "../main/client-certification.js";
-import { inspectEnhancementCache } from "../main/core/client-module.js";
+import { certifyClientBuild } from "../main/certification/client-certification.js";
+import { inspectEnhancementCache } from "../main/certification/client-module.js";
 import { parseSettings } from "../main/core/settings.js";
 import {
   DEFAULT_SETTINGS,
@@ -219,23 +219,4 @@ export async function inspectEnhancementWorkspace(
       && build !== null
       && snapshot?.complete === true,
   };
-}
-
-function argumentValue(name: string): string | null {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] ?? null : null;
-}
-
-async function main(): Promise<void> {
-  const profile = argumentValue("--profile") ?? defaultGuildWarsProfile();
-  const report = await inspectEnhancementWorkspace(profile);
-  process.stdout.write(`${JSON.stringify(report)}\n`);
-  if (!report.readyForCachedLive) process.exitCode = 1;
-}
-
-if (
-  process.argv[1]
-  && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
-) {
-  await main();
 }
