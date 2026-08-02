@@ -124,6 +124,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   const workflow = read(".github/workflows/release.yml");
   const forge = read("forge.config.ts");
   const signing = read("scripts/apple-signing.ts");
+  const verifier = read("scripts/verify-signed-app.ts");
   assert.match(workflow, /environment: release/);
   for (const secret of [
     "APPLE_DEVELOPER_ID_P12",
@@ -183,20 +184,39 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(workflow, /xcrun notarytool submit/);
   assert.match(workflow, /xcrun stapler staple/);
   assert.match(workflow, /test "\$TEAM_ID" = "9NN976MFZ4"/);
-  assert.match(workflow, /TeamIdentifier=9NN976MFZ4/);
   assert.match(workflow, /7F9A56793C16683742AA7818FE65221A884FA108/);
-  assert.match(workflow, /embedded\.provisionprofile/);
   assert.match(workflow, /remaining <= 2 \* 365 \* 86400000/);
   assert.match(workflow, /remaining <= 5 \* 365 \* 86400000/);
   assert.match(
     workflow,
     /rm -f "\$APPLE_PROVISIONING_PROFILE"[\s\S]*rm -f "\$APPLE_PROFILE_PLIST"/,
   );
-  assert.match(workflow, /Timestamp=/);
-  assert.match(workflow, /test "\$helper_count" -eq 4/);
-  assert.match(workflow, /test "\$plugin_helper_count" -eq 1/);
-  assert.match(workflow, /spctl --assess --type execute/);
-  assert.match(workflow, /spctl --assess --type open/);
+
+  // The signed-package assertions are the script's, and the workflow's only
+  // job is to run it. A release path that can only be exercised by cutting a
+  // release is one nobody can reproduce when it breaks, so an assertion that
+  // creeps back inline fails here.
+  assert.match(script("verify:signed-app"), /scripts\/verify-signed-app\.ts/);
+  assert.match(workflow, /GW_SIGNED_CHANNEL: release\n {8}run: \|\n {10}pnpm verify:signed-app/);
+  assert.match(workflow, /pnpm verify:signed-app "\$unzip_dir\//);
+  assert.doesNotMatch(
+    workflow,
+    /codesign -dv|codesign --verify|codesign -d --entitlements|spctl|stapler validate/,
+  );
+  assert.match(verifier, /TeamIdentifier=\$\{APPLE_TEAM_ID\}/);
+  assert.match(verifier, /Authority=\$\{distributionAuthorityName\(channel\)\}/);
+  assert.match(verifier, /embedded\.provisionprofile/);
+  assert.match(verifier, /"Timestamp="/);
+  assert.match(verifier, /const HELPERS = 4/);
+  assert.match(verifier, /const PLUGIN_HELPERS = 1/);
+  assert.match(verifier, /"--assess", "--type", "execute"/);
+  assert.match(verifier, /"--assess",\s*"--type",\s*"open"/);
+  assert.match(verifier, /approvedDistributionEntitlements\(channel\)/);
+  assert.match(verifier, /distributionOptionsForFile\(channel, helper\)/);
+  // The workflow passes the disk image as a `find` result. An empty one is a
+  // lookup that found nothing, not a package without an image, so it must not
+  // resolve to the form that skips every disk image assertion.
+  assert.match(verifier, /args\.length > 1 && !diskImage/);
 });
 
 test("release entitlements are an exact three-key allowlist", () => {
