@@ -65,7 +65,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
 | `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed and its delivery |
-| `certificates/`           | the pinned certificate-feed public key and its key ceremony    |
+| `certificates/`           | the pinned certificate-feed public key, its key ceremony, and the client generation this repository has certified |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -328,9 +328,24 @@ official module. The
 `certified`, `template-only` (templates save, enhancement tools cannot load), or
 `uncertified` — and `wasm.templateSaveCompatible` is the older boolean
 derived from that same answer. `pnpm certification template` re-derives the
-template build entry with the same production locator.
+template build entry with the same production locator, and `--write` puts a
+derived entry into the authoring table so a patch-day branch and a developer's
+paste produce the same text. It never writes `ENHANCEMENT_BUILDS`: those layout
+words are client-memory addresses no structural anchor re-derives.
 `internal/upstream/recertify.md` owns investigation when the local proof
 refuses.
+
+`.github/workflows/client-recertification.yml` runs that derivation without
+being asked. Every quarter hour it fetches one patch manifest and compares the
+published JSPI code generation against `certificates/certified-client.json`;
+matching, it exits in about a second, and a scheduled run that cannot fetch
+fails loudly, which is the heartbeat. On a change it downloads the code
+artifacts — never `Gw.snapshot` — runs the same certification command line, and
+pushes a branch with a pull request and a tracking issue, or an issue alone when
+the layout stopped being derivable. It holds no secret, uploads evidence and
+never client bytes, and its branch is worth nothing until the pull request's
+`pnpm verify` gate passes on it. The recorded generation carries no authority;
+it decides only whether that job runs.
 
 For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`

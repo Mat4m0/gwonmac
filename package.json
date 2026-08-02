@@ -37,6 +37,7 @@
     "test:release": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/release/*.ts",
     "enhancements:live": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-live.ts",
     "certification": "pnpm build && node build/tools/certification.js",
+    "client:official": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/official-client.ts",
     "enhancements:visual": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-visual.ts",
     "enhancements:kernel:verify": "pnpm build && node scripts/verify-companion-kernel.mjs",
     "snapshot:prune": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/snapshot-retention.ts",

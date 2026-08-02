@@ -217,6 +217,61 @@ certified build whose transform failed from being reported as available.
 `src/renderer/client-compatibility-notice.ts` turns them into the sentences
 both surfaces show.
 
+## Noticing the patch
+
+Everything above decides correctly on a machine that already has the new bytes.
+What it does not do is tell anyone a new build exists, and a certificate nobody
+starts deriving is a week of `template-only` for every player.
+
+`.github/workflows/client-recertification.yml` is that first layer, and it is
+built to be boring. A quarter-hourly job fetches one patch manifest, fingerprints
+`Gw.jspi.js` and `Gw.jspi.wasm` through `fingerprintClientGeneration`, and
+compares the result against `certificates/certified-client.json`. Matching, it
+ends in about a second having installed nothing, compiled nothing, and
+downloaded no client byte — Node runs the detector script directly, because
+`pnpm <script>` would resolve this repository's whole dependency tree first and
+that install, not the fetch, is what a cheap path has to exclude. A scheduled
+run that cannot reach the patch service fails, and that visible failure is how a
+silently dead detector is noticed.
+
+A generation that already has a branch or an open tracking issue is treated the
+same way as an unchanged one. Certifying a new build takes a person, and every
+quarter hour of that latency would otherwise re-run the whole derivation and
+file the proposal again; the red runs it produced would bury the heartbeat the
+paragraph above depends on.
+
+The identity is deliberately narrower than `clientFingerprint`, which also
+covers `Gw.snapshot` and `version.json` because it answers a different question —
+whether an *installed* generation may be rolled back to. Game content moves
+constantly; folding it in here would run a full derivation every content patch to
+conclude nothing changed.
+
+On a change, a macOS job downloads the code artifacts through the same
+`PatchClient` the application uses — chunk-hash verified, and `Gw.snapshot` is
+never assembled — and runs `certification template --write` and
+`certification recertify` against them. What it can derive it derives; what it
+cannot, it reports. Then a third job pushes a branch carrying the regenerated
+authoring table and the recorded generation, opens a pull request, and opens a
+tracking issue either way: *auto-derived, PR ready*, or *layout changed,
+investigation needed*. The issue closes itself on the first detector run that
+finds the published generation recorded on `main`.
+
+The pull request is a proposal and nothing more, and it says so out loud: GitHub
+starts no workflow for a pull request opened by a run's own token, so the body
+asks whoever picks it up to close and reopen it. The alternative is a personal
+access token, which is a secret this workflow would then be holding for a job
+whose whole point is that it cannot do anything on its own.
+
+Three properties make this safe to leave running unattended. It holds no secret;
+its only credential is the run's own `GITHUB_TOKEN` and the strongest thing it
+can do is propose. It uploads evidence — reports, the candidate feed, the source
+diff — and never client bytes, because this project does not redistribute
+ArenaNet's binaries. And its branch certifies nothing until the pull request's
+own `pnpm verify` gate passes on it, which is the same gate every other change
+faces. The Enhancement table stays untouched by machine for the reason the feed's
+enhancement half is exact-build only: its layout words are client-memory
+addresses no structural anchor re-derives.
+
 ## The certificate feed
 
 The tables above are compiled in, so today a new ArenaNet build waits for an

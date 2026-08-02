@@ -152,8 +152,10 @@ alone is not enough evidence for that decision.
 This fail-closed behavior is the last safety net, not the desired update
 experience. ArenaNet update continuity needs three operational layers:
 
-1. a scheduled canary detects a new official hash before or immediately after
-   rollout and preserves only bounded structural evidence;
+1. a scheduled detector notices a new official build within the quarter hour and
+   preserves only bounded structural evidence —
+   `.github/workflows/client-recertification.yml`, described in
+   [`wasm-host.md`](wasm-host.md);
 2. the recertifier derives hook and layout candidates from semantic anchors and
    runs the complete offline transform/kernel suite;
 3. a bounded live confirmation promotes the new exact certificate in an app
