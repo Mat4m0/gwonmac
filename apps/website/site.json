@@ -1,0 +1,9 @@
+{
+  "name": "GWonMac",
+  "description": "Play Guild Wars on your Mac. GWonMac runs ArenaNet's official client natively on Apple Silicon — free, open source, signed and notarized.",
+  "url": "https://gwonmac.vercel.app",
+  "links": {
+    "github": "https://github.com/Mat4m0/gwonmac",
+    "discord": "https://discord.gg/Z9ft52RBD3"
+  }
+}

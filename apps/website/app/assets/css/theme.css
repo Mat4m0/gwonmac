@@ -1,0 +1,379 @@
+/* GWonMac "Guild Wars Reforged" theme. Dark-only: nuxt.config pins the color
+   mode and the SiteHeader shadow drops the toggle, so only the `.dark` token
+   set matters. Loaded from app/plugins/theme.ts so it follows the layer CSS. */
+
+/* The classic Guild Wars display face, shared with the launcher and website.
+   Licence: public/fonts/COPYING-QUALITYPE. Used for display text only —
+   body and docs prose stay on Public Sans for readability. */
+@font-face {
+  font-family: "QTFrizQuad";
+  src: url("/fonts/QTFrizQuad.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-display: "QTFrizQuad", "Iowan Old Style", Palatino, Georgia, serif;
+
+  /* Reforged landing kit (shared with the launcher chrome) */
+  --gw-ink: #0a0806;
+  --gw-parch: #eee3c9;
+  --gw-parch-dim: #d9c9b2;
+  --gw-parch-faint: #a6957c;
+  --gw-gold: #f3dd9d;
+  --gw-gold-mid: #d9b25c;
+  --gw-gold-dark: #a98338;
+  --gw-gold-line: #67583e;
+  --gw-ember: #ff6b1a;
+  --gw-ember-hot: #ffb35c;
+  --gw-forge1: #d4521a;
+  --gw-forge2: #8a2508;
+  --gw-blood: #451104;
+  --gw-radius: 6px;
+}
+
+/* Ember primary — the launcher's palette. `primary: "custom"` in app.config
+   selects this block; the layer ships no rules for it. */
+html[data-primary="custom"] {
+  --theme-primary-light: #b8430f;
+  --theme-primary-light-foreground: #fff7ed;
+  --theme-primary-light-ring: #ff6b1a;
+  --theme-primary-dark: #ff6b1a;
+  --theme-primary-dark-foreground: #2a0d02;
+  --theme-primary-dark-ring: #ffb35c;
+}
+
+.dark {
+  /* Warm near-black, matching the launcher's scrim base. */
+  --background: #100c0a;
+  --hero-bg: #120d0a;
+  --hero-bg-muted: #1c1410;
+
+  /* The four accent tint groups become ember, gold, flame, and rust. */
+  --hero-blue: #ff6b1a;
+  --hero-blue-light: #ff8a4d;
+  --hero-blue-muted: #2a1509;
+  --hero-blue-dark: #ffb35c;
+
+  --hero-mint: #f3dd9d;
+  --hero-mint-dark: #f7e5b0;
+  --hero-mint-muted: #261c0d;
+  --hero-mint-text: #f3dd9d;
+
+  --hero-yellow: #f5c249;
+  --hero-yellow-hover: #f3c95c;
+  --hero-yellow-dark: #f3c95c;
+  --hero-yellow-muted: #271d0c;
+
+  --hero-coral: #e8541c;
+  --hero-coral-light: #ff7a3c;
+  --hero-coral-muted: #2a120a;
+  --hero-coral-dark: #ff8a5c;
+  --hero-coral-text: #ffab8a;
+}
+
+/* Layer quirk: DocsSidebar's scroll viewport uses pt-2, assuming the section
+   switcher renders above it. This site uses groups (no switcher), so restore
+   the full top padding. Remove once ginko-docs makes the padding conditional. */
+aside[data-variant] [data-reka-scroll-area-viewport] {
+  padding-top: 2rem;
+}
+
+/* ---------- Reforged landing components (app/pages/index.vue) ---------- */
+
+/* Ambient drift over hero key art. */
+@keyframes gw-drift {
+  from {
+    transform: scale(1) translateY(0);
+  }
+  to {
+    transform: scale(1.06) translateY(-1.2%);
+  }
+}
+
+.gw-drift {
+  animation: gw-drift 38s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-drift {
+    animation: none;
+  }
+}
+
+/* Gold hairline rule with ◆ center. */
+.gw-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gw-gold-mid);
+  font-size: 13px;
+}
+
+.gw-rule::before,
+.gw-rule::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, transparent, var(--gw-gold-line));
+}
+
+.gw-rule::after {
+  background: linear-gradient(90deg, var(--gw-gold-line), transparent);
+}
+
+/* Launcher-chrome panel. */
+.gw-panel {
+  background: linear-gradient(180deg, #17120e, #100d0a);
+  border: 1px solid #32281c;
+  border-radius: var(--gw-radius);
+  box-shadow:
+    inset 0 0 0 1px #0a080699,
+    inset 0 1px 0 #67583e33;
+}
+
+/* Forge-gradient primary + hairline secondary actions. */
+.gw-btn-primary,
+.gw-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 47px;
+  padding: 0 26px;
+  border-radius: var(--gw-radius);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.gw-btn-primary {
+  color: #fff7ed;
+  background: linear-gradient(180deg, var(--gw-forge1), var(--gw-forge2));
+  border: 1px solid #a93c10;
+  box-shadow:
+    inset 0 1px 0 #ff8a4d66,
+    0 0 22px #ff6b1a40;
+  text-shadow: 0 1px 2px #45110480;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+
+.gw-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 #ff8a4d66,
+    0 0 30px #ff6b1a66;
+}
+
+.gw-btn-secondary {
+  color: var(--gw-parch);
+  background: #0a080680;
+  border: 1px solid var(--gw-gold-line);
+  backdrop-filter: blur(4px);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.gw-btn-secondary:hover {
+  border-color: var(--gw-gold-dark);
+  background: #1d171280;
+}
+
+.gw-btn-primary:focus-visible,
+.gw-btn-secondary:focus-visible {
+  outline: 2px solid var(--gw-ember-hot);
+  outline-offset: 2px;
+}
+
+/* Corner-bracket frame for screenshots. */
+.gw-bracket {
+  position: relative;
+  border-radius: 4px;
+}
+
+.gw-bracket::before,
+.gw-bracket::after,
+.gw-bracket > .gw-bkt::before,
+.gw-bracket > .gw-bkt::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 0 solid var(--gw-gold-dark);
+  z-index: 1;
+}
+
+.gw-bracket::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.gw-bracket::after {
+  top: -1px;
+  right: -1px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.gw-bracket > .gw-bkt::before {
+  bottom: -1px;
+  left: -1px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+
+.gw-bracket > .gw-bkt::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+/* Stat band fused into the hero's bottom edge. */
+.gw-stat-band {
+  position: relative;
+  border-top: 1px solid #67583e4d;
+  background: #0a0806b8;
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.gw-stat {
+  flex: 1 1 150px;
+  max-width: 250px;
+  text-align: center;
+  padding: 20px 18px 22px;
+  position: relative;
+}
+
+.gw-stat + .gw-stat::before {
+  content: "◆";
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gw-gold-line);
+  font-size: 8px;
+}
+
+.gw-stat .gw-v {
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: var(--gw-gold);
+  text-shadow: 0 0 18px #f3dd9d33;
+}
+
+.gw-stat .gw-l {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--gw-parch-faint);
+  letter-spacing: 0.03em;
+}
+
+/* Roadmap forge-line. */
+.gw-road {
+  position: relative;
+  padding-left: 26px;
+}
+
+.gw-road::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    var(--gw-gold-dark),
+    var(--gw-forge2) 60%,
+    transparent
+  );
+}
+
+.gw-road-step {
+  position: relative;
+  padding: 0 0 34px 18px;
+}
+
+.gw-road-step:last-child {
+  padding-bottom: 0;
+}
+
+.gw-road-step::before {
+  content: "";
+  position: absolute;
+  left: -24px;
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  background: var(--gw-ink);
+  border: 1px solid var(--gw-gold-dark);
+  border-radius: 1px;
+}
+
+.gw-road-step.done::before {
+  background: var(--gw-gold-mid);
+  box-shadow: 0 0 12px #f3dd9d66;
+}
+
+.gw-road-step.now::before {
+  background: var(--gw-ember);
+  border-color: var(--gw-ember-hot);
+  box-shadow: 0 0 14px #ff6b1a99;
+}
+
+/* FAQ hairline accordion: the ◆ rotates and ignites when open. */
+.gw-faq details {
+  border-bottom: 1px solid #32281c;
+}
+
+.gw-faq summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 4px;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--gw-parch);
+}
+
+.gw-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.gw-faq summary::before {
+  content: "◆";
+  font-size: 9px;
+  color: var(--gw-gold-dark);
+  transition:
+    transform 0.25s,
+    color 0.25s;
+}
+
+.gw-faq details[open] summary::before {
+  transform: rotate(90deg);
+  color: var(--gw-ember);
+}
+
+.gw-faq summary:hover {
+  color: var(--gw-gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-faq summary::before {
+    transition: none;
+  }
+}

@@ -1,21 +1,34 @@
 {
-  "name": "gw-website",
+  "name": "ginko-docs-consumer-i18n-e2e",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "typecheck": "nuxt typecheck",
-    "postinstall": "nuxt prepare"
+    "dev": "vp exec nuxt dev",
+    "build": "vp exec nuxt build",
+    "certify": "vp run check && vp run build && node scripts/assert-release-output.mjs",
+    "check": "vp lint && vp run typecheck",
+    "typecheck": "vp exec nuxi typecheck",
+    "prepare": "vp exec nuxt prepare"
+  },
+  "dependencies": {
+    "@lupinum/ginko-content": "0.3.2",
+    "@lupinum/ginko-docs": "0.2.3",
+    "nuxt": "4.5.0",
+    "vue": "^3.5.35",
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.11",
-    "nuxt": "^4.0.1",
-    "tailwindcss": "^4.1.11",
-    "typescript": "^5.9.2",
-    "vue": "^3.5.18",
-    "vue-tsc": "^3.0.4"
-  }
+    "typescript": "^5.9.3",
+    "vite-plus": "0.1.24",
+    "vue-tsc": "^3.3.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "esbuild",
+      "sharp",
+      "vue-demi"
+    ]
+  },
+  "packageManager": "pnpm@10.32.1"
 }
