@@ -79,6 +79,12 @@ lifetime. It blocks below two years and warns below five. After signing, it
 compares the embedded profile byte-for-byte and checks the top-level app's
 exact three entitlements.
 
+Those post-signing checks are `scripts/verify-signed-app.ts` rather than
+workflow text, so the release path is reproducible off CI:
+`pnpm verify:signed-app` runs every one of them against a notarized
+application, and its optional second argument against the disk image that
+carries it. The script's header states what it needs.
+
 ## Identity correction and saved-login rollout
 
 `2026.7.0-beta.2` was the first Developer ID package, but it inherited the

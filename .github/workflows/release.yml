@@ -221,81 +221,21 @@ jobs:
             --issuer "$APPLE_API_ISSUER_ID"
           xcrun stapler staple -v "$dmg"
 
+      # Every assertion this makes lives in scripts/verify-signed-app.ts, so a
+      # release that fails one can be reproduced against the same package on a
+      # developer's machine instead of only by cutting another release.
       - name: Verify Apple distribution identity and tickets
+        env:
+          GW_SIGNED_CHANNEL: release
         run: |
-          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
-          dmg="$(find out/make -type f -name '*.dmg' -print -quit)"
-          test -n "$app"
-          test -n "$dmg"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
-          echo "$signature"
-          echo "$signature" | grep "Authority=Developer ID Application"
-          echo "$signature" | grep "TeamIdentifier=9NN976MFZ4"
-          echo "$signature" | grep "Runtime Version"
-          echo "$signature" | grep "Timestamp="
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
-            "$app/Contents/Info.plist")" = "io.github.mat4m0.gwonmac"
-          cmp "$APPLE_PROVISIONING_PROFILE" \
-            "$app/Contents/embedded.provisionprofile"
-          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/app-entitlements.plist"
-          plutil -convert json -o "$RUNNER_TEMP/app-entitlements.json" \
-            "$RUNNER_TEMP/app-entitlements.plist"
-          node -e '
-            const value = require(process.argv[1]);
-            const expected = {
-              "com.apple.application-identifier": "9NN976MFZ4.io.github.mat4m0.gwonmac",
-              "com.apple.developer.team-identifier": "9NN976MFZ4",
-              "com.apple.security.cs.allow-jit": true,
-            };
-            require("node:assert/strict").deepEqual(value, expected);
-          ' "$RUNNER_TEMP/app-entitlements.json"
-          helper_count=0
-          plugin_helper_count=0
-          while IFS= read -r -d '' helper; do
-            ((helper_count += 1))
-            if [[ "$helper" == *"(Plugin)"* ]]; then
-              ((plugin_helper_count += 1))
-            fi
-            entitlements="$RUNNER_TEMP/$(basename "$helper").plist"
-            json="$entitlements.json"
-            codesign -d --entitlements :- "$helper" > "$entitlements"
-            plutil -convert json -o "$json" "$entitlements"
-            node -e '
-              const value = require(process.argv[1]);
-              const plugin = process.argv[2].includes("(Plugin)");
-              const allowed = new Set([
-                "com.apple.security.cs.allow-jit",
-                ...(plugin ? [
-                  "com.apple.security.cs.allow-unsigned-executable-memory",
-                  "com.apple.security.cs.disable-library-validation",
-                ] : []),
-              ]);
-              const keys = Object.keys(value);
-              if (keys.some((key) => !allowed.has(key))) process.exit(1);
-              if ([...allowed].some((key) => value[key] !== true)) process.exit(1);
-            ' "$json" "$helper"
-            helper_signature="$(codesign -dv --verbose=4 "$helper" 2>&1)"
-            echo "$helper_signature" | grep "TeamIdentifier=9NN976MFZ4"
-            echo "$helper_signature" | grep "Runtime Version"
-            echo "$helper_signature" | grep "Timestamp="
-          done < <(find "$app/Contents/Frameworks" -name '*Helper*.app' -print0)
-          test "$helper_count" -eq 4
-          test "$plugin_helper_count" -eq 1
-          xcrun stapler validate -v "$app"
-          spctl --assess --type execute --verbose=4 "$app"
-          codesign --verify --verbose=2 "$dmg"
-          dmg_signature="$(codesign -dv --verbose=4 "$dmg" 2>&1)"
-          echo "$dmg_signature" | grep "Authority=Developer ID Application"
-          echo "$dmg_signature" | grep "TeamIdentifier=9NN976MFZ4"
-          echo "$dmg_signature" | grep "Timestamp="
-          xcrun stapler validate -v "$dmg"
-          spctl --assess --type open \
-            --context context:primary-signature --verbose=4 "$dmg"
+          pnpm verify:signed-app \
+            "$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)" \
+            "$(find out/make -type f -name '*.dmg' -print -quit)"
 
       - name: Prepare immutable release assets
         id: assets
         env:
+          GW_SIGNED_CHANNEL: release
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -318,9 +258,7 @@ jobs:
             "$VERSION" "$TAG" "$(basename "$zip")" "$published_at" "$manifest"
           unzip_dir="$RUNNER_TEMP/unzipped-release"
           ditto -x -k "$zip" "$unzip_dir"
-          extracted="$unzip_dir/Guild Wars Reforged.app"
-          codesign --verify --deep --strict --verbose=2 "$extracted"
-          xcrun stapler validate -v "$extracted"
+          pnpm verify:signed-app "$unzip_dir/Guild Wars Reforged.app"
           sbom="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.spdx.json"
           checksum="$asset_dir/SHA256SUMS.txt"
           {

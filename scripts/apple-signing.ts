@@ -112,6 +112,48 @@ export function ignoreRedundantSigningTarget(filePath: string): boolean {
   );
 }
 
+/**
+ * The exact entitlement set the top-level application of `channel` may carry.
+ *
+ * The preflight holds the entitlements *file* to it and
+ * `scripts/verify-signed-app.ts` holds the *signed application* to it, so the
+ * two can never disagree about what was approved.
+ */
+export function approvedDistributionEntitlements(
+  channel: DistributionChannel,
+): Readonly<Record<string, unknown>> {
+  return {
+    "com.apple.security.cs.allow-jit": true,
+    "com.apple.application-identifier": applicationIdentifier(channel),
+    "com.apple.developer.team-identifier": APPLE_TEAM_ID,
+  };
+}
+
+/**
+ * Whether `actual` is exactly `expected` — an extra key is a mismatch, which is
+ * the whole point of an allowlist.
+ */
+export function matchesExactEntitlements(
+  actual: unknown,
+  expected: Readonly<Record<string, unknown>>,
+): boolean {
+  if (typeof actual !== "object" || actual === null || Array.isArray(actual)) {
+    return false;
+  }
+  const value = actual as Record<string, unknown>;
+  return (
+    Object.keys(value).length === Object.keys(expected).length
+    && Object.entries(expected).every(([key, entitlement]) => value[key] === entitlement)
+  );
+}
+
+/** The certificate common name, and so the signature Authority, `channel` signs with. */
+export function distributionAuthorityName(channel: DistributionChannel): string {
+  return DISTRIBUTION_CHANNEL_CONFIG[channel].signingKind === "developer-id"
+    ? "Developer ID Application:"
+    : "Apple Development:";
+}
+
 export function distributionOptionsForFile(
   channel: DistributionChannel,
   filePath: string,
@@ -149,17 +191,10 @@ export function validateAppleSigningEvidence(
     fail("signing identity must be its unique uppercase SHA-1 fingerprint");
   }
   const expectedApplicationIdentifier = applicationIdentifier(channel);
-  const entitlements = dictionary(evidence.entitlements, "entitlements file");
-  const expectedEntitlements: Record<string, unknown> = {
-    "com.apple.security.cs.allow-jit": true,
-    "com.apple.application-identifier": expectedApplicationIdentifier,
-    "com.apple.developer.team-identifier": APPLE_TEAM_ID,
-  };
   if (
-    JSON.stringify(Object.keys(entitlements).sort())
-      !== JSON.stringify(Object.keys(expectedEntitlements).sort())
-    || Object.entries(expectedEntitlements).some(
-      ([key, value]) => entitlements[key] !== value,
+    !matchesExactEntitlements(
+      evidence.entitlements,
+      approvedDistributionEntitlements(channel),
     )
   ) {
     fail(`${channel} entitlements are not the exact approved allowlist`);
@@ -184,11 +219,7 @@ export function validateAppleSigningEvidence(
     fail("provisioning profile is expired or has no valid expiry");
   }
 
-  const config = DISTRIBUTION_CHANNEL_CONFIG[channel];
-  const expectedCertificateName =
-    config.signingKind === "developer-id"
-      ? "Developer ID Application:"
-      : "Apple Development:";
+  const expectedCertificateName = distributionAuthorityName(channel);
   const authorizedFingerprints = new Set(
     evidence.certificates
       .filter(({ subject }) => subject.includes(`CN=${expectedCertificateName}`))
