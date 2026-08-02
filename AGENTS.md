@@ -64,7 +64,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | ------------------------- | ------------------------------------------------------------- |
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
-| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed |
+| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed and its delivery |
 | `certificates/`           | the pinned certificate-feed public key and its key ceremony    |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
@@ -192,7 +192,16 @@ is meant to inherit the dead ends rather than walk back into them.
   `sequence`; the bundled snapshot is not, because it is derived from tables
   compiled into the signed application.
   `certificates/public-key.txt` holds a placeholder, which means no
-  remote feed is trusted at all. `docs/wasm-host.md` owns the mechanism.
+  remote feed is trusted at all — and no request is made either. A feed is
+  fetched as two release assets on the same host the updater already reads,
+  on the update check's own trigger and behind the same consent switch; there
+  is no second scheduler and no second egress destination. A verified feed is
+  stored in the profile as one versioned record carrying the exact bytes and
+  signature, re-verified by the same path at every launch, and deleted rather
+  than partially read when it no longer holds. The governing feed is consulted
+  only where the shipped tables answer `uncertified`, so a feed widens where a
+  certificate may come from and can never withdraw one.
+  `docs/wasm-host.md` owns the mechanism.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check at launch, then at
@@ -201,7 +210,10 @@ is meant to inherit the dead ends rather than walk back into them.
   exception, including the one on an unrecognised client build; switched off,
   a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of discovery, feed
-  validation, download, ready, and install state. Only an official package
+  validation, download, ready, and install state. The certificate feed's two
+  asset requests are the only other reads from this project's releases; they
+  fire on the same trigger, behind the same switch, and decide nothing about
+  installing anything. Only an official package
   carrying the release marker may reach Squirrel.Mac. Stable installs never
   receive previews; a preview may advance to stable. A ready update waits for
   an explicit or ordinary restart. ArenaNet client updates remain separate and

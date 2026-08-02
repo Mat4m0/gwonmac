@@ -53,12 +53,20 @@ declare const WebAssembly: {
  */
 export const LOCAL_CLIENT_VERIFIER_ABI = 3;
 
-export type LocalVerificationReason =
-  | "invalid-wasm"
-  | "template-shape-changed"
-  | "template-transform-failed"
-  | "enhancement-layout-changed"
-  | "enhancement-transform-failed";
+/**
+ * Declared as a list rather than a union so the boundary check below and the
+ * diagnostics schema can both execute it. A union nobody can enumerate gets
+ * restated wherever it has to be checked, and the restatements drift.
+ */
+export const LOCAL_VERIFICATION_REASONS = [
+  "invalid-wasm",
+  "template-shape-changed",
+  "template-transform-failed",
+  "enhancement-layout-changed",
+  "enhancement-transform-failed",
+] as const;
+
+export type LocalVerificationReason = (typeof LOCAL_VERIFICATION_REASONS)[number];
 
 export interface LocalClientVerification {
   readonly verifierAbi: number;
@@ -258,15 +266,9 @@ export function isLocalClientVerification(
     || result.officialSha256 !== officialSha256
     || !isDigest(result.officialSha256)
     || !Array.isArray(result.reasons)
-    || !result.reasons.every((reason) =>
+    || !result.reasons.every((reason): reason is LocalVerificationReason =>
       typeof reason === "string"
-      && [
-        "invalid-wasm",
-        "template-shape-changed",
-        "template-transform-failed",
-        "enhancement-layout-changed",
-        "enhancement-transform-failed",
-      ].includes(reason)
+      && (LOCAL_VERIFICATION_REASONS as readonly string[]).includes(reason)
     )
   ) {
     return false;

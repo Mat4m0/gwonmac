@@ -37,6 +37,11 @@ import {
 } from "../../shared/release.js";
 import type { AppUpdateStage } from "../app-updater.js";
 import {
+  CERTIFICATE_FEED_OUTCOMES,
+  CERTIFICATE_FEED_SOURCES,
+} from "../certification/certificate-feed-delivery.js";
+import { LOCAL_VERIFICATION_REASONS } from "../certification/local-client-verifier.js";
+import {
   isProxyRoute,
   type ProxyRoute,
 } from "../core/proxy-routes.js";
@@ -241,11 +246,14 @@ const thermalState = literal([
   "critical",
 ] as const);
 const localVerificationSource = literal(["cache", "process"] as const);
+const localVerificationReason = literal(LOCAL_VERIFICATION_REASONS);
 const buildCertification = literal([
   "certified",
   "template-only",
   "uncertified",
 ] as const);
+const certificateFeedOutcome = literal(CERTIFICATE_FEED_OUTCOMES);
+const certificateFeedSource = literal(CERTIFICATE_FEED_SOURCES);
 
 const none = {} as const;
 
@@ -743,6 +751,39 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "warn",
     fields: none,
+  },
+  // The certificate feed reports under `wasm` rather than `update` or
+  // `release`: it decides what a WebAssembly build may become, and nothing
+  // else. Where its bytes came from is transport, and transport is not what a
+  // reader of these events is looking for.
+  "certificateFeed.resolved": {
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      source: certificateFeedSource,
+      sequence: finiteNumber,
+      outcome: certificateFeedOutcome,
+    },
+  },
+  "certificateFeed.refused": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { outcome: certificateFeedOutcome },
+  },
+  "certificateFeed.proved": {
+    subsystem: "wasm",
+    level: "info",
+    fields: { sequence: finiteNumber, certification: buildCertification },
+  },
+  "certificateFeed.withheld": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { reason: localVerificationReason },
+  },
+  "certificateFeed.proofUnavailable": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { code },
   },
   "wasm.templateSavePrepareFailed": {
     subsystem: "wasm",

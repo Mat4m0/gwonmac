@@ -92,6 +92,17 @@ test("packaged releases carry the project and third-party license notices", () =
   assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
 });
 
+test("packaged releases carry the pinned certificate-feed key", () => {
+  // Read from the bundle's Resources at runtime, where the code signature
+  // seals it. Left out of the package, `certificateFeedTrust` would see no
+  // pinned key at all and every fetched feed would be refused — a failure that
+  // is safe, silent, and would survive a release.
+  assert.match(
+    read("forge.config.ts"),
+    /extraResource:[\s\S]*"certificates\/public-key\.txt"/,
+  );
+});
+
 // What the mapping produces is proved by executing it, in
 // tests/unit/every-release-raises-the-macos-build-number.test.ts. This is the
 // wiring: the packaged bundle takes its two numbers from that one function and
