@@ -49,7 +49,6 @@ const flatLocaleSwitcher =
 
 const metaKey = useMetaKey();
 const searchShortcut = computed(() => (metaKey.value === "⌘" ? "⌘K" : "Ctrl K"));
-const homePath = computed(() => localizedPath("home"));
 const docsPath = computed(() => localizedPath("docs"));
 
 // The mobile menu has two levels: the root nav in hero-scale type, and a docs

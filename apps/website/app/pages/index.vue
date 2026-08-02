@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // Fully custom marketing landing in the Reforged launcher chrome (the layer's
 // config-driven landing page is not used). Sections, per design exploration:
-// Shrine hero with fused stat band, panel-grid features, bracket screenshot
-// gallery, marching testimonial strip, forge-line roadmap, hairline FAQ, and
-// the "Return to Tyria" closing call. Copy is localized inline; testimonial
-// quotes stay in their original English. The global unofficial banner and
-// header render above this page as on every other page.
+// Shrine hero with fused stat band, panel-grid features, marching testimonial
+// strip, hairline FAQ, and the "Return to Tyria" closing call. (A screenshot
+// gallery and roadmap existed as parked sections; recover them from git
+// history if they return.) Copy is localized inline; testimonial quotes stay
+// in their original English. The global unofficial banner and header render
+// above this page as on every other page.
 import { computed } from "vue";
 import { useFetch, useI18n, useSeoMeta } from "#imports";
 import { useTracking, type DownloadSource } from "../composables/useTracking";
@@ -140,39 +141,6 @@ const FEATURES = [
   },
 ];
 
-const GALLERY_HEADING = {
-  eyebrow: { en: "Screenshots", de: "Screenshots" },
-  title: { en: "Guild Wars on macOS", de: "Guild Wars auf macOS" },
-  sub: {
-    en: "See how the official client runs on Apple Silicon Macs at high resolution.",
-    de: "Sieh dir an, wie der offizielle Client auf Apple-Silicon-Macs in hoher Auflösung läuft.",
-  },
-};
-
-const SHOTS = [
-  {
-    src: "/shots/shot-1.webp",
-    alt: "Gameplay at high resolution",
-    caption: { en: "Explorable Tyria, rendered natively", de: "Tyria, nativ gerendert" },
-    meta: { en: "Native · 4K", de: "Nativ · 4K" },
-    tall: true,
-  },
-  {
-    src: "/shots/shot-2.webp",
-    alt: "Explorable areas, rendered natively",
-    caption: { en: "Max settings", de: "Maximale Einstellungen" },
-    meta: { en: "120 FPS · M5 Pro", de: "120 FPS · M5 Pro" },
-    tall: false,
-  },
-  {
-    src: "/shots/shot-3.webp",
-    alt: "The original client on macOS",
-    caption: { en: "The original client on macOS", de: "Der Original-Client auf macOS" },
-    meta: { en: "Apple Silicon", de: "Apple Silicon" },
-    tall: false,
-  },
-];
-
 const VOICES_HEADING = {
   eyebrow: { en: "From r/GuildWars", de: "Aus r/GuildWars" },
   title: { en: "Reports from different Macs", de: "Erfahrungen auf verschiedenen Macs" },
@@ -247,56 +215,6 @@ const TESTIMONIALS = [
   },
 ];
 
-const ROAD_HEADING = {
-  eyebrow: { en: "Roadmap", de: "Roadmap" },
-  title: {
-    en: "What works today and what comes next",
-    de: "Was heute funktioniert und was als Nächstes kommt",
-  },
-  sub: {
-    en: "The main development steps, from the alpha to the planned GWonMac Tools.",
-    de: "Die wichtigsten Entwicklungsschritte von der Alpha bis zu den geplanten GWonMac Tools.",
-  },
-};
-
-const ROADMAP = [
-  {
-    state: "done",
-    when: { en: "July 2026 · shipped", de: "Juli 2026 · veröffentlicht" },
-    title: { en: "Alpha: the first working version", de: "Alpha: erste lauffähige Version" },
-    body: {
-      en: "ArenaNet’s WebAssembly client running on Apple Silicon. Testing reached steady 60 FPS at 4K on an M1 Pro.",
-      de: "ArenaNets WebAssembly-Client läuft auf Apple Silicon. Im Test wurden auf einem M1 Pro stabile 60 FPS bei 4K erreicht.",
-    },
-  },
-  {
-    state: "done",
-    when: { en: "July 2026 · shipped", de: "Juli 2026 · veröffentlicht" },
-    title: { en: "Beta: the major issues fixed", de: "Beta: wichtige Probleme behoben" },
-    body: {
-      en: "Auto-run, camera, kits, templates, and native cursor support reworked based on user feedback.",
-      de: "Auto-Run, Kamera, Kits, Templates und native Cursor-Unterstützung wurden anhand des Nutzerfeedbacks überarbeitet.",
-    },
-  },
-  {
-    state: "now",
-    when: { en: "Now", de: "Aktuell" },
-    title: { en: "Signed releases, simple updates", de: "Signierte Releases und einfache Updates" },
-    body: {
-      en: "New versions are signed with an Apple Developer ID, notarized, and update directly through the launcher.",
-      de: "Neue Versionen sind mit einer Apple Developer ID signiert, notarisiert und direkt über den Launcher aktualisierbar.",
-    },
-  },
-  {
-    state: "next",
-    when: { en: "Next", de: "Als Nächstes" },
-    title: { en: "GWonMac Tools", de: "GWonMac Tools" },
-    body: {
-      en: "Optional convenience features for PvE are planned. They stay disabled in PvP.",
-      de: "Geplant sind optionale Komfortfunktionen für PvE. In PvP bleiben diese Funktionen deaktiviert.",
-    },
-  },
-];
 
 const FAQ_HEADING = {
   title: { en: "Frequently asked questions", de: "Häufige Fragen" },
@@ -446,11 +364,6 @@ const CTA = {
   docs: { en: "See the install guide", de: "Installationsanleitung ansehen" },
 };
 
-const CREDIT = {
-  en: "Screenshots by",
-  de: "Screenshots von",
-};
-
 const docsPath = computed(() => localize(DOCS_PATH));
 
 const seoTitle = computed(() => localize(SEO.title));
@@ -567,72 +480,6 @@ useSchemaJsonLd(() => [
       </div>
     </section>
 
-    <!-- Screenshot gallery — bracket frames (temporarily disabled)
-    <section class="border-y border-border bg-(--hero-bg-muted)/40">
-      <div class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
-        <div class="mx-auto max-w-2xl text-center">
-          <p class="text-xs font-semibold tracking-[0.22em] text-(--gw-gold-mid) uppercase">
-            {{ localize(GALLERY_HEADING.eyebrow) }}
-          </p>
-          <h2 class="mt-3 font-(family-name:--font-display) text-3xl text-foreground sm:text-4xl">
-            {{ localize(GALLERY_HEADING.title) }}
-          </h2>
-          <p class="mt-3 text-base leading-7 text-muted-foreground">
-            {{ localize(GALLERY_HEADING.sub) }}
-          </p>
-        </div>
-        <div class="mt-10 grid gap-4 md:grid-cols-[2fr_1fr]">
-          <figure class="gw-bracket relative m-0 overflow-hidden">
-            <span class="gw-bkt"></span>
-            <img
-              :src="SHOTS[0]!.src"
-              :alt="SHOTS[0]!.alt"
-              class="block h-full w-full rounded-[4px] object-cover md:aspect-[16/11]"
-              loading="lazy"
-            />
-            <figcaption
-              class="absolute inset-x-0 bottom-0 flex justify-between gap-3 rounded-b-[4px] bg-linear-to-b from-transparent to-[#0a0806e6] px-4 pt-7 pb-2.5 text-xs tracking-[0.05em] text-(--gw-parch-dim)"
-            >
-              <span>{{ localize(SHOTS[0]!.caption) }}</span>
-              <span class="text-(--gw-gold-mid)">{{ localize(SHOTS[0]!.meta) }}</span>
-            </figcaption>
-          </figure>
-          <div class="grid gap-4">
-            <figure
-              v-for="shot in SHOTS.slice(1)"
-              :key="shot.src"
-              class="gw-bracket relative m-0 overflow-hidden"
-            >
-              <span class="gw-bkt"></span>
-              <img
-                :src="shot.src"
-                :alt="shot.alt"
-                class="block aspect-video w-full rounded-[4px] object-cover"
-                loading="lazy"
-              />
-              <figcaption
-                class="absolute inset-x-0 bottom-0 flex justify-between gap-3 rounded-b-[4px] bg-linear-to-b from-transparent to-[#0a0806e6] px-4 pt-7 pb-2.5 text-xs tracking-[0.05em] text-(--gw-parch-dim)"
-              >
-                <span>{{ localize(shot.caption) }}</span>
-                <span class="text-(--gw-gold-mid)">{{ localize(shot.meta) }}</span>
-              </figcaption>
-            </figure>
-          </div>
-        </div>
-        <p class="mt-4 text-right text-[11.5px] text-(--gw-parch-faint)">
-          {{ localize(CREDIT) }}
-          <a
-            href="https://bloogum.net/guildwars/"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-(--gw-gold-mid) hover:underline"
-            >Snapshot Henchman</a
-          >
-        </p>
-      </div>
-    </section>
-    -->
-
     <!-- Testimonials — masonry wall with bottom fade -->
     <section class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
       <div class="mx-auto flex max-w-2xl flex-col items-center text-center">
@@ -682,38 +529,6 @@ useSchemaJsonLd(() => [
         </div>
       </div>
     </section>
-
-    <!-- Roadmap — the forging (temporarily disabled)
-    <section class="border-y border-border bg-(--hero-bg-muted)/40">
-      <div class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
-        <p class="text-xs font-semibold tracking-[0.22em] text-(--gw-gold-mid) uppercase">
-          {{ localize(ROAD_HEADING.eyebrow) }}
-        </p>
-        <h2
-          class="mt-3 max-w-xl font-(family-name:--font-display) text-3xl text-balance text-foreground sm:text-4xl"
-        >
-          {{ localize(ROAD_HEADING.title) }}
-        </h2>
-        <p class="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
-          {{ localize(ROAD_HEADING.sub) }}
-        </p>
-        <div class="gw-road mt-12">
-          <div v-for="step in ROADMAP" :key="step.title.en" class="gw-road-step" :class="step.state">
-            <p class="text-[11px] tracking-[0.16em] text-(--gw-gold-mid) uppercase">
-              {{ localize(step.when) }}
-            </p>
-            <h3 class="mt-1 font-(family-name:--font-display) text-xl text-(--gw-parch)">
-              {{ localize(step.title) }}
-            </h3>
-            <p class="mt-1.5 max-w-[58ch] text-sm leading-6 text-(--gw-parch-faint)">
-              {{ localize(step.body) }}
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-    -->
-
 
 
     <!-- FAQ — hairline accordion -->
