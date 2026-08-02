@@ -8,6 +8,7 @@
 // header render above this page as on every other page.
 import { computed } from "vue";
 import { useFetch, useI18n, useSeoMeta } from "#imports";
+import { useTracking, type DownloadSource } from "../composables/useTracking";
 import { getLocalizedSiteText } from "#ginko-docs/config/site.utils";
 import { useGinkoDocsConfig } from "#ginko-docs/composables/useGinkoDocsConfig";
 import { useSchemaJsonLd } from "#ginko-docs/composables/useSchemaJsonLd";
@@ -25,6 +26,13 @@ const RELEASES_URL = "https://github.com/Mat4m0/gwonmac/releases/latest";
 // buttons link to the releases page.
 const { data: latestRelease } = useFetch("/api/latest", { server: false });
 const downloadUrl = computed(() => latestRelease.value?.url ?? RELEASES_URL);
+
+const { trackDownload, trackFaqOpen } = useTracking();
+
+function handleDownload(source: DownloadSource): void {
+  trackDownload(source, latestRelease.value?.version ?? null);
+}
+
 const DOCS_PATH = { en: "/docs/guides/install", de: "/de/dokumentation/anleitungen/installation" };
 const COMPARE_PATH = {
   en: "/docs/guides/play-guild-wars-on-mac",
@@ -398,6 +406,22 @@ const FAQ: FaqItem[] = [
   },
 ];
 
+// Each FAQ item is tracked once per visit, on first open. Questions are
+// tracked by their English text so both locales group under one event value.
+// The first item renders open (browsers fire toggle for it on load), so it is
+// pre-seeded and never tracked.
+const faqKey = (question: Localized): string =>
+  typeof question === "string" ? question : question.en;
+const trackedFaqs = new Set<string>(FAQ[0] ? [faqKey(FAQ[0].q)] : []);
+
+function handleFaqToggle(event: Event, question: Localized): void {
+  const details = event.currentTarget as HTMLDetailsElement;
+  const key = faqKey(question);
+  if (!details.open || trackedFaqs.has(key)) return;
+  trackedFaqs.add(key);
+  trackFaqOpen(key);
+}
+
 const DISCORD = {
   url: "https://discord.gg/Z9ft52RBD3",
   text: {
@@ -485,7 +509,13 @@ useSchemaJsonLd(() => [
           {{ localize(HERO.sub) }}
         </p>
         <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <NuxtLink :to="downloadUrl" target="_blank" rel="noopener noreferrer" class="gw-btn-primary">
+          <NuxtLink
+            :to="downloadUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="gw-btn-primary"
+            @click="handleDownload('hero')"
+          >
             <Icon name="lucide:download" class="size-4" aria-hidden="true" />
             {{ localize(HERO.download) }}
           </NuxtLink>
@@ -691,7 +721,12 @@ useSchemaJsonLd(() => [
         {{ localize(FAQ_HEADING.title) }}
       </h2>
       <div class="gw-faq mt-10 border-t border-[#32281c]">
-        <details v-for="(item, index) in FAQ" :key="localize(item.q)" :open="index === 0">
+        <details
+          v-for="(item, index) in FAQ"
+          :key="localize(item.q)"
+          :open="index === 0"
+          @toggle="handleFaqToggle($event, item.q)"
+        >
           <summary>{{ localize(item.q) }}</summary>
           <p class="max-w-[64ch] px-1 pb-5 pl-[27px] text-sm leading-6 text-(--gw-parch-faint)">
             {{ localize(item.a) }}
@@ -752,7 +787,13 @@ useSchemaJsonLd(() => [
         <p class="mt-3 text-base text-(--gw-parch-dim) sm:text-lg">{{ localize(CTA.sub) }}</p>
         <div class="gw-rule mt-6 w-[min(360px,80%)] text-xs">◆</div>
         <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <NuxtLink :to="downloadUrl" target="_blank" rel="noopener noreferrer" class="gw-btn-primary">
+          <NuxtLink
+            :to="downloadUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="gw-btn-primary"
+            @click="handleDownload('final-cta')"
+          >
             <Icon name="lucide:download" class="size-4" aria-hidden="true" />
             {{ localize(CTA.download) }}
           </NuxtLink>

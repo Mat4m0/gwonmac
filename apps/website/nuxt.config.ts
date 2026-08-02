@@ -13,6 +13,16 @@ export default defineNuxtConfig({
         { rel: "manifest", href: "/site.webmanifest" },
       ],
       meta: [{ name: "apple-mobile-web-app-title", content: "gwonmac" }],
+      script: [
+        {
+          async: true,
+          src: "https://plausible.io/js/pa--X4qMlLVyMnUW4L8emwE_.js",
+        },
+        {
+          innerHTML:
+            "window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)},window.plausible.init=window.plausible.init||function(i){window.plausible.o=i||{}};window.plausible.init()",
+        },
+      ],
     },
   },
   colorMode: { preference: "dark", fallback: "dark" },
