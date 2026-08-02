@@ -53,6 +53,9 @@ forge-dist/
 *.tsbuildinfo
 playwright-report/
 test-results/
+# The unit suite's coverage report. A measurement of the run that produced it,
+# never an input to the next one.
+coverage/
 .eslintcache
 
 # Local git worktrees checked out inside the repository.

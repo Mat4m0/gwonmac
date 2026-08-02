@@ -58,11 +58,45 @@ describe("allowlists", () => {
     ]) {
       assert.equal(isPublicIp(ip), false, ip);
     }
+    // Carrier-grade NAT and the benchmarking range are someone else's
+    // infrastructure, not a game server.
+    for (const ip of [
+      "100.64.0.0",
+      "100.127.255.255",
+      "198.18.0.1",
+      "198.19.255.255",
+    ]) {
+      assert.equal(isPublicIp(ip), false, ip);
+    }
+    // Spellings that reach a refused address by a route the range checks do
+    // not see: an empty group, whitespace, hex, octal-looking leading zeros,
+    // and a quad carried inside an IPv6 literal.
+    for (const ip of [
+      "8.8.8.",
+      ".8.8.8",
+      " 8.8.8.8",
+      "8.8.8.8 ",
+      "8.8.8.8\n",
+      "0x08.8.8.8",
+      "012.0.0.1",
+      "8.8.8.08",
+      "8.8.8.+8",
+      "8.8.8.8.8",
+      "::ffff:8.8.8.8",
+      "::ffff:198.18.0.1",
+      "64:ff9b::8.8.8.8",
+    ]) {
+      assert.equal(isPublicIp(ip), false, ip);
+    }
     for (const ip of [
       "8.8.8.8",
       "54.196.189.234",
       "172.15.0.1",
       "172.32.0.1",
+      "100.63.255.255",
+      "100.128.0.1",
+      "198.17.255.255",
+      "198.20.0.1",
     ]) {
       assert.equal(isPublicIp(ip), true, ip);
     }

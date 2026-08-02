@@ -26,9 +26,10 @@ import {
   stat,
 } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-  DownloadActivity,
-  DownloadProgress,
+import {
+  ARENANET_REQUEST_CEILING,
+  type DownloadActivity,
+  type DownloadProgress,
 } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import {
@@ -40,7 +41,6 @@ import {
   MAX_PATCH_MANIFEST_BYTES,
   PATCH_REQUEST_HEADERS,
   PATCH_ROOT,
-  PREFETCH_JOBS,
   REQUIRED_PATCH_FILES,
   SNAPSHOT,
 } from "./access-key.js";
@@ -113,7 +113,7 @@ export class PatchClient {
     this.chunksDir = opts.chunksDir;
     this.patchRoot = opts.patchRoot ?? PATCH_ROOT;
     this.fetchFn = opts.fetch;
-    this.jobs = opts.jobs ?? PREFETCH_JOBS;
+    this.jobs = opts.jobs ?? ARENANET_REQUEST_CEILING;
     this.onProgress = opts.onProgress;
     this.headers = { ...PATCH_REQUEST_HEADERS };
   }

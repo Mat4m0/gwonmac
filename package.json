@@ -27,7 +27,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.tests.json",
     "lint": "eslint .",
     "check:links": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/check-markdown-links.ts",
-    "test:unit": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/unit/*.ts",
+    "test:unit": "mkdir -p coverage && node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 --experimental-test-coverage --test-coverage-include='src/**' --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info tests/unit/*.ts",
     "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/integration/*.ts",
     "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",

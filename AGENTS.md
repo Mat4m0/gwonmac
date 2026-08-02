@@ -101,6 +101,14 @@ is meant to inherit the dead ends rather than walk back into them.
 - Concurrent chunk reads share one promise per content hash.
 - Renderer and native download schedulers cap ArenaNet concurrency at eight.
   Demand work outranks queued prefetch; do not raise the ceiling.
+  `ARENANET_REQUEST_CEILING` in `src/shared/contracts.ts` is the one
+  declaration all three schedulers import, and
+  `tests/unit/the-download-schedulers-share-one-ceiling.test.ts` refuses a
+  second. A renderer module may import a `src/shared` *value*, but only from
+  the named allowlist `RENDERER_SHARED_MODULES` in `src/main/protocol.ts`,
+  which is what serves `build/shared` under `gw://app/shared/`. A value import
+  of anything else 404s at runtime, and neither the type checker, the linter
+  nor the unit tests catch it.
 - Snapshot constants can use fixed-width, non-canonical LEB128. Analysis tools
   must decode values rather than byte-match a canonical encoding.
 - `geodc.arenanetworks.com` can return the datacenter sentinel `0.0.1.2`; raw
@@ -252,6 +260,11 @@ pnpm test:packaged
 `pnpm test:policy` holds the repository invariants that need no build: import
 boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
 artifacts, and documentation links.
+
+`pnpm test:unit` also writes `coverage/lcov.info`, and CI keeps it as a build
+artifact. It is a report: there is no threshold and no commit fails on it. What
+it is for is the question a passing suite cannot answer — which failure paths
+nothing exercises.
 
 `pnpm verify` runs that gate end to end, and CI runs it on every pull request.
 The website is not part of it: `apps/website` has its own path-filtered
