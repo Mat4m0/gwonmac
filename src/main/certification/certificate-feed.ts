@@ -19,7 +19,9 @@
  * `KnownTemplateSaveBuild` plus `KnownEnhancementBuild`, the two records
  * `certifyClientBuild` already consumes, so a feed cannot describe a fact the
  * subsystem cannot use or omit one it needs. `certifiedBuildTablesFromFeed`
- * hands a parsed feed straight to that function as its `CertifiedBuildTables`.
+ * states that equivalence in the chain's own vocabulary; how a feed actually
+ * reaches a launch is one proved entry at a time, and `client-runtime.ts` owns
+ * that order.
  *
  * The parser treats its input as hostile and refuses rather than repairs:
  * unknown fields, absent fields, values outside their declared range, more
@@ -69,7 +71,8 @@ export const BUNDLED_CERTIFICATE_FEED_SEQUENCE = 1;
 // describes one client build, and every index the transforms use is a WASM
 // function or memory word. Nothing here may grow into an allocation an attacker
 // chooses.
-const MAX_FEED_BYTES = 256 * 1024;
+/** Exported so a transport stops reading at the size the parser would refuse. */
+export const MAX_CERTIFICATE_FEED_BYTES = 256 * 1024;
 const MAX_ENTRIES = 64;
 const MAX_BRIDGE_CALL_SITES = 64;
 const MAX_STUB_BODY_BYTES = 256;
@@ -398,8 +401,11 @@ function feedEntry(value: unknown, index: number): CertificateFeedEntry {
  */
 export function parseCertificateFeed(bytes: Uint8Array): CertificateFeed {
   if (bytes.byteLength === 0) refuse("no bytes");
-  if (bytes.byteLength > MAX_FEED_BYTES) {
-    refuse(`${bytes.byteLength} bytes exceeds the ${MAX_FEED_BYTES}-byte cap`);
+  if (bytes.byteLength > MAX_CERTIFICATE_FEED_BYTES) {
+    refuse(
+      `${bytes.byteLength} bytes exceeds the `
+        + `${MAX_CERTIFICATE_FEED_BYTES}-byte cap`,
+    );
   }
   // A byte-order mark is a second spelling of the same document, and a signature
   // is over bytes.
@@ -585,9 +591,17 @@ export function bundledCertificateFeed(): CertificateFeed {
 }
 
 /**
- * The two lookups `certifyClientBuild` takes, read out of a feed. This is the
- * whole of what a feed is for; there is no other way its contents reach a
- * launch decision.
+ * The two lookups `certifyClientBuild` takes, read out of a feed: what a feed's
+ * contents *mean* expressed in the vocabulary the rest of the chain already
+ * speaks, which is what makes "a feed answers exactly what the shipped tables
+ * answer" a statement that can be executed rather than argued.
+ *
+ * It is deliberately not how a feed reaches a launch. `client-runtime.ts` asks
+ * the shipped tables first and consults the feed only where they say nothing,
+ * one entry at a time and through `certificate-feed-proof.ts` — so a feed can
+ * widen where a certificate comes from and can never withdraw one. These
+ * tables would answer for a whole feed at once and take its word for the
+ * lookup; nothing hands them to a launch, and nothing should.
  */
 export function certifiedBuildTablesFromFeed(feed: CertificateFeed): CertifiedBuildTables {
   const byEnhancementInput = new Map<string, KnownEnhancementBuild>();

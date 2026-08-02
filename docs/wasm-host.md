@@ -269,6 +269,47 @@ candidate must be strictly newer to replace the feed in hand, so a captured
 older feed replayed at the application cannot withdraw a certificate it already
 holds.
 
+### How a feed arrives
+
+`src/main/certification/certificate-feed-delivery.ts` owns where a feed is
+fetched from, how a verified one is stored, and which of the feeds in hand
+governs a session.
+
+A check is two GETs — `certificate-feed.json` and `certificate-feed.json.sig`,
+published as assets on the current release and addressed through
+`latestReleaseAssetUrl`. It is the same host and redirect chain the updater's
+own asset requests already follow, so the feed adds no egress destination, and
+the application adds nothing to either request: no body, no header, no query, no
+credential.
+`tests/unit/no-game-traffic-is-uploaded.test.ts` executes that.
+
+There is no second scheduler. `main.ts` triggers the delivery from the same
+place it triggers the release check — at launch, on the periodic tick that
+`periodicCheckDue` gates, when the player switches automatic checks on, and when
+they press **Check for Updates** — so one predicate governs both and
+`docs/content-pipeline.md` owns it. With no pinned key the module makes no
+request at all: refusing an answer to a question already decided would spend a
+connection for nothing.
+
+A verified feed is stored in the profile at `game/certificate-feed.json` as one
+versioned record holding the exact bytes and the exact detached signature. That
+record is verified by the same code path as a fresh fetch at every launch, so a
+file edited on this machine is refused and rotating the pin retroactively
+refuses everything the old key signed — there is no weaker rule for a feed that
+is already ours. A record the application does not fully understand is deleted
+rather than partially read, and the bundled snapshot governs.
+
+The governing feed is read once per certification pass. A build the shipped
+tables already certify is unaffected: the feed is consulted only where the
+answer would otherwise be `uncertified`, and what it proposes still has to
+survive `certificate-feed-proof.ts` against the client bytes. So a feed can
+widen where a certificate comes from and can never withdraw one.
+
+`.gwdiag` carries `certificateFeed.source`, `certificateFeed.sequence`,
+`certificateFeed.outcome` and `certificateFeed.lastSuccessAt`, which is what
+makes a stuck feed visible rather than silent — `outcome` is a closed
+vocabulary naming exactly what stopped the last check.
+
 ## Enhancement instrumentation
 
 The official `Gw.jspi.wasm` remains canonical. A session with the Enhancement

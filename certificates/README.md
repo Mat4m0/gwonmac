@@ -61,6 +61,25 @@ a machine that builds anything.
 4. Destroy every copy of the private half outside the signing environment,
    including the file written in step 1 and the machine's shell history.
 
+## What a signed feed is published as
+
+Two assets on the release the application resolves as current:
+
+| Asset                       | Content                                          |
+| --------------------------- | ------------------------------------------------ |
+| `certificate-feed.json`     | the exact canonical document the signature covers |
+| `certificate-feed.json.sig` | base64 of the 64-byte detached Ed25519 signature  |
+
+`pnpm build` writes the document the shipped tables derive to
+`build/certificates/feed.json`; a published feed is that document with a
+`sequence` higher than any feed already released. Sign the bytes, not a
+re-serialised copy of them — the parser accepts exactly one spelling, and a
+signature that covers a different one verifies against nothing.
+
+Replacing those two assets on an existing release is the whole of what it takes
+to reach installations. No application release is involved, which is the point:
+recovery arrives as data.
+
 ## Rotation and loss
 
 There is no revocation list and no second pinned key, deliberately: a second key

@@ -25,6 +25,7 @@ export interface GamePaths {
   previousArtifacts: string;
   rejectedClient: string;
   localClientVerification: string;
+  certificateFeed: string;
   compatibility: string;
   enhancements: string;
   chunks: string;
@@ -49,6 +50,7 @@ export function gamePaths(userData: string): GamePaths {
       game,
       "local-client-verification.json",
     ),
+    certificateFeed: path.join(game, "certificate-feed.json"),
     compatibility: path.join(game, "compatibility"),
     enhancements: path.join(game, "enhancements"),
     chunks: path.join(game, "chunks"),

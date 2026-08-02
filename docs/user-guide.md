@@ -291,6 +291,15 @@ the app contacts GitHub only when you choose **Check for Updates** — on the
 loading screen, in the application menu, on a client-compatibility notice, or
 under **Settings → Updates**. Turning it back on immediately checks once.
 
+A check asks GitHub for two things: whether a newer version of the app exists,
+and whether the project has published a newer compatibility record for Guild
+Wars client builds. The second is how an ArenaNet update that would otherwise
+switch template saving off can be repaired without you installing anything. It
+is a signed list of hashes and nothing else — no program and no instruction —
+and the app still re-derives every claim against the client on your machine
+before anything switches back on. Neither request sends anything about you or
+your installation.
+
 An eligible update downloads in the background. When it is ready, choose
 **Restart to Update** or choose Later and let it install on the next ordinary
 restart. Restarting while Guild Wars is connected asks before disconnecting.
