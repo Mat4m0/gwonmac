@@ -1,3 +1,5 @@
+# Signing and publishing run on every commit to main rather than once per
+# release, where a broken step would be discovered under the most time pressure.
 name: Main snapshot
 
 on:

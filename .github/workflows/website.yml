@@ -1,3 +1,5 @@
+# The website is outside pnpm verify, so this is the only thing that checks it;
+# the path filter keeps application-only commits off a run with nothing to do.
 name: Website
 
 on:

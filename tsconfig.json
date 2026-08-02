@@ -6,9 +6,17 @@
     "lib": ["ES2022"],
     "outDir": "build",
     "rootDir": "src",
+    // Every input this program reads crosses a boundary it does not control —
+    // IPC, the settings file, ArenaNet's manifests — where absence is normal.
     "strict": true,
+    // A renamed base member otherwise turns an override into a second method
+    // that nothing calls and nothing reports.
     "noImplicitOverride": true,
+    // Chunk tables, manifest rows and argv are indexed by values from outside
+    // the program, so a miss is a normal case rather than a defect.
     "noUncheckedIndexedAccess": true,
+    // An absent field and an explicit undefined are the same value after a JSON
+    // round trip and different values to every contract in src/shared.
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "esModuleInterop": true,

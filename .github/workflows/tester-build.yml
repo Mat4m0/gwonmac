@@ -1,3 +1,5 @@
+# A build for testers names its exact commit and waits for a human approval;
+# nothing else here signs a Preview from a revision somebody chose.
 name: Tester build
 
 on:

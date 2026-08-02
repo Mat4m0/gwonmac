@@ -153,16 +153,39 @@ const config: ForgeConfig = {
         path.resolve(resourcesPath, "../..", "MacOS", "Electron"),
         {
           version: FuseVersion.V1,
+          // Flipping a fuse edits the binary, which invalidates the signature
+          // the prebuilt Electron carries and Apple Silicon insists on having.
           resetAdHocDarwinSignature: arch === "arm64",
+          // A fuse this list has never heard of fails the package rather than
+          // taking whichever default a new Electron shipped it with.
           strictlyRequireAllFuses: true,
+          // A binary that runs arbitrary script on request runs it under this
+          // app's signature, and so with its Keychain access.
           [FuseV1Options.RunAsNode]: false,
+          // Chromium would otherwise create its own Safe Storage Keychain item
+          // beside the Data Protection items this app owns.
           [FuseV1Options.EnableCookieEncryption]: false,
+          // NODE_OPTIONS is read from the launching environment, before any
+          // check this app is in a position to make.
           [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+          // A debugger attached to main reads the ArenaNet credentials and the
+          // Steam token straight out of memory.
           [FuseV1Options.EnableNodeCliInspectArguments]: false,
+          // Gatekeeper checks the bundle seal at first launch; this checks the
+          // archive at every one.
           [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+          // Otherwise an app/ directory beside the archive is the fallback when
+          // app.asar is missing or unreadable, so removing the archive replaces
+          // it with code the check above never sees.
           [FuseV1Options.OnlyLoadAppFromAsar]: true,
+          // A browser-process-specific snapshot is a second code-bearing file,
+          // outside the archive the two fuses above account for.
           [FuseV1Options.LoadBrowserProcessSpecificV8Snapshot]: false,
+          // Everything the renderer loads arrives over gw://app, so file://
+          // pages have nothing here that extra privileges would serve.
           [FuseV1Options.GrantFileProtocolExtraPrivileges]: false,
+          // The game is WebAssembly: without trap handlers every heap access
+          // pays for an explicit bounds check.
           [FuseV1Options.WasmTrapHandlers]: true,
         },
       );

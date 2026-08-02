@@ -48,7 +48,15 @@ not only happy paths.
 Every module under `src/` opens with a comment stating what it owns and what it
 refuses to own; `tests/policy/source-module-headers.test.ts` fails a build that
 is missing one. Comments elsewhere state the constraint the code cannot show,
-never what the next line does.
+never what the next line does. Configuration that decides behaviour — the
+Electron fuses, the strictness flags, a workflow's reason to exist — carries the
+reason on the line it governs.
+
+An investigation that cost a wrong turn is recorded the same way: one round per
+hypothesis, what was built on it, the measurement that killed it, and the lesson
+it leaves. `internal/upstream/investigation-template.md` holds that shape and
+`internal/upstream/investigation-log.md` is the worked example. The next reader
+is meant to inherit the dead ends rather than walk back into them.
 
 ## Layout
 
