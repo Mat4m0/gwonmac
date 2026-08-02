@@ -9,14 +9,18 @@
  * algorithms testable.
  */
 
-import type { SnapshotMetadata } from '../shared/contracts.js';
+// A runtime import, not a type-only one: src/main/protocol.ts serves
+// build/shared/contracts.js at gw://app/shared/contracts.js for exactly this.
+import {
+  ARENANET_REQUEST_CEILING,
+  type SnapshotMetadata,
+} from '../shared/contracts.js';
 
 // The chunk size the main process publishes; the fallback is the value the
 // harness has always substituted for a metadata document without one.
 const DEFAULT_CHUNK_SIZE = 262144;
 // Renderer memory is disposable; native chunk residency lives in the main process.
 const CHUNK_CACHE_MAX = 256 * 1024 * 1024;
-const MAX_CHUNK_REQUESTS = 8;
 // A read burst is summarised once it goes quiet, for the optional game console.
 const BURST_QUIET_MS = 400;
 const BURST_LOG_BYTES = 4 * 1024 * 1024;
@@ -208,7 +212,7 @@ export function createImageSource({
     const first = demandQueue.shift();
     if (!first) return [];
     const tasks = [first];
-    while (tasks.length < Math.min(capacity, MAX_CHUNK_REQUESTS)) {
+    while (tasks.length < Math.min(capacity, ARENANET_REQUEST_CEILING)) {
       const nextIndex = tasks[tasks.length - 1]!.index + 1;
       const queuedIndex = demandQueue.findIndex((task) => task.index === nextIndex);
       if (queuedIndex < 0) break;
@@ -260,8 +264,8 @@ export function createImageSource({
   }
 
   function drainChunkQueue() {
-    while (activeDemand + activePrefetch < MAX_CHUNK_REQUESTS) {
-      const capacity = MAX_CHUNK_REQUESTS - activeDemand - activePrefetch;
+    while (activeDemand + activePrefetch < ARENANET_REQUEST_CEILING) {
+      const capacity = ARENANET_REQUEST_CEILING - activeDemand - activePrefetch;
       const demand = takeDemandBatch(capacity);
       if (demand.length) {
         startChunkTasks(demand);

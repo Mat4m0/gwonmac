@@ -1,7 +1,8 @@
 /**
  * The canonical contracts between main, the preload and the renderer: the IPC
  * channels, the settings, the progress and socket shapes, the Enhancement
- * capability profiles, and the closed vocabularies each side validates against.
+ * capability profiles, the ceiling on requests in flight to ArenaNet, and the
+ * closed vocabularies each side validates against.
  *
  * These are types and frozen values only. Nothing here has behaviour, imports
  * Electron, or touches a filesystem, which is what lets both processes and the
@@ -34,6 +35,15 @@ export interface SnapshotMetadata {
   chunkHashes: string[];
   residentBits: Uint8Array;
 }
+
+/**
+ * Requests in flight to ArenaNet, summed over every scheduler this application
+ * runs: the main process chunk store and patch client, and the renderer's
+ * snapshot image reader. They spend one budget against infrastructure every
+ * installation shares, so lowering this is a decision and raising it is a
+ * defect.
+ */
+export const ARENANET_REQUEST_CEILING = 8;
 
 /**
  * Why a ready client is not simply "ready": the launch took a fallback the

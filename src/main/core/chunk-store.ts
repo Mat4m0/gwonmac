@@ -15,13 +15,15 @@
  */
 import { readFile, readdir, stat, statfs, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import type { PrefetchProgress } from "../../shared/contracts.js";
+import {
+  ARENANET_REQUEST_CEILING,
+  type PrefetchProgress,
+} from "../../shared/contracts.js";
 import { AppError, type ErrorCode } from "../../shared/errors.js";
 import {
   DownloadRateAverage,
   secondsRemaining,
 } from "../../shared/progress.js";
-import { PREFETCH_JOBS } from "./access-key.js";
 import { mapPool } from "./async-pool.js";
 import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
 import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
@@ -445,7 +447,7 @@ export class ChunkStore {
   }
 
   private drainFetchQueue(): void {
-    while (this.activeDemand + this.activePrefetch < PREFETCH_JOBS) {
+    while (this.activeDemand + this.activePrefetch < ARENANET_REQUEST_CEILING) {
       const task = this.demandQueue.shift() ?? this.prefetchQueue.shift();
       if (!task) break;
       if (task.priority === "prefetch" && this.stopFlag) {
@@ -558,7 +560,7 @@ export class ChunkStore {
 
   async prefetch(
     onProgress?: (p: PrefetchProgress) => void,
-    jobs = PREFETCH_JOBS,
+    jobs = ARENANET_REQUEST_CEILING,
   ): Promise<void> {
     if (!this.fetchFn) return;
     const want = await this.readBootChunks();
@@ -599,7 +601,7 @@ export class ChunkStore {
     jobs?: number;
     freeBytes?: () => Promise<number>;
   } = {}): Promise<boolean> {
-    const jobs = opts.jobs ?? PREFETCH_JOBS;
+    const jobs = opts.jobs ?? ARENANET_REQUEST_CEILING;
     this.stopFlag = false;
     await this.initializeResidency();
     const residentRepresentatives = new Map<string, number>();
