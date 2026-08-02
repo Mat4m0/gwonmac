@@ -65,7 +65,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
 | `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed and its delivery |
-| `certificates/`           | the pinned certificate-feed public key, its key ceremony, and the client generation this repository has certified |
+| `certificates/`           | the pinned certificate-feed public key, its key ceremony, how a signed feed is published, and the client generation this repository has certified |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -346,6 +346,18 @@ the layout stopped being derivable. It holds no secret, uploads evidence and
 never client bytes, and its branch is worth nothing until the pull request's
 `pnpm verify` gate passes on it. The recorded generation carries no authority;
 it decides only whether that job runs.
+
+`.github/workflows/certificate-feed-publication.yml` is the only path from a
+merged table to a signed feed. Two runners derive the candidate from the tree
+alone and their bytes must be identical; a disagreement publishes nothing and
+files both hashes. The candidate's `sequence` is one past the higher of the feed
+in force and the bundled snapshot, resolved in the one job that sees both. One
+isolated job holds the private key, checks nothing out, refuses a candidate the
+published feed has caught up with while a person was approving it, and uploads
+the two assets. Template-save facts reach the approval gate on the push that
+produced them; Enhancement facts reach it only on a dispatch that says so,
+because nothing on the receiving machine re-derives them. `certificates/README.md` owns
+that mechanism and the go-live checklist the repository owner performs by hand.
 
 For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`

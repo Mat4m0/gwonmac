@@ -78,13 +78,77 @@ Two assets on the release the application resolves as current:
 
 `pnpm build` writes the document the shipped tables derive to
 `build/certificates/feed.json`; a published feed is that document with a
-`sequence` higher than any feed already released. Sign the bytes, not a
-re-serialised copy of them — the parser accepts exactly one spelling, and a
-signature that covers a different one verifies against nothing.
+`sequence` higher than both any feed already released and the snapshot compiled
+into the application. Both floors bind, so what a candidate must beat is the
+higher of them: a feed that does not beat the released one is a replay every
+installation holding it refuses, and one that does not beat the compiled-in
+snapshot is adopted by nobody, because `governingCertificateFeed` keeps the
+newer of the two. Sign the bytes, not a re-serialised copy of them — the parser
+accepts exactly one spelling, and a signature that covers a different one
+verifies against nothing.
 
 Replacing those two assets on an existing release is the whole of what it takes
 to reach installations. No application release is involved, which is the point:
 recovery arrives as data.
+
+## Publication
+
+`.github/workflows/certificate-feed-publication.yml` is the only path from the
+tables on `main` to those two assets, and it runs on a push that changes a
+certification table or this pin.
+
+It derives the candidate twice, on two runners, from the tree and a Node and
+nothing else — the generator's whole import graph is this repository plus Node
+builtins, so there is no dependency tree for two machines to disagree about. The
+two answers must be byte-identical. A disagreement publishes nothing and opens
+an issue carrying both hashes, because a derivation that is not reproducible is
+a fact about this repository that a person has to read.
+
+The candidate's `sequence` is one past the higher of the two floors above — the
+feed in force and the bundled snapshot — resolved in the one job that can see
+both, so the two rules can never contradict. That job asks the release list
+which release carries a feed rather than probing each one with a download,
+because a download that failed and a release that never had the asset are the
+same exit code, and reading the first as the second names a sequence
+installations have already passed.
+
+The job that signs holds the private key and checks nothing out: a working tree
+beside a signing key is every script in it running beside a signing key. It
+receives the reproduced bytes as data, re-hashes them against what the two
+runners agreed on, restates the spelling and ordering rules a signature must not
+cover blindly, and refuses a candidate the published feed has caught up with —
+resolved again at that moment rather than before the approval, so a feed
+published while a person was deciding blocks this one instead of being
+overwritten.
+
+The tier is read out of the candidate. An entry that only moves template-save
+facts reaches the approval gate on the push that produced it, because every
+installation re-derives those facts from its own client bytes. An entry carrying
+Enhancement facts reaches it only on a run someone dispatched with
+`enhancement_facts` set: nothing on the receiving machine re-derives a layout
+address, so a person says that is what they meant.
+
+## The go-live checklist
+
+Four things this repository cannot do for itself. Each one is a setting or a
+secret in an account, and scripting around any of them would mean holding the
+credentials that can change it — a larger blast radius than the thing being
+automated. Until all four are done the publication workflow refuses in its first
+job, which is the intended state of every clone.
+
+1. In **Settings → Actions → General**, allow GitHub Actions to create and
+   approve pull requests. Without it the recertification workflow pushes its
+   branch and files its issue but cannot open the proposal.
+2. Create the **`certificate-publishing`** environment with required reviewers
+   and a deployment branch rule limiting it to `main`. This is the one-click
+   human approval every publication passes through.
+3. Run the key ceremony above on an offline machine, and add the private half as
+   the environment secret **`CERTIFICATE_FEED_SIGNING_KEY`** — on that
+   environment, never as a repository secret. It is the PEM `openssl genpkey`
+   wrote, pasted whole.
+4. Replace the placeholder line in `public-key.txt` with the printed public key,
+   commit that on its own, and ship a release carrying it. Until that release is
+   what installations run, they trust no feed at all.
 
 ### Rotation and loss
 
