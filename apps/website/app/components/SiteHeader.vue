@@ -38,7 +38,13 @@ const route = useRoute();
 const isMobileMenuOpen = ref(false);
 const localizedPath = useLocalizedPath();
 
-const isActive = (href: string) => route.path === href || route.path.startsWith(href + "/");
+// Home ("/" or "/de") must match exactly — prefix matching would mark it
+// active on every page of its locale.
+const homePath = computed(() => localizedPath("home"));
+const isActive = (href: string) =>
+  href === homePath.value
+    ? route.path === href
+    : route.path === href || route.path.startsWith(href + "/");
 
 // The layer's locale switcher hard-codes the outline Button on its trigger and
 // exposes no borderless variant, so the chrome is stripped from the outside —

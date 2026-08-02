@@ -260,6 +260,18 @@ try {
     installHtml,
     new RegExp(`href="${EXTERNAL_URLS.releases}/latest"`),
   );
+  // The guide's direct download link goes through /download, which redirects
+  // to the newest DMG (or the releases page when none is eligible) — always
+  // inside this repository's releases space.
+  assert.match(installHtml, /href="\/download"/);
+  const download = await globalThis.fetch(`http://${host}:${port}/download`, {
+    redirect: "manual",
+  });
+  assert.equal(download.status, 302);
+  assert.match(
+    download.headers.get("location") ?? "",
+    new RegExp(`^${EXTERNAL_URLS.releases}/`),
+  );
 
   // The API route answers with the policy above whatever GitHub does: a direct
   // DMG when one is eligible, the releases page otherwise — always this repo.
