@@ -1,33 +1,18 @@
-import tailwindcss from "@tailwindcss/vite";
+import site from "./site.json" with { type: "json" };
 
 export default defineNuxtConfig({
-  compatibilityDate: "2026-07-23",
-  css: ["~/assets/css/main.css"],
-  vite: {
-    plugins: [tailwindcss()],
-  },
+  extends: ["@lupinum/ginko-docs"],
+  site: { url: site.url },
   app: {
     head: {
-      htmlAttrs: { lang: "en" },
-      meta: [
-        { name: "apple-mobile-web-app-title", content: "GW Reforged" },
-      ],
       link: [
-        {
-          rel: "icon",
-          type: "image/png",
-          href: "/favicon-96x96.png",
-          sizes: "96x96",
-        },
+        { rel: "icon", type: "image/png", href: "/favicon-96x96.png", sizes: "96x96" },
         { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
         { rel: "shortcut icon", href: "/favicon.ico" },
-        {
-          rel: "apple-touch-icon",
-          href: "/apple-touch-icon.png",
-          sizes: "180x180",
-        },
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
         { rel: "manifest", href: "/site.webmanifest" },
       ],
+      meta: [{ name: "apple-mobile-web-app-title", content: "gwonmac" }],
       script: [
         {
           async: true,
@@ -40,9 +25,18 @@ export default defineNuxtConfig({
       ],
     },
   },
-  runtimeConfig: {
-    public: {
-      siteUrl: "https://gwonmac.vercel.app",
+  colorMode: { preference: "dark", fallback: "dark" },
+  i18n: {
+    baseUrl: site.url,
+    defaultLocale: "en",
+    locales: [
+      { code: "en", language: "en-US", name: "English" },
+      { code: "de", language: "de-DE", name: "Deutsch" },
+    ],
+  },
+  content: {
+    i18n: {
+      fallback: { de: ["en"] },
     },
   },
 });

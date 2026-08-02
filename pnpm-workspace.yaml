@@ -14,6 +14,7 @@ allowBuilds:
   esbuild: true
   fs-xattr: true
   macos-alias: true
+  vue-demi: true
 # Electron Forge's packaging-only legacy minimatch graph requires
 # brace-expansion 1/2; forcing the incompatible major 5 is not a fix.
 auditConfig:

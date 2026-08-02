@@ -24,6 +24,11 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+// Documents under the website's content directory link in site-route terms:
+// absolute asset paths are served from the site's public/ directory.
+const WEBSITE_CONTENT = "apps/website/content/";
+const WEBSITE_PUBLIC = "apps/website/public";
+
 /** One local link target, and the line of its document that carries it. */
 export type LocalTarget = { line: number; target: string };
 
@@ -158,11 +163,20 @@ export function findBrokenLinks(
   };
   for (const file of files) {
     const source = readFileSync(join(root, file), "utf8");
+    const websiteContent = file.startsWith(WEBSITE_CONTENT);
     for (const { line, target } of extractLocalTargets(source)) {
       const decoded = decode(target);
+      if (websiteContent) {
+        // Website content links use site-route semantics, not repository
+        // paths: `$docs/...` aliases and extensionless routes (`/blog`) are
+        // resolved by the site's router. Asset links stay checkable — the
+        // site serves absolute paths from its public/ directory.
+        if (decoded.startsWith("$")) continue;
+        if (decoded.startsWith("/") && !/\.[a-z0-9]+$/i.test(decoded)) continue;
+      }
       // A leading slash means the repository root, not the filesystem root.
       const resolved = decoded.startsWith("/")
-        ? join(root, decoded)
+        ? join(root, websiteContent ? WEBSITE_PUBLIC : ".", decoded)
         : resolve(root, dirname(file), decoded);
       let valid = containedBy(absoluteRoot, resolved) && existsSync(resolved);
       if (valid) {

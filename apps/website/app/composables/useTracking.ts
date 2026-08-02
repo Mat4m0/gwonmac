@@ -1,8 +1,4 @@
-export type DownloadSource =
-  | "final-cta"
-  | "hero"
-  | "install-guide"
-  | "navigation";
+export type DownloadSource = "final-cta" | "hero";
 
 export function useTracking() {
   const plausibleTrack = (
