@@ -138,7 +138,7 @@ under `apps/`.
 | `src/renderer/` | Launcher chrome, settings, and the game host harness              |
 | `src/shared/`   | Contracts shared by main, preload, renderer, and the website      |
 | `apps/website/` | The download site (Nuxt 4 + Tailwind), deployed separately        |
-| `docs/`         | User guide, internals, performance notes                          |
+| `docs/`         | User guide, technical documents, performance record               |
 | `tests/`        | Unit, integration, Electron acceptance, and release-policy suites |
 | `tools/`        | Developer-only reverse-engineering helpers                        |
 
@@ -191,7 +191,7 @@ timings, cache/network/disk cost, memory, GPU and power state, socket
 lifetimes — and **Help → Report a Problem…** turns it into one redacted
 `.gwdiag` file that only leaves your machine if you attach it yourself.
 [Report a problem](docs/user-guide.md#report-a-problem) covers which capture to
-record for which symptom; [Internals](docs/internals.md#diagnostics) covers the
+record for which symptom; [Diagnostics](docs/diagnostics.md) covers the
 format and exactly what the redaction does and does not guarantee.
 
 Inspect captures without launching the app:
@@ -232,9 +232,10 @@ Each document owns one thing; this page links rather than repeating them.
 - [User guide](docs/user-guide.md) — everything the app does from a player's
   seat: first launch, download modes, settings, updates, local data, bug
   reports
-- [Internals](docs/internals.md) — how it does it: process model, security
-  boundaries, client update and cache design, renderer host surface,
-  diagnostics format, and which claims are proved by which test
+- [Technical documentation](docs/README.md) — how it does it: the process
+  model and its boundaries, the content pipeline and both updaters, the WASM
+  host and client certification, diagnostics, and which claims are proved by
+  which test
 - [Verify a release](docs/release-verification.md) — checksums, attestations,
   and what a version number means
 - [Product brief](PRODUCT.md) — who this is for, what ships next, and what this

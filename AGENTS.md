@@ -3,13 +3,16 @@
 Context for humans and agents working on this repository. Each document owns
 one thing, and the others link to it rather than restating it:
 
-| Document                 | Owns                                                  |
-| ------------------------ | ----------------------------------------------------- |
-| `docs/internals.md`      | current technical behaviour                           |
-| `docs/user-guide.md`     | current user-facing behaviour                         |
-| `internal/upstream/`     | the investigation record, wrong hypotheses included   |
-| `PRODUCT.md`             | who this is for, the first feature, and the non-goals |
-| `README.md`, `AGENTS.md` | the way in; they link, they do not restate            |
+| Document                    | Owns                                                    |
+| --------------------------- | ------------------------------------------------------- |
+| `docs/process-model.md`     | processes, boundaries, rendering and input, secrets      |
+| `docs/content-pipeline.md`  | client artifacts, chunk store, download modes, updater   |
+| `docs/wasm-host.md`         | the `Module` surface and client certification            |
+| `docs/diagnostics.md`       | the recorder, the export, and the claims that are proved |
+| `docs/user-guide.md`        | current user-facing behaviour                            |
+| `internal/upstream/`        | the investigation record, wrong hypotheses included      |
+| `PRODUCT.md`                | who this is for, the first feature, and the non-goals    |
+| `README.md`, `AGENTS.md`, `docs/README.md` | the way in; they link, they do not restate |
 
 This file adds what an agent needs before touching the code: the constraints
 that are load-bearing, the invariants that must not drift, and how to verify a
@@ -41,6 +44,11 @@ unreleased code and remove superseded paths.
 Keep domain logic out of preload/IPC transport. Main owns native invariants;
 the renderer owns presentation and the game host. Add tests for invariants,
 not only happy paths.
+
+Every module under `src/` opens with a comment stating what it owns and what it
+refuses to own; `tests/policy/source-module-headers.test.ts` fails a build that
+is missing one. Comments elsewhere state the constraint the code cannot show,
+never what the next line does.
 
 ## Layout
 
@@ -127,7 +135,7 @@ not only happy paths.
   bar, so **the sign-in origin is not visible to the player** — the top-level
   allowlist and the sandbox controls above confine the window, not the player's
   inspection. Do not write docs or UI that tell a player to verify the origin.
-  `docs/internals.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
+  `docs/process-model.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
   pins the presentation.
 - Persistent secrets are available only to the provisioned `release`,
   `preview`, and `development` distribution channels. Their distinct bundle
@@ -157,7 +165,7 @@ not only happy paths.
   carrying the release marker may reach Squirrel.Mac. Stable installs never
   receive previews; a preview may advance to stable. A ready update waits for
   an explicit or ordinary restart. ArenaNet client updates remain separate and
-  automatic. `docs/internals.md` owns the mechanism and `docs/user-guide.md`
+  automatic. `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md`
   owns what the player is told.
 
 ## Diagnostics and privacy
@@ -184,7 +192,7 @@ manifest calls `schemaChecked` is every app-authored record; it must equal
 `records` or export fails. The Chromium trace and the documents whose leaves
 come from OS and Chromium APIs are **pattern-scanned** by
 `src/main/diagnostics/text-scan.ts`, which catches a vocabulary and cannot
-promise more. `docs/internals.md` states which tier covers which file.
+promise more. `docs/diagnostics.md` states which tier covers which file.
 
 Level 1 captures prove performance. Level 2 Chromium traces locate causes but
 are profiler-contaminated and do not establish gains.

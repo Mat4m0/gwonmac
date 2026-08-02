@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 
 const policyRoots = [
   "src",
-  "docs/internals.md",
+  "docs/process-model.md",
   "docs/user-guide.md",
 ] as const;
 
