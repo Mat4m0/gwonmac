@@ -112,8 +112,6 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-    env:
-      EVIDENCE: ${{ runner.temp }}/evidence
     outputs:
       outcome: ${{ steps.derive.outputs.outcome }}
       summary: ${{ steps.derive.outputs.summary }}
@@ -122,6 +120,10 @@ jobs:
       # which is what the branch, the record and the issue must all name.
       fingerprint: ${{ steps.official.outputs.fingerprint }}
     steps:
+      # The runner context does not exist in a job-level env, so the evidence
+      # directory is named here, where the shell's own RUNNER_TEMP does.
+      - name: Name the evidence directory
+        run: echo "EVIDENCE=$RUNNER_TEMP/evidence" >> "$GITHUB_ENV"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
