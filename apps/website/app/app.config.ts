@@ -16,6 +16,17 @@ export default defineAppConfig({
       docsSidebarSwitcher: "dropdown",
       lupinumAttribution: false,
     },
+    nav: {
+      links: [
+        { label: { en: "Home", de: "Startseite" }, to: { en: "/", de: "/de" }, icon: "lucide:home" },
+        {
+          label: { en: "Documentation", de: "Dokumentation" },
+          to: { en: "/docs", de: "/de/dokumentation" },
+          icon: "lucide:book-open",
+        },
+        { label: "Blog", to: { en: "/blog", de: "/de/blog" }, icon: "lucide:file-text" },
+      ],
+    },
     banner: {
       enabled: true,
       id: "unofficial",

@@ -39,4 +39,11 @@ export default defineNuxtConfig({
       fallback: { de: ["en"] },
     },
   },
+  routeRules: {
+    // /download must stay a live redirect to the newest DMG; prerendering it
+    // would bake the answer of one build-time GitHub call into the deploy.
+    // The layer locale-prefixes the German guide's link, hence the alias.
+    "/download": { prerender: false },
+    "/de/download": { redirect: { to: "/download", statusCode: 302 }, prerender: false },
+  },
 });
