@@ -55,6 +55,10 @@ jobs:
           cache: pnpm
       - name: Require Apple Silicon runner
         run: test "$(uname -m)" = "arm64"
+      # The runner image's default toolchain is not this repository's. Installs
+      # the one rust-toolchain.toml names, with no version repeated here.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=high
       - run: pnpm verify

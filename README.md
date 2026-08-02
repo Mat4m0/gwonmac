@@ -78,8 +78,10 @@ pnpm dev
 
 Rust is a build prerequisite, not an optional extra: every entry point runs
 `pnpm build`, which compiles `src/companion-kernel/lib.rs` to WebAssembly with
-`rustc`. `rust-toolchain.toml` pins the compiler version and the
-`wasm32-unknown-unknown` target, so rustup installs both on the first build.
+`rustc`. `rust-toolchain.toml` pins the compiler version, the components the
+build needs, and the `wasm32-unknown-unknown` target, so rustup installs them
+on the first build. Continuous integration installs that same pin rather than
+using the runner image's own toolchain.
 
 The first online run fetches the small JSPI client artifacts.
 

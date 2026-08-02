@@ -1,7 +1,35 @@
 // The single producer of everything under build/.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+
+// package.json's `engines` is the one declaration of the floor, and this is
+// where it stops a build. Every entry point reaches the compiler through this
+// file, and an older Node fails somewhere further in — on a flag it does not
+// have, or on syntax it cannot strip — as a defect in the step rather than as
+// an unmet requirement.
+/** @type {{ engines?: { node?: string } }} */
+const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+const declaredNode = manifest.engines?.node;
+const nodeFloor = /^>=(\d+)\.(\d+)$/u.exec(declaredNode ?? "");
+if (nodeFloor === null) {
+  throw new Error(
+    `package.json engines.node must be a >=<major>.<minor> floor, not ${declaredNode}`,
+  );
+}
+const [floor, floorMajor = "0", floorMinor = "0"] = nodeFloor;
+const [runningMajor = 0, runningMinor = 0] = process.versions.node
+  .split(".")
+  .map(Number);
+if (
+  runningMajor < Number(floorMajor)
+  || (runningMajor === Number(floorMajor) && runningMinor < Number(floorMinor))
+) {
+  throw new Error(
+    `Node ${floor} is required; this is ${process.versions.node}. `
+      + "See the Requirements in README.md.",
+  );
+}
 
 const nativeArchitecture =
   process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x86_64" : null;
@@ -115,8 +143,8 @@ export const BUILD_STEPS = [
   // position is free. It is TypeScript, so it is spawned the one way this
   // repository runs a TypeScript file from Node — the same flags
   // package.json's script entries use. `--experimental-strip-types` is
-  // redundant from Node 22.18 and stays because package.json's engines floor
-  // is 22.6, where it is not.
+  // redundant from Node 22.18 and stays because the floor checked above is
+  // lower, where it is not.
   [
     process.execPath,
     [

@@ -54,6 +54,11 @@ jobs:
       - name: Require Apple Silicon runner
         run: test "$(uname -m)" = "arm64"
 
+      # The runner image's default toolchain is not this repository's. Installs
+      # the one rust-toolchain.toml names, with no version repeated here.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+
       - name: Require a client canary newer than 14 days
         env:
           GH_TOKEN: ${{ github.token }}

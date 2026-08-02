@@ -27,6 +27,10 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
+      # The runner image's default toolchain is not this repository's. Installs
+      # the one rust-toolchain.toml names, with no version repeated here.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
       - name: Exercise the current production client
         env:
