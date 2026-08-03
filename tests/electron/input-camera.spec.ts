@@ -234,6 +234,39 @@ test.describe("renderer camera input", () => {
     }
   });
 
+  test("walks the virtual cursor back to the lock origin on release", async () => {
+    const fixture = await launchOffline("gw-pointer-reconcile-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const canvas = page.locator("#canvas");
+      const box = await boxOf(canvas);
+      await watchCameraDrag(page, box);
+
+      // The same overrun as the roam test: the re-anchor leaves the client's
+      // absolute position at -9 while the OS cursor will be restored to the
+      // press point. The release must close that gap with one walk-back move,
+      // after the button release, with no buttons reported held.
+      await page.mouse.move(box.x + 20, box.y + CAMERA_Y);
+      await page.mouse.up({ button: "right" });
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as CameraInputWindow).__cameraEvents.at(-1),
+          ),
+        )
+        .toEqual({
+          type: "mousemove",
+          button: 0,
+          buttons: 0,
+          clientX: box.x + 100,
+          movementX: 14,
+        });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases only held mouse buttons when pointer lock is lost", async () => {
     const fixture = await launchOffline("gw-pointer-loss-e2e-");
     try {

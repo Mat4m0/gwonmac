@@ -192,6 +192,62 @@ test.describe("renderer pointer input", () => {
     }
   });
 
+  test("synthesizes one double-tap per click run and none after a drag", async () => {
+    const fixture = await launchOffline("gw-double-click-run-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const result = await page.evaluate(async () => {
+        const canvas = globalThis.document.getElementById("canvas");
+        if (!canvas) throw new Error("#canvas is missing");
+        const observed: string[] = [];
+        for (const type of ["touchstart", "touchend", "touchcancel"] as const) {
+          canvas.addEventListener(type, () => observed.push(type));
+        }
+        const mouse = (type: string, detail: number, x = 120, y = 140) =>
+          canvas.dispatchEvent(
+            new globalThis.MouseEvent(type, {
+              bubbles: true,
+              button: 0,
+              clientX: x,
+              clientY: y,
+              detail,
+            }),
+          );
+
+        // A fast run of clicks on one spot: detail keeps counting 2, 3, 4.
+        // Only the transition into the second click is a native double-click;
+        // the later even counts must not synthesize again.
+        mouse("mousedown", 2);
+        mouse("mouseup", 2);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const afterDouble = [...observed];
+        mouse("mousedown", 3);
+        mouse("mouseup", 3);
+        mouse("mousedown", 4);
+        mouse("mouseup", 4);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const afterRun = [...observed];
+
+        // A double-click press that turns into a drag releases far away; the
+        // stale press point must not receive a tap pair.
+        observed.length = 0;
+        mouse("mousedown", 2);
+        mouse("mouseup", 2, 160, 140);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return { afterDouble, afterRun, afterDrag: [...observed] };
+      });
+
+      expect(result).toEqual({
+        afterDouble: ["touchstart", "touchend", "touchstart", "touchend"],
+        afterRun: ["touchstart", "touchend", "touchstart", "touchend"],
+        afterDrag: [],
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases held input when the pointer leaves the app window", async () => {
     const fixture = await launchOffline("gw-input-window-leave-e2e-");
     try {

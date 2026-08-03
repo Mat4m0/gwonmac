@@ -16,6 +16,11 @@ const POINTER_ROAM = 16;
 // dropped. Four cross a drag's whole range; further is a teleport, not a drag.
 const MAX_POINTER_REGRABS = 4;
 
+// Chromium's own double-click slop: clicks further apart than this are
+// separate clicks, so a press that travelled further before releasing was a
+// drag, not half of a double-click.
+const DOUBLE_CLICK_SLOP = 4;
+
 // ArenaNet's web client identifies a binding by KeyboardEvent.key, which is a
 // character from the active keyboard layout. Give each main-block position a
 // unique stable US-layout character instead. `code` already is the browser's
@@ -96,6 +101,7 @@ export const installGameInput = ({
   let pendingTap: { x: number; y: number } | null = null;
   let touchId = 0;
   let virtualCursor: { x: number; y: number } | null = null;
+  let lockOrigin: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let releasing = false;
   let wheelRemainder = 0;
@@ -251,7 +257,23 @@ export const installGameInput = ({
 
   function releasePointer() {
     pointerWanted = false;
+    // Exiting the lock returns the OS cursor to where the lock engaged, while
+    // the roam/re-anchor walk left the client's absolute position elsewhere —
+    // the source of the post-pan cursor jump. Walk the virtual cursor back
+    // before dropping it so the client's last mousemove agrees with the
+    // restored OS cursor. Callers sequence this after the button release so
+    // the walk cannot steer a still-held camera drag.
+    if (virtualCursor && lockOrigin) {
+      const dx = lockOrigin.x - virtualCursor.x;
+      const dy = lockOrigin.y - virtualCursor.y;
+      if (dx || dy) {
+        const rect = canvas.getBoundingClientRect();
+        virtualCursor = { x: lockOrigin.x, y: lockOrigin.y };
+        sendMouse('mousemove', rect, 0, 0, dx, dy);
+      }
+    }
     virtualCursor = null;
+    lockOrigin = null;
     canvas.classList.remove('cursor-hidden');
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
@@ -305,8 +327,10 @@ export const installGameInput = ({
   function releaseButtons() {
     const inputs = [...heldButtons.values()];
     heldButtons.clear();
-    releasePointer();
+    // Releases go first: the client must see the drag end at the coordinates
+    // it held before releasePointer walks the virtual cursor back.
     for (const input of inputs) dispatchButtonRelease(input);
+    releasePointer();
   }
 
   function releaseAll() {
@@ -469,8 +493,12 @@ export const installGameInput = ({
     // count, but its touch path has the double-tap detector the game needs for
     // actions such as equipping an item. Preserve every mouse event and append
     // exactly that missing signal for each completed native double-click.
+    // detail counts the whole click run, so only the transition into its
+    // second click is one: the later even counts (4, 6, …) are rapid single
+    // clicks continuing the run, and synthesizing for them turned fast
+    // attribute-point clicking into spurious double-clicks.
     cancelSyntheticTouches();
-    if (event.detail > 0 && event.detail % 2 === 0) {
+    if (event.detail === 2) {
       pendingTap = { x: event.clientX, y: event.clientY };
     }
   }, true);
@@ -479,6 +507,12 @@ export const installGameInput = ({
     if (event.button !== 0 || !pendingTap) return;
     const { x, y } = pendingTap;
     pendingTap = null;
+    // A press that travelled past the slop before releasing was a drag; a tap
+    // pair at the stale press point would act far from where the drag ended.
+    if (
+      Math.abs(event.clientX - x) > DOUBLE_CLICK_SLOP ||
+      Math.abs(event.clientY - y) > DOUBLE_CLICK_SLOP
+    ) return;
     tapAt(x, y, 20);
     tapAt(x, y, 100);
   }, true);
@@ -537,6 +571,9 @@ export const installGameInput = ({
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     };
+    // Where Chromium will restore the OS cursor when the lock ends, and so
+    // where releasePointer must walk the virtual cursor back to.
+    lockOrigin = { x: virtualCursor.x, y: virtualCursor.y };
     pointerWanted = true;
     if (document.pointerLockElement === canvas) return;
     try {
@@ -577,7 +614,10 @@ export const installGameInput = ({
   document.addEventListener('mouseup', (event) => {
     if (event.button === 2 && event.isTrusted) {
       pointerWanted = false;
-      releasePointer();
+      // The client must integrate this release at the lock's frozen
+      // coordinates before the cursor walks back — reconciling first would
+      // steer the camera by the walk. A microtask runs once dispatch ends.
+      queueMicrotask(releasePointer);
     }
   }, true);
   document.addEventListener('pointerlockchange', () => {
