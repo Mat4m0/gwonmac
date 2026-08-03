@@ -277,21 +277,33 @@ window.gwLog = (on = true) => {
  * to travel somewhere safe, escalate when the next growth step would hit the
  * cap. Reloading is a quick relog; from a town or outpost it loses nothing.
  *
- * A classic script cannot static-import, so the cap arrives via one dynamic
- * import; until it resolves the thresholds are Infinity and the watcher is
- * silent, which costs at most one 15-second tick at startup.
+ * A classic script cannot static-import, so the cap arrives via a dynamic
+ * import — on the first watcher tick, not at boot. Boot would work here, but
+ * it would also put the canonical contract into the module cache before the
+ * Enhancement runtime imports it, and the packaged proof that the runtime
+ * resolves the canonical module observes that import as a request. Until the
+ * import lands the thresholds are Infinity and the watcher is silent, which
+ * costs one 15-second tick and nothing else: no heap reaches a watermark
+ * that fast.
  */
 const MIB = 1_048_576;
 let heapCapBytes = 0;
 let heapWarnBytes = Infinity; // cap − 256 MiB — time to finish up.
 let heapCriticalBytes = Infinity; // cap − 128 MiB — go now.
-void import('../shared/contracts.js')
-  .then(({ WASM_HEAP_CAP_BYTES }) => {
-    heapCapBytes = WASM_HEAP_CAP_BYTES;
-    heapWarnBytes = WASM_HEAP_CAP_BYTES - 256 * MIB;
-    heapCriticalBytes = WASM_HEAP_CAP_BYTES - 128 * MIB;
-  })
-  .catch(() => {});
+let heapCapRequested = false;
+function requestHeapCap() {
+  if (heapCapRequested) return;
+  heapCapRequested = true;
+  void import('../shared/contracts.js')
+    .then(({ WASM_HEAP_CAP_BYTES }) => {
+      heapCapBytes = WASM_HEAP_CAP_BYTES;
+      heapWarnBytes = WASM_HEAP_CAP_BYTES - 256 * MIB;
+      heapCriticalBytes = WASM_HEAP_CAP_BYTES - 128 * MIB;
+    })
+    // A failed load retries on the next tick rather than silencing the
+    // watermark for the whole session.
+    .catch(() => { heapCapRequested = false; });
+}
 let heapNoticeLevel: 'none' | 'low' | 'critical' = 'none';
 
 const wasmHeapBytes = () => Module.HEAPU8?.buffer.byteLength ?? 0;
@@ -368,6 +380,7 @@ async function presentHeapNotice(level: 'low' | 'critical') {
 
 setInterval(() => {
   if (crashRecorded) return;
+  requestHeapCap();
   const bytes = wasmHeapBytes();
   const level = bytes >= heapCriticalBytes
     ? 'critical'
