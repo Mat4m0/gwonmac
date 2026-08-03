@@ -6,9 +6,13 @@ publicHoistPattern:
 confirmModulesPurge: false
 blockExoticSubdeps: false
 overrides:
-  "brace-expansion@": 5.0.8
+  "brace-expansion@": 5.0.9
+  fast-uri: 3.1.5
+  ip-address: 10.3.1
   tar: 7.5.21
   tmp: 0.2.7
+  "undici@7": 7.29.0
+  "undici@8": 8.9.0
 allowBuilds:
   electron: true
   esbuild: true
