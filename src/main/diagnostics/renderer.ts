@@ -26,6 +26,10 @@ import { asRendererFingerprint } from "./schema.js";
 let graphics: GraphicsDiagnostics | null = null;
 let rendererClockOffsetUs = 0;
 let rendererClockSynchronized = false;
+// The last WASM heap size a metrics flush reported. Wasm memory only grows
+// within one client run, so each increase is one step of the whole heap
+// staircase; a smaller value means a reloaded client and resets the baseline.
+let lastWasmHeapBytes = 0;
 
 /** The renderer's graphics description, as an export carries it. */
 export function graphicsSnapshot(): GraphicsDiagnostics | null {
@@ -103,6 +107,24 @@ export function recordRendererMetrics(value: RendererMetrics): void {
   recorder.count("socket.rendererCompactBytes", value.socketCompactBytes);
   recorder.count("socket.rendererSettles", value.socketSettles);
   recorder.count("diagnostics.rendererDropped", value.droppedRecords);
+  if (value.wasmHeapBytes > 0) {
+    recorder.setLatest("renderer.wasmHeapBytes", value.wasmHeapBytes);
+    recorder.setPeak("renderer.peakWasmHeapBytes", value.wasmHeapBytes);
+    // Growth is discrete and rare (the glue steps geometrically toward its
+    // cap), so every observed rise between flushes becomes one event — steps
+    // inside one flush window coalesce. Read with the socket.open map
+    // transitions around it, the sequence answers whether a session leaked
+    // steadily or stepped up on zone loads — the question a heap-cap abort
+    // asks. A decrease is a reloaded client, not a shrink: baseline only.
+    if (value.wasmHeapBytes > lastWasmHeapBytes) {
+      logEvent({
+        k: "wasm.heapGrew",
+        fromBytes: lastWasmHeapBytes,
+        toBytes: value.wasmHeapBytes,
+      });
+    }
+    lastWasmHeapBytes = value.wasmHeapBytes;
+  }
   for (const event of value.rendererEvents) {
     recorder.count(`renderer.event.${event.name}`);
     const fingerprint = event.fingerprint
@@ -251,6 +273,7 @@ export function recordRendererMilestone(
         clockSynchronized: rendererClockSynchronized,
         reasonKind: fields.reasonKind,
         fingerprint: asRendererFingerprint(fields.fingerprint),
+        heapBytes: fields.heapBytes,
       },
       { timestampUs },
     );
@@ -264,6 +287,7 @@ export function recordRendererMilestone(
         k: "wasm.exit",
         clockSynchronized: rendererClockSynchronized,
         code: fields.code,
+        heapBytes: fields.heapBytes,
       },
       { timestampUs },
     );

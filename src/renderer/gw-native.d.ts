@@ -48,8 +48,14 @@ declare global {
     set(message: string, fraction: number | null, detail?: string): void;
     fail(message: string, detail?: string): void;
     failFilesystem(): void;
-    /** The running game client crashed; count is per app run. */
-    failCrash(crashCount: number): void;
+    /**
+     * The running game client crashed; count is per app run. `technicalDetail`
+     * is the abort's own prose plus heap size — it renders behind a disclosure
+     * on the overlay and never leaves the renderer; an omitted value keeps the
+     * text a previous call supplied, so the repeat-crash copy upgrade cannot
+     * erase it.
+     */
+    failCrash(crashCount: number, technicalDetail?: string): void;
     done(): void;
     waitForClient(): Promise<boolean>;
   }
@@ -191,6 +197,8 @@ declare global {
     gwLoading: LoadingController;
     gwDiagnostics: RendererDiagnostics;
     gwSnapshotState?(): Partial<RendererMetrics>;
+    /** Current WASM linear-memory size; present once the client is hosted. */
+    gwWasmHeapBytes?(): number;
     gwResolveDataStrategy(snapshotBytes: number): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;

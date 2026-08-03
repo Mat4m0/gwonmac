@@ -81,6 +81,14 @@
       <button type="button" id="loading-retry" hidden>Retry</button>
     </div>
 
+    <!-- The crash's own message and heap-at-death, renderer-local: the
+         exported report deliberately carries neither, so this disclosure is
+         where a player reads or screenshots the real text before reloading. -->
+    <details id="loading-crash-detail" hidden>
+      <summary>Technical details</summary>
+      <pre id="loading-crash-text"></pre>
+    </details>
+
     <!-- One decision, two cards, and a single plainly-worded consent line.
          The game tools live in Settings: their defaults are right for a first
          launch, and a player who has never played has no basis to answer. -->
@@ -192,6 +200,20 @@
 
 <div id="log"></div>
 <output id="diagnostics" aria-live="off"></output>
+<!-- The heap watermark notice: shown over the running game when WASM memory
+     nears its 2 GiB cap, so the player can reload from a safe place instead
+     of crashing mid-mission. harness.ts owns when; failure-messages.ts owns
+     the words. -->
+<div id="memory-notice" role="status" aria-live="polite" hidden>
+  <div id="memory-notice-text">
+    <strong id="memory-notice-label"></strong>
+    <span id="memory-notice-detail"></span>
+  </div>
+  <div id="memory-notice-actions">
+    <button type="button" id="memory-notice-later"></button>
+    <button type="button" id="memory-notice-reload"></button>
+  </div>
+</div>
 <output id="capture-status" hidden aria-live="off">
   <span class="capture-dot" aria-hidden="true"></span>
   <span id="capture-label">Performance capture · 00:00</span>

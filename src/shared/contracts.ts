@@ -46,6 +46,16 @@ export interface SnapshotMetadata {
 export const ARENANET_REQUEST_CEILING = 8;
 
 /**
+ * The game client's WASM heap maximum, compiled into ArenaNet's build: the
+ * glue's `getHeapMax()` returns exactly this. Every surface that reasons
+ * about heap headroom — the renderer's watermark notice, the crash detail,
+ * the diagnostics summary — derives from this one number, so a future client
+ * built with a larger cap (`-sMAXIMUM_MEMORY=4GB` is the upstream ask) is a
+ * one-line change here rather than a hunt for stale "2048 MiB" literals.
+ */
+export const WASM_HEAP_CAP_BYTES = 2_147_483_648;
+
+/**
  * Why a ready client is not simply "ready": the launch took a fallback the
  * player may want to know about. A closed union for the same reason failure
  * codes are one: the sentence the player reads belongs to the renderer

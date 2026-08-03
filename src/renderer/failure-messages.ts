@@ -183,6 +183,44 @@ export interface ClientCrashPresentation {
 const CRASH_RETRY = 'Retry';
 const CRASH_REPORT = 'Report a Problem…';
 
+export interface MemoryPressurePresentation {
+  label: string;
+  detail: string;
+  reloadButton: string;
+  dismissButton: string;
+}
+
+/**
+ * The game client's WASM heap is approaching its hard 2 GiB cap; once it gets
+ * there the next big allocation kills the client wherever the player happens
+ * to be standing. These sentences exist so the player spends that death at a
+ * moment of their choosing: reloading from a town or outpost is a quick relog
+ * that loses nothing, while an uncontrolled crash mid-mission loses the run.
+ */
+const MEMORY_RELOAD = 'Reload Now';
+const MEMORY_DISMISS = 'Later';
+
+export function memoryPressurePresentation(
+  level: 'low' | 'critical',
+): MemoryPressurePresentation {
+  const critical = level === 'critical';
+  return {
+    label: critical
+      ? 'Guild Wars is almost out of memory.'
+      : 'Guild Wars is running low on memory.',
+    detail: critical
+      ? 'A crash is likely soon. Head to a town or outpost at the next '
+        + 'safe moment and choose Reload Now — that is a quick relog, and '
+        + 'from an outpost you lose nothing.'
+      : 'After long sessions the game can crash when memory runs out. To '
+        + 'pick the moment yourself, finish what you are doing, return to a '
+        + 'town or outpost, and choose Reload Now — it works like a quick '
+        + 'relog.',
+    reloadButton: MEMORY_RELOAD,
+    dismissButton: MEMORY_DISMISS,
+  };
+}
+
 export function clientCrashPresentation(
   crashCount: number,
 ): ClientCrashPresentation {

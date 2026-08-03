@@ -268,6 +268,131 @@ window.gwLog = (on = true) => {
   return on;
 };
 
+/**
+ * The heap watermark. The client's WASM memory is capped by its own build
+ * (`WASM_HEAP_CAP_BYTES` in the shared contracts), memory only ever grows
+ * within one run, and a session that reaches the cap dies on whatever
+ * allocation comes next — historically hours in and mid-mission. The watcher
+ * moves that death to a moment the player picks: warn while there is headroom
+ * to travel somewhere safe, escalate when the next growth step would hit the
+ * cap. Reloading is a quick relog; from a town or outpost it loses nothing.
+ *
+ * A classic script cannot static-import, so the cap arrives via a dynamic
+ * import — on the first watcher tick, not at boot. Boot would work here, but
+ * it would also put the canonical contract into the module cache before the
+ * Enhancement runtime imports it, and the packaged proof that the runtime
+ * resolves the canonical module observes that import as a request. Until the
+ * import lands the thresholds are Infinity and the watcher is silent, which
+ * costs one 15-second tick and nothing else: no heap reaches a watermark
+ * that fast.
+ */
+const MIB = 1_048_576;
+let heapCapBytes = 0;
+let heapWarnBytes = Infinity; // cap − 256 MiB — time to finish up.
+let heapCriticalBytes = Infinity; // cap − 128 MiB — go now.
+let heapCapRequested = false;
+function requestHeapCap() {
+  if (heapCapRequested) return;
+  heapCapRequested = true;
+  void import('../shared/contracts.js')
+    .then(({ WASM_HEAP_CAP_BYTES }) => {
+      heapCapBytes = WASM_HEAP_CAP_BYTES;
+      heapWarnBytes = WASM_HEAP_CAP_BYTES - 256 * MIB;
+      heapCriticalBytes = WASM_HEAP_CAP_BYTES - 128 * MIB;
+    })
+    // A failed load retries on the next tick rather than silencing the
+    // watermark for the whole session.
+    .catch(() => { heapCapRequested = false; });
+}
+let heapNoticeLevel: 'none' | 'low' | 'critical' = 'none';
+
+const wasmHeapBytes = () => Module.HEAPU8?.buffer.byteLength ?? 0;
+window.gwWasmHeapBytes = wasmHeapBytes;
+
+/**
+ * What the crash overlay shows behind its disclosure: the abort's own prose
+ * plus the heap size at death. Renderer-local by design — the diagnostics
+ * export carries only the closed reason vocabulary and fingerprint, and this
+ * app keeps no browser storage, so the overlay is the one place the prose
+ * survives until the player reloads.
+ */
+const crashTechnicalDetail = (reason: unknown, heapBytes: number): string => {
+  const text = reason instanceof Error
+    ? `${reason.name}: ${reason.message}\n${reason.stack ?? ''}`
+    : String(reason ?? '');
+  const cap = heapCapBytes ? ` of ${Math.round(heapCapBytes / MIB)} MiB` : '';
+  return (
+    `WASM heap at crash: ${Math.round(heapBytes / MIB)} MiB${cap}\n${text}`
+  ).slice(0, 8192);
+};
+
+// Static markup, and this script loads at the end of <body>, so the elements
+// exist here; a missing id degrades to a watcher that never presents.
+const heapNoticeRoot = document.getElementById('memory-notice');
+const heapNoticeLabel = document.getElementById('memory-notice-label');
+const heapNoticeDetail = document.getElementById('memory-notice-detail');
+const heapNoticeReload = document.getElementById('memory-notice-reload');
+const heapNoticeLater = document.getElementById('memory-notice-later');
+heapNoticeReload?.addEventListener('click', () => {
+  hideHeapNotice();
+  reloadClientSafely();
+});
+heapNoticeLater?.addEventListener('click', hideHeapNotice);
+
+function hideHeapNotice() {
+  if (heapNoticeRoot) heapNoticeRoot.hidden = true;
+}
+
+/**
+ * Best-effort save sync, then the same page reload the crash overlay's Retry
+ * performs; the beforeunload dispose closes this run's game sockets on the
+ * way out. The quit path has shown the sync can fail, so the reload never
+ * waits on it for more than a beat — IDBFS auto-persist has usually written
+ * already.
+ */
+function reloadClientSafely() {
+  let reloaded = false;
+  const reload = () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  };
+  setTimeout(reload, 1_500);
+  const fs = window.Module?.FS;
+  if (fs) fs.syncfs(false, reload);
+  else reload();
+}
+
+async function presentHeapNotice(level: 'low' | 'critical') {
+  if (
+    !heapNoticeRoot || !heapNoticeLabel || !heapNoticeDetail
+    || !heapNoticeReload || !heapNoticeLater
+  ) return;
+  const { memoryPressurePresentation } = await import('./failure-messages.js');
+  const copy = memoryPressurePresentation(level);
+  heapNoticeLabel.textContent = copy.label;
+  heapNoticeDetail.textContent = copy.detail;
+  heapNoticeReload.textContent = copy.reloadButton;
+  heapNoticeLater.textContent = copy.dismissButton;
+  heapNoticeRoot.classList.toggle('critical', level === 'critical');
+  heapNoticeRoot.hidden = false;
+}
+
+setInterval(() => {
+  if (crashRecorded) return;
+  requestHeapCap();
+  const bytes = wasmHeapBytes();
+  const level = bytes >= heapCriticalBytes
+    ? 'critical'
+    : bytes >= heapWarnBytes ? 'low' : 'none';
+  // Escalation is one-way and each level presents once: the heap cannot
+  // shrink within a client run, and a reload resets this whole script.
+  if (level === 'none' || level === heapNoticeLevel) return;
+  heapNoticeLevel = level;
+  log(`[memory] wasm heap at ${Math.round(bytes / MIB)} MiB — ${level} notice`);
+  presentHeapNotice(level).catch(() => {});
+}, 15_000);
+
 const STARTUP_LABELS = {
   connecting: 'Starting Guild Wars',
   downloading: 'Preparing files needed to start',
@@ -665,12 +790,14 @@ Module = {
     // call presents and records — a repeat would reset the escalated copy
     // back to first-crash and steal focus again. The prose never crosses
     // IPC — it collapses into the closed reason vocabulary plus a
-    // fingerprint.
+    // fingerprint, and stays readable on the overlay's disclosure.
     if (crashRecorded) return;
     crashRecorded = true;
+    hideHeapNotice();
+    const heapBytes = wasmHeapBytes();
     // The overlay first, with the first-crash presentation; the recorded
     // count upgrades it below once main has counted this crash.
-    window.gwLoading?.failCrash(1);
+    window.gwLoading?.failCrash(1, crashTechnicalDetail(reason, heapBytes));
     void (async () => {
       const { classifyWasmAbortReason, wasmAbortFingerprint } =
         await import('./wasm-abort-reason.js');
@@ -680,6 +807,7 @@ Module = {
         {
           reasonKind: classifyWasmAbortReason(reason),
           fingerprint: wasmAbortFingerprint(reason),
+          heapBytes,
         },
       );
       await escalateRepeatedCrash();
@@ -700,17 +828,22 @@ Module = {
       // first-crash and count the same death twice.
       if (crashRecorded) return;
       crashRecorded = true;
-      window.gwLoading?.failCrash(1);
+      hideHeapNotice();
+      // `code` is declared unknown at the Module boundary; anything the
+      // glue passes that is not a plain integer records as the -1 the
+      // schema can still account for.
+      const exitCode =
+        typeof code === 'number' && Number.isSafeInteger(code) ? code : -1;
+      const heapBytes = wasmHeapBytes();
+      window.gwLoading?.failCrash(
+        1,
+        crashTechnicalDetail(`client exit code ${exitCode}`, heapBytes),
+      );
       void (async () => {
-        // `code` is declared unknown at the Module boundary; anything the
-        // glue passes that is not a plain integer records as the -1 the
-        // schema can still account for.
-        const exitCode =
-          typeof code === 'number' && Number.isSafeInteger(code) ? code : -1;
         await native().diagnostics.recordRendererMilestone(
           'wasm.exit',
           performance.now() * 1000,
-          { code: exitCode },
+          { code: exitCode, heapBytes },
         );
         await escalateRepeatedCrash();
       })().catch(() => {});

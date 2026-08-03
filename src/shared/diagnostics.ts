@@ -130,6 +130,10 @@ const RENDERER_NUMERIC_METRICS = [
   "socketSettles",
   "inputToSubmitCount",
   "droppedRecords",
+  // The WASM linear-memory size at flush time. It only ever grows within one
+  // client run (the glue caps it at 2 GiB), so the sequence of changes is the
+  // whole heap-growth story a memory-exhaustion triage needs.
+  "wasmHeapBytes",
 ] as const;
 
 type RendererNumericMetric = (typeof RENDERER_NUMERIC_METRICS)[number];
@@ -234,9 +238,18 @@ export type WasmAbortReasonKind = (typeof WASM_ABORT_REASON_KINDS)[number];
 
 export interface RendererMilestoneFieldsByName {
   "build.info": { programId: string | number; buildId: string | number };
-  "wasm.abort": { reasonKind: WasmAbortReasonKind; fingerprint: string };
+  /**
+   * `heapBytes` is the WASM linear-memory size at the moment of death. The
+   * glue caps the heap at 2 GiB, so a crash recorded at that cap is memory
+   * exhaustion whatever prose the abort carried.
+   */
+  "wasm.abort": {
+    reasonKind: WasmAbortReasonKind;
+    fingerprint: string;
+    heapBytes: number;
+  };
   /** A non-zero client exit: the other way the running game dies. */
-  "wasm.exit": { code: number };
+  "wasm.exit": { code: number; heapBytes: number };
   /**
    * The hook went live. `capabilityProfile` is the closed profile vocabulary
    * from contracts — typed as string here because contracts imports this file;
@@ -414,6 +427,7 @@ function isConsistent(metrics: RendererMetrics): boolean {
     "socketSettles",
     "inputToSubmitCount",
     "droppedRecords",
+    "wasmHeapBytes",
   ];
   const bounded = ({ name, countKey }: (typeof RENDERER_HISTOGRAMS)[number]) => {
     const count = metrics[countKey];

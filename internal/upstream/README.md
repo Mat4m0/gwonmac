@@ -27,6 +27,7 @@ hash, that routes the broken routines back into the host.
 | [host-bridge.md](host-bridge.md) | us | What we actually ship: the transform, the five markers, the bridge contract, and the invariants that must hold. |
 | [recertify.md](recertify.md) | us | The procedure when ArenaNet publishes a new client. Every index and offset below is build-specific. |
 | [investigation-log.md](investigation-log.md) | us | The chronology, including every wrong turn and what corrected it. Read this before re-deriving anything. |
+| [memory-exhaustion-log.md](memory-exhaustion-log.md) | us | Open: long-session `wasm.abort`s with the heap pegged at the client's compiled-in 2 GiB cap. The heap-staircase instrumentation and what the next crash bundle must answer. |
 | [investigation-template.md](investigation-template.md) | us | The shape a round takes — hypothesis, what was built, the measurement that killed it, the lesson. Copy it to start the next log. |
 
 ## The build this describes

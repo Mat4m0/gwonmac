@@ -149,6 +149,20 @@
 #loading-dock:has(#data-download:not([hidden])) #loading-boot { display:none; }
 #loading-dock:has(#data-download:not([hidden])) #loading-bar { display:none; }
 
+/* The crash's technical detail: a full-width row under the boot line, closed
+   by default so the plain-language sentence stays the first thing read. */
+#loading-crash-detail { flex-basis:100%; margin-top:8px; }
+#loading-crash-detail[hidden] { display:none; }
+#loading-crash-detail summary { cursor:pointer; font-size:12px;
+                                color:#d8caaaad; }
+#loading-crash-text { max-height:140px; overflow:auto; margin:6px 0 0;
+                      padding:8px 10px; background:#000a;
+                      border:1px solid #3a2f24; border-radius:4px;
+                      font:11px/1.5 ui-monospace, Menlo, monospace;
+                      white-space:pre-wrap; overflow-wrap:anywhere;
+                      user-select:text; -webkit-user-select:text; }
+#loading-dock:has(#loading-crash-detail:not([hidden])) { flex-wrap:wrap; }
+
 #loading-label { font-size:17px; letter-spacing:.02em; color:#f2e8d2;
                  text-shadow:0 1px 6px #000c; }
 #loading-detail { min-height:1.3em; font-size:13px; color:#e8dcc099;
