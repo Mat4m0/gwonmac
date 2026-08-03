@@ -46,6 +46,7 @@ test.describe("sandbox boundary", () => {
           "appUpdates",
           "cache",
           "client",
+          "clipboard",
           "commands",
           "credentials",
           "diagnostics",

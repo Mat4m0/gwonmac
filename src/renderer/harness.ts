@@ -326,6 +326,7 @@ let host: typeof import('./graphics.js') &
   typeof import('./gl-program-cache.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
+  typeof import('./clipboard-copy.js') &
   typeof import('./template-save-compatibility.js') &
   typeof import('./template-filesystem-trace.js');
 
@@ -828,6 +829,11 @@ function loadGlue() {
   const oskInputs = new Set<EventTarget | null>(
     Object.values(Module.oskInput).filter(Boolean),
   );
+  host.installClipboardCopy({
+    fields: oskInputs,
+    writeText: (text) => native().clipboard.writeText(text),
+    log,
+  });
 
   // The desktop text proxy and the same-window Toolbox overlay are part of the
   // game experience, not a loss of application focus. Keep the client's
@@ -879,6 +885,7 @@ function loadGlue() {
       glProgramCache,
       filesystem,
       input,
+      clipboardCopy,
       templateSaveCompatibility,
       templateFilesystemTrace,
       clientHealth,
@@ -890,6 +897,7 @@ function loadGlue() {
       import('./gl-program-cache.js'),
       import('./filesystem.js'),
       import('./input.js'),
+      import('./clipboard-copy.js'),
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
@@ -900,6 +908,7 @@ function loadGlue() {
       ...glProgramCache,
       ...filesystem,
       ...input,
+      ...clipboardCopy,
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,
     };

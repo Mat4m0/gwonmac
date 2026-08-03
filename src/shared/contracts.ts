@@ -711,6 +711,7 @@ export const IPC = {
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
+  clipboardWriteText: "gw:clipboard:writeText",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
@@ -857,6 +858,15 @@ export interface GwNativeApi {
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
     requestQuit(): Promise<void>;
+  };
+  clipboard: {
+    /**
+     * Copy out of the game's text proxy. The Emscripten client ships no
+     * clipboard platform layer, so the only text that can truthfully reach
+     * the OS clipboard is what a proxy field holds; canvas-rendered text
+     * never arrives here.
+     */
+    writeText(text: string): Promise<void>;
   };
   client: {
     retry(): Promise<void>;

@@ -233,6 +233,11 @@ const INVOCATIONS: Invocation[] = [
   { path: "app.openExternal", args: ["support"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
+  {
+    path: "clipboard.writeText",
+    args: ["copied text"],
+    channel: IPC.clipboardWriteText,
+  },
   { path: "client.retry", args: [], channel: IPC.clientRetry },
   {
     path: "client.healthy",

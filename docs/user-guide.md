@@ -212,6 +212,22 @@ ArenaNet, not here: see the Guild Wars support site at
 <https://help.guildwars.com/> for how Steam and Guild Wars accounts are
 connected.
 
+## Copy and paste
+
+Pasting into the game works everywhere text can be typed: press **⌘V** in any
+game text field.
+
+Copying out of the game works for the text field you are editing — chat
+entry, a search box, the guild announcement editor. **⌘C** copies the field's
+selected text, or the whole field when nothing is selected, and password
+fields are never copied.
+
+Text the game merely displays — chat history, item names, a guild's status
+line — cannot be copied, even where the game lets you highlight it. The web
+build of ArenaNet's client ships without the clipboard support the Windows
+client has, so the highlight never reaches macOS. Until that is fixed
+upstream, retype or screenshot what you need.
+
 ## Report a problem
 
 Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
