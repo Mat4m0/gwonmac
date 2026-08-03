@@ -21,6 +21,15 @@ const MAX_POINTER_REGRABS = 4;
 // drag, not half of a double-click.
 const DOUBLE_CLICK_SLOP = 4;
 
+// A deliberate double-click and the first two clicks of a fast burst are
+// physically identical; only what follows tells them apart. The synthetic tap
+// pair is therefore held back long enough for a continuing burst's third
+// press to cancel it — the Windows client ignores double-clicks on buttons,
+// so a burst (attribute points) must produce plain clicks and nothing else.
+// The cost is a real double-click's action landing this much later.
+const DOUBLE_TAP_HOLDBACK_MS = 250;
+const DOUBLE_TAP_GAP_MS = 80;
+
 // ArenaNet's web client identifies a binding by KeyboardEvent.key, which is a
 // character from the active keyboard layout. Give each main-block position a
 // unique stable US-layout character instead. `code` already is the browser's
@@ -470,6 +479,10 @@ export const installGameInput = ({
   const tapAt = (x: number, y: number, delay: number) => schedule(() => {
     const touch = makeTouch(x, y, ++touchId);
     startTouch(touch);
+    // The touchstart dispatch can synchronously cancel all synthetic input —
+    // releaseAll from a listener the client installed. A touchend for a touch
+    // no longer tracked would restate an input the cancel already retracted.
+    if (!syntheticTouches.has(touch.identifier)) return;
     schedule(() => finishTouch('touchend', touch), 30);
   }, delay);
 
@@ -500,8 +513,8 @@ export const installGameInput = ({
       Math.abs(event.clientX - x) > DOUBLE_CLICK_SLOP ||
       Math.abs(event.clientY - y) > DOUBLE_CLICK_SLOP
     ) return;
-    tapAt(x, y, 20);
-    tapAt(x, y, 100);
+    tapAt(x, y, DOUBLE_TAP_HOLDBACK_MS);
+    tapAt(x, y, DOUBLE_TAP_HOLDBACK_MS + DOUBLE_TAP_GAP_MS);
   }, true);
 
   canvas.addEventListener('mouseleave', () => {
