@@ -40,6 +40,10 @@ const COMPARE_PATH = {
   en: "/docs/guides/play-guild-wars-on-mac",
   de: "/de/dokumentation/anleitungen/guild-wars-auf-dem-mac-spielen",
 };
+const ACCOUNTS_PATH = {
+  en: "/docs/guides/accounts",
+  de: "/de/dokumentation/anleitungen/konten",
+};
 const SAFETY_PATH = { en: "/docs/project/safety", de: "/de/dokumentation/projekt/sicherheit" };
 const TROUBLE_PATH = {
   en: "/docs/guides/troubleshooting",
@@ -296,6 +300,20 @@ const FAQ: FaqItem[] = [
     a: {
       en: "Yes. You sign in with your existing Guild Wars account; Steam login works too. The app never sees or stores your credentials.",
       de: "Ja. Du meldest dich mit deinem bestehenden Guild-Wars-Konto an; auch der Steam-Login funktioniert. Die App sieht und speichert deine Zugangsdaten nie.",
+    },
+  },
+  {
+    q: {
+      en: "I play on mobile with Sign in with Apple. Can I play on Mac without buying again?",
+      de: "Ich spiele mobil mit Apple-Login. Kann ich ohne erneuten Kauf auf dem Mac spielen?",
+    },
+    a: {
+      en: "Yes. A mobile account uses a Mobile ID, which the desktop client doesn’t accept, so link it once to an ArenaNet account from the mobile app. After that you sign in on your Mac with the ArenaNet credentials, and your characters and the campaigns you bought on mobile come with you.",
+      de: "Ja. Ein Mobilkonto nutzt eine Mobile ID, die der Desktop-Client nicht annimmt. Verknüpfe es einmal in der Mobil-App mit einem ArenaNet-Konto. Danach meldest du dich auf dem Mac mit den ArenaNet-Zugangsdaten an, und deine Charaktere und die mobil gekauften Kampagnen kommen mit.",
+    },
+    link: {
+      label: { en: "How to link your mobile account", de: "Mobilkonto verknüpfen" },
+      href: ACCOUNTS_PATH,
     },
   },
   {
