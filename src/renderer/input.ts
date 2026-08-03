@@ -95,12 +95,25 @@ type HeldButton = {
 type GameInputOptions = {
   canvas: HTMLCanvasElement;
   diagnostics?: GameInputDiagnostics;
+  /**
+   * The client's own cursor-hidden state through the certified cursor
+   * readout, or null while that readout is unavailable (enhancement off,
+   * uncertified build, not yet installed). Measured 2026-08-03: entering
+   * mouse-look hides the client's cursor within a tick of the right press;
+   * a world-map pan never hides it.
+   */
+  clientCursorHidden?: () => boolean | null;
   log(...values: unknown[]): void;
 };
+
+// How often a held right-drag re-asks the client whether it entered
+// mouse-look, matching the cursor observer's own sampling cadence.
+const POINTER_MODE_INTERVAL_MS = 50;
 
 export const installGameInput = ({
   canvas,
   diagnostics,
+  clientCursorHidden,
   log,
 }: GameInputOptions): GameInputController => {
   const heldKeys = new Map<string, HeldKey>();
@@ -111,6 +124,12 @@ export const installGameInput = ({
   let touchId = 0;
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
+  let modeWatch: ReturnType<typeof setInterval> | null = null;
+
+  function stopModeWatch() {
+    if (modeWatch !== null) clearInterval(modeWatch);
+    modeWatch = null;
+  }
   let releasing = false;
   let wheelRemainder = 0;
   let wheelDirection = 0;
@@ -271,6 +290,7 @@ export const installGameInput = ({
   // absolute position from the first real mousemove after the lock ends.
   function releasePointer() {
     pointerWanted = false;
+    stopModeWatch();
     virtualCursor = null;
     canvas.classList.remove('cursor-hidden');
     if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -564,14 +584,17 @@ export const installGameInput = ({
     }
   };
 
-  canvas.addEventListener('mousedown', (event) => {
-    if (event.button !== 2 || !event.isTrusted) return;
+  const engagePointerLock = () => {
+    // The trusted-move handler keeps these coordinates current, so a lock
+    // engaged mid-drag seeds the virtual cursor where the pointer now is and
+    // the drag continues without a seam.
+    const held = heldButtons.get(2);
+    if (!held) return;
     const rect = canvas.getBoundingClientRect();
     virtualCursor = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      x: held.clientX - rect.left,
+      y: held.clientY - rect.top,
     };
-    pointerWanted = true;
     if (document.pointerLockElement === canvas) return;
     try {
       const request = canvas.requestPointerLock();
@@ -595,6 +618,34 @@ export const installGameInput = ({
       );
       releaseButtons();
     }
+  };
+
+  canvas.addEventListener('mousedown', (event) => {
+    if (event.button !== 2 || !event.isTrusted) return;
+    pointerWanted = true;
+    // Right-click is two modes the press alone cannot tell apart: mouse-look,
+    // which needs the lock and the roam walk, and a map/UI pan, which must
+    // stay a plain absolute drag or the cursor vanishes and the pan jumps.
+    // The client separates them itself — entering mouse-look hides its cursor
+    // within a tick — so when that readout is available the lock waits for
+    // it. Without the readout the lock engages at the press, as it always
+    // has: today's behaviour is the fallback, not the map's.
+    const hidden = clientCursorHidden ? clientCursorHidden() : null;
+    if (hidden !== false) {
+      engagePointerLock();
+      return;
+    }
+    stopModeWatch();
+    modeWatch = setInterval(() => {
+      if (!pointerWanted || !heldButtons.has(2)) {
+        stopModeWatch();
+        return;
+      }
+      if (clientCursorHidden?.() === true) {
+        stopModeWatch();
+        engagePointerLock();
+      }
+    }, POINTER_MODE_INTERVAL_MS);
   }, true);
 
   document.addEventListener('mousemove', (event) => {

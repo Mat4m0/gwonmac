@@ -16,6 +16,8 @@ type CameraInputWindow = typeof window & {
   __cameraEvents: CameraEvent[];
   __cameraDrains: number;
   __cameraTasks: number[];
+  __lockRequests: number;
+  __cursorHidden: boolean;
 };
 
 test.describe("renderer camera input", () => {
@@ -262,6 +264,91 @@ test.describe("renderer camera input", () => {
         beforeRelease,
       );
       expect(moves).toEqual([]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  // The client separates right-click's two modes itself: entering mouse-look
+  // hides its cursor within a tick, a map/UI pan never does (measured
+  // 2026-08-03). These two tests pin the lock gate on that readout.
+  const watchLockRequests = async (page: Page, hidden: boolean) => {
+    await page.evaluate((cursorHidden) => {
+      const canvas = globalThis.document.getElementById("canvas");
+      const loading = globalThis.document.getElementById("loading");
+      if (!canvas || !loading) throw new Error("the renderer shell is missing");
+      loading.classList.add("gone");
+      const testWindow = window as CameraInputWindow;
+      testWindow.__lockRequests = 0;
+      testWindow.__cursorHidden = cursorHidden;
+      (canvas as HTMLCanvasElement).requestPointerLock = () => {
+        testWindow.__lockRequests += 1;
+        return Promise.resolve();
+      };
+      testWindow.gwCursorState = () => Object.freeze({
+        generation: 1,
+        pixelHash: 1,
+        hidden: testWindow.__cursorHidden,
+        valid: true,
+        cssLength: 0,
+      });
+      canvas.focus();
+    }, hidden);
+  };
+
+  test("keeps a right-drag unlocked while the client cursor stays visible", async () => {
+    const fixture = await launchOffline("gw-pointer-map-pan-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await watchLockRequests(page, false);
+      const box = await boxOf(page.locator("#canvas"));
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "right" });
+      // Long enough for several mode-watch samples to have asked the client.
+      await page.waitForTimeout(300);
+      await page.mouse.move(box.x + 60, box.y + 100);
+      await page.mouse.up({ button: "right" });
+      expect(
+        await page.evaluate(
+          () => (window as CameraInputWindow).__lockRequests,
+        ),
+      ).toBe(0);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("locks the pointer once the client hides its cursor", async () => {
+    const fixture = await launchOffline("gw-pointer-mouselook-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await watchLockRequests(page, false);
+      const box = await boxOf(page.locator("#canvas"));
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "right" });
+      await page.waitForTimeout(150);
+      expect(
+        await page.evaluate(
+          () => (window as CameraInputWindow).__lockRequests,
+        ),
+      ).toBe(0);
+      // The client enters mouse-look a tick after the press; the held drag's
+      // mode watch must escalate to the lock on its own.
+      await page.evaluate(() => {
+        (window as CameraInputWindow).__cursorHidden = true;
+      });
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => (window as CameraInputWindow).__lockRequests),
+          // The mode watch samples every 50 ms, but a loaded machine running
+          // the whole suite can throttle background timers well past that.
+          { timeout: 15_000 },
+        )
+        .toBe(1);
+      await page.mouse.up({ button: "right" });
     } finally {
       await closeOffline(fixture);
     }

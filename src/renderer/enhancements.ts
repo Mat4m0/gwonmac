@@ -460,6 +460,13 @@ export async function installEnhancements(
         transitionHold: () => !retry.expired && refresh.armed(),
       });
       disposeCursor = cursor.dispose;
+      // The client's own cursor state, projected for two consumers: the
+      // console, for mode questions from a live session, and the pointer-lock
+      // gate in input.ts, which reads `hidden` to tell mouse-look from a map
+      // pan (measured 2026-08-03: mouse-look hides the client cursor within a
+      // tick of the right press; a map pan never does). Bounded presentation
+      // state only — no pixels, no pointers.
+      window.gwCursorState = () => cursor?.state ?? null;
     }
     const readout = observeState
       ? createTargetReadout(document.body)

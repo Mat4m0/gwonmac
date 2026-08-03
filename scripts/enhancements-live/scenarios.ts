@@ -507,6 +507,11 @@ const CURSOR_PHASES = Object.freeze([
   Object.freeze({ seconds: 8, ask: "press Escape and return to the plain arrow" }),
   Object.freeze({ seconds: 12, ask: "drag an inventory item and hold it" }),
   Object.freeze({ seconds: 10, ask: "open the world map and hover a travel destination" }),
+  // Whether the client hides its own cursor during mouse-look — and does not
+  // during a map pan — decides if pointer lock can be gated on the client's
+  // cursor state instead of a new certified world-map read (input.ts).
+  Object.freeze({ seconds: 12, ask: "in the world, hold right-click and rotate the camera" }),
+  Object.freeze({ seconds: 12, ask: "open the world map and right-drag to pan it" }),
 ]);
 const CURSOR_SAMPLE_INTERVAL_MS = 50;
 const CURSOR_MAX_CHANGES = 192;

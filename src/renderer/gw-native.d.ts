@@ -201,6 +201,14 @@ declare global {
     }>;
     gwCompanionRuntime?: CompanionDeveloperRuntime | CompanionObserverRuntime | null;
     gwCompanionState?: CompanionState;
+    /** The cursor's bounded presentation state; present once the nativeCursor enhancement installs. */
+    gwCursorState?(): Readonly<{
+      generation: number;
+      pixelHash: number;
+      hidden: boolean;
+      valid: boolean;
+      cssLength: number;
+    }> | null;
     readonly gwEnhancementSettings: Readonly<{
       create(options: {
         form: HTMLFormElement;
