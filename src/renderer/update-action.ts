@@ -55,6 +55,30 @@ export function formatLastChecked(
   return `Last checked ${plural(Math.floor(hours / 24), 'day')} ago`;
 }
 
+export type LaunchGateDecision = 'hold' | 'install' | 'proceed';
+
+/**
+ * What the loading screen does with the updater's state before it starts the
+ * game client: hold while the launch check or its download is in flight,
+ * install a ready update before the outdated version gets a whole session,
+ * and otherwise start the game. The off-path states never delay a launch —
+ * idle is what checks-turned-off looks like, and a failed check has already
+ * said everything it can.
+ */
+export function launchGateDecision(state: AppUpdateState): LaunchGateDecision {
+  switch (state.phase) {
+    case 'checking':
+    case 'downloading':
+      return 'hold';
+    case 'ready':
+      return 'install';
+    case 'idle':
+    case 'up-to-date':
+    case 'failed':
+      return 'proceed';
+  }
+}
+
 export type UpdateActionView = {
   actionLabel: string;
   busy: boolean;

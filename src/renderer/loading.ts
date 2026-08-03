@@ -275,20 +275,82 @@ window.gwLoading = (function (): LoadingController {
     api.set('Checking the game client', null);
     // Resolved before the first progress event can arrive, so the failure
     // path below stays synchronous.
-    const [{ describeLaunchFailure, describeNotice, failureDetail }, { DownloadDetailLine }] =
-      await Promise.all([
-        import('./failure-messages.js'),
-        import('./progress-display.js'),
-      ]);
+    const [
+      { describeLaunchFailure, describeNotice, failureDetail },
+      { DownloadDetailLine },
+      { launchGateDecision },
+    ] = await Promise.all([
+      import('./failure-messages.js'),
+      import('./progress-display.js'),
+      import('./update-action.js'),
+    ]);
 
     return new Promise<boolean>((resolve) => {
       let settled = false;
+      let gating = false;
       const detailLine = new DownloadDetailLine();
       const finish = (ok: boolean) => {
         if (settled) return;
         settled = true;
         unsub();
         resolve(ok);
+      };
+
+      // The launch gate: an update the launch check discovered lands before
+      // the outdated version gets a whole session. The gate holds the client
+      // start while the check or its download is in flight, restarts into a
+      // ready update, and releases on every settled state — a failed check
+      // never delays play, and "Play Without Updating" is the player's
+      // override while a download runs.
+      const holdForLaunchUpdate = (startClient: () => void) => {
+        const skip = el('loading-update-skip');
+        let gateSettled = false;
+        let unsubscribe = () => {};
+        let installFallback: ReturnType<typeof setTimeout> | null = null;
+        const release = () => {
+          if (gateSettled) return;
+          gateSettled = true;
+          unsubscribe();
+          skip.hidden = true;
+          if (installFallback !== null) clearTimeout(installFallback);
+          startClient();
+        };
+        skip.addEventListener('click', (event) => {
+          event.preventDefault();
+          release();
+        });
+        const consider = (
+          state: import('../shared/contracts.js').AppUpdateState,
+        ) => {
+          if (gateSettled) return;
+          const decision = launchGateDecision(state);
+          if (decision === 'proceed') {
+            release();
+            return;
+          }
+          if (decision === 'install' && state.phase === 'ready') {
+            skip.hidden = true;
+            api.set(
+              `Updating to version ${state.latestVersion}`,
+              null,
+              'Guild Wars Reforged restarts to finish the update.',
+            );
+            void window.gwNative.appUpdates.restartAndInstall();
+            // A refused restart must not hold the launch hostage.
+            installFallback = setTimeout(release, 10_000);
+            return;
+          }
+          skip.hidden = false;
+          api.set(
+            state.phase === 'downloading'
+              ? `Downloading version ${state.latestVersion}`
+              : 'Checking for updates',
+            null,
+            'The game starts when the update is ready.',
+          );
+        };
+        unsubscribe = window.gwNative.appUpdates.onState(consider);
+        void window.gwNative.appUpdates.getState().then(consider).catch(release);
       };
 
       const apply = (p: DownloadProgress) => {
@@ -299,14 +361,18 @@ window.gwLoading = (function (): LoadingController {
         }
         window.gwAutomation.set(`launcher.${p.phase}`);
         if (p.phase === 'ready') {
-          api.set(
-            'Starting Guild Wars',
-            null,
-            p.noticeCode ? describeNotice(p.noticeCode) : '',
-          );
-          // A client is active now, so the footer can name its build.
-          void renderFooterStatus();
-          finish(true);
+          if (gating) return;
+          gating = true;
+          holdForLaunchUpdate(() => {
+            api.set(
+              'Starting Guild Wars',
+              null,
+              p.noticeCode ? describeNotice(p.noticeCode) : '',
+            );
+            // A client is active now, so the footer can name its build.
+            void renderFooterStatus();
+            finish(true);
+          });
           return;
         }
         const frac = p.total ? p.received / p.total : null;
