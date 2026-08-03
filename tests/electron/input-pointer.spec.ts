@@ -229,34 +229,114 @@ test.describe("renderer pointer input", () => {
             }),
           );
 
+        // The tap pair is deferred, so every phase waits for the events it
+        // expects rather than for a duration: under full-suite load a fixed
+        // sleep races the holdback timers and this spec flaked.
+        const settle = async (count: number) => {
+          const deadline = performance.now() + 5_000;
+          while (observed.length < count && performance.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          // Long enough after the pair for a third, unwanted tap to appear.
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return [...observed];
+        };
+
         // A run that stops at two clicks is a completed native double-click;
         // once the holdback passes, exactly one tap pair fires.
         mouse("mousedown", 2);
         mouse("mouseup", 2);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        const afterDouble = [...observed];
+        const afterDouble = await settle(4);
         // detail keeps counting 3, 4 while the run continues; the later even
         // counts must not synthesize again.
         mouse("mousedown", 3);
         mouse("mouseup", 3);
         mouse("mousedown", 4);
         mouse("mouseup", 4);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        const afterRun = [...observed];
+        const afterRun = await settle(4);
 
         // A double-click press that turns into a drag releases far away; the
         // stale press point must not receive a tap pair.
         observed.length = 0;
         mouse("mousedown", 2);
         mouse("mouseup", 2, 160, 140);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        return { afterDouble, afterRun, afterDrag: [...observed] };
+        const afterDrag = await settle(0);
+        return { afterDouble, afterRun, afterDrag };
       });
 
       expect(result).toEqual({
         afterDouble: ["touchstart", "touchend", "touchstart", "touchend"],
         afterRun: ["touchstart", "touchend", "touchstart", "touchend"],
         afterDrag: [],
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("withholds the tap pair while another button is still held", async () => {
+    const fixture = await launchOffline("gw-tap-guard-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      // A real press is required: only trusted events enter the held-button
+      // registry the guard reads. The lock request is stubbed so the offline
+      // fixture's refusal cannot release the button under the test.
+      await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
+          throw new Error("#canvas is missing");
+        }
+        canvas.requestPointerLock = () => Promise.resolve();
+        const observed: string[] = [];
+        for (const type of ["touchstart", "touchend", "touchcancel"] as const) {
+          canvas.addEventListener(type, () => observed.push(type));
+        }
+        Object.assign(window, { __taps: observed });
+      });
+      const box = await boxOf(page.locator("#canvas"));
+      const leftDoubleClick = () =>
+        page.evaluate(async () => {
+          const canvas = globalThis.document.getElementById("canvas");
+          if (!canvas) throw new Error("#canvas is missing");
+          const at = (type: string, detail: number) =>
+            canvas.dispatchEvent(
+              new globalThis.MouseEvent(type, {
+                bubbles: true,
+                button: 0,
+                clientX: 120,
+                clientY: 140,
+                detail,
+              }),
+            );
+          at("mousedown", 1);
+          at("mouseup", 1);
+          at("mousedown", 2);
+          at("mouseup", 2);
+          await new Promise((resolve) => setTimeout(resolve, 700));
+        });
+      const taps = () =>
+        page.evaluate(() => [...(window as unknown as { __taps: string[] }).__taps]);
+
+      // The walk-and-look grip: right held throughout, a left double-click
+      // inside it. The client's touch path would force-release the captured
+      // right button and desynchronise its state, so nothing may be sent.
+      await page.mouse.move(box.x + 120, box.y + 140);
+      await page.mouse.down({ button: "right" });
+      await leftDoubleClick();
+      const held = await taps();
+
+      // Released: the same gesture is a plain double-click again.
+      await page.mouse.up({ button: "right" });
+      await page.evaluate(() => {
+        (window as unknown as { __taps: string[] }).__taps.length = 0;
+      });
+      await leftDoubleClick();
+      const result = { held, released: await taps() };
+
+      expect(result).toEqual({
+        held: [],
+        released: ["touchstart", "touchend", "touchstart", "touchend"],
       });
     } finally {
       await closeOffline(fixture);
