@@ -229,28 +229,39 @@ test.describe("renderer pointer input", () => {
             }),
           );
 
+        // The tap pair is deferred, so every phase waits for the events it
+        // expects rather than for a duration: under full-suite load a fixed
+        // sleep races the holdback timers and this spec flaked.
+        const settle = async (count: number) => {
+          const deadline = performance.now() + 5_000;
+          while (observed.length < count && performance.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          // Long enough after the pair for a third, unwanted tap to appear.
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return [...observed];
+        };
+
         // A run that stops at two clicks is a completed native double-click;
         // once the holdback passes, exactly one tap pair fires.
         mouse("mousedown", 2);
         mouse("mouseup", 2);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        const afterDouble = [...observed];
+        const afterDouble = await settle(4);
         // detail keeps counting 3, 4 while the run continues; the later even
         // counts must not synthesize again.
         mouse("mousedown", 3);
         mouse("mouseup", 3);
         mouse("mousedown", 4);
         mouse("mouseup", 4);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        const afterRun = [...observed];
+        const afterRun = await settle(4);
 
         // A double-click press that turns into a drag releases far away; the
         // stale press point must not receive a tap pair.
         observed.length = 0;
         mouse("mousedown", 2);
         mouse("mouseup", 2, 160, 140);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        return { afterDouble, afterRun, afterDrag: [...observed] };
+        const afterDrag = await settle(0);
+        return { afterDouble, afterRun, afterDrag };
       });
 
       expect(result).toEqual({
