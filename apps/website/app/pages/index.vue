@@ -21,13 +21,16 @@ const { locale } = useI18n();
 type Localized = string | { en: string; de?: string };
 const localize = (value: Localized) => getLocalizedSiteText(value, locale.value);
 
-const RELEASES_URL = "https://github.com/Mat4m0/gwonmac/releases/latest";
+// The buttons link to /download, the site's live redirect to the newest DMG, so
+// the prerendered HTML carries the right target from the first paint. Resolving
+// the DMG in the browser instead raced hydration: a third of clicks landed on
+// the releases page because the fetch had not answered yet.
+const DOWNLOAD_PATH = "/download";
 // /api/latest resolves the newest downloadable release from GitHub (cached
 // server-side, beta channel during the launch phase). Fetched in the browser so
-// the prerendered page never bakes in a stale version; until it answers, the
-// buttons link to the releases page.
+// the prerendered page never bakes in a stale version; it only names the
+// version in the fine print and the click event, so a late answer costs nothing.
 const { data: latestRelease } = useFetch<LatestRelease>("/api/latest", { server: false });
-const downloadUrl = computed(() => latestRelease.value?.url ?? RELEASES_URL);
 
 const { trackDownload, trackFaqOpen } = useTracking();
 
@@ -442,7 +445,7 @@ useSchemaJsonLd(() => [
         </p>
         <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
           <NuxtLink
-            :to="downloadUrl"
+            :to="DOWNLOAD_PATH"
             target="_blank"
             rel="noopener noreferrer"
             class="gw-btn-primary"
@@ -622,7 +625,7 @@ useSchemaJsonLd(() => [
         <div class="gw-rule mt-6 w-[min(360px,80%)] text-xs">◆</div>
         <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
           <NuxtLink
-            :to="downloadUrl"
+            :to="DOWNLOAD_PATH"
             target="_blank"
             rel="noopener noreferrer"
             class="gw-btn-primary"
