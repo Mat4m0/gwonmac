@@ -13,6 +13,10 @@ overrides:
   tmp: 0.2.7
   "undici@7": 7.29.0
   "undici@8": 8.9.0
+  # Fresh re-resolution rebinds part of the Nuxt graph to the unhead 2.x
+  # family, which mismatches the 3.x API and breaks the website build/server.
+  unhead: 3.2.3
+  "@unhead/vue": 3.2.3
 allowBuilds:
   electron: true
   esbuild: true
