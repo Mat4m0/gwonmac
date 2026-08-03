@@ -48,6 +48,7 @@ function metrics(): RendererMetrics {
     socketSettles: 1,
     inputToSubmitCount: 1,
     droppedRecords: 0,
+    wasmHeapBytes: 335_544_320,
     rendererEvents: [],
     raf: {
       buckets: [0, 0, 0, 0, 0, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 0, 0],

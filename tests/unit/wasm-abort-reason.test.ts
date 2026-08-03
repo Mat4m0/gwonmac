@@ -81,13 +81,14 @@ describe("wasm abort fingerprints", () => {
 });
 
 describe("the recorded abort event", () => {
-  it("is an error-level renderer event carrying kind and fingerprint", () => {
+  it("is an error-level renderer event carrying kind, fingerprint, and heap", () => {
     assert.deepEqual(
       diagnosticEventRecord({
         k: "wasm.abort",
         clockSynchronized: true,
         reasonKind: "indirectCall",
         fingerprint: asRendererFingerprint(wasmAbortFingerprint("x")),
+        heapBytes: 2_147_483_648,
       }),
       {
         subsystem: "renderer",
@@ -97,7 +98,26 @@ describe("the recorded abort event", () => {
           clockSynchronized: true,
           reasonKind: "indirectCall",
           fingerprint: wasmAbortFingerprint("x"),
+          heapBytes: 2_147_483_648,
         },
+      },
+    );
+  });
+});
+
+describe("the recorded heap staircase", () => {
+  it("is an info-level renderer event carrying both sides of a growth step", () => {
+    assert.deepEqual(
+      diagnosticEventRecord({
+        k: "wasm.heapGrew",
+        fromBytes: 1_879_048_192,
+        toBytes: 1_979_711_488,
+      }),
+      {
+        subsystem: "renderer",
+        level: "info",
+        name: "wasm.heapGrew",
+        fields: { fromBytes: 1_879_048_192, toBytes: 1_979_711_488 },
       },
     );
   });

@@ -1227,6 +1227,9 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
   // in the renderer into a closed reason kind plus a non-text fingerprint, so
   // the export can name the failing native operation class without carrying
   // prose; a non-zero exit carries only the client's own numeric code.
+  // `heapBytes` is the WASM linear memory at death: the glue caps it at
+  // 2 GiB, so a crash recorded at the cap is memory exhaustion whatever
+  // prose the abort carried.
   "wasm.abort": {
     subsystem: "renderer",
     level: "error",
@@ -1234,12 +1237,24 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
       clockSynchronized: boolean,
       reasonKind: literal(WASM_ABORT_REASON_KINDS),
       fingerprint: isRendererFingerprint,
+      heapBytes: finiteNumber,
     },
   },
   "wasm.exit": {
     subsystem: "renderer",
     level: "error",
-    fields: { clockSynchronized: boolean, code: finiteNumber },
+    fields: { clockSynchronized: boolean, code: finiteNumber, heapBytes: finiteNumber },
+  },
+  // The heap staircase, sampled: the renderer reports heap size with each
+  // metrics flush (~2 s) and every observed rise becomes one event, so
+  // near-simultaneous growth steps can coalesce and a run's first event
+  // rises from 0. Read with the socket.open map transitions around it, the
+  // sequence answers whether a session leaked steadily or stepped up on
+  // zone loads — the question every heap-cap abort asks.
+  "wasm.heapGrew": {
+    subsystem: "renderer",
+    level: "info",
+    fields: { fromBytes: finiteNumber, toBytes: finiteNumber },
   },
   // The renderer's Enhancement installation lifecycle. `clientPrepared` above
   // says a transformed module was served; only these say whether the hook was

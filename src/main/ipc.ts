@@ -362,6 +362,10 @@ interface ParsedMilestone {
   fields: RendererMilestoneFields | undefined;
 }
 
+/** A byte count as the renderer reports one: a non-negative safe integer. */
+const isByteCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
 const asMilestone: Parser<ParsedMilestone> = (args) => {
   exact(args, 3);
   const [name, rendererTimestampUs, fields] = args;
@@ -401,23 +405,29 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
   } else if (name === "wasm.abort") {
     const valid =
       recordIsObject
-      && Object.keys(record).length === 2
+      && Object.keys(record).length === 3
       && typeof record.reasonKind === "string"
       && (WASM_ABORT_REASON_KINDS as readonly string[]).includes(record.reasonKind)
-      && isRendererFingerprint(record.fingerprint);
+      && isRendererFingerprint(record.fingerprint)
+      && isByteCount(record.heapBytes);
     if (!valid) throw new ValidationError("invalid renderer milestone");
     milestoneFields = {
       reasonKind: record.reasonKind as WasmAbortReasonKind,
       fingerprint: record.fingerprint as string,
+      heapBytes: record.heapBytes as number,
     };
   } else if (name === "wasm.exit") {
     const valid =
       recordIsObject
-      && Object.keys(record).length === 1
+      && Object.keys(record).length === 2
       && typeof record.code === "number"
-      && Number.isSafeInteger(record.code);
+      && Number.isSafeInteger(record.code)
+      && isByteCount(record.heapBytes);
     if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = { code: record.code as number };
+    milestoneFields = {
+      code: record.code as number,
+      heapBytes: record.heapBytes as number,
+    };
   } else if (name === "enhancement.installed") {
     const valid =
       recordIsObject

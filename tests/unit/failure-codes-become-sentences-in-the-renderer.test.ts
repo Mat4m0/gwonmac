@@ -14,6 +14,7 @@ import {
   describeSnapshotReadFailure as snapshotRead,
   describeSteamRefusal,
   failureDetail,
+  memoryPressurePresentation,
   suggestReport,
 } from "../../src/renderer/failure-messages.js";
 import { NOTICE_CODES } from "../../src/shared/contracts.ts";
@@ -179,5 +180,32 @@ describe("renderer failure messages", () => {
     assert.equal(first.reportButton, repeated.reportButton);
     // An unreadable count degrades to the first-crash presentation.
     assert.deepEqual(clientCrashPresentation(0), first);
+  });
+
+  it("escalates the memory watermark words, not its actions", () => {
+    const low = memoryPressurePresentation("low");
+    const critical = memoryPressurePresentation("critical");
+    for (const notice of [low, critical]) {
+      for (const text of [
+        notice.label,
+        notice.detail,
+        notice.reloadButton,
+        notice.dismissButton,
+      ]) {
+        assert.ok(text.length > 0, "memory notice has empty prose");
+      }
+      // The whole point of the notice: the player picks a safe place first.
+      assert.match(notice.detail, /town or outpost/);
+      // The detail must name the button it tells the player to press.
+      assert.ok(notice.detail.includes(notice.reloadButton));
+    }
+    // Low reads as headroom; critical reads as imminent.
+    assert.match(low.label, /running low/);
+    assert.match(critical.label, /almost out of memory/);
+    assert.match(critical.detail, /^A crash is likely soon/);
+    // Buttons are identical across levels: escalation changes the words,
+    // not the actions.
+    assert.equal(low.reloadButton, critical.reloadButton);
+    assert.equal(low.dismissButton, critical.dismissButton);
   });
 });

@@ -108,6 +108,7 @@
     socketSettles: 0,
     inputToSubmitCount: 0,
     droppedRecords: 0,
+    wasmHeapBytes: 0,
     rendererEvents: [],
     raf: histogram(),
     swap: histogram(),
@@ -246,6 +247,7 @@
     batch.intervalMs = now - periodStarted;
     batch.visible = !document.hidden;
     batch.focused = document.hasFocus();
+    batch.wasmHeapBytes = window.gwWasmHeapBytes?.() ?? 0;
     periodStarted = now;
     flushing = true;
     try {

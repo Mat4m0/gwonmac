@@ -43,6 +43,8 @@ window.gwLoading = (function (): LoadingController {
   const label = el('loading-label'), detail = el('loading-detail');
   const retry = el('loading-retry') as HTMLButtonElement;
   const report = el('loading-report') as HTMLButtonElement;
+  const crashDetail = el('loading-crash-detail') as HTMLDetailsElement;
+  const crashDetailText = el('loading-crash-text');
   let recovery: 'client' | 'filesystem' = 'client';
   // Bumped by every state change so failCrash's async copy upgrade can tell
   // it has been overtaken — e.g. by a Retry already in progress.
@@ -64,6 +66,8 @@ window.gwLoading = (function (): LoadingController {
     detail.textContent = sub;
     retry.hidden = false;
     report.hidden = true;
+    crashDetail.hidden = true;
+    crashDetail.open = false;
     bar.classList.remove('busy');
     fill.style.width = '100%';
     fill.style.background = '#b8452f';
@@ -107,10 +111,20 @@ window.gwLoading = (function (): LoadingController {
       retry.textContent = 'Reset Saved Files…';
     },
 
-    failCrash(crashCount) {
+    failCrash(crashCount, technicalDetail) {
       // The synchronous frame first: the overlay must appear even if module
       // loading is broken. The crash copy then upgrades it in place.
       api.fail('The game client stopped unexpectedly.');
+      // The abort's own prose plus heap-at-death, behind a disclosure. It
+      // never leaves the renderer — the exported report carries only the
+      // closed reason vocabulary — so this panel is where a player reads or
+      // screenshots the real message before reloading. An omitted value keeps
+      // the text from the first call: the repeat-crash copy upgrade passes
+      // none and must not erase it.
+      if (technicalDetail !== undefined) {
+        crashDetailText.textContent = technicalDetail;
+      }
+      crashDetail.hidden = !crashDetailText.textContent;
       const generation = stateGeneration;
       void import('./failure-messages.js')
         .then(({ clientCrashPresentation }) => {
