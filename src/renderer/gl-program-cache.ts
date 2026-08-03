@@ -92,10 +92,19 @@ export const installGlProgramCache = ({
     return words;
   }
 
+  let saturationRecorded = false;
   env.glCreateProgram = function (this: unknown, ...args) {
     const program = createProgram.apply(this, args);
-    if (typeof program === 'number' && program > 0 && programs.size < MAX_PROGRAMS) {
-      programs.set(program, false);
+    if (typeof program === 'number' && program > 0) {
+      if (programs.size < MAX_PROGRAMS) {
+        programs.set(program, false);
+      } else if (!saturationRecorded) {
+        // Degrading to pass-through is safe but must not be silent: a capture
+        // without this event rules the ceiling out of an artifact report.
+        saturationRecorded = true;
+        window.gwDiagnostics?.event('graphics.programCacheSaturated');
+        log(`[warn] GL program cache full at ${MAX_PROGRAMS} — later programs pass through`);
+      }
     }
     return program;
   };

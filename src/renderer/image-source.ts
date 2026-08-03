@@ -88,6 +88,11 @@ type ImageDiagnostics = {
     bytes: number,
     source: 'memory' | 'native',
   ): void;
+  /**
+   * A demand read the client was awaiting rejected. Black textures are this
+   * failure's visible face; the event is what ties a capture to it.
+   */
+  event?(name: 'snapshot.readFailed', value?: unknown): void;
 };
 
 export type ImageSource = {
@@ -430,11 +435,21 @@ export function createImageSource({
       const source = data === null ? 'native' : 'memory';
       if (data === null) {
         const [first, last] = chunkRange(offset, bytes);
-        const fetched = await fetchDemandChunks(first, last);
+        let fetched;
+        try {
+          fetched = await fetchDemandChunks(first, last);
+        } catch (error) {
+          diagnostics?.event?.('snapshot.readFailed', error);
+          throw error;
+        }
         data = assembleRange(offset, bytes, (index) => fetched[index - first]);
       }
       if (data === null || data.length !== bytes) {
-        throw new Error(`image read ${offset}+${bytes}: assembled ${data && data.length}`);
+        const failure = new Error(
+          `image read ${offset}+${bytes}: assembled ${data && data.length}`,
+        );
+        diagnostics?.event?.('snapshot.readFailed', failure);
+        throw failure;
       }
       stats.reads++;
       stats.bytes += bytes;
