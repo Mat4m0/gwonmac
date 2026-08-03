@@ -16,6 +16,20 @@ const POINTER_ROAM = 16;
 // dropped. Four cross a drag's whole range; further is a teleport, not a drag.
 const MAX_POINTER_REGRABS = 4;
 
+// Chromium's own double-click slop: clicks further apart than this are
+// separate clicks, so a press that travelled further before releasing was a
+// drag, not half of a double-click.
+const DOUBLE_CLICK_SLOP = 4;
+
+// A deliberate double-click and the first two clicks of a fast burst are
+// physically identical; only what follows tells them apart. The synthetic tap
+// pair is therefore held back long enough for a continuing burst's third
+// press to cancel it — the Windows client ignores double-clicks on buttons,
+// so a burst (attribute points) must produce plain clicks and nothing else.
+// The cost is a real double-click's action landing this much later.
+const DOUBLE_TAP_HOLDBACK_MS = 250;
+const DOUBLE_TAP_GAP_MS = 80;
+
 // ArenaNet's web client identifies a binding by KeyboardEvent.key, which is a
 // character from the active keyboard layout. Give each main-block position a
 // unique stable US-layout character instead. `code` already is the browser's
@@ -249,6 +263,12 @@ export const installGameInput = ({
     return key;
   };
 
+  // Deliberately no position reconciliation here. The client samples mouse
+  // state per frame, so a "walk the cursor back to the lock origin" move
+  // dispatched at release lands in the same frame as the button-up and is
+  // integrated into the camera — releasing a rotation visibly un-rotated it.
+  // Event order within a frame cannot fix that; the client resyncs its
+  // absolute position from the first real mousemove after the lock ends.
   function releasePointer() {
     pointerWanted = false;
     virtualCursor = null;
@@ -459,6 +479,10 @@ export const installGameInput = ({
   const tapAt = (x: number, y: number, delay: number) => schedule(() => {
     const touch = makeTouch(x, y, ++touchId);
     startTouch(touch);
+    // The touchstart dispatch can synchronously cancel all synthetic input —
+    // releaseAll from a listener the client installed. A touchend for a touch
+    // no longer tracked would restate an input the cancel already retracted.
+    if (!syntheticTouches.has(touch.identifier)) return;
     schedule(() => finishTouch('touchend', touch), 30);
   }, delay);
 
@@ -469,8 +493,12 @@ export const installGameInput = ({
     // count, but its touch path has the double-tap detector the game needs for
     // actions such as equipping an item. Preserve every mouse event and append
     // exactly that missing signal for each completed native double-click.
+    // detail counts the whole click run, so only the transition into its
+    // second click is one: the later even counts (4, 6, …) are rapid single
+    // clicks continuing the run, and synthesizing for them turned fast
+    // attribute-point clicking into spurious double-clicks.
     cancelSyntheticTouches();
-    if (event.detail > 0 && event.detail % 2 === 0) {
+    if (event.detail === 2) {
       pendingTap = { x: event.clientX, y: event.clientY };
     }
   }, true);
@@ -479,8 +507,14 @@ export const installGameInput = ({
     if (event.button !== 0 || !pendingTap) return;
     const { x, y } = pendingTap;
     pendingTap = null;
-    tapAt(x, y, 20);
-    tapAt(x, y, 100);
+    // A press that travelled past the slop before releasing was a drag; a tap
+    // pair at the stale press point would act far from where the drag ended.
+    if (
+      Math.abs(event.clientX - x) > DOUBLE_CLICK_SLOP ||
+      Math.abs(event.clientY - y) > DOUBLE_CLICK_SLOP
+    ) return;
+    tapAt(x, y, DOUBLE_TAP_HOLDBACK_MS);
+    tapAt(x, y, DOUBLE_TAP_HOLDBACK_MS + DOUBLE_TAP_GAP_MS);
   }, true);
 
   canvas.addEventListener('mouseleave', () => {

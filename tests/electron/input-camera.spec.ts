@@ -234,6 +234,39 @@ test.describe("renderer camera input", () => {
     }
   });
 
+  test("ends a camera drag without dispatching any position reconciliation", async () => {
+    const fixture = await launchOffline("gw-pointer-release-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const canvas = page.locator("#canvas");
+      const box = await boxOf(canvas);
+      await watchCameraDrag(page, box);
+
+      // The same overrun as the roam test leaves the client's absolute
+      // position away from the press point. The release must NOT try to walk
+      // it back: the client samples mouse state per frame, so a walk-back
+      // move lands in the release's frame and is integrated into the camera —
+      // shipping one made every rotation visibly snap back on release.
+      await page.mouse.move(box.x + 20, box.y + CAMERA_Y);
+      const beforeRelease = await page.evaluate(
+        () => (window as CameraInputWindow).__cameraEvents.length,
+      );
+      await page.mouse.up({ button: "right" });
+      await page.waitForTimeout(100);
+      const moves = await page.evaluate(
+        (from) =>
+          (window as CameraInputWindow).__cameraEvents
+            .slice(from)
+            .filter(({ type }) => type === "mousemove"),
+        beforeRelease,
+      );
+      expect(moves).toEqual([]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases only held mouse buttons when pointer lock is lost", async () => {
     const fixture = await launchOffline("gw-pointer-loss-e2e-");
     try {

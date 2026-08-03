@@ -56,6 +56,16 @@ test.describe("renderer pointer input", () => {
         for (const type of ["touchstart", "touchend", "touchcancel"] as const) {
           canvas.addEventListener(type, () => events.push(type));
         }
+        // Reset while the first tap is in flight. Dispatching it from the
+        // tap's own touchstart makes the interruption deterministic instead
+        // of racing the holdback and tap timers.
+        canvas.addEventListener(
+          "touchstart",
+          () => {
+            window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
+          },
+          { once: true },
+        );
         const mouse = (type: string, detail = 0) =>
           canvas.dispatchEvent(
             new globalThis.MouseEvent(type, {
@@ -70,9 +80,13 @@ test.describe("renderer pointer input", () => {
         mouse("mouseup", 1);
         mouse("mousedown", 2);
         mouse("mouseup", 2);
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        window.dispatchEvent(new globalThis.CustomEvent("gw:input-reset"));
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        const deadline = performance.now() + 2_000;
+        while (events.length < 2 && performance.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        // Long enough for the cancelled second tap to have fired if the
+        // reset had failed to clear it.
+        await new Promise((resolve) => setTimeout(resolve, 250));
         return events;
       });
       expect(touchEvents).toEqual([
@@ -187,6 +201,63 @@ test.describe("renderer pointer input", () => {
       expect(new Set(touchEvents.map(({ identifier }) => identifier)).size).toBe(
         2,
       );
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("synthesizes one double-tap per click run and none after a drag", async () => {
+    const fixture = await launchOffline("gw-double-click-run-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const result = await page.evaluate(async () => {
+        const canvas = globalThis.document.getElementById("canvas");
+        if (!canvas) throw new Error("#canvas is missing");
+        const observed: string[] = [];
+        for (const type of ["touchstart", "touchend", "touchcancel"] as const) {
+          canvas.addEventListener(type, () => observed.push(type));
+        }
+        const mouse = (type: string, detail: number, x = 120, y = 140) =>
+          canvas.dispatchEvent(
+            new globalThis.MouseEvent(type, {
+              bubbles: true,
+              button: 0,
+              clientX: x,
+              clientY: y,
+              detail,
+            }),
+          );
+
+        // A run that stops at two clicks is a completed native double-click;
+        // once the holdback passes, exactly one tap pair fires.
+        mouse("mousedown", 2);
+        mouse("mouseup", 2);
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        const afterDouble = [...observed];
+        // detail keeps counting 3, 4 while the run continues; the later even
+        // counts must not synthesize again.
+        mouse("mousedown", 3);
+        mouse("mouseup", 3);
+        mouse("mousedown", 4);
+        mouse("mouseup", 4);
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        const afterRun = [...observed];
+
+        // A double-click press that turns into a drag releases far away; the
+        // stale press point must not receive a tap pair.
+        observed.length = 0;
+        mouse("mousedown", 2);
+        mouse("mouseup", 2, 160, 140);
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        return { afterDouble, afterRun, afterDrag: [...observed] };
+      });
+
+      expect(result).toEqual({
+        afterDouble: ["touchstart", "touchend", "touchstart", "touchend"],
+        afterRun: ["touchstart", "touchend", "touchstart", "touchend"],
+        afterDrag: [],
+      });
     } finally {
       await closeOffline(fixture);
     }
@@ -308,7 +379,7 @@ test.describe("renderer pointer input", () => {
     }
   });
 
-  test("cancels an active synthetic tap before a rapid follow-up click", async () => {
+  test("a continuing click burst cancels the held-back tap pair entirely", async () => {
     const fixture = await launchOffline("gw-double-click-cancel-e2e-");
     try {
       const { page } = fixture;
@@ -331,12 +402,15 @@ test.describe("renderer pointer input", () => {
             }),
           );
 
+        // The third press of an attribute-point burst arrives inside the
+        // holdback: no tap ever fires, so the client sees plain clicks and
+        // nothing else — the Windows behaviour for buttons.
         mouse("mousedown", 2);
         mouse("mouseup", 2);
-        await new Promise((resolve) => setTimeout(resolve, 30));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         mouse("mousedown", 3);
         mouse("mouseup", 3);
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        await new Promise((resolve) => setTimeout(resolve, 700));
         const interrupted = [...observed];
 
         observed.length = 0;
@@ -350,12 +424,12 @@ test.describe("renderer pointer input", () => {
           }),
         );
         mouse("mouseup", 2);
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        await new Promise((resolve) => setTimeout(resolve, 700));
         return { interrupted, afterLeave: observed };
       });
 
       expect(result).toEqual({
-        interrupted: ["touchstart", "touchcancel"],
+        interrupted: [],
         afterLeave: [],
       });
     } finally {
