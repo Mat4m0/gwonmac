@@ -13,7 +13,7 @@
  * decided behind these handlers; this file validates arguments, names the
  * subsystem that answers, and returns codes rather than inventing prose.
  */
-import { BrowserWindow, dialog, ipcMain, shell, app } from "electron";
+import { BrowserWindow, clipboard, dialog, ipcMain, shell, app } from "electron";
 import { statfs, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
@@ -324,6 +324,21 @@ const asSteamStoreback: Parser<{ token: string; expiry: number | null }> = (args
 const asRevealKind = one((value: unknown): RevealKind => {
   if (value !== "gameData") {
     throw new ValidationError("invalid reveal kind");
+  }
+  return value;
+});
+
+// Far above any text a game field holds, low enough that a renderer gone
+// wrong cannot stuff megabytes into the OS pasteboard.
+const CLIPBOARD_TEXT_CEILING = 64 * 1024;
+
+const asClipboardText = one((value: unknown): string => {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > CLIPBOARD_TEXT_CEILING
+  ) {
+    throw new ValidationError("invalid clipboard text");
   }
   return value;
 });
@@ -802,6 +817,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     appRequestQuit: channel(nothing, () => {
       app.quit();
+    }),
+
+    clipboardWriteText: channel(asClipboardText, (_win, text) => {
+      clipboard.writeText(text);
     }),
 
     clientRetry: channel(nothing, () => ctx.retryClient()),

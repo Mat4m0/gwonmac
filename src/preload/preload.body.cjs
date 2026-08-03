@@ -212,6 +212,9 @@ const api = {
     reveal: (kind) => ipcRenderer.invoke(IPC.appRevealPath, kind),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
   },
+  clipboard: {
+    writeText: (text) => ipcRenderer.invoke(IPC.clipboardWriteText, text),
+  },
   client: {
     retry: () => ipcRenderer.invoke(IPC.clientRetry),
     healthy: (token) => ipcRenderer.invoke(IPC.clientHealthy, token),
