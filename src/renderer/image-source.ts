@@ -271,6 +271,11 @@ export function createImageSource({
         startChunkTasks(demand);
         continue;
       }
+      // The last slot is demand's alone. An active request cannot be recalled
+      // within the eight-request conduct ceiling, so prefetch saturating all
+      // eight made a cold demand read — a tooltip icon, a fresh model — wait a
+      // full round trip behind background work it is supposed to overtake.
+      if (capacity <= 1) return;
       const task = prefetchQueue.shift();
       if (!task) return;
       if (stopped) {

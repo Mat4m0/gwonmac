@@ -56,8 +56,11 @@ because the snapshot metadata is obtained before the Emscripten glue is
 appended. Adjacent demand chunks already queued in the same renderer turn share
 one bounded range request and are split back into compact cache entries; the
 eight-request ceiling continues to count chunks, not HTTP requests. A
-multi-chunk `image.cacheAsync` queues its whole range so the same scheduler can
-use all eight slots while demand retains priority over queued prefetch.
+multi-chunk `image.cacheAsync` queues its whole range through the same
+scheduler. Demand runs before queued prefetch, and the eighth slot is reserved
+for demand: an active request cannot be recalled within the ceiling, so
+prefetch is capped at seven concurrent chunks to keep a cold demand read from
+waiting a full round trip behind background work.
 
 ## Download concurrency and progress
 

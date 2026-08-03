@@ -214,6 +214,7 @@ describe("renderer image source", () => {
 
     // All work is queued in one turn. Demand overtakes prefetch, and its six
     // adjacent chunks share one range request while still consuming six slots.
+    // Prefetch fills what remains minus the reserved demand slot.
     for (let chunk = 0; chunk < 4; chunk++) {
       void image.cacheAsync(handle, chunk * 64, 1, () => {}).catch(() => {});
     }
@@ -221,7 +222,7 @@ describe("renderer image source", () => {
       image.readAsync(handle, (4 + n) * 64, null, 0, 16));
     await turn();
 
-    assert.equal(transport.requests.length, 3);
+    assert.equal(transport.requests.length, 2);
     assert.deepEqual(
       {
         start: transport.requests[0]!.start,
@@ -235,9 +236,9 @@ describe("renderer image source", () => {
       memoryCacheChunks: 0,
       pendingChunks: 10,
       activeDemand: 6,
-      activePrefetch: 2,
+      activePrefetch: 1,
       queuedDemand: 0,
-      queuedPrefetch: 2,
+      queuedPrefetch: 3,
     });
 
     // Completing one range releases all six logical demand slots. The queued
@@ -281,7 +282,7 @@ describe("renderer image source", () => {
     source.stop();
   });
 
-  it("runs one multi-chunk cacheAsync eight-wide and reports every chunk", async () => {
+  it("runs one multi-chunk cacheAsync seven-wide, keeping the demand slot free", async () => {
     const { image, source, transport } = makeSource({ size: 64 * 12, chunkSize: 64 });
 
     const progress: number[] = [];
@@ -290,23 +291,23 @@ describe("renderer image source", () => {
     });
     await turn();
 
-    assert.equal(transport.requests.length, 8);
+    assert.equal(transport.requests.length, 7);
     assert.deepEqual(source.state(), {
       memoryCacheBytes: 0,
       memoryCacheChunks: 0,
       pendingChunks: 12,
       activeDemand: 0,
-      activePrefetch: 8,
+      activePrefetch: 7,
       queuedDemand: 0,
-      queuedPrefetch: 4,
+      queuedPrefetch: 5,
     });
 
     transport.serve(0);
     await turn();
 
-    assert.equal(transport.requests.length, 9);
-    assert.equal(source.state().activePrefetch, 8);
-    assert.equal(source.state().queuedPrefetch, 3);
+    assert.equal(transport.requests.length, 8);
+    assert.equal(source.state().activePrefetch, 7);
+    assert.equal(source.state().queuedPrefetch, 4);
     transport.serveImmediately();
     await prefetch;
     assert.equal(progress.length, 12);
@@ -320,31 +321,33 @@ describe("renderer image source", () => {
       chunkSize: 64,
     });
 
-    // Eight prefetches occupy every slot; chunks 8 and 9 wait behind them.
+    // Ten prefetches: seven occupy their capped slots, three wait behind them.
     for (let chunk = 0; chunk < 10; chunk++) {
       void image.cacheAsync(handle, chunk * 64, 1, () => {}).catch(() => {});
     }
     await turn();
-    assert.equal(transport.requests.length, 8);
-    assert.equal(source.state().queuedPrefetch, 2);
+    assert.equal(transport.requests.length, 7);
+    assert.equal(source.state().queuedPrefetch, 3);
 
     // A demand read for a chunk that is already queued promotes that task
-    // rather than issuing a second request for it.
+    // rather than issuing a second request for it — and the reserved slot
+    // starts it immediately, mid-burst, without waiting for a prefetch round
+    // trip to finish.
     const promoted = image.readAsync(handle, 9 * 64, null, 0, 16);
     // A demand read for a chunk nobody asked for joins the demand queue behind it.
     const fresh = image.readAsync(handle, 10 * 64, null, 64, 16);
     await turn();
 
     assert.equal(diagnostics.count("scheduler:promotion"), 1);
-    assert.equal(transport.requests.length, 8, "no slot is free yet");
+    assert.equal(transport.requests.length, 8, "the reserved slot took the promoted read");
     assert.deepEqual(source.state(), {
       memoryCacheBytes: 0,
       memoryCacheChunks: 0,
       pendingChunks: 11,
-      activeDemand: 0,
-      activePrefetch: 8,
-      queuedDemand: 2,
-      queuedPrefetch: 1,
+      activeDemand: 1,
+      activePrefetch: 7,
+      queuedDemand: 1,
+      queuedPrefetch: 2,
     });
 
     transport.serve(0);
@@ -353,10 +356,13 @@ describe("renderer image source", () => {
     await turn();
     transport.serve(2);
     await turn();
+    transport.serve(3);
+    await turn();
 
-    assert.deepEqual(transport.issued().slice(8), [
+    assert.deepEqual(transport.issued().slice(7), [
       { start: 9 * 64, priority: "demand" },
       { start: 10 * 64, priority: "demand" },
+      { start: 7 * 64, priority: "prefetch" },
       { start: 8 * 64, priority: "prefetch" },
     ]);
 
@@ -552,9 +558,10 @@ describe("renderer image source", () => {
     const prefetches = Array.from({ length: 10 }, (_, chunk) =>
       image.cacheAsync(handle, chunk * 64, 1, () => {}));
     await turn();
-    assert.equal(source.state().queuedPrefetch, 2);
+    assert.equal(source.state().queuedPrefetch, 3);
 
     source.stop();
+    await assert.rejects(prefetches[7]!, /background download stopped/);
     await assert.rejects(prefetches[8]!, /background download stopped/);
     await assert.rejects(prefetches[9]!, /background download stopped/);
     assert.equal(source.state().queuedPrefetch, 0);
@@ -564,8 +571,8 @@ describe("renderer image source", () => {
     const late = image.cacheAsync(handle, 11 * 64, 1, () => {});
     transport.serve(0);
     await assert.rejects(late, /background download stopped/);
-    assert.equal(transport.requests.length, 8);
+    assert.equal(transport.requests.length, 7);
 
-    for (const pending of prefetches.slice(0, 8)) void pending.catch(() => {});
+    for (const pending of prefetches.slice(0, 7)) void pending.catch(() => {});
   });
 });
