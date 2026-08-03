@@ -496,7 +496,27 @@ export const installGameInput = ({
     canvas.dispatchEvent(normalized);
   }, { capture: true, passive: false });
 
+  /**
+   * Whether a synthetic tap may reach the client right now.
+   *
+   * A tap is not a passive hint: the client's touch path force-releases every
+   * mouse button it has captured, moves its cursor to the tap point, and
+   * switches to a touch input mode in which real mouse releases are dropped
+   * until a real press restores it. Delivered mid-drag — walking with both
+   * buttons, steering the camera — that desynchronises the client's button
+   * state from the OS's, and the frame layer asserts on the mismatch. The tap
+   * pair is deferred by design, so this is re-asked when it fires, not only
+   * when it is scheduled.
+   */
+  const tapsSafe = () =>
+    heldButtons.size === 0 && document.pointerLockElement !== canvas;
+
   const tapAt = (x: number, y: number, delay: number) => schedule(() => {
+    if (!tapsSafe()) {
+      cancelSyntheticTouches();
+      diagnostics?.event('input.tapSuppressed');
+      return;
+    }
     const touch = makeTouch(x, y, ++touchId);
     startTouch(touch);
     // The touchstart dispatch can synchronously cancel all synthetic input —
@@ -508,6 +528,13 @@ export const installGameInput = ({
 
   canvas.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return;
+    // A left press while another button is already held is the walk-and-look
+    // grip, not a click run: no double-tap belongs to it, and the tap would
+    // tear down the capture the other button holds.
+    if (heldButtons.size > 1 || document.pointerLockElement === canvas) {
+      cancelSyntheticTouches();
+      return;
+    }
     // Chromium already applies the user's macOS double-click speed and
     // distance preferences to detail. ArenaNet's mouse bridge discards that
     // count, but its touch path has the double-tap detector the game needs for

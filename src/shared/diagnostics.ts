@@ -49,6 +49,7 @@ export const RENDERER_EVENT_NAMES = [
   "graphics.programCacheSaturated",
   "clipboard.copied",
   "clipboard.writeFailed",
+  "input.tapSuppressed",
 ] as const;
 
 export type RendererEventName = (typeof RENDERER_EVENT_NAMES)[number];

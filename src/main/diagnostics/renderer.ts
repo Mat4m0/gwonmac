@@ -122,6 +122,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       case "graphics.programCacheSaturated":
       case "clipboard.copied":
       case "clipboard.writeFailed":
+      case "input.tapSuppressed":
         recordEvent(
           { k: event.name, fingerprint },
           { timestampUs: Math.round(event.timestampUs) },
