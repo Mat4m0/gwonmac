@@ -213,13 +213,13 @@ async function load(pathname: string): Promise<Response> {
   throw new Error(`website server did not start:\n${stderr}`);
 }
 
-// The release lookup is a client-side effect, so the offline fallback is what
-// every visitor is served first and what a visitor without JavaScript keeps.
-// Every rendered download button must already be a working link.
+// Every rendered download button points at /download, the live redirect, in the
+// HTML itself. Resolving the DMG in the browser instead left the buttons on the
+// releases page until hydration finished, and a third of clicks arrived first.
 const downloadLinks = (page: string) =>
   [
     ...page.matchAll(
-      /<a href="(https:\/\/github\.com\/[^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Direct|Direkter) Download/g,
+      /<a href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Direct|Direkter) Download/g,
     ),
   ].map((match) => match[1]);
 
@@ -237,10 +237,11 @@ try {
   // Hero and final CTA.
   assert.equal(downloadLinks(html).length, 2);
   for (const href of downloadLinks(html)) {
-    assert.equal(href, `${EXTERNAL_URLS.releases}/latest`);
+    assert.equal(href, "/download");
   }
 
-  // The German landing page carries the same analytics and fallback buttons.
+  // The German landing page carries the same analytics and buttons; a
+  // locale-prefixed link would be answered by the /de/download alias below.
   const germanHome = await load("/de");
   assert.equal(germanHome.status, 200);
   const germanHtml = await germanHome.text();
@@ -250,6 +251,9 @@ try {
     /https:\/\/plausible\.io\/js\/pa--X4qMlLVyMnUW4L8emwE_\.js/,
   );
   assert.equal(downloadLinks(germanHtml).length, 2);
+  for (const href of downloadLinks(germanHtml)) {
+    assert.match(href, /^\/(de\/)?download$/);
+  }
 
   // The install guide replaced the old /install page and still hands the
   // visitor the releases page.
@@ -272,6 +276,12 @@ try {
     download.headers.get("location") ?? "",
     new RegExp(`^${EXTERNAL_URLS.releases}/`),
   );
+  // The alias the layer's locale-prefixed links land on.
+  const germanDownload = await globalThis.fetch(`http://${host}:${port}/de/download`, {
+    redirect: "manual",
+  });
+  assert.equal(germanDownload.status, 302);
+  assert.equal(germanDownload.headers.get("location"), "/download");
 
   // The API route answers with the policy above whatever GitHub does: a direct
   // DMG when one is eligible, the releases page otherwise — always this repo.
