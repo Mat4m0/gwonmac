@@ -870,22 +870,33 @@ async function assertTargetReadoutLifecycle() {
       ],
       "the packaged install lifecycle did not reach the diagnostics log",
     );
+    // The request listener attaches after boot, and the harness now imports
+    // the shared contract during boot for its heap watermark — a module the
+    // ES-module cache then serves to the control without a second request.
+    // The performance timeline sees every load since page start, so the
+    // merged list is the instrument that can still prove the control's
+    // dependency graph resolves to the canonical modules.
+    const performanceResources = await fixture.page.evaluate(() =>
+      performance.getEntriesByType("resource").map((entry) => entry.name));
+    const allResources = [...resources, ...performanceResources];
     assert.ok(
-      resources.some(
+      allResources.some(
         (url) => new URL(url).pathname === "/companion-kernel.wasm",
       ),
       "the installed control never fetched the packaged Enhancement kernel",
     );
     assert.ok(
-      resources.some((url) => new URL(url).pathname === "/enhancements.js"),
+      allResources.some((url) => new URL(url).pathname === "/enhancements.js"),
       "the installed control never imported the packaged Enhancement runtime",
     );
     assert.ok(
-      resources.some((url) => new URL(url).pathname === "/shared/contracts.js"),
-      "the installed control never loaded the canonical capability contract",
+      allResources.some(
+        (url) => new URL(url).pathname === "/shared/contracts.js",
+      ),
+      "the canonical capability contract was never loaded",
     );
     assert.ok(
-      resources.some(
+      allResources.some(
         (url) => new URL(url).pathname === "/shared/project-identity.js",
       ),
       "the canonical contract dependency graph was incomplete",
