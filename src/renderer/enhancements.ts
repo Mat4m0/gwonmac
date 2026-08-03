@@ -466,6 +466,31 @@ export async function installEnhancements(
       // cursor during right-drag mouse-look (the pointer-lock gating question
       // in input.ts) without a developer program.
       window.gwCursorState = () => cursor?.state ?? null;
+      // Hands are busy during the gesture under measurement, so the probe
+      // logs itself: state on every right-button press, twice a second while
+      // it is held, and on release. Quiet otherwise. Temporary — it leaves
+      // with the measurement branch once the mode question is answered.
+      const probeLog = (phase: string) => {
+        const state = cursor?.state;
+        console.info(
+          `[cursor-probe] ${phase} hidden=${state?.hidden} valid=${state?.valid} ` +
+          `hash=${state?.pixelHash} lock=${document.pointerLockElement !== null}`,
+        );
+      };
+      let probeTimer: ReturnType<typeof setInterval> | null = null;
+      window.addEventListener('mousedown', (event) => {
+        if (event.button !== 2) return;
+        probeLog('right-down');
+        probeTimer ??= setInterval(() => probeLog('right-held'), 500);
+      }, true);
+      window.addEventListener('mouseup', (event) => {
+        if (event.button !== 2) return;
+        probeLog('right-up');
+        if (probeTimer !== null) {
+          clearInterval(probeTimer);
+          probeTimer = null;
+        }
+      }, true);
     }
     const readout = observeState
       ? createTargetReadout(document.body)
