@@ -316,10 +316,20 @@ and the app still re-derives every claim against the client on your machine
 before anything switches back on. Neither request sends anything about you or
 your installation.
 
-An eligible update downloads in the background. When it is ready, choose
-**Restart to Update** or choose Later and let it install on the next ordinary
-restart. Restarting while Guild Wars is connected asks before disconnecting.
-The app saves its persistent game filesystem before either kind of restart.
+**At launch, an update lands before the game starts.** While the launch check
+or its download is running, the loading screen holds at that step instead of
+starting an outdated version; when the update is ready, the app restarts
+itself into the new version and then starts the game. **Play Without
+Updating** on the loading screen skips the wait — the download continues in
+the background and installs on the next restart. A failed or offline check
+never delays play, and with automatic checks off the launch is not held at
+all.
+
+An update found while you are already playing downloads in the background.
+When it is ready, choose **Restart to Update** or choose Later and let it
+install on the next ordinary restart. Restarting while Guild Wars is
+connected asks before disconnecting. The app saves its persistent game
+filesystem before either kind of restart.
 
 Stable installations receive stable releases only. Preview installations may
 receive a newer preview or advance to stable. A failed check is never reported

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   createUpdateAction,
   formatLastChecked,
+  launchGateDecision,
   type UpdateActionView,
 } from "../../src/renderer/update-action.ts";
 import type { AppUpdateState } from "../../src/shared/contracts.ts";
@@ -28,6 +29,55 @@ describe("update action", () => {
     assert.equal(
       formatLastChecked("1970-01-01T00:00:00.000Z", 2 * 60 * 60 * 1000),
       "Last checked 2 hours ago",
+    );
+  });
+
+  it("gates a launch on exactly the in-flight and ready updater states", () => {
+    const current = { currentVersion: "2026.8.0" };
+    // In flight: the game must not start outdated when the answer is seconds
+    // away, so the launch holds.
+    assert.equal(
+      launchGateDecision({ phase: "checking", ...current }),
+      "hold",
+    );
+    assert.equal(
+      launchGateDecision({
+        phase: "downloading",
+        latestVersion: "2026.8.1",
+        checkedAt: "2026-08-03T10:00:00.000Z",
+        ...current,
+      }),
+      "hold",
+    );
+    // Ready: the update installs before the outdated version gets a session.
+    assert.equal(
+      launchGateDecision({
+        phase: "ready",
+        latestVersion: "2026.8.1",
+        checkedAt: "2026-08-03T10:00:00.000Z",
+        ...current,
+      }),
+      "install",
+    );
+    // Settled states never delay play: idle is checks-off, and a failed
+    // check has already said everything it can.
+    assert.equal(launchGateDecision({ phase: "idle", ...current }), "proceed");
+    assert.equal(
+      launchGateDecision({
+        phase: "up-to-date",
+        latestVersion: "2026.8.0",
+        checkedAt: "2026-08-03T10:00:00.000Z",
+        ...current,
+      }),
+      "proceed",
+    );
+    assert.equal(
+      launchGateDecision({
+        phase: "failed",
+        reason: "offline",
+        ...current,
+      }),
+      "proceed",
     );
   });
 
