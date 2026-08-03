@@ -467,6 +467,32 @@ export async function installEnhancements(
       // tick of the right press; a map pan never does). Bounded presentation
       // state only — no pixels, no pointers.
       window.gwCursorState = () => cursor?.state ?? null;
+      // TEMPORARY probe for the portrait-rotation report: a left drag is
+      // observed to hide the client's cursor, yet the lock gate does not
+      // engage, so what the readout reports during that drag is the open
+      // question. Logs itself because hands are on the mouse. Remove with the
+      // answer.
+      const probeLog = (phase: string) => {
+        const state = cursor?.state;
+        console.info(
+          `[drag-probe] ${phase} hidden=${state?.hidden} valid=${state?.valid} ` +
+          `hash=${state?.pixelHash} lock=${document.pointerLockElement !== null}`,
+        );
+      };
+      let probeTimer: ReturnType<typeof setInterval> | null = null;
+      window.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        probeLog('left-down');
+        probeTimer ??= setInterval(() => probeLog('left-held'), 250);
+      }, true);
+      window.addEventListener('mouseup', (event) => {
+        if (event.button !== 0) return;
+        probeLog('left-up');
+        if (probeTimer !== null) {
+          clearInterval(probeTimer);
+          probeTimer = null;
+        }
+      }, true);
     }
     const readout = observeState
       ? createTargetReadout(document.body)
