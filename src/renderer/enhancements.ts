@@ -460,6 +460,12 @@ export async function installEnhancements(
         transitionHold: () => !retry.expired && refresh.armed(),
       });
       disposeCursor = cursor.dispose;
+      // Production-safe console probe: the same bounded presentation state the
+      // developer runtime projects — no pixels, no pointers. Exists to answer
+      // mode questions from a live session, e.g. whether the client hides its
+      // cursor during right-drag mouse-look (the pointer-lock gating question
+      // in input.ts) without a developer program.
+      window.gwCursorState = () => cursor?.state ?? null;
     }
     const readout = observeState
       ? createTargetReadout(document.body)
