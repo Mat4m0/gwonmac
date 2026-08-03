@@ -118,6 +118,10 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       case "filesystem.persistenceFailed":
       case "audio.resumeFailed":
       case "pointerLock.failed":
+      case "snapshot.readFailed":
+      case "graphics.programCacheSaturated":
+      case "clipboard.copied":
+      case "clipboard.writeFailed":
         recordEvent(
           { k: event.name, fingerprint },
           { timestampUs: Math.round(event.timestampUs) },

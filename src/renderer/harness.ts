@@ -832,6 +832,7 @@ function loadGlue() {
   host.installClipboardCopy({
     fields: oskInputs,
     writeText: (text) => native().clipboard.writeText(text),
+    diagnostics: window.gwDiagnostics,
     log,
   });
 

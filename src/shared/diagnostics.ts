@@ -45,6 +45,10 @@ export const RENDERER_EVENT_NAMES = [
   "filesystem.persistenceFailed",
   "audio.resumeFailed",
   "pointerLock.failed",
+  "snapshot.readFailed",
+  "graphics.programCacheSaturated",
+  "clipboard.copied",
+  "clipboard.writeFailed",
 ] as const;
 
 export type RendererEventName = (typeof RENDERER_EVENT_NAMES)[number];

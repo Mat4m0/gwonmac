@@ -13,6 +13,7 @@ type ClipboardCopyOptions = {
   /** The OSK proxy fields; anything else never reaches the clipboard. */
   fields: Iterable<unknown>;
   writeText(text: string): Promise<void>;
+  diagnostics?: GameInputDiagnostics;
   log(...values: unknown[]): void;
 };
 
@@ -25,6 +26,7 @@ const isCopyableField = (value: unknown): value is ClipboardField =>
 export const installClipboardCopy = ({
   fields,
   writeText,
+  diagnostics,
   log,
 }: ClipboardCopyOptions): void => {
   const sources = new Set<ClipboardField>();
@@ -51,11 +53,15 @@ export const installClipboardCopy = ({
         ? value.slice(selectionStart, selectionEnd)
         : value;
     if (!text) return;
-    writeText(text).catch((error: unknown) => {
-      log(
-        '[warn] clipboard write refused:',
-        error instanceof Error ? error.message : String(error),
-      );
-    });
+    writeText(text).then(
+      () => diagnostics?.event('clipboard.copied'),
+      (error: unknown) => {
+        diagnostics?.event('clipboard.writeFailed', error);
+        log(
+          '[warn] clipboard write refused:',
+          error instanceof Error ? error.message : String(error),
+        );
+      },
+    );
   }, true);
 };

@@ -37,6 +37,10 @@
     'filesystem.persistenceFailed',
     'audio.resumeFailed',
     'pointerLock.failed',
+    'snapshot.readFailed',
+    'graphics.programCacheSaturated',
+    'clipboard.copied',
+    'clipboard.writeFailed',
   ]);
   const histogram = (): Histogram => ({
     buckets: new Array<number>(histogramLimitsUs.length).fill(0),

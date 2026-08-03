@@ -1056,6 +1056,32 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "warn",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
+  // A demand read the client was awaiting rejected — the failure mode behind
+  // black textures. The count and timestamps tie a visual artifact report to
+  // the reads that failed under it.
+  "snapshot.readFailed": {
+    subsystem: "snapshot",
+    level: "error",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
+  // The 1024-program ceiling was reached; later programs degrade to
+  // pass-through polling. Its absence in a capture rules the cache out of a
+  // rendering-artifact investigation.
+  "graphics.programCacheSaturated": {
+    subsystem: "graphics",
+    level: "warn",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
+  "clipboard.copied": {
+    subsystem: "renderer",
+    level: "info",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
+  "clipboard.writeFailed": {
+    subsystem: "renderer",
+    level: "warn",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
   "graphics.detected": {
     subsystem: "graphics",
     level: "info",
