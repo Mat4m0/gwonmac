@@ -354,6 +354,39 @@ test.describe("renderer camera input", () => {
     }
   });
 
+  test("locks a left drag the client grabs, but never a stationary click", async () => {
+    const fixture = await launchOffline("gw-portrait-rotate-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      // The client hides its cursor for two different reasons: a grabbed
+      // rotation, and a mode change it is waiting on (salvage, identify).
+      // Hidden is therefore reported throughout — travel is what separates
+      // the rotation from the click.
+      await watchLockRequests(page, true);
+      const box = await boxOf(page.locator("#canvas"));
+      const requests = () =>
+        page.evaluate(() => (window as CameraInputWindow).__lockRequests);
+
+      // A stationary left click while the cursor is hidden must not grab it.
+      await page.mouse.move(box.x + 200, box.y + 200);
+      await page.mouse.down({ button: "left" });
+      await page.waitForTimeout(250);
+      expect(await requests()).toBe(0);
+      await page.mouse.up({ button: "left" });
+
+      // The same press, dragged: the portrait rotation takes the pointer.
+      await page.mouse.down({ button: "left" });
+      await page.mouse.move(box.x + 260, box.y + 230);
+      await expect
+        .poll(requests, { timeout: 15_000 })
+        .toBe(1);
+      await page.mouse.up({ button: "left" });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("releases only held mouse buttons when pointer lock is lost", async () => {
     const fixture = await launchOffline("gw-pointer-loss-e2e-");
     try {

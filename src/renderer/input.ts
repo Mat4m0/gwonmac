@@ -106,9 +106,15 @@ type GameInputOptions = {
   log(...values: unknown[]): void;
 };
 
-// How often a held right-drag re-asks the client whether it entered
-// mouse-look, matching the cursor observer's own sampling cadence.
+// How often a held drag re-asks the client whether it entered a grabbed
+// rotation, matching the cursor observer's own sampling cadence.
 const POINTER_MODE_INTERVAL_MS = 50;
+
+// How far a left press must travel before its hidden cursor is read as a
+// grabbed rotation. The client also hides the cursor for mode changes it is
+// waiting on — salvage, identify — so a stationary click must never take the
+// pointer; only a drag may.
+const DRAG_LOCK_SLOP = 4;
 
 export const installGameInput = ({
   canvas,
@@ -125,11 +131,20 @@ export const installGameInput = ({
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let modeWatch: ReturnType<typeof setInterval> | null = null;
+  // Which button armed the watch, and which button owns an engaged lock. Both
+  // are the drag's identity: the re-anchor has to restate the button the
+  // client believes is down, and a release only ends the drag it started.
+  let armedButton: number | null = null;
+  let lockButton: number | null = null;
 
   function stopModeWatch() {
     if (modeWatch !== null) clearInterval(modeWatch);
     modeWatch = null;
   }
+
+  /** The `buttons` mask bit for a button index, as the client reads it. */
+  const buttonBit = (button: number) =>
+    button === 0 ? 1 : button === 1 ? 4 : button === 2 ? 2 : 0;
   let releasing = false;
   let wheelRemainder = 0;
   let wheelDirection = 0;
@@ -291,6 +306,8 @@ export const installGameInput = ({
   function releasePointer() {
     pointerWanted = false;
     stopModeWatch();
+    armedButton = null;
+    lockButton = null;
     virtualCursor = null;
     canvas.classList.remove('cursor-hidden');
     if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -605,18 +622,23 @@ export const installGameInput = ({
       restX -= stepX;
       restY -= stepY;
       if ((!restX && !restY) || regrab === MAX_POINTER_REGRABS) return;
-      sendMouse('mouseup', rect, buttons & ~2, 2, 0, 0);
+      // The re-anchor restates the button that owns this drag: a left-drag
+      // rotation re-pressed as a right button would end the rotation and
+      // start a camera steer.
+      const owner = lockButton ?? 2;
+      sendMouse('mouseup', rect, buttons & ~buttonBit(owner), owner, 0, 0);
       virtualCursor = { x: rect.width / 2, y: rect.height / 2 };
-      sendMouse('mousedown', rect, buttons, 2, 0, 0);
+      sendMouse('mousedown', rect, buttons, owner, 0, 0);
     }
   };
 
-  const engagePointerLock = () => {
+  const engagePointerLock = (button: number) => {
     // The trusted-move handler keeps these coordinates current, so a lock
     // engaged mid-drag seeds the virtual cursor where the pointer now is and
     // the drag continues without a seam.
-    const held = heldButtons.get(2);
+    const held = heldButtons.get(button);
     if (!held) return;
+    lockButton = button;
     const rect = canvas.getBoundingClientRect();
     virtualCursor = {
       x: held.clientX - rect.left,
@@ -647,6 +669,36 @@ export const installGameInput = ({
     }
   };
 
+  /**
+   * Polls the client's own cursor state while a drag is held, and engages the
+   * lock the moment the client reports it has grabbed the pointer. `requireDrag`
+   * additionally withholds that reading until the press has actually travelled.
+   */
+  function watchForGrabbedRotation(button: number, requireDrag: boolean) {
+    stopModeWatch();
+    const pressed = heldButtons.get(button);
+    const origin = pressed
+      ? { x: pressed.clientX, y: pressed.clientY }
+      : null;
+    modeWatch = setInterval(() => {
+      const held = heldButtons.get(button);
+      if (!pointerWanted || !held) {
+        stopModeWatch();
+        return;
+      }
+      if (
+        requireDrag &&
+        origin &&
+        Math.abs(held.clientX - origin.x) <= DRAG_LOCK_SLOP &&
+        Math.abs(held.clientY - origin.y) <= DRAG_LOCK_SLOP
+      ) return;
+      if (clientCursorHidden?.() === true) {
+        stopModeWatch();
+        engagePointerLock(button);
+      }
+    }, POINTER_MODE_INTERVAL_MS);
+  }
+
   canvas.addEventListener('mousedown', (event) => {
     if (event.button !== 2 || !event.isTrusted) return;
     pointerWanted = true;
@@ -657,22 +709,30 @@ export const installGameInput = ({
     // within a tick — so when that readout is available the lock waits for
     // it. Without the readout the lock engages at the press, as it always
     // has: today's behaviour is the fallback, not the map's.
+    armedButton = 2;
     const hidden = clientCursorHidden ? clientCursorHidden() : null;
     if (hidden !== false) {
-      engagePointerLock();
+      engagePointerLock(2);
       return;
     }
-    stopModeWatch();
-    modeWatch = setInterval(() => {
-      if (!pointerWanted || !heldButtons.has(2)) {
-        stopModeWatch();
-        return;
-      }
-      if (clientCursorHidden?.() === true) {
-        stopModeWatch();
-        engagePointerLock();
-      }
-    }, POINTER_MODE_INTERVAL_MS);
+    watchForGrabbedRotation(2, false);
+  }, true);
+
+  // A held left-drag the client turns into a grabbed rotation — the character
+  // portrait in the inventory — needs the same lock as mouse-look, or the
+  // cursor wanders off the model and the rotation stops. The client says so
+  // the same way: it hides its own cursor. Two differences from the right
+  // button. It must have travelled first, because the client also hides the
+  // cursor while waiting on a mode change (salvage, identify) and a plain
+  // click must never take the pointer. And there is no fallback: without the
+  // cursor readout a left-drag never locks, which is exactly what it did
+  // before this existed.
+  canvas.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || !event.isTrusted || !clientCursorHidden) return;
+    if (heldButtons.size > 1 || document.pointerLockElement === canvas) return;
+    pointerWanted = true;
+    armedButton = 0;
+    watchForGrabbedRotation(0, true);
   }, true);
 
   document.addEventListener('mousemove', (event) => {
@@ -687,7 +747,10 @@ export const installGameInput = ({
   }, true);
 
   document.addEventListener('mouseup', (event) => {
-    if (event.button === 2 && event.isTrusted) {
+    if (!event.isTrusted) return;
+    // Only the drag's own button ends it: a stray release of the other one
+    // must not drop a rotation that is still held.
+    if (event.button === armedButton || event.button === lockButton) {
       pointerWanted = false;
       releasePointer();
     }
