@@ -221,7 +221,7 @@ const downloadLinks = (page: string) =>
     ...page.matchAll(
       /<a href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Direct|Direkter) Download/g,
     ),
-  ].map((match) => match[1]);
+  ].map((match) => match[1] ?? assert.fail("download link without href"));
 
 try {
   const home = await load("/");
