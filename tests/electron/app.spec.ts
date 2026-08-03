@@ -250,6 +250,53 @@ test.describe("Electron application", () => {
     }
   });
 
+  test("the app-menu Quit item exits cleanly", async () => {
+    // The Cmd+Q accelerator is this menu role; red-X coverage does not reach
+    // it. The role's app.quit() must end the process even though before-quit
+    // hands the exit to the bounded cleanup pass.
+    const env = launchEnv({ GW_OFFLINE_SHELL: "1", GW_BACKGROUND_LAUNCH: "1" });
+    const userData = await mkdtemp(
+      path.join(tmpdir(), "gw-electron-menu-quit-e2e-"),
+    );
+    const app = await launch(userData, env);
+    try {
+      const page = await app.firstWindow({ timeout: 30_000 });
+      await page.waitForLoadState("domcontentloaded");
+      const electronProcess = app.process();
+      const exited = new Promise<ProcessExit>((resolve) => {
+        electronProcess.once("exit", (code, signal) => resolve({ code, signal }));
+      });
+      // The Cmd+Q accelerator is the stock role, which macOS drives through
+      // the native terminate: selector — unreachable from a programmatic
+      // click. Assert the item exists, then request quit the way the
+      // selector does: app.quit(), the entry the bounded cleanup pass owns.
+      const hasQuitItem = await app.evaluate(({ Menu }) =>
+        (Menu.getApplicationMenu()?.items ?? []).some((top) =>
+          (top.submenu?.items ?? []).some((item) => item.role === "quit"),
+        ),
+      );
+      expect(hasQuitItem).toBe(true);
+      await app.evaluate(({ app: electronApp }) => {
+        electronApp.quit();
+      }).catch(() => undefined);
+      expect(await exited).toEqual({ code: 0, signal: null });
+
+      const diagnosticsDir = path.join(userData, "diagnostics");
+      const sessionFiles = (await readdir(diagnosticsDir))
+        .filter((name) => name.endsWith(".jsonl"))
+        .map((name) => path.join(diagnosticsDir, name));
+      const events = (
+        await Promise.all(sessionFiles.map((file) => readFile(file, "utf8")))
+      ).join("\n");
+      expect(events).toContain('"name":"app.beforeQuit"');
+      expect(events).toContain('"name":"quit.cleanupCompleted"');
+      expect(events).not.toContain('"name":"quit.cleanupFailed"');
+    } finally {
+      await app.close().catch(() => undefined);
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
   test("restores fullscreen and normal bounds, then resets safely", async () => {
     // No GW_BACKGROUND_LAUNCH: setFullScreen is unreliable on a non-key window.
     const env = launchEnv({ GW_OFFLINE_SHELL: "1" });

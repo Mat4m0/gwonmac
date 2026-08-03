@@ -79,6 +79,9 @@ export const ERROR_CODES = [
   "net_offline",
   "not_ready",
   "proxy_path",
+  /** A quit-cleanup task exceeded its budget and the pass moved on without
+   * it. Named so a hang and a throw stay distinguishable in a capture. */
+  "quit_task_timeout",
   "range_required",
   "response_limit",
   "response_too_large",
