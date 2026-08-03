@@ -234,8 +234,8 @@ test.describe("renderer camera input", () => {
     }
   });
 
-  test("walks the virtual cursor back to the lock origin on release", async () => {
-    const fixture = await launchOffline("gw-pointer-reconcile-e2e-");
+  test("ends a camera drag without dispatching any position reconciliation", async () => {
+    const fixture = await launchOffline("gw-pointer-release-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -243,25 +243,25 @@ test.describe("renderer camera input", () => {
       const box = await boxOf(canvas);
       await watchCameraDrag(page, box);
 
-      // The same overrun as the roam test: the re-anchor leaves the client's
-      // absolute position at -9 while the OS cursor will be restored to the
-      // press point. The release must close that gap with one walk-back move,
-      // after the button release, with no buttons reported held.
+      // The same overrun as the roam test leaves the client's absolute
+      // position away from the press point. The release must NOT try to walk
+      // it back: the client samples mouse state per frame, so a walk-back
+      // move lands in the release's frame and is integrated into the camera —
+      // shipping one made every rotation visibly snap back on release.
       await page.mouse.move(box.x + 20, box.y + CAMERA_Y);
+      const beforeRelease = await page.evaluate(
+        () => (window as CameraInputWindow).__cameraEvents.length,
+      );
       await page.mouse.up({ button: "right" });
-      await expect
-        .poll(() =>
-          page.evaluate(() =>
-            (window as CameraInputWindow).__cameraEvents.at(-1),
-          ),
-        )
-        .toEqual({
-          type: "mousemove",
-          button: 0,
-          buttons: 0,
-          clientX: box.x + 100,
-          movementX: 14,
-        });
+      await page.waitForTimeout(100);
+      const moves = await page.evaluate(
+        (from) =>
+          (window as CameraInputWindow).__cameraEvents
+            .slice(from)
+            .filter(({ type }) => type === "mousemove"),
+        beforeRelease,
+      );
+      expect(moves).toEqual([]);
     } finally {
       await closeOffline(fixture);
     }

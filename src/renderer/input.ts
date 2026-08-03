@@ -101,7 +101,6 @@ export const installGameInput = ({
   let pendingTap: { x: number; y: number } | null = null;
   let touchId = 0;
   let virtualCursor: { x: number; y: number } | null = null;
-  let lockOrigin: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let releasing = false;
   let wheelRemainder = 0;
@@ -255,25 +254,15 @@ export const installGameInput = ({
     return key;
   };
 
+  // Deliberately no position reconciliation here. The client samples mouse
+  // state per frame, so a "walk the cursor back to the lock origin" move
+  // dispatched at release lands in the same frame as the button-up and is
+  // integrated into the camera — releasing a rotation visibly un-rotated it.
+  // Event order within a frame cannot fix that; the client resyncs its
+  // absolute position from the first real mousemove after the lock ends.
   function releasePointer() {
     pointerWanted = false;
-    // Exiting the lock returns the OS cursor to where the lock engaged, while
-    // the roam/re-anchor walk left the client's absolute position elsewhere —
-    // the source of the post-pan cursor jump. Walk the virtual cursor back
-    // before dropping it so the client's last mousemove agrees with the
-    // restored OS cursor. Callers sequence this after the button release so
-    // the walk cannot steer a still-held camera drag.
-    if (virtualCursor && lockOrigin) {
-      const dx = lockOrigin.x - virtualCursor.x;
-      const dy = lockOrigin.y - virtualCursor.y;
-      if (dx || dy) {
-        const rect = canvas.getBoundingClientRect();
-        virtualCursor = { x: lockOrigin.x, y: lockOrigin.y };
-        sendMouse('mousemove', rect, 0, 0, dx, dy);
-      }
-    }
     virtualCursor = null;
-    lockOrigin = null;
     canvas.classList.remove('cursor-hidden');
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
@@ -327,10 +316,8 @@ export const installGameInput = ({
   function releaseButtons() {
     const inputs = [...heldButtons.values()];
     heldButtons.clear();
-    // Releases go first: the client must see the drag end at the coordinates
-    // it held before releasePointer walks the virtual cursor back.
-    for (const input of inputs) dispatchButtonRelease(input);
     releasePointer();
+    for (const input of inputs) dispatchButtonRelease(input);
   }
 
   function releaseAll() {
@@ -571,9 +558,6 @@ export const installGameInput = ({
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     };
-    // Where Chromium will restore the OS cursor when the lock ends, and so
-    // where releasePointer must walk the virtual cursor back to.
-    lockOrigin = { x: virtualCursor.x, y: virtualCursor.y };
     pointerWanted = true;
     if (document.pointerLockElement === canvas) return;
     try {
@@ -614,10 +598,7 @@ export const installGameInput = ({
   document.addEventListener('mouseup', (event) => {
     if (event.button === 2 && event.isTrusted) {
       pointerWanted = false;
-      // The client must integrate this release at the lock's frozen
-      // coordinates before the cursor walks back — reconciling first would
-      // steer the camera by the walk. A microtask runs once dispatch ends.
-      queueMicrotask(releasePointer);
+      releasePointer();
     }
   }, true);
   document.addEventListener('pointerlockchange', () => {
