@@ -1082,6 +1082,17 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "warn",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
+  // A synthetic double-tap was withheld because a real button was still held
+  // or the pointer was locked. The client's touch path force-releases every
+  // captured button, so delivering one mid-drag desynchronises its button
+  // state and the frame layer asserts. Counting the refusals is how a capture
+  // shows the guard doing its work rather than the crash never recurring by
+  // luck.
+  "input.tapSuppressed": {
+    subsystem: "renderer",
+    level: "debug",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
   "graphics.detected": {
     subsystem: "graphics",
     level: "info",
