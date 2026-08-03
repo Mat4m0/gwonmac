@@ -814,6 +814,10 @@ function loadGlue() {
   inputHost = host.installGameInput({
     canvas: c,
     diagnostics: window.gwDiagnostics,
+    // Read through the window global rather than a module handle: input
+    // installs before the enhancement chain decides whether a certified
+    // cursor readout exists at all.
+    clientCursorHidden: () => window.gwCursorState?.()?.hidden ?? null,
     log,
   });
   // Text entry runs through these, not through keydown on the canvas. Stray

@@ -460,37 +460,13 @@ export async function installEnhancements(
         transitionHold: () => !retry.expired && refresh.armed(),
       });
       disposeCursor = cursor.dispose;
-      // Production-safe console probe: the same bounded presentation state the
-      // developer runtime projects — no pixels, no pointers. Exists to answer
-      // mode questions from a live session, e.g. whether the client hides its
-      // cursor during right-drag mouse-look (the pointer-lock gating question
-      // in input.ts) without a developer program.
+      // The client's own cursor state, projected for two consumers: the
+      // console, for mode questions from a live session, and the pointer-lock
+      // gate in input.ts, which reads `hidden` to tell mouse-look from a map
+      // pan (measured 2026-08-03: mouse-look hides the client cursor within a
+      // tick of the right press; a map pan never does). Bounded presentation
+      // state only — no pixels, no pointers.
       window.gwCursorState = () => cursor?.state ?? null;
-      // Hands are busy during the gesture under measurement, so the probe
-      // logs itself: state on every right-button press, twice a second while
-      // it is held, and on release. Quiet otherwise. Temporary — it leaves
-      // with the measurement branch once the mode question is answered.
-      const probeLog = (phase: string) => {
-        const state = cursor?.state;
-        console.info(
-          `[cursor-probe] ${phase} hidden=${state?.hidden} valid=${state?.valid} ` +
-          `hash=${state?.pixelHash} lock=${document.pointerLockElement !== null}`,
-        );
-      };
-      let probeTimer: ReturnType<typeof setInterval> | null = null;
-      window.addEventListener('mousedown', (event) => {
-        if (event.button !== 2) return;
-        probeLog('right-down');
-        probeTimer ??= setInterval(() => probeLog('right-held'), 500);
-      }, true);
-      window.addEventListener('mouseup', (event) => {
-        if (event.button !== 2) return;
-        probeLog('right-up');
-        if (probeTimer !== null) {
-          clearInterval(probeTimer);
-          probeTimer = null;
-        }
-      }, true);
     }
     const readout = observeState
       ? createTargetReadout(document.body)
