@@ -23,6 +23,7 @@ import {
   discardDerivedWasm,
   inspectDerivedWasmCache,
   prepareDerivedWasm,
+  sha256File,
 } from "../core/derived-wasm.js";
 import {
   rewriteTemplateSaveWasm,
@@ -34,6 +35,12 @@ import {
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
+import {
+  findNativeDoubleClickBuild,
+  nativeDoubleClickOutputSha256,
+  NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
+  rewriteNativeDoubleClickWasm,
+} from "./native-double-click.js";
 
 /**
  * The exact records matched while certifying the official client hash. The
@@ -53,7 +60,7 @@ export type ClientCertification =
     };
 
 export interface ClientModulePreparationFailure {
-  readonly stage: "template-save" | "enhancement";
+  readonly stage: "template-save" | "enhancement" | "native-double-click";
   readonly error: unknown;
 }
 
@@ -62,6 +69,12 @@ export interface PreparedClientModule {
   readonly state: ClientCompatibilityState;
   readonly enhancementBuild: KnownEnhancementBuild | null;
   readonly failure: ClientModulePreparationFailure | null;
+  /**
+   * Whether the served module carries the client's own mouse double-click
+   * flag. False means the renderer must keep synthesising touch taps, so this
+   * is the renderer's switch and not a report.
+   */
+  readonly nativeDoubleClick: boolean;
 }
 
 export interface PrepareClientModuleOptions {
@@ -71,6 +84,7 @@ export interface PrepareClientModuleOptions {
   readonly enhancementCapabilities: EnhancementCapabilities;
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
+  readonly nativeDoubleClickCacheRoot: string;
 }
 
 function templateSaveCache(
@@ -157,7 +171,61 @@ async function discardEnhancementCache(
  * graceful and leaves the last good cache intact, but never serves it for a
  * different input.
  */
+/**
+ * The last stage, applied to whatever the chain above settled on.
+ *
+ * It is deliberately not part of the certification *state*: a module it cannot
+ * derive is served exactly as the previous stage produced it, and the renderer
+ * falls back to synthesising taps. So an unrecognised predecessor costs the
+ * player the double-click repair's latency, never the client.
+ */
+async function withNativeDoubleClick(
+  prepared: PreparedClientModule,
+  cacheRoot: string,
+): Promise<PreparedClientModule> {
+  const inputSha256 = await sha256File(prepared.wasmPath);
+  const build = findNativeDoubleClickBuild(inputSha256);
+  const expectedOutputSha256 = build
+    ? nativeDoubleClickOutputSha256(build, inputSha256)
+    : null;
+  if (!build || expectedOutputSha256 === null) {
+    await discardDerivedWasm(cacheRoot).catch(() => undefined);
+    return prepared;
+  }
+  try {
+    return {
+      ...prepared,
+      wasmPath: await prepareDerivedWasm(
+        prepared.wasmPath,
+        {
+          inputSha256,
+          cacheRoot,
+          transformAbi: NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
+          buildFingerprint: buildFingerprint(build),
+          expectedOutputSha256,
+        },
+        (base) => rewriteNativeDoubleClickWasm(base),
+      ),
+      nativeDoubleClick: true,
+    };
+  } catch (error) {
+    return {
+      ...prepared,
+      failure: prepared.failure ?? { stage: "native-double-click", error },
+    };
+  }
+}
+
 export async function prepareClientModule(
+  options: PrepareClientModuleOptions,
+): Promise<PreparedClientModule> {
+  return withNativeDoubleClick(
+    await prepareCertifiedChain(options),
+    options.nativeDoubleClickCacheRoot,
+  );
+}
+
+async function prepareCertifiedChain(
   options: PrepareClientModuleOptions,
 ): Promise<PreparedClientModule> {
   const {
@@ -174,6 +242,7 @@ export async function prepareClientModule(
       wasmPath: officialWasmPath,
       state: "uncertified",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: await discardUnsupportedCaches(
         compatibilityCacheRoot,
         enhancementCacheRoot,
@@ -188,6 +257,7 @@ export async function prepareClientModule(
       wasmPath: officialWasmPath,
       state: "uncertified",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: {
         stage: "template-save",
         error: new Error("template-save certification does not match client hash"),
@@ -210,6 +280,7 @@ export async function prepareClientModule(
       wasmPath: officialWasmPath,
       state: "uncertified",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: { stage: "template-save", error },
     };
   }
@@ -219,6 +290,7 @@ export async function prepareClientModule(
       wasmPath: templateSaveWasm,
       state: "template-only",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
@@ -230,6 +302,7 @@ export async function prepareClientModule(
       wasmPath: templateSaveWasm,
       state: "template-only",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
         error: new Error("Enhancement certification does not match template-save output"),
@@ -242,6 +315,7 @@ export async function prepareClientModule(
       wasmPath: templateSaveWasm,
       state: "certified",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
@@ -263,6 +337,7 @@ export async function prepareClientModule(
       ),
       state: "certified",
       enhancementBuild,
+      nativeDoubleClick: false,
       failure: null,
     };
   } catch (error) {
@@ -270,6 +345,7 @@ export async function prepareClientModule(
       wasmPath: templateSaveWasm,
       state: "certified",
       enhancementBuild: null,
+      nativeDoubleClick: false,
       failure: { stage: "enhancement", error },
     };
   }

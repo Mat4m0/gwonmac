@@ -310,6 +310,7 @@ export class ClientRuntime {
       enhancementCapabilities: this.options.enhancementCapabilities,
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
+      nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
     });
     const state = prepared.state;
     this.compatibilityValue = {

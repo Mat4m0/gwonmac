@@ -671,6 +671,7 @@ export type RendererCommand =
       checkForUpdates?: boolean;
     }
   | { type: "filesystem.sync" }
+  | { type: "input.trace" }
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";

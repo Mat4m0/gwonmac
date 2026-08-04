@@ -293,6 +293,7 @@ async function fixture() {
     enhancementBuild: enhancement,
     compatibilityCacheRoot: join(root, "compatibility"),
     enhancementCacheRoot: join(root, "enhancement"),
+    nativeDoubleClickCacheRoot: join(root, "double-click"),
   };
 }
 
@@ -310,6 +311,7 @@ function options(
     enhancementCapabilities,
     compatibilityCacheRoot: value.compatibilityCacheRoot,
     enhancementCacheRoot: value.enhancementCacheRoot,
+    nativeDoubleClickCacheRoot: value.nativeDoubleClickCacheRoot,
   };
 }
 
@@ -418,6 +420,10 @@ describe("client module preparation", () => {
       wasmPath: value.officialWasmPath,
       state: "uncertified",
       enhancementBuild: null,
+      // An unrecognised client is served exactly as downloaded, so it also
+      // never reaches the double-click stage: the renderer keeps synthesising
+      // taps rather than being handed a module nothing certified.
+      nativeDoubleClick: false,
       failure: null,
     });
     await Promise.all([

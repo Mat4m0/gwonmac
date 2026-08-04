@@ -37,6 +37,7 @@ import {
   encodeSection,
   parseCode,
   parseIndexVector,
+  parseExports,
   parseTypes,
   readSleb,
   readUleb,
@@ -45,6 +46,7 @@ import {
   splitSections,
   uleb,
   valueTypeName,
+  vectorPayload,
   WASM_HEADER,
   type FunctionType,
   type Section,
@@ -61,12 +63,6 @@ const DISPATCH_PARAMS = 6;
 const DISPATCH_TICK = 0;
 const DISPATCH_CURSOR = 1;
 const DISPATCH_UI = 2;
-
-interface WasmExport {
-  name: string;
-  kind: number;
-  index: number;
-}
 
 function fail(message: string): never {
   throw new Error(`enhancement transform: ${message}`);
@@ -99,32 +95,6 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
 function encodeName(value: string): Uint8Array {
   const bytes = new TextEncoder().encode(value);
   return concat(uleb(bytes.byteLength), bytes);
-}
-
-function parseExports(bytes: Uint8Array): WasmExport[] {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const exports: WasmExport[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const nameLength = readUleb(bytes, cursor);
-    const end = cursor.offset + nameLength;
-    if (end > bytes.byteLength) fail("truncated export name");
-    const name = new TextDecoder().decode(bytes.slice(cursor.offset, end));
-    cursor.offset = end;
-    const kind = bytes[cursor.offset++]!;
-    exports.push({ name, kind, index: readUleb(bytes, cursor) });
-  }
-  if (cursor.offset !== bytes.byteLength) fail("malformed export section");
-  return exports;
-}
-
-function vectorPayload(bytes: Uint8Array): {
-  count: number;
-  entries: Uint8Array;
-} {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  return { count, entries: bytes.slice(cursor.offset) };
 }
 
 function parseTable(bytes: Uint8Array): {
