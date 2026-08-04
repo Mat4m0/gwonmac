@@ -2,7 +2,7 @@ import site from "../site.json";
 
 export default defineAppConfig({
   ginkoDocs: {
-    theme: { neutral: "stone", primary: "custom" },
+    theme: { neutral: "custom", primary: "custom" },
     site: {
       url: site.url,
       name: { en: "GWonMac", de: "GWonMac" },

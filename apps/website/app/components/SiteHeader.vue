@@ -1,10 +1,9 @@
 <script setup lang="ts">
-// Shadows the layer's SiteHeader for two reasons: the site is dark-only, so the
-// ModeToggle (imported by path in the layer, not name-overridable) is removed
-// from both the desktop bar and the mobile menu; and the community links are
-// Discord + GitHub, which the layer's `social` config can't express. Everything
-// else is verbatim layer markup.
+// Shadows the layer's SiteHeader because the community links are Discord +
+// GitHub, which the layer's `social` config can't express. Everything else is
+// verbatim layer markup.
 import { Button } from "#ginko-docs/components/ui/button";
+import ModeToggle from "#ginko-docs/components/site/ModeToggle.vue";
 import { Kbd } from "#ginko-docs/components/ui/kbd";
 import { Separator } from "#ginko-docs/components/ui/separator";
 import {
@@ -52,6 +51,9 @@ const isActive = (href: string) =>
 // hydration. Hover/focus styles are left intact.
 const flatLocaleSwitcher =
   "[&_[data-slot=dropdown-menu-trigger]]:border-transparent [&_[data-slot=dropdown-menu-trigger]]:bg-transparent [&_[data-slot=dropdown-menu-trigger]]:shadow-none [&>span]:border-transparent [&>span]:bg-transparent";
+// Same treatment for the mode toggle, which hard-codes the outline Button too —
+// the two preference controls should read as one flat pair.
+const flatModeToggle = "border-transparent bg-transparent shadow-none";
 
 const metaKey = useMetaKey();
 const searchShortcut = computed(() => (metaKey.value === "⌘" ? "⌘K" : "Ctrl K"));
@@ -192,6 +194,15 @@ watch(
         <div class="hidden md:block">
           <SiteSocialLinks />
         </div>
+
+        <!-- The resolved mode is client state, so the server can't render the
+             right icon; a same-size placeholder keeps the bar from shifting. -->
+        <ClientOnly>
+          <ModeToggle :class="['hidden md:inline-flex', flatModeToggle]" />
+          <template #fallback>
+            <span class="hidden size-9 shrink-0 md:block" aria-hidden="true" />
+          </template>
+        </ClientOnly>
 
         <SiteLocaleSwitcher :class="['hidden md:flex', flatLocaleSwitcher]" />
         <Sheet v-model:open="isMobileMenuOpen">
@@ -339,6 +350,15 @@ watch(
                   <Kbd class="ml-auto h-5 bg-background text-[10px]">{{ searchShortcut }}</Kbd>
                 </button>
                 <div class="flex flex-wrap items-center gap-2">
+                  <ClientOnly>
+                    <ModeToggle variant="pill" />
+                    <template #fallback>
+                      <span
+                        class="h-9 w-24 rounded-full border border-border bg-background"
+                        aria-hidden="true"
+                      />
+                    </template>
+                  </ClientOnly>
                   <SiteLocaleSwitcher variant="pill" class="flex" @navigate="closeMenu" />
                   <SiteSocialLinks class="ml-auto" @navigate="closeMenu" />
                 </div>

@@ -31,7 +31,9 @@ export default defineNuxtConfig({
       ],
     },
   },
-  colorMode: { preference: "dark", fallback: "dark" },
+  // Follow the OS by default; dark is the brand's home ground, so it is also
+  // what a client without a match (or without JS) gets.
+  colorMode: { preference: "system", fallback: "dark" },
   i18n: {
     baseUrl: site.url,
     defaultLocale: "en",

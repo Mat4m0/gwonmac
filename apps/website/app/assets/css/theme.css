@@ -1,6 +1,16 @@
-/* GWonMac "Guild Wars Reforged" theme. Dark-only: nuxt.config pins the color
-   mode and the SiteHeader shadow drops the toggle, so only the `.dark` token
-   set matters. Loaded from app/plugins/theme.ts so it follows the layer CSS. */
+/* GWonMac "Guild Wars Reforged" theme, in light and dark.
+
+   The `--gw-*` kit below is the raw Reforged palette and never changes. Two
+   families of semantic tokens read from it and do flip with the mode:
+
+     --gw-art-*    everything drawn over the hero / closing-call key art, which
+                   itself flips (--gw-hero-art) between the stormy and the
+                   fog-lit painting. Light art means dark ink, so the scrims
+                   and hairlines invert with it.
+     --gw-panel/text/accent/hairline
+                   everything sitting on the page background.
+
+   Loaded from app/plugins/theme.ts so it follows the layer CSS. */
 
 /* The classic Guild Wars display face, shared with the launcher and website.
    Licence: public/fonts/COPYING-QUALITYPE. Used for display text only —
@@ -31,6 +41,76 @@
   --gw-forge2: #8a2508;
   --gw-blood: #451104;
   --gw-radius: 6px;
+
+  /* Warm parchment white — the daylight counterpart to the launcher's scrim. */
+  --background: #fbf8f3;
+
+  /* On-art tokens, light values: the fog-lit painting, read with dark ink.
+     Its bright centre is where the headline sits, so the scrim stays clear
+     there and closes in at the edges — the mirror of the dark treatment. */
+  --gw-hero-art: url("/bg-reforged-light.jpg");
+  --gw-art-base: #efe7d8;
+  --gw-art-ink: #1a120b;
+  --gw-art-ink-dim: #46372a;
+  --gw-art-ink-faint: #675843;
+  --gw-art-halo: #fbf6ec;
+  --gw-art-line: #b0996d;
+  --gw-art-gold: #86590f;
+  --gw-art-gold-strong: #6b4408;
+  --gw-art-surface: #fbf6ecd9;
+  --gw-art-surface-hover: #fffdf7e6;
+  --gw-art-band: #fbf6ece6;
+  --gw-hero-scrim:
+    radial-gradient(90% 65% at 50% 42%, transparent 30%, #fbf6ecd9 100%),
+    linear-gradient(180deg, #fbf6ecc4 0%, #fbf6ec33 30%, #fbf6ec26 55%, #fbf6ecf7 100%);
+  --gw-cta-scrim: linear-gradient(180deg, #fbf6ecf5 0%, #fbf6ec99 50%, #fbf6ecf5 100%);
+
+  /* On-page tokens. Those given a flat value here are restated in `.dark`; one
+     added here without a dark twin would leak into dark mode. Those pointing at
+     a layer token need no twin — the var resolves at the use site, and the
+     neutral ramp below is cut from this same kit, so the parchment surfaces and
+     these tokens hold one value between them instead of two copies of it. */
+  --gw-panel-bg: linear-gradient(180deg, #fffefb, #f8f3ea);
+  --gw-panel-border: var(--border);
+  --gw-panel-shadow: var(--shadow-xs);
+  --gw-hairline: var(--border);
+
+  --gw-text: var(--foreground);
+  --gw-text-dim: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  --gw-text-faint: var(--muted-foreground);
+
+  /* Gold carries text contrast on parchment only once it is this dark, and by
+     then the three metal steps have collapsed into two. */
+  --gw-accent-quiet: #86590f;
+  --gw-accent: #86590f;
+  --gw-accent-strong: #6b4408;
+}
+
+/* Parchment neutrals. `neutral: "custom"` in app.config selects this block.
+   The layer derives every surface token from this ramp — --code, --secondary
+   (codeblock chrome), --muted, --border, --card in dark mode — so a stock
+   grey ramp put cool panels on a warm page and they read as smudges rather
+   than surfaces. Stone-100 chrome sat 1% off the parchment background at
+   1/6th its chroma; the codeblock frame was effectively invisible.
+
+   The steps are the Reforged kit itself, so the layer's surfaces and the
+   `--gw-*` tokens below cannot drift apart: 200 is --gw-panel-border, 300 is
+   --gw-parch-dim, 400 is --gw-parch-faint, 800 is the dark panel border, 900
+   the dark panel fill, 950 the dark page. Contrast on both page colours is
+   AA or better, the tightest being muted text on the dark codeblock chrome
+   at 4.96:1. */
+html[data-neutral="custom"] {
+  --theme-neutral-50: oklch(96.9% 0.012 84); /* light --code, dark text */
+  --theme-neutral-100: oklch(95% 0.017 84); /* codeblock chrome, --muted */
+  --theme-neutral-200: oklch(90% 0.029 85); /* --border, --code-border */
+  --theme-neutral-300: oklch(84.3% 0.036 77);
+  --theme-neutral-400: oklch(67.8% 0.041 77); /* dark --muted-foreground */
+  --theme-neutral-500: oklch(44.4% 0.01 74); /* light --muted-foreground */
+  --theme-neutral-600: oklch(38% 0.013 72);
+  --theme-neutral-700: oklch(33% 0.018 72);
+  --theme-neutral-800: oklch(28.4% 0.026 72); /* dark chrome and borders */
+  --theme-neutral-900: oklch(18.7% 0.011 61); /* dark --code, --card */
+  --theme-neutral-950: oklch(15.9% 0.008 48); /* light --foreground */
 }
 
 /* Ember primary — the launcher's palette. `primary: "custom"` in app.config
@@ -49,6 +129,38 @@ html[data-primary="custom"] {
   --background: #100c0a;
   --hero-bg: #120d0a;
   --hero-bg-muted: #1c1410;
+
+  /* On-art tokens, dark values: the stormy painting, read with parchment. */
+  --gw-hero-art: url("/bg-reforged.jpg");
+  --gw-art-base: var(--gw-ink);
+  --gw-art-ink: #fdf3e3;
+  --gw-art-ink-dim: var(--gw-parch-dim);
+  --gw-art-ink-faint: var(--gw-parch-faint);
+  --gw-art-halo: var(--gw-ink);
+  --gw-art-line: var(--gw-gold-line);
+  --gw-art-gold: var(--gw-gold-mid);
+  --gw-art-gold-strong: var(--gw-gold);
+  --gw-art-surface: #0a080680;
+  --gw-art-surface-hover: #1d171280;
+  --gw-art-band: #0a0806b8;
+  --gw-hero-scrim:
+    radial-gradient(90% 65% at 50% 42%, transparent 30%, #0a0806cc 100%),
+    linear-gradient(180deg, #0a0806b3 0%, #0a080626 30%, #0a08061a 55%, #0a0806f2 100%);
+  --gw-cta-scrim: linear-gradient(180deg, #0a0806f5 0%, #0a080699 50%, #0a0806f5 100%);
+
+  /* On-page tokens, dark values: the page surface joins the key art, so these
+     are the Reforged kit itself. */
+  --gw-panel-bg: linear-gradient(180deg, #17120e, #100d0a);
+  --gw-panel-shadow:
+    inset 0 0 0 1px #0a080699,
+    inset 0 1px 0 #67583e33;
+
+  --gw-text: var(--gw-parch);
+  --gw-text-dim: var(--gw-parch-dim);
+
+  --gw-accent-quiet: var(--gw-gold-dark);
+  --gw-accent: var(--gw-gold-mid);
+  --gw-accent-strong: var(--gw-gold);
 
   /* The four accent tint groups become ember, gold, flame, and rust. */
   --hero-blue: #ff6b1a;
@@ -82,6 +194,22 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 
 /* ---------- Reforged landing components (app/pages/index.vue) ---------- */
 
+/* Key art plate. A background-image rather than an <img> so the mode swap is a
+   token swap and the browser only ever fetches the painting it paints. */
+.gw-art {
+  background-image: var(--gw-hero-art);
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.gw-hero-scrim {
+  background: var(--gw-hero-scrim);
+}
+
+.gw-cta-scrim {
+  background: var(--gw-cta-scrim);
+}
+
 /* Ambient drift over hero key art. */
 @keyframes gw-drift {
   from {
@@ -108,7 +236,7 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--gw-gold-mid);
+  color: var(--gw-art-gold);
   font-size: 13px;
 }
 
@@ -117,21 +245,19 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
   content: "";
   height: 1px;
   flex: 1;
-  background: linear-gradient(90deg, transparent, var(--gw-gold-line));
+  background: linear-gradient(90deg, transparent, var(--gw-art-line));
 }
 
 .gw-rule::after {
-  background: linear-gradient(90deg, var(--gw-gold-line), transparent);
+  background: linear-gradient(90deg, var(--gw-art-line), transparent);
 }
 
-/* Launcher-chrome panel. */
+/* Launcher-chrome panel. Sits on the page background, so it follows the mode. */
 .gw-panel {
-  background: linear-gradient(180deg, #17120e, #100d0a);
-  border: 1px solid #32281c;
+  background: var(--gw-panel-bg);
+  border: 1px solid var(--gw-panel-border);
   border-radius: var(--gw-radius);
-  box-shadow:
-    inset 0 0 0 1px #0a080699,
-    inset 0 1px 0 #67583e33;
+  box-shadow: var(--gw-panel-shadow);
 }
 
 /* Forge-gradient primary + hairline secondary actions. */
@@ -170,9 +296,9 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 }
 
 .gw-btn-secondary {
-  color: var(--gw-parch);
-  background: #0a080680;
-  border: 1px solid var(--gw-gold-line);
+  color: var(--gw-art-ink);
+  background: var(--gw-art-surface);
+  border: 1px solid var(--gw-art-line);
   backdrop-filter: blur(4px);
   transition:
     border-color 0.2s,
@@ -180,8 +306,8 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 }
 
 .gw-btn-secondary:hover {
-  border-color: var(--gw-gold-dark);
-  background: #1d171280;
+  border-color: var(--gw-art-gold);
+  background: var(--gw-art-surface-hover);
 }
 
 .gw-btn-primary:focus-visible,
@@ -239,8 +365,8 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 /* Stat band fused into the hero's bottom edge. */
 .gw-stat-band {
   position: relative;
-  border-top: 1px solid #67583e4d;
-  background: #0a0806b8;
+  border-top: 1px solid color-mix(in oklab, var(--gw-art-line) 45%, transparent);
+  background: var(--gw-art-band);
   backdrop-filter: blur(6px);
   display: flex;
   flex-wrap: wrap;
@@ -261,21 +387,21 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
   left: -5px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--gw-gold-line);
+  color: var(--gw-art-line);
   font-size: 8px;
 }
 
 .gw-stat .gw-v {
   font-family: var(--font-display);
   font-size: 30px;
-  color: var(--gw-gold);
-  text-shadow: 0 0 18px #f3dd9d33;
+  color: var(--gw-art-gold-strong);
+  text-shadow: 0 0 18px color-mix(in oklab, var(--gw-art-gold-strong) 20%, transparent);
 }
 
 .gw-stat .gw-l {
   margin-top: 3px;
   font-size: 12px;
-  color: var(--gw-parch-faint);
+  color: var(--gw-art-ink-faint);
   letter-spacing: 0.03em;
 }
 
@@ -335,7 +461,7 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 
 /* FAQ hairline accordion: the ◆ rotates and ignites when open. */
 .gw-faq details {
-  border-bottom: 1px solid #32281c;
+  border-bottom: 1px solid var(--gw-hairline);
 }
 
 .gw-faq summary {
@@ -347,7 +473,7 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
   padding: 18px 4px;
   font-size: 15.5px;
   font-weight: 600;
-  color: var(--gw-parch);
+  color: var(--gw-text);
 }
 
 .gw-faq summary::-webkit-details-marker {
@@ -357,7 +483,7 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 .gw-faq summary::before {
   content: "◆";
   font-size: 9px;
-  color: var(--gw-gold-dark);
+  color: var(--gw-accent-quiet);
   transition:
     transform 0.25s,
     color 0.25s;
@@ -369,11 +495,19 @@ aside[data-variant] [data-reka-scroll-area-viewport] {
 }
 
 .gw-faq summary:hover {
-  color: var(--gw-gold);
+  color: var(--gw-accent-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .gw-faq summary::before {
     transition: none;
   }
+}
+
+/* Inline code inside content tables must not break mid-token: identifiers
+   like `UR-01` or `FS.mkdirTree` otherwise wrap at the hyphen or dot when a
+   column gets tight. The .content-table-scroll wrapper already handles any
+   resulting overflow. */
+.content-table code {
+  white-space: nowrap;
 }

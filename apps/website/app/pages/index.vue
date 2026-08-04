@@ -157,7 +157,8 @@ const VOICES_HEADING = {
   },
 };
 
-// Avatar plate hues cycle per card: ember, gold, rust.
+// Avatar plate hues cycle per card: ember, gold, rust. The plates stay dark in
+// both color modes, so the initial on top keeps the fixed --gw-gold.
 const AVATAR_HUES = ["#8a2508", "#6d5222", "#45280f"];
 
 const TESTIMONIALS = [
@@ -237,8 +238,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Will this get me banned?", de: "Kann ich dafür gebannt werden?" },
     a: {
-      en: "GWonMac is an independent, open-source project and is not affiliated with or endorsed by ArenaNet or NCSoft. It runs ArenaNet’s official client, downloads official files directly from ArenaNet, and does not automate gameplay. ArenaNet has not published a policy covering hosts like this one and could take a different view in future. Use it at your own discretion; only ArenaNet decides what its Terms of Service allow.",
-      de: "GWonMac ist ein unabhängiges Open-Source-Projekt und weder mit ArenaNet noch mit NCSoft verbunden oder von ihnen freigegeben. Es führt ArenaNets offiziellen Client aus, lädt die offiziellen Dateien direkt von ArenaNet und automatisiert kein Gameplay. ArenaNet hat keine Richtlinie zu Hosts wie diesem veröffentlicht und könnte das künftig anders bewerten. Nutzung auf eigene Verantwortung; was die Nutzungsbedingungen erlauben, entscheidet allein ArenaNet.",
+      en: "Nobody outside ArenaNet can guarantee that, so here is what we actually know. We contacted ArenaNet before launch: in late July 2026 a staff member ran GWonMac on their own Mac and said they are fine with what the project does as things stand. That is not an endorsement or a policy, and ArenaNet could take a different view later. GWonMac runs ArenaNet’s unmodified official client, hooks into nothing, and automates nothing. If ArenaNet ever says stop, the project is deprecated and everyone is told the same day.",
+      de: "Niemand außerhalb von ArenaNet kann das garantieren, deshalb hier, was wir tatsächlich wissen. Wir haben ArenaNet vor dem Launch kontaktiert: Ende Juli 2026 hat ein Mitarbeiter GWonMac auf seinem eigenen Mac ausgeführt und gesagt, dass er nach aktuellem Stand damit einverstanden ist. Das ist keine Freigabe und keine Richtlinie, und ArenaNet kann das künftig anders bewerten. GWonMac führt ArenaNets offiziellen Client unverändert aus, klinkt sich nirgends ein und automatisiert nichts. Sagt ArenaNet jemals Stopp, wird das Projekt eingestellt und alle erfahren es am selben Tag.",
     },
     link: {
       label: { en: "Read the full safety page", de: "Zur ausführlichen Sicherheitsseite" },
@@ -411,17 +412,10 @@ useSchemaJsonLd(() => [
 <template>
   <div class="overflow-hidden">
     <!-- Hero — "The Shrine": centered title-screen composition over key art. -->
-    <section class="relative border-b border-border bg-[#0a0806]">
+    <section class="relative border-b border-border bg-(--gw-art-base)">
       <div class="absolute inset-0 overflow-hidden" aria-hidden="true">
-        <img
-          src="/bg-reforged.jpg"
-          alt=""
-          class="gw-drift absolute inset-0 size-full object-cover object-[center_30%]"
-          loading="eager"
-        />
-        <div
-          class="absolute inset-0 bg-[radial-gradient(90%_65%_at_50%_42%,transparent_30%,#0a0806cc_100%),linear-gradient(180deg,#0a0806b3_0%,#0a080626_30%,#0a08061a_55%,#0a0806f2_100%)]"
-        />
+        <div class="gw-art gw-drift absolute inset-0 size-full bg-[position:center_30%]" />
+        <div class="gw-hero-scrim absolute inset-0" />
       </div>
       <div
         class="relative mx-auto flex max-w-3xl flex-col items-center px-6 pt-20 pb-16 text-center sm:pt-24 sm:pb-20"
@@ -429,17 +423,17 @@ useSchemaJsonLd(() => [
         <img
           src="/reforged-logo.webp"
           alt="Guild Wars Reforged"
-          class="w-[min(430px,80vw)] drop-shadow-[0_4px_22px_#0a0806]"
+          class="w-[min(430px,80vw)] drop-shadow-[0_4px_22px_var(--gw-art-halo)]"
           loading="eager"
         />
         <h1
-          class="mt-8 font-(family-name:--font-display) text-4xl leading-[1.08] font-normal text-balance text-[#fdf3e3] [text-shadow:0_2px_14px_#0a0806] sm:text-5xl"
+          class="mt-8 font-(family-name:--font-display) text-4xl leading-[1.08] font-normal text-balance text-(--gw-art-ink) [text-shadow:0_2px_14px_var(--gw-art-halo)] sm:text-5xl"
         >
           {{ localize(HERO.title) }}
         </h1>
         <div class="gw-rule mt-6 w-[min(420px,80%)]">◆</div>
         <p
-          class="mt-6 max-w-[56ch] text-base leading-7 text-(--gw-parch-dim) [text-shadow:0_1px_8px_#0a0806] sm:text-lg sm:leading-8"
+          class="mt-6 max-w-[56ch] text-base leading-7 text-(--gw-art-ink-dim) [text-shadow:0_1px_8px_var(--gw-art-halo)] sm:text-lg sm:leading-8"
         >
           {{ localize(HERO.sub) }}
         </p>
@@ -456,7 +450,7 @@ useSchemaJsonLd(() => [
           </NuxtLink>
           <NuxtLink :to="docsPath" class="gw-btn-secondary">{{ localize(HERO.docs) }}</NuxtLink>
         </div>
-        <p class="mt-5 text-[12.5px] tracking-[0.04em] text-(--gw-parch-faint)">
+        <p class="mt-5 text-[12.5px] tracking-[0.04em] text-(--gw-art-ink-faint)">
           <template v-if="latestRelease?.version">{{ latestRelease.version }} · </template>{{ localize(HERO.finePrint) }}
         </p>
       </div>
@@ -487,14 +481,14 @@ useSchemaJsonLd(() => [
           class="gw-panel relative min-w-0 p-6"
         >
           <span
-            class="absolute top-5 right-5 text-[10px] tracking-[0.14em] text-(--gw-gold-dark) uppercase"
+            class="absolute top-5 right-5 text-[10px] tracking-[0.14em] text-(--gw-accent-quiet) uppercase"
           >
             {{ localize(feature.kicker) }}
           </span>
-          <h3 class="mt-6 font-(family-name:--font-display) text-xl text-(--gw-parch)">
+          <h3 class="mt-6 font-(family-name:--font-display) text-xl text-(--gw-text)">
             {{ localize(feature.title) }}
           </h3>
-          <p class="mt-2 text-[13.5px] leading-relaxed text-(--gw-parch-faint)">
+          <p class="mt-2 text-[13.5px] leading-relaxed text-(--gw-text-faint)">
             {{ localize(feature.description) }}
           </p>
         </article>
@@ -504,7 +498,7 @@ useSchemaJsonLd(() => [
     <!-- Testimonials — masonry wall with bottom fade -->
     <section class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
       <div class="mx-auto flex max-w-2xl flex-col items-center text-center">
-        <p class="text-xs font-semibold tracking-[0.22em] text-(--gw-gold-mid) uppercase">
+        <p class="text-xs font-semibold tracking-[0.22em] text-(--gw-accent) uppercase">
           {{ localize(VOICES_HEADING.eyebrow) }}
         </p>
         <h2 class="mt-3 font-(family-name:--font-display) text-3xl text-foreground sm:text-4xl">
@@ -536,14 +530,14 @@ useSchemaJsonLd(() => [
                   :to="item.href"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="block truncate font-semibold text-(--gw-gold) hover:underline"
+                  class="block truncate font-semibold text-(--gw-accent-strong) hover:underline"
                 >
                   u/{{ item.user }}
                 </NuxtLink>
-                <span class="text-(--gw-parch-faint)">{{ item.device }}</span>
+                <span class="text-(--gw-text-faint)">{{ item.device }}</span>
               </span>
             </figcaption>
-            <blockquote class="mt-4 text-sm leading-7 text-(--gw-parch-dim)">
+            <blockquote class="mt-4 text-sm leading-7 text-(--gw-text-dim)">
               <q>{{ item.quote }}</q>
             </blockquote>
           </figure>
@@ -557,7 +551,7 @@ useSchemaJsonLd(() => [
       <h2 class="font-(family-name:--font-display) text-3xl text-foreground sm:text-4xl">
         {{ localize(FAQ_HEADING.title) }}
       </h2>
-      <div class="gw-faq mt-10 border-t border-[#32281c]">
+      <div class="gw-faq mt-10 border-t border-(--gw-hairline)">
         <details
           v-for="(item, index) in FAQ"
           :key="localize(item.q)"
@@ -565,12 +559,12 @@ useSchemaJsonLd(() => [
           @toggle="handleFaqToggle($event, item.q)"
         >
           <summary>{{ localize(item.q) }}</summary>
-          <p class="max-w-[64ch] px-1 pb-5 pl-[27px] text-sm leading-6 text-(--gw-parch-faint)">
+          <p class="max-w-[64ch] px-1 pb-5 pl-[27px] text-sm leading-6 text-(--gw-text-faint)">
             {{ localize(item.a) }}
             <NuxtLink
               v-if="item.link"
               :to="localize(item.link.href)"
-              class="mt-1 block w-fit font-medium text-(--gw-gold-mid) hover:text-(--gw-gold) hover:underline"
+              class="mt-1 block w-fit font-medium text-(--gw-accent) hover:text-(--gw-accent-strong) hover:underline"
             >
               {{ localize(item.link.label) }} →
             </NuxtLink>
@@ -601,27 +595,20 @@ useSchemaJsonLd(() => [
     </section>
 
     <!-- Final CTA — return to Tyria -->
-    <section class="relative border-t border-border bg-[#0a0806]">
+    <section class="relative border-t border-border bg-(--gw-art-base)">
       <div class="absolute inset-0 overflow-hidden" aria-hidden="true">
-        <img
-          src="/bg-reforged.jpg"
-          alt=""
-          class="absolute inset-0 size-full object-cover object-[center_70%]"
-          loading="lazy"
-        />
-        <div
-          class="absolute inset-0 bg-[linear-gradient(180deg,#0a0806f5_0%,#0a080699_50%,#0a0806f5_100%)]"
-        />
+        <div class="gw-art absolute inset-0 size-full bg-[position:center_70%]" />
+        <div class="gw-cta-scrim absolute inset-0" />
       </div>
       <div
         class="relative mx-auto flex max-w-6xl flex-col items-center px-5 py-20 text-center sm:px-8 sm:py-28"
       >
         <h2
-          class="font-(family-name:--font-display) text-4xl text-balance text-[#fdf3e3] [text-shadow:0_2px_14px_#0a0806] sm:text-5xl"
+          class="font-(family-name:--font-display) text-4xl text-balance text-(--gw-art-ink) [text-shadow:0_2px_14px_var(--gw-art-halo)] sm:text-5xl"
         >
           {{ localize(CTA.title) }}
         </h2>
-        <p class="mt-3 text-base text-(--gw-parch-dim) sm:text-lg">{{ localize(CTA.sub) }}</p>
+        <p class="mt-3 text-base text-(--gw-art-ink-dim) sm:text-lg">{{ localize(CTA.sub) }}</p>
         <div class="gw-rule mt-6 w-[min(360px,80%)] text-xs">◆</div>
         <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
           <NuxtLink
