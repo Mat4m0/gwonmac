@@ -161,7 +161,13 @@
                       font:11px/1.5 ui-monospace, Menlo, monospace;
                       white-space:pre-wrap; overflow-wrap:anywhere;
                       user-select:text; -webkit-user-select:text; }
+/* Both rows claim a whole flex line. Without the second rule the boot row
+   keeps `flex:1`'s zero flex-basis, so it "fits" beside a 100%-basis sibling,
+   wins none of the zero free space, and collapses to 0px — the label then
+   wraps one word per line behind a full-width detail block. */
 #loading-dock:has(#loading-crash-detail:not([hidden])) { flex-wrap:wrap; }
+#loading-dock:has(#loading-crash-detail:not([hidden])) #loading-boot {
+  flex-basis:100%; }
 
 #loading-label { font-size:17px; letter-spacing:.02em; color:#f2e8d2;
                  text-shadow:0 1px 6px #000c; }
