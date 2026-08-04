@@ -16,20 +16,6 @@ const POINTER_ROAM = 16;
 // dropped. Four cross a drag's whole range; further is a teleport, not a drag.
 const MAX_POINTER_REGRABS = 4;
 
-// Chromium's own double-click slop: clicks further apart than this are
-// separate clicks, so a press that travelled further before releasing was a
-// drag, not half of a double-click.
-const DOUBLE_CLICK_SLOP = 4;
-
-// A deliberate double-click and the first two clicks of a fast burst are
-// physically identical; only what follows tells them apart. The synthetic tap
-// pair is therefore held back long enough for a continuing burst's third
-// press to cancel it — the Windows client ignores double-clicks on buttons,
-// so a burst (attribute points) must produce plain clicks and nothing else.
-// The cost is a real double-click's action landing this much later.
-const DOUBLE_TAP_HOLDBACK_MS = 250;
-const DOUBLE_TAP_GAP_MS = 80;
-
 // ArenaNet's web client identifies a binding by KeyboardEvent.key, which is a
 // character from the active keyboard layout. Give each main-block position a
 // unique stable US-layout character instead. `code` already is the browser's
@@ -49,6 +35,30 @@ const PHYSICAL_PUNCTUATION_KEYS: Readonly<Record<string, string>> = {
   Period: '.',
   Slash: '/',
 };
+
+// The modifier keys the client tracks, by the `KeyboardEvent.key` it reads.
+// It has no fourth: Command is not a Guild Wars modifier.
+const TRACED_MODIFIERS: Readonly<Record<string, 'ctrl' | 'shift' | 'alt'>> = {
+  Control: 'ctrl',
+  Shift: 'shift',
+  Alt: 'alt',
+};
+
+/**
+ * The modifiers a press carried, as the trace prints them.
+ *
+ * Worth knowing when reading one: the client does not use these. Its mouse
+ * callback reads only the button and the position out of the event and never
+ * touches the modifier bytes beside them, so a press message carries a
+ * modifier state the client accumulated from *key* events instead. A trace
+ * that shows `left +ctrl` on the press and no Control key down before it is
+ * therefore a report about the keyboard path, not the mouse one.
+ */
+const modifierText = (event: MouseEvent): string =>
+  (event.ctrlKey ? ' +ctrl' : '') +
+  (event.shiftKey ? ' +shift' : '') +
+  (event.altKey ? ' +alt' : '') +
+  (event.metaKey ? ' +cmd' : '');
 
 const physicalKey = (code: string, fallback: string): string => {
   if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
@@ -82,6 +92,11 @@ type HeldKey = {
 type HeldButton = {
   target: EventTarget | null;
   button: number;
+  // Where the press landed, which the moves below deliberately do not update:
+  // the trace reports how far a press travelled before its release, and the
+  // live coordinates have already been walked to the pointer by then.
+  originX: number;
+  originY: number;
   clientX: number;
   clientY: number;
   screenX: number;
@@ -95,6 +110,12 @@ type HeldButton = {
 type GameInputOptions = {
   canvas: HTMLCanvasElement;
   diagnostics?: GameInputDiagnostics;
+  /**
+   * The developer trace, when the player has switched it on. It observes and
+   * never decides: every call here is on a path whose behaviour is identical
+   * with the trace absent.
+   */
+  trace?: InputTrace;
   /**
    * The client's own cursor-hidden state through the certified cursor
    * readout, or null while that readout is unavailable (enhancement off,
@@ -113,18 +134,23 @@ const POINTER_MODE_INTERVAL_MS = 50;
 export const installGameInput = ({
   canvas,
   diagnostics,
+  trace,
   clientCursorHidden,
   log,
 }: GameInputOptions): GameInputController => {
   const heldKeys = new Map<string, HeldKey>();
   const heldButtons = new Map<number, HeldButton>();
-  const syntheticTouches = new Map<number, Touch>();
-  const tapTimers = new Set<ReturnType<typeof setTimeout>>();
-  let pendingTap: { x: number; y: number } | null = null;
-  let touchId = 0;
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let modeWatch: ReturnType<typeof setInterval> | null = null;
+  // The lock state the trace last reported, which is not the same as the lock
+  // state. A right-click shorter than the lock's round trip resolves its
+  // request after the button is already up, so the exit below runs before the
+  // browser delivers the change event that announced the lock — and both that
+  // event and the one for the exit then read an already-cleared
+  // `pointerLockElement`. Reporting each of those is how a lock nobody held
+  // came out of the trace as "released" twice with no "engaged" above it.
+  let lockTraced = false;
 
   function stopModeWatch() {
     if (modeWatch !== null) clearInterval(modeWatch);
@@ -151,68 +177,6 @@ export const installGameInput = ({
       else if (button === 4) buttons |= 16;
     }
     return buttons;
-  };
-
-  const schedule = (callback: () => void, delay: number) => {
-    const timer = setTimeout(() => {
-      tapTimers.delete(timer);
-      callback();
-    }, delay);
-    tapTimers.add(timer);
-    return timer;
-  };
-
-  const cancelTapTimers = () => {
-    for (const timer of tapTimers) clearTimeout(timer);
-    tapTimers.clear();
-  };
-
-  const makeTouch = (x: number, y: number, identifier: number) => new Touch({
-    identifier,
-    target: canvas,
-    clientX: x,
-    clientY: y,
-    pageX: x,
-    pageY: y,
-    screenX: x,
-    screenY: y,
-    radiusX: 5,
-    radiusY: 5,
-    rotationAngle: 0,
-    force: 1,
-  });
-
-  const sendTouch = (
-    type: 'touchstart' | 'touchend' | 'touchcancel',
-    touch: Touch,
-  ) => {
-    const ended = type === 'touchend' || type === 'touchcancel';
-    canvas.dispatchEvent(new TouchEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      touches: ended ? [] : [touch],
-      targetTouches: ended ? [] : [touch],
-      changedTouches: [touch],
-    }));
-  };
-
-  const startTouch = (touch: Touch) => {
-    syntheticTouches.set(touch.identifier, touch);
-    sendTouch('touchstart', touch);
-  };
-  const finishTouch = (type: 'touchend' | 'touchcancel', touch: Touch) => {
-    syntheticTouches.delete(touch.identifier);
-    sendTouch(type, touch);
-  };
-
-  const cancelSyntheticTouches = () => {
-    cancelTapTimers();
-    pendingTap = null;
-    for (const touch of syntheticTouches.values()) {
-      sendTouch('touchcancel', touch);
-    }
-    syntheticTouches.clear();
   };
 
   const sendMouse = (
@@ -353,9 +317,6 @@ export const installGameInput = ({
     if (releasing) return;
     releasing = true;
     try {
-      // A double-click repair interrupted between its two taps must not leave
-      // ArenaNet's touch detector held across a native modal or focus change.
-      cancelSyntheticTouches();
       resetWheel();
       releaseKeys();
       releaseButtons();
@@ -369,6 +330,8 @@ export const installGameInput = ({
     const held = heldKeys.get(event.code);
     const key = clientKey(event, event.repeat ? held?.key : undefined);
     if (event.repeat && held) return;
+    const modifier = TRACED_MODIFIERS[key];
+    if (modifier) trace?.record({ kind: 'modifier', key: modifier, down: true });
     heldKeys.set(event.code, {
       target: event.target,
       key,
@@ -386,7 +349,9 @@ export const installGameInput = ({
   window.addEventListener('keyup', (event) => {
     if (!event.isTrusted) return;
     const held = heldKeys.get(event.code);
-    clientKey(event, held?.key);
+    const key = clientKey(event, held?.key);
+    const modifier = TRACED_MODIFIERS[key];
+    if (modifier) trace?.record({ kind: 'modifier', key: modifier, down: false });
     heldKeys.delete(event.code);
     // A release landing on renderer UI (the Tools palette) never bubbles back
     // to the client's canvas listeners, so a press the canvas received would
@@ -409,9 +374,17 @@ export const installGameInput = ({
   }, true);
   window.addEventListener('mousedown', (event) => {
     if (!event.isTrusted) return;
+    trace?.record({
+      kind: 'press',
+      button: event.button,
+      detail: event.detail,
+      modifiers: modifierText(event),
+    });
     heldButtons.set(event.button, {
       target: event.target,
       button: event.button,
+      originX: event.clientX,
+      originY: event.clientY,
       clientX: event.clientX,
       clientY: event.clientY,
       screenX: event.screenX,
@@ -425,6 +398,16 @@ export const installGameInput = ({
   window.addEventListener('mouseup', (event) => {
     if (!event.isTrusted) return;
     const held = heldButtons.get(event.button);
+    trace?.record({
+      kind: 'release',
+      button: event.button,
+      travelPx: held
+        ? Math.round(Math.hypot(
+          event.clientX - held.originX,
+          event.clientY - held.originY,
+        ))
+        : 0,
+    });
     heldButtons.delete(event.button);
     if (held && held.target === canvas && event.target !== canvas) {
       dispatchButtonRelease(held);
@@ -444,11 +427,20 @@ export const installGameInput = ({
     }
   }, true);
 
-  window.addEventListener('blur', releaseAll);
-  window.addEventListener('pagehide', releaseAll);
-  window.addEventListener('gw:input-reset', releaseAll);
+  const releaseFor = (cause: 'blur' | 'hidden' | 'command' | 'leave') => () => {
+    // Only the causes are named, not a new reason to release: every one of
+    // these already released everything, and the trace exists to say which
+    // native interruption ended a drag the player thought they still had.
+    if (heldKeys.size || heldButtons.size) {
+      trace?.record({ kind: 'release-all', cause });
+    }
+    releaseAll();
+  };
+  window.addEventListener('blur', releaseFor('blur'));
+  window.addEventListener('pagehide', releaseFor('blur'));
+  window.addEventListener('gw:input-reset', releaseFor('command'));
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') releaseAll();
+    if (document.visibilityState === 'hidden') releaseFor('hidden')();
   });
 
   // Pixel deltas from trackpads become bounded pixel steps; discrete mouse
@@ -495,78 +487,6 @@ export const installGameInput = ({
     normalizedWheels.add(normalized);
     canvas.dispatchEvent(normalized);
   }, { capture: true, passive: false });
-
-  /**
-   * Whether a synthetic tap may reach the client right now.
-   *
-   * A tap is not a passive hint: the client's touch path force-releases every
-   * mouse button it has captured, moves its cursor to the tap point, and
-   * switches to a touch input mode in which real mouse releases are dropped
-   * until a real press restores it. Delivered mid-drag — walking with both
-   * buttons, steering the camera — that desynchronises the client's button
-   * state from the OS's, and the frame layer asserts on the mismatch. The tap
-   * pair is deferred by design, so this is re-asked when it fires, not only
-   * when it is scheduled.
-   */
-  const tapsSafe = () =>
-    heldButtons.size === 0 && document.pointerLockElement !== canvas;
-
-  const tapAt = (x: number, y: number, delay: number) => schedule(() => {
-    if (!tapsSafe()) {
-      cancelSyntheticTouches();
-      diagnostics?.event('input.tapSuppressed');
-      return;
-    }
-    const touch = makeTouch(x, y, ++touchId);
-    startTouch(touch);
-    // The touchstart dispatch can synchronously cancel all synthetic input —
-    // releaseAll from a listener the client installed. A touchend for a touch
-    // no longer tracked would restate an input the cancel already retracted.
-    if (!syntheticTouches.has(touch.identifier)) return;
-    schedule(() => finishTouch('touchend', touch), 30);
-  }, delay);
-
-  canvas.addEventListener('mousedown', (event) => {
-    if (event.button !== 0) return;
-    // A left press while another button is already held is the walk-and-look
-    // grip, not a click run: no double-tap belongs to it, and the tap would
-    // tear down the capture the other button holds.
-    if (heldButtons.size > 1 || document.pointerLockElement === canvas) {
-      cancelSyntheticTouches();
-      return;
-    }
-    // Chromium already applies the user's macOS double-click speed and
-    // distance preferences to detail. ArenaNet's mouse bridge discards that
-    // count, but its touch path has the double-tap detector the game needs for
-    // actions such as equipping an item. Preserve every mouse event and append
-    // exactly that missing signal for each completed native double-click.
-    // detail counts the whole click run, so only the transition into its
-    // second click is one: the later even counts (4, 6, …) are rapid single
-    // clicks continuing the run, and synthesizing for them turned fast
-    // attribute-point clicking into spurious double-clicks.
-    cancelSyntheticTouches();
-    if (event.detail === 2) {
-      pendingTap = { x: event.clientX, y: event.clientY };
-    }
-  }, true);
-
-  canvas.addEventListener('mouseup', (event) => {
-    if (event.button !== 0 || !pendingTap) return;
-    const { x, y } = pendingTap;
-    pendingTap = null;
-    // A press that travelled past the slop before releasing was a drag; a tap
-    // pair at the stale press point would act far from where the drag ended.
-    if (
-      Math.abs(event.clientX - x) > DOUBLE_CLICK_SLOP ||
-      Math.abs(event.clientY - y) > DOUBLE_CLICK_SLOP
-    ) return;
-    tapAt(x, y, DOUBLE_TAP_HOLDBACK_MS);
-    tapAt(x, y, DOUBLE_TAP_HOLDBACK_MS + DOUBLE_TAP_GAP_MS);
-  }, true);
-
-  canvas.addEventListener('mouseleave', () => {
-    pendingTap = null;
-  }, true);
 
   // The client steers from absolute coordinates, so a held right-drag eventually
   // runs out of the room a re-anchor gives it. Release and re-press at center
@@ -694,6 +614,10 @@ export const installGameInput = ({
   }, true);
   document.addEventListener('pointerlockchange', () => {
     const locked = document.pointerLockElement === canvas;
+    if (locked !== lockTraced) {
+      lockTraced = locked;
+      trace?.record({ kind: 'pointer-lock', locked });
+    }
     canvas.classList.toggle('cursor-hidden', locked);
     if (locked && !pointerWanted) {
       document.exitPointerLock();
@@ -706,10 +630,9 @@ export const installGameInput = ({
     log('[warn] pointer lock failed (needs a user gesture and focused document)');
     releaseButtons();
   });
-  document.documentElement.addEventListener('mouseleave', releaseAll);
+  document.documentElement.addEventListener('mouseleave', releaseFor('leave'));
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  log('macOS double-click repair: enabled');
   canvas.dataset.inputReady = 'true';
 
   return Object.freeze({

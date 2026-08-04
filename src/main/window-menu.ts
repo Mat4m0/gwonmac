@@ -197,6 +197,17 @@ export function installApplicationMenu({
                 });
               },
             },
+            // The trace answers a different question from a capture — what the
+            // input host decided, not what the frame cost — so it is its own
+            // switch rather than a level of the capture it would otherwise
+            // have to be armed alongside.
+            {
+              id: "toggle-input-trace",
+              label: "Show Input Trace",
+              click: () => {
+                void sendRendererCommand(win, { type: "input.trace" });
+              },
+            },
             {
               id: "stop-capture",
               label: "Stop Capture",

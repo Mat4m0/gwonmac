@@ -65,6 +65,9 @@
           });
         });
         break;
+      case 'input.trace':
+        dispatch('gw:input-trace');
+        break;
       case 'diagnostics.toggle':
         dispatch('gw:diagnostics-toggle');
         break;

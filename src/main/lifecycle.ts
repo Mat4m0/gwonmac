@@ -33,22 +33,51 @@ export function onAppQuit(task: CleanupTask): () => void {
   };
 }
 
+/**
+ * How long the whole pass may take before the process leaves anyway.
+ *
+ * A quit request is answered by cancelling the quit and running cleanup, so
+ * until cleanup finishes the application is still there — and Cmd+Q, having
+ * already been consumed, looks like it did nothing. Every task is meant to be
+ * quick, but two of them are not bounded by anything of their own: the
+ * renderer filesystem sync waits out `RENDERER_COMMAND_TIMEOUT_MS`, and the
+ * client shutdown awaits an in-flight game update. This is the ceiling on all
+ * of it, chosen to sit above one renderer command and below the point where a
+ * person presses Cmd+Q a second time.
+ */
+export const QUIT_CLEANUP_DEADLINE_MS = 6_000;
+
 export async function runQuitCleanup(): Promise<void> {
   if (quitting) return;
   quitting = true;
   logEvent({ k: "quit.cleanupStarted" });
   const tasks = [...cleanups].reverse();
   cleanups.length = 0;
-  for (const task of tasks) {
-    try {
-      await task();
-    } catch (err) {
-      logEvent({ k: "quit.cleanupFailed", code: errorCode(err) });
-      // The prose stays on the developer console, which is not exported.
-      console.error("quit cleanup failed", err);
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<"timed-out">((resolve) => {
+    deadline = setTimeout(() => resolve("timed-out"), QUIT_CLEANUP_DEADLINE_MS);
+  });
+  const pass = (async () => {
+    for (const task of tasks) {
+      try {
+        await task();
+      } catch (err) {
+        logEvent({ k: "quit.cleanupFailed", code: errorCode(err) });
+        // The prose stays on the developer console, which is not exported.
+        console.error("quit cleanup failed", err);
+      }
     }
-  }
-  logEvent({ k: "quit.cleanupCompleted" });
+  })();
+  const outcome = await Promise.race([pass.then(() => "completed" as const), expired]);
+  clearTimeout(deadline);
+  // A task still running past the deadline keeps running; nothing here can
+  // cancel it. What the deadline buys is that the process no longer waits for
+  // it, and that the record says which of the two happened.
+  logEvent(
+    outcome === "completed"
+      ? { k: "quit.cleanupCompleted" }
+      : { k: "quit.cleanupTimedOut" },
+  );
   await flushDiagnostics();
 }
 

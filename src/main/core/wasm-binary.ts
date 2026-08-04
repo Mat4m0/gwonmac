@@ -314,3 +314,45 @@ export function functionImportIndex(
   });
   return found;
 }
+
+export interface WasmExport {
+  name: string;
+  kind: number;
+  index: number;
+}
+
+/**
+ * A section whose body is one vector, split into its count and the bytes
+ * behind it — what a rewrite needs to append an entry without re-encoding the
+ * entries it is not touching.
+ */
+export function vectorPayload(bytes: Uint8Array): {
+  count: number;
+  entries: Uint8Array;
+} {
+  const cursor = { offset: 0 };
+  const count = readUleb(bytes, cursor);
+  return { count, entries: copyRange(bytes, cursor.offset, bytes.byteLength) };
+}
+
+export function parseExports(bytes: Uint8Array): WasmExport[] {
+  const cursor = { offset: 0 };
+  const count = readUleb(bytes, cursor);
+  const exports: WasmExport[] = [];
+  const decoder = new TextDecoder();
+  for (let index = 0; index < count; index += 1) {
+    const nameLength = readUleb(bytes, cursor);
+    const end = cursor.offset + nameLength;
+    if (end > bytes.byteLength) {
+      throw new Error("wasm-binary: truncated export name");
+    }
+    const name = decoder.decode(copyRange(bytes, cursor.offset, end));
+    cursor.offset = end;
+    const kind = bytes[cursor.offset++]!;
+    exports.push({ name, kind, index: readUleb(bytes, cursor) });
+  }
+  if (cursor.offset !== bytes.byteLength) {
+    throw new Error("wasm-binary: malformed export section");
+  }
+  return exports;
+}

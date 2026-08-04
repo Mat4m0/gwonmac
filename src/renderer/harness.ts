@@ -425,6 +425,7 @@ let clientHealthConfirmation:
 let createClientHealthConfirmation:
   typeof import('./client-health.js').createClientHealthConfirmation;
 let inputHost: GameInputController | null = null;
+let inputTrace: InputTrace | null = null;
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
@@ -451,6 +452,8 @@ let host: typeof import('./graphics.js') &
   typeof import('./gl-program-cache.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
+  typeof import('./input-trace.js') &
+  typeof import('./native-double-click.js') &
   typeof import('./clipboard-copy.js') &
   typeof import('./template-save-compatibility.js') &
   typeof import('./template-filesystem-trace.js');
@@ -944,13 +947,43 @@ function loadGlue() {
     window.addEventListener(ev, resumeAudio, true);
   }
 
+  // The trace observes the input host and is switched on from the menu. It is
+  // built here, before the host, because the host takes it once and never asks
+  // again — a trace created later would watch nothing.
+  inputTrace = host.createInputTrace(
+    document.body,
+    (text) => native().clipboard.writeText(text),
+  );
+  window.addEventListener('gw:input-trace', () => {
+    log(`input trace: ${inputTrace?.toggle() ? 'on' : 'off'}`);
+  });
+
   inputHost = host.installGameInput({
     canvas: c,
     diagnostics: window.gwDiagnostics,
+    trace: inputTrace,
     // Read through the window global rather than a module handle: input
     // installs before the enhancement chain decides whether a certified
     // cursor readout exists at all.
     clientCursorHidden: () => window.gwCursorState?.()?.hidden ?? null,
+    log,
+  });
+
+  // After the input host, and both before the glue. Correctness only needs the
+  // flag written before the client's own canvas listener runs, and a
+  // window-capture listener always precedes one on the canvas. Order between
+  // these two settles something smaller: registered first, this recorded its
+  // trace row above the press it belongs to, which read like the flag arrived
+  // before the click. The instance is read per press because input installs
+  // long before the glue instantiates anything.
+  host.installNativeDoubleClick({
+    flag: () => {
+      const exported = gameWasmInstance?.exports?.['gwonmac_double_click'];
+      return exported && typeof exported === 'object' && 'value' in exported
+        ? (exported as { value: number })
+        : null;
+    },
+    trace: inputTrace,
     log,
   });
   // Text entry runs through these, not through keydown on the canvas. Stray
@@ -1023,6 +1056,8 @@ function loadGlue() {
       glProgramCache,
       filesystem,
       input,
+      inputTraceModule,
+      nativeDoubleClickModule,
       clipboardCopy,
       templateSaveCompatibility,
       templateFilesystemTrace,
@@ -1035,6 +1070,8 @@ function loadGlue() {
       import('./gl-program-cache.js'),
       import('./filesystem.js'),
       import('./input.js'),
+      import('./input-trace.js'),
+      import('./native-double-click.js'),
       import('./clipboard-copy.js'),
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
@@ -1046,6 +1083,8 @@ function loadGlue() {
       ...glProgramCache,
       ...filesystem,
       ...input,
+      ...inputTraceModule,
+      ...nativeDoubleClickModule,
       ...clipboardCopy,
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,

@@ -28,6 +28,7 @@ export interface GamePaths {
   certificateFeed: string;
   compatibility: string;
   enhancements: string;
+  nativeDoubleClick: string;
   chunks: string;
   bootChunks: string;
   cacheClearRequest: string;
@@ -53,6 +54,7 @@ export function gamePaths(userData: string): GamePaths {
     certificateFeed: path.join(game, "certificate-feed.json"),
     compatibility: path.join(game, "compatibility"),
     enhancements: path.join(game, "enhancements"),
+    nativeDoubleClick: path.join(game, "double-click"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),

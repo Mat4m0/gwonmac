@@ -35,6 +35,7 @@ describe("resolved profile paths", () => {
       certificateFeed: `${root}/game/certificate-feed.json`,
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
+      nativeDoubleClick: `${root}/game/double-click`,
       chunks: `${root}/game/chunks`,
       bootChunks: `${root}/game/boot-chunks.json`,
       cacheClearRequest: `${root}/clear-cache-on-start`,
