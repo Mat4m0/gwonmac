@@ -115,6 +115,7 @@ test.describe("Enhancement runtime selection", () => {
         enhancementCapabilities,
         compatibilityCacheRoot: paths.compatibility,
         enhancementCacheRoot: paths.enhancements,
+        nativeDoubleClickCacheRoot: paths.nativeDoubleClick,
       });
       const bytes = await readFile(selected.wasmPath);
       const module = new WebAssembly.Module(bytes);

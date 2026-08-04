@@ -100,9 +100,11 @@ scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× render
 four times as many pixels.
 Right-drag always locks the pointer while steering the camera and restores it
 on release. Mouse, trackpad, and Magic Mouse clicks and drags pass through to
-Guild Wars unchanged. A macOS double-click automatically supplies the
-double-tap signal required by the official web client; there is no input mode to
-configure. Main-block letter, number-row, and punctuation bindings stay on the
+Guild Wars unchanged. A macOS double-click reaches Guild Wars as a
+double-click, using your own system double-click speed and distance settings;
+there is no input mode to configure. On a client build this host has not
+certified, double-click is unavailable until it is — the same builds that lose
+build templates and the game's own cursor. Main-block letter, number-row, and punctuation bindings stay on the
 same physical keys when the macOS input source changes, while chat and other
 text fields continue to type the active layout. Extra ISO/JIS keys and the
 numeric keypad retain the official web client's layout behavior. The in-game
@@ -238,6 +240,14 @@ in the app to export diagnostics and open it. Diagnostics are optional.
 - For stutter, choose **Record Performance Problem**, reproduce it, press
   **Cmd+Shift+M** when it is visible, then use
   **Help → Diagnostics → Stop Capture**.
+- For a mouse problem — a click that arrives twice, a double-click that does
+  nothing — choose
+  **Help → Diagnostics → Show Input Trace**, reproduce it, then press **Copy**
+  on the panel and paste the text straight into the report. It is a live list
+  of every button press and release and what the app decided to do with it.
+  Nothing is written to disk and nothing is sent anywhere; the text holds
+  counts and distances, never where your pointer was or where your window is,
+  and closing the trace discards it.
 - When investigating a repeatable long loading stall with a Chromium trace,
   start the trace and wait five seconds before entering the portal or changing
   maps. Stop the capture after the destination has rendered. The initial wait

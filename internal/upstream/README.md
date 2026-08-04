@@ -26,6 +26,7 @@ hash, that routes the broken routines back into the host.
 | [client-internals.md](client-internals.md) | us | The reference we had to build: function indices, data layouts, path conventions, the list filter. Everything a future change to this area needs. |
 | [host-bridge.md](host-bridge.md) | us | What we actually ship: the transform, the five markers, the bridge contract, and the invariants that must hold. |
 | [recertify.md](recertify.md) | us | The procedure when ArenaNet publishes a new client. Every index and offset below is build-specific. |
+| [mouse-double-click.md](mouse-double-click.md) | **ArenaNet** and us | A second, unrelated finding: the client's mouse path carries a double-click flag all the way to `FrMouse`, and the Emscripten glue never writes it. Why the host synthesises touch taps, what that costs, and the one byte that would end it. |
 | [investigation-log.md](investigation-log.md) | us | The chronology, including every wrong turn and what corrected it. Read this before re-deriving anything. |
 | [memory-exhaustion-log.md](memory-exhaustion-log.md) | us | Open: long-session `wasm.abort`s with the heap pegged at the client's compiled-in 2 GiB cap. The heap-staircase instrumentation and what the next crash bundle must answer. |
 | [investigation-template.md](investigation-template.md) | us | The shape a round takes — hypothesis, what was built, the measurement that killed it, the lesson. Copy it to start the next log. |

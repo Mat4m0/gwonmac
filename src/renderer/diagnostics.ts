@@ -41,7 +41,6 @@
     'graphics.programCacheSaturated',
     'clipboard.copied',
     'clipboard.writeFailed',
-    'input.tapSuppressed',
   ]);
   const histogram = (): Histogram => ({
     buckets: new Array<number>(histogramLimitsUs.length).fill(0),

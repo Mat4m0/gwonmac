@@ -311,3 +311,87 @@ by re-aiming the stored click on canvas movement instead of forgetting it.
 The lesson joins the list: **test the composition, not only the parts** — a
 predicate proven right in isolation was delivered one frame late by the
 wiring.
+
+## Round 12 — two wrong turns on Ctrl+click (2026-08-04)
+
+**Report.** "I can't Ctrl-Click to call out enemy targets."
+
+- **Hypothesis: macOS translates Control+left into a right press before the
+  page sees it.** Wrong, and it was written into a source comment as fact
+  before anything measured it. Chromium's
+  `content/common/input/web_input_event_builders_mac.mm` maps
+  `NSEventTypeLeftMouseDown` to `Button::kLeft` unconditionally, with no
+  modifier check — WebKit remaps, Blink deliberately does not. A probe under
+  the pinned Electron 43.2.0 delivers `mousedown button:0, buttons:1,
+  ctrlKey:true, isTrusted:true`, plus a `contextmenu`, and suppresses `click`.
+  The host was never the problem.
+- **Hypothesis: that extra `contextmenu` reaches the client and reads as a
+  right button.** Also wrong, and killed in one command. `contextmenu` appears
+  zero times in `Gw.jspi.js`, there is no `contextmenu` among the twelve
+  input callbacks the client registers, and Emscripten has no such API. The
+  client cannot be listening for it. The `preventDefault` on the canvas is a
+  browser-affordance suppression and nothing more.
+
+**What the search actually found.** `#2448`, the mousedown callback, reads
+exactly three things out of Emscripten's 64-byte event struct: the button at
+`+28` and the canvas-relative coordinates at `+40`/`+44`. The four modifier
+bytes at `+24…+27` — `ctrlKey`, `shiftKey`, `altKey`, `metaKey` — are never
+read by any mouse callback.
+
+So a click carries no modifiers of its own. `#829` fills the press message's
+modifier word from a global at `0x28cf0c` that only the *keyboard* path
+maintains: `#829`'s keydown branch ORs `1 << key` into it for key codes 0, 1
+and 2, and its keyup branch clears the same bit. The client's
+`KeyboardEvent.key` table gives `Control` code 1 and `Shift` code 2.
+
+**Consequence for the next reader.** Ctrl+click is a *keyboard* path bug, not a
+mouse one. Whatever breaks it breaks the Control keydown reaching the client or
+being mapped, and no amount of work on the mouse path can reach it. The input
+trace records modifier key transitions as their own rows for exactly this
+reason: a report showing a press with `+ctrl` and no `ctrl down` row before it
+names the failure immediately.
+
+**Lesson.** Round 3's lesson again, in its third costume: a comment that states
+a platform behaviour as fact is an unfalsifiable instrument until something
+measures it. This one was worse than a silent instrument, because it was also
+the interpretation guide printed beside the trace — it would have told the next
+reader to disbelieve a correct measurement. **Do not write a platform claim into
+a comment that has not been executed.**
+
+## Round 13 — the tap pair collapsed under its own timers (2026-08-04)
+
+**Report.** "Clicking is still not good." The input trace shipped the same day
+answered it in three lines:
+
+```
+388090    0ms  ARMED double-tap pair
+388429  339ms  SENT  double-tap 1/2
+388449   19ms  SENT  double-tap 2/2
+```
+
+The pair is scheduled at +250 ms and +330 ms. The first tap arrived 89 ms late
+and the second 19 ms behind it rather than 80 ms, because both timers were
+queued up front: once the main thread blocks past the second deadline, the two
+come due together and the spacing between them is whatever the task queue
+happens to do.
+
+**Why that breaks the double-click rather than merely rushing it.** A tap is
+held 30 ms, so tap 1's `touchend` was due at 388459 — ten milliseconds *after*
+tap 2's `touchstart`. `#2454` allocates the first free touch slot on each
+`touchstart` and frees it on `touchend`, so two live touches take two slots,
+and the detector in `#6614` requires the second tap to reuse the first one's
+slot. Different slots, no double-tap: the client sees two unrelated first taps
+and the action never fires.
+
+**Fix.** Chain the pair instead of scheduling it. Tap 2 is scheduled from tap
+1's release, so the order `start, end, start, end` holds at any timer lag. The
+regression test blocks the renderer's main thread for 500 ms after arming —
+against the old code it produces `start, start, end, end`.
+
+**Lesson.** Two independent timers are not a sequence. Where the order matters
+to the receiver, chain the steps; a delay is a hope, and this one was measured
+failing on a machine whose logs show frames of several seconds.
+
+**Note for the next reader.** This is a repair of the workaround, not of the
+defect. `mouse-double-click.md` records the byte that would delete the whole
+mechanism.

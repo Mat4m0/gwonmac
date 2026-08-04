@@ -32,6 +32,14 @@ import {
 } from "../main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
+  NATIVE_DOUBLE_CLICK_BUILDS,
+  rewriteWithBuild,
+} from "../main/certification/native-double-click.js";
+import {
+  findTemplateSaveBuild,
+  rewriteTemplateSaveWasm,
+} from "../main/certification/template-save-compat.js";
+import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_TRANSFORM_ABI,
 } from "../shared/contracts.js";
@@ -56,7 +64,8 @@ const USAGE =
   + "  recertify [PATH/Gw.jspi.wasm]        draft an Enhancement build entry, with evidence\n"
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
-  + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n";
+  + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n"
+  + "  double-click [PATH/Gw.jspi.wasm]     re-derive the native double-click table\n";
 
 /**
  * The one fixed profile the command line emits. The other certified profiles
@@ -204,7 +213,77 @@ async function transform(argv: readonly string[]): Promise<void> {
   })}\n`);
 }
 
-const COMMANDS = Object.freeze({ doctor, recertify, template, transform });
+/**
+ * Re-derives the native double-click table by running the whole chain from the
+ * official bytes: template-save, then each certified Enhancement profile, then
+ * this transform against every one of those outputs.
+ *
+ * It reads nothing from the shipped table except the structural entry — the
+ * callback's slot, index, body hash and offsets — so a disagreement between
+ * what it prints and what is checked in is a real change in the client rather
+ * than a restatement of the constant being checked.
+ */
+async function doubleClick(argv: readonly string[]): Promise<void> {
+  const [filename] = positionalArguments(argv);
+  const official = new Uint8Array(
+    await readFile(filename ?? installedClientArtifact()),
+  );
+  const officialSha256 = createHash("sha256").update(official).digest("hex");
+  const templateBuild = findTemplateSaveBuild(officialSha256);
+  if (!templateBuild) {
+    throw new Error(`unsupported official WASM hash ${officialSha256}`);
+  }
+  const templateSave = rewriteTemplateSaveWasm(official, templateBuild);
+  const predecessors: Array<[string, Uint8Array]> = [
+    ["template-save", templateSave],
+  ];
+  const enhancementBuild = findEnhancementBuild(
+    createHash("sha256").update(templateSave).digest("hex"),
+  );
+  if (enhancementBuild) {
+    for (const [profile, capabilities] of Object.entries(
+      ENHANCEMENT_CAPABILITY_PROFILES,
+    )) {
+      predecessors.push([
+        profile,
+        transformEnhancementWasm(templateSave, enhancementBuild, {
+          ...capabilities,
+        }),
+      ]);
+    }
+  }
+  const derivations: Record<string, string> = {};
+  for (const [, bytes] of predecessors) {
+    const input = createHash("sha256").update(bytes).digest("hex");
+    derivations[input] = createHash("sha256")
+      .update(rewriteWithBuild(bytes, NATIVE_DOUBLE_CLICK_BUILDS[0]!))
+      .digest("hex");
+  }
+  const shipped = NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations;
+  const matches =
+    JSON.stringify(Object.entries(derivations).sort())
+    === JSON.stringify(Object.entries(shipped).sort());
+  process.stdout.write(`${JSON.stringify({
+    officialSha256,
+    predecessors: predecessors.map(([name]) => name),
+    derivations,
+    matchesShippedTable: matches,
+  }, null, 2)}\n`);
+  if (!matches) {
+    process.stderr.write(
+      "certification double-click: derived table does not match the shipped one\n",
+    );
+    process.exitCode = 1;
+  }
+}
+
+const COMMANDS = Object.freeze({
+  doctor,
+  recertify,
+  template,
+  transform,
+  "double-click": doubleClick,
+});
 
 // The subcommand name is argv, so the lookup has to be closed over own
 // properties: a plain object answers for its prototype, which made

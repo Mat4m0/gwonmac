@@ -95,14 +95,46 @@ half of it, and the `gl.programQuery*` counters prove it is engaged against the
 downloaded client.
 
 The renderer also supplies focus, OSK fields, trusted-interaction audio resume,
-fullscreen, trackpad-wheel normalization, macOS double-click repair, and
-right-drag pointer lock. `input.ts` owns the one canvas input policy. Mouse,
-trackpad, and Magic Mouse clicks and drags pass through unchanged. Chromium's
-native even click count adds the two touch taps ArenaNet's WebAssembly client
-needs for a double-click action; there is no device mode or input setting. One
-held-input registry releases keys, buttons, and an interrupted repair tap when
-focus or native UI consumes an input release. Pointer lock uses a virtual cursor
-and recycles a held drag so camera rotation does not stall.
+fullscreen, trackpad-wheel normalization, and right-drag pointer lock.
+`input.ts` owns the one canvas input policy. Mouse, trackpad, and Magic Mouse
+clicks and drags pass through unchanged, and the host dispatches no input event
+of its own except the releases below; there is no device mode and no input
+setting. One held-input registry releases keys and buttons when focus or native
+UI consumes an input release. Pointer lock uses a virtual cursor and recycles a
+held drag so camera rotation does not stall.
+
+Double-click is the client's own. Its mouse path carries a per-press
+double-click flag from the input record through `FrMouse` to the widget under
+the cursor, and ArenaNet's glue never writes it, because `MouseEvent.detail` is
+not marshalled — `internal/upstream/mouse-double-click.md` holds the evidence.
+The certified chain's last stage appends one exported mutable global and one
+store to the mousedown callback, and `native-double-click.ts` writes Chromium's
+click count into that global before each trusted press: every even click of a
+run sets the flag, exactly as Windows raises `WM_LBUTTONDBLCLK`, and every
+other press clears it. The widget goes on deciding what a double-click means,
+which is the behaviour the Windows client has.
+
+The host used to reach the same action by synthesising a pair of touch taps.
+That path is gone rather than kept beside this one. A tap is not a hint: the
+client warps the cursor to it, force-releases every captured button, switches
+its pointer mode to touch, enters the drag machinery, and delivers a click of
+its own — so a double-click cost four clicks instead of two, arrived 360 ms
+late, and moved inventory items it was meant to use. An unrecognised client
+build is served untransformed and simply has no double-click until it is
+certified again; `tests/electron/input-pointer.spec.ts` refuses any touch event
+so the mechanism cannot return as a fallback.
+
+`input-trace.ts` is the instrument for the reports that path produces. Help →
+Diagnostics → Show Input Trace draws a bounded live list of what the input host
+saw — press with its click-run count and modifiers, release with the distance
+it travelled, each modifier key transition, and each press the double-click
+flag rode on, including the ones an uncertified client could not be told
+about. It observes and never decides: every call site is on
+a path whose behaviour is identical with the trace absent, and switching it off
+discards what it held. It is not the diagnostics recorder — nothing crosses
+IPC, nothing is written to disk, and the text the Copy button produces carries
+distances and counts but no coordinate, so it can be pasted into a public issue
+unread. `docs/user-guide.md` owns what a player is told about it.
 
 That recycle is rare by construction. The client keeps integrating mouse moves
 whose coordinates fall outside the canvas, so a held right-drag is free to roam
