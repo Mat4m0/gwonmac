@@ -29,6 +29,8 @@ hash, that routes the broken routines back into the host.
 | [mouse-double-click.md](mouse-double-click.md) | **ArenaNet** and us | A second, unrelated finding: the client's mouse path carries a double-click flag all the way to `FrMouse`, and the Emscripten glue never writes it. Why the host synthesises touch taps, what that costs, and the one byte that would end it. |
 | [investigation-log.md](investigation-log.md) | us | The chronology, including every wrong turn and what corrected it. Read this before re-deriving anything. |
 | [memory-exhaustion-log.md](memory-exhaustion-log.md) | us | Open: long-session `wasm.abort`s with the heap pegged at the client's compiled-in 2 GiB cap. The heap-staircase instrumentation and what the next crash bundle must answer. |
+| [upstream-keyboard-labels.md](upstream-keyboard-labels.md) | **ArenaNet** | Every printable key is labelled one position too high, while input is correct. Self-contained; states plainly which parts are observed and which are inferred. |
+| [keyboard-label-offset.md](keyboard-label-offset.md) | us | Open: every printable key is labelled one position too high in the Controls panel and the menus, while input is correct. The key descriptor table, the measurement that isolates the render path, and the two readings a probe still has to choose between. |
 | [investigation-template.md](investigation-template.md) | us | The shape a round takes — hypothesis, what was built, the measurement that killed it, the lesson. Copy it to start the next log. |
 
 ## The build this describes
