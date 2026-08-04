@@ -80,6 +80,45 @@ Anchors tried and exhausted:
   suggestive rather than decisive. Best candidates by that score: #7154
   (16,590 bytes), #12320, #10382, #13674, #12328, #15906.
 
+## What calling their functions established, and what it could not
+
+The module instantiates standalone in Node: all 219 imports are functions, so
+a stub returning zero for each is enough, and `memory`, `malloc` and `free`
+are already exported. Appending export entries for candidate functions and
+calling them works exactly as the templates investigation describes.
+
+It found **#9718**, which writes a key id as a character:
+
+```
+47:/  48:0  49:1  50:2  …  72:H  73:I  74:J  75:K  76:L  77:M  …  90:Z  91:[
+```
+
+A plain cast, no offset. That is the operation the labels are wrong about —
+but #9718 is not the key renderer. Dozens of functions scattered through the
+binary do the byte-identical thing (they are generic one-character string
+helpers, template instantiations of the same formatting code), so "writes L
+when handed 76" does not distinguish the one the Controls panel calls from
+any of the others. The property that makes one of them the renderer lives in
+its caller.
+
+And the callers cannot be reached cold. The eight functions that call #9718,
+and every pointer-returning candidate tried, return zero without writing
+anything — they early-out on uninitialised state. That is the difference
+from the templates work: `Path::RemoveExtension` and `_wsplitpath` are pure
+helpers that need no game state, and a label renderer needs a live text
+subsystem and an initialised UI.
+
+So the technique that ended the guessing there does not end it here. Locating
+this function needs **live instrumentation** — patching the module to record
+which function produced the string while the real Controls panel draws it —
+not a cold call.
+
+One cheap probe is still unrun: sweeping for the *name → id* direction, which
+does not need UI state. Writing `"k"` into memory and finding the function
+that answers 75 or 76 settles the framing question below outright. It was
+started and killed by a timeout while the broad sweep was still competing for
+the machine; it should be re-run on its own.
+
 ## The open question
 
 Two readings survive every static observation, and they need different
