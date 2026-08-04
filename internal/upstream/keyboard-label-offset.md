@@ -61,8 +61,9 @@ distinguishable from the data alone — see the open question below.
 
 Exactly one function references the table: **#2441**, the Emscripten input
 callback registration. It carries `"#canvas"` and the callback slots
-899–909, including 903, the mouse callback already patched for
-[the double-click flag](mouse-double-click.md). It *stores* the table
+899–909, including 903, the mouse callback the native double-click work
+patches on its own branch — deliberately not linked, because these two
+lines of work are independent and either may land first. It *stores* the table
 pointer rather than indexing it in place, which is why no other function
 carries a constant into the table and why the consumers cannot be found by
 searching for one.
