@@ -255,11 +255,13 @@ preserved in this repository.
 
 Upstream authors:
 
-- **[Marc (henderkes)](https://github.com/henderkes)** — original author;
-  wrote the foundational _"Guild Wars in the browser"_ work this fork descends
-  from.
+- **[Marc Henderkes (dub_le)](https://github.com/henderkes)** — original
+  author of gw_in_browser; wrote the foundational _"Guild Wars in the browser"_
+  work this fork descends from, and the research that established how the
+  official WASM client can be hosted outside the browser at all.
 - **[Jon (3vcloud)](https://github.com/3vcloud)** — [gwdevhub](https://github.com/gwdevhub)
-  maintainer and contributor.
+  maintainer and contributor; shared the proof of concept this project started
+  from.
 - **[GWToolbox++](https://gwtoolbox.com)** — contributed the macOS launch
   wrapper that this app's native host grew out of.
 
@@ -272,9 +274,11 @@ Also with thanks to:
   License 1.1.
 - **ArenaNet** — for the game, and for keeping the Guild Wars client alive and
   publicly downloadable more than twenty years on.
-- **[gwnative](https://github.com/jean-humann/gwnative)** — for identifying the
-  official Reforged App Store artwork and preparing the macOS icon adopted
-  here.
+- **[gwnative](https://github.com/jean-humann/gwnative)** — an independent
+  native Rust host with the same goal, reached by a different route. Ideas and
+  fixes travel both ways; several here came out of that exchange. It also
+  identified the official Reforged App Store artwork and prepared the macOS
+  icon adopted here.
 
 ## Legal
 
