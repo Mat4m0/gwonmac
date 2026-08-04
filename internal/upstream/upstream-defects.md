@@ -187,17 +187,21 @@ paths.
 passing a null extension. The filename length passed to the split is one short,
 so the last character of the name is removed along with the extension.
 
-Measured by calling the shipped function directly:
+Measured by calling the shipped function directly, on build 38797
+(`3229678d3fd7d2f0e309530086a614d97f02e7eeb3ca12650ababfd2eb360817`); the
+defect is present on the build named at the top of this report as well:
 
 ```
-Path::RemoveExtension("\ASDAs.txt")      = "\ASDA"        ← expected "\ASDAs"
-Path::RemoveExtension("\LOLOL.txt")      = "\LOLO"        ← expected "\LOLOL"
-Path::RemoveExtension("\Sub\Nested.txt") = "\Sub\Neste"   ← expected "\Sub\Nested"
-Path::RemoveExtension("ASDAs.txt")       = "ASDA"         ← expected "ASDAs"
-Path::RemoveExtension("\ASDAs")          = "\ASDAs"       ← correct, nothing to strip
+Path::RemoveExtension("\Healer.txt")        = "\Heale"         ← expected "\Healer"
+Path::RemoveExtension("\Warrior.txt")       = "\Warrio"        ← expected "\Warrior"
+Path::RemoveExtension("\Builds\Healer.txt") = "\Builds\Heale"  ← expected "\Builds\Healer"
+Path::RemoveExtension("Healer.txt")         = "Heale"          ← expected "Healer"
+Path::RemoveExtension("\My.Build.txt")      = "\My.Buil"       ← expected "\My.Build"
+Path::RemoveExtension("\Healer")            = "\Healer"        ← correct, nothing to strip
 ```
 
-The bug appears only when there is an extension to remove.
+The bug appears only when there is an extension to remove. A name that itself
+contains a dot loses the last extension and one further character.
 
 **Consequence.** Function 9747 calls this on every enumerated template, so once
 defects 2 and 3 are fixed, every listed name is short by one character — and the
@@ -279,7 +283,7 @@ where directory creation and enumeration succeed:
    zero-length file appears at the destination.
 
 Defect 5 alone can be confirmed without any of that, by calling function 457
-with `"\Test.txt"`.
+with `"\Healer.txt"`; it returns `"\Heale"`.
 
 ## Contact
 
