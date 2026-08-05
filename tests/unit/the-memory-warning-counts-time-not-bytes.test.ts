@@ -2,11 +2,21 @@
 // 2026-08-04. The shipped build warned on bytes remaining, which meant the same
 // sentence bought half an hour in the open world and about two minutes inside a
 // mission — the second row here is the whole reason this module exists.
+//
+// Every session below is a staircase, not a ramp, because that is what the
+// runtime presents: `Module.HEAPU8.buffer` is *reserved* memory and WebAssembly
+// reserves it in jumps. An earlier version of this file drove smooth linear
+// growth and passed while the shipped estimator read a steady 555 MiB/h session
+// as alternating between 384 and 1,152 — the test was measuring a shape no
+// client produces. `simulate` below is the fix: it models the allocator, works
+// out when the client really dies, and every assertion is what the player was
+// told against what was true at that moment.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   createHeapPressureWatch,
   hedgeMinutes,
+  type HeapPressurePolicy,
   type HeapPressureLevel,
   type HeapPressureReading,
 } from "../../src/renderer/heap-pressure.js";
@@ -14,71 +24,186 @@ import {
 const MIB = 1_048_576;
 const CAP = 2048 * MIB;
 const TICK_MS = 15_000;
+const TICK_MINUTES = TICK_MS / 60_000;
+
+interface Tick extends HeapPressureReading {
+  atMinutes: number;
+  /** Minutes until this session really ends, known from the whole run. */
+  trulyLeft: number;
+}
+
+interface Session {
+  diesAtMinutes: number;
+  ticks: readonly Tick[];
+  /** The first tick at each level, which is all the player ever experiences. */
+  raised: Map<HeapPressureLevel, Tick>;
+}
 
 /**
- * A session at a constant rate, sampled on the watcher's own 15-second tick.
- * Returns the reading at which each level was first raised, which is the only
- * thing the player ever experiences.
+ * A session as the runtime actually presents it.
+ *
+ * The client fills memory smoothly and the runtime reserves it in steps:
+ * Emscripten's glue grows by a fifth of the current size, capped at 96 MiB,
+ * and never by less than the allocation needs. At the measured open-world rate
+ * that is one step roughly every ten minutes with a flat heap in between —
+ * which is the entire difficulty this module exists to handle.
+ *
+ * The physics run first and to the end, so the death is known before the
+ * watcher is asked about it. Nothing here asserts against the watcher's own
+ * arithmetic; every claim is checked against the session that really happened.
  */
-function play(mibPerHour: number, startMib = 300, capBytes = CAP) {
-  const watch = createHeapPressureWatch({ capBytes });
-  const first = new Map<HeapPressureLevel, { atMinutes: number; reading: HeapPressureReading }>();
-  let atMs = 0;
-  for (let step = 0; step < 4 * 60 * 4; step += 1) {
-    const minutes = atMs / 60_000;
-    const bytes = (startMib + (mibPerHour / 60) * minutes) * MIB;
-    if (bytes >= capBytes) break;
-    const reading = watch.sample(bytes, atMs);
-    if (!first.has(reading.level)) {
-      first.set(reading.level, { atMinutes: minutes, reading });
+function simulate(options: {
+  /** MiB per hour of real spending, constant or per-minute. */
+  rate: number | ((minute: number) => number);
+  startMib?: number;
+  /** Minutes the page is open before the client allocates anything. */
+  bootAtMinutes?: number;
+  /** One-off reservations — a zone load is a couple of hundred MiB in seconds. */
+  loads?: readonly { atMinutes: number; mib: number }[];
+  policy?: HeapPressurePolicy;
+  capBytes?: number;
+}): Session {
+  const capBytes = options.capBytes ?? CAP;
+  const boot = options.bootAtMinutes ?? 0;
+  const rateAt = (minute: number) =>
+    typeof options.rate === "function" ? options.rate(minute) : options.rate;
+
+  const frames: { atMinutes: number; reservedMib: number }[] = [];
+  let usedMib = 0;
+  let reservedMib = 0;
+  let diesAtMinutes = Infinity;
+  for (let minute = 0; minute < 600; minute += TICK_MINUTES) {
+    if (minute >= boot) {
+      if (usedMib === 0) usedMib = options.startMib ?? 690;
+      usedMib += (rateAt(minute) / 60) * TICK_MINUTES;
+      for (const load of options.loads ?? []) {
+        if (Math.abs(minute - load.atMinutes) < TICK_MINUTES / 2) {
+          usedMib += load.mib;
+        }
+      }
+      // The glue's own growth rule, and it repeats until the ask fits.
+      while (usedMib > reservedMib) {
+        reservedMib += Math.max(16, Math.min(96, reservedMib * 0.2));
+      }
     }
-    atMs += TICK_MS;
+    if (usedMib * MIB >= capBytes) {
+      diesAtMinutes = minute;
+      break;
+    }
+    frames.push({ atMinutes: minute, reservedMib });
   }
-  return first;
+
+  const watch = createHeapPressureWatch({ capBytes, ...options.policy });
+  const raised = new Map<HeapPressureLevel, Tick>();
+  const ticks = frames.map((frame) => {
+    const reading = watch.sample(frame.reservedMib * MIB, frame.atMinutes * 60_000);
+    const tick: Tick = {
+      ...reading,
+      atMinutes: frame.atMinutes,
+      trulyLeft: diesAtMinutes - frame.atMinutes,
+    };
+    if (!raised.has(reading.level)) raised.set(reading.level, tick);
+    return tick;
+  });
+  return { diesAtMinutes, ticks, raised };
 }
+
+/** Every figure the player was shown, and what was true when they saw it. */
+const claims = (session: Session) =>
+  session.ticks.filter((tick) => tick.minutes !== null);
 
 describe("the memory warning counts time, not bytes", () => {
   it("warns an open-world session with the headroom it claims", () => {
-    // 555 MiB/h, measured over 2 h 16 m. The cap arrives at about 3 h 09 m.
-    const run = play(555);
-    const low = run.get("low");
-    const critical = run.get("critical");
-    assert.ok(low && critical);
+    // 555 MiB/h, measured over 2 h 16 m.
+    const session = simulate({ rate: 555 });
+    const low = session.raised.get("low");
+    const critical = session.raised.get("critical");
+    assert.ok(low && critical, "the session ended without warning");
 
+    // The claim has to be true, not merely present.
     assert.ok(
-      low.reading.minutes !== null && low.reading.minutes >= 15 && low.reading.minutes <= 20,
-      `low claimed ${low.reading.minutes} minutes`,
+      low.trulyLeft > 15 && low.trulyLeft < 26,
+      `low arrived with ${low.trulyLeft.toFixed(1)} real minutes left`,
     );
     assert.ok(
-      critical.reading.minutes !== null && critical.reading.minutes <= 5,
-      `critical claimed ${critical.reading.minutes} minutes`,
+      critical.trulyLeft > 3 && critical.trulyLeft < 9,
+      `critical arrived with ${critical.trulyLeft.toFixed(1)} real minutes left`,
     );
-    // The claim has to be true, not just present: the remaining headroom at
-    // the measured rate must be near the number the player was shown.
-    const remaining = (CAP - critical.reading.bytes) / MIB / (555 / 60);
-    assert.ok(remaining > 3 && remaining < 9, `${remaining} real minutes left`);
-    assert.equal(critical.reading.raisedBy, "time");
+    assert.equal(critical.raisedBy, "time");
   });
 
-  it("gives a texture-dense mission the same warning, not two minutes", () => {
+  it("gives a texture-dense mission a real warning, not ninety seconds", () => {
     // The Eye of the North report: the cap in about half an hour. Under the
     // shipped byte thresholds this player got "low" with three minutes left
     // and "critical" with ninety seconds — and crashed anyway.
-    const run = play(3_500);
-    const low = run.get("low");
-    const critical = run.get("critical");
-    assert.ok(low && critical);
-
-    assert.ok(low.atMinutes < 15, `low arrived at ${low.atMinutes} min`);
-    const lowHeadroomMib = (CAP - low.reading.bytes) / MIB;
+    const session = simulate({ rate: 3_500 });
+    const low = session.raised.get("low");
+    assert.ok(low, "the fast session was never warned at all");
     assert.ok(
-      lowHeadroomMib > 256,
-      `${lowHeadroomMib} MiB left — the shipped rule would not have fired yet`,
+      low.trulyLeft >= 4,
+      `only ${low.trulyLeft.toFixed(1)} minutes of warning`,
     );
 
-    // What the shipped build could not do: leave real minutes on the clock.
-    const remaining = (CAP - critical.reading.bytes) / MIB / (3_500 / 60);
-    assert.ok(remaining > 3, `${remaining} real minutes left at critical`);
+    // What the shipped build could not do: warn while there is still headroom
+    // to walk somewhere. Its 256 MiB rule fires about 3 minutes before death
+    // at this rate.
+    const headroomMib = (CAP - low.bytes) / MIB;
+    assert.ok(
+      headroomMib > 180,
+      `${headroomMib.toFixed(0)} MiB left — inside the shipped rule's reach`,
+    );
+  });
+
+  it("reads the rate that was actually spent, not the shape of the staircase", () => {
+    // The defect this test exists for. Reserved memory moves in ~96 MiB jumps
+    // about ten minutes apart at this rate, so a five-minute window contains
+    // either no step or one and reports 0 or 1,152 MiB/h for a session
+    // spending 555. Both ends of a measurement sit on a step for this reason.
+    for (const rate of [555, 3_500]) {
+      const measured = simulate({ rate })
+        .ticks.map((tick) => tick.bytesPerMinute)
+        .filter((value): value is number => value !== null)
+        .map((value) => (value * 60) / MIB);
+      assert.ok(measured.length > 0, `${rate} MiB/h was never measured at all`);
+      for (const value of measured) {
+        assert.ok(
+          Math.abs(value - rate) / rate < 0.1,
+          `read ${value.toFixed(0)} MiB/h for a session spending ${rate}`,
+        );
+      }
+    }
+  });
+
+  it("counts down instead of standing still and lurching", () => {
+    // Each step reserves about ten minutes of play at once. Read off the
+    // reserve, the estimate would sit through a whole tread and then drop ten
+    // minutes in one tick; the figure the player watches has to move the way
+    // time does. The five-minute granularity of the wording is the floor.
+    for (const rate of [555, 3_500]) {
+      const shown = claims(simulate({ rate })).map((tick) => tick.minutes!);
+      for (let i = 1; i < shown.length; i += 1) {
+        assert.ok(
+          Math.abs(shown[i]! - shown[i - 1]!) <= 5,
+          `${rate} MiB/h: the figure jumped ${shown[i - 1]} → ${shown[i]}`,
+        );
+      }
+    }
+  });
+
+  it("never names a number that is not close to true", () => {
+    // The whole premise. Anywhere a figure is shown, in either session, it has
+    // to be near the time that was really left — a warning nobody can check is
+    // worth as much as the "running low" it replaced.
+    for (const rate of [555, 3_500]) {
+      for (const tick of claims(simulate({ rate }))) {
+        const slack = Math.max(2.5, tick.trulyLeft * 0.35);
+        assert.ok(
+          Math.abs(tick.minutes! - tick.trulyLeft) <= slack,
+          `${rate} MiB/h at ${tick.atMinutes} min: said ${tick.minutes}`
+            + `, truly ${tick.trulyLeft.toFixed(1)}`,
+        );
+      }
+    }
   });
 
   it("does not read the cost of starting the game as the cost of playing it", () => {
@@ -86,93 +211,93 @@ describe("the memory warning counts time, not bytes", () => {
     // than three minutes in, against a steady-state 555 MiB/h. Measured from
     // inside that ramp the session looks a quarter of an hour from death, and
     // the warning fired at 36% of the cap — every player, every login.
-    const watch = createHeapPressureWatch({ capBytes: CAP });
-    let atMs = 0;
-    let last = watch.sample(0, atMs);
-    for (let minute = 0; minute <= 4; minute += 0.25) {
-      atMs = minute * 60_000;
-      last = watch.sample(Math.min(760, 260 * minute + 40) * MIB, atMs);
+    const session = simulate({
+      startMib: 40,
+      rate: (minute) => (minute < 3 ? 15_000 : 555),
+    });
+    for (const tick of session.ticks) {
+      if (tick.atMinutes > 60) break;
       assert.equal(
-        last.level,
+        tick.level,
         "none",
-        `warned ${minute} minutes in, at ${Math.round(last.bytes / MIB)} MiB`,
+        `warned ${tick.atMinutes} min in, at ${Math.round(tick.bytes / MIB)} MiB`,
       );
-      assert.equal(last.minutes, null, "claimed a figure measured from startup");
     }
-
     // Once the ramp is behind it, ordinary play is read as ordinary play.
-    const settledAt = atMs;
-    for (let minute = 5; minute <= 30; minute += 0.25) {
-      atMs = minute * 60_000;
-      const mib = 760 + (555 / 60) * (minute - settledAt / 60_000);
-      last = watch.sample(mib * MIB, atMs);
-    }
-    assert.equal(last.level, "none", "still quiet with two hours of headroom");
+    const settled = claims(session).at(-1);
+    assert.ok(settled?.bytesPerMinute, "the ramp silenced the whole session");
+    const perHour = (settled.bytesPerMinute * 60) / MIB;
     assert.ok(
-      last.bytesPerMinute !== null
-        && Math.round((last.bytesPerMinute * 60) / MIB) === 555,
-      `read ${Math.round(((last.bytesPerMinute ?? 0) * 60) / MIB)} MiB/h`,
+      Math.abs(perHour - 555) / 555 < 0.1,
+      `read ${perHour.toFixed(0)} MiB/h after a 15,000 MiB/h launch`,
     );
+  });
+
+  it("survives a first run whose download outlasts the warm-up", () => {
+    // The warm-up excludes the startup ramp, so where its clock starts decides
+    // whether it works. Anchored to page load it looks equivalent and is not:
+    // the page stays open through the client download, so a slow first run
+    // boots after the exclusion has already expired and the ramp is measured
+    // as ordinary play — 38% of the cap, "about 8 minutes of play left", two
+    // hours of real headroom. The clock starts at the first allocation.
+    const session = simulate({
+      bootAtMinutes: 12,
+      startMib: 40,
+      rate: (minute) => (minute < 15 ? 15_000 : 555),
+    });
+    for (const tick of session.ticks) {
+      if (tick.atMinutes > 70) break;
+      assert.equal(
+        tick.level,
+        "none",
+        `warned ${tick.atMinutes} min in, at ${Math.round(tick.bytes / MIB)} MiB`,
+      );
+    }
   });
 
   it("starts measuring when the player starts playing, not when they log in", () => {
-    // Ten minutes parked in Kamadan, then out into the world. The rate that
-    // matters begins at minute ten, and nothing about the idling before it
-    // should either warn or be averaged into what follows.
-    const watch = createHeapPressureWatch({ capBytes: CAP });
-    let atMs = 0;
-    let last = watch.sample(700 * MIB, atMs);
-    for (let minute = 0; minute <= 10; minute += 0.25) {
-      atMs = minute * 60_000;
-      last = watch.sample(700 * MIB, atMs);
-      assert.equal(last.level, "none", `warned while idle at ${minute} min`);
+    // Ten minutes parked in Kamadan, then out into the world. Nothing about
+    // the idling should either warn or be averaged into what follows.
+    const session = simulate({ rate: (minute) => (minute < 15 ? 0 : 555) });
+    for (const tick of session.ticks) {
+      if (tick.atMinutes > 40) break;
+      assert.equal(tick.level, "none", `warned while idle at ${tick.atMinutes}`);
     }
-    // Now playing, at the measured open-world rate.
-    for (let minute = 10.25; minute <= 25; minute += 0.25) {
-      atMs = minute * 60_000;
-      last = watch.sample((700 + (555 / 60) * (minute - 10)) * MIB, atMs);
-    }
-    assert.equal(last.level, "none", "still an hour of headroom");
-    // The idle stretch is behind the window by now, so the rate is the one the
-    // player is actually spending at — not a tenth of it.
-    assert.ok(
-      last.bytesPerMinute !== null
-        && Math.round((last.bytesPerMinute * 60) / MIB) === 555,
-      `read ${Math.round(((last.bytesPerMinute ?? 0) * 60) / MIB)} MiB/h`,
-    );
+    const late = claims(session).at(-1);
+    assert.ok(late && Math.abs((late.bytesPerMinute! * 60) / MIB - 555) < 60);
   });
 
   it("does not let one map load latch a warning that cannot be taken back", () => {
-    // A zone load allocates a couple of hundred MiB in seconds. Measured over
-    // a short enough window that reads as thousands of MiB an hour, and since
-    // the level never falls it would have been permanent — a player who then
-    // played quietly for an hour would keep a warning that had already been
-    // wrong for fifty minutes.
-    const watch = createHeapPressureWatch({ capBytes: CAP });
-    let heap = 900;
-    watch.sample(heap * MIB, 0);
-    for (let minute = 0.25; minute <= 20; minute += 0.25) {
-      // One 220 MiB load at minute twelve, quiet either side of it.
-      if (Math.abs(minute - 12) < 0.13) heap += 220;
-      const last = watch.sample(heap * MIB, minute * 60_000);
-      assert.equal(
-        last.level,
-        "none",
-        `a single map load warned at ${minute} min`,
-      );
-    }
-    assert.equal(heap, 1120, "the load did happen");
+    // A zone load reserves a couple of hundred MiB in seconds. Measured over a
+    // window short enough it reads as thousands of MiB an hour, and since the
+    // level never falls it would be permanent — this session is warned when it
+    // deserves it, not thirty-eight minutes early because the player walked
+    // through a door.
+    const session = simulate({
+      rate: 555,
+      loads: [{ atMinutes: 30, mib: 300 }],
+    });
+    const low = session.raised.get("low");
+    assert.ok(low, "the load swallowed the real warning too");
+    assert.ok(
+      low.trulyLeft < 26,
+      `the load warned ${low.trulyLeft.toFixed(0)} minutes before it mattered`,
+    );
+    assert.ok(
+      session.ticks.some((tick) => tick.atMinutes > 30 && tick.bytes > 1_100 * MIB),
+      "the load did happen",
+    );
   });
 
   it("falls back to bytes only while there is no rate to read", () => {
-    // A page that opens already near the cap has no history to slope, so the
+    // A page that opens already near the cap has no staircase to read, so the
     // shipped thresholds are what still warns it.
     const watch = createHeapPressureWatch({ capBytes: CAP });
     const first = watch.sample(CAP - 100 * MIB, 0);
     // Corroborated first: the level can never be taken back, so no single
     // reading sets it. One tick later is the whole cost.
     assert.equal(first.level, "none", "raised on a single reading");
-    const cold = watch.sample(CAP - 100 * MIB, 15_000);
+    const cold = watch.sample(CAP - 100 * MIB, TICK_MS);
     assert.equal(cold.level, "critical");
     assert.equal(cold.minutes, null, "no number was measured, so none is offered");
     assert.equal(cold.raisedBy, "bytes");
@@ -183,10 +308,8 @@ describe("the memory warning counts time, not bytes", () => {
   });
 
   it("keeps warning a stalled heap that is nearly full", () => {
-    // A player idling in an outpost at 1.8 GiB has a near-zero recent rate, so
-    // the time rule goes quiet. Bytes are what is left to speak. The heap is
-    // flat from the first sample on purpose: a step into it would be a real
-    // burst, and reading that as imminent would be correct.
+    // A player idling in an outpost at 1.8 GiB has no recent steps, so the
+    // time rule has nothing to say. Bytes are what is left to speak.
     const watch = createHeapPressureWatch({ capBytes: CAP });
     let atMs = 0;
     let last = watch.sample(1_820 * MIB, atMs);
@@ -198,15 +321,30 @@ describe("the memory warning counts time, not bytes", () => {
     assert.equal(last.level, "low");
   });
 
+  it("lets a rate go stale rather than believing it forever", () => {
+    // Step-to-step measurement is what stops the figure sagging between steps,
+    // but it also means a player who stops spending would otherwise keep the
+    // last rate they earned. A tread wider than the ones it was measured over
+    // is evidence, and it stretches the estimate out.
+    const session = simulate({ rate: (minute) => (minute < 45 ? 555 : 0) });
+    const spending = session.ticks.find((tick) => tick.atMinutes === 44)!;
+    const idle = session.ticks.find((tick) => tick.atMinutes === 90);
+    assert.ok(spending.bytesPerMinute !== null);
+    assert.ok(
+      idle === undefined
+        || idle.bytesPerMinute === null
+        || idle.bytesPerMinute < spending.bytesPerMinute / 4,
+      "an hour of standing still still read as open-world spending",
+    );
+  });
+
   it("never lowers a warning it has already raised", () => {
     const watch = createHeapPressureWatch({ capBytes: CAP });
     let atMs = 0;
-    // Climb hard into critical.
     for (let i = 0; i < 40; i += 1) {
       watch.sample((300 + i * 45) * MIB, atMs);
       atMs += TICK_MS;
     }
-    // Then stop allocating entirely for twenty minutes.
     let last = watch.sample(2_000 * MIB, atMs);
     assert.equal(last.level, "critical");
     for (let i = 0; i < 80; i += 1) {

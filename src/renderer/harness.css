@@ -113,6 +113,10 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   font: 13px/1.5 Tahoma, sans-serif;
   letter-spacing: .01em;
   color: #ece0cf;
+  /* The label above is a block; these two run together inline beneath it, so
+     the gap between them belongs here rather than as padding inside a string
+     the copy module owns. */
+  margin-right: .35em;
 }
 #memory-notice-why {
   display: inline;

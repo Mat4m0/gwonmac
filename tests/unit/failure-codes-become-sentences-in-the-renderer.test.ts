@@ -233,6 +233,16 @@ describe("renderer failure messages", () => {
     assert.match(memoryPressurePresentation("critical", 3).label, /About 3 minutes/);
     assert.match(memoryPressurePresentation("critical", 1).label, /About 1 minute\b/);
 
+    // The estimate rounds to whole minutes, so the last half-minute reaches
+    // here as a zero. "About 0 minutes" reads as a broken app at the one
+    // moment the sentence has to be believed. Reachable from the chip, which
+    // re-opens the banner against a live figure.
+    for (const level of ["low", "critical"] as const) {
+      const expiring = memoryPressurePresentation(level, 0);
+      assert.match(expiring.label, /^Under a minute/);
+      assert.doesNotMatch(expiring.label, /\b0\b/);
+    }
+
     // Never in the detail: the banner's number is frozen when shown, and a
     // stale figure in a sentence that outlives it would be a lie.
     for (const minutes of [null, 1, 5, 20] as const) {

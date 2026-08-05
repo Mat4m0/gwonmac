@@ -245,6 +245,14 @@ actually read. It has no thresholds and no copy of its own, and it never writes
 the watcher's escalation — the readout prints the real level beside the
 simulated one so that stays visible.
 
+Two numbers on it are estimates, and they are deliberately not the same one.
+**to cap** is the panel's own arithmetic over the whole run, which is the right
+figure for reading a session afterwards. **warning** is what the warning itself
+concluded — measured step to step over at least ten minutes, ignoring the
+startup ramp — and it is the number that explains what the player was actually
+told. It reads `not measuring yet` until two growth steps ten minutes apart
+have been seen, which in the open world is around twenty minutes of play.
+
 Two simulation divergences worth knowing: a simulated crash leaves the memory
 watcher running (a real abort stops it), and the overlay covers a client that is
 still allocating underneath — hence **Dismiss**.

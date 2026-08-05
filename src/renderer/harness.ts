@@ -317,6 +317,21 @@ let heapSurface: 'hidden' | 'notice' | 'chip' = 'hidden';
 let heapLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/**
+ * How long to leave an element in the DOM while it animates out, read from the
+ * element itself rather than restated here. A number copied out of the
+ * stylesheet is a second source of truth that drifts silently — and this one
+ * also inherits the shorter durations the reduced-motion block sets, which a
+ * constant could not.
+ */
+const exitMs = (element: HTMLElement) =>
+  Math.max(
+    0,
+    ...getComputedStyle(element)
+      .transitionDuration.split(',')
+      .map((value) => Number.parseFloat(value) * 1_000)
+      .filter(Number.isFinite),
+  );
 
 const wasmHeapBytes = () => Module.HEAPU8?.buffer.byteLength ?? 0;
 window.gwWasmHeapBytes = wasmHeapBytes;
@@ -385,11 +400,23 @@ heapChip?.addEventListener('click', () => {
 });
 heapWhyClose?.addEventListener('click', () => closeHeapWhy());
 heapScrim?.addEventListener('click', () => closeHeapWhy());
-heapWhyRoot?.addEventListener('keydown', (event) => {
-  if ((event as KeyboardEvent).key !== 'Escape') return;
-  event.preventDefault();
-  closeHeapWhy();
-});
+/**
+ * The explanation claims `aria-modal`, which tells a screen reader everything
+ * behind it is inert — so the keyboard has to agree. It holds exactly one
+ * control, which makes the trap the whole of it: Tab has nowhere else to go.
+ * Listening on the document rather than on the panel is what makes Escape
+ * work from a click that landed on the panel's own prose.
+ */
+document.addEventListener('keydown', (event) => {
+  if (!heapWhyRoot || heapWhyRoot.hidden) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeHeapWhy();
+  } else if (event.key === 'Tab') {
+    event.preventDefault();
+    heapWhyClose?.focus();
+  }
+}, true);
 
 function hideHeapNotice(options?: { instant?: boolean }) {
   if (!heapNoticeRoot || heapNoticeRoot.hidden) return;
@@ -407,7 +434,7 @@ function hideHeapNotice(options?: { instant?: boolean }) {
     if (!heapNoticeRoot.classList.contains('leaving')) return;
     heapNoticeRoot.hidden = true;
     heapNoticeRoot.classList.remove('leaving');
-  }, 300);
+  }, exitMs(heapNoticeRoot));
 }
 
 function hideHeapChip() {
@@ -452,7 +479,7 @@ async function presentHeapNotice(level: 'low' | 'critical') {
   const { memoryPressurePresentation } = await import('./failure-messages.js');
   const copy = memoryPressurePresentation(level, heapMinutes);
   heapNoticeLabel.textContent = copy.label;
-  heapNoticeDetail.textContent = ` ${copy.detail} `;
+  heapNoticeDetail.textContent = copy.detail;
   heapNoticeReload.textContent = copy.reloadButton;
   heapNoticeLater.textContent = copy.dismissButton;
   heapNoticeWhy.textContent = copy.whyLink;
@@ -552,7 +579,7 @@ function closeHeapWhy(options?: { instant?: boolean }) {
   if (options?.instant || prefersReducedMotion()) finish();
   else {
     heapWhyRoot.classList.add('leaving');
-    setTimeout(finish, 280);
+    setTimeout(finish, exitMs(heapWhyRoot));
   }
   if (options?.instant) return;
   // The notice comes back where it was, and focus with it; if the warning is

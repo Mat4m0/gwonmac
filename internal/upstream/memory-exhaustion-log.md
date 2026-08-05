@@ -159,3 +159,75 @@ open-world session it raised `critical` at seven minutes — ahead of the
 five-minute time rule, i.e. the same defect in miniature. It is 32 MiB, which
 sits below where the time rule fires at every rate observed so far. That
 threshold had no session behind it until the test supplied one.
+
+## Round 5 — wrong: the heap is a staircase, and we measured it with a ruler shorter than the stair (2026-08-05)
+
+**Hypothesis.** With the unit fixed, a trailing window over recent samples
+gives the rate: five minutes to catch a session that has started spending, and
+fifteen so a lull inside that spending cannot erase it.
+
+**Wrong because** `Module.HEAPU8.buffer` is *reserved* memory, and WebAssembly
+reserves it in jumps. Emscripten's glue grows by a fifth of the current size
+capped at 96 MiB, so at the measured 555 MiB/h the heap steps about once every
+ten minutes and is perfectly flat in between — which the instrumentation
+already said in Round 3 (`wasm.heapGrew`: "growth is discrete and rare") and
+the debug panel repeated on the way in ("a short window reads as either zero or
+enormous depending on where the sample landed").
+
+A five-minute window over a ten-minute tread holds either no step or one.
+Simulated against the measured open-world session, the estimator read:
+
+| | measured | true |
+| --- | --- | --- |
+| Rate | alternating 384 and 1,152 MiB/h | 555 MiB/h |
+| Shown to the player | 15 → 45 → 10 → 30 minutes | a smooth count down |
+| `low` fired | claiming 15 minutes | 41 minutes remained |
+
+The level still landed in roughly the right place, because the steep arm of the
+sawtooth dominates. The *number* — the entire point of Round 4 — swung by three
+times its own value every five minutes, on the chip, which is the one surface
+that updates live.
+
+**Why it survived review and a test suite.** Every test drove smooth linear
+growth. The sessions we measured were staircases; the sessions we tested were
+ramps, so the tests agreed with the code about a shape no client produces.
+
+**Built.** Both ends of a measurement now sit on a growth step, at least ten
+minutes apart, and the module keeps steps rather than samples. Step-to-step is
+what makes the figure stand still: anchoring the far end to *now* puts a whole
+tread in the denominator and none of its rise in the numerator. Ten minutes is
+what tells a burst from a trend, and it was bought rather than guessed — a
+300 MiB zone load at minute 30 of an ordinary session says "about 20 minutes of
+play left" over a four-minute span with 77 minutes truly left, and escalates to
+critical over an eight-minute span with 30 minutes left. Over ten it says
+nothing and the real warning arrives on time.
+
+The cost is knowingly accepted: a mission spending 3,500 MiB/h dies around
+minute 23 and cannot be spoken about until minute 18, where an eight-minute
+span would have warned at 15. There is no shorter honest answer — ten minutes
+into a mission, a ten-minute-old zone load and a sustained spend look alike in
+every window, and a "is it still going?" test costs exactly the latency it
+saves. The byte floors remain the backstop for the fast case.
+
+**Two more the same simulation found.**
+
+*The warm-up ran on the wrong clock.* It excluded the startup ramp for five
+minutes after page load. The page stays open through the client download, so a
+slow first run boots after the exclusion has expired and the ramp is measured
+as ordinary play: 38% of the cap, "about 8 minutes of play left", two hours of
+real headroom. It runs from the client's first allocation now.
+
+*Headroom was read off the reserve.* The client dies when what it has *filled*
+reaches the cap, and the reserve leads that by up to one step — ten minutes of
+open-world play. Taking headroom off the reserve made every step look like ten
+minutes vanishing at once and read a session as a third shorter than it was.
+Growth fires when a request no longer fits, so at the instant of a step the
+filled bytes are what the reserve was before it; between steps they climb at
+the rate just measured. The residual error is one allocation request rather
+than one step.
+
+**Lesson.** Round 4's lesson was that a threshold is a claim about the player's
+situation. This one is narrower and sharper: a test that drives a shape the
+system never produces will confirm whatever the code believes. The measured
+sessions were on disk the whole time — `wasm.heapGrew` events, fourteen of them
+in 2 h 16 m — and no test read one.

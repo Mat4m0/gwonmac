@@ -525,4 +525,46 @@ test("the memory warning measures time and keeps its one contract import", async
     /id="memory-notice"[^>]*aria-modal/u,
     "the notice must not block the game it is drawn over",
   );
+  // `aria-modal` tells a screen reader the game behind it is not there. Half
+  // that contract — the attribute without a keyboard that agrees — describes
+  // an app the player is not using.
+  assert.match(
+    harness,
+    /heapWhyRoot\.hidden\) return;[\s\S]{0,400}'Tab'[\s\S]{0,200}focus\(\)/u,
+    "an aria-modal explanation must trap the keyboard inside itself",
+  );
+});
+
+test("the memory warning measures a staircase step to step", async () => {
+  const pressure = await readFile(
+    path.join(root, "src/renderer/heap-pressure.ts"),
+    "utf8",
+  );
+
+  // `Module.HEAPU8.buffer` is *reserved* memory and WebAssembly reserves it in
+  // jumps — about one 96 MiB step every ten minutes at the measured open-world
+  // rate, and flat in between. A fixed-duration window over that shape holds
+  // either no step or one, and reads a steady 555 MiB/h session as alternating
+  // between 384 and 1,152. Both ends of a measurement belong on a step, which
+  // is why the module keeps the steps rather than the samples.
+  assert.match(
+    pressure,
+    /const steps: \{ atMs: number; bytes: number; grewBy: number \}\[\]/u,
+    "the estimator must measure growth steps, not raw samples",
+  );
+  assert.doesNotMatch(
+    pressure,
+    /windowsMs/u,
+    "a fixed-duration window cannot measure a staircase",
+  );
+
+  // The warm-up excludes the startup ramp, and where its clock starts is the
+  // whole of whether it works: the page stays open through the client
+  // download, so a slow first run boots after a page-load-anchored warm-up has
+  // already expired and the ramp is measured as ordinary play.
+  assert.match(
+    pressure,
+    /allocatingSinceMs === null && bytes > 0\) allocatingSinceMs = atMs/u,
+    "the warm-up must run from the first allocation, not from page load",
+  );
 });

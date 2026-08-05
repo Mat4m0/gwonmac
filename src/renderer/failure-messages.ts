@@ -244,6 +244,11 @@ export function memoryPressurePresentation(
     label = critical
       ? 'Guild Wars is almost out of memory.'
       : 'Guild Wars is running low on memory.';
+  } else if (minutes < 1) {
+    // The estimate rounds to whole minutes, so the last half-minute would
+    // otherwise read "About 0 minutes" — a sentence that sounds like a bug at
+    // the one moment the player has to believe it.
+    label = 'Under a minute before Guild Wars runs out of memory.';
   } else {
     label = critical
       ? `About ${minutes} ${unit} before Guild Wars runs out of memory.`
