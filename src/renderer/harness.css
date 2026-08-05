@@ -153,10 +153,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 #memory-notice-actions .primary:hover { background: #d15f36; border-color: #ff8a63; }
 
-/* The chip a dismissal leaves. Right edge, clear of the notice's own centre. */
+/* The chip a dismissal leaves. Top right, in the band between the client's own
+   window buttons and the top of its compass — at 118px it sat on the compass
+   itself, over the one piece of UI a player reads constantly. */
 #memory-chip {
   position: fixed;
-  top: 118px;
+  top: 52px;
   right: 16px;
   z-index: 9;
   display: flex;
