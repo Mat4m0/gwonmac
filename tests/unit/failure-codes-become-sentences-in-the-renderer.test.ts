@@ -197,8 +197,12 @@ describe("renderer failure messages", () => {
       ]) {
         assert.ok(text.length > 0, "memory notice has empty prose");
       }
-      // The safe place is named, so a player who wants certainty has it.
-      assert.match(notice.detail, /town or outpost/);
+      // The outpost belongs to the explanation now, not to the notice. It is
+      // still the one place that risks nothing, but the reconnect is measured,
+      // and repeating a caveat against a measured fact is what made the
+      // shipped sentence easy to ignore from inside a dungeon.
+      assert.doesNotMatch(notice.detail, /town or outpost/);
+      assert.match(memoryExplanation().blocks[3]!.body, /town or outpost/);
       // The detail opens with the action. Derived from the button so it
       // survives a rename, and it pins the ordering the redesign is about:
       // what to do first, why it is happening behind a link.
@@ -255,10 +259,15 @@ describe("renderer failure messages", () => {
     }
   });
 
-  it("hedges the reconnect until somebody has actually tested it", () => {
-    // Guild Wars offers an instance back after a dropped connection, but
-    // whether our reload triggers that offer is unverified. This test is what
-    // stops the wording being firmed up before the experiment is run.
+  it("states the reconnect that was measured, and claims nothing past it", () => {
+    // This test used to require the hedge — "should be able to rejoin" — and
+    // fail if anyone firmed the wording before the experiment had been run.
+    // It has been run: 2026-08-05, all five reload paths, from inside an
+    // instance, progress intact every time and back inside thirty seconds.
+    // The uncertainty was never whether Guild Wars restores an instance after
+    // a dropped connection; it was whether our reload looks like one to the
+    // server. That is answered, so the assertion turns around and guards the
+    // opposite failure: a promise wider than the evidence.
     const strings = [
       memoryPressurePresentation("low", 20),
       memoryPressurePresentation("critical", 5),
@@ -267,11 +276,18 @@ describe("renderer failure messages", () => {
     strings.push(...explanation.blocks.map((block) => block.body));
 
     assert.ok(
-      strings.some((text) => /should be able to rejoin/.test(text)),
-      "the hedge disappeared",
+      strings.some((text) => /puts you back where you were/.test(text)),
+      "the measured reconnect stopped being stated",
     );
+    assert.ok(
+      strings.every((text) => !/should be able to/.test(text)),
+      "a hedge the experiment retired came back",
+    );
+    // What was tested is one tester, one account, five paths. It says the
+    // reconnect works and how long it took; it must not promise that nothing
+    // can ever go wrong, which no session count would earn.
     for (const text of strings) {
-      assert.doesNotMatch(text, /\b(will|can) (put|place|return) you back\b/i, text);
+      assert.doesNotMatch(text, /\b(guarantee\w*|never lose|always works?)\b/i, text);
     }
   });
 

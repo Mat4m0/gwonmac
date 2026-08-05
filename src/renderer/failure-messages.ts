@@ -220,18 +220,24 @@ export interface MemoryExplanation {
  * growth rate could be measured, and then the label states no number at all: a
  * figure we did not measure is worse than none.
  *
- * They also say "should be able to rejoin" rather than promising it. Guild
- * Wars offers a player their instance back after a dropped connection, but
- * whether our reload triggers that offer has not been tested yet, and a player
- * who loses a run to our confidence would be right to be angry. The outpost is
- * named as the safe option, not demanded — demanding it is what made the old
- * sentence easy to ignore from inside a dungeon.
+ * They state the reconnect rather than hedging it, which they did not always.
+ * The uncertainty was never whether Guild Wars gives a player their instance
+ * back after a dropped connection — it does — but whether *our* reload looks
+ * like a dropped connection to its server. Tested 2026-08-05 across all five
+ * reload paths this app can take, from inside an instance: every one came back
+ * with progress intact, in under thirty seconds. That is the specific question
+ * the hedge existed for, so the hedge is gone.
+ *
+ * The outpost is no longer in the notice. It is still true that an outpost
+ * risks nothing at all, and the explanation says so — but leading with it is
+ * what made the shipped sentence easy to ignore from inside a dungeon, and now
+ * that the reconnect is measured, repeating the caveat argues against a fact.
  */
 const MEMORY_RELOAD = 'Reload Now';
 const MEMORY_DISMISS = 'Later';
 const MEMORY_WHY = 'Why is this happening?';
 const MEMORY_REJOIN =
-  'you should be able to rejoin where you were. Safest from a town or outpost.';
+  'Guild Wars puts you back where you were, in under a minute.';
 
 export function memoryPressurePresentation(
   level: 'low' | 'critical',
@@ -329,11 +335,11 @@ export function memoryExplanation(): MemoryExplanation {
       {
         title: 'What to do',
         body:
-          'Reloading gives the game a fresh 2 GB — it takes a few seconds, '
-          + 'then you log back in. You should be able to rejoin an instance '
-          + 'you were in, the same way Guild Wars handles a dropped '
-          + 'connection. Reloading from a town or outpost is the one case '
-          + 'with nothing to lose.',
+          'Reloading gives the game a fresh 2 GB. It takes under a minute, '
+          + 'and Guild Wars puts you back where you were — the same way it '
+          + 'handles a dropped connection. We tested that from inside an '
+          + 'instance, on every way this app can reload the game. A town or '
+          + 'outpost is still the one place with nothing at all to lose.',
       },
     ],
   };

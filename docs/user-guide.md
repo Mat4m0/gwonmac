@@ -285,10 +285,11 @@ filling in this session, so it shortens on its own in areas that load a lot of
 new scenery; when there has not yet been enough to measure, the notice says
 memory is running low without claiming a figure.
 
-**Reload Now** restarts the client with fresh memory. It takes a few seconds
-and then you log back in. You should be able to rejoin an instance you were
-in, the same way Guild Wars handles a dropped connection — reloading from a
-town or outpost is the one case with nothing to lose. **Later** leaves a small
+**Reload Now** restarts the client with fresh memory. It takes under a minute,
+and Guild Wars puts you back where you were — the same way it handles a
+dropped connection. That was tested from inside an instance on every way this
+app can reload the game, and progress survived each time; a town or outpost is
+still the one place with nothing at all to lose. **Later** leaves a small
 counter in the corner rather than going quiet; the full notice returns if time
 runs short. **Why is this happening?** explains it in the game.
 

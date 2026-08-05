@@ -259,11 +259,17 @@ still allocating underneath — hence **Dismiss**.
 
 ### The reload paths, and why they differ
 
-Whether a reload lets Guild Wars offer the player their instance back is a
-question about what the *server* observes, so the paths are worth telling
-apart. They do not differ at the TCP level — every one of them ends in the same
-`destroy()` — but they differ in ordering, in whether the client learns it was
-disconnected, and in whether anything is sent at all.
+**Answered, 2026-08-05: every path below reconnects.** Run from inside an
+instance, all five put the player back where they were with progress intact,
+in under thirty seconds. The question was never whether Guild Wars restores an
+instance after a dropped connection — it does — but whether these reloads look
+like one to its server, and none of the differences in the table turned out to
+matter to it. The notice's copy states the reconnect because of this run.
+
+The table stays because the paths still differ, and the next question about
+them will be a different one. They do not differ at the TCP level — every one
+ends in the same `destroy()` — but they differ in ordering, in whether the
+client learns it was disconnected, and in whether anything is sent at all.
 
 | | Path | Filesystem sync | Client sees the close | What the server sees |
 | --- | --- | --- | --- | --- |
@@ -274,15 +280,20 @@ disconnected, and in whether anything is sent at all.
 | d | Panel: drop sockets, keep running | no | **yes**, and the client stays alive | FIN |
 | e | Crash overlay → Retry | no | no | FIN at navigation |
 
-Run **(d) first**: it is the only one that does not restart the client, so the
-re-login is fastest, and if reconnecting works from there every reload path
-inherits the answer. **(c1)** is the only silence, which makes it the closest
-imitation of a real crash.
+If you are re-running this, take **(d) first**: it is the only one that does
+not restart the client, so the re-login is fastest. **(c1)** is the only
+silence, which makes it the closest imitation of a real crash — and it was the
+one most likely to fail, so it passing is what generalises.
 
 Record the uptime and socket count before each run and how long the re-login
 took — otherwise a server-side timeout gets attributed to a teardown
 difference. (c1) leaves orphaned handles in the main process until the app
 quits, so quit after using it. (c2) recovers only once per launch.
+
+Two limits on what that run proved: one tester on one account, and it says
+nothing about a full party, a timed mission, or a loaded server. It is enough
+to state the reconnect and not enough to promise it can never go wrong, which
+is the line the copy tests hold.
 
 ## Verification boundaries
 

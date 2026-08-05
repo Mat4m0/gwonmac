@@ -231,3 +231,38 @@ situation. This one is narrower and sharper: a test that drives a shape the
 system never produces will confirm whatever the code believes. The measured
 sessions were on disk the whole time — `wasm.heapGrew` events, fourteen of them
 in 2 h 16 m — and no test read one.
+
+## Round 6 — right: every reload path reconnects (2026-08-05)
+
+**The question.** Guild Wars restores a player's instance after a dropped
+connection; that was never in doubt. What was unknown is whether *our* reload
+looks like a dropped connection to its server — and the copy could not say
+"you come back where you were" until somebody had checked. A unit test held
+the hedge in place so nobody could firm the wording by assertion.
+
+**Run.** All five paths in `docs/diagnostics.md`, from inside an instance:
+(d) drop sockets, (c1) orphan + reload, (c2) crash the renderer process,
+(b) View → Reload Game, (a) sync + reload.
+
+**Result.** Every one reconnected, with progress intact, in under thirty
+seconds. Including (c1), which sends no FIN at all and forces the server to
+time the connection out — the path most likely to fail, and the one whose
+passing generalises to a real crash.
+
+**What changed.** The notice now states the reconnect instead of hedging it,
+and the outpost moved out of the notice into the explanation. It is still true
+that an outpost risks nothing, but leading with it is what made the shipped
+sentence easy to ignore from inside a dungeon, and repeating a caveat against
+a measured fact argues with the measurement. The guard test turned around: it
+used to fail if the hedge disappeared, and now fails if the measured claim
+disappears or if the copy grows past the evidence into "guaranteed" or
+"never lose".
+
+**What it does not cover.** One tester, one account. Nothing about a full
+party, a timed mission, or a loaded server. Enough to state the reconnect;
+not enough to promise it cannot go wrong.
+
+**Lesson.** The instrument was worth building. Five paths in one sitting
+answered a question that hours of ordinary play would not have, because
+ordinary play never produces (c1) on purpose — and (c1) is the one that
+mattered.
