@@ -238,6 +238,16 @@ const INVOCATIONS: Invocation[] = [
     args: ["copied text"],
     channel: IPC.clipboardWriteText,
   },
+  {
+    path: "clipboard.readText",
+    args: [],
+    channel: IPC.clipboardReadText,
+  },
+  {
+    path: "templates.export",
+    args: [[{ path: "Skills/Shockaxe.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
+    channel: IPC.templatesExport,
+  },
   { path: "client.retry", args: [], channel: IPC.clientRetry },
   {
     path: "client.healthy",

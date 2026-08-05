@@ -37,6 +37,7 @@ path helpers are pure and need no game state.
 | Delete a template | Client aborts |
 | Screenshot (`Screens/`) | Never written |
 | Chat log | Never written |
+| Load a template kept in a subfolder | The folder lists, and is always empty |
 
 ## Defect 1 — directory creation always fails
 
@@ -264,6 +265,48 @@ acknowledges.
 **Expected.** After the acknowledgement that completes a mode change, the
 client should re-run pointer hit-testing once on its own, without waiting for
 input or the idle cycle.
+
+## Defect 8 — the template scan never enumerates a subdirectory
+
+**Functions 9745, 9746, 9747**, `AcctCliTemplate.cpp`.
+
+`9745(ctx, type)` runs the whole scan for a template type exactly once, guarded
+by `ctx->state[type] != 0`, and calls `9746` then `9747`. Between them those two
+issue exactly two enumeration requests, both at the type root:
+
+| Caller | Pattern | flags |
+| --- | --- | --- |
+| 9746 | `Templates/Skills/*` | 18 — directories |
+| 9747 | `Templates/Skills/*.txt` | 17 — files |
+
+Neither descends. `9746` populates the subdirectory collection, so a folder is
+displayed; nothing then enumerates `Templates/Skills/<folder>/*.txt`, so no
+template file record is ever created for its contents. The list filter at
+`9738` matches records whose name carries the `\<folder>\<name>` form, and no
+scan produces one.
+
+**Observed.** With `Templates/Skills/Paragon/Test.txt` present on disk before
+the client starts, the folder `Paragon` is listed in "Load from Skills
+Template" and is empty when opened. The same file placed at
+`Templates/Skills/Test.txt` is listed and loads correctly. "Refresh List" and a
+full client restart both leave the folder empty, which is consistent with the
+guard being cleared and the same two root-level requests being reissued.
+
+Verified with the host answering defect 2's enumeration, so the requests the
+client makes are directly observable; the subdirectory request is never made.
+
+**Consequence.** Templates kept in a subfolder cannot be loaded. The Windows
+client documents subfolders as the way around the 550-template limit on a
+single directory, so a collection organised that way is unreachable.
+
+**Untested implication.** A template the client itself saves into a subfolder
+during a session should be affected the same way once that session ends: the
+save path writes the record directly, but only the scan restores records at
+startup, and the scan does not visit the folder. We did not confirm this,
+because our own reproduction does not depend on it.
+
+**Expected.** Enumerate each subdirectory found by `9746` and register its
+files with the `\<folder>\<name>` record name the list filter already expects.
 
 ## How to reproduce
 

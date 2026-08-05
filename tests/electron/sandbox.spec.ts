@@ -58,6 +58,7 @@ test.describe("sandbox boundary", () => {
           "snapshot",
           "sockets",
           "steam",
+          "templates",
           "wasmBridgeMarkers",
         ],
         nativeFrozen: true,
