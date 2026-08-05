@@ -441,6 +441,8 @@ function reloadClientSafely() {
  * while they are reading it; the chip is the live one.
  */
 let heapMinutes: number | null = null;
+/** The last thing the estimator concluded, for the debug panel to read back. */
+let heapReading: import('./heap-pressure.js').HeapPressureReading | null = null;
 
 async function presentHeapNotice(level: 'low' | 'critical') {
   if (
@@ -569,6 +571,7 @@ setInterval(() => {
   requestHeapCap();
   if (!heapWatch) return;
   const reading = heapWatch.sample(wasmHeapBytes(), performance.now());
+  heapReading = reading;
   heapMinutes = reading.minutes;
   if (reading.level === 'none') return;
   if (reading.level !== heapNoticeLevel) {
@@ -607,6 +610,10 @@ window.addEventListener('gw:dev-panel', () => {
         heapBytes: wasmHeapBytes,
         capBytes: () => heapCapBytes,
         realNoticeLevel: () => heapNoticeLevel,
+        pressure: () => heapReading && {
+          minutes: heapReading.minutes,
+          bytesPerMinute: heapReading.bytesPerMinute,
+        },
         previewNotice: (level) => void presentHeapNotice(level).catch(() => {}),
         hideNotice: hideHeapNotice,
         previewCrash: (count) => {

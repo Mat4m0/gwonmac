@@ -29,6 +29,8 @@ export interface HeapPressureReading {
 
 export interface HeapPressurePolicy {
   windowsMs?: readonly number[];
+  /** No slope is measured from a sample older than this. See DEFAULTS. */
+  warmupMs?: number;
   lowMinutes?: number;
   criticalMinutes?: number;
   blindLowBytes?: number;
@@ -52,6 +54,18 @@ const MIB = 1_048_576;
  */
 const DEFAULTS = {
   windowsMs: [2 * 60_000, 10 * 60_000] as readonly number[],
+  /**
+   * Nothing measured before this counts as a baseline. Starting the client is
+   * the heaviest allocating a session ever does — observed at roughly
+   * 4,500 MiB/h against a steady-state 555 — so a window whose base sits in
+   * the ramp reads a startup as a session with a quarter of an hour to live,
+   * and every player would be warned a minute after logging in.
+   *
+   * Samples from the ramp are still recorded; they are just never the point a
+   * slope is measured from. The cost is that the first estimate arrives about
+   * seven minutes in, and until then the byte floors are what warn.
+   */
+  warmupMs: 5 * 60_000,
   lowMinutes: 20,
   criticalMinutes: 5,
   // The bytes the shipped build warned on, kept for when time is unmeasurable.
@@ -108,11 +122,15 @@ export function createHeapPressureWatch(
 
       let bytesPerMinute: number | null = null;
       for (const windowMs of policy.windowsMs) {
-        // A window with no sample old enough is not usable. Extrapolating a
-        // partial window is how a cold start invents a rate it never saw.
+        // A window with no sample old enough is not usable, and one whose base
+        // is still inside the startup ramp is worse than unusable — it reports
+        // the cost of launching the game as the cost of playing it.
+        // Extrapolating either is how a young session invents a rate it never
+        // saw.
         const base = [...history]
           .reverse()
-          .find((entry) => entry.atMs <= atMs - windowMs);
+          .find((entry) =>
+            entry.atMs <= atMs - windowMs && entry.atMs >= policy.warmupMs);
         if (!base) continue;
         const elapsed = (atMs - base.atMs) / 60_000;
         if (elapsed <= 0) continue;

@@ -81,6 +81,40 @@ describe("the memory warning counts time, not bytes", () => {
     assert.ok(remaining > 3, `${remaining} real minutes left at critical`);
   });
 
+  it("does not read the cost of starting the game as the cost of playing it", () => {
+    // Observed on a real launch: 734 MiB and climbing at ~4,500 MiB/h less
+    // than three minutes in, against a steady-state 555 MiB/h. Measured from
+    // inside that ramp the session looks a quarter of an hour from death, and
+    // the warning fired at 36% of the cap — every player, every login.
+    const watch = createHeapPressureWatch({ capBytes: CAP });
+    let atMs = 0;
+    let last = watch.sample(0, atMs);
+    for (let minute = 0; minute <= 4; minute += 0.25) {
+      atMs = minute * 60_000;
+      last = watch.sample(Math.min(760, 260 * minute + 40) * MIB, atMs);
+      assert.equal(
+        last.level,
+        "none",
+        `warned ${minute} minutes in, at ${Math.round(last.bytes / MIB)} MiB`,
+      );
+      assert.equal(last.minutes, null, "claimed a figure measured from startup");
+    }
+
+    // Once the ramp is behind it, ordinary play is read as ordinary play.
+    const settledAt = atMs;
+    for (let minute = 5; minute <= 30; minute += 0.25) {
+      atMs = minute * 60_000;
+      const mib = 760 + (555 / 60) * (minute - settledAt / 60_000);
+      last = watch.sample(mib * MIB, atMs);
+    }
+    assert.equal(last.level, "none", "still quiet with two hours of headroom");
+    assert.ok(
+      last.bytesPerMinute !== null
+        && Math.round((last.bytesPerMinute * 60) / MIB) === 555,
+      `read ${Math.round(((last.bytesPerMinute ?? 0) * 60) / MIB)} MiB/h`,
+    );
+  });
+
   it("falls back to bytes only while there is no rate to read", () => {
     // A page that opens already near the cap has no history to slope, so the
     // shipped thresholds are what still warns it.

@@ -218,6 +218,12 @@ export interface DevPanelHost {
   capBytes(): number;
   /** The escalation the real watcher has reached. Read only. */
   realNoticeLevel(): string;
+  /**
+   * What the warning itself last concluded, as against this panel's own
+   * arithmetic. They measure over different windows on purpose, and when they
+   * disagree it is the warning's number that explains what the player saw.
+   */
+  pressure(): { minutes: number | null; bytesPerMinute: number | null } | null;
   /** Draws the notice without touching the watcher's own state. */
   previewNotice(level: 'low' | 'critical'): void;
   hideNotice(): void;
@@ -270,6 +276,7 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
       <dt>notice</dt><dd data-role="notice"></dd>
       <dt>growth</dt><dd data-role="growth"></dd>
       <dt>to cap</dt><dd data-role="tocap"></dd>
+      <dt>warning</dt><dd data-role="warning"></dd>
       <dt>steps</dt><dd data-role="steps"></dd>
       <dt>sockets</dt><dd data-role="sockets"></dd>
       <dt>uptime</dt><dd data-role="uptime"></dd>
@@ -310,6 +317,7 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
   const noticeCell = cell('notice');
   const growthCell = cell('growth');
   const toCapCell = cell('tocap');
+  const warningCell = cell('warning');
   const stepsCell = cell('steps');
   const socketsCell = cell('sockets');
   const uptimeCell = cell('uptime');
@@ -382,7 +390,16 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
     growthCell.textContent =
       `${perHour(summary.recentBytesPerMinute)} 30m`
       + ` · ${perHour(summary.runBytesPerMinute)} since open`;
-    toCapCell.textContent = minutesText(summary.minutesToCap);
+    toCapCell.textContent = `${minutesText(summary.minutesToCap)}  (since open)`;
+    // The warning's own reading. It measures step to step over a longer span
+    // and ignores the startup ramp, so this is the number that explains what
+    // the player was told — and a disagreement with the line above is
+    // information, not a bug in either.
+    const pressure = host.pressure();
+    warningCell.textContent = pressure === null
+      ? 'not measuring yet'
+      : `${pressure.minutes === null ? '—' : `~${pressure.minutes} m`}`
+        + ` at ${perHour(pressure.bytesPerMinute)}`;
     stepsCell.textContent = summary.lastStepBytes === null
       ? String(summary.steps)
       : `${summary.steps} · last +${Math.round(summary.lastStepBytes / MIB)} MiB`;
