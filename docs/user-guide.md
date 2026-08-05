@@ -272,11 +272,32 @@ known patterns, so treat it as strong rather than absolute. The export is an
 ordinary ZIP you can open and read before attaching it. GitHub issues are
 public, so review the bug form’s privacy notice as well.
 
+## If the game warns that memory is running out
+
+ArenaNet's game client can only use 2 GB of memory and does not release what
+it loads, so a long session eventually fills it and the client stops. Neither
+the limit nor the memory use is something this app can change; what it can do
+is watch, and warn before it happens.
+
+A notice appears over the game naming roughly how long is left — about twenty
+minutes, then about five. The estimate comes from how fast memory has been
+filling in this session, so it shortens on its own in areas that load a lot of
+new scenery; when there has not yet been enough to measure, the notice says
+memory is running low without claiming a figure.
+
+**Reload Now** restarts the client with fresh memory. It takes a few seconds
+and then you log back in. You should be able to rejoin an instance you were
+in, the same way Guild Wars handles a dropped connection — reloading from a
+town or outpost is the one case with nothing to lose. **Later** leaves a small
+counter in the corner rather than going quiet; the full notice returns if time
+runs short. **Why is this happening?** explains it in the game.
+
 ## If the game crashes
 
 When the running game client stops unexpectedly, the launcher screen returns
 with **Retry** and **Report a Problem…**. Retry starts the client again; a
-single crash is usually transient.
+single crash is usually transient. A crash that ran out of memory says so
+under **Technical details**, with the heap size it reached.
 
 If the client crashes again in the same app run, the message changes to say
 so and leads with reporting: **Report a Problem…** on the launcher is the

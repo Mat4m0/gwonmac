@@ -188,36 +188,149 @@ export interface MemoryPressurePresentation {
   detail: string;
   reloadButton: string;
   dismissButton: string;
+  whyLink: string;
+}
+
+export interface MemoryPressureChip {
+  text: string;
+  /** The whole sentence, for the button's accessible name. */
+  label: string;
+}
+
+export interface MemoryExplanationBlock {
+  title: string;
+  body: string;
+}
+
+export interface MemoryExplanation {
+  title: string;
+  blocks: readonly MemoryExplanationBlock[];
+  closeButton: string;
 }
 
 /**
  * The game client's WASM heap is approaching its hard 2 GiB cap; once it gets
  * there the next big allocation kills the client wherever the player happens
  * to be standing. These sentences exist so the player spends that death at a
- * moment of their choosing: reloading from a town or outpost is a quick relog
- * that loses nothing, while an uncontrolled crash mid-mission loses the run.
+ * moment of their choosing.
+ *
+ * They lead with a deadline because the old wording led with a condition —
+ * "running low" meant half an hour in the open world and about two minutes in
+ * a mission, and a player could not tell which. `minutes` is null when no
+ * growth rate could be measured, and then the label states no number at all: a
+ * figure we did not measure is worse than none.
+ *
+ * They also say "should be able to rejoin" rather than promising it. Guild
+ * Wars offers a player their instance back after a dropped connection, but
+ * whether our reload triggers that offer has not been tested yet, and a player
+ * who loses a run to our confidence would be right to be angry. The outpost is
+ * named as the safe option, not demanded — demanding it is what made the old
+ * sentence easy to ignore from inside a dungeon.
  */
 const MEMORY_RELOAD = 'Reload Now';
 const MEMORY_DISMISS = 'Later';
+const MEMORY_WHY = 'Why is this happening?';
+const MEMORY_REJOIN =
+  'you should be able to rejoin where you were. Safest from a town or outpost.';
 
 export function memoryPressurePresentation(
   level: 'low' | 'critical',
+  minutes: number | null = null,
 ): MemoryPressurePresentation {
   const critical = level === 'critical';
-  return {
-    label: critical
+  const unit = minutes === 1 ? 'minute' : 'minutes';
+  let label: string;
+  if (minutes === null) {
+    label = critical
       ? 'Guild Wars is almost out of memory.'
-      : 'Guild Wars is running low on memory.',
+      : 'Guild Wars is running low on memory.';
+  } else {
+    label = critical
+      ? `About ${minutes} ${unit} before Guild Wars runs out of memory.`
+      : `About ${minutes} ${unit} of play left before a crash.`;
+  }
+  return {
+    label,
     detail: critical
-      ? 'A crash is likely soon. Head to a town or outpost at the next '
-        + 'safe moment and choose Reload Now — that is a quick relog, and '
-        + 'from an outpost you lose nothing.'
-      : 'After long sessions the game can crash when memory runs out. To '
-        + 'pick the moment yourself, finish what you are doing, return to a '
-        + 'town or outpost, and choose Reload Now — it works like a quick '
-        + 'relog.',
+      ? `Reload soon — ${MEMORY_REJOIN}`
+      : `Reload when it suits you — ${MEMORY_REJOIN}`,
     reloadButton: MEMORY_RELOAD,
     dismissButton: MEMORY_DISMISS,
+    whyLink: MEMORY_WHY,
+  };
+}
+
+/**
+ * What `Later` leaves behind. The banner's number is frozen when it is shown,
+ * so this is the one live surface — it is also what stops a dismissal meaning
+ * silence until the crash, which is what the shipped build did.
+ */
+export function memoryPressureChip(
+  level: 'low' | 'critical',
+  minutes: number | null,
+): MemoryPressureChip {
+  if (minutes === null) {
+    return {
+      text: 'Low memory',
+      label: 'Guild Wars is low on memory. Open the memory warning again.',
+    };
+  }
+  if (minutes < 1) {
+    return {
+      text: 'Under a minute',
+      label: 'Under a minute before Guild Wars runs out of memory.',
+    };
+  }
+  const unit = minutes === 1 ? 'minute' : 'minutes';
+  return {
+    text: `${minutes} min`,
+    label: `About ${minutes} ${unit} before Guild Wars runs out of memory.`,
+  };
+}
+
+/**
+ * The four things a player asks once they have read the warning twice. The
+ * third block says what is true today — measured, documented, published. It
+ * must not claim we are in contact with ArenaNet until someone has actually
+ * written to them.
+ */
+export function memoryExplanation(): MemoryExplanation {
+  return {
+    title: 'Why Guild Wars runs out of memory',
+    closeButton: 'Close',
+    blocks: [
+      {
+        title: 'What this is',
+        body:
+          'The game client can only use 2 GB of memory. It does not release '
+          + 'what it loads, so a long session gradually fills that up and the '
+          + 'game stops — usually after two to three hours, and faster in '
+          + 'dungeons and missions with a lot of new scenery.',
+      },
+      {
+        title: 'Why we cannot fix it',
+        body:
+          "The limit and the memory use are both inside ArenaNet's game "
+          + 'client. This app only hosts that client on macOS — it cannot '
+          + 'change how the game allocates memory. What it can do is watch it '
+          + 'and warn you before it runs out, which is what this is.',
+      },
+      {
+        title: 'Where it stands',
+        body:
+          'We have measured it, documented it in detail, and published the '
+          + 'findings for ArenaNet.',
+      },
+      {
+        title: 'What to do',
+        body:
+          'Reloading gives the game a fresh 2 GB — it takes a few seconds, '
+          + 'then you log back in. You should be able to rejoin an instance '
+          + 'you were in, the same way Guild Wars handles a dropped '
+          + 'connection. Reloading from a town or outpost is the one case '
+          + 'with nothing to lose.',
+      },
+    ],
   };
 }
 

@@ -1,4 +1,11 @@
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  /* A critically damped spring, response 0.4s, sampled rather than guessed at
+     with a bezier. No overshoot: bounce belongs to motion a gesture threw, and
+     nothing here was thrown. */
+  --spring: linear(0, .186, .465, .682, .821, .903, .949, .973, .986, .993,
+                   .997, .999, 1);
+}
 html,body { width:100%; height:100%; margin:0; overflow:hidden;
             background:#000; color:#fe0000; font:14px Tahoma,sans-serif; }
 #canvas { display:block; width:100%; height:100%; }
@@ -49,52 +56,231 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 #capture-status[hidden] { display: none; }
 
-/* The heap watermark notice. Top-centred over the running game; amber while
-   there is headroom, red once the next growth step would hit the 2 GiB cap.
-   Buttons are the only interactive surface — the div itself must not feel
-   like a dialog that blocks play. */
+/* The memory warning. Top-centred over the running game, translucent so the
+   game reads through it, and never scrimmed — it is a message running beside
+   play, not a dialog that stops it. It enters down from the edge it lives on
+   and leaves the same way, and blur and scale animate together so it arrives
+   as a surface rather than cross-fading as a picture. */
 #memory-notice {
   position: fixed;
   top: 14px;
   left: 50%;
-  transform: translateX(-50%);
   z-index: 9;
   display: flex;
   align-items: center;
-  gap: 14px;
-  max-width: min(90vw, 680px);
+  gap: 16px;
+  max-width: min(92vw, 540px);
   box-sizing: border-box;
-  padding: 8px 12px;
-  border: 1px solid #8a6d3b;
-  border-radius: 6px;
+  padding: 11px 13px;
+  border: 1px solid #ffffff1f;
+  border-radius: 12px;
   color: #f5ead9;
-  background: #1c1408ee;
-  font: 13px/1.45 Tahoma, sans-serif;
-  box-shadow: 0 2px 10px #0008;
+  background: #241d13b8;
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  /* The bright top edge is light catching the material. */
+  box-shadow: inset 0 1px 0 #ffffff1c, 0 8px 28px #000000a6;
+  transform: translateX(-50%) translateY(0) scale(1);
+  opacity: 1;
+  transition: transform .4s var(--spring), opacity .28s ease-out,
+              backdrop-filter .4s var(--spring), border-color .3s ease-out,
+              background-color .3s ease-out;
 }
 #memory-notice[hidden] { display: none; }
-#memory-notice.critical {
-  border-color: #945b4f;
-  background: #1b0c0bee;
-  color: #fff1e9;
+#memory-notice.entering,
+#memory-notice.leaving {
+  transform: translateX(-50%) translateY(-14px) scale(.97);
+  opacity: 0;
+  backdrop-filter: blur(0) saturate(100%);
+  -webkit-backdrop-filter: blur(0) saturate(100%);
 }
-#memory-notice-label { display: block; }
-#memory-notice-actions { display: flex; gap: 8px; flex-shrink: 0; }
-#memory-notice button {
-  font: 12px Tahoma, sans-serif;
-  padding: 5px 12px;
-  border: 1px solid #776a55;
-  border-radius: 4px;
-  background: #2b2a20;
-  color: inherit;
+#memory-notice.critical {
+  background: #2b0f0ab8;
+  border-color: #ff8f6b4d;
+  box-shadow: inset 0 1px 0 #ffb49c26, 0 10px 34px #000000b8,
+              0 0 0 1px #ff6a4126;
+}
+/* Vibrancy: over a translucent ground text earns contrast, a heavier weight
+   and a little tracking rather than sitting flat and grey. */
+#memory-notice-label {
+  display: block;
+  font: 600 14px/1.3 Tahoma, sans-serif;
+  letter-spacing: .005em;
+  color: #fff6ec;
+}
+#memory-notice.critical #memory-notice-label { color: #ffd9cb; }
+#memory-notice-detail {
+  font: 13px/1.5 Tahoma, sans-serif;
+  letter-spacing: .01em;
+  color: #ece0cf;
+}
+#memory-notice-why {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ece0cf;
+  opacity: .74;
+  font: 13px/1.5 Tahoma, sans-serif;
+  letter-spacing: .01em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
 }
-#memory-notice button:hover { border-color: #a99878; }
+#memory-notice-why:hover { opacity: 1; }
+#memory-notice-actions { display: flex; gap: 8px; flex-shrink: 0; }
+#memory-notice-actions button {
+  font: 500 12.5px/1 Tahoma, sans-serif;
+  padding: 8px 14px;
+  border: 1px solid #ffffff26;
+  border-radius: 8px;
+  background: #ffffff14;
+  color: #f3e8da;
+  cursor: pointer;
+  transition: background-color .12s ease-out, border-color .12s ease-out,
+              transform .1s ease-out;
+}
+#memory-notice-actions button:hover { background: #ffffff1f; border-color: #ffffff3d; }
+/* Feedback on the press, not the release. */
+#memory-notice button:active { transform: scale(.97); }
 #memory-notice button:focus-visible { outline: 2px solid #ff9d66;
                                       outline-offset: 2px; }
-#memory-notice button:active { transform: scale(.97); }
-#memory-notice.critical button { border-color: #8a5f55; }
-#memory-notice.critical button:hover { border-color: #c08a7c; }
+#memory-notice-actions .primary {
+  background: #c2542e;
+  border-color: #e0714f;
+  color: #fff6f1;
+  font-weight: 600;
+}
+#memory-notice-actions .primary:hover { background: #d15f36; border-color: #ff8a63; }
+
+/* The chip a dismissal leaves. Right edge, clear of the notice's own centre. */
+#memory-chip {
+  position: fixed;
+  top: 118px;
+  right: 16px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border: 1px solid #ffffff26;
+  border-radius: 20px;
+  background: #2b0f0ab3;
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  color: #ffd9cb;
+  font: 600 11.5px/1 Tahoma, sans-serif;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px #0009;
+  transition: transform .1s ease-out, background-color .12s ease-out;
+}
+#memory-chip[hidden] { display: none; }
+#memory-chip:active { transform: scale(.96); }
+#memory-chip:focus-visible { outline: 2px solid #ff9d66; outline-offset: 2px; }
+.memory-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff7a55;
+}
+
+/* The explanation is the one modal task here, so it dims what it interrupts.
+   The notice never does — it runs beside play. */
+#memory-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #000;
+  opacity: .5;
+  transition: opacity .3s ease-out;
+}
+#memory-scrim[hidden] { display: none; }
+#memory-why {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 11;
+  width: min(92vw, 540px);
+  max-height: calc(100vh - 34px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 20px 22px;
+  border: 1px solid #ffffff21;
+  border-radius: 14px;
+  background: #1a1610f2;
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  color: #f0e6d2;
+  font: 13px/1.6 Tahoma, sans-serif;
+  box-shadow: inset 0 1px 0 #ffffff1a, 0 18px 50px #000000c4;
+  /* Anchored to the link that opened it; harness.ts computes the origin from
+     the link's own box, because a constant drifts the first time the copy
+     changes length. */
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+  transition: transform .4s var(--spring), opacity .26s ease-out;
+}
+#memory-why[hidden] { display: none; }
+#memory-why.entering, #memory-why.leaving {
+  transform: translateX(-50%) scale(.94);
+  opacity: 0;
+}
+#memory-why h3 {
+  margin: 18px 0 4px;
+  font: 600 11px/1.3 Tahoma, sans-serif;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #e0a94b;
+}
+#memory-why h3:first-child { margin-top: 0; }
+#memory-why p { margin: 0; color: #e2d7c2; letter-spacing: .008em; }
+#memory-why-close {
+  margin-top: 18px;
+  padding: 8px 16px;
+  border: 1px solid #ffffff26;
+  border-radius: 8px;
+  background: #ffffff14;
+  color: #f0e6d2;
+  font: 500 12.5px/1 Tahoma, sans-serif;
+  cursor: pointer;
+  transition: background-color .12s ease-out, transform .1s ease-out;
+}
+#memory-why-close:hover { background: #ffffff1f; }
+#memory-why-close:active { transform: scale(.97); }
+#memory-why-close:focus-visible { outline: 2px solid #ff9d66; outline-offset: 2px; }
+
+/* Reduced motion keeps the feedback and drops the travel: a cross-fade in
+   place, and no scaling under the finger. */
+@media (prefers-reduced-motion: reduce) {
+  #memory-notice, #memory-why, #memory-scrim,
+  #memory-notice button, #memory-chip, #memory-why-close {
+    transition: opacity .2s ease;
+  }
+  #memory-notice.entering, #memory-notice.leaving {
+    transform: translateX(-50%);
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+  }
+  #memory-why.entering, #memory-why.leaving { transform: translateX(-50%); }
+  #memory-notice button:active, #memory-chip:active,
+  #memory-why-close:active { transform: none; }
+}
+/* Frosted glass is the first thing to go when transparency is refused. */
+@media (prefers-reduced-transparency: reduce) {
+  #memory-notice { background: #241d13; backdrop-filter: none;
+                   -webkit-backdrop-filter: none; }
+  #memory-notice.critical { background: #2b0f0a; }
+  #memory-chip { background: #2b0f0a; backdrop-filter: none;
+                 -webkit-backdrop-filter: none; }
+  #memory-why { background: #1a1610; backdrop-filter: none;
+                -webkit-backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  #memory-notice { background: #1b150d; border-color: #ffd9a8; }
+  #memory-notice.critical { background: #2a0b06; border-color: #ff9f80; }
+  #memory-notice-detail, #memory-notice-why { color: #fff8ee; opacity: 1; }
+}
 
 /* The Steam sign-in status line: quiet, bottom-centred over the client's own
    login screen, and gone on its own — it explains, it never blocks. */

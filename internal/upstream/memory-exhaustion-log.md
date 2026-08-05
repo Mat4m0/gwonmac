@@ -121,3 +121,41 @@ survivable failure). Shipped instead:
    rollup in the bundle), quit-time `filesystem.sync` failing on every
    observed quit (no error code recorded yet), and quit-teardown aborts
    (`a6311932`, 10 ms after `sockets.closeAll()`) being counted as crashes.
+
+## Round 4 — wrong: bytes remaining was the unit (2026-08-04)
+
+**Hypothesis.** Warning at a fixed distance from the cap — 256 MiB, then
+128 MiB — gives the player enough room to reach somewhere safe.
+
+**Built.** The watermark notice shipped in 2026.8.4 with exactly those two
+thresholds, and copy that told the player to travel to a town or outpost.
+
+**Wrong because** the same headroom is not the same amount of time. Measured
+on the same client build:
+
+| Session | Rate | What 256 MiB bought |
+| --- | --- | --- |
+| Open world, 2 h 16 m | 555 MiB/h | ~28 min |
+| Eye of the North mission | fast enough to hit the cap in ~30 min | ~2–3 min |
+
+The second player reported "multiple warnings" and crashed anyway. Both saw
+the same sentence, and neither could tell which of those two it meant. The
+copy compounded it: an instruction to travel to an outpost is one a player
+inside a dungeon reads as "abandon the run", so it was rational to ignore.
+
+**Kept anyway.** The byte thresholds survive as the fallback for when a rate
+cannot be measured — the first two minutes of a session, and any stretch where
+growth has stalled. They are conditional now: left unconditional, 128 MiB is
+nearly fourteen minutes at the open-world rate and would pre-empt the time rule
+every session, rebuilding the defect.
+
+**Lesson.** A threshold is a claim about the player's situation, and the unit
+has to be the one the player is in. Bytes were what we could measure most
+easily; time was what the sentence was actually promising.
+
+**A number the test corrected.** The replacement kept a hard byte floor as a
+never-silent backstop, first set at 64 MiB. Driven over the measured
+open-world session it raised `critical` at seven minutes — ahead of the
+five-minute time rule, i.e. the same defect in miniature. It is 32 MiB, which
+sits below where the time rule fires at every rate observed so far. That
+threshold had no session behind it until the test supplied one.

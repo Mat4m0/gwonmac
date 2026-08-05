@@ -467,3 +467,62 @@ test("a completed client main loop closes the host application", async () => {
   assert.match(harness, /onExit\(code\)/);
   assert.match(harness, /code === 0[\s\S]*native\(\)\.app\.requestQuit\(\)/);
 });
+
+test("the memory warning measures time and keeps its one contract import", async () => {
+  const [harness, pressure, css, html] = await Promise.all([
+    readFile(path.join(root, "src/renderer/harness.ts"), "utf8"),
+    readFile(path.join(root, "src/renderer/heap-pressure.ts"), "utf8"),
+    readFile(path.join(root, "src/renderer/harness.css"), "utf8"),
+    readFile(path.join(root, "src/renderer/index.html"), "utf8"),
+  ]);
+
+  // The packaged Enhancement-runtime proof observes the runtime's own request
+  // for the canonical contract. A second importer, or this one moved to boot,
+  // resolves it from the module cache and the proof stops proving anything.
+  //
+  // Only a runtime import counts. `import('…').SomeType` is a type position,
+  // erased before anything is fetched, and harness.ts names several — the
+  // negative lookahead is what tells the two apart in source text.
+  assert.equal(
+    harness.match(/import\('\.\.\/shared\/contracts\.js'\)(?!\s*\.)/gu)?.length,
+    1,
+    "harness.ts must import the canonical contract exactly once at runtime",
+  );
+  assert.match(
+    harness,
+    /function requestHeapCap\(\)[\s\S]{0,400}import\('\.\.\/shared\/contracts\.js'\)/u,
+    "the contract import must stay inside requestHeapCap",
+  );
+  assert.doesNotMatch(
+    pressure,
+    /from ['"]\.\.\/shared\//u,
+    "heap-pressure.ts must take the cap as an argument, not import it",
+  );
+
+  // The estimator is what makes the warning mean the same thing in an outpost
+  // and in a mission; a byte-only watcher is the defect it replaced.
+  assert.match(harness, /heapWatch\.sample\(wasmHeapBytes\(\), performance\.now\(\)\)/u);
+
+  // A warning drawn over a live game has to survive the three preferences that
+  // change how it may be drawn at all.
+  for (const query of [
+    "prefers-reduced-motion",
+    "prefers-reduced-transparency",
+    "prefers-contrast",
+  ]) {
+    const block = css.slice(css.indexOf(`@media (${query}`));
+    assert.ok(
+      block.slice(0, 600).includes("#memory-notice"),
+      `${query} must cover the memory notice`,
+    );
+  }
+
+  // The explanation is modal and the notice is not: one dims the game and
+  // takes focus, the other runs beside play.
+  assert.match(html, /id="memory-why"[^>]*role="dialog"[^>]*aria-modal="true"/u);
+  assert.doesNotMatch(
+    html,
+    /id="memory-notice"[^>]*aria-modal/u,
+    "the notice must not block the game it is drawn over",
+  );
+});
