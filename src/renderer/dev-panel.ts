@@ -240,9 +240,10 @@ export interface DevPanel {
 
 const minutesText = (minutes: number | null): string => {
   if (minutes === null) return '—';
-  if (minutes < 60) return `~${Math.round(minutes)} m`;
-  const hours = Math.floor(minutes / 60);
-  return `~${hours} h ${String(Math.round(minutes % 60)).padStart(2, '0')} m`;
+  // Round once, then split. Rounding each part separately prints "1 h 60 m".
+  const whole = Math.round(minutes);
+  if (whole < 60) return `~${whole} m`;
+  return `~${Math.floor(whole / 60)} h ${String(whole % 60).padStart(2, '0')} m`;
 };
 
 const clockText = (ms: number): string => {
