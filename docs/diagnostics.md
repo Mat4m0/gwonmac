@@ -222,6 +222,60 @@ process when its event loop actually blocked, and otherwise to the renderer.
 Captures recorded before window-state tracking say so rather than claiming the
 window was steady.
 
+## The memory debug panel
+
+Help → Diagnostics → **Show Memory Debug Panel** (⌘⇧D), or the panel's own
+toggle. It appears on a development build, and on any build launched with the
+switch:
+
+```
+open -a "Guild Wars Reforged.app" --args --gw-debug-panel
+```
+
+Not a setting, so nothing about it persists and a player cannot reach it by
+clicking. Not the performance overlay either: that one is a shipped, closed-
+schema readout drawn from the main process's summary, while the heap curve is
+renderer-local and these controls are destructive.
+
+The panel reads the heap, the growth rate, the estimated time to the client's
+2 GiB cap, the growth-step count, open sockets, and the uptime of the current
+page load. It renders the notice and the crash overlay through the same
+functions the real paths use, so a simulation shows the sentence a player would
+actually read. It has no thresholds and no copy of its own, and it never writes
+the watcher's escalation — the readout prints the real level beside the
+simulated one so that stays visible.
+
+Two simulation divergences worth knowing: a simulated crash leaves the memory
+watcher running (a real abort stops it), and the overlay covers a client that is
+still allocating underneath — hence **Dismiss**.
+
+### The reload paths, and why they differ
+
+Whether a reload lets Guild Wars offer the player their instance back is a
+question about what the *server* observes, so the paths are worth telling
+apart. They do not differ at the TCP level — every one of them ends in the same
+`destroy()` — but they differ in ordering, in whether the client learns it was
+disconnected, and in whether anything is sent at all.
+
+| | Path | Filesystem sync | Client sees the close | What the server sees |
+| --- | --- | --- | --- | --- |
+| a | Panel: sync + reload — also the notice's own Reload Now | yes, ≤1.5 s | no | FIN at navigation |
+| b | View → Reload Game (⌘R) | no | **yes** — main closes first | FIN before navigation |
+| c1 | Panel: orphan + reload | no | no | **nothing** — no FIN; the server must time out |
+| c2 | Help → Diagnostics → Crash Renderer Process | no | no | FIN from `render-process-gone` |
+| d | Panel: drop sockets, keep running | no | **yes**, and the client stays alive | FIN |
+| e | Crash overlay → Retry | no | no | FIN at navigation |
+
+Run **(d) first**: it is the only one that does not restart the client, so the
+re-login is fastest, and if reconnecting works from there every reload path
+inherits the answer. **(c1)** is the only silence, which makes it the closest
+imitation of a real crash.
+
+Record the uptime and socket count before each run and how long the re-login
+took — otherwise a server-side timeout gets attributed to a teardown
+difference. (c1) leaves orphaned handles in the main process until the app
+quits, so quit after using it. (c2) recovers only once per launch.
+
 ## Verification boundaries
 
 ### Claims and the tests that prove them

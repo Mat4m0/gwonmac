@@ -197,6 +197,10 @@ async function escalateRepeatedCrash(): Promise<void> {
   if (count > 1) window.gwLoading?.failCrash(count);
 }
 let disposeSocketHost = () => {};
+let socketHost: ReturnType<
+  typeof import('./socket-host.js').createSocketHost
+> | null = null;
+let devPanel: import('./dev-panel.js').DevPanel | null = null;
 const native = () => window.gwNative;
 const milestone = <
   N extends import('../shared/diagnostics.js').RendererMilestone,
@@ -392,6 +396,59 @@ setInterval(() => {
   log(`[memory] wasm heap at ${Math.round(bytes / MIB)} MiB — ${level} notice`);
   presentHeapNotice(level).catch(() => {});
 }, 15_000);
+
+/**
+ * The memory debug panel, built on first use. The menu entry that sends this
+ * is gated, so most runs never pay for it — and it is wired here rather than
+ * inside boot() because a client that failed to start is exactly when the
+ * heap reading is worth having.
+ *
+ * The panel is handed callbacks, never state: it has no thresholds and no copy
+ * of its own, so a simulated notice is the sentence a player would really read
+ * and a preview cannot move the real escalation.
+ */
+window.addEventListener('gw:dev-panel', () => {
+  void (async () => {
+    if (!devPanel) {
+      const { createDevPanel } = await import('./dev-panel.js');
+      devPanel = createDevPanel({
+        parent: document.body,
+        log,
+        heapBytes: wasmHeapBytes,
+        capBytes: () => heapCapBytes,
+        realNoticeLevel: () => heapNoticeLevel,
+        previewNotice: (level) => void presentHeapNotice(level).catch(() => {}),
+        hideNotice: hideHeapNotice,
+        previewCrash: (count) => {
+          // No `crashRecorded`, no `wasm.abort` milestone: the overlay is
+          // drawn, the diagnostics record stays truthful, and the marker
+          // keeps a screenshot of this from being read as a real crash.
+          window.gwLoading?.failCrash(
+            count,
+            `SIMULATED crash overlay — no client abort occurred\n`
+              + `WASM heap: ${Math.round(wasmHeapBytes() / 1048576)} MiB`,
+          );
+        },
+        dismissOverlay: () => window.gwLoading?.done(),
+        openSockets: () => socketHost?.openCount() ?? 0,
+        dropSockets: () => socketHost?.closeAll(),
+        reloadSafely: reloadClientSafely,
+        reloadOrphaning: () => {
+          // Reassigns the same binding boot assigns, so the production
+          // teardown at `beforeunload` keeps one path and no debug branch.
+          // Nothing closes the sockets, so the server sees silence rather
+          // than a FIN — the closest thing to a real crash we can stage.
+          disposeSocketHost = () => {};
+          window.location.reload();
+        },
+      });
+    }
+    log(`dev panel: ${devPanel.toggle() ? 'on' : 'off'}`);
+  })().catch((error: unknown) => {
+    log('[err] dev panel failed to load:',
+      error instanceof Error ? error.message : String(error));
+  });
+});
 
 const STARTUP_LABELS = {
   connecting: 'Starting Guild Wars',
@@ -1092,7 +1149,7 @@ function loadGlue() {
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
     Object.assign(Module, unavailablePlatformCapabilities(log));
-    const socketHost = createSocketHost({
+    socketHost = createSocketHost({
       native: native().sockets,
       diagnostics: window.gwDiagnostics,
       socketOpened: () => {

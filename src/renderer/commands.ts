@@ -68,6 +68,9 @@
       case 'input.trace':
         dispatch('gw:input-trace');
         break;
+      case 'dev.panel':
+        dispatch('gw:dev-panel');
+        break;
       case 'diagnostics.toggle':
         dispatch('gw:diagnostics-toggle');
         break;

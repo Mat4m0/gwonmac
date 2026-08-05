@@ -22,6 +22,9 @@ import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
 import type { WindowHost } from "./window.js";
 
+/** Launch with `--gw-debug-panel` to reveal the memory panel on any build. */
+export const DEBUG_PANEL_SWITCH = "gw-debug-panel";
+
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface ApplicationMenuActions {
@@ -38,6 +41,12 @@ export function installApplicationMenu({
 }: ApplicationMenuActions): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
+  // The memory panel's own gate, deliberately not `dev` alone. The sessions
+  // worth measuring are hours long on a real account, and a dev build refuses
+  // persistent secrets — so the build that needs these controls is the
+  // packaged one, launched with the switch. Nothing about it persists, and a
+  // player cannot reach it by clicking.
+  const debugPanel = dev || app.commandLine.hasSwitch(DEBUG_PANEL_SWITCH);
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -208,6 +217,30 @@ export function installApplicationMenu({
                 void sendRendererCommand(win, { type: "input.trace" });
               },
             },
+            // The memory panel and the one trigger main owns. Crashing the
+            // renderer is here rather than in the panel because it is the one
+            // path with no renderer involvement at all, which is exactly what
+            // makes it the most faithful imitation of a real crash.
+            ...(debugPanel
+              ? ([
+                  { type: "separator" },
+                  {
+                    id: "toggle-dev-panel",
+                    label: "Show Memory Debug Panel",
+                    accelerator: "CmdOrCtrl+Shift+D",
+                    click: () => {
+                      void sendRendererCommand(win, { type: "dev.panel" });
+                    },
+                  },
+                  {
+                    id: "crash-renderer-process",
+                    label: "Crash Renderer Process (test reconnect)",
+                    click: () => {
+                      win.webContents.forcefullyCrashRenderer();
+                    },
+                  },
+                ] as MenuItemConstructorOptions[])
+              : []),
             {
               id: "stop-capture",
               label: "Stop Capture",

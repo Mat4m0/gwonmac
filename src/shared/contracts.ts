@@ -672,6 +672,7 @@ export type RendererCommand =
     }
   | { type: "filesystem.sync" }
   | { type: "input.trace" }
+  | { type: "dev.panel" }
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";
