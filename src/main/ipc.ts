@@ -51,6 +51,7 @@ import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import { resolveDns } from "./core/dns.js";
+import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
   MAX_TOKEN_LENGTH,
   SteamSessionCoordinator,
@@ -831,6 +832,23 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     clipboardWriteText: channel(asClipboardText, (_win, text) => {
       clipboard.writeText(text);
+    }),
+
+    // Truncated rather than refused: a player who copied something large before
+    // reaching for Import from Clipboard should see "no build templates in
+    // that", not a failure about a size they never chose.
+    clipboardReadText: channel(nothing, () =>
+      clipboard.readText().slice(0, CLIPBOARD_TEXT_CEILING),
+    ),
+
+    templatesExport: channel(one(parseExportEntries), async (win, entries) => {
+      const result = await exportTemplates(win, entries);
+      if (result.status === "written") {
+        logEvent({ k: "templates.exported", count: result.count });
+      } else if (result.status === "failed") {
+        logEvent({ k: "templates.exportFailed", code: result.errorCode });
+      }
+      return result;
     }),
 
     clientRetry: channel(nothing, () => ctx.retryClient()),

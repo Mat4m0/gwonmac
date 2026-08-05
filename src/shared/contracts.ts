@@ -56,6 +56,51 @@ export const ARENANET_REQUEST_CEILING = 8;
 export const WASM_HEAP_CAP_BYTES = 2_147_483_648;
 
 /**
+ * The bounds a build template transfer is held to, in both directions.
+ *
+ * One declaration because two processes enforce them and must not disagree:
+ * `src/renderer/template-format.ts` applies them while parsing what a player
+ * picked, and `src/main/template-export.ts` re-applies them to the payload that
+ * arrives over IPC, which is the only version of these numbers that is a trust
+ * boundary rather than a format rule.
+ *
+ * `entries` sits well past the game's own 550-per-root ceiling, so a real
+ * collection is never refused; it is here to bound one gesture. `nameLength`
+ * is the client's `WCHAR name[260]` record minus `.txt` and its terminator —
+ * `matchingEntries` in `src/renderer/template-save-compatibility.ts` drops
+ * anything at or past that, so a longer name would import successfully and
+ * then be invisible in game.
+ */
+export const TEMPLATE_CEILINGS = {
+  entries: 4_000,
+  codeLength: 512,
+  nameLength: 255,
+} as const;
+
+/**
+ * One build template on its way out to a folder the player chose. `path` is
+ * relative to that folder, `/`-separated, and already sanitised by the renderer
+ * that read it out of the mount; `src/main/template-export.ts` re-checks it
+ * before writing, because a path is the one field that decides where a write
+ * lands. `contents` is the code alone — the game writes no trailing newline and
+ * a file that gains one stops being the same file.
+ */
+export interface TemplateExportEntry {
+  path: string;
+  contents: string;
+}
+
+/**
+ * How an export ended. A value rather than a rejection for the same reason
+ * `FullDownloadOutcome` is one: Electron flattens a rejection to its message,
+ * and the sentence belongs to `src/renderer/failure-messages.ts`.
+ */
+export type TemplateExportResult =
+  | { status: "cancelled" }
+  | { status: "written"; count: number }
+  | { status: "failed"; errorCode: ErrorCode };
+
+/**
  * Why a ready client is not simply "ready": the launch took a fallback the
  * player may want to know about. A closed union for the same reason failure
  * codes are one: the sentence the player reads belongs to the renderer
@@ -554,6 +599,7 @@ export type AppUpdateState =
 
 export type SettingsPane =
   | "data"
+  | "templates"
   | "display"
   | "controls"
   | "updates"
@@ -723,6 +769,8 @@ export const IPC = {
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
   clipboardWriteText: "gw:clipboard:writeText",
+  clipboardReadText: "gw:clipboard:readText",
+  templatesExport: "gw:templates:export",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
@@ -878,6 +926,29 @@ export interface GwNativeApi {
      * never arrives here.
      */
     writeText(text: string): Promise<void>;
+    /**
+     * Read the OS pasteboard so a player can import build codes they copied
+     * from a guild page or a forum post.
+     *
+     * This is the one capability here that widens what the renderer can reach:
+     * whatever was last copied — plausibly a password — becomes readable by a
+     * process that persists files. It is bounded by the same ceiling as the
+     * write direction, it is only ever called from an explicit "Import from
+     * Clipboard" click, and nothing it returns is written until the player has
+     * seen the parsed result and confirmed it.
+     */
+    readText(): Promise<string>;
+  };
+  templates: {
+    /**
+     * Write the game's saved build templates into a folder the player chooses.
+     * The renderer supplies the tree because only it can see the mount; main
+     * owns the dialog, the destination, and the refusal of any path that would
+     * not stay inside it.
+     */
+    export(
+      entries: readonly TemplateExportEntry[],
+    ): Promise<TemplateExportResult>;
   };
   client: {
     retry(): Promise<void>;

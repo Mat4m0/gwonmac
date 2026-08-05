@@ -8,6 +8,12 @@
 const MOUNT = 'app:';
 const DEPENDENCY = 'gw-persistent-filesystem';
 const SYNC_TIMEOUT_MS = 30_000;
+// The two directories the game keeps build templates in. `template-store.ts`
+// reads and writes the same two; it cannot import them from here, because this
+// module is merged wholesale into the WASM host and may export only its
+// installer. `tests/unit/the-template-directories-agree-across-the-renderer.test.ts`
+// is what makes the two spellings a build failure instead of templates that
+// quietly stop being found.
 const REQUIRED_DIRECTORIES = [
   `${MOUNT}/Templates/Skills`,
   `${MOUNT}/Templates/Equipment`,

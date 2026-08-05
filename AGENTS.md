@@ -93,6 +93,20 @@ is meant to inherit the dead ends rather than walk back into them.
 - Renderer `preRun` owns the single `app:` IDBFS mount. Restore it, create both
   template directories, and change into it before releasing the run dependency;
   relative game files must never fall back to ephemeral MEMFS.
+- That `chdir(MOUNT)` is why anything reaching the mount *after* startup
+  addresses it absolutely. `src/renderer/filesystem.ts` spells the template
+  directories mount-relative because it runs before the chdir;
+  `src/renderer/template-store.ts` spells the same two `/app:/Templates/…`
+  because it runs after, and the relative form would resolve to
+  `/app:/app:/Templates/…`. Every read finds nothing, the pane concludes the
+  game is not running, and no fake filesystem catches it — a fake treats a path
+  as an opaque key. Two tests hold this: the directories must agree across the
+  two modules, and the store's must be absolute.
+- Build templates import to the type root only. The client's scan enumerates
+  `Templates/<type>/*.txt` and never descends, so a template written into a
+  subfolder is saved, appears in an export, and is never listed in game —
+  defect 8 in `internal/upstream/upstream-defects.md`. A folder name survives
+  as part of the template name instead.
 - `dataStrategy` is the only launcher-intent state. The renderer resolves it
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.

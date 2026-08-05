@@ -214,6 +214,10 @@ const api = {
   },
   clipboard: {
     writeText: (text) => ipcRenderer.invoke(IPC.clipboardWriteText, text),
+    readText: () => ipcRenderer.invoke(IPC.clipboardReadText),
+  },
+  templates: {
+    export: (entries) => ipcRenderer.invoke(IPC.templatesExport, entries),
   },
   client: {
     retry: () => ipcRenderer.invoke(IPC.clientRetry),

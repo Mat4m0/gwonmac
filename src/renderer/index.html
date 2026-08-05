@@ -240,6 +240,9 @@
         <button type="button" class="settings-rtab" id="settings-tab-data"
                 role="tab" aria-selected="true" aria-controls="settings-pane-data"
                 data-pane="data">Game Data</button>
+        <button type="button" class="settings-rtab" id="settings-tab-templates"
+                role="tab" aria-selected="false" aria-controls="settings-pane-templates"
+                data-pane="templates">Templates</button>
         <button type="button" class="settings-rtab" id="settings-tab-display"
                 role="tab" aria-selected="false" aria-controls="settings-pane-display"
                 data-pane="display">Display</button>
@@ -286,6 +289,84 @@
           <div class="settings-divider" aria-hidden="true"></div>
           <button type="button" id="settings-clear-cache" class="quiet-danger">Clear Game Data…</button>
           <p class="settings-danger-sub">Frees the downloaded game data. Your login and settings are kept.</p>
+        </section>
+
+        <!-- Build templates are the player's own files, not downloaded game
+             data, so they get their own pane rather than sitting beside
+             "Clear Game Data…". Import writes nothing until the preview below
+             has been confirmed. -->
+        <section class="settings-pane" id="settings-pane-templates" role="tabpanel"
+                 aria-labelledby="settings-tab-templates">
+          <h3 id="settings-templates-title" class="sr-only">Templates</h3>
+          <p id="templates-status" class="settings-status" role="status" aria-live="polite">
+            Checking your saved templates…
+          </p>
+
+          <div id="templates-actions" class="settings-actions-row">
+            <button type="button" id="templates-export" class="primary">Export…</button>
+            <button type="button" id="templates-import-folder">Import Folder…</button>
+            <button type="button" id="templates-import-files">Import Files…</button>
+            <button type="button" id="templates-import-clipboard">Import from Clipboard</button>
+          </div>
+          <p id="templates-help" class="settings-note">
+            Export writes every saved build into a folder of .txt files. Import reads that
+            folder back, or the Templates folder from a Windows Guild Wars install, or a text
+            file holding several codes. Imports arrive in the top level of Skills and
+            Equipment, because Guild Wars does not list templates kept in a subfolder here;
+            a build from a Windows subfolder keeps that folder in its name.
+          </p>
+
+          <!-- Only ever visible when a template is somewhere Guild Wars cannot
+               read it. There is no in-game way out of that state, which is the
+               whole reason this exists. -->
+          <div id="templates-rescue" hidden>
+            <div class="settings-divider" aria-hidden="true"></div>
+            <p id="templates-rescue-note" class="settings-status"></p>
+            <div class="settings-actions-row">
+              <button type="button" id="templates-rescue-move">Move to Top Level</button>
+            </div>
+            <p class="settings-note">
+              Moving keeps the folder name as part of the template name. Once they are
+              listed in game you can rename or delete them there.
+            </p>
+          </div>
+
+          <div id="templates-preview" hidden>
+            <div class="settings-divider" aria-hidden="true"></div>
+            <p id="templates-preview-summary" class="settings-status"></p>
+            <p id="templates-preview-skipped" class="settings-note"></p>
+            <!-- Only for a source whose codes carry no name of their own: a
+                 pasted code has nothing to be called, and a typed name is read
+                 exactly the way a filename is for a picked file. -->
+            <label class="settings-field" for="templates-name" id="templates-name-field" hidden>
+              <span>Name</span>
+              <input type="text" id="templates-name" autocomplete="off" spellcheck="false"
+                     placeholder="Template">
+            </label>
+            <fieldset>
+              <legend>If a name is already used</legend>
+              <div class="settings-seg" role="presentation">
+                <label class="settings-radio">
+                  <input type="radio" name="templateCollision" value="skip" checked>
+                  <span>Keep Existing</span>
+                </label>
+                <label class="settings-radio">
+                  <input type="radio" name="templateCollision" value="replace">
+                  <span>Replace</span>
+                </label>
+              </div>
+            </fieldset>
+            <div class="settings-actions-row">
+              <button type="button" id="templates-confirm" class="primary">Import</button>
+              <button type="button" id="templates-cancel">Cancel</button>
+            </div>
+          </div>
+
+          <!-- Chromium's own pickers. `webkitdirectory` gives every file a
+               relative path, which is why no absolute path ever crosses into
+               the main process for an import. -->
+          <input type="file" id="templates-file-folder" webkitdirectory hidden>
+          <input type="file" id="templates-file-files" accept=".txt,text/plain" multiple hidden>
         </section>
 
         <section class="settings-pane" id="settings-pane-display" role="tabpanel"
@@ -346,7 +427,7 @@
             <span>Automatically check for and download app updates</span>
           </label>
           <p class="settings-note">On by default: one check at launch, then a quiet check about every six hours while the app stays open — never while a game connection is open. Turn this off and the app contacts GitHub only when you ask it to — including when it meets a game client build it does not recognise. Downloaded updates are installed when you restart.</p>
-          <div class="settings-update-actions">
+          <div class="settings-actions-row">
             <button type="button" id="settings-check-updates">
               Check for Updates
             </button>

@@ -213,6 +213,26 @@
     void updateAction?.check();
   }
 
+  // The pane reads the game's mounted template directories, so it is refreshed
+  // every time the sheet opens rather than subscribed: the mount appears when
+  // the client boots and vanishes when it dies, and neither is an event this
+  // renderer is told about.
+  let templatePane: import('./template-pane.js').TemplatePane | null = null;
+  void import('./template-pane.js')
+    .then((module) => {
+      templatePane = module.bindTemplatePane(document, {
+        exportToDisk: (entries) => window.gwNative.templates.export(entries),
+        readClipboard: () => window.gwNative.clipboard.readText(),
+      });
+      templatePane.refresh();
+    })
+    .catch(() => {
+      byId('templates-status').textContent =
+        'Build template import and export are unavailable in this build.';
+      byId('templates-actions').hidden = true;
+      byId('templates-help').hidden = true;
+    });
+
   void import('./update-action.js')
     .then((module) => {
       const action = module.createUpdateAction({
@@ -733,6 +753,7 @@
     feedback.textContent = '';
     selectPane(activeSettingsPane);
     settingsCache.textContent = 'Checking downloaded game data…';
+    templatePane?.refresh();
     try {
       await settingsWrite;
       currentSettings = await window.gwNative.settings.get();
