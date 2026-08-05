@@ -115,14 +115,71 @@ describe("the memory warning counts time, not bytes", () => {
     );
   });
 
+  it("starts measuring when the player starts playing, not when they log in", () => {
+    // Ten minutes parked in Kamadan, then out into the world. The rate that
+    // matters begins at minute ten, and nothing about the idling before it
+    // should either warn or be averaged into what follows.
+    const watch = createHeapPressureWatch({ capBytes: CAP });
+    let atMs = 0;
+    let last = watch.sample(700 * MIB, atMs);
+    for (let minute = 0; minute <= 10; minute += 0.25) {
+      atMs = minute * 60_000;
+      last = watch.sample(700 * MIB, atMs);
+      assert.equal(last.level, "none", `warned while idle at ${minute} min`);
+    }
+    // Now playing, at the measured open-world rate.
+    for (let minute = 10.25; minute <= 25; minute += 0.25) {
+      atMs = minute * 60_000;
+      last = watch.sample((700 + (555 / 60) * (minute - 10)) * MIB, atMs);
+    }
+    assert.equal(last.level, "none", "still an hour of headroom");
+    // The idle stretch is behind the window by now, so the rate is the one the
+    // player is actually spending at — not a tenth of it.
+    assert.ok(
+      last.bytesPerMinute !== null
+        && Math.round((last.bytesPerMinute * 60) / MIB) === 555,
+      `read ${Math.round(((last.bytesPerMinute ?? 0) * 60) / MIB)} MiB/h`,
+    );
+  });
+
+  it("does not let one map load latch a warning that cannot be taken back", () => {
+    // A zone load allocates a couple of hundred MiB in seconds. Measured over
+    // a short enough window that reads as thousands of MiB an hour, and since
+    // the level never falls it would have been permanent — a player who then
+    // played quietly for an hour would keep a warning that had already been
+    // wrong for fifty minutes.
+    const watch = createHeapPressureWatch({ capBytes: CAP });
+    let heap = 900;
+    watch.sample(heap * MIB, 0);
+    for (let minute = 0.25; minute <= 20; minute += 0.25) {
+      // One 220 MiB load at minute twelve, quiet either side of it.
+      if (Math.abs(minute - 12) < 0.13) heap += 220;
+      const last = watch.sample(heap * MIB, minute * 60_000);
+      assert.equal(
+        last.level,
+        "none",
+        `a single map load warned at ${minute} min`,
+      );
+    }
+    assert.equal(heap, 1120, "the load did happen");
+  });
+
   it("falls back to bytes only while there is no rate to read", () => {
     // A page that opens already near the cap has no history to slope, so the
     // shipped thresholds are what still warns it.
     const watch = createHeapPressureWatch({ capBytes: CAP });
-    const cold = watch.sample(CAP - 100 * MIB, 0);
+    const first = watch.sample(CAP - 100 * MIB, 0);
+    // Corroborated first: the level can never be taken back, so no single
+    // reading sets it. One tick later is the whole cost.
+    assert.equal(first.level, "none", "raised on a single reading");
+    const cold = watch.sample(CAP - 100 * MIB, 15_000);
     assert.equal(cold.level, "critical");
     assert.equal(cold.minutes, null, "no number was measured, so none is offered");
     assert.equal(cold.raisedBy, "bytes");
+
+    // Except at the floor, where there is nothing left to corroborate.
+    const dying = createHeapPressureWatch({ capBytes: CAP });
+    assert.equal(dying.sample(CAP - 8 * MIB, 0).level, "critical");
   });
 
   it("keeps warning a stalled heap that is nearly full", () => {

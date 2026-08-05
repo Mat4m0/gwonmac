@@ -46,14 +46,23 @@ export interface HeapPressureWatch {
 const MIB = 1_048_576;
 
 /**
- * Two trailing windows, and the steepest wins. The short one makes a mission
- * that eats memory visible about two minutes after the player zones into it;
- * the long one stops a lull inside that mission from erasing a rate we just
- * measured. There is no session-average window: under a steepest-wins rule it
- * could only ever win by keeping an hour-old burst alive forever.
+ * Two trailing windows, and the steepest wins. The short one catches a session
+ * that has started spending heavily; the long one stops a lull inside that
+ * spending from erasing a rate we just measured. There is no session-average
+ * window: under a steepest-wins rule it could only ever win by keeping an
+ * hour-old burst alive forever.
+ *
+ * Five minutes is the floor for the short one, not two. Loading a zone
+ * allocates a couple of hundred MiB in seconds, which over two minutes reads
+ * as thousands of MiB an hour — and since the level never falls, one map
+ * change would have latched a warning for the rest of the session. Five
+ * minutes dilutes a single load to something a real trend can still beat, and
+ * costs nothing that matters: the fastest session we have measured took half
+ * an hour to fill, so being told at minute ten instead of minute eight
+ * changes nothing a player would do.
  */
 const DEFAULTS = {
-  windowsMs: [2 * 60_000, 10 * 60_000] as readonly number[],
+  windowsMs: [5 * 60_000, 15 * 60_000] as readonly number[],
   /**
    * Nothing measured before this counts as a baseline. Starting the client is
    * the heaviest allocating a session ever does — observed at roughly
@@ -78,6 +87,14 @@ const DEFAULTS = {
   // over at seven minutes, which is the defect this module exists to remove.
   hardCriticalBytes: 32 * MIB,
   minRateBytesPerMinute: MIB,
+  /**
+   * How many consecutive readings must agree before the level is raised. The
+   * level never falls, so a single unlucky sample would be permanent — this is
+   * what makes "we measured it twice" the price of a warning that cannot be
+   * taken back. The hard byte floor is exempt: at that point the heap really
+   * is nearly full and there is nothing left to corroborate.
+   */
+  confirmations: 2,
 };
 
 const RANK: Record<HeapPressureLevel, number> = {
@@ -109,6 +126,8 @@ export function createHeapPressureWatch(
   const longestWindowMs = Math.max(...policy.windowsMs);
   const history: { atMs: number; bytes: number }[] = [];
   let raised: HeapPressureLevel = 'none';
+  let pending: HeapPressureLevel = 'none';
+  let streak = 0;
 
   return {
     sample(bytes, atMs) {
@@ -172,8 +191,18 @@ export function createHeapPressureWatch(
       const proposed = RANK[fromTime] >= RANK[fromBytes] ? fromTime : fromBytes;
       let raisedBy: 'time' | 'bytes' | null = null;
       if (RANK[proposed] > RANK[raised]) {
-        raised = proposed;
-        raisedBy = RANK[fromTime] >= RANK[fromBytes] ? 'time' : 'bytes';
+        streak = proposed === pending ? streak + 1 : 1;
+        pending = proposed;
+        // The floor answers for itself; everything else is corroborated first,
+        // because a level that cannot fall must not be set by one sample.
+        const forced = headroom !== null && headroom <= policy.hardCriticalBytes;
+        if (forced || streak >= policy.confirmations) {
+          raised = proposed;
+          raisedBy = RANK[fromTime] >= RANK[fromBytes] ? 'time' : 'bytes';
+        }
+      } else {
+        streak = 0;
+        pending = 'none';
       }
 
       return {
