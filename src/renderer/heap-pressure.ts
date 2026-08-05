@@ -31,6 +31,13 @@ export interface HeapPressureReading {
   minutes: number | null;
   /** Unhedged, for the log line. Null when unmeasurable. */
   bytesPerMinute: number | null;
+  /**
+   * The step-to-step span the rate was measured over; null when no rate could
+   * be measured. This is what tells "nothing has grown twice yet" apart from
+   * "the reading is broken" — a distinction the debug panel could not draw
+   * from a bare dash, and the reason it is on the reading rather than inferred.
+   */
+  measuredOverMs: number | null;
   bytes: number;
   /** Which rule raised the level. For the log; the copy never branches on it. */
   raisedBy: 'time' | 'bytes' | null;
@@ -191,6 +198,7 @@ export function createHeapPressureWatch(
       }
 
       let bytesPerMinute: number | null = null;
+      let measuredOverMs: number | null = null;
       const last = steps.at(-1);
       let baseIndex = -1;
       if (last) {
@@ -215,6 +223,7 @@ export function createHeapPressureWatch(
         const minutes = (spanMs + overdueMs) / 60_000;
         if (minutes > 0) {
           bytesPerMinute = Math.max(0, (last.bytes - base.bytes) / minutes);
+          measuredOverMs = spanMs + overdueMs;
         }
       }
       if (
@@ -222,6 +231,7 @@ export function createHeapPressureWatch(
         && bytesPerMinute < policy.minRateBytesPerMinute
       ) {
         bytesPerMinute = null;
+        measuredOverMs = null;
       }
 
       // What the client has actually filled, as against what it has reserved
@@ -283,6 +293,7 @@ export function createHeapPressureWatch(
         level: raised,
         minutes: rawMinutes === null ? null : hedgeMinutes(rawMinutes),
         bytesPerMinute,
+        measuredOverMs,
         bytes,
         raisedBy,
       };

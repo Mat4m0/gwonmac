@@ -289,6 +289,51 @@ describe("the memory warning counts time, not bytes", () => {
     );
   });
 
+  it("says nothing through an hour with only one growth step in it", () => {
+    // An observed session, 2026-08-05: ramp to ~740 MiB, then flat for an hour,
+    // then a single 96 MiB step to 833 — 191 MiB/h, a third of the rate this
+    // was designed around, with the cap six hours away. One step is not a rate
+    // and the panel showed a bare dash for it, which read as a broken
+    // instrument rather than as the correct answer. It reports the span it
+    // measured over now, so the two cases are told apart.
+    const session = simulate({ rate: (minute) => (minute < 4 ? 11_000 : 191) });
+    for (const tick of session.ticks) {
+      if (tick.atMinutes > 74) break;
+      assert.equal(tick.level, "none", `warned at ${tick.atMinutes} min`);
+    }
+    const late = session.ticks.find((tick) => tick.atMinutes === 74)!;
+    assert.ok(
+      late.bytesPerMinute === null || late.measuredOverMs !== null,
+      "a rate was reported without the span it came from",
+    );
+
+    // And it wakes up: the estimate exists well before this session could die.
+    const measured = claims(session)[0];
+    assert.ok(measured, "the session never produced an estimate at all");
+    assert.ok(
+      measured.trulyLeft > 60,
+      `first estimate arrived with only ${measured.trulyLeft.toFixed(0)} min left`,
+    );
+  });
+
+  it("shows the span behind every rate it reports", () => {
+    // The panel prints this, and a rate with no span behind it is the shape of
+    // the reading that used to be indistinguishable from a broken one.
+    for (const rate of [555, 3_500]) {
+      for (const tick of simulate({ rate }).ticks) {
+        if (tick.bytesPerMinute === null) {
+          assert.equal(tick.measuredOverMs, null, "a span with no rate");
+        } else {
+          assert.ok(
+            tick.measuredOverMs !== null
+              && tick.measuredOverMs >= 10 * 60_000,
+            `${rate} MiB/h: rate measured over ${tick.measuredOverMs} ms`,
+          );
+        }
+      }
+    }
+  });
+
   it("falls back to bytes only while there is no rate to read", () => {
     // A page that opens already near the cap has no staircase to read, so the
     // shipped thresholds are what still warns it.

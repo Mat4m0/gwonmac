@@ -223,7 +223,12 @@ export interface DevPanelHost {
    * arithmetic. They measure over different windows on purpose, and when they
    * disagree it is the warning's number that explains what the player saw.
    */
-  pressure(): { minutes: number | null; bytesPerMinute: number | null } | null;
+  pressure(): {
+    minutes: number | null;
+    bytesPerMinute: number | null;
+    /** The span the rate was measured over; null while there is no rate. */
+    measuredOverMs: number | null;
+  } | null;
   /** Draws the notice without touching the watcher's own state. */
   previewNotice(level: 'low' | 'critical'): void;
   hideNotice(): void;
@@ -396,10 +401,22 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
     // the player was told — and a disagreement with the line above is
     // information, not a bug in either.
     const pressure = host.pressure();
-    warningCell.textContent = pressure === null
-      ? 'not measuring yet'
-      : `${pressure.minutes === null ? '—' : `~${pressure.minutes} m`}`
-        + ` at ${perHour(pressure.bytesPerMinute)}`;
+    if (pressure === null) {
+      warningCell.textContent = 'no reading yet';
+    } else if (pressure.measuredOverMs === null) {
+      // It has a reading and no rate, which is a different thing from having
+      // no reading — and on a quiet session it is the state the panel sits in
+      // for an hour. A bare dash here read as a broken instrument, so it says
+      // what it is waiting for. The steps row above counts this panel's own
+      // samples, including the boot-ramp rises the warning excludes, so the
+      // two numbers are not meant to agree.
+      warningCell.textContent = 'waiting for two steps 10 min apart';
+    } else {
+      warningCell.textContent =
+        `${pressure.minutes === null ? '—' : `~${pressure.minutes} m`}`
+        + ` at ${perHour(pressure.bytesPerMinute)}`
+        + ` over ${Math.round(pressure.measuredOverMs / 60_000)} m`;
+    }
     stepsCell.textContent = summary.lastStepBytes === null
       ? String(summary.steps)
       : `${summary.steps} · last +${Math.round(summary.lastStepBytes / MIB)} MiB`;

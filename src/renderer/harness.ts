@@ -640,6 +640,7 @@ window.addEventListener('gw:dev-panel', () => {
         pressure: () => heapReading && {
           minutes: heapReading.minutes,
           bytesPerMinute: heapReading.bytesPerMinute,
+          measuredOverMs: heapReading.measuredOverMs,
         },
         previewNotice: (level) => void presentHeapNotice(level).catch(() => {}),
         hideNotice: hideHeapNotice,
