@@ -149,6 +149,26 @@ export function createSocketHost({
 
   return {
     socket: { connect: makeSocket },
+
+    /** How many connections the client currently holds. */
+    openCount: () => sockets.size,
+
+    /**
+     * Drop every connection but stay subscribed, so the client can reconnect
+     * on this same page — which is what tells a disconnect apart from a
+     * teardown. `dispose` is the teardown; this is not, and unsubscribing here
+     * would silently break the reconnection it exists to allow.
+     *
+     * Only the close is requested. Each socket leaves the map and calls the
+     * client's `onclose` when main confirms it, exactly as a reset from the
+     * far end does — clearing the map here would strand those confirmations as
+     * events for sockets nobody knows, and the client would never learn it had
+     * been disconnected.
+     */
+    closeAll() {
+      for (const socket of sockets.values()) socket.close();
+    },
+
     dispose() {
       unsubscribe();
       earlyEvents.clear();

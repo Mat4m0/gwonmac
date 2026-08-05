@@ -163,6 +163,50 @@ describe("renderer socket host", () => {
     assert.equal(secondClosed, 0);
     host.dispose();
   });
+
+  it("tells dropping the connections apart from tearing the host down", async () => {
+    // The difference is what the client is allowed to do next. `closeAll`
+    // imitates a lost connection, so the client must be able to reconnect on
+    // this same page; `dispose` is the page going away. An unsubscribe in the
+    // first would look identical here and break only in a live session.
+    const native = fakeNative();
+    const host = createSocketHost({ native: native.api, log: () => undefined });
+    const first = host.socket.connect("one");
+    let firstClosed = 0;
+    first.onclose = () => {
+      firstClosed += 1;
+    };
+    native.connects[0]!(51);
+    await turn();
+    native.emit({ type: "open", socketId: 51, port: 6112 });
+    assert.equal(host.openCount(), 1);
+
+    host.closeAll();
+    assert.deepEqual(native.closes, [51]);
+    // The close is requested, not assumed: the client learns it was
+    // disconnected when main confirms, the same way a reset from the far end
+    // reaches it.
+    assert.equal(firstClosed, 0, "not before main confirms");
+    native.emit({ type: "close", socketId: 51, reason: "owner" });
+    assert.equal(firstClosed, 1);
+    assert.equal(host.openCount(), 0);
+    assert.equal(native.counts().unsubscribes, 0, "still listening");
+
+    // The reconnection the client makes after the drop still arrives.
+    const second = host.socket.connect("two");
+    let secondOpened = 0;
+    second.onopen = () => {
+      secondOpened += 1;
+    };
+    native.connects[1]!(52);
+    await turn();
+    native.emit({ type: "open", socketId: 52, port: 6112 });
+    assert.equal(secondOpened, 1, "reconnect after closeAll");
+    assert.equal(host.openCount(), 1);
+
+    host.dispose();
+    assert.equal(native.counts().unsubscribes, 1);
+  });
 });
 
 /**
