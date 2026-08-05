@@ -375,14 +375,23 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
       : `real ${host.realNoticeLevel()} · showing ${simulated} (sim)`;
     noticeCell.dataset.warn = String(simulated !== null);
 
+    // "since open", not "run": the slope starts at this panel's first sample,
+    // and the panel did not exist for the boot ramp. Calling it the run rate
+    // claimed a window it cannot see, and on a session where the panel opened
+    // during startup that claim is mostly ramp.
     growthCell.textContent =
-      `${perHour(summary.recentBytesPerMinute)} 30m · ${perHour(summary.runBytesPerMinute)} run`;
+      `${perHour(summary.recentBytesPerMinute)} 30m`
+      + ` · ${perHour(summary.runBytesPerMinute)} since open`;
     toCapCell.textContent = minutesText(summary.minutesToCap);
     stepsCell.textContent = summary.lastStepBytes === null
       ? String(summary.steps)
       : `${summary.steps} · last +${Math.round(summary.lastStepBytes / MIB)} MiB`;
     socketsCell.textContent = String(host.openSockets());
-    uptimeCell.textContent = clockText(nowMs - startedAt);
+    // Since page load, not since this panel opened. `performance.now()` is
+    // already measured from the time origin, and the subtraction that used to
+    // be here made uptime mean "time since ⌘⇧D" — while the panel's own footer
+    // asks the reader to record it as time-since-relaunch.
+    uptimeCell.textContent = clockText(nowMs);
     paintCurve(summary);
   };
 
