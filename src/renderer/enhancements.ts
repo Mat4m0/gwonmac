@@ -516,11 +516,10 @@ export async function installEnhancements(
 
     const toolbox = foundation
       ? createToolboxFoundation(document.body, {
-          onFirstOpen: (content) => {
-            void import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(content),
-            );
-          },
+          mountTool: (host) =>
+            import("./tools-host.js").then(({ mountToolsInto }) =>
+              mountToolsInto(host),
+            ),
         })
       : null;
     if (toolbox) disposeToolbox = toolbox.dispose;

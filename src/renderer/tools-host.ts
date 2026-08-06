@@ -17,6 +17,7 @@ import type {
   TeamApplyPlan,
   TeamApplyResult,
 } from "../shared/builds/team-apply.js";
+import type { MountedTool } from "./toolbox-foundation.js";
 import {
   applyImport,
   planImport,
@@ -99,23 +100,41 @@ function applyTeam(): Promise<TeamApplyResult> {
 }
 
 /**
- * Mounts the bundle into the overlay's content region. Called on the overlay's
- * first open, so a player who never opens Tools never loads it.
+ * Loads the Tools bundle and hands the overlay a handle to it.
+ *
+ * The application draws its own window against the viewport, so all it needs
+ * from here is somewhere inside the overlay to attach — the overlay's root is
+ * where the event stops and the cursor mirror already are.
+ *
+ * A failure is reported rather than swallowed. An empty panel that explains
+ * nothing costs a debugging session; this one says what went wrong and leaves
+ * the reason in the console.
  */
-export function mountToolsInto(content: HTMLElement): void {
+export function mountToolsInto(
+  host: HTMLElement,
+): Promise<MountedTool | null> {
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
   // not try to resolve a file that only exists after the build step.
   const specifier = "./tools/tools-app.js";
-  void import(specifier)
+  return import(specifier)
     .then((bundle: ToolsBundle) => {
-      bundle.mountToolsApp(content, {
-        initiallyVisible: true,
+      const app = bundle.mountToolsApp(host, {
+        initiallyVisible: false,
         publishTemplate,
         applyTeam,
       });
+      return {
+        setVisible: (visible: boolean) => {
+          if (visible) app.show();
+          else app.hide();
+        },
+        dispose: app.dispose,
+      };
     })
-    .catch(() => {
-      content.textContent = "Tools could not be loaded.";
+    .catch((cause: unknown) => {
+      console.error("[tools] the Tools application failed to load", cause);
+      host.textContent = "Tools could not be loaded — see the console.";
+      return null;
     });
 }

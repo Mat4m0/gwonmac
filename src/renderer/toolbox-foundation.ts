@@ -118,10 +118,26 @@ const VIEWPORT_MARGIN = 8;
  */
 let panelPosition: { left: number; top: number } | null = null;
 
+/**
+ * A tool mounted into the overlay. It draws its own window; the overlay tells
+ * it when it is meant to be on screen and tears it down at the end.
+ */
+export interface MountedTool {
+  setVisible(visible: boolean): void;
+  dispose(): void;
+}
+
 export function createToolboxFoundation(
   parent: HTMLElement,
-  options: { onFirstOpen?: (content: HTMLElement) => void } = {},
+  options: {
+    /** Loads a tool into the overlay. Called the first time Tools is opened. */
+    mountTool?: (host: HTMLElement) => Promise<MountedTool | null>;
+  } = {},
 ) {
+  // A tool replaces the built-in readout rather than sitting under it. Those
+  // three rows are the foundation's own developer example, and two panels
+  // arguing over one corner of the screen is not an interface.
+  const usesTool = options.mountTool !== undefined;
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) {
@@ -177,14 +193,17 @@ export function createToolboxFoundation(
   const chat = document.createElement("div");
   const hero = document.createElement("div");
   const panelRow = document.createElement("div");
-  // Where a tool draws. The overlay owns the boundary — the chord, the event
-  // stops, pointer lock, the cursor mirror, focus and teardown — and knows
-  // nothing about what is mounted here. That separation is the reason a tool
-  // does not need a second root element with a second copy of the boundary.
-  const content = document.createElement("div");
-  content.dataset.role = "content";
-  panel.append(titlebar, chat, hero, panelRow, content);
-  root.append(hud, panel);
+  panel.append(titlebar, chat, hero, panelRow);
+
+  // Where a tool draws: a full-bleed layer inside the overlay root, beside the
+  // palette rather than inside it. A tool brings its own window and positions
+  // it against the viewport, so nesting it in a 280px dialog would give it a
+  // container it immediately escapes. Being inside the root is what matters —
+  // that is where the event stops and the cursor mirror live, so a tool needs
+  // no second boundary of its own.
+  const toolHost = document.createElement("div");
+  toolHost.dataset.role = "tool";
+  root.append(hud, panel, toolHost);
   parent.append(style, root);
 
   // Everything the overlay draws is non-activating: the HUD chip, the panel,
@@ -192,6 +211,18 @@ export function createToolboxFoundation(
   // control without taking the keyboard, so the game keeps receiving keys
   // until the player clicks into something they can actually type in.
   const surface = createNonActivatingSurface(root, () => canvas);
+
+  let tool: MountedTool | null = null;
+  let toolRequested = false;
+  const ensureTool = () => {
+    if (toolRequested || options.mountTool === undefined) return;
+    toolRequested = true;
+    void options.mountTool(toolHost).then((mounted) => {
+      tool = mounted;
+      // The overlay may have been closed again while the bundle loaded.
+      tool?.setVisible(overlayOpen);
+    });
+  };
 
   let state: ToolboxState = Object.freeze({ status: "waiting" });
   let overlayOpen = false;
@@ -225,18 +256,16 @@ export function createToolboxFoundation(
     panel.style.top = `${placed.top}px`;
   };
 
-  let opened = false;
   const setOpen = (next: boolean) => {
     if (next === overlayOpen) return;
     overlayOpen = next;
     // The tool's bundle is worth loading when someone asks to see it, and not
     // before: a player who never opens Tools never pays for it.
-    if (next && !opened) {
-      opened = true;
-      options.onFirstOpen?.(content);
-    }
-    panel.hidden = !next;
-    panel.style.display = next ? "grid" : "none";
+    if (next) ensureTool();
+    tool?.setVisible(next);
+    const showPanel = next && !usesTool;
+    panel.hidden = !showPanel;
+    panel.style.display = showPanel ? "grid" : "none";
     hud.hidden = next;
     hud.style.display = next ? "none" : "flex";
     open.setAttribute("aria-expanded", String(next));
@@ -351,7 +380,6 @@ export function createToolboxFoundation(
   close.addEventListener("click", () => setOpen(false));
 
   return {
-    content,
     update(next: ToolboxState) {
       state = next;
       if (next.status !== "ready") {
@@ -373,6 +401,7 @@ export function createToolboxFoundation(
       return state;
     },
     dispose() {
+      tool?.dispose();
       surface.dispose();
       cursorMirror.disconnect();
       window.removeEventListener("keydown", onToggleChord, true);
