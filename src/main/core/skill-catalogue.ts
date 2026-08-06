@@ -38,7 +38,6 @@ import {
   type FileTable,
 } from "./gw-archive.js";
 import { ATTRIBUTE_BY_ID } from "../../shared/builds/heroes.js";
-import { isKnownEquippableSkill } from "./equippable-skills.js";
 import {
   findLanguageFileIds,
   formatSkillDescription,
@@ -57,6 +56,18 @@ const PROFESSION = new Map<number, string>([
  * skills. This is the same boundary the game's own team-build catalogue uses.
  */
 const CODEX_TITLE_ID = 41;
+
+/**
+ * The client's own answer to "may this go on a skill bar", from the field GWCA
+ * calls `skill_equip_type` at `+h0033`.
+ *
+ * The table holds far more than skills: NPC attacks, item effects, minigame
+ * moves and title-track bookkeeping all share it. Of 3,443 records only 1,333
+ * carry this value, and the ones that do not are things like `Boss Bounty`,
+ * `Hunt Point Bonus`, the 58 `Polymock` moves, and three records literally
+ * named `[null]` — every one of which the editor used to offer.
+ */
+const EQUIPPABLE = 1;
 
 /** Bounds on what the helper may hand back, applied before anything is read. */
 const MAX_ICON_BYTES = 256 * 256 * 4 + 8;
@@ -98,13 +109,12 @@ export type CatalogueRead =
   | { readonly ok: false; readonly reason: CatalogueRefusal };
 
 export function skillAvailability(
-  skill: Pick<SkillRecord, "id" | "playable" | "pvp" | "pve" | "title">,
+  skill: Pick<SkillRecord, "equipType" | "playable" | "pvp" | "pve" | "title">,
 ): SkillFacts["availability"] {
+  if (skill.equipType !== EQUIPPABLE || !skill.playable) return "not-equippable";
   if (skill.pvp) return "pvp";
-  if (!skill.playable) return "not-equippable";
   if (skill.pve && skill.title < CODEX_TITLE_ID) return "player-only-pve";
-  if (skill.pve || isKnownEquippableSkill(skill.id)) return "pve";
-  return "not-equippable";
+  return "pve";
 }
 
 /** The three run-scaled values a description interpolates, as printed ranges. */
@@ -260,7 +270,7 @@ interface Archive {
  * recognised and the assets are decoded again, which is why nothing here needs
  * a migration.
  */
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 /** What one archive yields: the catalogue, plus where each icon lives in it. */
 interface Extracted {

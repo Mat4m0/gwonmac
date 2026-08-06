@@ -174,7 +174,22 @@ scans for the table by *shape* rather than a pinned address — so a new ArenaNe
 build, and the Enhancement transform shifting the segment, both leave it
 working. Names and descriptions come from the archive's own language shards, so
 the client is the authority on both and nothing can drift from the build being
-run. Equippability comes from the audited bitset in `equippable-skills.ts`.
+run. Equippability comes from the client too, via the `skill_equip_type` field
+GWCA documents at `+h0033`.
+
+An earlier pass used GWToolbox++'s audited bitset of account-unlocked skill ids
+for that last part, and it was wrong in both directions. It admitted 154
+records that are not skills at all — `Boss Bounty`, `Hunt Point Bonus`, the 58
+`Polymock` moves, three named `[null]` — because the rule fell through to a
+`pve` flag those records also carry. And it excluded 94 real ones, among them
+`"Save Yourselves!"` and `Whirlwind Attack`, which appear in saved builds in
+this repository's own author's library. The client's field is a strict superset
+of the bitset (zero allowlisted ids fall outside it) and needs no transcribed
+data, so the bitset is deleted.
+
+A useful corroboration: with the field as the filter, every one of the 1,329
+equippable skills has both a description and an icon. Nothing real is lost and
+nothing unreal survives.
 
 An earlier pass transcribed names from GWCA's `SkillID` enumeration instead.
 That was wrong twice over: identifier-derived spellings lost every apostrophe,

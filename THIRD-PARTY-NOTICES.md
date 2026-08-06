@@ -50,19 +50,16 @@ artifact.
 under the MIT License and identifies it as derived from
 [GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser) by
 Jonathan Bjørn Greve. It decompresses an archive stream and decodes a texture.
-The allowlist of player-equippable skill ids in
-`src/main/core/equippable-skills.ts` is the set GWToolbox++ derived from the
-game's account-unlocked skill array, under the same grant.
 
 Both grants are included as `COPYING-GWTOOLBOX` and
 `COPYING-GUILDWARSMAPBROWSER` beside the source and in the packaged
 application's Resources directory.
 
-This is decoding machinery and an id allowlist, not game content. Every skill
-name, description and icon the build editor shows is read at runtime out of the
-Guild Wars installation on the player's own machine and cached there. As with
-the game cursor described above, none of it is copied into this repository, the
-packaged application, or any release artifact.
+This is decoding machinery, not game content. Every fact the build editor shows
+— each skill's name, description, icon, profession, attribute and costs — is
+read at runtime out of the Guild Wars installation on the player's own machine
+and cached there. As with the game cursor described above, none of it is copied
+into this repository, the packaged application, or any release artifact.
 
 ## QT Friz Quad
 

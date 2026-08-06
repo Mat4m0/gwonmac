@@ -152,7 +152,8 @@ test("a binary with no table says so instead of guessing", () => {
 // ## The catalogue built on top
 
 test("availability separates what a player may actually equip", () => {
-  const base = { id: 1, playable: true, pvp: false, pve: false, title: 0 };
+  const base = { equipType: 1, playable: true, pvp: false, pve: false, title: 0 };
+  assert.equal(skillAvailability(base), "pve");
   assert.equal(skillAvailability({ ...base, pvp: true }), "pvp");
   assert.equal(skillAvailability({ ...base, playable: false }), "not-equippable");
   assert.equal(
@@ -165,10 +166,18 @@ test("availability separates what a player may actually equip", () => {
     "pve",
     "Codex and above are ordinary PvE skills",
   );
-  // Not playable-flagged, but on the audited allowlist: id 1 is Healing Signet.
-  assert.equal(skillAvailability(base), "pve");
-  // A record past the allowlist is refused rather than assumed equippable.
-  assert.equal(skillAvailability({ ...base, id: 3_000_000 }), "not-equippable");
+
+  // The client's own `skill_equip_type` is what decides, and it is checked
+  // first: the table is mostly not skills, and the records that are not carry
+  // every other flag a real skill does. `Boss Bounty` is playable, PvE-flagged
+  // and named — only this field says it cannot go on a bar.
+  for (const equipType of [0, 2, 3]) {
+    assert.equal(
+      skillAvailability({ ...base, equipType, pve: true }),
+      "not-equippable",
+      `equip type ${equipType} is not a skill-bar skill`,
+    );
+  }
 });
 
 /** A decoder icon payload: `GWIC`, width, height, then BGRA rows top-down. */
