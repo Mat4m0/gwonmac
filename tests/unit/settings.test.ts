@@ -16,6 +16,13 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
+      // The product's own colour, so the Tools panel and the launcher chrome
+      // are one interface rather than two that nearly match.
+      uiTheme: "reforged",
+      uiDensity: "balanced",
+      uiPanelOpacity: 94,
+      uiBorderWidth: 2,
+      uiRadius: 8,
       // On since P3.34: the game's own cursor is what a Guild Wars player
       // expects to see, so the setting is how it is switched off.
       nativeCursor: true,
@@ -50,6 +57,13 @@ describe("settings", () => {
     assert.equal("cursorTheme" in got, false);
     assert.equal(got.nativeCursor, true);
     assert.deepEqual(got, {
+      // Presentation-only, so an alpha profile simply arrives at the current
+      // look rather than a remembered one.
+      uiTheme: "reforged",
+      uiDensity: "balanced",
+      uiPanelOpacity: 94,
+      uiBorderWidth: 2,
+      uiRadius: 8,
       renderScale: 1,
       nativeCursor: true,
       showDiagnostics: true,
@@ -80,6 +94,14 @@ describe("settings", () => {
 
   it("rejects unknown types", () => {
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
+    assert.throws(() => parseSettings({ uiTheme: "purple" }), AppError);
+    assert.throws(() => parseSettings({ uiDensity: "huge" }), AppError);
+    // The bounds are the setting's meaning: below 65% a panel stops being
+    // readable over moving art, and a fractional pixel is not a border.
+    assert.throws(() => parseSettings({ uiPanelOpacity: 64 }), AppError);
+    assert.throws(() => parseSettings({ uiPanelOpacity: 94.5 }), AppError);
+    assert.throws(() => parseSettings({ uiBorderWidth: 5 }), AppError);
+    assert.throws(() => parseSettings({ uiRadius: -1 }), AppError);
     assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
@@ -176,6 +198,11 @@ describe("settings", () => {
       "nativeCursor",
       "renderScale",
       "showDiagnostics",
+      "uiBorderWidth",
+      "uiDensity",
+      "uiPanelOpacity",
+      "uiRadius",
+      "uiTheme",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -201,6 +228,13 @@ describe("settings", () => {
     });
     assert.equal(recovered, "", "an alpha profile must not be treated as corrupt");
     assert.deepEqual(loaded, {
+      // Appearance is presentation-only, so a profile that predates it simply
+      // arrives at the current look rather than a remembered one.
+      uiTheme: "reforged",
+      uiDensity: "balanced",
+      uiPanelOpacity: 94,
+      uiBorderWidth: 2,
+      uiRadius: 8,
       renderScale: 1.5,
       nativeCursor: true,
       showDiagnostics: true,

@@ -444,6 +444,22 @@ export function enhancementCapabilitiesRequested(
 
 export interface AppSettings extends EnhancementSelection {
   renderScale: 1 | 1.5 | 2;
+  /**
+   * How the application's own interface looks — the launcher chrome, the
+   * Settings dialog and the Tools panel, which share one design system.
+   *
+   * These are presentation only and deliberately never reach the game: no
+   * value here changes what the client renders, what it sends, or what it is
+   * allowed to do. `src/shared/ui/tokens.css` is where each of them lands.
+   */
+  uiTheme: "reforged" | "brass" | "steel" | "jade";
+  uiDensity: "compact" | "balanced" | "comfortable";
+  /** Panel translucency, as a percentage. Bounded so a panel stays readable. */
+  uiPanelOpacity: number;
+  /** Border thickness in pixels. `0` is a legitimate answer. */
+  uiBorderWidth: number;
+  /** Corner radius in pixels. `0` squares the whole interface. */
+  uiRadius: number;
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
@@ -477,6 +493,11 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
+  uiTheme: "reforged",
+  uiDensity: "balanced",
+  uiPanelOpacity: 94,
+  uiBorderWidth: 2,
+  uiRadius: 8,
   nativeCursor: true,
   showDiagnostics: false,
   dataStrategy: null,
