@@ -1,0 +1,305 @@
+/* The one place this application decides what it looks like.
+ *
+ * Every colour, corner, edge and length in `components.css` — and in the two
+ * stylesheets that consume it, `harness.css` and the Tools app's `styles.css` —
+ * resolves through a variable declared here.
+ * `tests/unit/the-ui-system-has-one-place-to-change-a-colour.test.ts` fails the
+ * build when a literal sneaks into a component. That is what makes retheming a
+ * capability rather than a claim: setting `--ui-radius: 0` squares every panel,
+ * button, well and tab at once, because there is nowhere else for a corner to
+ * be decided.
+ *
+ * ## The direction
+ *
+ * The interface sits over a moving game for long sessions. It must stay
+ * readable, feel native to GWonMac, and remain visibly separate from
+ * ArenaNet's own UI. So: restrained, dark, operational. One metal edge and one
+ * accent connect the surface to Guild Wars without copying its textures. The
+ * client stacks an inner highlight, an outer shadow and a stone texture; over
+ * live art for hours that reads as noise, and a texture convincing at 100%
+ * opacity is mud at 70%. System UI type carries every control and label.
+ * Colour communicates selection or state; it is not decoration.
+ *
+ * ## What a player can change
+ *
+ * Settings writes five values, listed in `apps/tools/DESIGN.md`. Everything
+ * else derives from them, so a player cannot produce a half-themed interface
+ * where the panels and the buttons disagree about what "selected" means.
+ *
+ *   --ui-theme via [data-ui-theme]     the whole neutral and accent family
+ *   --ui-density via [data-ui-density] type, spacing and control height together
+ *   --ui-panel-opacity                 1 for opaque, .65 to see the fight through
+ *   --ui-border-width                  the physical edge, without moving layout
+ *   --ui-radius                        every corner; small and large derive
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* -- Shape ------------------------------------------------------------- */
+  /* One radius. Small and large derive, so a theme cannot half-round. The
+   * clamps keep a 0px setting from producing a hairline that reads as a
+   * rendering bug, and a 16px setting from turning inputs into capsules. */
+  --ui-radius: 8px;
+  --ui-radius-sm: max(2px, calc(var(--ui-radius) / 2));
+  --ui-radius-lg: min(16px, calc(var(--ui-radius) + 4px));
+  --ui-radius-pill: 999px;
+
+  /* The metal edge is the signature. Below 2px it stops reading as metal. */
+  --ui-border-width: 2px;
+
+  /* -- Density ----------------------------------------------------------- */
+  /* Spacing is a scale rather than a set of independent numbers so that one
+   * density override moves the whole interface coherently. */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 24px;
+  --ui-control-height: 34px;
+
+  /* -- Type -------------------------------------------------------------- */
+  --ui-font-size: 13px;
+  --ui-font-size-sm: calc(var(--ui-font-size) - 2px);
+  --ui-font-size-lg: calc(var(--ui-font-size) + 3px);
+  --ui-line-height: 1.45;
+  --ui-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Reserved for object names — a build, a team, the window itself. It is the
+   * one place the interface is allowed to sound like Guild Wars. */
+  --ui-font-display: "QT Friz Quad", Georgia, serif;
+
+  /* -- Neutrals ---------------------------------------------------------- */
+  /* Brass is the default: the launcher's existing warmth, promoted to a
+   * first-class theme so the two surfaces stop disagreeing. */
+  --ui-base: oklch(20% 0.014 73);
+  --ui-raised: oklch(24% 0.016 73);
+  --ui-well: oklch(16% 0.012 73);
+  --ui-hover: oklch(29% 0.018 73);
+  --ui-selected: oklch(31% 0.035 78);
+  --ui-line: oklch(44% 0.025 76);
+  --ui-line-soft: oklch(34% 0.018 76);
+
+  /* -- Ink --------------------------------------------------------------- */
+  /* Brighter than the client's parchment ink, which assumes an opaque panel.
+   * Ours sits over moving art. */
+  --ui-text: oklch(91% 0.025 81);
+  --ui-text-bright: oklch(97% 0.03 83);
+  --ui-text-muted: oklch(76% 0.028 78);
+  --ui-text-faint: oklch(65% 0.025 76);
+
+  /* -- Accent ------------------------------------------------------------ */
+  /* Each theme's identity colour, declared once and named, because Settings
+   * has to paint a swatch for a theme that is not the active one. Without
+   * these the swatches would be a second, silently-drifting copy of the
+   * palette — which is exactly the bug this file exists to prevent. */
+  --ui-theme-brass: oklch(78% 0.105 78);
+  --ui-theme-steel: oklch(75% 0.11 245);
+  --ui-theme-jade: oklch(76% 0.12 157);
+
+  --ui-accent: var(--ui-theme-brass);
+  --ui-accent-strong: oklch(66% 0.11 76);
+  --ui-accent-ink: oklch(20% 0.03 69);
+  --ui-focus: oklch(86% 0.1 81);
+
+  /* -- The metal edge ---------------------------------------------------- */
+  --ui-frame-top: oklch(86% 0.055 80);
+  --ui-frame-mid: oklch(58% 0.052 75);
+  --ui-frame-bottom: oklch(72% 0.06 79);
+  /* The hairline outside the metal. It is what separates a panel from art. */
+  --ui-outline: oklch(10% 0.01 70);
+
+  /* -- Status ------------------------------------------------------------ */
+  /* Fixed hues. A theme changes the room; it does not get to decide that a
+   * warning is green. */
+  --ui-info: oklch(77% 0.075 237);
+  --ui-warning: oklch(79% 0.095 70);
+  --ui-danger: oklch(69% 0.13 32);
+  --ui-success: oklch(75% 0.1 140);
+
+  /* -- Profession identity ----------------------------------------------- */
+  /* Data colours, not theme colours: a Monk is the same yellow in every
+   * theme, because the player already learned it in the client. They live
+   * here anyway so the "one place to change a colour" rule stays true. */
+  --ui-profession-warrior: oklch(75% 0.08 85);
+  --ui-profession-ranger: oklch(67% 0.1 135);
+  --ui-profession-monk: oklch(88% 0.06 92);
+  --ui-profession-necromancer: oklch(63% 0.07 164);
+  --ui-profession-mesmer: oklch(67% 0.1 315);
+  --ui-profession-elementalist: oklch(68% 0.13 36);
+  --ui-profession-assassin: oklch(66% 0.06 258);
+  --ui-profession-ritualist: oklch(72% 0.09 208);
+  --ui-profession-paragon: oklch(80% 0.1 73);
+  --ui-profession-dervish: oklch(69% 0.07 220);
+  /* Profession marks are filled with a bright identity colour, so their ink
+   * and hairline are near-black and near-white rather than theme ink. */
+  --ui-profession-ink: oklch(17% 0.02 70);
+
+  /* -- Motion ------------------------------------------------------------ */
+  /* One duration. A UI over a game must never feel slower than the game. */
+  --ui-duration: 180ms;
+  --ui-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* -- Stacking ---------------------------------------------------------- */
+  /* Every z-index in the product comes from this scale, bottom to top. A raw
+   * number in a component is how two surfaces end up fighting over a layer.
+   * The Settings dialog is absent on purpose: it is a native `<dialog>`, and
+   * the top layer is the browser's to manage, not ours. */
+  --ui-z-readout: 3;
+  --ui-z-status: 9;
+  --ui-z-tools: 30;
+  --ui-z-toast: 40;
+}
+
+/* ======================================================= derived values == */
+/* Declared after the themes would be wrong: custom properties resolve at use,
+ * so a theme block overriding `--ui-base` re-derives `--ui-panel-fill` for
+ * free. That is the whole reason the fills are composed rather than listed. */
+:root {
+  /* -- Translucency ------------------------------------------------------ */
+  /* Real translucency, tuned by one token, rather than a texture that only
+   * survives at full opacity. */
+  --ui-panel-opacity: 0.94;
+  --ui-panel-fill: color-mix(
+    in srgb,
+    var(--ui-base) calc(var(--ui-panel-opacity) * 100%),
+    transparent
+  );
+  --ui-raised-fill: color-mix(
+    in srgb,
+    var(--ui-raised) calc(var(--ui-panel-opacity) * 100%),
+    transparent
+  );
+  /* A well is recessed *into* the panel, so it stays more transparent than
+   * the panel around it — the recess is what you see through. */
+  --ui-well-fill: color-mix(
+    in srgb,
+    var(--ui-well) calc(var(--ui-panel-opacity) * 92%),
+    transparent
+  );
+
+  /* -- Edges and elevation ----------------------------------------------- */
+  /* Physicality comes from two hairlines and one shadow, never from a bevel
+   * sandwich: a lit top edge, a neutral surrounding edge, a cast shadow.
+   * Every one is a mix of the theme's own ink, so the highlight on a jade
+   * panel is not the highlight on a brass one. */
+  --ui-edge: color-mix(in srgb, var(--ui-text-bright) 15%, transparent);
+  --ui-edge-strong: color-mix(in srgb, var(--ui-text-bright) 34%, transparent);
+  --ui-edge-inner: color-mix(in srgb, var(--ui-text-bright) 10%, transparent);
+  --ui-shadow: 0 8px 8px color-mix(in srgb, var(--ui-outline) 46%, transparent);
+  --ui-shadow-inset: inset 0 1px 2px
+    color-mix(in srgb, var(--ui-outline) 55%, transparent);
+  /* Text over a translucent panel is text over whatever the game is doing.
+   * This is the cheapest thing that keeps it legible when that is a snowfield. */
+  --ui-text-shadow: 0 1px 1px
+    color-mix(in srgb, var(--ui-outline) 75%, transparent);
+
+  /* One metal gradient, used by every framed surface. */
+  --ui-frame: linear-gradient(
+    180deg,
+    var(--ui-frame-top),
+    var(--ui-frame-mid) 58%,
+    var(--ui-frame-bottom)
+  );
+  /* An opaque paint for mask compositing — see `.ui-frame`. Not a colour: only
+   * its alpha is read, and the mask never reaches the screen. It lives here so
+   * no component has to write a literal to cut a hole in itself. */
+  --ui-mask-paint: linear-gradient(#000 0 0);
+  /* The accent variant of anything raised: primary buttons, checked boxes,
+   * selected tabs, scrollbar thumbs. One declaration, so "selected" cannot
+   * drift from widget to widget. */
+  --ui-accent-fill: linear-gradient(
+    180deg,
+    var(--ui-accent),
+    var(--ui-accent-strong)
+  );
+
+  /* -- Spacing shorthands ------------------------------------------------ */
+  /* The gap between siblings derives from the padding around them, so a
+   * density change keeps the two in proportion instead of drifting apart. */
+  --ui-gap: calc(var(--ui-space-3) * 0.75);
+}
+
+/* ================================================================ themes == */
+/* A theme is a complete override: neutrals, ink, accent, frame, focus. Adding
+ * only an accent is not a theme — it inherits half a palette from the default
+ * and produces a combination nobody designed. The unit test enforces this. */
+
+/* Steel. The client's own selected-tab blue, calmed. */
+:root[data-ui-theme="steel"] {
+  --ui-base: oklch(19% 0.016 248);
+  --ui-raised: oklch(24% 0.02 248);
+  --ui-well: oklch(15% 0.014 248);
+  --ui-hover: oklch(29% 0.025 248);
+  --ui-selected: oklch(32% 0.055 246);
+  --ui-line: oklch(46% 0.035 247);
+  --ui-line-soft: oklch(35% 0.025 247);
+  --ui-text: oklch(92% 0.018 244);
+  --ui-text-bright: oklch(98% 0.012 244);
+  --ui-text-muted: oklch(77% 0.025 244);
+  --ui-text-faint: oklch(66% 0.024 244);
+  --ui-accent: var(--ui-theme-steel);
+  --ui-accent-strong: oklch(62% 0.12 247);
+  --ui-accent-ink: oklch(18% 0.035 247);
+  --ui-frame-top: oklch(82% 0.025 242);
+  --ui-frame-mid: oklch(55% 0.035 245);
+  --ui-frame-bottom: oklch(68% 0.04 244);
+  --ui-outline: oklch(9% 0.012 248);
+  --ui-focus: oklch(84% 0.1 241);
+}
+
+/* Jade. Here to prove the theme is genuinely a knob and not two hardcoded
+ * palettes wearing a variable — if a third could not be added in one block,
+ * this would not be a system. */
+:root[data-ui-theme="jade"] {
+  --ui-base: oklch(19% 0.018 158);
+  --ui-raised: oklch(24% 0.024 158);
+  --ui-well: oklch(15% 0.015 158);
+  --ui-hover: oklch(29% 0.03 158);
+  --ui-selected: oklch(31% 0.055 158);
+  --ui-line: oklch(45% 0.04 158);
+  --ui-line-soft: oklch(34% 0.03 158);
+  --ui-text: oklch(92% 0.02 151);
+  --ui-text-bright: oklch(98% 0.014 151);
+  --ui-text-muted: oklch(77% 0.028 151);
+  --ui-text-faint: oklch(66% 0.026 151);
+  --ui-accent: var(--ui-theme-jade);
+  --ui-accent-strong: oklch(62% 0.115 158);
+  --ui-accent-ink: oklch(17% 0.03 158);
+  --ui-frame-top: oklch(82% 0.035 153);
+  --ui-frame-mid: oklch(55% 0.045 157);
+  --ui-frame-bottom: oklch(68% 0.05 155);
+  --ui-outline: oklch(9% 0.014 158);
+  --ui-focus: oklch(84% 0.11 155);
+}
+
+/* =============================================================== density == */
+/* Someone playing with the client's own UI scaled up, or on a 4K panel.
+ * Type, spacing and control height move together or not at all. */
+
+:root[data-ui-density="compact"] {
+  --ui-space-2: 6px;
+  --ui-space-3: 9px;
+  --ui-space-4: 12px;
+  --ui-space-5: 18px;
+  --ui-control-height: 30px;
+  --ui-font-size: 12px;
+}
+
+:root[data-ui-density="comfortable"] {
+  --ui-space-2: 10px;
+  --ui-space-3: 15px;
+  --ui-space-4: 20px;
+  --ui-space-5: 28px;
+  --ui-control-height: 40px;
+  --ui-font-size: 14px;
+}
+
+/* Respecting this is not optional for a surface that sits over a game: an
+ * animation the player did not ask for competes with the thing they are
+ * actually looking at. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ui-duration: 0ms;
+  }
+}
