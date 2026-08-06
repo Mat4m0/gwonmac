@@ -58,9 +58,14 @@ const NON_TEXT_INPUT_TYPES = new Set([
 ]);
 
 export interface NonActivatingSurface {
-  /** Whether the keyboard currently belongs to this surface. */
-  ownsKeyboard(): boolean;
-  /** Hand the keyboard back, if this surface holds it. */
+  /**
+   * Give the keyboard to `returnFocusTo`, unconditionally.
+   *
+   * Unconditional on purpose. Suppressing the focus change is not the same as
+   * guaranteeing focus survived: hiding the element that was clicked drops
+   * focus to `body`, which owns no keys and is nobody's idea of the game. The
+   * caller says when the game should hold the keyboard and this makes it so.
+   */
   releaseKeyboard(): void;
   dispose(): void;
 }
@@ -76,12 +81,11 @@ export function createNonActivatingSurface(
   root: HTMLElement,
   returnFocusTo: () => HTMLElement | null,
 ): NonActivatingSurface {
-  const ownsKeyboard = () =>
-    root.contains(root.ownerDocument.activeElement);
-
   const releaseKeyboard = () => {
-    if (!ownsKeyboard()) return;
-    returnFocusTo()?.focus({ preventScroll: true });
+    const target = returnFocusTo();
+    if (target && root.ownerDocument.activeElement !== target) {
+      target.focus({ preventScroll: true });
+    }
   };
 
   /**
@@ -102,7 +106,6 @@ export function createNonActivatingSurface(
   root.addEventListener("mousedown", onMouseDown, true);
 
   return {
-    ownsKeyboard,
     releaseKeyboard,
     dispose() {
       root.removeEventListener("mousedown", onMouseDown, true);

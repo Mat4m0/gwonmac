@@ -247,6 +247,10 @@ export function createToolboxFoundation(
       // not a statement that you have stopped playing.
       if (document.pointerLockElement !== null) document.exitPointerLock();
       placePanel();
+      // Opening hides the HUD chip, so the button that was just pressed leaves
+      // the document and takes focus with it. Say where the keyboard goes
+      // rather than assuming it stayed.
+      surface.releaseKeyboard();
     } else {
       surface.releaseKeyboard();
     }
