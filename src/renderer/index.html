@@ -409,6 +409,49 @@
             </div>
           </fieldset>
           <p class="settings-note">Retina is the visual-quality default. 1.5× renders 2.25 times the pixels of 1×; 2× renders four times the pixels. Lower values improve performance and reduce GPU memory use.</p>
+
+          <!-- Presentation only, and said so in the note: these change this
+               app's own panels and never reach Guild Wars, which is the one
+               thing worth being unambiguous about on a pane that also carries
+               a setting that does. Controls come from the shared design system
+               loaded at the top of this file, so the Settings dialog and the
+               Tools panel stay one interface. -->
+          <fieldset>
+            <legend>Interface appearance</legend>
+            <label class="settings-appearance">
+              <span>Theme</span>
+              <select name="uiTheme" class="ui-select">
+                <option value="reforged">Reforged (Default)</option>
+                <option value="brass">Brass</option>
+                <option value="steel">Steel</option>
+                <option value="jade">Jade</option>
+              </select>
+            </label>
+            <label class="settings-appearance">
+              <span>Density</span>
+              <select name="uiDensity" class="ui-select">
+                <option value="compact">Compact</option>
+                <option value="balanced">Balanced (Default)</option>
+                <option value="comfortable">Comfortable</option>
+              </select>
+            </label>
+            <label class="ui-range-field">
+              <span>Panel opacity <output name="uiPanelOpacityValue">94%</output></span>
+              <input type="range" class="ui-range" name="uiPanelOpacity"
+                     min="65" max="100" step="1">
+            </label>
+            <label class="ui-range-field">
+              <span>Border thickness <output name="uiBorderWidthValue">2px</output></span>
+              <input type="range" class="ui-range" name="uiBorderWidth"
+                     min="0" max="4" step="1">
+            </label>
+            <label class="ui-range-field">
+              <span>Corner radius <output name="uiRadiusValue">8px</output></span>
+              <input type="range" class="ui-range" name="uiRadius"
+                     min="0" max="16" step="1">
+            </label>
+          </fieldset>
+          <p class="settings-note">Changes the look of this app's own panels — the launcher, this dialog and the Tools window. Nothing here reaches Guild Wars: it cannot change what the game renders, what it sends, or what it is allowed to do.</p>
         </section>
 
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"

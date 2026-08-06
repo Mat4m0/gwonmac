@@ -53,6 +53,24 @@
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
+  const uiTheme = form.elements.namedItem('uiTheme') as HTMLSelectElement;
+  const uiDensity = form.elements.namedItem('uiDensity') as HTMLSelectElement;
+  /**
+   * The three appearance sliders, each beside the `output` that reads it back.
+   *
+   * `main` rejects an out-of-range value rather than clamping it, so the
+   * bounds live on the `input` elements in `index.html` and this table only
+   * says which setting each one writes and how it reads to a player.
+   */
+  const appearanceRanges = [
+    { name: 'uiPanelOpacity', suffix: '%' },
+    { name: 'uiBorderWidth', suffix: 'px' },
+    { name: 'uiRadius', suffix: 'px' },
+  ] as const;
+  const appearanceRange = (name: string) =>
+    form.elements.namedItem(name) as HTMLInputElement | null;
+  const appearanceOutput = (name: string) =>
+    form.elements.namedItem(`${name}Value`) as HTMLOutputElement | null;
   const choiceAutoUpdates = byId('data-choice-auto-updates') as HTMLInputElement;
   let updateAction: UpdateAction | null = null;
 
@@ -355,6 +373,23 @@
           ? { renderScale: value }
           : null;
       }
+      // A select can only hold one of its own options, so the vocabulary is
+      // the markup and there is nothing for this file to re-check. That the
+      // markup still agrees with `UI_THEMES`/`UI_DENSITIES` is pinned by
+      // tests/policy/source-settings-appearance.test.ts, because this script
+      // is classic and cannot import the list to compare against.
+      case 'uiTheme':
+        return { uiTheme: control.value as AppSettings['uiTheme'] };
+      case 'uiDensity':
+        return { uiDensity: control.value as AppSettings['uiDensity'] };
+      case 'uiPanelOpacity':
+      case 'uiBorderWidth':
+      case 'uiRadius': {
+        // The slider's own min/max/step are the bounds; a value outside them
+        // is a broken control, not a choice, and `main` would refuse it.
+        const value = Number(control.value);
+        return Number.isSafeInteger(value) ? { [control.name]: value } : null;
+      }
       case 'showDiagnostics':
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
@@ -370,8 +405,23 @@
     }
   }
 
+  /** Each slider's `output`, so the number a player is dragging is readable. */
+  function showAppearanceValues(settings: AppSettings) {
+    for (const { name, suffix } of appearanceRanges) {
+      const output = appearanceOutput(name);
+      if (output) output.value = `${settings[name]}${suffix}`;
+    }
+  }
+
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
+    uiTheme.value = settings.uiTheme;
+    uiDensity.value = settings.uiDensity;
+    for (const { name } of appearanceRanges) {
+      const range = appearanceRange(name);
+      if (range) range.value = String(settings[name]);
+    }
+    showAppearanceValues(settings);
     toolSettings.render(settings);
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
@@ -779,6 +829,18 @@
     void openSettings().then(() => {
       if (detail?.checkForUpdates) requestUpdateCheck();
     });
+  });
+
+  // A slider's readout follows the thumb; the save waits for `change`, which
+  // is the drag ending. Writing on every `input` would put one settings write
+  // per pixel of travel through the IPC seam.
+  form.addEventListener('input', (event) => {
+    const control = event.target;
+    if (!(control instanceof globalThis.HTMLInputElement)) return;
+    const range = appearanceRanges.find(({ name }) => name === control.name);
+    if (!range) return;
+    const output = appearanceOutput(range.name);
+    if (output) output.value = `${control.value}${range.suffix}`;
   });
 
   form.addEventListener('change', (event) => {

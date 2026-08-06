@@ -154,6 +154,18 @@ Acceptance: `tests/unit/appearance.test.ts` and `settings.test.ts` pass; the
 Electron settings spec passes; a theme change is visible in both the harness and
 the panel from one token edit.
 
+Landed, with one thing this wording did not ask for and needed. The settings and
+`applyAppearance` came across as described, but nothing could *write* the five
+fields, so the whole path was dead and the default look was stated twice — once
+in `DEFAULT_SETTINGS` and once in `tokens.css` — with nothing keeping the two
+honest. The Display pane now carries the controls, built from the shared
+`.ui-select`/`.ui-range` components rather than new CSS. `UI_THEMES` and
+`UI_DENSITIES` moved into `contracts.ts` as values with the types derived from
+them, so main's validator and the dialog's markup read one list;
+`tests/policy/source-settings-appearance.test.ts` pins the `<option>` values and
+each slider's `min`/`max` to what `parseSettings` accepts, because `settings.ts`
+is a classic script and cannot import the list to check itself.
+
 ### A5 — mount the panel in the Toolbox
 
 Replace the overlay's three placeholder rows with the Vue app.

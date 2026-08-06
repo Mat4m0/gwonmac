@@ -182,6 +182,91 @@ test.describe("settings experience", () => {
     }
   });
 
+  /**
+   * The appearance controls, driven the way a player drives them.
+   *
+   * These five settings existed in `contracts.ts` with defaults, and
+   * `appearance.ts` already turned them into CSS, but nothing could write them
+   * — so the whole path was dead and the default look was stated twice, once
+   * there and once in `tokens.css`. What matters here is that the dialog now
+   * reaches the tokens: a value chosen lands on the document, survives the
+   * round trip through main, and comes back on reopen.
+   */
+  test("the appearance controls change the look and the change survives", async () => {
+    const fixture = await launchOffline("gw-settings-appearance-e2e-");
+    try {
+      const { page } = fixture;
+      const root = page.locator("html");
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await page.locator("#settings-tab-display").click();
+
+      // The defaults are what the form shows before anything is touched.
+      await expect(page.locator('select[name="uiTheme"]')).toHaveValue("reforged");
+      await expect(page.locator('select[name="uiDensity"]')).toHaveValue("balanced");
+      await expect(page.locator('input[name="uiRadius"]')).toHaveValue("8");
+      await expect(root).toHaveAttribute("data-ui-theme", "reforged");
+
+      // A theme is a data attribute, because tokens.css switches whole palettes
+      // on it. Choosing one has to reach the document, not just the file.
+      await page.locator('select[name="uiTheme"]').selectOption("jade");
+      await expect(root).toHaveAttribute("data-ui-theme", "jade");
+      await page.locator('select[name="uiDensity"]').selectOption("compact");
+      await expect(root).toHaveAttribute("data-ui-density", "compact");
+
+      // The three numbers arrive as the public token overrides. `main` refuses
+      // an out-of-range value rather than clamping, so this also proves the
+      // slider's own bounds are the ones it accepts.
+      // Polled, not read once: the save is a round trip through main and the
+      // token is written when it returns. The slider's own readout updates on
+      // the drag and so proves nothing about the setting having landed.
+      const expectToken = async (property: string, value: string) => {
+        await expect
+          .poll(() =>
+            root.evaluate(
+              (html, name) => html.style.getPropertyValue(name),
+              property,
+            ),
+          )
+          .toBe(value);
+      };
+
+      await page.locator('input[name="uiRadius"]').fill("0");
+      await page.locator('input[name="uiRadius"]').dispatchEvent("change");
+      await expect(page.locator('output[name="uiRadiusValue"]')).toHaveText("0px");
+      await expectToken("--ui-radius", "0px");
+
+      await page.locator('input[name="uiPanelOpacity"]').fill("65");
+      await page.locator('input[name="uiPanelOpacity"]').dispatchEvent("change");
+      await expect(page.locator('output[name="uiPanelOpacityValue"]'))
+        .toHaveText("65%");
+      await expectToken("--ui-panel-opacity", "0.65");
+
+      // Nothing here may reach the game. The canvas is the game's surface, and
+      // a presentation setting that resized or restyled it would be exactly the
+      // leak `contracts.ts` promises does not exist.
+      await expect(page.locator("#settings-feedback")).not.toContainText(
+        "could not be saved",
+      );
+
+      // Closing and reopening reads the form back from main rather than from
+      // whatever the controls happen to still hold.
+      await page.locator("#settings-done").click();
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-display").click();
+      await expect(page.locator('select[name="uiTheme"]')).toHaveValue("jade");
+      await expect(page.locator('select[name="uiDensity"]')).toHaveValue("compact");
+      await expect(page.locator('input[name="uiRadius"]')).toHaveValue("0");
+      await expect(page.locator('output[name="uiRadiusValue"]')).toHaveText("0px");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("explains render cost and will not change the cursor without a restart", async () => {
     const fixture = await launchOffline("gw-settings-e2e-");
     try {

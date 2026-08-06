@@ -5,6 +5,16 @@
  * `plans/tools/hero-builds/evidence/party-loadout-codec.md`, and section
  * numbers below refer to that document.
  *
+ * ## Nothing calls this yet, and that is deliberate
+ *
+ * There is no production caller — only the suite beside it. That is a decision,
+ * not an oversight, so a later reader does not delete it as dead code or wire
+ * it up as though it were finished: the codec is complete and proven against
+ * the layout document, and what is missing is a counterparty, which no amount
+ * of reading C++ can supply. It stays uncalled until `primitives.md` §6.1 (does
+ * the client import one?) or §6.2 (can it export one?) is answered in a live
+ * session. If both come back no, delete this file rather than finding it a use.
+ *
  * ## Read this before putting the codec in front of a player
  *
  * The bit layout is settled: §1.3 cites a working encoder and decoder line by

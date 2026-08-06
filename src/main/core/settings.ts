@@ -18,6 +18,8 @@ import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
   ENHANCEMENTS,
+  UI_DENSITIES,
+  UI_THEMES,
   type AppSettings,
   type AppSettingsPatch,
 } from "../../shared/contracts.js";
@@ -26,17 +28,8 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
-const UI_THEMES = new Set<AppSettings["uiTheme"]>([
-  "reforged",
-  "brass",
-  "steel",
-  "jade",
-]);
-const UI_DENSITIES = new Set<AppSettings["uiDensity"]>([
-  "compact",
-  "balanced",
-  "comfortable",
-]);
+const THEMES = new Set<AppSettings["uiTheme"]>(UI_THEMES);
+const DENSITIES = new Set<AppSettings["uiDensity"]>(UI_DENSITIES);
 
 /**
  * A whole number inside a closed range.
@@ -105,13 +98,13 @@ export function parseSettings(raw: unknown): AppSettings {
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
   if ("uiTheme" in src) {
-    if (!UI_THEMES.has(src.uiTheme as AppSettings["uiTheme"])) {
+    if (!THEMES.has(src.uiTheme as AppSettings["uiTheme"])) {
       throw new AppError("bad_settings", "settings.uiTheme has unknown value");
     }
     out.uiTheme = src.uiTheme as AppSettings["uiTheme"];
   }
   if ("uiDensity" in src) {
-    if (!UI_DENSITIES.has(src.uiDensity as AppSettings["uiDensity"])) {
+    if (!DENSITIES.has(src.uiDensity as AppSettings["uiDensity"])) {
       throw new AppError("bad_settings", "settings.uiDensity has unknown value");
     }
     out.uiDensity = src.uiDensity as AppSettings["uiDensity"];

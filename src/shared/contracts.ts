@@ -442,6 +442,22 @@ export function enhancementCapabilitiesRequested(
     || capabilities.toolbox;
 }
 
+/**
+ * The interface vocabularies, as values rather than as a type alone.
+ *
+ * A union type cannot be iterated or membership-tested at run time, so main's
+ * validator and the renderer's form each need the same list of names. Written
+ * out twice they are two sources of truth for one vocabulary, and the way that
+ * fails is silent: a theme added here and not there is offered to a player and
+ * then refused on save. Deriving the type from the array — the shape
+ * `ENHANCEMENTS` already uses above — leaves one list that `tsc` checks.
+ */
+export const UI_THEMES = ["reforged", "brass", "steel", "jade"] as const;
+export const UI_DENSITIES = ["compact", "balanced", "comfortable"] as const;
+
+export type UiTheme = (typeof UI_THEMES)[number];
+export type UiDensity = (typeof UI_DENSITIES)[number];
+
 export interface AppSettings extends EnhancementSelection {
   renderScale: 1 | 1.5 | 2;
   /**
@@ -452,8 +468,8 @@ export interface AppSettings extends EnhancementSelection {
    * value here changes what the client renders, what it sends, or what it is
    * allowed to do. `src/shared/ui/tokens.css` is where each of them lands.
    */
-  uiTheme: "reforged" | "brass" | "steel" | "jade";
-  uiDensity: "compact" | "balanced" | "comfortable";
+  uiTheme: UiTheme;
+  uiDensity: UiDensity;
   /** Panel translucency, as a percentage. Bounded so a panel stays readable. */
   uiPanelOpacity: number;
   /** Border thickness in pixels. `0` is a legitimate answer. */
