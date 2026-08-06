@@ -232,6 +232,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 .settings-panes { flex: 1; min-width: 0; padding: 18px 20px; }
 .settings-pane { display: none; }
 .settings-panes[data-active="data"] #settings-pane-data,
+.settings-panes[data-active="templates"] #settings-pane-templates,
 .settings-panes[data-active="display"] #settings-pane-display,
 .settings-panes[data-active="controls"] #settings-pane-controls,
 .settings-panes[data-active="updates"] #settings-pane-updates,
@@ -239,6 +240,13 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 
 .sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0;
            overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* The user agent's `[hidden]` rule is a bare attribute selector, so any class or
+   id rule here that sets `display` silently outranks it and `hidden` stops
+   working. This sheet toggles visibility with `hidden` throughout, so it is
+   declared once, with the weight it needs, rather than remembered per control —
+   two controls had already shipped visible when they were meant to be hidden. */
+#settings-dialog [hidden] { display: none !important; }
 
 #settings-form label.settings-field {
   display: flex;
@@ -355,9 +363,10 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 .settings-data-actions .primary { width: 100%; }
 .settings-data-actions .primary[hidden] { display: none; }
 
-/* Check for updates, and the releases link that only exists when there is
-   something to get. Built by settings.js so the launcher mount stays identical. */
-.settings-update-actions { display: flex; gap: 10px; margin: 12px 0; }
+/* A row of sibling actions: check for updates and the releases link that only
+   exists when there is something to get, and the build template row, which
+   wraps because it carries four. */
+.settings-actions-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
 
 .settings-divider { height: 1px; margin: 16px 0 12px; background: #6e3d2b2e; }
 

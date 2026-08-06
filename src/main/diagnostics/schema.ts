@@ -663,6 +663,27 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "error",
     fields: { code },
   },
+  /**
+   * How many build templates an export wrote, and nothing about them. No
+   * destination, no filename, no template name, no code: a player's builds and
+   * where they keep them are theirs, and the count is the whole of what a bug
+   * report needs.
+   *
+   * There is no matching import event. An import is written entirely by the
+   * renderer against its own mount, so the main process never sees one, and
+   * inventing a channel to report it would be adding surface to record
+   * something no failure path here can act on.
+   */
+  "templates.exported": {
+    subsystem: "filesystem",
+    level: "info",
+    fields: { count: finiteNumber },
+  },
+  "templates.exportFailed": {
+    subsystem: "filesystem",
+    level: "error",
+    fields: { code },
+  },
 
   // Chunk cache and full download.
   "cache.infoFailed": {

@@ -230,6 +230,71 @@ build of ArenaNet's client ships without the clipboard support the Windows
 client has, so the highlight never reaches macOS. Until that is fixed
 upstream, retype or screenshot what you need.
 
+## Templates
+
+Guild Wars saves each build as a short template code. On Windows those are
+`.txt` files under `Documents\Guild Wars\Templates`; here they live inside the
+game's own storage, so **Settings → Templates** is how they get in and
+out. The pane works once the game has started, because that is when the game's
+storage exists.
+
+**Export…** asks for a folder and writes a `Guild Wars Build
+Templates` folder into it: one `.txt` per build, under `Skills` and
+`Equipment`, with the subfolders you made in game. It is the same layout
+Windows uses, so the result is a backup, a way to move builds to another Mac,
+and a folder a Windows install can read. An export never writes into an earlier
+one — a second export becomes `Guild Wars Build Templates 2`.
+
+Import reads that layout back:
+
+- **Import Folder…** takes a folder — one exported here, or the `Templates`
+  folder from a Windows install. Subfolders are kept.
+- **Import Files…** takes individual `.txt` files, including one file holding
+  many codes.
+- **Import from Clipboard** reads codes you copied from a guild page or a forum post.
+
+Codes are recognised on their own, as `Name: code`, as `Name<tab>code`, and in
+the `[Name;code]` form builds are usually shared in. Skill and equipment codes
+are filed correctly on their own.
+
+A bare code carries no name, so when one is pasted the preview offers a **Name**
+field. Type one and it is used as-is; paste several bare codes and they are
+numbered from it. Leave it empty and they are called `Template 1`, `Template 2`,
+and so on. Codes that arrived with a name of their own keep it, and a file
+import never asks — those are named after the file.
+
+Nothing is written until you confirm. After picking a source the pane shows
+what would be imported, what it would skip and why, and whether a name already
+in use should be kept or replaced. Characters Guild Wars refuses in a name are
+adjusted, and the preview says how many.
+
+**Imports always land in the top level of Skills or Equipment.** Guild Wars
+lists only the templates directly in those folders: it shows a subfolder, but
+never reads what is inside one it did not write during the session, so a
+template imported into a subfolder would be saved, would appear in an export,
+and would never be visible in game. A build from a Windows subfolder therefore
+keeps that folder in its name — `Warrior\Shockaxe` arrives as
+`Warrior - Shockaxe`. That also means the game's limit of 550 templates per
+kind applies to everything you import; subfolders cannot be used to get past
+it here. This is a client defect, recorded in `internal/upstream/`.
+
+Guild Wars reads its template list once per session, so **imported builds
+appear after you choose Refresh List** in the game's template manager — or
+after a restart.
+
+Export keeps whatever folders exist in the game's storage, so an export of
+templates the game itself filed into subfolders preserves them; re-importing
+that export folds those folders into names, for the reason above.
+
+If a template is already sitting in a folder Guild Wars cannot read — put
+there by an earlier version of this app, or by the game itself — the pane says
+so and offers **Move to Top Level**. That is the only way out: the game cannot
+list such a template, so it cannot rename or delete it either. Moving keeps the
+folder name as part of the template name and empties the folder away. A
+template whose new name is already taken by a different build is left where it
+is and reported, rather than overwriting either one. The offer appears only
+when there is something to move.
+
 ## Report a problem
 
 Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
@@ -300,7 +365,9 @@ The crash count resets when you quit and reopen the app.
 - If Guild Wars saved files cannot be opened, choose **Reset Saved Files…**.
   After confirmation, this removes local game preferences, build templates,
   screenshots, and chat logs, then restarts. Downloaded game data and the
-  saved login stay untouched.
+  saved login stay untouched. This recovery is offered only when the game's
+  storage cannot be opened at all, which is also why it cannot export first:
+  keep a copy from **Settings → Templates** while the game runs.
 - The first unexpected renderer crash is recovered automatically. If it
   repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
 

@@ -478,14 +478,22 @@ test.describe("settings experience", () => {
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
 
-      const dataTab = page.locator("#settings-tab-data");
-      const displayTab = page.locator("#settings-tab-display");
+      // Whichever tab follows the first one: the claim is that ArrowRight moves
+      // focus and selection together, not that any two panes are neighbours.
+      const panes = await page
+        .locator(".settings-rail .settings-rtab")
+        .evaluateAll((tabs) => tabs.map((tab) => (tab as HTMLElement).dataset.pane));
+      const [first, second] = panes;
+      expect(second).toBeTruthy();
+
+      const dataTab = page.locator(`#settings-tab-${first}`);
+      const nextTab = page.locator(`#settings-tab-${second}`);
       await dataTab.focus();
       await dataTab.press("ArrowRight");
-      await expect(displayTab).toBeFocused();
-      await expect(displayTab).toHaveAttribute("aria-selected", "true");
-      await expect(page.locator("#settings-pane-display")).toBeVisible();
-      await expect(page.locator("#settings-pane-data")).toBeHidden();
+      await expect(nextTab).toBeFocused();
+      await expect(nextTab).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator(`#settings-pane-${second}`)).toBeVisible();
+      await expect(page.locator(`#settings-pane-${first}`)).toBeHidden();
 
       expect(
         await page.locator("#settings-saved").evaluate(
