@@ -12,6 +12,7 @@ import type {
   TeamApplyPlan,
   TeamApplyResult,
 } from "../../../src/shared/builds/team-apply";
+import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import { demoLibrary, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import {
@@ -94,9 +95,17 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
   };
 }
 
+/**
+ * A build already encoded as the text Guild Wars stores. The renderer writes
+ * templates but does not own the codec: `src/shared/builds` is compiled into
+ * this bundle and is deliberately not on the protocol's shared-module
+ * allowlist, so the encoding happens here and the host receives a string.
+ */
+export type PublishableTemplate = Readonly<{ name: string; code: string }>;
+
 export function createNativeHost(
   api: GwNativeApi,
-  publishBuild: (build: Build) => Promise<PublishedTemplate>,
+  publishTemplate: (template: PublishableTemplate) => Promise<PublishedTemplate>,
   applyTeam: (plan: TeamApplyPlan) => Promise<TeamApplyResult>,
 ): ToolsHost {
   const skills = createSkillCatalogue([]);
@@ -165,7 +174,13 @@ export function createNativeHost(
     async saveLibrary(library) {
       await api.buildLibrary.set(library);
     },
-    publishBuild,
+    async publishBuild(build) {
+      const code = encodeSkillTemplate(build);
+      if (code === null) {
+        throw new Error("This build cannot be written as a template.");
+      }
+      return publishTemplate({ name: build.name, code });
+    },
     applyTeam,
   };
 }

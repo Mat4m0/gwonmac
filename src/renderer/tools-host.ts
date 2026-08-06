@@ -13,8 +13,6 @@
  * build is written so Guild Wars can load it, and whether a team may be applied
  * to the running game.
  */
-import type { Build } from "../shared/builds/library.js";
-import { encodeSkillTemplate } from "../shared/builds/skill-template.js";
 import type {
   TeamApplyPlan,
   TeamApplyResult,
@@ -28,6 +26,9 @@ import { sanitiseTemplateName } from "./template-format.js";
 
 type PublishedTemplate = Readonly<{ fileName: string; location: string }>;
 
+/** A build the bundle has already encoded. See apps/tools/src/host.ts. */
+type PublishableTemplate = Readonly<{ name: string; code: string }>;
+
 type ToolsAppHandle = Readonly<{
   show(): void;
   hide(): void;
@@ -40,7 +41,7 @@ type ToolsBundle = Readonly<{
     target: HTMLElement,
     options: {
       initiallyVisible?: boolean;
-      publishBuild(build: Build): Promise<PublishedTemplate>;
+      publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
       applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
     },
   ): ToolsAppHandle;
@@ -54,16 +55,14 @@ type ToolsBundle = Readonly<{
  * caches its template scan, which is why the returned location is worded for a
  * player who will have to press Refresh List before the build appears.
  */
-async function publishBuild(build: Build): Promise<PublishedTemplate> {
-  const code = encodeSkillTemplate(build);
-  if (code === null) {
-    throw new Error("This build cannot be written as a template.");
-  }
+async function publishTemplate(
+  { name: raw, code }: PublishableTemplate,
+): Promise<PublishedTemplate> {
   const fs = templateFilesystem();
   if (fs === null) {
     throw new Error("Guild Wars template storage is not available yet.");
   }
-  const name = sanitiseTemplateName(build.name);
+  const name = sanitiseTemplateName(raw);
   // The type root, never a subfolder: the client's scan does not descend, so a
   // template one level down is saved, exported, and listed by nothing in game.
   const candidate = { kind: "skills" as const, folder: null, name, code };
@@ -112,7 +111,7 @@ export function mountToolsInto(content: HTMLElement): void {
     .then((bundle: ToolsBundle) => {
       bundle.mountToolsApp(content, {
         initiallyVisible: true,
-        publishBuild,
+        publishTemplate,
         applyTeam,
       });
     })
