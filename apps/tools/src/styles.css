@@ -1012,6 +1012,11 @@ body:has(.tools-stage[data-mode="standalone"]) {
   font-size: var(--ui-font-size-sm);
 }
 
+/* Why the button beside it is disabled, so it reads as a capability that does
+   not exist rather than as a panel that is broken. Not faint: it is the only
+   thing in the footer that explains the control. */
+.detail-actions--explain > .apply-unavailable { color: var(--ui-warning); }
+
 /* ----------------------------------------------------------------- team */
 
 .team-scroll { padding-top: var(--ui-space-3); }
@@ -1360,7 +1365,10 @@ body:has(.tools-stage[data-mode="standalone"]) {
   .catalogue-workspace { padding: var(--ui-space-3); }
   .authoring-actions { flex-wrap: wrap; }
   .save-state { width: 100%; margin-right: 0; }
-  .detail-actions--explain > span { display: none; }
+  /* The description is decoration and can go. The reason a disabled button is
+     disabled is not — dropping it here would put the narrow layout back where
+     the wide one started: a primary action that refuses without saying why. */
+  .detail-actions--explain > span:not(.apply-unavailable) { display: none; }
 }
 
 @container (max-width: 390px) {

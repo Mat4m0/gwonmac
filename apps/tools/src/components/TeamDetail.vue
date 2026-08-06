@@ -347,12 +347,24 @@ const apply = () => props.controller.applyTeam(props.team);
     </div>
 
     <footer class="detail-actions detail-actions--explain">
-      <span>Applies the roster, difficulty, builds, behavior, and disabled skills.</span>
+      <!--
+        The reason replaces the description rather than joining it. Explaining
+        what Apply would do, beside a control that cannot do it, is the sentence
+        that made the button look ready in the first place.
+      -->
+      <span v-if="controller.applyUnavailable" class="apply-unavailable">
+        {{ controller.applyUnavailable }}
+      </span>
+      <span v-else>Applies the roster, difficulty, builds, behavior, and disabled skills.</span>
       <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
       <button
         class="ui-button"
         data-variant="primary"
-        :disabled="configured === 0 || controller.saving.value"
+        :disabled="
+          controller.applyUnavailable !== null
+            || configured === 0
+            || controller.saving.value
+        "
         @click="apply"
       >
         {{ controller.saving.value ? "Applying…" : "Apply team" }}

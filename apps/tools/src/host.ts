@@ -62,6 +62,15 @@ export interface ToolsHost {
   saveLibrary(library: BuildLibrary): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
   applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
+  /**
+   * Why `applyTeam` cannot reach the running game, or `null` when it can.
+   *
+   * The interface has to be able to say this before the click. A primary button
+   * that looks ready and then refuses has already spent the player's decision
+   * to press it, and reads as a broken panel rather than as a capability that
+   * does not exist yet.
+   */
+  readonly applyUnavailable: string | null;
   reset?(): Promise<LibraryLoad>;
 }
 
@@ -100,6 +109,8 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     // a full roster would let this section be designed against data the running
     // game cannot yet supply, and the gap would surface as a bug report.
     party: ref(demoParty),
+    // The fixture host answers its own apply, so it has nothing to refuse.
+    applyUnavailable: null,
     async loadLibrary() {
       memory = read();
       return { library: cloneLibrary(memory), recovered: false };
@@ -136,6 +147,7 @@ export function createNativeHost(
   api: GwNativeApi,
   publishTemplate: (template: PublishableTemplate) => Promise<PublishedTemplate>,
   applyTeam: (plan: TeamApplyPlan) => Promise<TeamApplyResult>,
+  applyUnavailable: string | null,
 ): ToolsHost {
   const skills = createSkillCatalogue([]);
   const profession = new Set<Profession>(
@@ -207,6 +219,7 @@ export function createNativeHost(
     label: "Saved on this Mac",
     skills,
     party: ref(unavailableParty()),
+    applyUnavailable,
     async loadLibrary() {
       const [library, skills] = await Promise.all([
         api.buildLibrary.get(),

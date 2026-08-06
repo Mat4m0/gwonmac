@@ -52,6 +52,7 @@ type ToolsBundle = Readonly<{
       onVisibilityChange?(visible: boolean): void;
       publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
       applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
+      applyUnavailable: string | null;
     },
   ): ToolsAppHandle;
 }>;
@@ -92,19 +93,26 @@ async function publishTemplate(
 }
 
 /**
- * Applying a team means commanding the running game, and no command gateway is
- * certified for this client. Saying so as a refusal, here, is deliberate: the
+ * Why applying a team cannot reach the running game, or `null` once it can.
+ *
+ * Applying means commanding the running game, and no command gateway is
+ * certified for this client. Saying so as a refusal is deliberate: the
  * alternative an earlier version shipped was a resolved promise reporting zero
  * completed changes, which is indistinguishable in the interface from a team
  * that applied and did nothing.
+ *
+ * It is a value rather than only a thrown message because the interface has to
+ * say it *before* the click, not after. A button that looks ready and then
+ * refuses has already cost the player the decision to press it — and it reads
+ * as a bug in the panel rather than as a capability that does not exist yet.
+ * One constant, so the disabled reason and the refusal cannot drift apart.
  */
+const APPLY_UNAVAILABLE =
+  "Applying a team to the running game is not available yet. Publish the "
+  + "builds as templates and load them in Guild Wars.";
+
 function applyTeam(): Promise<TeamApplyResult> {
-  return Promise.reject(
-    new Error(
-      "Applying a team to the running game is not available yet. Publish the "
-      + "builds as templates and load them in Guild Wars.",
-    ),
-  );
+  return Promise.reject(new Error(APPLY_UNAVAILABLE));
 }
 
 /**
@@ -133,6 +141,7 @@ export function mountToolsInto(
         onVisibilityChange,
         publishTemplate,
         applyTeam,
+        applyUnavailable: APPLY_UNAVAILABLE,
       });
       return {
         setVisible: (visible: boolean) => {

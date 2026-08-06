@@ -404,6 +404,44 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
+  // The shipped build has no certified command gateway, so Apply cannot reach
+  // the game. It used to say so only *after* the click, which spends the
+  // player's decision to press a primary button and reads as a broken panel
+  // rather than as a capability that does not exist yet — this is the one
+  // failure mode a real session actually hit.
+  it("refuses Apply before the click when no gateway exists", async () => {
+    const refused = "No command gateway is certified for this client.";
+    const wrapper = await workbench({
+      ...applicableHost(async () => {
+        throw new Error("apply must not be reachable");
+      }),
+      applyUnavailable: refused,
+    });
+    const apply = wrapper
+      .findAll(".detail-actions .ui-button")
+      .find((button) => button.text().includes("Apply team"))!;
+
+    expect(apply.attributes("disabled")).toBeDefined();
+    // The reason is on screen, not in a toast the player has to earn.
+    expect(wrapper.get(".apply-unavailable").text()).toBe(refused);
+    // And it replaces the description that made the button look ready.
+    expect(wrapper.text()).not.toContain("Applies the roster, difficulty");
+    wrapper.unmount();
+  });
+
+  it("leaves Apply alone when the host can reach the game", async () => {
+    const wrapper = await workbench(applicableHost(
+      async () => ({ commandId: 1, completedChanges: 8, skillsSkipped: false }),
+    ));
+    const apply = wrapper
+      .findAll(".detail-actions .ui-button")
+      .find((button) => button.text().includes("Apply team"))!;
+
+    expect(apply.attributes("disabled")).toBeUndefined();
+    expect(wrapper.find(".apply-unavailable").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   // The companion counts every hero the player owns and can currently name only
   // some of them. What the panel must never do is present the named ones as the
   // party — the difference between "your party is Koss" and "Koss, and two more

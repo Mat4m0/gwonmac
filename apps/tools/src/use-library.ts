@@ -589,6 +589,10 @@ export function useLibrary(host: ToolsHost) {
 
   return {
     skills: host.skills,
+    // Narrower than handing components the host: they need the reason Apply is
+    // refused, not the ability to call around the controller for everything
+    // else it wraps.
+    applyUnavailable: host.applyUnavailable,
     library, loading, saving, error, notice, kind, selectedId, query, tag,
     items, tags, selectedBuild, selectedTeam, canUndo, selectKind,
     select: (next: LibraryItem) => {
