@@ -10,6 +10,7 @@ import {
   type BuildLibrary,
   type Profession,
 } from "../../../src/shared/builds/library";
+import { liveParty } from "../../../src/shared/builds/live-party";
 import { createSkillCatalogue, type SkillPresentation } from "./skill-catalog";
 
 const names = [
@@ -120,6 +121,23 @@ function slots(ids: readonly (string | null)[]): BuildLibrary["teams"][number]["
     disabled: [],
   }));
 }
+
+/**
+ * A party for the standalone view, built by putting a fake observation through
+ * the same `liveParty` door the running game uses.
+ *
+ * Constructing the result by hand would let the fixture describe a party the
+ * mapper cannot actually produce, which is how a section gets designed against
+ * data that never arrives. Koss is `heroId(6)`; the count says three because
+ * the companion counts what it cannot yet name.
+ */
+export const demoParty = liveParty({
+  status: "ready",
+  heroAvailable: true,
+  heroCount: 3,
+  firstHeroId: 6,
+  firstHeroAgentId: 142,
+});
 
 export const demoLibrary: BuildLibrary = {
   version: LIBRARY_VERSION,

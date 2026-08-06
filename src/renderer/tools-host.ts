@@ -13,14 +13,16 @@
  * and reports back when it closes itself so the overlay does not go on
  * believing it is open.
  *
- * What is left is the two things the Vue bundle genuinely cannot know: where a
- * build is written so Guild Wars can load it, and whether a team may be applied
- * to the running game.
+ * What is left is the three things the Vue bundle genuinely cannot reach on its
+ * own: where a build is written so Guild Wars can load it, whether a team may be
+ * applied to the running game, and the companion's observation of that game —
+ * which passes straight through, unread. The bundle owns what a party means.
  */
 import type {
   TeamApplyPlan,
   TeamApplyResult,
 } from "../shared/builds/team-apply.js";
+import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { MountedTool } from "./toolbox-foundation.js";
 import {
   applyImport,
@@ -38,6 +40,7 @@ type ToolsAppHandle = Readonly<{
   show(): void;
   hide(): void;
   toggle(): void;
+  update(observation: ToolboxObservation): void;
   dispose(): void;
 }>;
 
@@ -136,6 +139,7 @@ export function mountToolsInto(
           if (visible) app.show();
           else app.hide();
         },
+        update: app.update,
         dispose: app.dispose,
       };
     })

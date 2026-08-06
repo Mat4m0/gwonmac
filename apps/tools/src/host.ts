@@ -1,8 +1,13 @@
+import { ref, type Ref } from "vue";
 import {
   SKILL_CATALOGUE_ROUTE,
   SKILL_ICON_ROUTE,
   type GwNativeApi,
 } from "../../../src/shared/contracts";
+import {
+  unavailableParty,
+  type LiveParty,
+} from "../../../src/shared/builds/live-party";
 import {
   ATTRIBUTES,
   PROFESSIONS,
@@ -17,7 +22,7 @@ import type {
   TeamApplyResult,
 } from "../../../src/shared/builds/team-apply";
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
-import { demoLibrary, demoSkillCatalogue } from "./fixtures";
+import { demoLibrary, demoParty, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import {
   createSkillCatalogue,
@@ -44,6 +49,15 @@ export type LibraryLoad = Readonly<{
 export interface ToolsHost {
   readonly label: string;
   readonly skills: SkillCatalogue;
+  /**
+   * The party the player is actually in.
+   *
+   * The harness writes it as the companion publishes; the panel only reads. A
+   * host with no running game behind it leaves it `unavailable`, which is a
+   * state the interface has to draw anyway — the game is not always running,
+   * and "not observed" is the honest thing to say when it is not.
+   */
+  readonly party: Ref<LiveParty>;
   loadLibrary(): Promise<LibraryLoad>;
   saveLibrary(library: BuildLibrary): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
@@ -81,6 +95,11 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
   return {
     label: storage ? "Local fixture library" : "Session fixture library",
     skills: demoSkillCatalogue,
+    // Deliberately the *partial* shape the companion actually publishes today —
+    // a hero count with one identified hero and no ordering. A fixture showing
+    // a full roster would let this section be designed against data the running
+    // game cannot yet supply, and the gap would surface as a bug report.
+    party: ref(demoParty),
     async loadLibrary() {
       memory = read();
       return { library: cloneLibrary(memory), recovered: false };
@@ -187,6 +206,7 @@ export function createNativeHost(
   return {
     label: "Saved on this Mac",
     skills,
+    party: ref(unavailableParty()),
     async loadLibrary() {
       const [library, skills] = await Promise.all([
         api.buildLibrary.get(),

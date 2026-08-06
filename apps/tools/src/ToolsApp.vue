@@ -19,6 +19,7 @@ import {
 } from "./model";
 import { useLibrary } from "./use-library";
 import BuildDetail from "./components/BuildDetail.vue";
+import LiveParty from "./components/LiveParty.vue";
 import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
 
@@ -378,6 +379,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               </button>
             </div>
           </div>
+
+          <LiveParty :party="host.party.value" />
 
           <footer class="library-footer">
             <button v-if="host.reset" class="ui-link" @click="controller.reset">

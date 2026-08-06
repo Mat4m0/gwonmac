@@ -21,8 +21,12 @@ import { createNonActivatingSurface } from "./non-activating-surface.js";
 
 /**
  * The companion's toolbox projection, as `window.gwCompanionRuntime.toolbox`
- * publishes it. The overlay stores it and draws none of it — a console asking
- * a live session what the kernel sees is the consumer, not the screen.
+ * publishes it. The overlay draws none of it — it holds the latest one and
+ * hands it to the mounted tool, which is the only thing here that draws.
+ *
+ * Structural on purpose. The decoder in `companion-snapshot.ts` owns the wire
+ * format and `src/shared/builds/live-party.ts` owns the domain; the overlay is
+ * a courier between them and should need to know neither.
  */
 type ToolboxState = Readonly<{
   status: string;
@@ -108,6 +112,15 @@ const TOGGLE_CODE = "Space";
  */
 export interface MountedTool {
   setVisible(visible: boolean): void;
+  /**
+   * The companion's latest projection of the running game.
+   *
+   * Push, not pull: the overlay is already on the observer's update path, and a
+   * tool that polled instead would be a second reader of the same region on a
+   * cadence nobody chose. Called on mount with whatever has arrived so far, so
+   * a tool loaded after the game was already running does not start blank.
+   */
+  update(state: ToolboxState): void;
   dispose(): void;
 }
 
@@ -186,8 +199,12 @@ export function createToolboxFoundation(
     void options.mountTool(toolHost, (visible) => setOpen(visible))
       .then((mounted) => {
         tool = mounted;
-        // The overlay may have been closed again while the bundle loaded.
+        // The overlay may have been closed again while the bundle loaded, and
+        // the companion has almost certainly published since — the tool loads
+        // on first open, which is minutes into a session. Both are caught up
+        // here rather than waiting for the next toggle and the next publish.
         tool?.setVisible(overlayOpen);
+        tool?.update(state);
       });
   };
 
@@ -294,12 +311,15 @@ export function createToolboxFoundation(
 
   return {
     /**
-     * The companion's latest toolbox projection. Stored, not drawn: the
-     * consumer is `window.gwCompanionRuntime.toolbox`, which a live session
-     * reads from the console.
+     * The companion's latest toolbox projection, from the observer.
+     *
+     * Held as well as forwarded: the tool mounts on first open, long after the
+     * game starts publishing, and `ensureTool` replays this into it. Without
+     * that the panel would show nothing until the party next changed.
      */
     update(next: ToolboxState) {
       state = next;
+      tool?.update(next);
     },
     get state() {
       return state;

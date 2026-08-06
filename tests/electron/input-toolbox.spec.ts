@@ -64,6 +64,7 @@ test.describe("renderer Tools input", () => {
                 onVisibilityChange: (visible: boolean) => void,
               ): Promise<{
                 setVisible(visible: boolean): void;
+                update(state: object): void;
                 dispose(): void;
               } | null>;
             },
@@ -110,14 +111,30 @@ test.describe("renderer Tools input", () => {
             });
             panel.append(action, field, close);
             host.append(panel);
+            let observations = 0;
             return Promise.resolve({
               setVisible: (visible: boolean) => {
                 panel.style.display = visible ? "block" : "none";
+              },
+              // A real tool draws the party from this. The stub records what
+              // arrived and when, which is the part the overlay is responsible
+              // for; what the values mean is pinned elsewhere.
+              update: (state: object) => {
+                observations += 1;
+                panel.dataset.observations = String(observations);
+                panel.dataset.heroId = String(
+                  (state as { firstHeroId?: number }).firstHeroId ?? "",
+                );
               },
               dispose: () => panel.remove(),
             });
           },
         });
+        // The observer publishes from the moment the game runs; a tool mounts on
+        // first open, which is minutes later. Exposed so the test can publish
+        // again once the tool exists.
+        (globalThis as unknown as { publishToolbox(state: object): void })
+          .publishToolbox = (state: object) => toolbox.update(state);
         // The projection still takes what the observer feeds it. What those
         // values mean is pinned at the real boundary by
         // tests/packaged-enhancement-runtime.ts, which reads them back through
@@ -175,6 +192,27 @@ test.describe("renderer Tools input", () => {
       await page.getByRole("button", { name: "Open Tools" }).click();
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(tool).toBeVisible();
+
+      // The companion published before this tool existed. A tool that only
+      // heard about the game from the *next* publish would sit blank until the
+      // party happened to change, which on a quiet map is indefinitely — so the
+      // overlay holds the last projection and replays it on mount.
+      await expect(tool).toHaveAttribute("data-observations", "1");
+      await expect(tool).toHaveAttribute("data-hero-id", "7");
+
+      // And from here it follows the game live.
+      await page.evaluate(() => {
+        (globalThis as unknown as { publishToolbox(state: object): void })
+          .publishToolbox({
+            status: "ready",
+            heroAvailable: true,
+            heroCount: 2,
+            firstHeroId: 24,
+          });
+      });
+      await expect(tool).toHaveAttribute("data-observations", "2");
+      await expect(tool).toHaveAttribute("data-hero-id", "24");
+
       await expect(page.locator("#canvas")).toBeFocused();
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
       await page.keyboard.up("KeyW");

@@ -1,6 +1,10 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import { mapTeamSlots } from "../../../src/shared/builds/library";
+import {
+  liveParty,
+  unavailableParty,
+} from "../../../src/shared/builds/live-party";
 import type { TeamApplyResult } from "../../../src/shared/builds/team-apply";
 import ToolsApp from "./ToolsApp.vue";
 import { createDemoHost, type ToolsHost } from "./host";
@@ -397,6 +401,56 @@ describe("ToolsApp", () => {
     await flushPromises();
     expect(wrapper.get<HTMLInputElement>("#build-name").element.value).toContain("Aegis");
     expect(wrapper.findAll(".library-row")).toHaveLength(before);
+    wrapper.unmount();
+  });
+
+  // The companion counts every hero the player owns and can currently name only
+  // some of them. What the panel must never do is present the named ones as the
+  // party — the difference between "your party is Koss" and "Koss, and two more
+  // we cannot name yet" is the difference between a wrong answer and a partial
+  // one, and only the second is safe to build capture on.
+  it("names the heroes it can and says how many it cannot", async () => {
+    const wrapper = await workbench();
+    const section = wrapper.get(".live-party");
+
+    expect(section.text()).toContain("3 heroes");
+    expect(section.findAll(".live-party-row")).toHaveLength(1);
+    expect(section.text()).toContain("Koss");
+    expect(section.text()).toContain("2 more heroes are in your party");
+    wrapper.unmount();
+  });
+
+  it("says no party is observed rather than showing an empty one", async () => {
+    const host = createDemoHost();
+    host.party.value = unavailableParty();
+    const wrapper = await workbench(host);
+    const section = wrapper.get(".live-party");
+
+    expect(section.text()).toContain("No party observed");
+    expect(section.findAll(".live-party-row")).toHaveLength(0);
+    // Nothing that would read as a count of zero heroes, which is a claim about
+    // the party rather than about whether one was seen at all.
+    expect(section.find(".ui-chip").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("follows the companion as the party changes under it", async () => {
+    const host = createDemoHost();
+    const wrapper = await workbench(host);
+
+    host.party.value = liveParty({
+      status: "ready",
+      heroAvailable: true,
+      heroCount: 1,
+      firstHeroId: 24,
+      firstHeroAgentId: 7,
+    });
+    await flushPromises();
+
+    const section = wrapper.get(".live-party");
+    expect(section.text()).toContain("Gwen");
+    expect(section.text()).not.toContain("Koss");
+    expect(section.text()).not.toContain("more heroes are in your party");
     wrapper.unmount();
   });
 });

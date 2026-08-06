@@ -1,0 +1,146 @@
+// `src/shared/builds/live-party.ts` is the read counterpart of `team-apply.ts`,
+// and the whole of its value is in refusing to fill a blank. The companion
+// publishes a fraction of what the type describes and will until the party
+// region lands, so every case below drives one unobserved field and asserts it
+// arrives as `null` — not as zero, not as an empty bar, not as a hero the
+// table cannot name.
+//
+// That is not fussiness about a sentinel. The next thing built on this module
+// is capture, and a captured build carrying invented attributes or a bar of
+// eight empty slots is worse than one that admits it has none: the first is
+// silently wrong in the library forever, the second is visibly incomplete and
+// gets fixed. The boundary between "observed as absent" and "not observed" is
+// the only thing standing between those two outcomes, so it is asserted here
+// rather than left to the caller's judgement.
+//
+// The `partial` flag is derived and is tested as such: it is the single place
+// the rule "this is not the whole party" is decided, and a panel that had to
+// recompute it would eventually disagree with one that did not.
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  liveParty,
+  professionPair,
+  unavailableParty,
+} from "../../src/shared/builds/live-party.ts";
+import { heroId } from "../../src/shared/builds/library.ts";
+
+test("an observation that is not ready is a party nobody can draw", () => {
+  for (const status of ["waiting", "unsupported", "", "READY"]) {
+    const party = liveParty({ status, heroAvailable: true, heroCount: 4, firstHeroId: 6 });
+    assert.equal(party.status, "unavailable", `status ${JSON.stringify(status)}`);
+    assert.equal(party.heroCount, 0);
+    assert.deepEqual(party.heroes, []);
+    assert.equal(party.partial, false);
+  }
+  // The same statement, so it must be the same value rather than a second
+  // shape the interface has to learn.
+  assert.deepEqual(liveParty({ status: "waiting" }), unavailableParty());
+});
+
+test("a counted but unnamed hero is counted, not invented", () => {
+  const party = liveParty({
+    status: "ready",
+    heroAvailable: true,
+    heroCount: 3,
+    firstHeroId: 6,
+    firstHeroAgentId: 142,
+  });
+
+  assert.equal(party.status, "ready");
+  assert.equal(party.heroCount, 3);
+  assert.equal(party.heroes.length, 1, "only the identified hero is listed");
+  assert.equal(party.partial, true, "three counted, one named");
+  assert.equal(party.heroes[0]?.hero, heroId(6));
+  assert.equal(party.heroes[0]?.agentId, 142);
+});
+
+test("every field the companion has not published reads as not observed", () => {
+  const [hero] = liveParty({
+    status: "ready",
+    heroAvailable: true,
+    heroCount: 1,
+    firstHeroId: 6,
+    firstHeroAgentId: 142,
+  }).heroes;
+
+  assert.ok(hero);
+  // Position included: the kernel walks the hero array skipping heroes owned by
+  // other players, so the index it stops at is not the position the player
+  // sees, and claiming slot 1 would be a guess that looks like a fact.
+  assert.equal(hero.slot, null, "party position");
+  assert.equal(hero.professions, null, "professions");
+  assert.equal(hero.behaviour, null, "behaviour");
+  assert.equal(hero.level, null, "level");
+  assert.equal(hero.skills, null, "skill bar");
+  assert.equal(hero.disabled, null, "disabled slots");
+});
+
+test("account and instance facts stay unknown rather than defaulting to false", () => {
+  const party = liveParty({ status: "ready", heroCount: 0 });
+
+  // `unlocked: null` and an empty set are different claims. Only one of them
+  // may grey a hero out in the picker.
+  assert.equal(party.unlocked, null, "unlocked heroes");
+  assert.equal(party.hardMode, null, "hard mode");
+  assert.equal(party.inOutpost, null, "in an outpost");
+});
+
+test("a hero the table cannot name is dropped rather than published as a number", () => {
+  for (const firstHeroId of [0, 40, 999, -1, 6.5]) {
+    const party = liveParty({
+      status: "ready",
+      heroAvailable: true,
+      heroCount: 2,
+      firstHeroId,
+    });
+    assert.deepEqual(party.heroes, [], `hero id ${firstHeroId}`);
+    // Dropping the identity does not drop the count — the party still has two
+    // heroes in it and saying otherwise would be a second wrong answer.
+    assert.equal(party.heroCount, 2);
+    assert.equal(party.partial, true);
+  }
+});
+
+test("the flag says available or the hero is not listed, whatever the id says", () => {
+  const party = liveParty({
+    status: "ready",
+    heroAvailable: false,
+    heroCount: 2,
+    firstHeroId: 6,
+  });
+  assert.deepEqual(party.heroes, []);
+});
+
+test("a fully named party is not partial", () => {
+  const party = liveParty({
+    status: "ready",
+    heroAvailable: true,
+    heroCount: 1,
+    firstHeroId: 6,
+  });
+  assert.equal(party.partial, false);
+});
+
+test("a nonsense count is floored rather than trusted", () => {
+  for (const heroCount of [-3, Number.NaN, 1.5]) {
+    const party = liveParty({ status: "ready", heroCount });
+    assert.equal(party.heroCount, 0, `count ${String(heroCount)}`);
+    assert.equal(party.partial, false);
+  }
+  // Absent entirely, which is what an older decoder would send.
+  const party = liveParty({ status: "ready" });
+  assert.equal(party.heroCount, 0);
+  assert.equal(party.partial, false);
+});
+
+test("profession ids become acronyms, and None is a secondary rather than a refusal", () => {
+  assert.deepEqual(professionPair(1, 3), ["W", "Mo"]);
+  // `Profession::None` as a secondary is a monoclass character, which is a real
+  // state — not a read that failed.
+  assert.deepEqual(professionPair(1, 0), ["W", null]);
+  // A primary of None is a read that failed: every character has one.
+  assert.equal(professionPair(0, 1), null);
+  assert.equal(professionPair(1, 99), null);
+  assert.equal(professionPair(99, 1), null);
+});
