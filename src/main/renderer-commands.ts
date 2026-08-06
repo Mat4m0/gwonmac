@@ -16,6 +16,7 @@ import {
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import { logEvent } from "./diagnostics.js";
 
 interface Pending {
   webContentsId: number;
@@ -125,4 +126,22 @@ export function sendRendererCommand(
  */
 export async function resetGameInput(win: BrowserWindow): Promise<void> {
   await sendRendererCommand(win, { type: "input.reset" });
+}
+
+/**
+ * Show or hide the Tools overlay.
+ *
+ * One function for the two ways a player asks. The menu item and the keyboard
+ * shortcut are different routes to the same intent, and a second copy of
+ * "release held input, send the command, notice if it was refused" is how the
+ * two quietly stop agreeing.
+ */
+export async function toggleTools(win: BrowserWindow): Promise<void> {
+  await resetGameInput(win);
+  const outcome = await sendRendererCommand(win, { type: "tools.toggle" });
+  // The renderer refuses outright when the Toolbox capability is not
+  // installed, which is the ordinary case on a launch that did not ask for it.
+  if (outcome !== "completed") {
+    logEvent({ k: "tools.toggleRefused", outcome });
+  }
 }

@@ -37,6 +37,7 @@ import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
+import { toggleTools } from "./renderer-commands.js";
 import { installApplicationMenu } from "./window-menu.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
@@ -323,6 +324,30 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   win.webContents.setWindowOpenHandler(() => {
     logEvent({ k: "security.windowOpenBlocked" });
     return { action: "deny" };
+  });
+
+  // Cmd/Ctrl+B, decided in the main process before the page sees the key.
+  //
+  // A menu accelerator is not enough, and the reason is the opposite of what it
+  // looks like: Electron dispatches a key to the page first and only considers
+  // menu shortcuts for events the renderer reports unhandled. Guild Wars binds
+  // most single letters and acts on the base key whatever modifier is held, so
+  // `Cmd+B` arrives at the client as `B`, the client handles it, and its
+  // `preventDefault()` cancels our accelerator along with the keystroke.
+  //
+  // `before-input-event` fires in main *before* the renderer receives anything,
+  // so `preventDefault()` here means neither our page nor the client ever sees
+  // the key. There is nothing to out-race and no ordering to get wrong.
+  //
+  // The View menu item carries the same accelerator with
+  // `registerAccelerator: false`, so the shortcut is still shown and
+  // discoverable without also being bound and fired twice.
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return;
+    if (input.key.toLowerCase() !== "b") return;
+    if (!(input.meta || input.control) || input.shift || input.alt) return;
+    event.preventDefault();
+    void toggleTools(win);
   });
 
   win.webContents.on("will-navigate", (event, url) => {

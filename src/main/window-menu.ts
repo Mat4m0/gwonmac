@@ -18,7 +18,11 @@ import {
 import { EXTERNAL_URLS } from "../shared/contracts.js";
 import { logEvent } from "./diagnostics.js";
 import { reportProblem } from "./problem-report.js";
-import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
+import {
+  resetGameInput,
+  sendRendererCommand,
+  toggleTools,
+} from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
 import type { WindowHost } from "./window.js";
 
@@ -101,25 +105,18 @@ export function installApplicationMenu({
         },
         { type: "separator" },
         {
+          id: "toggle-tools",
           label: "Toggle Tools",
-          // A menu accelerator rather than a key the renderer listens for: the
-          // main process takes it before the web contents exist in the picture,
-          // so the game cannot also act on it. A renderer chord has to race the
-          // game's own handlers and win; this one never enters that contest.
+          // Displayed, not bound. Electron dispatches a key to the page before
+          // it considers menu shortcuts, and Guild Wars claims most single
+          // letters whatever modifier is held -- it handles `b` and its
+          // preventDefault cancels the accelerator with it. The key is owned by
+          // `before-input-event` in window.ts instead, which runs before the
+          // page; `registerAccelerator: false` keeps the shortcut visible here
+          // without binding it a second time and firing twice.
           accelerator: "CmdOrCtrl+B",
-          click: async () => {
-            await resetGameInput(win);
-            const outcome = await sendRendererCommand(win, {
-              type: "tools.toggle",
-            });
-            // A menu item a player chose and that did nothing owes them a
-            // reason. The renderer refuses this command outright when the
-            // Toolbox capability is not installed, which is the ordinary case
-            // on a launch that did not ask for it.
-            if (outcome !== "completed") {
-              logEvent({ k: "tools.toggleRefused", outcome });
-            }
-          },
+          registerAccelerator: false,
+          click: () => toggleTools(win),
         },
         {
           label: "Toggle Diagnostics",
