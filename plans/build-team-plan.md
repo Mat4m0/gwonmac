@@ -149,9 +149,12 @@ the panel from one token edit.
 Replace the overlay's three placeholder rows with the Vue app.
 
 - The overlay keeps ownership of the boundary: the toggle chord, the event
-  stops, pointer-lock release, cursor mirroring, drag, focus transfer, teardown.
-- The panel mounts into the existing `panel` element and receives
-  `ToolboxState` as props. It asks the game for nothing.
+  stops, pointer-lock release, cursor mirroring, focus transfer, teardown.
+  Drag is *not* on that list: the tool draws and drags its own window.
+- The panel mounts into a full-bleed `#toolbox-tool` layer inside the overlay
+  root. It asks the game for nothing. `ToolboxState` is no longer passed as
+  props — the overlay stores the projection for `window.gwCompanionRuntime`
+  and draws none of it.
 - Gating is the existing `toolbox` capability. No new enhancement flag is added.
 - Persistence is the build library through its IPC channels, re-expressed
   through `main`'s canonical channel registry so the generated preload and the
