@@ -29,12 +29,17 @@ const ASSETS = [
 // The renderer loads it as `ui/…`, so it lands beside the renderer's own assets
 // rather than under a shared/ subtree nothing else would read. Listed here for
 // the same reason as everything above: a package input is explicit.
+/** @type {ReadonlyArray<readonly [source: string, destination: string]>} */
 const SHARED_ASSETS = [
   ["src/shared/ui/tokens.css", "ui/tokens.css"],
   ["src/shared/ui/components.css", "ui/components.css"],
 ];
 
 const dest = path.resolve("build/renderer");
+/**
+ * @param {string} from absolute source path
+ * @param {string} relative destination, under build/renderer
+ */
 const copy = (from, relative) => {
   const target = path.join(dest, relative);
   fs.mkdirSync(path.dirname(target), { recursive: true });

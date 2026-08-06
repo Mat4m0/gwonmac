@@ -9,6 +9,8 @@
  * The overlay is chrome, so it owns only its own pixels: every click that is
  * not on Tools chrome still belongs to the game.
  */
+import { createNonActivatingSurface } from "./non-activating-surface.js";
+
 type ToolboxState = Readonly<{
   status: string;
   playerChatCount?: number;
@@ -153,10 +155,11 @@ export function createToolboxFoundation(
   panel.className = "toolbox-surface";
   panel.hidden = true;
   panel.style.display = "none";
-  // A palette, not a modal: the game stays interactive beside it, so no
-  // aria-modal and no focus trap. tabindex puts keyboard focus on the panel
-  // itself when a click lands on non-interactive panel area.
-  panel.setAttribute("role", "dialog");
+  // A palette, not a modal, and not a dialog either: a dialog is a surface
+  // focus moves into, and this one deliberately never takes the keyboard on
+  // its own. Tab from the canvas reaches its controls in document order, which
+  // is the ordinary way in and needs no affordance of its own.
+  panel.setAttribute("role", "region");
   panel.setAttribute("aria-labelledby", "toolbox-foundation-title");
   panel.tabIndex = -1;
 
@@ -183,6 +186,12 @@ export function createToolboxFoundation(
   panel.append(titlebar, chat, hero, panelRow, content);
   root.append(hud, panel);
   parent.append(style, root);
+
+  // Everything the overlay draws is non-activating: the HUD chip, the panel,
+  // and whatever a tool mounts inside it. Clicking any of it operates the
+  // control without taking the keyboard, so the game keeps receiving keys
+  // until the player clicks into something they can actually type in.
+  const surface = createNonActivatingSurface(root, () => canvas);
 
   let state: ToolboxState = Object.freeze({ status: "waiting" });
   let overlayOpen = false;
@@ -233,11 +242,13 @@ export function createToolboxFoundation(
     open.setAttribute("aria-expanded", String(next));
     root.dataset.open = String(next);
     if (next) {
+      // Pointer lock still has to go: the panel is unreachable by a captured
+      // cursor. The keyboard, though, stays with the game — opening Tools is
+      // not a statement that you have stopped playing.
       if (document.pointerLockElement !== null) document.exitPointerLock();
       placePanel();
-      panel.focus({ preventScroll: true });
     } else {
-      canvas.focus({ preventScroll: true });
+      surface.releaseKeyboard();
     }
   };
 
@@ -277,20 +288,15 @@ export function createToolboxFoundation(
     root.addEventListener(name, stopAtOverlay);
   }
 
+  // Escape reaches this listener only while the surface holds the keyboard,
+  // which is to say only while the player is typing in it. There it means what
+  // it means in any field — stop typing — and hands the game back rather than
+  // closing the panel. With the game focused it never fires, so Escape keeps
+  // meaning what Guild Wars says it means.
   root.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     event.preventDefault();
-    setOpen(false);
-  });
-
-  // Focus follows click. Held game input deliberately carries across the
-  // focus transfer — a movement key held while clicking into the panel keeps
-  // the character moving, and the input host replays its eventual release at
-  // the canvas, so nothing sticks.
-  panel.addEventListener("pointerdown", () => {
-    if (!root.contains(document.activeElement)) {
-      panel.focus({ preventScroll: true });
-    }
+    surface.releaseKeyboard();
   });
 
   let dragOffset: { x: number; y: number } | null = null;
@@ -363,6 +369,7 @@ export function createToolboxFoundation(
       return state;
     },
     dispose() {
+      surface.dispose();
       cursorMirror.disconnect();
       window.removeEventListener("keydown", onToggleChord, true);
       window.removeEventListener("resize", onResize);

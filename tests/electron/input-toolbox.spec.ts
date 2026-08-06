@@ -67,50 +67,46 @@ test.describe("renderer Tools input", () => {
 
       const body = page.locator("body");
       const root = page.locator("#toolbox-foundation");
-      const panel = page.getByRole("dialog", { name: "Tools" });
+      const panel = page.getByRole("region", { name: "Tools" });
       await expect(root).not.toHaveAttribute("data-open");
 
       // The game owns canvas clicks while the palette is closed.
       await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "1");
 
-      // A movement key held across opening keeps acting: opening neither
-      // resets game input nor swallows the eventual release. The release
-      // lands on the focused panel, and the input host replays it at the
-      // canvas so the game lets go of the key.
+      // Opening Tools is not a statement that you have stopped playing. The
+      // keyboard stays with the game, so a held movement key keeps acting and
+      // the player can still press more of them.
       await page.keyboard.down("KeyW");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
       await page.getByRole("button", { name: "Open Tools" }).click();
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(panel).toBeVisible();
-      await expect(panel).toBeFocused();
+      await expect(page.locator("#canvas")).toBeFocused();
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
       await page.keyboard.up("KeyW");
       await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
       await expect(body).toHaveAttribute("data-toolbox-last-key-up", "KeyW");
 
-      // Keys pressed inside the panel stay inside it — including their
-      // releases, which the replay must not forward.
+      // The panel is open and the game still has the keyboard.
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
-      await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
       await expect(page.getByText("Hero panel observed · hidden")).toBeVisible();
 
-      // Non-modal: a game click lands in the game, the palette stays open,
-      // and keyboard focus follows the click back to the canvas.
+      // Non-modal: a game click lands in the game and the palette stays open.
       await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
       await expect(panel).toBeVisible();
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
       await expect(page.locator("#canvas")).toBeFocused();
-      await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
 
-      // Clicking the palette takes keyboard focus back without leaking the
-      // click or subsequent keys into the game.
+      // Non-activating: clicking Tools chrome operates it without taking the
+      // keyboard, and without leaking the click into the game. This is the
+      // whole point — the player clicks the panel and can still run.
       await panel.click({ position: { x: 8, y: 60 } });
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
+      await expect(page.locator("#canvas")).toBeFocused();
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
       // Dragging the titlebar moves the panel and the position survives
       // closing and reopening.
@@ -135,12 +131,14 @@ test.describe("renderer Tools input", () => {
       expect(reopened.x).toBeCloseTo(after.x, 0);
       expect(reopened.y).toBeCloseTo(after.y, 0);
 
-      // Escape closes only from palette focus and hands the game back.
+      // Escape belongs to Guild Wars while the game holds the keyboard, which
+      // is now the resting state, so it reaches the game rather than closing
+      // the palette. Closing is the Close button or the chord.
       await page.keyboard.press("Escape");
+      await expect(panel).toBeVisible();
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "4");
+      await page.getByRole("button", { name: "Close Tools" }).click();
       await expect(panel).toBeHidden();
-      await expect(page.locator("#canvas")).toBeFocused();
-      await page.keyboard.press("Escape");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
       // The chord toggles from anywhere.
       await page.keyboard.press("Control+Shift+Space");
