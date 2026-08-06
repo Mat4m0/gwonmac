@@ -168,6 +168,10 @@ const api = {
     set: (value) => ipcRenderer.invoke(IPC.settingsSet, value),
     reset: () => ipcRenderer.invoke(IPC.settingsReset),
   },
+  buildLibrary: {
+    get: () => ipcRenderer.invoke(IPC.buildLibraryGet),
+    set: (value) => ipcRenderer.invoke(IPC.buildLibrarySet, value),
+  },
   credentials: {
     load: () => ipcRenderer.invoke(IPC.credentialsLoad),
     save: (value) => ipcRenderer.invoke(IPC.credentialsSave, value),

@@ -50,6 +50,11 @@ import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
+import {
+  loadBuildLibrary,
+  parseBuildLibrary,
+  saveBuildLibrary,
+} from "./core/build-library.js";
 import { resolveDns } from "./core/dns.js";
 import {
   MAX_TOKEN_LENGTH,
@@ -608,6 +613,18 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     socketClose: channel(asSocketId, async (win, socketId) => {
       await ctx.sockets.close(socketId, win.webContents.id);
+    }),
+
+    buildLibraryGet: channel(nothing, async () => {
+      let recovered = false;
+      const library = await loadBuildLibrary(paths.buildLibrary, () => {
+        recovered = true;
+      });
+      return { library, recovered };
+    }),
+
+    buildLibrarySet: channel(one(parseBuildLibrary), async (_win, library) => {
+      await saveBuildLibrary(paths.buildLibrary, library);
     }),
 
     settingsGet: channel(nothing, async () => {
