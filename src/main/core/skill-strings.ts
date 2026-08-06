@@ -55,54 +55,73 @@ function staticSegments(wasm: Uint8Array): readonly Segment[] {
   return result;
 }
 
-function readAt(segments: readonly Segment[], address: number, size: number): Uint8Array | null {
+/**
+ * A segment and a view over it, built once.
+ *
+ * `findLanguageFileIds` probes every four-byte offset of a five-megabyte data
+ * section, and each probe reads one `u32` and then six bytes elsewhere. Taking
+ * a `subarray` and constructing a `DataView` per probe is two to three
+ * allocations against a handful of reads — measured at 148 ms, against 15 ms
+ * when the views are hoisted out of both loops as they are here.
+ */
+interface Viewed {
+  readonly address: number;
+  readonly bytes: Uint8Array;
+  readonly view: DataView;
+}
+
+function viewed(segments: readonly Segment[]): readonly Viewed[] {
+  return segments.map((segment) => ({
+    address: segment.address,
+    bytes: segment.bytes,
+    view: new DataView(
+      segment.bytes.buffer,
+      segment.bytes.byteOffset,
+      segment.bytes.byteLength,
+    ),
+  }));
+}
+
+/** The six-byte file hash at a static address, as a file id. */
+function fileIdAtAddress(
+  segments: readonly Viewed[],
+  pointer: number,
+): number | null {
+  if (pointer === 0) return 0;
   for (const segment of segments) {
-    const offset = address - segment.address;
-    if (offset >= 0 && offset + size <= segment.bytes.byteLength) {
-      return segment.bytes.subarray(offset, offset + size);
+    const offset = pointer - segment.address;
+    if (offset < 0 || offset + 6 > segment.bytes.byteLength) continue;
+    const low = segment.view.getUint16(offset, true);
+    const high = segment.view.getUint16(offset + 2, true);
+    if (low <= 0xff || high <= 0xff || segment.view.getUint16(offset + 4, true) !== 0) {
+      return null;
     }
+    return low - 0x100 + (high - 0x100) * 0xff00 + 1;
   }
   return null;
 }
 
-function fileIdAt(
-  segments: readonly Segment[],
-  table: Uint8Array,
-  index: number,
-): number | null {
-  const pointer = new DataView(
-    table.buffer,
-    table.byteOffset + index * 4,
-    4,
-  ).getUint32(0, true);
-  if (pointer === 0) return 0;
-  const hash = readAt(segments, pointer, 6);
-  if (!hash) return null;
-  const view = new DataView(hash.buffer, hash.byteOffset, hash.byteLength);
-  const low = view.getUint16(0, true);
-  const high = view.getUint16(2, true);
-  if (low <= 0xff || high <= 0xff || view.getUint16(4, true) !== 0) return null;
-  return low - 0x100 + (high - 0x100) * 0xff00 + 1;
-}
-
 /** Finds the client-owned 18 × 99 language-file hash table by its full shape. */
 export function findLanguageFileIds(wasm: Uint8Array): readonly (readonly number[])[] | null {
-  const segments = staticSegments(wasm);
+  const segments = viewed(staticSegments(wasm));
   const bytesNeeded = LANGUAGES * FILES_PER_LANGUAGE * 4;
   for (const segment of segments) {
     for (let offset = 0; offset + bytesNeeded <= segment.bytes.byteLength; offset += 4) {
-      const table = segment.bytes.subarray(offset, offset + bytesNeeded);
-      const first = fileIdAt(segments, table, 0);
+      // Deliberately not a closure over `offset`: this runs about 1.25 million
+      // times, and one allocation per probe is the cost this shape removes.
+      const first = fileIdAtAddress(segments, segment.view.getUint32(offset, true));
       if (first === null || first === 0) continue;
       const ids: number[][] = [];
       let valid = true;
       for (let language = 0; language < LANGUAGES && valid; language++) {
         const row: number[] = [];
         for (let file = 0; file < FILES_PER_LANGUAGE; file++) {
-          const id = fileIdAt(
+          const id = fileIdAtAddress(
             segments,
-            table,
-            language * FILES_PER_LANGUAGE + file,
+            segment.view.getUint32(
+              offset + (language * FILES_PER_LANGUAGE + file) * 4,
+              true,
+            ),
           );
           // English is the runtime source used by the catalogue and is
           // complete. Other rows contain nulls where ArenaNet did not publish
@@ -121,12 +140,18 @@ export function findLanguageFileIds(wasm: Uint8Array): readonly (readonly number
   return null;
 }
 
+/**
+ * One decoder for every record. A catalogue build walks about sixty shards of
+ * 1,024 records; constructing this per record cost more than the decoding.
+ */
+const UTF16 = new TextDecoder("utf-16le");
+
 function decodeStringRecord(
+  view: DataView,
   bytes: Uint8Array,
   offset: number,
   size: number,
 ): string | null {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const baseCharacter = view.getUint16(offset + 2, true);
   const rangeBits = bytes[offset + 4]!;
   if (bytes[offset + 5] !== 0) throw new Error("invalid language string padding");
@@ -135,7 +160,7 @@ function decodeStringRecord(
     if (payload.byteLength % 2 !== 0) {
       throw new Error("invalid UTF-16 language string");
     }
-    return new TextDecoder("utf-16le").decode(payload).replace(/\0+$/u, "");
+    return UTF16.decode(payload).replace(/\0+$/u, "");
   }
   // Other records use ArenaNet's compact, context-keyed representation.
   // Skill description ids point to raw UTF-16 records; unrelated compact
@@ -165,7 +190,7 @@ export function parseStringShard(bytes: Uint8Array): readonly (string | null)[] 
     ) {
       throw new Error("invalid language string record");
     }
-    strings.push(decodeStringRecord(bytes, offset, size));
+    strings.push(decodeStringRecord(view, bytes, offset, size));
     offset += size;
   }
   return strings;

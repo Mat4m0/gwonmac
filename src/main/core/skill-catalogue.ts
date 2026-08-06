@@ -17,16 +17,22 @@
  * by the archive's identity, so the cost is paid once and a new ArenaNet build
  * starts a new cache rather than serving the last build's art.
  *
- * The catalogue is built eagerly — it is one pass over ~67 shards, and the
- * editor cannot show a skill list without it. Icons are decoded lazily, on the
- * request that first asks for one, because a player who never opens the picker
- * should not pay for 3,439 of them.
+ * The catalogue is built eagerly — the editor cannot show a skill list without
+ * it — and the roughly sixty language shards it needs are decoded through a
+ * pool, because each one is a subprocess round-trip and sequentially they were
+ * the whole cost. Icons are decoded lazily, on the request that first asks for
+ * one, because a player who never opens the picker should not pay for 3,439.
+ *
+ * Nothing here is held longer than it is used. The catalogue records where each
+ * icon's bytes are, so serving one never reopens the archive, and the 4.2 MB
+ * file table and its 176,000-entry index are collected once the build returns.
  */
 
 import { mkdir, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { mapPool } from "./async-pool.js";
 import { sweepOrphans, writeAtomic } from "./atomic-file.js";
 import type { ChunkStore } from "./chunk-store.js";
 import {
@@ -37,7 +43,10 @@ import {
   readFileTable,
   type FileTable,
 } from "./gw-archive.js";
-import { ATTRIBUTE_BY_ID } from "../../shared/builds/heroes.js";
+import {
+  ATTRIBUTE_BY_ID,
+  PROFESSION_BY_ID,
+} from "../../shared/builds/heroes.js";
 import {
   findLanguageFileIds,
   formatSkillDescription,
@@ -45,11 +54,6 @@ import {
   stringShardIndex,
 } from "./skill-strings.js";
 import { findSkillTable, type SkillRecord } from "./skill-table.js";
-
-const PROFESSION = new Map<number, string>([
-  [1, "W"], [2, "R"], [3, "Mo"], [4, "N"], [5, "Me"],
-  [6, "E"], [7, "A"], [8, "Rt"], [9, "P"], [10, "D"],
-]);
 
 /**
  * Title ids below Codex are the account title tracks used by player-only PvE
@@ -74,6 +78,15 @@ const MAX_ICON_BYTES = 256 * 256 * 4 + 8;
 const MAX_SHARD_BYTES = 1024 * 1024 + 8;
 const MAX_STREAM_BYTES = 1024 * 1024;
 const HELPER_TIMEOUT_MS = 5_000;
+/**
+ * How many shard decoders run at once. This bounds local processes against
+ * local cores; it is deliberately not named for a "job" or a "concurrency"
+ * budget, because the only such budget this application has is
+ * `ARENANET_REQUEST_CEILING` — requests in flight to ArenaNet — and nothing
+ * here spends it. `the-download-schedulers-share-one-ceiling` exists to keep
+ * those two from being read as the same number.
+ */
+const SHARD_DECODERS = 8;
 const MAX_ICON_DIMENSION = 256;
 
 export interface SkillFacts {
@@ -270,42 +283,47 @@ interface Archive {
  * recognised and the assets are decoded again, which is why nothing here needs
  * a migration.
  */
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
+
+/**
+ * Where one icon's bytes sit in the archive.
+ *
+ * Resolving a file id to this costs the 4.2 MB file table and an id index of
+ * roughly 176,000 entries. Storing the answer means serving an icon never opens
+ * the archive, so nothing holds ~12 MB of index for the life of the process.
+ */
+interface IconStream {
+  readonly offset: number;
+  readonly size: number;
+}
 
 /** What one archive yields: the catalogue, plus where each icon lives in it. */
 interface Extracted {
   readonly version: number;
   readonly skills: readonly SkillFacts[];
-  /** Skill id to archive file id, only for skills whose icon was located. */
-  readonly icons: Readonly<Record<number, number>>;
+  /** Skill id to stream location, only for skills whose icon was located. */
+  readonly icons: Readonly<Record<number, IconStream>>;
 }
 
 /**
- * A cache file is data this process wrote, but it is still read back as
- * unknown: a truncated or hand-edited file must decode again rather than reach
- * the editor as a catalogue of `undefined`.
+ * A cache file is data this process wrote, so this checks that it is *this*
+ * version's shape and not that every element is well-formed. Probing fields on
+ * one element would not make the rest sound, and the version — bumped whenever
+ * the shape changes — is the mechanism that actually retires a stale file.
+ *
+ * The renderer validates every record it receives regardless
+ * (`apps/tools/src/host.ts`), because that boundary does not trust this one.
  */
 function readExtracted(value: unknown): Extracted | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Partial<Extracted>;
-  if (
-    candidate.version !== CACHE_VERSION
-    || !Array.isArray(candidate.skills)
-    || candidate.skills.length === 0
-    || typeof candidate.icons !== "object"
-    || candidate.icons === null
-  ) {
-    return null;
-  }
-  const first: unknown = candidate.skills[0];
-  if (
-    typeof first !== "object" || first === null
-    || typeof (first as SkillFacts).name !== "string"
-    || typeof (first as SkillFacts).hasIcon !== "boolean"
-  ) {
-    return null;
-  }
-  return candidate as Extracted;
+  const usable =
+    candidate.version === CACHE_VERSION
+    && Array.isArray(candidate.skills)
+    && candidate.skills.length > 0
+    && typeof candidate.icons === "object"
+    && candidate.icons !== null;
+  return usable ? (candidate as Extracted) : null;
 }
 
 /**
@@ -314,32 +332,28 @@ function readExtracted(value: unknown): Extracted | null {
  */
 export class SkillAssets {
   private readonly source: SkillAssetSource;
-  private extractValue: Promise<Extracted | CatalogueRefusal> | null = null;
-  private cacheDirValue: string | null = null;
-  private readonly swept = new Set<string>();
-  private archiveValue: Promise<Archive> | null = null;
-  private readonly icons = new Map<number, Promise<Buffer | null>>();
-
-  constructor(source: SkillAssetSource) {
-    this.source = source;
-  }
-
   /**
    * Where this archive's decoded assets live.
    *
    * Keyed by the chunk hashes rather than by a path: those identify the
    * archive's contents exactly, so a re-download to a different location reuses
-   * the cache and an ArenaNet patch cannot.
+   * the cache and an ArenaNet patch cannot. Fixed for the instance's lifetime,
+   * so it is computed once here rather than memoised behind a method.
    */
-  private cacheDir(): string {
-    this.cacheDirValue ??= path.join(
-      this.source.cacheRoot,
+  private readonly cacheDir: string;
+  private extractValue: Promise<Extracted | CatalogueRefusal> | null = null;
+  private readonly swept = new Set<string>();
+  private readonly icons = new Map<number, Promise<Buffer | null>>();
+
+  constructor(source: SkillAssetSource) {
+    this.source = source;
+    this.cacheDir = path.join(
+      source.cacheRoot,
       createHash("sha256")
-        .update(this.source.store.hashes.join(""))
+        .update(source.store.hashes.join(""))
         .digest("hex")
         .slice(0, 32),
     );
-    return this.cacheDirValue;
   }
 
   /**
@@ -357,36 +371,38 @@ export class SkillAssets {
     await sweepOrphans(dir);
   }
 
+  /**
+   * The archive's file table and id index.
+   *
+   * Deliberately not memoised. `buildCatalogue` is the only caller and runs at
+   * most once per instance, so holding this would keep a 4.2 MB table and an
+   * index of some 176,000 entries alive for the life of the process to serve
+   * nothing — every later icon request reads its location out of `Extracted`.
+   */
   private async openArchive(): Promise<Archive> {
-    this.archiveValue ??= (async () => {
-      const { store } = this.source;
-      const headerBytes = await store.readRange(0, 32);
-      const header = parseArchiveHeader(() => headerBytes);
-      const tableBytes = await store.readRange(
-        header.tableOffset,
-        header.tableSize,
-      );
-      const files = readFileTable(
-        (offset, length) =>
-          tableBytes.subarray(
-            offset - header.tableOffset,
-            offset - header.tableOffset + length,
-          ),
-        header,
-      );
-      const slot = parseSlot(files.bytes, 2);
-      const indexBytes = await store.readRange(slot.offset, slot.size);
-      const index = fileIdIndex(
-        (offset, length) =>
-          indexBytes.subarray(
-            offset - slot.offset,
-            offset - slot.offset + length,
-          ),
-        files,
-      );
-      return { files, index };
-    })();
-    return this.archiveValue;
+    const { store } = this.source;
+    const headerBytes = await store.readRange(0, 32);
+    const header = parseArchiveHeader(() => headerBytes);
+    const tableBytes = await store.readRange(
+      header.tableOffset,
+      header.tableSize,
+    );
+    const files = readFileTable(
+      (offset, length) =>
+        tableBytes.subarray(
+          offset - header.tableOffset,
+          offset - header.tableOffset + length,
+        ),
+      header,
+    );
+    const slot = parseSlot(files.bytes, 2);
+    const indexBytes = await store.readRange(slot.offset, slot.size);
+    const index = fileIdIndex(
+      (offset, length) =>
+        indexBytes.subarray(offset - slot.offset, offset - slot.offset + length),
+      files,
+    );
+    return { files, index };
   }
 
   /** Every localized string the catalogue needs, by string id. */
@@ -398,40 +414,48 @@ export class SkillAssets {
     const english = findLanguageFileIds(wasm)?.[0];
     const result = new Map<number, string>();
     if (!english) return result;
-    const shards = new Set<number>();
+
+    // One pass to group the ids by the shard that holds them. Re-walking all
+    // ~6,900 wanted ids inside the per-shard loop was the obvious shape and
+    // did the same work sixty times over.
+    const byShard = new Map<number, number[]>();
     for (const id of wanted) {
       const { file } = stringShardIndex(id);
-      if (file < english.length) shards.add(file);
+      if (file >= english.length) continue;
+      const ids = byShard.get(file);
+      if (ids) ids.push(id);
+      else byShard.set(file, [id]);
     }
-    for (const file of shards) {
+
+    // Each shard is a subprocess round-trip, and about sixty of them run for
+    // one catalogue. Sequentially that is the dominant cost of a cold build;
+    // pooled it is roughly a quarter of it. Every shard writes only its own
+    // ids, so they do not contend.
+    await mapPool([...byShard], SHARD_DECODERS, async ([file, ids]) => {
       const fileId = english[file];
-      if (fileId === undefined) continue;
+      if (fileId === undefined) return;
       const stream = findStream(archive.files, archive.index, fileId);
-      if (!stream?.compressed || stream.size > MAX_STREAM_BYTES) continue;
-      let records: readonly (string | null)[];
+      if (!stream?.compressed || stream.size > MAX_STREAM_BYTES) return;
       try {
         const compressed = await this.source.store.readRange(
           stream.offset,
           stream.size,
         );
-        records = parseStringShard(
+        const records = parseStringShard(
           await runDecoder(this.source.decoderPath, compressed, {
             args: ["--raw"],
             maxOutput: MAX_SHARD_BYTES,
             parse: decodedShard,
           }),
         );
+        for (const id of ids) {
+          const text = records[stringShardIndex(id).record];
+          if (text) result.set(id, text);
+        }
       } catch {
         // One unreadable shard costs its own strings, not the catalogue.
-        continue;
       }
-      for (const id of wanted) {
-        const at = stringShardIndex(id);
-        if (at.file !== file) continue;
-        const text = records[at.record];
-        if (text) result.set(id, text);
-      }
-    }
+    });
     return result;
   }
 
@@ -459,19 +483,24 @@ export class SkillAssets {
     }
     const strings = await this.readStrings(wasm, archive, wanted);
 
-    const icons: Record<number, number> = {};
+    const icons: Record<number, IconStream> = {};
     const skills = table.skills.map((skill) => {
-      const stream = skill.iconFileId === 0
+      const found = skill.iconFileId === 0
         ? null
         : findStream(archive.files, archive.index, skill.iconFileId);
-      if (stream) icons[skill.id] = skill.iconFileId;
+      // Compressed streams only, and bounded, so `decodeIcon` can read this
+      // straight from the cache without consulting the archive again.
+      const stream = found?.compressed && found.size <= MAX_STREAM_BYTES
+        ? found
+        : null;
+      if (stream) icons[skill.id] = { offset: stream.offset, size: stream.size };
       const description = strings.get(skill.descriptionStringId);
       return {
         id: skill.id,
         // The client's own spelling, apostrophes and all. Only a record with
         // no name at all falls back, and those are not equippable anyway.
         name: strings.get(skill.nameStringId) ?? `Skill ${skill.id}`,
-        profession: PROFESSION.get(skill.profession) ?? null,
+        profession: PROFESSION_BY_ID.get(skill.profession) ?? null,
         elite: skill.elite,
         availability: skillAvailability(skill),
         attribute: ATTRIBUTE_BY_ID.get(skill.attribute) ?? null,
@@ -500,7 +529,7 @@ export class SkillAssets {
    */
   private extract(): Promise<Extracted | CatalogueRefusal> {
     this.extractValue ??= (async () => {
-      const file = path.join(this.cacheDir(), "catalogue.json");
+      const file = path.join(this.cacheDir, "catalogue.json");
       try {
         const cached = readExtracted(JSON.parse(await readFile(file, "utf8")));
         if (cached) return cached;
@@ -510,7 +539,7 @@ export class SkillAssets {
       const extracted = await this.buildCatalogue();
       if (typeof extracted !== "string") {
         try {
-          await this.prepare(this.cacheDir());
+          await this.prepare(this.cacheDir);
           await writeAtomic(file, Buffer.from(JSON.stringify(extracted)));
         } catch {
           // A cache that cannot be written costs speed, never correctness.
@@ -528,6 +557,7 @@ export class SkillAssets {
       : { ok: true, skills: extracted.skills };
   }
 
+
   /**
    * One skill's icon as a BMP, decoded on first request and cached on disk
    * thereafter. `null` means the archive has no icon for that skill.
@@ -541,7 +571,7 @@ export class SkillAssets {
   }
 
   private async decodeIcon(skillId: number): Promise<Buffer | null> {
-    const file = path.join(this.cacheDir(), "icons", `${skillId}.bmp`);
+    const file = path.join(this.cacheDir, "icons", `${skillId}.bmp`);
     try {
       return await readFile(file);
     } catch {
@@ -549,11 +579,8 @@ export class SkillAssets {
     }
     const extracted = await this.extract();
     if (typeof extracted === "string") return null;
-    const fileId = extracted.icons[skillId];
-    if (fileId === undefined) return null;
-    const archive = await this.openArchive();
-    const stream = findStream(archive.files, archive.index, fileId);
-    if (!stream?.compressed || stream.size > MAX_STREAM_BYTES) return null;
+    const stream = extracted.icons[skillId];
+    if (stream === undefined) return null;
     const compressed = await this.source.store.readRange(
       stream.offset,
       stream.size,
