@@ -2,12 +2,13 @@ import {
   LIBRARY_VERSION,
   buildId,
   heroId,
+  skillBarOf,
   skillId,
   teamId,
+  teamSlotsOf,
   type Build,
   type BuildLibrary,
   type Profession,
-  type TeamSlot,
 } from "../../../src/shared/builds/library";
 import { createSkillCatalogue, type SkillPresentation } from "./skill-catalog";
 
@@ -61,9 +62,7 @@ export const demoSkillCatalogue = createSkillCatalogue(presentations);
 
 function bar(profession: Profession, variation: number): Build["skills"] {
   const block = professions.indexOf(profession) * 8;
-  return Array.from({ length: 8 }, (_, index) =>
-    skillId(200 + block + ((variation + index) % 8)),
-  ) as unknown as Build["skills"];
+  return skillBarOf((slot) => skillId(200 + block + ((variation + slot) % 8)));
 }
 
 function build(
@@ -113,13 +112,13 @@ const builds: Build[] = [
 
 const heroIds = [null, heroId(21), heroId(4), heroId(1), heroId(24), heroId(3), heroId(15), heroId(26)] as const;
 function slots(ids: readonly (string | null)[]): BuildLibrary["teams"][number]["slots"] {
-  return heroIds.map((hero, index): TeamSlot => ({
-    hero,
-    build: ids[index] ? buildId(ids[index]!) : null,
-    behaviour: index === 0 ? null : "guard",
-    panel: index > 0,
+  return teamSlotsOf((position) => ({
+    hero: heroIds[position] ?? null,
+    build: ids[position] ? buildId(ids[position]!) : null,
+    behaviour: position === 0 ? null : "guard",
+    panel: position > 0,
     disabled: [],
-  })) as unknown as BuildLibrary["teams"][number]["slots"];
+  }));
 }
 
 export const demoLibrary: BuildLibrary = {

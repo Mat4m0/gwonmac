@@ -42,8 +42,10 @@ import {
   SKILL_SLOTS,
   buildId,
   heroId,
+  skillBarOf,
   skillId,
   teamId,
+  teamSlotsOf,
   type Attribute,
   type AttributeRank,
   type AttributeRanks,
@@ -59,7 +61,6 @@ import {
   type Team,
   type TeamMode,
   type TeamSlot,
-  type TeamSlots,
 } from "../../shared/builds/library.js";
 import { ATTRIBUTES, PROFESSIONS } from "../../shared/builds/heroes.js";
 import { AppError } from "../../shared/errors.js";
@@ -149,8 +150,7 @@ const asSkillBar = (value: unknown, field: string): SkillBar => {
   if (slots.length !== SKILL_SLOTS.length) {
     return fail(field, `must hold ${SKILL_SLOTS.length} slots, not ${slots.length}`);
   }
-  const bar = slots.map((slot, index) => asSkillSlot(slot, `${field}[${index}]`));
-  return bar as unknown as SkillBar;
+  return skillBarOf((slot) => asSkillSlot(slots[slot], `${field}[${slot}]`));
 };
 
 const asAttributeRanks = (value: unknown, field: string): AttributeRanks => {
@@ -233,8 +233,8 @@ function parseTeam(value: unknown, field: string, known: ReadonlySet<string>): T
   if (slots.length !== PARTY_SIZE) {
     return fail(`${field}.slots`, `must hold ${PARTY_SIZE} party positions`);
   }
-  const parsed = slots.map((slot, index) =>
-    parseSlot(slot, `${field}.slots[${index}]`, known),
+  const parsed = teamSlotsOf((position) =>
+    parseSlot(slots[position], `${field}.slots[${position}]`, known),
   );
   return {
     id: teamId(asId(raw.id, `${field}.id`)),
@@ -246,7 +246,7 @@ function parseTeam(value: unknown, field: string, known: ReadonlySet<string>): T
     favourite: asBoolean(raw.favourite, `${field}.favourite`),
     lastUsed: asTimestamp(raw.lastUsed, `${field}.lastUsed`),
     notes: asString(raw.notes, `${field}.notes`),
-    slots: parsed as unknown as TeamSlots,
+    slots: parsed,
   };
 }
 

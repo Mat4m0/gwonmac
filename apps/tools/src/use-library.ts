@@ -2,7 +2,9 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import {
   LIBRARY_VERSION,
   buildId as canonicalBuildId,
-  type TeamSlot,
+  mapTeamSlots,
+  skillBarOf,
+  teamSlotsOf,
 } from "../../../src/shared/builds/library";
 import {
   decodeSkillTemplate,
@@ -41,13 +43,13 @@ function id(prefix: string): string {
 }
 
 function emptyTeamSlots(): Team["slots"] {
-  return Array.from({ length: 8 }, (_, index): TeamSlot => ({
+  return teamSlotsOf((position) => ({
     build: null,
     hero: null,
-    behaviour: index === 0 ? null : "guard",
+    behaviour: position === 0 ? null : "guard",
     panel: false,
     disabled: [],
-  })) as unknown as Team["slots"];
+  }));
 }
 
 /**
@@ -276,11 +278,11 @@ export function useLibrary(host: ToolsHost) {
             rebindTeamIds.includes(team.id)
               ? {
                   ...team,
-                  slots: team.slots.map((slot) =>
+                  slots: mapTeamSlots(team.slots, (slot) =>
                     slot.build === sourceId
                       ? { ...slot, build: buildId(nextId) }
                       : slot,
-                  ) as unknown as Team["slots"],
+                  ),
                 }
               : team,
           ),
@@ -304,9 +306,9 @@ export function useLibrary(host: ToolsHost) {
           rebindTeamIds.includes(team.id)
             ? {
                 ...team,
-                slots: team.slots.map((slot) =>
+                slots: mapTeamSlots(team.slots, (slot) =>
                   slot.build === sourceId ? { ...slot, build: buildId(nextId) } : slot,
-                ) as unknown as Team["slots"],
+                ),
               }
             : team,
         ),
@@ -348,9 +350,9 @@ export function useLibrary(host: ToolsHost) {
         builds: updated.builds.filter((build) => build.id !== child.id),
         teams: updated.teams.map((team) => ({
           ...team,
-          slots: team.slots.map((slot) =>
+          slots: mapTeamSlots(team.slots, (slot) =>
             slot.build === child.id ? { ...slot, build: parent.id } : slot,
-          ) as unknown as Team["slots"],
+          ),
         })),
       };
     });
@@ -453,7 +455,7 @@ export function useLibrary(host: ToolsHost) {
         id: canonicalBuildId(nextId),
         name,
         professions: ["W", null],
-        skills: Array.from({ length: 8 }, () => null) as unknown as Build["skills"],
+        skills: skillBarOf(() => null),
         attributes: {},
         tags: [],
         notes: "",

@@ -200,6 +200,23 @@ type OnePerSlot<Bar extends readonly unknown[]> = {
  */
 export const SKILL_SLOTS = [0, 1, 2, 3, 4, 5, 6, 7] as const satisfies OnePerSlot<SkillBar>;
 
+/**
+ * A bar built from a per-position function.
+ *
+ * Written out rather than looped because `Array.from({ length: 8 }, ...)` types
+ * as an array, not a tuple, and every construction site was closing that gap
+ * with `as unknown as SkillBar`. A double cast keeps compiling after the thing
+ * it asserts stops being true — it would survive `SkillBar` growing a ninth
+ * slot, at every site, silently. Eight literal calls cannot: the compiler
+ * checks the length here, so no call site has to assert it.
+ */
+export function skillBarOf(fill: (slot: SkillSlotIndex) => SkillSlot): SkillBar {
+  return [
+    fill(0), fill(1), fill(2), fill(3),
+    fill(4), fill(5), fill(6), fill(7),
+  ];
+}
+
 export interface Build {
   readonly id: BuildId;
   readonly name: string;
@@ -265,6 +282,47 @@ export type TeamSlots = readonly [
  * up until one of them changed.
  */
 export const PARTY_SIZE: TeamSlots["length"] = 8;
+
+/**
+ * The eight party positions as a type, the counterpart of `SkillSlotIndex`.
+ * Separate from it for the reason `PARTY_SIZE` is separate from
+ * `SKILL_SLOTS.length`: the two eights are unrelated and must stay free to
+ * change apart. Indexing `TeamSlots` with this reads a `TeamSlot` rather than a
+ * `TeamSlot | undefined`, so walking a party needs no non-null assertion.
+ */
+export type TeamSlotIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/**
+ * A party built from a per-position function. Index 0 is the player.
+ *
+ * The same reasoning as `skillBarOf`, and deliberately a second function rather
+ * than one generic over both: a bar holds eight things and a party holds eight
+ * things, and the two eights are unrelated. One shared helper is how they would
+ * quietly become one number.
+ */
+export function teamSlotsOf(
+  fill: (position: TeamSlotIndex) => TeamSlot,
+): TeamSlots {
+  return [
+    fill(0), fill(1), fill(2), fill(3),
+    fill(4), fill(5), fill(6), fill(7),
+  ];
+}
+
+/**
+ * The party with every position passed through `map`.
+ *
+ * `slots.map(...)` is the obvious spelling and it returns `TeamSlot[]`, losing
+ * the length — which is why rebinding a build id across a library was written
+ * five times as a `.map` followed by a cast back. Going through `teamSlotsOf`
+ * keeps the eight in the type the whole way.
+ */
+export function mapTeamSlots(
+  slots: TeamSlots,
+  map: (slot: TeamSlot, position: TeamSlotIndex) => TeamSlot,
+): TeamSlots {
+  return teamSlotsOf((position) => map(slots[position], position));
+}
 
 export interface Team {
   readonly id: TeamId;

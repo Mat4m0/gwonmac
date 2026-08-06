@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { HEROES_IN_PANEL_ORDER } from "../../../../src/shared/builds/heroes";
 import {
   heroId,
+  mapTeamSlots,
   type SkillSlotIndex,
   type TeamSlot,
 } from "../../../../src/shared/builds/library";
@@ -83,9 +84,9 @@ const updateSlot = (
   props.team.id,
   (team) => ({
     ...team,
-    slots: team.slots.map((slot, slotIndex) =>
+    slots: mapTeamSlots(team.slots, (slot, slotIndex) =>
       slotIndex === index ? { ...slot, ...patch } : slot,
-    ) as unknown as Team["slots"],
+    ),
   }),
   label,
 );

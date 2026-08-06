@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
-import type { TeamSlots } from "../../../src/shared/builds/library";
+import { mapTeamSlots } from "../../../src/shared/builds/library";
 import type { TeamApplyResult } from "../../../src/shared/builds/team-apply";
 import ToolsApp from "./ToolsApp.vue";
 import { createDemoHost, type ToolsHost } from "./host";
@@ -32,7 +32,7 @@ function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
             ? {
                 ...team,
                 mode: "normal" as const,
-                slots: team.slots.map((slot, slotIndex) => slotIndex === 0
+                slots: mapTeamSlots(team.slots, (slot, slotIndex) => slotIndex === 0
                   ? slot
                   : {
                       ...slot,
@@ -41,7 +41,7 @@ function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
                       behaviour: null,
                       panel: false,
                       disabled: [],
-                    }) as unknown as TeamSlots,
+                    }),
               }
             : team),
         },

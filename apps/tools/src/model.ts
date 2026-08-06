@@ -1,6 +1,7 @@
 import {
   buildId,
   forkParentOf,
+  mapTeamSlots,
   teamId,
   usedBy,
   type Build,
@@ -111,9 +112,9 @@ export function removeBuild(
       ),
     teams: library.teams.map((team) => ({
       ...team,
-      slots: team.slots.map((slot) =>
+      slots: mapTeamSlots(team.slots, (slot) =>
         slot.build === removedId ? { ...slot, build: null } : slot,
-      ) as unknown as Team["slots"],
+      ),
     })),
   };
 }

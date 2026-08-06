@@ -5,11 +5,12 @@ import {
   watch,
   type Ref,
 } from "vue";
-import type {
-  Attribute,
-  AttributeRank,
-  Profession,
-  SkillId,
+import {
+  skillBarOf,
+  type Attribute,
+  type AttributeRank,
+  type Profession,
+  type SkillId,
 } from "../../../src/shared/builds/library";
 import { withAttributeRank } from "../../../src/shared/builds/authoring";
 import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
@@ -106,17 +107,22 @@ export function useBuildDraft(
 
   function setSkill(slot: number, skill: SkillId | null): void {
     if (slot < 0 || slot >= 8) return;
-    const skills = [...draft.value.skills] as unknown as Array<SkillId | null>;
-    skills[slot] = skill;
-    replace({ skills: skills as unknown as Build["skills"] });
+    replace({
+      skills: skillBarOf((position) =>
+        position === slot ? skill : draft.value.skills[position],
+      ),
+    });
   }
 
   function moveSkill(from: number, to: number): void {
     if (from === to || from < 0 || from >= 8 || to < 0 || to >= 8) return;
-    const skills = [...draft.value.skills] as unknown as Array<SkillId | null>;
-    const [moved] = skills.splice(from, 1);
-    skills.splice(to, 0, moved ?? null);
-    replace({ skills: skills as unknown as Build["skills"] });
+    // Reordering changes the length twice, so it happens on a plain array and
+    // comes back through the tuple constructor rather than being asserted into
+    // one. The splices cancel out; `skillBarOf` is what proves it.
+    const reordered = [...draft.value.skills];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved ?? null);
+    replace({ skills: skillBarOf((position) => reordered[position] ?? null) });
     activeSlot.value = to;
   }
 
