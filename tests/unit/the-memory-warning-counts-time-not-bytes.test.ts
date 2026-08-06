@@ -108,7 +108,11 @@ function simulate(options: {
   return { diesAtMinutes, ticks, raised };
 }
 
-/** Every figure the player was shown, and what was true when they saw it. */
+/**
+ * Every tick where a rate could be measured. The figure never reaches the
+ * player — the Eye of the North bundle retired that — but the estimate still
+ * decides the level, so the sessions below check it is measured at all.
+ */
 const claims = (session: Session) =>
   session.ticks.filter((tick) => tick.minutes !== null);
 
@@ -174,36 +178,45 @@ describe("the memory warning counts time, not bytes", () => {
     }
   });
 
-  it("counts down instead of standing still and lurching", () => {
-    // Each step reserves about ten minutes of play at once. Read off the
-    // reserve, the estimate would sit through a whole tread and then drop ten
-    // minutes in one tick; the figure the player watches has to move the way
-    // time does. The five-minute granularity of the wording is the floor.
-    for (const rate of [555, 3_500]) {
-      const shown = claims(simulate({ rate })).map((tick) => tick.minutes!);
-      for (let i = 1; i < shown.length; i += 1) {
-        assert.ok(
-          Math.abs(shown[i]! - shown[i - 1]!) <= 5,
-          `${rate} MiB/h: the figure jumped ${shown[i - 1]} → ${shown[i]}`,
-        );
-      }
+  it("puts the levels of a real crash where they belong", () => {
+    // The Eye of the North session of 2026-08-04, replayed from the player's
+    // own bundle: every `wasm.heapGrew` event of the client run that reached
+    // the cap, against the abort that ended it. The last step is clamped —
+    // 1990 to 2048 MiB rather than the usual 96 — and the client dies forty
+    // seconds later at exactly 2 GiB.
+    //
+    // This is the fixture the simulations could not be: the rate swings about
+    // tenfold between quiet stretches and mission loading, including a
+    // thirteen-minute lull at minute 34. What has to survive that is the
+    // level, because the level is the only thing the player is told.
+    const diedAtMinutes = 66.02;
+    const steps: readonly (readonly [number, number])[] = [
+      [0.12, 531], [0.16, 627], [1.76, 723], [16.06, 820], [22.82, 916],
+      [24.82, 1013], [26.69, 1110], [28.36, 1206], [30.69, 1302],
+      [32.56, 1398], [34.16, 1495], [47.72, 1593], [51.82, 1690],
+      [53.16, 1786], [55.12, 1894], [58.62, 1990], [65.32, 2048],
+    ];
+    const watch = createHeapPressureWatch({ capBytes: CAP });
+    const raised = new Map<HeapPressureLevel, number>();
+    for (let minute = 0; minute <= diedAtMinutes; minute += TICK_MINUTES) {
+      let mib = 0;
+      for (const [at, value] of steps) if (at <= minute) mib = value;
+      const { level } = watch.sample(mib * MIB, minute * 60_000);
+      if (!raised.has(level)) raised.set(level, diedAtMinutes - minute);
     }
-  });
 
-  it("never names a number that is not close to true", () => {
-    // The whole premise. Anywhere a figure is shown, in either session, it has
-    // to be near the time that was really left — a warning nobody can check is
-    // worth as much as the "running low" it replaced.
-    for (const rate of [555, 3_500]) {
-      for (const tick of claims(simulate({ rate }))) {
-        const slack = Math.max(2.5, tick.trulyLeft * 0.35);
-        assert.ok(
-          Math.abs(tick.minutes! - tick.trulyLeft) <= slack,
-          `${rate} MiB/h at ${tick.atMinutes} min: said ${tick.minutes}`
-            + `, truly ${tick.trulyLeft.toFixed(1)}`,
-        );
-      }
-    }
+    const low = raised.get("low");
+    const critical = raised.get("critical");
+    assert.ok(low !== undefined, "the session that hit the cap was never warned");
+    assert.ok(critical !== undefined, "it never escalated");
+
+    // The shipped byte thresholds gave this player 10.9 minutes at 256 MiB and
+    // 7.4 at 128 MiB. Beating the first is the whole reason for the change.
+    assert.ok(low > 20, `low arrived with ${low.toFixed(1)} min left`);
+    assert.ok(
+      critical > 5 && critical < 12,
+      `critical arrived with ${critical.toFixed(1)} min left`,
+    );
   });
 
   it("does not read the cost of starting the game as the cost of playing it", () => {

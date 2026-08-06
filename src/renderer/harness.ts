@@ -463,12 +463,12 @@ function reloadClientSafely() {
 }
 
 /**
- * The estimate the banner carries is frozen when it is shown. A figure ticking
- * down under the player's cursor is noise, and it would reflow the surface
- * while they are reading it; the chip is the live one.
+ * The last thing the estimator concluded. It is a diagnostic — the debug panel
+ * reads it back and the log line records it — and deliberately never reaches
+ * the player: replayed against a real crash bundle the level held up and the
+ * minute figure did not, so `failure-messages.ts` states the condition and no
+ * number. See the memory block there for the session that decided it.
  */
-let heapMinutes: number | null = null;
-/** The last thing the estimator concluded, for the debug panel to read back. */
 let heapReading: import('./heap-pressure.js').HeapPressureReading | null = null;
 
 async function presentHeapNotice(level: 'low' | 'critical') {
@@ -477,7 +477,7 @@ async function presentHeapNotice(level: 'low' | 'critical') {
     || !heapNoticeReload || !heapNoticeLater || !heapNoticeWhy
   ) return;
   const { memoryPressurePresentation } = await import('./failure-messages.js');
-  const copy = memoryPressurePresentation(level, heapMinutes);
+  const copy = memoryPressurePresentation(level);
   heapNoticeLabel.textContent = copy.label;
   heapNoticeDetail.textContent = copy.detail;
   heapNoticeReload.textContent = copy.reloadButton;
@@ -513,7 +513,7 @@ function showHeapChip() {
   if (!heapChip || !heapChipText || heapNoticeLevel === 'none') return;
   void (async () => {
     const { memoryPressureChip } = await import('./failure-messages.js');
-    const chip = memoryPressureChip(heapNoticeLevel as 'low' | 'critical', heapMinutes);
+    const chip = memoryPressureChip(heapNoticeLevel as 'low' | 'critical');
     // Only touch the DOM when the rendered string actually changes: this runs
     // on every tick, over a game drawing at sixty frames a second.
     if (heapChipText.textContent !== chip.text) heapChipText.textContent = chip.text;
@@ -599,7 +599,6 @@ setInterval(() => {
   if (!heapWatch) return;
   const reading = heapWatch.sample(wasmHeapBytes(), performance.now());
   heapReading = reading;
-  heapMinutes = reading.minutes;
   if (reading.level === 'none') return;
   if (reading.level !== heapNoticeLevel) {
     heapNoticeLevel = reading.level;

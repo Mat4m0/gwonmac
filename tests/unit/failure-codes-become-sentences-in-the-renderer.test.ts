@@ -185,8 +185,8 @@ describe("renderer failure messages", () => {
   });
 
   it("escalates the memory watermark words, not its actions", () => {
-    const low = memoryPressurePresentation("low", 20);
-    const critical = memoryPressurePresentation("critical", 5);
+    const low = memoryPressurePresentation("low");
+    const critical = memoryPressurePresentation("critical");
     for (const notice of [low, critical]) {
       for (const text of [
         notice.label,
@@ -222,41 +222,36 @@ describe("renderer failure messages", () => {
     assert.equal(low.dismissButton, critical.dismissButton);
   });
 
-  it("claims a number only when one was measured, and never in the detail", () => {
-    const measured = memoryPressurePresentation("low", 20);
-    assert.match(measured.label, /About 20 minutes/);
-
-    // No rate, no figure. An estimate we did not measure is worse than none,
-    // so the label falls back to the sentence that states only the condition.
-    const blind = memoryPressurePresentation("low", null);
-    assert.doesNotMatch(blind.label, /\d/);
-    assert.match(blind.label, /running low/);
-    assert.doesNotMatch(memoryPressurePresentation("critical", null).label, /\d/);
-
-    // The number is injected, not baked in, and it agrees with itself.
-    assert.match(memoryPressurePresentation("critical", 3).label, /About 3 minutes/);
-    assert.match(memoryPressurePresentation("critical", 1).label, /About 1 minute\b/);
-
-    // The estimate rounds to whole minutes, so the last half-minute reaches
-    // here as a zero. "About 0 minutes" reads as a broken app at the one
-    // moment the sentence has to be believed. Reachable from the chip, which
-    // re-opens the banner against a live figure.
+  it("names no figure the player could check against a clock", () => {
+    // The thresholds count in time; the sentences do not print the time. That
+    // split was decided by the Eye of the North crash bundle of 2026-08-04:
+    // replayed against the client run that reached the cap, the levels landed
+    // where they should — `low` with 31 real minutes left where the shipped
+    // byte rule gave 11 — and the figure read 10 → 15 → 20 → 75 → 40 → 20 →
+    // 15 → 10 → 3, offering "about 75 minutes" to a player with 18 left. A
+    // quiet stretch had drifted into the measurement window just before they
+    // went back into heavy loading, and no rate can see that coming.
+    //
+    // The estimate still exists and still sets the level. It is a diagnostic:
+    // the debug panel shows it and the log records it. A diagnostic on a
+    // banner is a promise, so nothing here may carry one.
     for (const level of ["low", "critical"] as const) {
-      const expiring = memoryPressurePresentation(level, 0);
-      assert.match(expiring.label, /^Under a minute/);
-      assert.doesNotMatch(expiring.label, /\b0\b/);
-    }
-
-    // Never in the detail: the banner's number is frozen when shown, and a
-    // stale figure in a sentence that outlives it would be a lie.
-    for (const minutes of [null, 1, 5, 20] as const) {
-      for (const level of ["low", "critical"] as const) {
-        assert.doesNotMatch(
-          memoryPressurePresentation(level, minutes).detail,
-          /\d/,
-        );
+      const notice = memoryPressurePresentation(level);
+      for (const text of [notice.label, notice.detail, notice.whyLink]) {
+        assert.doesNotMatch(text, /\d/, text);
       }
+      assert.doesNotMatch(memoryPressureChip(level).text, /\d/);
+      assert.doesNotMatch(memoryPressureChip(level).label, /\d/);
     }
+    // Low reads as headroom, critical as imminent — the escalation the figure
+    // used to carry has to live in the words instead.
+    assert.match(memoryPressurePresentation("low").label, /running low/);
+    assert.match(memoryPressurePresentation("critical").label, /almost out of/);
+    assert.notEqual(
+      memoryPressureChip("low").text,
+      memoryPressureChip("critical").text,
+      "the chip says the same thing at both levels",
+    );
   });
 
   it("states the reconnect that was measured, and claims nothing past it", () => {
@@ -269,8 +264,8 @@ describe("renderer failure messages", () => {
     // server. That is answered, so the assertion turns around and guards the
     // opposite failure: a promise wider than the evidence.
     const strings = [
-      memoryPressurePresentation("low", 20),
-      memoryPressurePresentation("critical", 5),
+      memoryPressurePresentation("low"),
+      memoryPressurePresentation("critical"),
     ].flatMap((notice) => [notice.label, notice.detail]);
     const explanation = memoryExplanation();
     strings.push(...explanation.blocks.map((block) => block.body));
@@ -308,12 +303,14 @@ describe("renderer failure messages", () => {
     assert.doesNotMatch(joined, /in contact with|reported to ArenaNet/i);
   });
 
-  it("keeps counting on the chip a dismissal leaves behind", () => {
-    assert.match(memoryPressureChip("critical", 4).text, /4/);
-    assert.ok(memoryPressureChip("critical", 4).label.length > 20);
-    // Below a minute it must not round up to "1 min" and read as reassurance.
-    assert.match(memoryPressureChip("critical", 0).text, /Under a minute/);
-    // And with no measurement it states the condition rather than a figure.
-    assert.doesNotMatch(memoryPressureChip("low", null).text, /\d/);
+  it("leaves something behind when a warning is dismissed", () => {
+    // `Later` used to mean silence until the crash. The chip is what stops
+    // that, and its accessible name has to say what it will do when clicked.
+    for (const level of ["low", "critical"] as const) {
+      const chip = memoryPressureChip(level);
+      assert.ok(chip.text.length > 0 && chip.text.length < 24, chip.text);
+      assert.match(chip.label, /memory/i);
+      assert.match(chip.label, /again/);
+    }
   });
 });

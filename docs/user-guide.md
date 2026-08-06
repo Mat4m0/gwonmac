@@ -279,11 +279,17 @@ it loads, so a long session eventually fills it and the client stops. Neither
 the limit nor the memory use is something this app can change; what it can do
 is watch, and warn before it happens.
 
-A notice appears over the game naming roughly how long is left — about twenty
-minutes, then about five. The estimate comes from how fast memory has been
-filling in this session, so it shortens on its own in areas that load a lot of
-new scenery; when there has not yet been enough to measure, the notice says
-memory is running low without claiming a figure.
+A notice appears over the game at two points: once with roughly twenty minutes
+of play left, and again with about five. Those points are worked out from how
+fast memory has been filling in this session, so in areas that load a lot of
+new scenery the warning comes sooner in wall-clock terms, which is the whole
+idea — the same notice used to mean half an hour in the open world and two
+minutes inside a mission.
+
+The notice does not print a countdown. It could be worked out, but replayed
+against a real crash it was wrong by enough to matter in both directions, and
+a number on a banner is a promise. What is worth acting on is that the warning
+appeared.
 
 **Reload Now** restarts the client with fresh memory. It takes under a minute,
 and Guild Wars puts you back where you were — the same way it handles a

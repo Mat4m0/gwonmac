@@ -214,11 +214,25 @@ export interface MemoryExplanation {
  * to be standing. These sentences exist so the player spends that death at a
  * moment of their choosing.
  *
- * They lead with a deadline because the old wording led with a condition —
- * "running low" meant half an hour in the open world and about two minutes in
- * a mission, and a player could not tell which. `minutes` is null when no
- * growth rate could be measured, and then the label states no number at all: a
- * figure we did not measure is worse than none.
+ * They state a condition and not a deadline, which is where they ended up
+ * rather than where they started. "Running low" meant half an hour in the open
+ * world and about two minutes in a mission, and a player could not tell which —
+ * so the *thresholds* count in time now, and that is the fix. It is only the
+ * printed figure that is gone, and a real crash bundle is why.
+ *
+ * Replayed against the Eye of the North session of 2026-08-04 — the player's
+ * own `wasm.heapGrew` staircase, ending at exactly 2 GiB — the levels arrived
+ * where they should: `low` with 31 minutes of real play left against the
+ * shipped rule's 11, `critical` with 7. The figure did not. It read
+ * 10 → 15 → 20 → 75 → 40 → 20 → 15 → 10 → 3, and at one point offered "about
+ * 75 minutes" to a player with 18 left, because a quiet stretch sat in the
+ * measurement window just before they went back into heavy loading.
+ *
+ * No rate can see a player about to zone into a dungeon. The estimate still
+ * exists — the thresholds are computed from it, the debug panel shows it and
+ * the log records it — but it is a diagnostic, and a diagnostic printed on a
+ * banner is a promise. The level is the part that survived contact with a
+ * real session, so the level is the part the player is told.
  *
  * They state the reconnect rather than hedging it, which they did not always.
  * The uncertainty was never whether Guild Wars gives a player their instance
@@ -241,27 +255,12 @@ const MEMORY_REJOIN =
 
 export function memoryPressurePresentation(
   level: 'low' | 'critical',
-  minutes: number | null = null,
 ): MemoryPressurePresentation {
   const critical = level === 'critical';
-  const unit = minutes === 1 ? 'minute' : 'minutes';
-  let label: string;
-  if (minutes === null) {
-    label = critical
-      ? 'Guild Wars is almost out of memory.'
-      : 'Guild Wars is running low on memory.';
-  } else if (minutes < 1) {
-    // The estimate rounds to whole minutes, so the last half-minute would
-    // otherwise read "About 0 minutes" — a sentence that sounds like a bug at
-    // the one moment the player has to believe it.
-    label = 'Under a minute before Guild Wars runs out of memory.';
-  } else {
-    label = critical
-      ? `About ${minutes} ${unit} before Guild Wars runs out of memory.`
-      : `About ${minutes} ${unit} of play left before a crash.`;
-  }
   return {
-    label,
+    label: critical
+      ? 'Guild Wars is almost out of memory.'
+      : 'Guild Wars is running low on memory.',
     detail: critical
       ? `Reload soon — ${MEMORY_REJOIN}`
       : `Reload when it suits you — ${MEMORY_REJOIN}`,
@@ -272,31 +271,25 @@ export function memoryPressurePresentation(
 }
 
 /**
- * What `Later` leaves behind. The banner's number is frozen when it is shown,
- * so this is the one live surface — it is also what stops a dismissal meaning
- * silence until the crash, which is what the shipped build did.
+ * What `Later` leaves behind: the thing that stops a dismissal meaning silence
+ * until the crash, which is what the shipped build did. It carried a live
+ * countdown until the Eye of the North bundle showed that countdown reading
+ * "75 min" to a player with eighteen minutes left — a figure that moves is
+ * only worth more than a word if it moves the right way.
  */
 export function memoryPressureChip(
   level: 'low' | 'critical',
-  minutes: number | null,
 ): MemoryPressureChip {
-  if (minutes === null) {
-    return {
-      text: 'Low memory',
-      label: 'Guild Wars is low on memory. Open the memory warning again.',
-    };
-  }
-  if (minutes < 1) {
-    return {
-      text: 'Under a minute',
-      label: 'Under a minute before Guild Wars runs out of memory.',
-    };
-  }
-  const unit = minutes === 1 ? 'minute' : 'minutes';
-  return {
-    text: `${minutes} min`,
-    label: `About ${minutes} ${unit} before Guild Wars runs out of memory.`,
-  };
+  return level === 'critical'
+    ? {
+        text: 'Memory almost full',
+        label:
+          'Guild Wars is almost out of memory. Open the memory warning again.',
+      }
+    : {
+        text: 'Low memory',
+        label: 'Guild Wars is low on memory. Open the memory warning again.',
+      };
 }
 
 /**

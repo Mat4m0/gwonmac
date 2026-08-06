@@ -266,3 +266,55 @@ not enough to promise it cannot go wrong.
 answered a question that hours of ordinary play would not have, because
 ordinary play never produces (c1) on purpose — and (c1) is the one that
 mattered.
+
+## Round 7 — wrong: the figure was a diagnostic, printed as a promise (2026-08-05)
+
+**The bundle.** A player's Eye of the North session, 2026-08-04, app 2026.8.4,
+complete from start. Two client runs, two aborts, and 33 `wasm.heapGrew`
+events — the first real staircase we have had rather than a modelled one.
+
+**What it confirmed.**
+
+- The final growth step is clamped to the cap: 1990 → 2048 MiB, 58 MiB rather
+  than the usual 96. The client then died at exactly `2147483648` bytes,
+  `reasonKind: assertion`, fingerprint `8f57c5d5`, **forty-two seconds** after
+  that last step. The reserve does reach the cap exactly, which is what the
+  headroom model assumes.
+- The tread is 96 MiB and the gaps run from 0.9 to 14.3 minutes, which is the
+  shape Round 5 was built for.
+
+**What it broke.** Replayed against that run, the *levels* landed well:
+
+| | this build | shipped 2026.8.4 |
+| --- | --- | --- |
+| `low` | 31.5 min of real play left | 10.9 min |
+| `critical` | 7.0 min | 7.4 min |
+
+The *figure* did not. It read 10 → 15 → 20 → **75** → 40 → 20 → 15 → 10 → 3,
+and at minute 49 offered "about 75 minutes" to a player with 18 left. A
+thirteen-minute lull had drifted into the measurement window just before the
+player went back into heavy loading. Earlier, at minute 34, it said "10
+minutes" with 31 left — wrong the other way, behind a rate that looked stable.
+
+**Why the tests did not catch it.** They drove constant rates. Round 5's
+lesson was that a test driving a shape the system never produces will confirm
+whatever the code believes; the fix for that round replaced ramps with
+staircases and then held the rate constant along them. Real play varies about
+tenfold between lulls and mission loading. The same lesson, one level down.
+
+**Built.** The thresholds still count in time — that is what tripled the
+warning and it is not in question. The figure is gone from every player-facing
+string. The estimate still exists, still sets the level, and is still shown in
+the debug panel and the log, where being approximately right is useful and
+being precisely wrong costs nothing. The client run that reached the cap is
+now a test fixture, replayed step by step against the abort that ended it.
+
+**Also observed, unexplained.** The session's *first* abort came at 1899 MiB —
+149 MiB of headroom left — with `reasonKind: other` and fingerprint
+`a6311932`, the same fingerprint as both crashes in the 2026-08-03 bundle. Our
+model cannot predict a death below the cap. Two observed deaths, one at the
+cap and one short of it, is not enough to say what that is.
+
+**Lesson.** An estimate can be good enough to decide something and not good
+enough to say out loud. The level is a decision the app makes and can defend;
+the figure was a claim the player would check against their own clock.
