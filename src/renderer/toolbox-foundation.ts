@@ -49,20 +49,6 @@ const OVERLAY_CSS = `
   border-radius: 3px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
 }
-/* The game's cursor is the cursor, everywhere the overlay draws.
- *
- * The mirror above puts the published Guild Wars cursor on the overlay root,
- * and inheritance is what carries it down. A tool mounted inside brings its own
- * affordance cursors -- pointer on a clickable row, grab on a drag handle --
- * which are right in the standalone workbench and wrong here: over the game
- * they read as a second, competing pointer, and the mouse crossing between
- * chrome and game flickers between the two.
- *
- * Text entry keeps its I-beam. That one is not decoration: it is the only
- * cursor here that tells the truth about what the mouse will do. */
-#toolbox-foundation *:not(input):not(textarea):not([contenteditable]) {
-  cursor: inherit;
-}
 #toolbox-foundation button {
   pointer-events: auto;
   padding: 4px 10px;
@@ -71,6 +57,7 @@ const OVERLAY_CSS = `
   background: #1d1c19;
   color: inherit;
   font: inherit;
+  cursor: inherit;
   transition: background-color 80ms linear, border-color 80ms linear;
 }
 #toolbox-foundation button:hover {

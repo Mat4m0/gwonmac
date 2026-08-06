@@ -99,39 +99,10 @@ function applyTeam(): Promise<TeamApplyResult> {
 }
 
 /**
- * The stylesheets the panel needs, loaded with it rather than with the page.
- *
- * They used to be linked from index.html, which meant every launch parsed
- * 1,300 lines of design system whether or not Tools was ever opened -- and put
- * them in the document of a player who had not asked for the panel at all. The
- * bundle's own CSS is emitted by vite in library mode, which does not inject
- * it, so it is listed here beside the two it depends on.
- */
-const STYLESHEETS = [
-  "ui/tokens.css",
-  "ui/components.css",
-  "tools/tools-app.css",
-];
-
-let stylesheetsLinked = false;
-
-function linkStylesheets(document: Document): void {
-  if (stylesheetsLinked) return;
-  stylesheetsLinked = true;
-  for (const href of STYLESHEETS) {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    document.head.append(link);
-  }
-}
-
-/**
  * Mounts the bundle into the overlay's content region. Called on the overlay's
  * first open, so a player who never opens Tools never loads it.
  */
 export function mountToolsInto(content: HTMLElement): void {
-  linkStylesheets(content.ownerDocument);
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
   // not try to resolve a file that only exists after the build step.

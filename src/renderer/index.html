@@ -3,8 +3,18 @@
 <title>Guild Wars Reforged</title>
 <!-- Packaged at the protocol root; the link tag avoids a speculative 404. -->
 <link rel="icon" href="favicon.png" type="image/png" sizes="48x48">
+<!-- The design system, before anything that consumes it. `ui/tokens.css` is the
+     only file that decides a colour; `ui/components.css` is the only file that
+     decides what a control looks like. Both are copied out of src/shared by
+     scripts/copy-renderer.mjs, because the Tools application reads them too. -->
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="ui/components.css">
 <link rel="stylesheet" href="harness.css">
 <link rel="stylesheet" href="loading.css">
+<!-- The Tools application's own layout. Its bundle is imported on demand when
+     the overlay first opens, but lib-mode CSS is not injected by that import,
+     so the sheet is linked here. -->
+<link rel="stylesheet" href="tools/tools-app.css">
 
 <!-- tabindex=0 + autofocus match the shipped page; tabindex=-1 is focusable but
      not keyboard-focusable, and key events never reached the module. -->
