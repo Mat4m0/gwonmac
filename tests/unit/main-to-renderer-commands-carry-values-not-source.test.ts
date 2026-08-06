@@ -87,8 +87,15 @@ function harness(argv: string[]) {
   const flushed = new Promise<void>((resolve) => {
     releaseFlush = resolve;
   });
+  // The Toolbox overlay, present or not. `tools.toggle` is refused when it is
+  // absent, which is the ordinary case on a launch without the capability.
+  let toolbox: object | null = null;
   const window = {
     gwNative: api,
+    document: {
+      getElementById: (id: string) =>
+        id === "toolbox-foundation" ? toolbox : null,
+    },
     gwDiagnostics: {
       resetForCapture: () => Promise.resolve(),
       captureStarted(level: unknown) {
@@ -137,6 +144,9 @@ function harness(argv: string[]) {
     acknowledgements,
     releaseFlush,
     window,
+    installToolbox: () => {
+      toolbox = {};
+    },
   };
 }
 
@@ -190,6 +200,7 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
   fixture.deliver(1, { type: "input.reset" });
   fixture.deliver(2, { type: "settings.open" });
   fixture.deliver(3, { type: "diagnostics.toggle" });
+  fixture.installToolbox();
   fixture.deliver(4, { type: "tools.toggle" });
   await new Promise(setImmediate);
   assert.deepEqual(fixture.dispatched, [
@@ -204,6 +215,17 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [3, "completed"],
     [4, "completed"],
   ]);
+});
+
+test("the Tools shortcut is refused when there is no Toolbox to toggle", async () => {
+  // The capability is off on an ordinary launch, and an event nobody listens
+  // for is indistinguishable from one that worked. The command has to fail so
+  // the menu can say so rather than appear to have done something.
+  const fixture = harness(ARGV);
+  fixture.deliver(1, { type: "tools.toggle" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.dispatched, []);
+  assert.deepEqual(fixture.acknowledgements(), [[1, "failed"]]);
 });
 
 test("a capture level crosses as a number, not as interpolated source", async () => {

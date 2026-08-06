@@ -369,6 +369,16 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     level: "info",
     fields: { width: finiteNumber, height: finiteNumber },
   },
+  /**
+   * The Tools shortcut reached a launch that has no Toolbox to toggle. Ordinary
+   * on a launch that did not ask for the capability, and the only trace a
+   * player would otherwise get of a menu item that did nothing.
+   */
+  "tools.toggleRefused": {
+    subsystem: "app",
+    level: "warn",
+    fields: { outcome: incompleteCommandOutcome },
+  },
   "window.stateResetFailed": {
     subsystem: "app",
     level: "error",

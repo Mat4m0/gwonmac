@@ -47,6 +47,14 @@
         dispatch('gw:input-reset');
         break;
       case 'tools.toggle':
+        // Nothing listens unless the Toolbox capability installed, and an
+        // event with no listener is indistinguishable from one that worked.
+        // A player who pressed the shortcut is owed the difference.
+        if (window.document.getElementById('toolbox-foundation') === null) {
+          throw new Error(
+            'Tools is not available in this launch: the Toolbox capability is not installed.',
+          );
+        }
         dispatch('gw:tools-toggle');
         break;
       case 'settings.open':

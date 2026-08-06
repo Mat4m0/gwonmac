@@ -109,7 +109,16 @@ export function installApplicationMenu({
           accelerator: "CmdOrCtrl+B",
           click: async () => {
             await resetGameInput(win);
-            await sendRendererCommand(win, { type: "tools.toggle" });
+            const outcome = await sendRendererCommand(win, {
+              type: "tools.toggle",
+            });
+            // A menu item a player chose and that did nothing owes them a
+            // reason. The renderer refuses this command outright when the
+            // Toolbox capability is not installed, which is the ordinary case
+            // on a launch that did not ask for it.
+            if (outcome !== "completed") {
+              logEvent({ k: "tools.toggleRefused", outcome });
+            }
           },
         },
         {
