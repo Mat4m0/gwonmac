@@ -84,6 +84,15 @@ Rebase PR #109 onto current `main` and reduce it to its engine.
 - **Drop**: `src/renderer/template-pane.ts` and its Settings-pane DOM. The panel
   replaces that surface in A5.
 
+> **Not done, and not to be done on the strength of the line above.** A5 has
+> landed and the Settings pane is still live from `settings.ts`, because the
+> panel replaced only part of it. The pane still owns the three things the
+> panel has no route to: export to disk (`gw:templates:export`), bulk import
+> from a folder of files, and rescuing templates stranded in a subfolder the
+> client's scan will not descend into. Deleting it now removes working
+> features and is a regression, not a simplification. This paragraph exists
+> because the acceptance line below already read as permission once.
+
 Three client behaviours discovered live must survive the reduction, because no
 fake `FS` can rediscover them: the client caches its template scan and shows
 nothing until *Refresh List*; the scan never descends into a subfolder; and
@@ -91,7 +100,8 @@ nothing until *Refresh List*; the scan never descends into a subfolder; and
 absolutely.
 
 Acceptance: `pnpm check` passes; the import-escape and template-format suites
-pass unchanged; no Settings pane ships.
+pass unchanged; the Settings pane ships until the panel covers export, folder
+import and rescue — see the note above.
 
 ### A2 — the builds domain and the workspace
 
@@ -164,7 +174,15 @@ Replace the overlay's three placeholder rows with the Vue app.
 
 Acceptance: the panel opens on the chord over a running client; every click
 outside its chrome still reaches the game; `tests/electron/input-toolbox.spec.ts`
-passes unchanged; teardown leaves no listener and no held input.
+passes; teardown leaves no listener and no held input.
+
+What landed, against the wording above: the spec did **not** pass unchanged. It
+could not — deleting the placeholder panel deleted the surface it drove, so it
+was rewritten around a stub tool behind the `mountTool` seam. That is legitimate,
+but it means the stage's own proof was rewritten by the change it was meant to
+check, and it then went unrun: `pnpm test:electron` is in `pnpm test` and
+`pnpm verify` but not in `pnpm check`, so a green `check` said nothing about it.
+Run `pnpm test:electron` for any change to the overlay.
 
 ### A6 — the skill catalogue
 
@@ -393,7 +411,7 @@ a deletion, not a migration:
 | `src/renderer/build-projection.ts`, `src/renderer/tools-host.ts` | An older, weaker template writer. A1's `template-store.ts` is the proven one. |
 | The `teamManagement` entry in `ENHANCEMENTS` | The `toolbox` capability already gates this panel. Two flags for one thing. |
 | `apps/tools` demo `applyTeam` stub | It returns `completedChanges: 0` after a timer. Until B4 the control is disabled, not faked. |
-| `template-pane.ts` from PR #109 | Its surface becomes the panel in A5. |
+| ~~`template-pane.ts` from PR #109~~ | **Not a duplicate after all.** The panel took its import-a-code surface and none of its export, folder-import or rescue. Two surfaces that do different things are not a second source of truth; deleting this one deletes features. Revisit when the panel can export. |
 
 ## Verification
 
