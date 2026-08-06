@@ -198,11 +198,12 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
       // Distinct values rather than zeros: the config ABI is positional, so a
       // fixture padded with zeros would let a mis-ordered field pass.
-      heroPrimary: 40, heroSecondary: 41, heroLevel: 42,
+      heroLevel: 42,
       partyPlayers: 43, partyHenchmen: 44, partyFlag: 45,
       worldContext: 46, worldHeroFlags: 47, heroFlagStride: 48,
       flagHeroId: 49, flagAgentId: 50, flagBehavior: 51,
       worldHeroInfo: 52, heroInfoStride: 53, infoHeroId: 54,
+      infoAgentId: 40, infoLevel: 41,
       infoPrimary: 55, infoSecondary: 56, infoAppearanceBitmap: 57,
       worldSkillbars: 58, skillbarStride: 59, skillbarAgentId: 60,
       skillbarSkills: 61, skillSlotStride: 62, skillSlotId: 63,

@@ -73,8 +73,6 @@ export interface EnhancementLayout {
   heroAgentId: number;
   heroOwnerPlayerId: number;
   heroId: number;
-  heroPrimary: number;
-  heroSecondary: number;
   heroLevel: number;
   partyPlayers: number;
   partyHenchmen: number;
@@ -88,6 +86,8 @@ export interface EnhancementLayout {
   worldHeroInfo: number;
   heroInfoStride: number;
   infoHeroId: number;
+  infoAgentId: number;
+  infoLevel: number;
   infoPrimary: number;
   infoSecondary: number;
   infoAppearanceBitmap: number;
@@ -166,17 +166,17 @@ export const ENHANCEMENT_PARTY_LAYOUT_FIELDS = [
 /**
  * Everything the full party projection needs beyond the first owned hero.
  *
- * A separate group because it is a separate certification: the seven fields
- * above were measured against a live game, and none of these have been. They
- * are appended rather than interleaved so the words the kernel already decodes
- * keep their positions — the config ABI is positional, and a field inserted
- * mid-list changes what every later word means.
+ * A separate group because it was a separate certification round. Appended
+ * rather than interleaved so the words the kernel already decodes keep their
+ * positions — the config ABI is positional, and a field inserted mid-list
+ * changes what every later word means.
  *
- * Zero until certified, which the kernel reads as "do not walk this".
+ * Professions are absent by measurement, not oversight: `HeroPartyMember`
+ * carries zero at the two offsets the reference names, for a Warrior, so they
+ * are read from `HeroInfo` instead. A field whose value the client does not
+ * populate is worse than a missing one — it reads as Profession::None.
  */
 export const ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS = [
-  "heroPrimary",
-  "heroSecondary",
   "heroLevel",
   "partyPlayers",
   "partyHenchmen",
@@ -190,6 +190,8 @@ export const ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS = [
   "worldHeroInfo",
   "heroInfoStride",
   "infoHeroId",
+  "infoAgentId",
+  "infoLevel",
   "infoPrimary",
   "infoSecondary",
   "infoAppearanceBitmap",
@@ -378,39 +380,42 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       heroAgentId: 0x00,
       heroOwnerPlayerId: 0x04,
       heroId: 0x08,
-      // Not yet certified. Candidates and their provenance are tabulated in
-      // plans/tools/hero-builds/evidence/party-memory-layout.md; the eight
-      // offsets above were measured live and all eight agree with the same
-      // source, and #8812 corroborates the WorldContext array starts from the
-      // module bytes. None of that is live evidence for *these*, and the rule
-      // in primitives.md §4 step 3 is that only live evidence promotes a value.
-      // Zero reads as "do not walk this", so the kernel publishes no detail
-      // until each one is measured.
-      heroPrimary: 0,
-      heroSecondary: 0,
-      heroLevel: 0,
-      partyPlayers: 0,
-      partyHenchmen: 0,
-      partyFlag: 0,
-      worldContext: 0,
-      worldHeroFlags: 0,
-      heroFlagStride: 0,
-      flagHeroId: 0,
-      flagAgentId: 0,
-      flagBehavior: 0,
-      worldHeroInfo: 0,
-      heroInfoStride: 0,
-      infoHeroId: 0,
-      infoPrimary: 0,
-      infoSecondary: 0,
-      infoAppearanceBitmap: 0,
-      worldSkillbars: 0,
-      skillbarStride: 0,
-      skillbarAgentId: 0,
-      skillbarSkills: 0,
-      skillSlotStride: 0,
-      skillSlotId: 0,
-      skillbarDisabled: 0,
+      // Certified live against this build in an outpost, by cross-match
+      // against the eight offsets above rather than by plausibility. See
+      // plans/tools/hero-builds/evidence/party-memory-layout.md.
+      heroLevel: 0x14,
+      partyPlayers: 0x04,
+      partyHenchmen: 0x14,
+      partyFlag: 0x14,
+      worldContext: 0x2c,
+      // Its hero ids *and* agent ids matched the party array exactly.
+      worldHeroFlags: 0x584,
+      heroFlagStride: 0x24,
+      flagHeroId: 0x00,
+      flagAgentId: 0x04,
+      flagBehavior: 0x0c,
+      // The account's unlock table, not the party: its row count held at two
+      // across kicking both heroes and re-adding one. `infoAgentId` is zero
+      // while a hero is unlocked but out of the party and the live agent id
+      // while it is in, so one array answers ownership and membership both.
+      worldHeroInfo: 0x594,
+      heroInfoStride: 0x9c,
+      infoHeroId: 0x00,
+      infoAgentId: 0x04,
+      infoLevel: 0x08,
+      infoPrimary: 0x0c,
+      infoSecondary: 0x10,
+      // Zero for every non-mercenary observed, as the reference describes. The
+      // mercenary rule itself is untestable on an account that owns none, so
+      // the kernel publishes mercenaries as *unknown* rather than guessing.
+      infoAppearanceBitmap: 0x48,
+      worldSkillbars: 0x6f0,
+      skillbarStride: 0xbc,
+      skillbarAgentId: 0x00,
+      skillbarSkills: 0x04,
+      skillSlotStride: 0x14,
+      skillSlotId: 0x0c,
+      skillbarDisabled: 0xa4,
     }),
   }),
 ]);

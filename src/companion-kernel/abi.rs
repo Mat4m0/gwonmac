@@ -52,6 +52,30 @@ pub(crate) const PANEL_HIDDEN: u32 = 1;
 pub(crate) const PANEL_SHOWN: u32 = 2;
 pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
+pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;
+pub(crate) const PARTY_MAGIC: u32 = 0x5054_5747;
+pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 1;
+
+/// The walk completed on a live game. Same meaning, and the same reason, as
+/// `FLAG_PARTY_OBSERVED` on the toolbox region: an empty roster and an unread
+/// one are otherwise identical bytes.
+pub(crate) const FLAG_ROSTER_OBSERVED: u32 = 1 << 0;
+/// The account's hero table was read, so `unlocked_*` and `unlock_known_*`
+/// mean something. Without it both pairs are zero and claim nothing.
+pub(crate) const FLAG_UNLOCK_OBSERVED: u32 = 1 << 1;
+
+/// This slot holds a hero. An unoccupied slot publishes nothing else.
+pub(crate) const SLOT_OCCUPIED: u32 = 1 << 0;
+/// Professions and level were read from the party member.
+pub(crate) const SLOT_PROFESSIONS: u32 = 1 << 1;
+/// Behaviour was read from the hero-flag array.
+pub(crate) const SLOT_BEHAVIOUR: u32 = 1 << 2;
+/// The eight skill ids and the disabled mask were read from a valid skillbar.
+pub(crate) const SLOT_SKILLS: u32 = 1 << 3;
+
+pub(crate) const PARTY_SLOTS: usize = 8;
+pub(crate) const SKILL_SLOTS: usize = 8;
+
 pub(crate) const CURSOR_BYTES: u32 = size_of::<CursorSnapshot>() as u32;
 pub(crate) const CURSOR_MAGIC: u32 = 0x4354_5747;
 pub(crate) const CURSOR_ABI_AND_SIZE: u32 = (CURSOR_BYTES << 16) | 1;
@@ -106,10 +130,10 @@ pub(crate) struct Layout {
     pub(crate) hero_agent_id: u32,
     pub(crate) hero_owner_player_id: u32,
     pub(crate) hero_id: u32,
-    // Further fields of the `HeroPartyMember` the walk above already indexes,
-    // so they cost no new pointer chain.
-    pub(crate) hero_primary: u32,
-    pub(crate) hero_secondary: u32,
+    // A further field of the `HeroPartyMember` the walk above already indexes,
+    // so it costs no new pointer chain. Professions are deliberately absent:
+    // the client leaves them zero in this struct even for a Warrior, and they
+    // are read from `HeroInfo` instead.
     pub(crate) hero_level: u32,
     // The rest of the party, and the difficulty flag beside it.
     pub(crate) party_players: u32,
@@ -126,6 +150,11 @@ pub(crate) struct Layout {
     pub(crate) world_hero_info: u32,
     pub(crate) hero_info_stride: u32,
     pub(crate) info_hero_id: u32,
+    /// Zero while the hero is unlocked but not in the party, and the live agent
+    /// id while it is. One array therefore answers both "what does this account
+    /// own" and "who is in the party right now".
+    pub(crate) info_agent_id: u32,
+    pub(crate) info_level: u32,
     pub(crate) info_primary: u32,
     pub(crate) info_secondary: u32,
     pub(crate) info_appearance_bitmap: u32,
@@ -180,8 +209,6 @@ impl Layout {
         hero_agent_id: 0,
         hero_owner_player_id: 0,
         hero_id: 0,
-        hero_primary: 0,
-        hero_secondary: 0,
         hero_level: 0,
         party_players: 0,
         party_henchmen: 0,
@@ -195,6 +222,8 @@ impl Layout {
         world_hero_info: 0,
         hero_info_stride: 0,
         info_hero_id: 0,
+        info_agent_id: 0,
+        info_level: 0,
         info_primary: 0,
         info_secondary: 0,
         info_appearance_bitmap: 0,
@@ -264,7 +293,54 @@ pub(crate) struct ToolboxSnapshot {
     pub(crate) reserved: [u32; 6],
 }
 
+/// One party position, as much of it as has been read.
+///
+/// Every field is paired with a bit in `flags` that says whether it was read.
+/// A zero `level` and an unread `level` are the same word otherwise, and a bar
+/// of eight zeroes is a real skillbar shape — so absence has to be stated
+/// rather than inferred from the value, exactly as it is for the roster.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct PartySlot {
+    pub(crate) hero_id: u32,
+    pub(crate) agent_id: u32,
+    /// `primary | secondary << 8`. Both are 0-10, so they share a word rather
+    /// than costing two.
+    pub(crate) professions: u32,
+    pub(crate) level: u32,
+    pub(crate) behaviour: u32,
+    pub(crate) flags: u32,
+    /// The client's disabled mask, `& 0xFF`, widened to the region's word.
+    pub(crate) disabled: u32,
+    pub(crate) skills: [u32; SKILL_SLOTS],
+}
+
+#[repr(C)]
+pub(crate) struct PartySnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    /// Bumps on any change to the roster, so a reader can tell "same party,
+    /// republished" from "different party" without comparing eight slots.
+    pub(crate) generation: u32,
+    pub(crate) slot_count: u32,
+    /// Hero ids 0..31 and 32..63. Every hero id fits in six bits, so the whole
+    /// account's unlock state is two words rather than thirty-nine records.
+    pub(crate) unlocked_low: u32,
+    pub(crate) unlocked_high: u32,
+    /// Which bits of `unlocked_*` were actually decided. A mercenary whose
+    /// rule needs the current character's name is *unknown*, not locked, and
+    /// the two must not arrive as the same zero bit.
+    pub(crate) unlock_known_low: u32,
+    pub(crate) unlock_known_high: u32,
+    pub(crate) reserved: [u32; 6],
+    pub(crate) slots: [PartySlot; PARTY_SLOTS],
+}
+
 const _: [(); 296] = [(); size_of::<Layout>()];
+const _: [(); 60] = [(); size_of::<PartySlot>()];
+const _: [(); 544] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
