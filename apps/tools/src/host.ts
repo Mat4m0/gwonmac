@@ -29,6 +29,12 @@ export type PublishedTemplate = Readonly<{
 export type LibraryLoad = Readonly<{
   library: BuildLibrary;
   recovered: boolean;
+  /**
+   * Why the skill catalogue is missing, when it is. The library still opens —
+   * saved builds stay readable and editable — but nothing new can be authored,
+   * and that has to be said rather than shown as an empty picker.
+   */
+  skillProblem?: string;
 }>;
 
 export interface ToolsHost {
@@ -115,11 +121,21 @@ export function createNativeHost(
   const attribute = new Set<Attribute>(
     Object.keys(ATTRIBUTES) as Attribute[],
   );
+  // Failures here are reported, never swallowed. A silently empty catalogue is
+  // indistinguishable from a rendering bug, which is exactly how a missing
+  // protocol route once cost an afternoon.
   const loadSkills = async () => {
     const response = await fetch("gw://app/skill-catalog.json");
-    if (!response.ok) return;
+    if (!response.ok) {
+      throw new Error(
+        `The skill catalogue is unavailable (${response.status}). Guild Wars `
+        + "may still be downloading; the console records why.",
+      );
+    }
     const raw: unknown = await response.json();
-    if (!Array.isArray(raw)) return;
+    if (!Array.isArray(raw)) {
+      throw new Error("The skill catalogue was not a list of skills.");
+    }
     const parsed: SkillPresentation[] = [];
     for (const value of raw) {
       if (value === null || typeof value !== "object") continue;
@@ -159,17 +175,28 @@ export function createNativeHost(
         iconUrl: record.hasIcon ? `gw://app/skill-icons/${id}.bmp` : null,
       });
     }
+    if (parsed.length === 0) {
+      throw new Error("The skill catalogue arrived empty.");
+    }
     skills.replace(parsed);
   };
   return {
     label: "Saved on this Mac",
     skills,
     async loadLibrary() {
-      const [library] = await Promise.all([
+      const [library, skills] = await Promise.all([
         api.buildLibrary.get(),
-        loadSkills().catch(() => undefined),
+        loadSkills().then(
+          () => null,
+          (cause: unknown) => {
+            console.error("[tools] the skill catalogue did not load", cause);
+            return cause instanceof Error
+              ? cause.message
+              : "The skill catalogue did not load.";
+          },
+        ),
       ]);
-      return library;
+      return skills === null ? library : { ...library, skillProblem: skills };
     },
     async saveLibrary(library) {
       await api.buildLibrary.set(library);

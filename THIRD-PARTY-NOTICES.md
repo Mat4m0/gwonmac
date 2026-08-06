@@ -43,6 +43,22 @@ over the game view for the duration of that session. That artwork is never
 copied into this repository, the packaged application, or any release
 artifact.
 
+## GWToolbox++ and GWCA
+
+The build editor's skill vocabulary in `src/main/core/skill-names.ts` was
+generated from the `SkillID` enumeration that
+[GWCA](https://github.com/gwdevhub/GWCA) distributes with
+[GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), and the allowlist of
+player-equippable skill ids in `src/main/core/equippable-skills.ts` is the set
+GWToolbox++ derived from the game's account-unlocked skill array. Both are used
+under the MIT License, included as `COPYING-GWTOOLBOX` beside them in source
+distributions and in the packaged application's Resources directory.
+
+These supply English spellings and an id allowlist only. Every other fact the
+editor shows — profession, attribute, elite state, energy and recharge — is
+read from the Guild Wars client the player installed, and no ArenaNet game data
+is copied into this repository or any release artifact.
+
 ## QT Friz Quad
 
 QT Friz Quad is © 1992 QualiType and is distributed under the SIL Open Font

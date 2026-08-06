@@ -46,6 +46,7 @@ import {
   type ProxyRoute,
 } from "../core/proxy-routes.js";
 import { ALLOWED_PORTS } from "../core/allowlists.js";
+import type { CatalogueRefusal } from "../core/skill-catalogue.js";
 
 export type FieldGuard<T extends DiagnosticScalar> = (
   value: unknown,
@@ -216,6 +217,10 @@ const windowMode = literal(["normal", "maximized", "fullscreen"] as const);
 const launcherStrategy = literal(["quick", "full", "unselected"] as const);
 const snapshotPriority = literal(["demand", "prefetch"] as const);
 const proxyMethod = literal(["GET", "POST", "PUT"] as const);
+const catalogueRefusal = literal<CatalogueRefusal>([
+  "client-unreadable",
+  "table-not-found",
+]);
 const proxyEndReason = nullable(
   literal(["bodyTooLarge", "redirectEscape"] as const),
 );
@@ -981,6 +986,15 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "proxy",
     level: "error",
     fields: { route: proxyRoute, code },
+  },
+
+  // The build editor asked for the skill catalogue and the client build could
+  // not supply one. Warn rather than error: the editor stays usable and both
+  // reasons are recoverable on a later request.
+  "protocol.skillCatalogueRefused": {
+    subsystem: "protocol",
+    level: "warn",
+    fields: { reason: catalogueRefusal },
   },
 
   // Managed sockets and IPC rejection.

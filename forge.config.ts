@@ -73,6 +73,7 @@ const config: ForgeConfig = {
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
       "src/renderer/fonts/COPYING-QUALITYPE",
+      "src/main/core/COPYING-GWTOOLBOX",
       // The certificate feed's pinned key. It ships inside the bundle so the
       // code signature seals it: the one decision about whom a fetched feed
       // may come from must not be editable without breaking the signature.

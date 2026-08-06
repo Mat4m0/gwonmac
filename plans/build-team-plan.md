@@ -163,6 +163,40 @@ Acceptance: the panel opens on the chord over a running client; every click
 outside its chrome still reaches the game; `tests/electron/input-toolbox.spec.ts`
 passes unchanged; teardown leaves no listener and no held input.
 
+### A6 — the skill catalogue
+
+A5 leaves the panel opening onto an empty skill picker: it fetches
+`gw://app/skill-catalog.json`, and nothing serves it. Without this stage nothing
+can be authored, so this is the last thing between the panel and being useful.
+
+Mechanics come from the player's own client binary, which `skill-table.ts`
+scans for the table by *shape* rather than a pinned address — so a new ArenaNet
+build, and the Enhancement transform shifting the segment, both leave it
+working. Spelling comes from `skill-names.ts`, generated once from the `SkillID`
+enumeration GWCA distributes under MIT. Equippability comes from the audited
+bitset in `equippable-skills.ts`.
+
+**Icons and description text are deliberately not served.** Both live in
+`Gw.dat` behind ArenaNet's compression and, for icons, a texture codec: about
+2,100 lines of vendored C++, a `clang++` step in `pnpm build`, and four packaged
+resources — against roughly 450 lines of TypeScript for everything above. The
+panel was already built to do without them (`SkillCatalogue.vue` renders a
+name-and-cost row when `iconUrl` is null, beside a "description unavailable"
+branch), so the cost bought polish rather than function.
+
+`hasIcon` therefore stays on the wire, reported honestly as `false`. Serving
+real icons later is a change to `skill-catalogue.ts` and one protocol route,
+with no edit to the renderer at all — so this is a deferral, not a door closing.
+
+The panel's catalogue failure is **loud**: `loadSkills()` throws a named reason
+and the library opens with it shown as an error notice. A silently empty picker
+is indistinguishable from a rendering bug, which is exactly how the missing
+route was first misread.
+
+Acceptance: `pnpm check` passes; over a running client the picker lists skills
+with professions, attributes, costs and elite markers; a build authored from it
+publishes as a template and appears in Guild Wars after *Refresh List*.
+
 ## Track B — the certified command
 
 Track B exists to answer one question: **is there a natural game-owned execution

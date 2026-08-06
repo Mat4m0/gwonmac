@@ -562,6 +562,8 @@ export function useLibrary(host: ToolsHost) {
       if (loaded.library.teams.length === 0 && loaded.library.builds.length > 0) kind.value = "build";
       if (loaded.recovered) {
         showNotice("The damaged library was preserved and a new empty library opened.", "warning");
+      } else if (loaded.skillProblem) {
+        showNotice(loaded.skillProblem, "error");
       }
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : "The library could not be loaded.";

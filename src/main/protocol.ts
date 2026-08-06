@@ -30,6 +30,10 @@ import {
   rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
 import { clientArtifactPath } from "./core/paths.js";
+import {
+  readSkillCatalogue,
+  type CatalogueRead,
+} from "./core/skill-catalogue.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
 import { errorCode } from "../shared/errors.js";
@@ -78,6 +82,30 @@ export interface ProtocolDeps {
 let deps: ProtocolDeps = {
   getActiveClient: () => null,
 };
+
+/**
+ * Reading the catalogue means scanning the whole client binary for the skill
+ * table, so it is done once per client build and the promise is what is held —
+ * concurrent first requests share one scan rather than racing two.
+ */
+let catalogue: {
+  readonly wasmPath: string;
+  readonly value: Promise<CatalogueRead>;
+} | null = null;
+
+function catalogueFor(wasmPath: string): Promise<CatalogueRead> {
+  const hit = catalogue;
+  if (hit?.wasmPath === wasmPath) return hit.value;
+  const value = readSkillCatalogue(wasmPath);
+  catalogue = { wasmPath, value };
+  // Only a success is worth remembering. Forgetting a refusal lets the next
+  // request try again, where keeping it would 503 for the whole session — a
+  // client that was still downloading would never be picked up.
+  void value.then((read) => {
+    if (!read.ok && catalogue?.value === value) catalogue = null;
+  });
+  return value;
+}
 
 export function setProtocolDeps(next: ProtocolDeps): void {
   deps = next;
@@ -421,6 +449,32 @@ export async function handleGwRequest(request: Request): Promise<Response> {
       headers: headers({
         "Content-Type": "application/json",
         "Content-Length": String(Buffer.byteLength(body)),
+      }),
+    });
+  }
+
+  if (base === "skill-catalog.json") {
+    const empty = () =>
+      new Response("[]", {
+        status: 503,
+        headers: headers({ "Content-Type": "application/json" }),
+      });
+    const active = deps.getActiveClient();
+    if (!active || request.method !== "GET") return empty();
+    const read = await catalogueFor(active.wasmPath);
+    if (!read.ok) {
+      logEvent({ k: "protocol.skillCatalogueRefused", reason: read.reason });
+      return empty();
+    }
+    const body = JSON.stringify(read.skills);
+    return new Response(body, {
+      status: 200,
+      headers: headers({
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(body)),
+        // The catalogue is a property of the client build, and a new build
+        // arrives as a new `wasmPath`, so this can be held for the session.
+        "Cache-Control": "private, max-age=3600",
       }),
     });
   }
