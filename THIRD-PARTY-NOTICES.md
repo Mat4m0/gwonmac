@@ -43,21 +43,26 @@ over the game view for the duration of that session. That artwork is never
 copied into this repository, the packaged application, or any release
 artifact.
 
-## GWToolbox++ and GWCA
+## GWToolbox++ and GuildWarsMapBrowser
 
-The build editor's skill vocabulary in `src/main/core/skill-names.ts` was
-generated from the `SkillID` enumeration that
-[GWCA](https://github.com/gwdevhub/GWCA) distributes with
-[GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), and the allowlist of
-player-equippable skill ids in `src/main/core/equippable-skills.ts` is the set
-GWToolbox++ derived from the game's account-unlocked skill array. Both are used
-under the MIT License, included as `COPYING-GWTOOLBOX` beside them in source
-distributions and in the packaged application's Resources directory.
+`src/native/gw-dat/vendor/` is a source port from
+[GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), which distributes it
+under the MIT License and identifies it as derived from
+[GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser) by
+Jonathan Bjørn Greve. It decompresses an archive stream and decodes a texture.
+The allowlist of player-equippable skill ids in
+`src/main/core/equippable-skills.ts` is the set GWToolbox++ derived from the
+game's account-unlocked skill array, under the same grant.
 
-These supply English spellings and an id allowlist only. Every other fact the
-editor shows — profession, attribute, elite state, energy and recharge — is
-read from the Guild Wars client the player installed, and no ArenaNet game data
-is copied into this repository or any release artifact.
+Both grants are included as `COPYING-GWTOOLBOX` and
+`COPYING-GUILDWARSMAPBROWSER` beside the source and in the packaged
+application's Resources directory.
+
+This is decoding machinery and an id allowlist, not game content. Every skill
+name, description and icon the build editor shows is read at runtime out of the
+Guild Wars installation on the player's own machine and cached there. As with
+the game cursor described above, none of it is copied into this repository, the
+packaged application, or any release artifact.
 
 ## QT Friz Quad
 

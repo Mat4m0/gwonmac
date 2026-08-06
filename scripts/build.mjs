@@ -144,6 +144,37 @@ export const BUILD_STEPS = [
       "build/native/keychain.node",
     ],
   ],
+  // The Guild Wars archive decoder. A separate executable rather than a second
+  // addon: it is hand-transcribed x86 (see src/native/gw-dat/vendor/README.md)
+  // parsing the player's own game files, and a malformed record should fail one
+  // decode rather than take the application down with it. It is spawned once
+  // per asset and the result is cached on disk, so the process boundary costs
+  // about four milliseconds, once, per icon that is ever looked at.
+  //
+  // -Wall/-Wextra/-Werror are deliberately not applied: this is vendored source
+  // carried unmodified, and the two -D/-Wno flags stand in for MSVC builtins
+  // clang lacks rather than patching it.
+  [
+    "xcrun",
+    [
+      "clang++",
+      "-std=c++20",
+      "-mmacosx-version-min=12.0",
+      "-arch",
+      nativeArchitecture,
+      "-O2",
+      '-D__int64=long long',
+      "-Wno-multichar",
+      "-Isrc/native/gw-dat",
+      "src/native/gw-dat/decoder-main.cpp",
+      "src/native/gw-dat/vendor/gwdat/xentax.cpp",
+      "src/native/gw-dat/vendor/gwdat/AtexReader.cpp",
+      "src/native/gw-dat/vendor/gwdat/AtexDecompress.cpp",
+      "src/native/gw-dat/vendor/gwdat/AtexAsm.cpp",
+      "-o",
+      "build/native/gw-dat-decode",
+    ],
+  ],
   // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes
   // build/preload/preload.cjs, which nothing else here produces — so its
   // position is free. It is TypeScript, so it is spawned the one way this

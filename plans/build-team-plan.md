@@ -172,21 +172,40 @@ can be authored, so this is the last thing between the panel and being useful.
 Mechanics come from the player's own client binary, which `skill-table.ts`
 scans for the table by *shape* rather than a pinned address — so a new ArenaNet
 build, and the Enhancement transform shifting the segment, both leave it
-working. Spelling comes from `skill-names.ts`, generated once from the `SkillID`
-enumeration GWCA distributes under MIT. Equippability comes from the audited
-bitset in `equippable-skills.ts`.
+working. Names and descriptions come from the archive's own language shards, so
+the client is the authority on both and nothing can drift from the build being
+run. Equippability comes from the audited bitset in `equippable-skills.ts`.
 
-**Icons and description text are deliberately not served.** Both live in
-`Gw.dat` behind ArenaNet's compression and, for icons, a texture codec: about
-2,100 lines of vendored C++, a `clang++` step in `pnpm build`, and four packaged
-resources — against roughly 450 lines of TypeScript for everything above. The
-panel was already built to do without them (`SkillCatalogue.vue` renders a
-name-and-cost row when `iconUrl` is null, beside a "description unavailable"
-branch), so the cost bought polish rather than function.
+An earlier pass transcribed names from GWCA's `SkillID` enumeration instead.
+That was wrong twice over: identifier-derived spellings lost every apostrophe,
+and the enumeration drifts from the real ids — id 952 came out as "Disrupting
+Stab" where the client says "Death's Charge", which its Shadow Arts attribute
+corroborates. 2,929 of 3,440 names disagreed. Reading the client is both
+simpler and correct.
 
-`hasIcon` therefore stays on the wire, reported honestly as `false`. Serving
-real icons later is a change to `skill-catalogue.ts` and one protocol route,
-with no edit to the renderer at all — so this is a deferral, not a door closing.
+Names, description text and icons come from the archive, which needs ArenaNet's
+own compression and, for icons, a texture codec. Those are vendored from
+GWToolbox++ under MIT in `src/native/gw-dat/` and compiled by the `clang++` step
+`pnpm build` already runs for `keychain.node`. They are hand-transcribed x86 and
+are treated as a black box: never edited, never read.
+
+**Nothing is shipped and nothing is extracted twice.** Committing extracted
+icons would reverse the stance `THIRD-PARTY-NOTICES.md` takes — the same one
+the game cursor already satisfies by reading the player's own decoded bitmap —
+and would go stale every balance patch. So the decode happens on the player's
+machine, against their own installation, into a cache keyed by the archive's
+chunk hashes. A new ArenaNet build is a new key, so it cannot serve last
+build's art.
+
+The catalogue is extracted eagerly (one pass, ~67 shards, measured at 1.9 s
+cold and 6 ms warm) because the editor cannot show a list without it. Icons are
+decoded lazily, on the request that first asks (46 ms cold, ~1 ms warm), because
+a player who never opens the picker should not pay for 3,439 of them.
+
+The helper is spawned rather than linked, unlike `keychain.node`. It parses
+binary game files, and a malformed record should fail one decode rather than
+take the application down. At ~4 ms once per icon, the process boundary is
+close to free.
 
 The panel's catalogue failure is **loud**: `loadSkills()` throws a named reason
 and the library opens with it shown as an error notice. A silently empty picker

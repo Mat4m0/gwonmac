@@ -39,6 +39,7 @@ describe("resolved profile paths", () => {
       nativeDoubleClick: `${root}/game/double-click`,
       chunks: `${root}/game/chunks`,
       bootChunks: `${root}/game/boot-chunks.json`,
+      skillAssets: `${root}/game/skill-assets`,
       cacheClearRequest: `${root}/clear-cache-on-start`,
       gameStorageClearRequest: `${root}/clear-game-storage-on-start`,
     });
@@ -59,6 +60,10 @@ describe("resolved profile paths", () => {
       `${root}/game/artifacts.previous`,
       `${root}/game/compatibility`,
       `${root}/game/enhancements`,
+      // `game/skill-assets` is deliberately absent. Its writes land in a
+      // per-archive subdirectory that this non-recursive sweep would not reach,
+      // so `SkillAssets.prepare` collects its own orphans instead — the same
+      // owner-recovery exemption the hashed derived-WASM entries take.
     ]);
   });
 

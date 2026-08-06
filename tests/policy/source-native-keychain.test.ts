@@ -82,15 +82,22 @@ test("the canonical build emits one host-only Node-API 8 addon", () => {
   );
 });
 
-test("Forge unpacks only the native addon from ASAR", () => {
+// Two files are unpacked, and both are executable code that cannot run from
+// inside the archive: an addon cannot be dlopen'd from it and a helper cannot
+// be spawned from it. The pattern stays a literal pair rather than a directory
+// glob, so adding a third is an edit here as well as there.
+test("Forge unpacks only the two executables from ASAR", () => {
   const forge = read("forge.config.ts");
   assert.match(
     forge,
-    /asar: \{ unpack: "\*\*\/build\/native\/keychain\.node" \}/u,
+    /asar: \{ unpack: "\*\*\/build\/native\/\{keychain\.node,gw-dat-decode\}" \}/u,
   );
-  assert.match(
-    forge,
-    /p === "\/build\/native" \|\| p === "\/build\/native\/keychain\.node"/u,
-  );
+  for (const kept of [
+    /p === "\/build\/native"/u,
+    /p === "\/build\/native\/keychain\.node"/u,
+    /p === "\/build\/native\/gw-dat-decode"/u,
+  ]) {
+    assert.match(forge, kept);
+  }
   assert.doesNotMatch(forge, /unpackDir|asarUnpack/u);
 });

@@ -30,10 +30,7 @@ import {
   rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
 import { clientArtifactPath } from "./core/paths.js";
-import {
-  readSkillCatalogue,
-  type CatalogueRead,
-} from "./core/skill-catalogue.js";
+import { SkillAssets } from "./core/skill-catalogue.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
 import { errorCode } from "../shared/errors.js";
@@ -43,7 +40,7 @@ import {
   startProxyRequestSpan,
   startSnapshotReadSpan,
 } from "./diagnostics.js";
-import { gamePaths, rendererRoot } from "./paths.js";
+import { gamePaths, gwDatDecoderPath, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -84,26 +81,31 @@ let deps: ProtocolDeps = {
 };
 
 /**
- * Reading the catalogue means scanning the whole client binary for the skill
- * table, so it is done once per client build and the promise is what is held —
- * concurrent first requests share one scan rather than racing two.
+ * One `SkillAssets` per active client. It owns its own memoisation and its own
+ * on-disk cache, so this only has to notice when the client underneath changes.
  */
-let catalogue: {
+let skillAssets: {
+  readonly store: ChunkStore;
   readonly wasmPath: string;
-  readonly value: Promise<CatalogueRead>;
+  readonly value: SkillAssets;
 } | null = null;
 
-function catalogueFor(wasmPath: string): Promise<CatalogueRead> {
-  const hit = catalogue;
-  if (hit?.wasmPath === wasmPath) return hit.value;
-  const value = readSkillCatalogue(wasmPath);
-  catalogue = { wasmPath, value };
-  // Only a success is worth remembering. Forgetting a refusal lets the next
-  // request try again, where keeping it would 503 for the whole session — a
-  // client that was still downloading would never be picked up.
-  void value.then((read) => {
-    if (!read.ok && catalogue?.value === value) catalogue = null;
+function assetsFor(
+  active: NonNullable<ReturnType<ProtocolDeps["getActiveClient"]>>,
+): SkillAssets {
+  if (
+    skillAssets?.store === active.store
+    && skillAssets.wasmPath === active.wasmPath
+  ) {
+    return skillAssets.value;
+  }
+  const value = new SkillAssets({
+    store: active.store,
+    wasmPath: active.wasmPath,
+    decoderPath: gwDatDecoderPath(),
+    cacheRoot: gamePaths().skillAssets,
   });
+  skillAssets = { store: active.store, wasmPath: active.wasmPath, value };
   return value;
 }
 
@@ -461,7 +463,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
       });
     const active = deps.getActiveClient();
     if (!active || request.method !== "GET") return empty();
-    const read = await catalogueFor(active.wasmPath);
+    const read = await assetsFor(active).catalogue();
     if (!read.ok) {
       logEvent({ k: "protocol.skillCatalogueRefused", reason: read.reason });
       return empty();
@@ -477,6 +479,29 @@ export async function handleGwRequest(request: Request): Promise<Response> {
         "Cache-Control": "private, max-age=3600",
       }),
     });
+  }
+
+  // Bounded by the pattern, not by a check afterwards: only decimal digits
+  // reach `icon`, so no request can name a path.
+  const iconMatch = /^skill-icons\/([0-9]{1,7})\.bmp$/u.exec(base);
+  if (iconMatch) {
+    const active = deps.getActiveClient();
+    const missing = () =>
+      new Response("not found", { status: 404, headers: headers() });
+    if (!active || request.method !== "GET") return missing();
+    const icon = await assetsFor(active).icon(Number(iconMatch[1]));
+    return icon
+      ? new Response(icon, {
+          status: 200,
+          headers: headers({
+            "Content-Type": "image/bmp",
+            "Content-Length": String(icon.byteLength),
+            // Decoded from an archive this cache key is derived from, so it
+            // cannot go stale without the client itself changing.
+            "Cache-Control": "private, max-age=86400",
+          }),
+        })
+      : missing();
   }
 
   const artifactName = CLIENT_ARTIFACTS.includes(

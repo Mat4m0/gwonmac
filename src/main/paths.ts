@@ -28,3 +28,16 @@ export function preloadPath(): string {
   // Sandboxed preload must be CommonJS (.cjs); ESM graphs are not executed.
   return path.join(app.getAppPath(), "build", "preload", "preload.cjs");
 }
+
+/**
+ * The Guild Wars archive decoder, which is spawned rather than linked.
+ *
+ * Resolved out of `app.asar.unpacked` when packaged for the same reason
+ * `nativeKeychainPath` is: an executable cannot be run from inside the archive.
+ */
+export function gwDatDecoderPath(): string {
+  const relative = path.join("build", "native", "gw-dat-decode");
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "app.asar.unpacked", relative)
+    : path.join(app.getAppPath(), relative);
+}

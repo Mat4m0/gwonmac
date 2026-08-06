@@ -8,20 +8,15 @@
 //   node --import ./scripts/ts-hook.mjs --experimental-strip-types --test \
 //     tests/unit/the-skill-table-is-found-by-shape-not-by-a-pinned-address.test.ts
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import test from "node:test";
 import {
-  presentSkill,
-  readSkillCatalogue,
+  decodedIconToBmp,
+  decodedShard,
   skillAvailability,
 } from "../../src/main/core/skill-catalogue.ts";
-import { skillName } from "../../src/main/core/skill-names.ts";
 import {
   decodeEnergyCost,
   findSkillTable,
-  parseSkillRecord,
   signatureRun,
   SKILL_RECORD_BYTES,
 } from "../../src/main/core/skill-table.ts";
@@ -156,18 +151,6 @@ test("a binary with no table says so instead of guessing", () => {
 
 // ## The catalogue built on top
 
-test("the committed vocabulary names skills by id, positionally", () => {
-  // Off-by-one here would mislabel every skill in the editor, and every name
-  // would still look like a real skill name — so the ends are pinned.
-  assert.equal(skillName(0), "No Skill");
-  assert.equal(skillName(1), "Healing Signet");
-  assert.equal(skillName(2), "Resurrection Signet");
-  assert.equal(skillName(3), "Signet of Capture");
-  assert.equal(skillName(5), "Power Block");
-  // A gap in the enum is an absence, not the next name shifted up.
-  assert.equal(skillName(1_000_000), null);
-});
-
 test("availability separates what a player may actually equip", () => {
   const base = { id: 1, playable: true, pvp: false, pve: false, title: 0 };
   assert.equal(skillAvailability({ ...base, pvp: true }), "pvp");
@@ -188,39 +171,60 @@ test("availability separates what a player may actually equip", () => {
   assert.equal(skillAvailability({ ...base, id: 3_000_000 }), "not-equippable");
 });
 
-test("a presented skill reports no icon rather than a URL that would 404", () => {
-  // `hasIcon` stays on the wire so serving icons later needs no renderer edit;
-  // what must not happen is claiming one that the protocol cannot produce.
-  const records = skillRecords(40);
-  const skill = presentSkill(parseSkillRecord(records, SKILL_RECORD_BYTES));
-  assert.equal(skill.id, 1);
-  assert.equal(skill.name, "Healing Signet");
-  assert.equal(skill.hasIcon, false);
-  assert.equal(skill.description, null);
-  assert.equal(skill.profession, "R", "profession 2 is Ranger");
+/** A decoder icon payload: `GWIC`, width, height, then BGRA rows top-down. */
+function gwic(width: number, height: number, fill = 0x40): Uint8Array {
+  const bytes = new Uint8Array(8 + width * height * 4).fill(fill);
+  bytes.set([0x47, 0x57, 0x49, 0x43], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(4, width, true);
+  view.setUint16(6, height, true);
+  return bytes;
+}
+
+test("a decoded icon becomes a bottom-up BMP without swapping its channels", () => {
+  // The decoder labels RGB565's low bits `r`, but BC1 stores them as blue, so
+  // its stream is already B,G,R,A — the order BMP wants. A well-meaning
+  // RGBA-to-BGRA swap here turns every icon's colours inside out.
+  const source = gwic(2, 2);
+  source.set([1, 2, 3, 4], 8); // top-left pixel
+  source.set([9, 8, 7, 6], 8 + 4 * 4 - 4); // bottom-right pixel
+  const bmp = decodedIconToBmp(source);
+
+  assert.equal(bmp.subarray(0, 2).toString("ascii"), "BM");
+  assert.equal(bmp.readUInt32LE(10), 54, "pixels start after the 54-byte head");
+  assert.equal(bmp.readInt32LE(18), 2);
+  assert.equal(bmp.readInt32LE(22), 2);
+  assert.equal(bmp.readUInt16LE(28), 32, "32 bits per pixel");
+  // BMP rows run bottom-up, so the source's first row lands last.
+  assert.deepEqual([...bmp.subarray(54 + 8, 54 + 12)], [1, 2, 3, 4]);
+  assert.deepEqual([...bmp.subarray(54 + 4, 54 + 8)], [9, 8, 7, 6]);
 });
 
-test("a client that cannot be read is a named refusal, not a throw", async () => {
-  const missing = await readSkillCatalogue(
-    path.join(tmpdir(), "gwonmac-no-such-client.wasm"),
+test("an icon the decoder could not have produced is refused", () => {
+  assert.throws(() => decodedIconToBmp(new Uint8Array(4)), /invalid icon header/);
+  assert.throws(
+    () => decodedIconToBmp(new Uint8Array([0x47, 0x57, 0x44, 0x42, 0, 0, 0, 0])),
+    /invalid icon header/,
+    "a decompress-only payload is not an icon",
   );
-  assert.equal(missing.ok, false);
-  assert.equal(missing.ok === false && missing.reason, "client-unreadable");
+  // Dimensions that disagree with the payload, and dimensions past the bound.
+  const short = gwic(4, 4).subarray(0, 8 + 16);
+  assert.throws(() => decodedIconToBmp(short), /invalid icon dimensions/);
+  const huge = gwic(1, 1);
+  new DataView(huge.buffer).setUint16(4, 512, true);
+  assert.throws(() => decodedIconToBmp(huge), /invalid icon dimensions/);
+});
 
-  const dir = await mkdtemp(path.join(tmpdir(), "gwonmac-catalogue-"));
-  try {
-    const shaped = path.join(dir, "shaped.wasm");
-    await writeFile(shaped, skillRecords(400));
-    const read = await readSkillCatalogue(shaped);
-    assert.equal(read.ok, true);
-    assert.equal(read.ok === true && read.skills.length, 400);
+test("a decompressed shard is unwrapped only when its length agrees", () => {
+  const payload = Buffer.from("shard bytes", "utf8");
+  const wrapped = Buffer.alloc(8 + payload.length);
+  wrapped.write("GWDB", 0, "ascii");
+  wrapped.writeUInt32LE(payload.length, 4);
+  payload.copy(wrapped, 8);
+  assert.equal(decodedShard(wrapped).toString("utf8"), "shard bytes");
 
-    const noise = path.join(dir, "noise.wasm");
-    await writeFile(noise, new Uint8Array(SKILL_RECORD_BYTES * 200).fill(0xab));
-    const absent = await readSkillCatalogue(noise);
-    assert.equal(absent.ok, false);
-    assert.equal(absent.ok === false && absent.reason, "table-not-found");
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+  assert.throws(() => decodedShard(Buffer.alloc(4)), /invalid shard header/);
+  const lying = Buffer.from(wrapped);
+  lying.writeUInt32LE(payload.length + 1, 4);
+  assert.throws(() => decodedShard(lying), /invalid shard length/);
 });

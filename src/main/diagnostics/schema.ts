@@ -220,6 +220,7 @@ const proxyMethod = literal(["GET", "POST", "PUT"] as const);
 const catalogueRefusal = literal<CatalogueRefusal>([
   "client-unreadable",
   "table-not-found",
+  "archive-unreadable",
 ]);
 const proxyEndReason = nullable(
   literal(["bodyTooLarge", "redirectEscape"] as const),
