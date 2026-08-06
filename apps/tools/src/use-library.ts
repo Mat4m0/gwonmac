@@ -4,7 +4,11 @@ import {
   buildId as canonicalBuildId,
   type TeamSlot,
 } from "../../../src/shared/builds/library";
-import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
+import {
+  decodeSkillTemplate,
+  type SkillTemplate,
+} from "../../../src/shared/builds/skill-template";
+import { diffBuilds } from "../../../src/shared/builds/diff";
 import {
   validateBuild,
   validateBuildFor,
@@ -46,9 +50,18 @@ function emptyTeamSlots(): Team["slots"] {
   })) as unknown as Team["slots"];
 }
 
-function sameTemplate(left: Build, right: NonNullable<ReturnType<typeof decodeSkillTemplate>>): boolean {
-  return JSON.stringify([left.professions, left.attributes, left.skills])
-    === JSON.stringify([right.professions, right.attributes, right.skills]);
+/**
+ * Whether a saved build already is this template.
+ *
+ * Overlaying the template's three fields onto the build and asking for the
+ * distance uses the domain's own comparison, which knows that an absent
+ * attribute and an explicit rank 0 are the same build. Comparing the two with
+ * `JSON.stringify` — which this did — is key-order sensitive, so a re-imported
+ * code whose attributes decoded in a different order was not recognised as
+ * already saved and got a duplicate.
+ */
+function sameTemplate(left: Build, right: SkillTemplate): boolean {
+  return diffBuilds(left, { ...left, ...right }).total === 0;
 }
 
 export function useLibrary(host: ToolsHost) {

@@ -206,7 +206,7 @@ function attributeRankOf(value: number): AttributeRank | null {
  * string: §7.1 R6 notes that Toolbox truncates instead, and silently decoding
  * the prefix of a corrupted paste is worse than refusing it.
  */
-function bitsOf(code: string): number[] | null {
+export function bitsOf(code: string): number[] | null {
   const bits: number[] = [];
   for (const character of code) {
     const value = ALPHABET.indexOf(character);
@@ -217,7 +217,7 @@ function bitsOf(code: string): number[] | null {
 }
 
 /** The `width` bits at `at`, LSB-first, or `null` if the stream ends first. */
-function readAt(
+export function readAt(
   bits: readonly number[],
   at: number,
   width: number,
@@ -231,7 +231,7 @@ function readAt(
 }
 
 /** Bits back to characters, zero-padded to the next character boundary (§6). */
-function charsOf(bits: readonly number[]): string {
+export function charsOf(bits: readonly number[]): string {
   let code = "";
   for (let start = 0; start < bits.length; start += 6) {
     let value = 0;
@@ -244,7 +244,7 @@ function charsOf(bits: readonly number[]): string {
 }
 
 /** Append `value` as `width` bits, LSB-first. */
-function writeBits(bits: number[], value: number, width: number): void {
+export function writeBits(bits: number[], value: number, width: number): void {
   for (let index = 0; index < width; index++) {
     bits.push((value >>> index) & 1);
   }

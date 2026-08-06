@@ -1,4 +1,8 @@
-import type { GwNativeApi } from "../../../src/shared/contracts";
+import {
+  SKILL_CATALOGUE_ROUTE,
+  SKILL_ICON_ROUTE,
+  type GwNativeApi,
+} from "../../../src/shared/contracts";
 import {
   ATTRIBUTES,
   PROFESSIONS,
@@ -125,7 +129,7 @@ export function createNativeHost(
   // indistinguishable from a rendering bug, which is exactly how a missing
   // protocol route once cost an afternoon.
   const loadSkills = async () => {
-    const response = await fetch("gw://app/skill-catalog.json");
+    const response = await fetch(`gw://app/${SKILL_CATALOGUE_ROUTE}`);
     if (!response.ok) {
       throw new Error(
         `The skill catalogue is unavailable (${response.status}). Guild Wars `
@@ -172,7 +176,7 @@ export function createNativeHost(
         aftercastSeconds: record.aftercastSeconds as number,
         rechargeSeconds: record.rechargeSeconds as number,
         description: record.description as string | null,
-        iconUrl: record.hasIcon ? `gw://app/skill-icons/${id}.bmp` : null,
+        iconUrl: record.hasIcon ? `gw://app/${SKILL_ICON_ROUTE(id)}` : null,
       });
     }
     if (parsed.length === 0) {

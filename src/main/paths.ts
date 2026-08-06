@@ -9,7 +9,7 @@
  */
 import { app } from "electron";
 import path from "node:path";
-import { gamePaths as resolveGamePaths } from "./core/paths.js";
+import { gamePaths as resolveGamePaths, unpackedPath } from "./core/paths.js";
 import type { GamePaths } from "./core/paths.js";
 
 export type { GamePaths } from "./core/paths.js";
@@ -32,12 +32,16 @@ export function preloadPath(): string {
 /**
  * The Guild Wars archive decoder, which is spawned rather than linked.
  *
- * Resolved out of `app.asar.unpacked` when packaged for the same reason
- * `nativeKeychainPath` is: an executable cannot be run from inside the archive.
+ * The packaging rule itself lives in `./core/paths.ts` beside the keychain
+ * addon's, because it is the same rule and a test can execute it there.
  */
 export function gwDatDecoderPath(): string {
-  const relative = path.join("build", "native", "gw-dat-decode");
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "app.asar.unpacked", relative)
-    : path.join(app.getAppPath(), relative);
+  return unpackedPath(
+    {
+      packaged: app.isPackaged,
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+    },
+    "build/native/gw-dat-decode",
+  );
 }

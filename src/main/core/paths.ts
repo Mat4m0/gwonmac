@@ -143,3 +143,30 @@ export function diagnosticFramesPath(
 ): string {
   return path.join(diagnosticsDir, `frames-${sessionId}.bin`);
 }
+
+/**
+ * Where the application bundle keeps things, as plain values.
+ *
+ * Taken as an argument rather than read from `app` so the rule below can be
+ * executed by a test — which is the whole point of it existing once.
+ */
+export interface BundleLayout {
+  readonly packaged: boolean;
+  readonly appPath: string;
+  readonly resourcesPath: string;
+}
+
+/**
+ * A file that must live outside `app.asar`.
+ *
+ * Executable code cannot be run from inside the archive: a `.node` addon cannot
+ * be loaded from it and a helper cannot be spawned from it. Both are unpacked
+ * by the `asar.unpack` pattern in `forge.config.ts`, and both resolve here, so
+ * the packaging rule is stated once and a change that breaks it fails a test
+ * rather than only a packaged build.
+ */
+export function unpackedPath(layout: BundleLayout, relative: string): string {
+  return layout.packaged
+    ? path.join(layout.resourcesPath, "app.asar.unpacked", relative)
+    : path.join(layout.appPath, relative);
+}

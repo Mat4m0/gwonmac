@@ -18,7 +18,11 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import type { SnapshotMetadata } from "../shared/contracts.js";
+import {
+  SKILL_CATALOGUE_ROUTE,
+  SKILL_ICON_PATTERN,
+  type SnapshotMetadata,
+} from "../shared/contracts.js";
 import { CLIENT_ARTIFACTS } from "./core/access-key.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
@@ -455,7 +459,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     });
   }
 
-  if (base === "skill-catalog.json") {
+  if (base === SKILL_CATALOGUE_ROUTE) {
     const empty = () =>
       new Response("[]", {
         status: 503,
@@ -483,7 +487,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
 
   // Bounded by the pattern, not by a check afterwards: only decimal digits
   // reach `icon`, so no request can name a path.
-  const iconMatch = /^skill-icons\/([0-9]{1,7})\.bmp$/u.exec(base);
+  const iconMatch = SKILL_ICON_PATTERN.exec(base);
   if (iconMatch) {
     const active = deps.getActiveClient();
     const missing = () =>

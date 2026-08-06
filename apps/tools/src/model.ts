@@ -8,6 +8,7 @@ import {
   type BuildLibrary,
   type Team,
 } from "../../../src/shared/builds/library";
+import { diffBuilds } from "../../../src/shared/builds/diff";
 import { HERO_BY_ID } from "../../../src/shared/builds/heroes";
 import type { SkillCatalogue } from "./skill-catalog";
 
@@ -47,20 +48,15 @@ export function buildUsage(library: BuildLibrary, id: string): readonly Team[] {
   return usedBy(library, buildId(id));
 }
 
+/**
+ * How far a variant has moved from its parent, as one number.
+ *
+ * `diffBuilds` owns this comparison and knows two things this file's own
+ * version did not: an absent attribute and an explicit rank 0 are the same
+ * build, not a change, and a changed profession pair counts.
+ */
 export function buildDifference(parent: Build, child: Build): number {
-  const skillChanges = parent.skills.reduce(
-    (count, skill, index) => count + (skill === child.skills[index] ? 0 : 1),
-    0,
-  );
-  const attributes = new Set([
-    ...Object.keys(parent.attributes),
-    ...Object.keys(child.attributes),
-  ]);
-  return skillChanges + [...attributes].filter(
-    (attribute) =>
-      parent.attributes[attribute as keyof typeof parent.attributes]
-      !== child.attributes[attribute as keyof typeof child.attributes],
-  ).length;
+  return diffBuilds(parent, child).total;
 }
 
 export function orderedBuilds(builds: readonly Build[]): Build[] {

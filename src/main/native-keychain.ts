@@ -9,23 +9,13 @@
  * player's saved password.
  */
 import { createRequire } from "node:module";
-import path from "node:path";
 import type { NativeKeychain } from "./core/native-keychain.js";
+import { unpackedPath, type BundleLayout } from "./core/paths.js";
 
-export interface NativeKeychainLayout {
-  readonly packaged: boolean;
-  readonly appPath: string;
-  readonly resourcesPath: string;
-}
+export type NativeKeychainLayout = BundleLayout;
 
 export function nativeKeychainPath(layout: NativeKeychainLayout): string {
-  return layout.packaged
-    ? path.join(
-        layout.resourcesPath,
-        "app.asar.unpacked",
-        "build/native/keychain.node",
-      )
-    : path.join(layout.appPath, "build/native/keychain.node");
+  return unpackedPath(layout, "build/native/keychain.node");
 }
 
 function isNativeKeychain(value: unknown): value is NativeKeychain {

@@ -115,8 +115,12 @@ import { buildById, heroId } from "./library.js";
 import { HERO_BY_ID } from "./heroes.js";
 import type { SkillTemplate } from "./skill-template.js";
 import {
+  bitsOf,
+  charsOf,
   decodeTemplateBody,
   encodeTemplateBody,
+  readAt,
+  writeBits,
 } from "./skill-template.js";
 
 /**
@@ -130,15 +134,6 @@ export interface PartyLoadoutMember {
   readonly hero: HeroId | null;
   readonly template: SkillTemplate;
 }
-
-/**
- * RFC 4648 characters in the standard order, read least-significant-bit first
- * (§1.2). `skill-template.ts` holds the same constant and does not export it;
- * this is RFC 4648 rather than a fact about Guild Wars, and the two files agree
- * because the RFC does, not because either copied the other.
- */
-const ALPHABET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /** Field 0, always 15. `kDaybreakMagicByte` is this plus the type below. (`:642`, `:696`) */
 const PARTY_LOADOUT_HEADER = 15;
@@ -182,47 +177,6 @@ const PARTY_SIZE = 8;
  * whole bytes first and lands on the same 672.
  */
 const MAX_CODE_LENGTH = 672;
-
-/** A bit array, LSB of each character first, or `null` for a character outside the alphabet. */
-function bitsOf(code: string): number[] | null {
-  const bits: number[] = [];
-  for (const character of code) {
-    const value = ALPHABET.indexOf(character);
-    // §1.5: Toolbox `break`s here and returns the prefix, so `fg…]` decodes as
-    // far as the bracket. Silently decoding part of a mangled paste is worse
-    // than refusing the whole thing.
-    if (value < 0) return null;
-    for (let index = 0; index < 6; index++) bits.push((value >> index) & 1);
-  }
-  return bits;
-}
-
-/** Bits back to characters, zero-padded to the next character boundary (§1.6). */
-function charsOf(bits: readonly number[]): string {
-  let code = "";
-  for (let start = 0; start < bits.length; start += 6) {
-    let value = 0;
-    for (let index = 0; index < 6; index++) {
-      if (bits[start + index] === 1) value |= 1 << index;
-    }
-    code += ALPHABET.charAt(value);
-  }
-  return code;
-}
-
-/** The `width` bits at `at`, LSB-first, or `null` if the stream ends first. */
-function readAt(
-  bits: readonly number[],
-  at: number,
-  width: number,
-): number | null {
-  if (at + width > bits.length) return null;
-  let value = 0;
-  for (let index = 0; index < width; index++) {
-    if (bits[at + index] === 1) value |= 1 << index;
-  }
-  return value;
-}
 
 /**
  * The members of `team`, in party order, ready to encode. `null` when a slot
@@ -271,11 +225,7 @@ export function encodePartyLoadout(
   if (members.length > PARTY_SIZE) return null;
 
   const bits: number[] = [];
-  const write = (value: number, width: number): void => {
-    for (let index = 0; index < width; index++) {
-      bits.push((value >>> index) & 1);
-    }
-  };
+  const write = (value: number, width: number) => writeBits(bits, value, width);
 
   write(PARTY_LOADOUT_HEADER, 4);
   write(PARTY_LOADOUT_TYPE, 4);

@@ -756,6 +756,20 @@ export type RendererCommandOutcome =
   | RendererCommandCompletion
   | "timed-out";
 
+/**
+ * The two `gw://` routes the build editor fetches.
+ *
+ * Named here for the same reason `IPC` is: both sides of a process boundary
+ * spell them, and a rename that only lands on one side compiles, lints, and
+ * fails at runtime as an empty skill picker. `src/main/protocol.ts` serves
+ * them and `apps/tools/src/host.ts` asks for them.
+ */
+export const SKILL_CATALOGUE_ROUTE = "skill-catalog.json";
+export const SKILL_ICON_ROUTE = (skillId: number): string =>
+  `skill-icons/${skillId}.bmp`;
+/** What `SKILL_ICON_ROUTE` produces, as the server's matcher. */
+export const SKILL_ICON_PATTERN = /^skill-icons\/([0-9]{1,7})\.bmp$/u;
+
 export const IPC = {
   progressCurrent: "gw:progress:current",
   progressEvent: "gw:progress:event",

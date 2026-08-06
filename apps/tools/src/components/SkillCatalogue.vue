@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUpdate, ref, watch } from "vue";
 import type { SkillId } from "../model";
 import type { SkillCatalogue, SkillPresentation } from "../skill-catalog";
 import type { BuildDraftController } from "../use-build-draft";
@@ -16,6 +16,12 @@ const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
 const inspected = ref<SkillPresentation | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
+// The `:ref` callback below only ever writes, so narrowing a search left the
+// buttons for every index ever rendered — detached subtrees, each holding a
+// decoded icon — and `focusResult` read a stale length off the end.
+onBeforeUpdate(() => {
+  resultButtons.value = [];
+});
 
 const label = (value: string) => value.replace(/([a-z])([A-Z])/gu, "$1 $2");
 const current = computed(() => {
