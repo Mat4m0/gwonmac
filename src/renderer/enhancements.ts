@@ -474,7 +474,13 @@ export async function installEnhancements(
     if (readout) disposeReadout = readout.dispose;
 
     const toolbox = foundation
-      ? createToolboxFoundation(document.body)
+      ? createToolboxFoundation(document.body, {
+          onFirstOpen: (content) => {
+            void import("./tools-host.js").then(({ mountToolsInto }) =>
+              mountToolsInto(content),
+            );
+          },
+        })
       : null;
     if (toolbox) disposeToolbox = toolbox.dispose;
 

@@ -103,6 +103,12 @@ export const BUILD_STEPS = [
   ],
   // The main program, and the owner of build/shared.
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // The Tools application, bundled once for the renderer. It is an independent
+  // Vue workspace with its own tests, so this step only packages what already
+  // passed them. Vite writes build/renderer/tools/ and empties only that
+  // directory, so it cannot disturb the emits above and its position here is
+  // for readability rather than correctness.
+  ["pnpm", ["--filter", "@gwonmac/tools-ui", "build:embedded"]],
   // The only native addon. It uses raw Node-API version 8, whose ABI remains
   // stable across the Node and Electron upgrades this project takes. The
   // framework APIs resolve at runtime from the Electron host, so the bundle

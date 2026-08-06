@@ -54,6 +54,10 @@ function rendererCheckout(): string {
   write("src/renderer/images/hero-video.webm", "webm");
   write("src/renderer/.DS_Store", "local metadata");
   write("src/renderer/images/local-note.txt", "untracked");
+  // The design system is a package input that does not live under src/renderer:
+  // the Tools application reads it too, and apps/** may only reach src/shared.
+  write("src/shared/ui/tokens.css", "tokens");
+  write("src/shared/ui/components.css", "components");
   return root;
 }
 
@@ -122,6 +126,10 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/logo.webp",
       "index.html",
       "loading.css",
+      // Copied out of src/shared, and flattened to `ui/` so the renderer and
+      // the Tools bundle load the one design system by the same href.
+      "ui/components.css",
+      "ui/tokens.css",
     ]);
   });
 

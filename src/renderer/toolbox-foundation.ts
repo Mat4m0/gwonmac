@@ -116,7 +116,10 @@ const VIEWPORT_MARGIN = 8;
  */
 let panelPosition: { left: number; top: number } | null = null;
 
-export function createToolboxFoundation(parent: HTMLElement) {
+export function createToolboxFoundation(
+  parent: HTMLElement,
+  options: { onFirstOpen?: (content: HTMLElement) => void } = {},
+) {
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) {
@@ -171,7 +174,13 @@ export function createToolboxFoundation(parent: HTMLElement) {
   const chat = document.createElement("div");
   const hero = document.createElement("div");
   const panelRow = document.createElement("div");
-  panel.append(titlebar, chat, hero, panelRow);
+  // Where a tool draws. The overlay owns the boundary — the chord, the event
+  // stops, pointer lock, the cursor mirror, focus and teardown — and knows
+  // nothing about what is mounted here. That separation is the reason a tool
+  // does not need a second root element with a second copy of the boundary.
+  const content = document.createElement("div");
+  content.dataset.role = "content";
+  panel.append(titlebar, chat, hero, panelRow, content);
   root.append(hud, panel);
   parent.append(style, root);
 
@@ -207,9 +216,16 @@ export function createToolboxFoundation(parent: HTMLElement) {
     panel.style.top = `${placed.top}px`;
   };
 
+  let opened = false;
   const setOpen = (next: boolean) => {
     if (next === overlayOpen) return;
     overlayOpen = next;
+    // The tool's bundle is worth loading when someone asks to see it, and not
+    // before: a player who never opens Tools never pays for it.
+    if (next && !opened) {
+      opened = true;
+      options.onFirstOpen?.(content);
+    }
     panel.hidden = !next;
     panel.style.display = next ? "grid" : "none";
     hud.hidden = next;
@@ -325,6 +341,7 @@ export function createToolboxFoundation(parent: HTMLElement) {
   close.addEventListener("click", () => setOpen(false));
 
   return {
+    content,
     update(next: ToolboxState) {
       state = next;
       if (next.status !== "ready") {
