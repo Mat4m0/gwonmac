@@ -46,6 +46,18 @@ const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
 const COMPANION_ABI = 6;
 const COMPANION_RUNTIME_BYTES = 65_536;
+/**
+ * The side module's `__memory_base` must be 16-byte aligned: the wasm linker
+ * places the module's data segments at fixed offsets *from* this base, so a
+ * misaligned base misaligns every aligned datum inside it.
+ *
+ * Emscripten's allocator only promises 8. Asking `malloc` for the alignment we
+ * need and refusing what it returns is a launch that fails on where the heap
+ * happened to land -- observed live: pointer 11,518,200, which is 8-aligned and
+ * not 16. So the block is over-allocated by the alignment and the base is
+ * rounded up inside it; the raw pointer is what has to be freed.
+ */
+const COMPANION_RUNTIME_ALIGN = 16;
 let companionInstallations = 0;
 
 /**
@@ -212,7 +224,9 @@ export async function installEnhancements(
   let configPointer = 0;
   let cursorPointer = 0;
   let toolboxPointer = 0;
-  let runtimePointer = 0;
+  // What malloc returned, which is what free must be given. The aligned base
+  // used by the module lives inside it and is not a valid argument to free.
+  let runtimeAllocation = 0;
   let stopObserver = () => {};
   let disposeCursor = () => {};
   let disposeReadout = () => {};
@@ -242,7 +256,7 @@ export async function installEnhancements(
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
-    if (runtimePointer) free(runtimePointer);
+    if (runtimeAllocation) free(runtimeAllocation);
     if (window.gwCompanionRuntime === installedRuntime) {
       window.gwCompanionRuntime = null;
     }
@@ -256,7 +270,15 @@ export async function installEnhancements(
     }
   };
   try {
-    runtimePointer = Number(exports.malloc(COMPANION_RUNTIME_BYTES));
+    runtimeAllocation = Number(
+      exports.malloc(COMPANION_RUNTIME_BYTES + COMPANION_RUNTIME_ALIGN - 1),
+    );
+    // Rounded with arithmetic rather than a bitmask: pointers reach past what
+    // a 32-bit bitwise operation can represent as the heap grows.
+    const runtimePointer = runtimeAllocation === 0
+      ? 0
+      : Math.ceil(runtimeAllocation / COMPANION_RUNTIME_ALIGN)
+        * COMPANION_RUNTIME_ALIGN;
     if (observeState) {
       snapshotPointer = Number(exports.malloc(COMPANION_SNAPSHOT_BYTES));
     }
@@ -269,7 +291,7 @@ export async function installEnhancements(
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
     }
     if (
-      !runtimePointer
+      !runtimeAllocation
       || !configPointer
       || (observeState && !snapshotPointer)
       || (capabilities.nativeCursor && !cursorPointer)
@@ -278,7 +300,12 @@ export async function installEnhancements(
       throw new Error("Companion allocation failed");
     }
     const ownedRegions = [
-      { name: "runtime", pointer: runtimePointer, size: COMPANION_RUNTIME_BYTES, align: 16 },
+      {
+        name: "runtime",
+        pointer: runtimePointer,
+        size: COMPANION_RUNTIME_BYTES,
+        align: COMPANION_RUNTIME_ALIGN,
+      },
       ...(observeState
         ? [{ name: "snapshot", pointer: snapshotPointer, size: COMPANION_SNAPSHOT_BYTES, align: 4 }]
         : []),
