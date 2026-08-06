@@ -41,6 +41,7 @@ use core::ptr::{read_volatile, write_volatile};
 mod abi;
 mod cursor;
 mod memory;
+mod party;
 mod toolbox;
 
 use abi::*;
@@ -495,6 +496,8 @@ pub unsafe extern "C" fn companion_init(
     cursor_size: u32,
     toolbox_ptr: u32,
     toolbox_size: u32,
+    party_ptr: u32,
+    party_size: u32,
     features: u32,
 ) -> u32 {
     if features == 0
@@ -519,6 +522,16 @@ pub unsafe extern "C" fn companion_init(
             toolbox_ptr,
             toolbox_size,
             TOOLBOX_BYTES,
+        )
+        // The party region rides on the same capability as the toolbox one:
+        // it is the same observation, complete rather than truncated, and a
+        // second feature bit would only add a half-enabled state to reason
+        // about. FEATURE_NATIVE_CURSOR already owns two regions this way.
+        || !valid_region(
+            features & FEATURE_TOOLBOX_FOUNDATION != 0,
+            party_ptr,
+            party_size,
+            PARTY_BYTES,
         )
     {
         return 0;
@@ -549,6 +562,7 @@ pub unsafe extern "C" fn companion_init(
         }
         if features & FEATURE_TOOLBOX_FOUNDATION != 0 {
             toolbox::initialize(toolbox_ptr);
+            party::initialize(party_ptr);
         }
     }
     1
@@ -574,6 +588,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
             }
             if features & FEATURE_TOOLBOX_FOUNDATION != 0 {
                 unsafe { toolbox::tick(layout, TICK_COUNT) };
+                unsafe { party::tick_if_dirty(layout, TICK_COUNT) };
             }
             if features & FEATURE_NATIVE_CURSOR != 0 {
                 unsafe { cursor::tick(layout) };
@@ -604,7 +619,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    6
+    7
 }
 
 #[no_mangle]
@@ -625,6 +640,11 @@ pub extern "C" fn companion_cursor_bytes() -> u32 {
 #[no_mangle]
 pub extern "C" fn companion_toolbox_bytes() -> u32 {
     TOOLBOX_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_party_bytes() -> u32 {
+    PARTY_BYTES
 }
 
 #[no_mangle]

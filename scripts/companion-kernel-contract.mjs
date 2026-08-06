@@ -20,17 +20,21 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
   { name: "companion_snapshot_bytes", typeIndex: 2 },
   { name: "companion_cursor_bytes", typeIndex: 2 },
   { name: "companion_toolbox_bytes", typeIndex: 2 },
+  { name: "companion_party_bytes", typeIndex: 2 },
 ]);
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 410 bytes (0x9a 0x03). Two documented moves:
+  // Memory footprint 908 bytes (0x8c 0x07). Three documented moves:
   //   309 -> 310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //               separates "you have no heroes" from "nobody read the party";
   //   310 -> 410  Layout grew by the 25 party-detail address words, at 4 bytes
-  //               each, so the config block the host copies in got 100 larger.
+  //               each, so the config block the host copies in got 100 larger;
+  //   410 -> 908  party.rs, whose zeroed `[Hero; PARTY_SLOTS]` const is 8 x 60
+  //               bytes of data on its own.
   // This constant exists so a kernel whose footprint moves cannot ship without
-  // someone saying why.
-  0x01, 0x05, 0x9a, 0x03, 0x02, 0x00, 0x00,
+  // someone saying why. One page is still the ceiling, and 908 is a long way
+  // under it.
+  0x01, 0x05, 0x8c, 0x07, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES
@@ -76,7 +80,10 @@ function encodeSection(id, payload) {
 
 function makeCompanionSignatureModule() {
   const types = [
-    i32FunctionType(9, true),
+    // companion_init: snapshot, config, cursor, toolbox and party regions as
+    // pointer/size pairs, plus the feature word. Eleven, not nine, since the
+    // party region joined.
+    i32FunctionType(11, true),
     i32FunctionType(6, false),
     i32FunctionType(0, true),
   ];

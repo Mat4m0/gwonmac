@@ -83,7 +83,8 @@ function fixture(options: FixtureOptions = {}): Uint8Array<ArrayBuffer> {
   );
   const startFunction = signatures.length;
   const types = [
-    functionType(9, true),
+    // companion_init: five region pointer/size pairs plus the feature word.
+    functionType(11, true),
     functionType(6, false),
     functionType(0, true),
     functionType(0, false),

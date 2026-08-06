@@ -30,6 +30,7 @@ const exactSignatures = [
   ["companion_snapshot_bytes", 2],
   ["companion_cursor_bytes", 2],
   ["companion_toolbox_bytes", 2],
+  ["companion_party_bytes", 2],
 ] as const;
 
 function signatureTable(
@@ -85,7 +86,8 @@ describe("the companion kernel ABI is structurally verified", () => {
   it("pins init, dispatch, and scalar exports to their exact function shapes", () => {
     for (const source of [runtimeSource, contractSource]) {
       assert.deepEqual(functionTypes(source), [
-        [9, true],
+        // init takes five region pointer/size pairs and the feature word.
+        [11, true],
         [6, false],
         [0, true],
       ]);

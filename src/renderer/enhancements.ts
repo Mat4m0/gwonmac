@@ -30,6 +30,7 @@ import {
   COMPANION_CURSOR_BYTES,
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
+  COMPANION_PARTY_BYTES,
 } from "./companion-snapshot.js";
 import {
   observeCompanion,
@@ -44,7 +45,7 @@ import type {
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const COMPANION_ABI = 6;
+const COMPANION_ABI = 7;
 const COMPANION_RUNTIME_BYTES = 65_536;
 /**
  * The side module's `__memory_base` must be 16-byte aligned: the wasm linker
@@ -89,6 +90,7 @@ const COMPANION_SIGNATURES = [
   { name: "companion_snapshot_bytes", typeIndex: 2 },
   { name: "companion_cursor_bytes", typeIndex: 2 },
   { name: "companion_toolbox_bytes", typeIndex: 2 },
+  { name: "companion_party_bytes", typeIndex: 2 },
 ] as const;
 
 function encodeUleb(value: number): number[] {
@@ -122,7 +124,8 @@ function encodeSection(id: number, payload: number[]): number[] {
 
 function companionSignatureModule(): WebAssembly.Module {
   const types = [
-    i32FunctionType(9, true),
+    // init takes five region pointer/size pairs and the feature word.
+    i32FunctionType(11, true),
     i32FunctionType(6, false),
     i32FunctionType(0, true),
   ];
@@ -224,6 +227,7 @@ export async function installEnhancements(
   let configPointer = 0;
   let cursorPointer = 0;
   let toolboxPointer = 0;
+  let partyPointer = 0;
   // What malloc returned, which is what free must be given. The aligned base
   // used by the module lives inside it and is not a valid argument to free.
   let runtimeAllocation = 0;
@@ -253,6 +257,7 @@ export async function installEnhancements(
       table.set(manifest.tableSlot, null);
     }
     if (toolboxPointer) free(toolboxPointer);
+    if (partyPointer) free(partyPointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
@@ -289,6 +294,7 @@ export async function installEnhancements(
     }
     if (foundation) {
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
+      partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
     }
     if (
       !runtimeAllocation
@@ -296,6 +302,7 @@ export async function installEnhancements(
       || (observeState && !snapshotPointer)
       || (capabilities.nativeCursor && !cursorPointer)
       || (foundation && !toolboxPointer)
+      || (foundation && !partyPointer)
     ) {
       throw new Error("Companion allocation failed");
     }
@@ -314,7 +321,10 @@ export async function installEnhancements(
         ? [{ name: "cursor", pointer: cursorPointer, size: COMPANION_CURSOR_BYTES, align: 4 }]
         : []),
       ...(foundation
-        ? [{ name: "toolbox", pointer: toolboxPointer, size: COMPANION_TOOLBOX_BYTES, align: 4 }]
+        ? [
+            { name: "toolbox", pointer: toolboxPointer, size: COMPANION_TOOLBOX_BYTES, align: 4 },
+            { name: "party", pointer: partyPointer, size: COMPANION_PARTY_BYTES, align: 4 },
+          ]
         : []),
     ];
     for (const region of ownedRegions) {
@@ -429,6 +439,8 @@ export async function installEnhancements(
       cursorBytes: number,
       toolboxPointer: number,
       toolboxBytes: number,
+      partyPointer: number,
+      partyBytes: number,
       featureFlags: number,
     ) => number;
     type KernelDispatch = (
@@ -448,12 +460,14 @@ export async function installEnhancements(
     const kernelSnapshotBytes = kernel.exports.companion_snapshot_bytes as KernelScalar;
     const kernelCursorBytes = kernel.exports.companion_cursor_bytes as KernelScalar;
     const kernelToolboxBytes = kernel.exports.companion_toolbox_bytes as KernelScalar;
+    const kernelPartyBytes = kernel.exports.companion_party_bytes as KernelScalar;
     if (
       kernelAbi() !== COMPANION_ABI
       || kernelConfigBytes() !== configBytes
       || kernelSnapshotBytes() !== COMPANION_SNAPSHOT_BYTES
       || kernelCursorBytes() !== COMPANION_CURSOR_BYTES
       || kernelToolboxBytes() !== COMPANION_TOOLBOX_BYTES
+      || kernelPartyBytes() !== COMPANION_PARTY_BYTES
       || kernelInit(
         snapshotPointer,
         observeState ? COMPANION_SNAPSHOT_BYTES : 0,
@@ -463,6 +477,8 @@ export async function installEnhancements(
         capabilities.nativeCursor ? COMPANION_CURSOR_BYTES : 0,
         toolboxPointer,
         foundation ? COMPANION_TOOLBOX_BYTES : 0,
+        partyPointer,
+        foundation ? COMPANION_PARTY_BYTES : 0,
         featureFlags,
       ) !== 1
     ) {

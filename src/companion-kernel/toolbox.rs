@@ -17,7 +17,7 @@
 use core::ptr::{read_volatile, write_volatile};
 
 use crate::abi::*;
-use crate::{collect_first_owned_hero, cursor, resolve_game, GameState};
+use crate::{collect_first_owned_hero, cursor, party, resolve_game, GameState};
 
 // UI dispatch is the certified change boundary for this first foundation.
 // A low-rate reconciliation recovers from a missed callback without turning
@@ -158,6 +158,7 @@ pub(crate) unsafe fn observe_ui(layout: Layout, message: u32, wparam: u32) {
         // party traversal.
         if is_party_dirty_message(layout, message) {
             PARTY_DIRTY = true;
+            party::mark_dirty();
         }
         if message == layout.player_chat_message {
             let next = PLAYER_CHAT_COUNT.saturating_add(1);

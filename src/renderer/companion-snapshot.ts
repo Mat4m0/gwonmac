@@ -443,3 +443,173 @@ export function sameCompanionToolboxState(
     && previous.firstHeroAgentId === next.firstHeroAgentId
     && previous.panelState === next.panelState;
 }
+
+/**
+ * The full party projection: who is in the party, with what, and which heroes
+ * the account owns.
+ *
+ * Its shape is the toolbox region's argument taken to its conclusion. Every
+ * field the kernel read carries a flag saying so, because a zero level and an
+ * unread level are the same word and eight zero skill ids are a legal bar. The
+ * decoder therefore reports absence rather than substituting a default, and
+ * re-derives every implication it can check instead of trusting the writer
+ * that enforced it.
+ */
+export const COMPANION_PARTY_ABI = 1;
+export const COMPANION_PARTY_BYTES = 544;
+
+const PARTY_MAGIC = 0x50545747;
+const PARTY_SLOT_COUNT = 8;
+const PARTY_SLOT_BYTES = 60;
+const PARTY_HEADER_BYTES = 64;
+const PARTY_SKILL_SLOTS = 8;
+
+const PARTY_FLAGS = Object.freeze({ roster: 1 << 0, unlock: 1 << 1 });
+const KNOWN_PARTY_FLAGS = PARTY_FLAGS.roster | PARTY_FLAGS.unlock;
+const SLOT_FLAGS = Object.freeze({
+  occupied: 1 << 0,
+  professions: 1 << 1,
+  behaviour: 1 << 2,
+  skills: 1 << 3,
+});
+const KNOWN_SLOT_FLAGS =
+  SLOT_FLAGS.occupied | SLOT_FLAGS.professions | SLOT_FLAGS.behaviour
+  | SLOT_FLAGS.skills;
+
+/** `hero_id`s the account owns, as the kernel's two bitmaps decode. */
+function unlockedHeroes(known: bigint, unlocked: bigint): number[] {
+  const heroes: number[] = [];
+  for (let id = 1; id <= 63; id += 1) {
+    const bit = 1n << BigInt(id);
+    if ((known & bit) !== 0n && (unlocked & bit) !== 0n) heroes.push(id);
+  }
+  return heroes;
+}
+
+export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
+  if (
+    !(buffer instanceof ArrayBuffer)
+    || !Number.isInteger(pointer)
+    || pointer < 0
+    || pointer + COMPANION_PARTY_BYTES > buffer.byteLength
+  ) {
+    return Object.freeze({ status: "waiting", reason: "memory" });
+  }
+  const view = new DataView(buffer, pointer, COMPANION_PARTY_BYTES);
+  const firstSequence = view.getUint32(8, true);
+  if ((firstSequence & 1) !== 0) {
+    return Object.freeze({ status: "waiting", reason: "writing" });
+  }
+  const magic = view.getUint32(0, true);
+  const abiAndSize = view.getUint32(4, true);
+  const flags = view.getUint32(12, true);
+  const generation = view.getUint32(16, true);
+  const slotCount = view.getUint32(20, true);
+  const unlockedLow = view.getUint32(24, true);
+  const unlockedHigh = view.getUint32(28, true);
+  const knownLow = view.getUint32(32, true);
+  const knownHigh = view.getUint32(36, true);
+  let reserved = 0;
+  for (let at = 40; at < PARTY_HEADER_BYTES; at += 4) {
+    reserved |= view.getUint32(at, true);
+  }
+
+  const slots: Array<Record<string, unknown>> = [];
+  let occupied = 0;
+  let malformed = false;
+  const seen = new Set<number>();
+  for (let index = 0; index < PARTY_SLOT_COUNT; index += 1) {
+    const at = PARTY_HEADER_BYTES + index * PARTY_SLOT_BYTES;
+    const heroId = view.getUint32(at, true);
+    const agentId = view.getUint32(at + 4, true);
+    const professions = view.getUint32(at + 8, true);
+    const level = view.getUint32(at + 12, true);
+    const behaviour = view.getUint32(at + 16, true);
+    const slotFlags = view.getUint32(at + 20, true);
+    const disabled = view.getUint32(at + 24, true);
+    const skills: number[] = [];
+    for (let skill = 0; skill < PARTY_SKILL_SLOTS; skill += 1) {
+      skills.push(view.getUint32(at + 28 + skill * 4, true));
+    }
+    const isOccupied = (slotFlags & SLOT_FLAGS.occupied) !== 0;
+    if ((slotFlags & ~KNOWN_SLOT_FLAGS) !== 0) malformed = true;
+    if (isOccupied) {
+      occupied += 1;
+      // Slot 0 is the player, who is never a hero, and a hero cannot hold two
+      // positions at once. Both are enforced by the writer; agreeing with it by
+      // construction would prove nothing, so they are checked again here.
+      if (index === 0 || heroId < 1 || heroId > 39 || seen.has(heroId)) {
+        malformed = true;
+      }
+      seen.add(heroId);
+      if ((slotFlags & SLOT_FLAGS.behaviour) !== 0 && behaviour > 2) malformed = true;
+      if ((slotFlags & SLOT_FLAGS.skills) !== 0 && disabled > 0xff) malformed = true;
+      if ((slotFlags & SLOT_FLAGS.professions) !== 0) {
+        const primary = professions & 0xff;
+        const secondary = (professions >>> 8) & 0xff;
+        if (primary < 1 || primary > 10 || secondary > 10) malformed = true;
+      }
+    } else if (
+      heroId !== 0 || agentId !== 0 || professions !== 0 || level !== 0
+      || behaviour !== 0 || disabled !== 0 || slotFlags !== 0
+      || skills.some((skill) => skill !== 0)
+    ) {
+      // An empty slot carrying values is a torn write, not an empty slot.
+      malformed = true;
+    }
+    slots.push(Object.freeze({
+      index,
+      occupied: isOccupied,
+      hero: isOccupied ? heroId : null,
+      agentId: isOccupied ? agentId : null,
+      level: isOccupied && level !== 0 ? level : null,
+      professions: (slotFlags & SLOT_FLAGS.professions) !== 0
+        ? Object.freeze([professions & 0xff, (professions >>> 8) & 0xff])
+        : null,
+      behaviour: (slotFlags & SLOT_FLAGS.behaviour) !== 0 ? behaviour : null,
+      skills: (slotFlags & SLOT_FLAGS.skills) !== 0
+        ? Object.freeze(skills)
+        : null,
+      disabled: (slotFlags & SLOT_FLAGS.skills) !== 0 ? disabled : null,
+    }));
+  }
+
+  const secondSequence = view.getUint32(8, true);
+  const rosterObserved = (flags & PARTY_FLAGS.roster) !== 0;
+  const unlockObserved = (flags & PARTY_FLAGS.unlock) !== 0;
+  if (
+    magic !== PARTY_MAGIC
+    || abiAndSize !== ((COMPANION_PARTY_BYTES << 16) | COMPANION_PARTY_ABI)
+    || firstSequence !== secondSequence
+    || (secondSequence & 1) !== 0
+    || (flags & ~KNOWN_PARTY_FLAGS) !== 0
+    || reserved !== 0
+    || malformed
+    || slotCount !== occupied
+    // Nothing may be occupied, and no hero owned, in a party nobody read.
+    || (!rosterObserved && (occupied !== 0 || slotCount !== 0))
+    || (!unlockObserved && (knownLow !== 0 || knownHigh !== 0))
+    // A hero cannot be unlocked without that having been decided.
+    || (unlockedLow & ~knownLow) !== 0
+    || (unlockedHigh & ~knownHigh) !== 0
+  ) {
+    return Object.freeze({ status: "waiting", reason: "party" });
+  }
+  return Object.freeze({
+    status: "ready",
+    sequence: secondSequence,
+    generation,
+    rosterObserved,
+    unlockObserved,
+    slotCount,
+    slots: Object.freeze(slots),
+    unlocked: unlockObserved
+      ? Object.freeze(unlockedHeroes(
+          (BigInt(knownHigh) << 32n) | BigInt(knownLow),
+          (BigInt(unlockedHigh) << 32n) | BigInt(unlockedLow),
+        ))
+      : null,
+  });
+}
+
+export type CompanionPartyState = ReturnType<typeof readCompanionParty>;

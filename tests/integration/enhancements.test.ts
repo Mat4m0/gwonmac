@@ -11,6 +11,8 @@ import {
   COMPANION_CURSOR_ABI,
   COMPANION_CURSOR_BYTES,
   COMPANION_TOOLBOX_BYTES,
+  COMPANION_PARTY_BYTES,
+  readCompanionParty,
 } from "../../src/renderer/companion-snapshot.ts";
 import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
@@ -67,6 +69,13 @@ function cursorReason(read: CursorHeaderRead) {
 
 function publishedPixels(read: CursorPixelsRead) {
   if (read === null) throw new Error("the kernel published no cursor bitmap");
+  return read;
+}
+
+function readyParty(read: ReturnType<typeof readCompanionParty>) {
+  if (read.status !== "ready") {
+    throw new Error(`expected a party region, got ${JSON.stringify(read)}`);
+  }
   return read;
 }
 
@@ -239,6 +248,7 @@ const ADDRESSES = Object.freeze({
   textureView: 0x8300,
   texture: 0x8400,
   toolbox: 0x9000,
+  party: 0xa800,
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
@@ -270,6 +280,8 @@ interface KernelOverrides {
   cursorPointer?: number;
   cursorSize?: number;
   toolboxPointer?: number;
+  partyPointer?: number;
+  partySize?: number;
   toolboxSize?: number;
 }
 
@@ -290,6 +302,8 @@ type KernelInit = (
   cursorSize: number,
   toolboxPointer: number,
   toolboxSize: number,
+  partyPointer: number,
+  partySize: number,
   features: number,
 ) => number;
 type KernelDispatch = (
@@ -396,6 +410,14 @@ async function createKernel() {
           ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
             ? COMPANION_TOOLBOX_BYTES
             : 0),
+        overrides.partyPointer
+          ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
+            ? ADDRESSES.party
+            : 0),
+        overrides.partySize
+          ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
+            ? COMPANION_PARTY_BYTES
+            : 0),
         features,
       );
     },
@@ -406,6 +428,7 @@ async function createKernel() {
     uiEvent: (message: number, wparam: number, lparam: number) =>
       exports.dispatch(2, message, wparam, lparam, 0, 0),
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
+    party: () => readCompanionParty(memory.buffer, ADDRESSES.party),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),
@@ -822,6 +845,61 @@ describe("Companion kernel", () => {
     assert.equal(toolbox.firstHeroAgentId, 77);
   });
 
+  // The party region is the toolbox region's argument taken to its conclusion:
+  // the same walk, publishing who rather than merely whether. These fixtures
+  // carry no party-detail offsets -- those words are zero, which the kernel
+  // reads as "not certified, do not traverse" -- so what is asserted here is
+  // that the roster survives without them and that every unread field says so
+  // rather than arriving as a plausible default.
+  it("publishes a roster whose unread fields admit they are unread", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const party = kernel.party();
+    if (party.status !== "ready") {
+      throw new Error(`expected a party region, got ${JSON.stringify(party)}`);
+    }
+    assert.equal(party.rosterObserved, true);
+    assert.equal(party.slotCount, 1);
+
+    // Slot 0 is the player and is never a hero, so a one-hero party occupies
+    // slot 1. A roster that started at 0 would put a hero where the player is.
+    const [player, hero] = party.slots;
+    assert.equal(player?.occupied, false);
+    assert.equal(hero?.occupied, true);
+    assert.equal(hero?.hero, 1);
+    assert.equal(hero?.agentId, 77);
+
+    // Uncertified groups were skipped whole rather than read as zero.
+    assert.equal(hero?.professions, null, "professions");
+    assert.equal(hero?.behaviour, null, "behaviour");
+    assert.equal(hero?.skills, null, "skill bar");
+    assert.equal(hero?.disabled, null, "disabled mask");
+    assert.equal(party.unlockObserved, false);
+    assert.equal(party.unlocked, null, "unlock table");
+  });
+
+  it("retracts the roster when the party cannot be read", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    assert.equal(readyParty(kernel.party()).slotCount, 1);
+
+    // Break the party pointer and force a walk. A half-read party must not be
+    // published as a small one: the whole observation is withdrawn.
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, 0xffff_fffc, true);
+    kernel.uiEvent(0x1000_011f, 0, 0);
+    kernel.tick();
+
+    const party = readyParty(kernel.party());
+    assert.equal(party.rosterObserved, false);
+    assert.equal(party.slotCount, 0);
+    assert.equal(party.slots.every((slot) => slot.occupied === false), true);
+  });
+
   it("traverses party state only for the exact dirty-message set", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
@@ -1080,6 +1158,7 @@ describe("Companion kernel", () => {
       [ADDRESSES.snapshot, ADDRESSES.snapshot + 64],
       [ADDRESSES.cursor, ADDRESSES.cursor + COMPANION_CURSOR_BYTES],
       [ADDRESSES.toolbox, ADDRESSES.toolbox + COMPANION_TOOLBOX_BYTES],
+      [ADDRESSES.party, ADDRESSES.party + COMPANION_PARTY_BYTES],
       [ADDRESSES.companionRuntime, ADDRESSES.companionRuntime + 65_536],
     ] as const;
     const after = new Uint8Array(kernel.memory.buffer);
