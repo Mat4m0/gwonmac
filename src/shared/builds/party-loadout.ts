@@ -1,112 +1,114 @@
-// The party-loadout code: the `f…` string whose first byte is `0x1F`, carrying
-// a whole party — a hero id and a skill bar per member — in one base64 code.
-// GWToolbox calls it a *Daybreak team build*. The layout is
-// `plans/tools/hero-builds/evidence/party-loadout-codec.md`, and section
-// numbers below refer to that document.
-//
-// ## Read this before putting the codec in front of a player
-//
-// The bit layout is settled: §1.3 cites a working encoder and decoder line by
-// line, and every field below names the line it came from. What is **not**
-// settled is whether anything outside this repository speaks the format.
-// §"WHAT THIS DECIDES" is blunt about it — the only claim that the game itself
-// produces and consumes these codes is one comment whose own worked example
-// fails its own decoder, nothing in GWToolbox ever writes one, nothing ever
-// reads one from the client, and the name "Daybreak" refers elsewhere in that
-// tree to a third-party launcher rather than to anything ArenaNet ships.
-//
-// So this file implements a format with one known implementation and no proven
-// counterparty. `primitives.md` §6.1 (does the client import one?) and §6.2
-// (can it export one?) are each a single live session and neither can be
-// answered by reading more C++. Until one of them is recorded, a code produced
-// here is a code only we can read: fine as our own transport, and not something
-// to describe to a player as "your party loadout, importable in game".
-// §1.7 derives the cheapest probe there is — the empty party, `fAA` under
-// Toolbox's padding rule and `fA` under this one (see §1.6 below); both decode
-// here, and `encodePartyLoadout([])` writes the shorter.
-//
-// ## There is no version field
-//
-// `primitives.md` §A3 and the commit that introduced the codec both describe
-// "header 15, type 1, version 1" — three fields for two nibbles. The
-// implementation writes exactly two (`TeamBuildEncoder.cpp:642-643`) and checks
-// exactly two (`:696-697`). The third nibble is the member count. A decoder
-// written from the prose would read a party of one as a valid version and then
-// mis-align every member after it, which is why this is stated here rather than
-// left as a footnote.
-//
-// ## What a party loadout carries, and what it silently drops
-//
-// Per member: a hero id and a skill bar (professions, invested attributes,
-// eight skill ids). That is all (§1.4). Behaviour, the pinned skill panel, the
-// disabled-skill mask, every name, the team's tags and its mode are **not in
-// the format** — the encoder touches two fields of its input and the decoder
-// sets two (`TeamBuildEncoder.cpp:646-650`, `:726-730`). Toolbox scrapes
-// behaviour and the disabled mask from the live game and persists them to its
-// own JSON precisely because a code cannot hold them. A round trip through this
-// module is therefore lossy by construction, and the test beside it asserts
-// exactly which fields survive rather than pretending the loss is a bug.
-//
-// ## Empty party positions
-//
-// The format has no spelling for "nobody here": a member is a hero id followed
-// by a bar, and there is no presence bit anywhere in the stream. Toolbox's own
-// Daybreak encoder therefore *aborts* on an empty member — its capture path
-// always pushes eight entries and the first default-constructed one sinks the
-// whole code (§1.5), so a captured party of four heroes cannot be encoded at
-// all. §1.5 names that as the first bug not to reproduce, without saying what
-// to do instead.
-//
-// This module drops empty positions and writes the members that remain, which
-// is what the sibling encoder in the same file already does — skip the empty
-// build, patch the count down (`TeamBuildEncoder.cpp:570-571`, `:575-578`).
-// The alternative, writing an all-zero member as a placeholder, would mean
-// inventing a meaning for profession id 0 in a member slot; the skill-template
-// evidence records that a primary of `None` is how Toolbox detects a *failed*
-// decode (skill-template-codec.md §7.2), so such a member is indistinguishable
-// from corruption. Dropping loses which party positions were occupied and
-// invents nothing. `partyMembersOf` is the one place that decision is taken.
-//
-// ## Why the per-member body lives in `skill-template.ts`
-//
-// A party loadout does not embed template *strings* — §1.1 corrects the plan on
-// exactly this point. What it embeds is the skill template *body*: the same
-// bits in the same order, with the 8-bit `kind`/`version` head replaced by an
-// 8-bit hero id (skill-template-codec.md §9). So this file owns the party frame
-// — magic, type, member count, hero id — and hands every body to
-// `skill-template.ts`, which owns the width rules and every semantic rejection
-// and reads the id tables out of `heroes.ts`. Duplicating that here would give
-// the two formats two disagreeing opinions about what attribute 26 means.
-//
-// Members are packed with no alignment between them and a body is
-// variable-length, so this file also needs to know where one *ends*. It is told
-// rather than measuring: `decodeTemplateBody` answers with the template and the
-// width it consumed, and `encodeTemplateBody` answers in bits. Measuring the
-// body here would mean a second statement of §5.2's four width rules, which is
-// the same duplication one paragraph up, just spelled in arithmetic.
-//
-// ## Hero ids are checked against the hero table, and skill ids are not
-//
-// The two look symmetrical in the stream and are not. `heroes.ts` holds the
-// whole closed `HeroID` enum, `library.ts` says the module owning that table is
-// what mints a `HeroId`, and a member naming hero 200 — or 40, which is the
-// enum's `Count` end marker — would hand every reader downstream a lookup that
-// answers `undefined`. So an unknown hero id is refused at both ends, exactly
-// as an unknown profession or attribute id is. An unknown *skill* id is
-// accepted, because the skill table is open and a skill from a newer client is
-// a thing this format is expected to carry (skill-template-codec.md §7.3).
-//
-// ## Rejections
-//
-// `decodePartyLoadout` is total: it returns `null` for anything it cannot fully
-// decode and never throws, because its input is a string a stranger pasted.
-// §1.5 lists what Toolbox's decoder refuses (empty, header ≠ 15, type ≠ 1, bit
-// exhaustion) and, more usefully, what it does not: a character outside the
-// alphabet silently truncates the stream instead of rejecting, no field is
-// range-checked, and a member count of 13-15 walks off the end of a
-// fixed-size array. This decoder refuses all of those. Two of its limits are
-// ours rather than the format's, and are marked where they are declared: a
-// member count above eight, and a maximum code length.
+/**
+ * The party-loadout code: the `f…` string whose first byte is `0x1F`, carrying
+ * a whole party — a hero id and a skill bar per member — in one base64 code.
+ * GWToolbox calls it a *Daybreak team build*. The layout is
+ * `plans/tools/hero-builds/evidence/party-loadout-codec.md`, and section
+ * numbers below refer to that document.
+ *
+ * ## Read this before putting the codec in front of a player
+ *
+ * The bit layout is settled: §1.3 cites a working encoder and decoder line by
+ * line, and every field below names the line it came from. What is **not**
+ * settled is whether anything outside this repository speaks the format.
+ * §"WHAT THIS DECIDES" is blunt about it — the only claim that the game itself
+ * produces and consumes these codes is one comment whose own worked example
+ * fails its own decoder, nothing in GWToolbox ever writes one, nothing ever
+ * reads one from the client, and the name "Daybreak" refers elsewhere in that
+ * tree to a third-party launcher rather than to anything ArenaNet ships.
+ *
+ * So this file implements a format with one known implementation and no proven
+ * counterparty. `primitives.md` §6.1 (does the client import one?) and §6.2
+ * (can it export one?) are each a single live session and neither can be
+ * answered by reading more C++. Until one of them is recorded, a code produced
+ * here is a code only we can read: fine as our own transport, and not something
+ * to describe to a player as "your party loadout, importable in game".
+ * §1.7 derives the cheapest probe there is — the empty party, `fAA` under
+ * Toolbox's padding rule and `fA` under this one (see §1.6 below); both decode
+ * here, and `encodePartyLoadout([])` writes the shorter.
+ *
+ * ## There is no version field
+ *
+ * `primitives.md` §A3 and the commit that introduced the codec both describe
+ * "header 15, type 1, version 1" — three fields for two nibbles. The
+ * implementation writes exactly two (`TeamBuildEncoder.cpp:642-643`) and checks
+ * exactly two (`:696-697`). The third nibble is the member count. A decoder
+ * written from the prose would read a party of one as a valid version and then
+ * mis-align every member after it, which is why this is stated here rather than
+ * left as a footnote.
+ *
+ * ## What a party loadout carries, and what it silently drops
+ *
+ * Per member: a hero id and a skill bar (professions, invested attributes,
+ * eight skill ids). That is all (§1.4). Behaviour, the pinned skill panel, the
+ * disabled-skill mask, every name, the team's tags and its mode are **not in
+ * the format** — the encoder touches two fields of its input and the decoder
+ * sets two (`TeamBuildEncoder.cpp:646-650`, `:726-730`). Toolbox scrapes
+ * behaviour and the disabled mask from the live game and persists them to its
+ * own JSON precisely because a code cannot hold them. A round trip through this
+ * module is therefore lossy by construction, and the test beside it asserts
+ * exactly which fields survive rather than pretending the loss is a bug.
+ *
+ * ## Empty party positions
+ *
+ * The format has no spelling for "nobody here": a member is a hero id followed
+ * by a bar, and there is no presence bit anywhere in the stream. Toolbox's own
+ * Daybreak encoder therefore *aborts* on an empty member — its capture path
+ * always pushes eight entries and the first default-constructed one sinks the
+ * whole code (§1.5), so a captured party of four heroes cannot be encoded at
+ * all. §1.5 names that as the first bug not to reproduce, without saying what
+ * to do instead.
+ *
+ * This module drops empty positions and writes the members that remain, which
+ * is what the sibling encoder in the same file already does — skip the empty
+ * build, patch the count down (`TeamBuildEncoder.cpp:570-571`, `:575-578`).
+ * The alternative, writing an all-zero member as a placeholder, would mean
+ * inventing a meaning for profession id 0 in a member slot; the skill-template
+ * evidence records that a primary of `None` is how Toolbox detects a *failed*
+ * decode (skill-template-codec.md §7.2), so such a member is indistinguishable
+ * from corruption. Dropping loses which party positions were occupied and
+ * invents nothing. `partyMembersOf` is the one place that decision is taken.
+ *
+ * ## Why the per-member body lives in `skill-template.ts`
+ *
+ * A party loadout does not embed template *strings* — §1.1 corrects the plan on
+ * exactly this point. What it embeds is the skill template *body*: the same
+ * bits in the same order, with the 8-bit `kind`/`version` head replaced by an
+ * 8-bit hero id (skill-template-codec.md §9). So this file owns the party frame
+ * — magic, type, member count, hero id — and hands every body to
+ * `skill-template.ts`, which owns the width rules and every semantic rejection
+ * and reads the id tables out of `heroes.ts`. Duplicating that here would give
+ * the two formats two disagreeing opinions about what attribute 26 means.
+ *
+ * Members are packed with no alignment between them and a body is
+ * variable-length, so this file also needs to know where one *ends*. It is told
+ * rather than measuring: `decodeTemplateBody` answers with the template and the
+ * width it consumed, and `encodeTemplateBody` answers in bits. Measuring the
+ * body here would mean a second statement of §5.2's four width rules, which is
+ * the same duplication one paragraph up, just spelled in arithmetic.
+ *
+ * ## Hero ids are checked against the hero table, and skill ids are not
+ *
+ * The two look symmetrical in the stream and are not. `heroes.ts` holds the
+ * whole closed `HeroID` enum, `library.ts` says the module owning that table is
+ * what mints a `HeroId`, and a member naming hero 200 — or 40, which is the
+ * enum's `Count` end marker — would hand every reader downstream a lookup that
+ * answers `undefined`. So an unknown hero id is refused at both ends, exactly
+ * as an unknown profession or attribute id is. An unknown *skill* id is
+ * accepted, because the skill table is open and a skill from a newer client is
+ * a thing this format is expected to carry (skill-template-codec.md §7.3).
+ *
+ * ## Rejections
+ *
+ * `decodePartyLoadout` is total: it returns `null` for anything it cannot fully
+ * decode and never throws, because its input is a string a stranger pasted.
+ * §1.5 lists what Toolbox's decoder refuses (empty, header ≠ 15, type ≠ 1, bit
+ * exhaustion) and, more usefully, what it does not: a character outside the
+ * alphabet silently truncates the stream instead of rejecting, no field is
+ * range-checked, and a member count of 13-15 walks off the end of a
+ * fixed-size array. This decoder refuses all of those. Two of its limits are
+ * ours rather than the format's, and are marked where they are declared: a
+ * member count above eight, and a maximum code length.
+ */
 
 import type { BuildLibrary, HeroId, Team } from "./library.js";
 import { buildById, heroId } from "./library.js";

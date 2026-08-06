@@ -1,47 +1,49 @@
-// The one data model behind the hero-builds toolbox: what a build is, what a
-// team is, and what a stored library file holds. Several other modules read
-// these shapes, so this is deliberately the only place any of them exist.
-//
-// The model is not invented here. It is the model the UX prototype at
-// `plans/research/toolbox/11-teams-ux-prototype.html` already decided, and two
-// of its decisions are load-bearing enough that the types enforce them rather
-// than trusting callers:
-//
-//  1. A team slot *references* a build by id; it never embeds one. Builds are
-//     shared atoms, and every affordance the prototype designs around — the
-//     permanent "used in N teams" banner, a fork that rebinds the teams you
-//     choose, the "change all of them, or fork a variant" question asked at the
-//     moment of divergence — exists only because two teams can point at the
-//     same build. Flattening a build into its slots would delete the feature,
-//     not simplify it. So `TeamSlot.build` is a `BuildId`, and because ids are
-//     branded there is no shape in this file that lets a `Build` sit in a slot.
-//
-//  2. Lineage is exactly one level deep. `Build.parent` names the build this
-//     one was forked from, and forking a variant keeps the same root rather
-//     than growing a chain — `forkParentOf` is the single place that holds
-//     that. A chain would buy tidier diagrams and cost orphan repair on every
-//     delete, while two levels already answer both questions anyone asks:
-//     "what is this based on?" and "what did I change?". Deleting a parent
-//     promotes its variants to roots, so a dangling `parent` is a state the
-//     library genuinely reaches — `parentOf` answers `null` for it instead of
-//     assuming the link resolves.
-//
-// No I/O, no Electron, no filesystem, no IPC: main and the renderer both
-// import this file, and it must stay importable by both.
-//
-// Where this deliberately departs from the prototype, and why:
-//   - `lastUsed` is an epoch-millisecond timestamp, not the prototype's
-//     "days ago" integer. That integer is a fixture convenience; a stored
-//     record cannot hold a value that silently rots between sessions.
-//   - Skill and hero identifiers are the client's numeric ids, not the
-//     prototype's `"livia"`-style slugs. The slugs were a mock's convenience;
-//     the codecs and the client both speak numbers.
-//   - Attribute ranks stop at 12, which is what the game's own cumulative cost
-//     table admits (13 entries, ranks 0-12; see
-//     `plans/tools/hero-builds/evidence/hero-and-profession-tables.md` §3.4).
-//     The prototype's 16-entry table extends past anything a stored build can
-//     hold, and a rank of 15 in a saved record is not a value to round-trip,
-//     it is a bug to make unrepresentable.
+/**
+ * The one data model behind the hero-builds toolbox: what a build is, what a
+ * team is, and what a stored library file holds. Several other modules read
+ * these shapes, so this is deliberately the only place any of them exist.
+ *
+ * The model is not invented here. It is the model the UX prototype at
+ * `plans/research/toolbox/11-teams-ux-prototype.html` already decided, and two
+ * of its decisions are load-bearing enough that the types enforce them rather
+ * than trusting callers:
+ *
+ * 1. A team slot *references* a build by id; it never embeds one. Builds are
+ * shared atoms, and every affordance the prototype designs around — the
+ * permanent "used in N teams" banner, a fork that rebinds the teams you
+ * choose, the "change all of them, or fork a variant" question asked at the
+ * moment of divergence — exists only because two teams can point at the
+ * same build. Flattening a build into its slots would delete the feature,
+ * not simplify it. So `TeamSlot.build` is a `BuildId`, and because ids are
+ * branded there is no shape in this file that lets a `Build` sit in a slot.
+ *
+ * 2. Lineage is exactly one level deep. `Build.parent` names the build this
+ * one was forked from, and forking a variant keeps the same root rather
+ * than growing a chain — `forkParentOf` is the single place that holds
+ * that. A chain would buy tidier diagrams and cost orphan repair on every
+ * delete, while two levels already answer both questions anyone asks:
+ * "what is this based on?" and "what did I change?". Deleting a parent
+ * promotes its variants to roots, so a dangling `parent` is a state the
+ * library genuinely reaches — `parentOf` answers `null` for it instead of
+ * assuming the link resolves.
+ *
+ * No I/O, no Electron, no filesystem, no IPC: main and the renderer both
+ * import this file, and it must stay importable by both.
+ *
+ * Where this deliberately departs from the prototype, and why:
+ * - `lastUsed` is an epoch-millisecond timestamp, not the prototype's
+ * "days ago" integer. That integer is a fixture convenience; a stored
+ * record cannot hold a value that silently rots between sessions.
+ * - Skill and hero identifiers are the client's numeric ids, not the
+ * prototype's `"livia"`-style slugs. The slugs were a mock's convenience;
+ * the codecs and the client both speak numbers.
+ * - Attribute ranks stop at 12, which is what the game's own cumulative cost
+ * table admits (13 entries, ranks 0-12; see
+ * `plans/tools/hero-builds/evidence/hero-and-profession-tables.md` §3.4).
+ * The prototype's 16-entry table extends past anything a stored build can
+ * hold, and a rank of 15 in a saved record is not a value to round-trip,
+ * it is a bug to make unrepresentable.
+ */
 
 // The brand is declared, never exported and never constructed, so the only way
 // to produce a branded value is one of the minting functions below. That keeps

@@ -1,44 +1,46 @@
-// What changed between two builds, said precisely enough to show a player.
-//
-// The parent link stored in `library.ts` is decoration until something can
-// answer "what did I actually change?", and the capture flow cannot offer "this
-// is a variant of Discord Necro" until something can answer "what is this bar
-// closest to?". Both questions are one comparison, so they live in one file.
-//
-// The comparison is not invented here either: it is the one the UX prototype at
-// `plans/research/toolbox/11-teams-ux-prototype.html` arrived at by being used.
-// Three of its decisions are the reason this is worth having:
-//
-//  1. A changed slot carries *both* skills, not the slot number. "Slot 3
-//     changed" is a diff a machine is satisfied by; "Aegis → Protective Spirit"
-//     is the sentence the player came for, and the from/to pair is what lets a
-//     caller render it. The same record covers the two ends of a bar being
-//     filled in, because an empty slot is a real value: `null → Aegis` and
-//     `Aegis → null` are both named swaps.
-//  2. Distance is a single integer — one per changed slot, one per changed
-//     attribute, one for a changed profession pair — because everything that
-//     consumes a diff is really asking "how far apart are these?": the fork
-//     prompt, the merge-back offer, and the near-duplicate ceiling below.
-//     Weighting an elite swap above a rank change would be a better model of
-//     the *game* and a worse model of the question.
-//  3. A candidate with a different primary profession is not near anything.
-//     Two bars can be one skill apart and still be a Monk build and a Ritualist
-//     build, and offering the second as a variant of the first would be
-//     confidently wrong. Secondary professions are compared as a difference,
-//     not as a disqualifier — re-secondarying a bar is an ordinary variant.
-//
-// Where this departs from the prototype, and why:
-//   - The empty summary is `"identical"`, not the prototype's "identical to its
-//     parent". The same string is shown beside a variant *and* in the capture
-//     flow, where there is no parent and the caller supplies the context
-//     ("… from Discord Necro"). A function that names a relationship it was not
-//     told about is one the second caller has to work around.
-//   - `droppedByTeam` answers in heroes rather than in live party slots. The
-//     prototype computes the slot index and every caller then ignores it, so
-//     the index is not part of the answer.
-//
-// Pure and total: no I/O, no throwing, no Electron. Main and the renderer both
-// import this, and a diff runs while the player types.
+/**
+ * What changed between two builds, said precisely enough to show a player.
+ *
+ * The parent link stored in `library.ts` is decoration until something can
+ * answer "what did I actually change?", and the capture flow cannot offer "this
+ * is a variant of Discord Necro" until something can answer "what is this bar
+ * closest to?". Both questions are one comparison, so they live in one file.
+ *
+ * The comparison is not invented here either: it is the one the UX prototype at
+ * `plans/research/toolbox/11-teams-ux-prototype.html` arrived at by being used.
+ * Three of its decisions are the reason this is worth having:
+ *
+ * 1. A changed slot carries *both* skills, not the slot number. "Slot 3
+ * changed" is a diff a machine is satisfied by; "Aegis → Protective Spirit"
+ * is the sentence the player came for, and the from/to pair is what lets a
+ * caller render it. The same record covers the two ends of a bar being
+ * filled in, because an empty slot is a real value: `null → Aegis` and
+ * `Aegis → null` are both named swaps.
+ * 2. Distance is a single integer — one per changed slot, one per changed
+ * attribute, one for a changed profession pair — because everything that
+ * consumes a diff is really asking "how far apart are these?": the fork
+ * prompt, the merge-back offer, and the near-duplicate ceiling below.
+ * Weighting an elite swap above a rank change would be a better model of
+ * the *game* and a worse model of the question.
+ * 3. A candidate with a different primary profession is not near anything.
+ * Two bars can be one skill apart and still be a Monk build and a Ritualist
+ * build, and offering the second as a variant of the first would be
+ * confidently wrong. Secondary professions are compared as a difference,
+ * not as a disqualifier — re-secondarying a bar is an ordinary variant.
+ *
+ * Where this departs from the prototype, and why:
+ * - The empty summary is `"identical"`, not the prototype's "identical to its
+ * parent". The same string is shown beside a variant *and* in the capture
+ * flow, where there is no parent and the caller supplies the context
+ * ("… from Discord Necro"). A function that names a relationship it was not
+ * told about is one the second caller has to work around.
+ * - `droppedByTeam` answers in heroes rather than in live party slots. The
+ * prototype computes the slot index and every caller then ignores it, so
+ * the index is not part of the answer.
+ *
+ * Pure and total: no I/O, no throwing, no Electron. Main and the renderer both
+ * import this, and a diff runs while the player types.
+ */
 import type {
   Attribute,
   AttributeRank,

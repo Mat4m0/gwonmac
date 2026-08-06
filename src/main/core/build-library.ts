@@ -1,37 +1,39 @@
-// The durable half of the hero-builds toolbox: read and write `build-library.json`.
-//
-// The shape lives in `src/shared/builds/library.ts` because the renderer needs
-// it too. What lives here is everything that touches a disk, and one decision
-// that shapes the whole feature:
-//
-//   **The library is the source of truth. The game's template folder is a
-//   projection of it, written on demand.**
-//
-// The alternative — treating `app:/Templates/Skills` as the library and reading
-// it back — gives two writers to one directory, and the other writer is the
-// game, which this project does not control. `AGENTS.md` asks for one owner per
-// concept before anything else; this is that answer for builds.
-//
-// ## Why this is stricter than `settings.ts` in one place and softer in another
-//
-// Stricter: duplicate ids throw. `buildById` returns the first match, so a file
-// with two builds sharing an id silently loses one of them and rebinds every
-// team that pointed at it. That is data loss disguised as a successful load.
-//
-// Softer: a team slot naming a build that is not in the file is repaired to
-// `null` rather than refused. `TeamSlot.build` is already nullable — an empty
-// slot is an ordinary state — and deleting a build does exactly this repair to
-// every slot that held it. Refusing instead would mean one dangling reference
-// costs a player their entire collection, which is a far worse answer than one
-// empty slot in one team.
-//
-// ## Why a corrupt library is louder than corrupt settings
-//
-// `loadSettings` recovers by returning defaults, and defaults are a perfectly
-// good place to be. There is no such thing as a good default library: an empty
-// one is a player's whole collection gone. So the file is moved aside intact
-// and `onRecovered` fires — the caller is expected to tell somebody, not to
-// treat the empty result as normal.
+/**
+ * The durable half of the hero-builds toolbox: read and write `build-library.json`.
+ *
+ * The shape lives in `src/shared/builds/library.ts` because the renderer needs
+ * it too. What lives here is everything that touches a disk, and one decision
+ * that shapes the whole feature:
+ *
+ * **The library is the source of truth. The game's template folder is a
+ * projection of it, written on demand.**
+ *
+ * The alternative — treating `app:/Templates/Skills` as the library and reading
+ * it back — gives two writers to one directory, and the other writer is the
+ * game, which this project does not control. `AGENTS.md` asks for one owner per
+ * concept before anything else; this is that answer for builds.
+ *
+ * ## Why this is stricter than `settings.ts` in one place and softer in another
+ *
+ * Stricter: duplicate ids throw. `buildById` returns the first match, so a file
+ * with two builds sharing an id silently loses one of them and rebinds every
+ * team that pointed at it. That is data loss disguised as a successful load.
+ *
+ * Softer: a team slot naming a build that is not in the file is repaired to
+ * `null` rather than refused. `TeamSlot.build` is already nullable — an empty
+ * slot is an ordinary state — and deleting a build does exactly this repair to
+ * every slot that held it. Refusing instead would mean one dangling reference
+ * costs a player their entire collection, which is a far worse answer than one
+ * empty slot in one team.
+ *
+ * ## Why a corrupt library is louder than corrupt settings
+ *
+ * `loadSettings` recovers by returning defaults, and defaults are a perfectly
+ * good place to be. There is no such thing as a good default library: an empty
+ * one is a player's whole collection gone. So the file is moved aside intact
+ * and `onRecovered` fires — the caller is expected to tell somebody, not to
+ * treat the empty result as normal.
+ */
 import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {

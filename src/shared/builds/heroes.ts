@@ -1,49 +1,51 @@
-// The client's own numeric reference tables: which hero is id 7, which
-// profession is id 3, which attribute is id 35. Every value here is transcribed
-// from `plans/tools/hero-builds/evidence/hero-and-profession-tables.md`, which
-// carries the file and line each one was read from. These are protocol values,
-// not presentation: getting one wrong does not produce a visibly broken build,
-// it produces a build that loads the wrong skill on the wrong hero. So this file
-// transcribes and does nothing else — no fallbacks, no derived guesses, no
-// "sensible default" for a value the source did not state.
-//
-// `library.ts` owns the model (`Profession`, `Attribute`, `AttributeRank`,
-// `HeroId`); this file owns the numbers behind it. That split is why the two
-// lookups below are shaped differently:
-//
-//   - `PROFESSIONS` and `ATTRIBUTES` are keyed by the union `library.ts`
-//     already defines, so a name this file spells differently, omits, or
-//     invents is a compile error rather than something a test has to notice.
-//   - `HEROES` is an array, because there is no hero union to key by: the names
-//     here *are* the definition, and `HeroName` is derived from them.
-//
-// Three deliberate absences, each of which the evidence document marks
-// **NOT IN SOURCE**. They are absent rather than defaulted, because a plausible
-// wrong number is worse here than a missing one:
-//
-//   1. **Hero display names.** Read from the client at runtime and localised
-//      (`Resources.cpp:1213-1221`); there is no English list to copy. The
-//      internal name is the stable identifier and the honest degraded label, so
-//      a hero with no catalogue entry shows `Norgu`, never `Hero 1`.
-//   2. **Hero professions.** Live in `GW::HeroInfo` (`Hero.h:40-41`) and are
-//      never mirrored into a Toolbox table. Every hero needs a live read; what
-//      differs between heroes is whether the answer is a *fact about the hero*
-//      at all, which is what `Hero.kind` records.
-//   3. **Every profession's primary attribute.** The source asserts two of the
-//      ten, in the trailing comment on `Constants.h:73`; `kProfessionAttributes`
-//      in `TeamBuildEncoder.cpp:275-298` looks like the missing table and is
-//      not — it is ordered by frequency of use and pads to five with `None`, so
-//      Mesmer's entry begins with `DominationMagic`, and reading primaries out
-//      of it would be a guess wearing a citation. A profession's primary is a
-//      *rule*, not a wire value, and `validate.ts`'s `PRIMARY_ATTRIBUTE` is the
-//      one table that states it, marking per line which two were read and which
-//      eight are assumed. This file held those same two a second time with no
-//      production reader, which made the pair a thing that could disagree
-//      rather than a thing that could be corrected.
-//
-// The level-20 attribute point budget is likewise absent: it is a rule that
-// `validate.ts` owns and the evidence document states outright that the number
-// is in neither source tree, so there is nothing here to transcribe.
+/**
+ * The client's own numeric reference tables: which hero is id 7, which
+ * profession is id 3, which attribute is id 35. Every value here is transcribed
+ * from `plans/tools/hero-builds/evidence/hero-and-profession-tables.md`, which
+ * carries the file and line each one was read from. These are protocol values,
+ * not presentation: getting one wrong does not produce a visibly broken build,
+ * it produces a build that loads the wrong skill on the wrong hero. So this file
+ * transcribes and does nothing else — no fallbacks, no derived guesses, no
+ * "sensible default" for a value the source did not state.
+ *
+ * `library.ts` owns the model (`Profession`, `Attribute`, `AttributeRank`,
+ * `HeroId`); this file owns the numbers behind it. That split is why the two
+ * lookups below are shaped differently:
+ *
+ * - `PROFESSIONS` and `ATTRIBUTES` are keyed by the union `library.ts`
+ * already defines, so a name this file spells differently, omits, or
+ * invents is a compile error rather than something a test has to notice.
+ * - `HEROES` is an array, because there is no hero union to key by: the names
+ * here *are* the definition, and `HeroName` is derived from them.
+ *
+ * Three deliberate absences, each of which the evidence document marks
+ * **NOT IN SOURCE**. They are absent rather than defaulted, because a plausible
+ * wrong number is worse here than a missing one:
+ *
+ * 1. **Hero display names.** Read from the client at runtime and localised
+ * (`Resources.cpp:1213-1221`); there is no English list to copy. The
+ * internal name is the stable identifier and the honest degraded label, so
+ * a hero with no catalogue entry shows `Norgu`, never `Hero 1`.
+ * 2. **Hero professions.** Live in `GW::HeroInfo` (`Hero.h:40-41`) and are
+ * never mirrored into a Toolbox table. Every hero needs a live read; what
+ * differs between heroes is whether the answer is a *fact about the hero*
+ * at all, which is what `Hero.kind` records.
+ * 3. **Every profession's primary attribute.** The source asserts two of the
+ * ten, in the trailing comment on `Constants.h:73`; `kProfessionAttributes`
+ * in `TeamBuildEncoder.cpp:275-298` looks like the missing table and is
+ * not — it is ordered by frequency of use and pads to five with `None`, so
+ * Mesmer's entry begins with `DominationMagic`, and reading primaries out
+ * of it would be a guess wearing a citation. A profession's primary is a
+ * *rule*, not a wire value, and `validate.ts`'s `PRIMARY_ATTRIBUTE` is the
+ * one table that states it, marking per line which two were read and which
+ * eight are assumed. This file held those same two a second time with no
+ * production reader, which made the pair a thing that could disagree
+ * rather than a thing that could be corrected.
+ *
+ * The level-20 attribute point budget is likewise absent: it is a rule that
+ * `validate.ts` owns and the evidence document states outright that the number
+ * is in neither source tree, so there is nothing here to transcribe.
+ */
 
 import type { Attribute, AttributeRank, HeroId, Profession } from "./library.js";
 import { heroId } from "./library.js";

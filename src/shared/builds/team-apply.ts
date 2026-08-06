@@ -1,3 +1,19 @@
+/**
+ * A team, reduced to the one checked value that may be handed to the game.
+ *
+ * `resolveTeamApplyPlan` is the only door: it either returns a `TeamApplyPlan`
+ * whose every member has been checked, or the complete list of reasons it
+ * refused. There is no partially-valid plan, and nothing downstream re-derives
+ * the rules — a caller that holds a plan holds proof the rules passed.
+ *
+ * The plan is deliberately scalar and closed: hero ids, profession ids,
+ * attribute ranks, eight skill ids, a behaviour, and which slots are disabled.
+ * No pointers, no packets, no free text. That is what lets it cross into the
+ * companion as a fixed-size record rather than as a command surface, and it is
+ * why the refusals (`hard-mode`, `player-slot`, `party-gap`, ...) are values
+ * here rather than sentences: the renderer writes the sentence, this decides
+ * the fact.
+ */
 import { HERO_BY_ID } from "./heroes.js";
 import {
   buildById,

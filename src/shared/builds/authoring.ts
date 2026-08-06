@@ -1,3 +1,17 @@
+/**
+ * The attribute-spending rules, as the questions an editor actually asks: which
+ * attributes may this build spend on, how many points has it spent, how many
+ * remain, and may this one rank be set right now.
+ *
+ * `validate.ts` owns whether a finished build is legal; this owns whether one
+ * edit is available. The two are deliberately separate, because an editor has
+ * to grey a control out *before* the invalid state exists, and a validator that
+ * only speaks about finished builds cannot answer that.
+ *
+ * The point cost of a rank is the game's own table, so the budget arithmetic
+ * lives here rather than in any component: a rank set through `withAttributeRank`
+ * either fits the level-20 budget or the call returns the build unchanged.
+ */
 import type {
   Attribute,
   AttributeRank,

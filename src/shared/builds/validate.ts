@@ -1,46 +1,48 @@
-// Primitive A6, the build half: the structural rules that decide whether a
-// stored `Build` describes a character the game could actually produce. Team
-// rules (the same hero in two slots, a gap between filled party slots, an
-// unlocked-hero check that needs C4) belong to a team validator and are
-// deliberately not here — this file takes one build and answers about that
-// build alone, with no clock, no I/O and no game access.
-//
-// Three decisions shape everything below.
-//
-//  1. **The answer is a typed problem list, never a boolean.** A player who is
-//     told "invalid" learns nothing; a player told "slot 4 is a second elite"
-//     fixes it. Every problem therefore names its rule *and* its location — a
-//     `SkillSlotIndex` for the bar rules, an `Attribute` for the attribute
-//     rules — so the UI can point at the offending control rather than at the
-//     build. And the result is a union, not a struct with an optional list: a
-//     valid answer has no `problems` field to read, and an invalid one carries
-//     a non-empty tuple, so "invalid with nothing wrong" and "valid but here
-//     are three problems" are both unspellable.
-//
-//  2. **The skill catalogue is injected, because we do not own one.** Which
-//     profession a skill belongs to, and whether it is elite, is content —
-//     primitive A1 in `plans/tools/hero-builds/primitives.md`, an undecided
-//     product question (certified client read, bundled table, or no names at
-//     all). Inventing a skill table here would be inventing ArenaNet data, and
-//     it would rot the moment A1 is answered. So `validateBuild` takes the
-//     lookup as a parameter: a fixture answers it in tests today, and whatever
-//     A1 settles on answers it later without this file changing. A skill the
-//     catalogue cannot resolve is reported as `unknown-skill` rather than
-//     skipped, because silently skipping turns an incomplete catalogue into a
-//     clean bill of health — the one lie this module must not tell.
-//
-//  3. **Provenance is marked, not smoothed over.** The tables below come from
-//     `plans/tools/hero-builds/evidence/hero-and-profession-tables.md`, which
-//     is explicit about where its own sources stop. Two of the ten primary
-//     attributes are asserted by the source tree and eight are not; the
-//     level-20 budget is not in the source tree at all. Each of those carries a
-//     comment saying so where it is declared. Nothing here is presented as
-//     read-from-source when it was not.
-//
-// Order of the reported problems is deterministic — professions, then the bar
-// slot by slot, then attributes in the client's own enum order, then the
-// budget — so a UI can render the list without sorting it and a test can assert
-// on it.
+/**
+ * Primitive A6, the build half: the structural rules that decide whether a
+ * stored `Build` describes a character the game could actually produce. Team
+ * rules (the same hero in two slots, a gap between filled party slots, an
+ * unlocked-hero check that needs C4) belong to a team validator and are
+ * deliberately not here — this file takes one build and answers about that
+ * build alone, with no clock, no I/O and no game access.
+ *
+ * Three decisions shape everything below.
+ *
+ * 1. **The answer is a typed problem list, never a boolean.** A player who is
+ * told "invalid" learns nothing; a player told "slot 4 is a second elite"
+ * fixes it. Every problem therefore names its rule *and* its location — a
+ * `SkillSlotIndex` for the bar rules, an `Attribute` for the attribute
+ * rules — so the UI can point at the offending control rather than at the
+ * build. And the result is a union, not a struct with an optional list: a
+ * valid answer has no `problems` field to read, and an invalid one carries
+ * a non-empty tuple, so "invalid with nothing wrong" and "valid but here
+ * are three problems" are both unspellable.
+ *
+ * 2. **The skill catalogue is injected, because we do not own one.** Which
+ * profession a skill belongs to, and whether it is elite, is content —
+ * primitive A1 in `plans/tools/hero-builds/primitives.md`, an undecided
+ * product question (certified client read, bundled table, or no names at
+ * all). Inventing a skill table here would be inventing ArenaNet data, and
+ * it would rot the moment A1 is answered. So `validateBuild` takes the
+ * lookup as a parameter: a fixture answers it in tests today, and whatever
+ * A1 settles on answers it later without this file changing. A skill the
+ * catalogue cannot resolve is reported as `unknown-skill` rather than
+ * skipped, because silently skipping turns an incomplete catalogue into a
+ * clean bill of health — the one lie this module must not tell.
+ *
+ * 3. **Provenance is marked, not smoothed over.** The tables below come from
+ * `plans/tools/hero-builds/evidence/hero-and-profession-tables.md`, which
+ * is explicit about where its own sources stop. Two of the ten primary
+ * attributes are asserted by the source tree and eight are not; the
+ * level-20 budget is not in the source tree at all. Each of those carries a
+ * comment saying so where it is declared. Nothing here is presented as
+ * read-from-source when it was not.
+ *
+ * Order of the reported problems is deterministic — professions, then the bar
+ * slot by slot, then attributes in the client's own enum order, then the
+ * budget — so a UI can render the list without sorting it and a test can assert
+ * on it.
+ */
 import type {
   Attribute,
   AttributeRank,

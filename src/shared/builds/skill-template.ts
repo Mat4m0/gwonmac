@@ -1,82 +1,84 @@
-// The Guild Wars skill template codec: the `OwFj0…` string a player pastes into
-// chat or saves under `Templates/Skills`, decoded into the three fields of a
-// stored build that a template actually carries, and encoded back.
-//
-// The layout is `plans/tools/hero-builds/evidence/skill-template-codec.md`, and
-// that document is honest about what it is: the authoritative encoder was never
-// read (GWCA ships as a compiled DLL), so the bit layout is reconstructed from
-// GWToolbox's party-loadout encoder, which shares the alphabet, the bit order
-// and the per-entry body. Section numbers below refer to that document. Two
-// consequences worth carrying in your head while reading this file:
-//
-//   - Every DERIVED vector in §8 is a regression vector, not a conformance one.
-//     They prove this codec agrees with that document; nothing here has been
-//     accepted by a Guild Wars client. §10 items 1 and 2 are what would change
-//     that, and both need the hosted client.
-//   - §6 is genuinely open: the client may or may not round the payload up to a
-//     whole byte before base64. The two rules differ by at most one trailing
-//     `A`. This encoder implements the 6-bit rule (§6's recommendation) and the
-//     decoder accepts both, so a disagreement stays cosmetic.
-//
-// The bit order is the part that breaks naive implementations, so it is stated
-// once here rather than rediscovered at each field. The alphabet is standard
-// RFC 4648, but character *n* contributes bits `6n…6n+5` **least significant
-// bit first**, and a field of width `w` at offset `o` is `Σ bits[o+i] << i`.
-// There is no byte in the format at all; feeding a code to a stock base64
-// decoder produces noise that still looks like data.
-//
-// ## What this decoder refuses, and why it is stricter than §5.1
-//
-// `decodeSkillTemplate` is total: it returns `null` for everything it cannot
-// fully decode and never throws, because its input is a string a stranger
-// pasted into Discord. It never returns a partially-filled template — §7.2
-// records that GWCA leaves the caller's struct indeterminate on failure, and
-// that is exactly the shape a caller misreads as success.
-//
-// Beyond §7.1's confirmed rejections (empty, truncated, wrong kind, wrong
-// version, attribute count above 12, character outside the alphabet) this file
-// refuses four more things. Three of them are forced by the record the result
-// has to fit in — a template that cannot become a `Build` is not a template we
-// can honour, and pretending otherwise only moves the failure somewhere with
-// less context:
-//
-//   1. A profession or attribute id the client has no name for (the 26-28 gap
-//      included). `Profession` and `Attribute` are closed unions in
-//      `library.ts`; there is no value to put in the record, and `heroes.ts`
-//      owns which numbers name which member of them. Note the contrast with
-//      *skill* ids, which stay bare numbers precisely so §7.3 holds: a skill
-//      from a newer client decodes, carries its number, and renders as `#3512`
-//      rather than sinking the whole paste.
-//   2. An attribute rank above 12, which `AttributeRank` cannot hold (the
-//      game's cumulative cost table has 13 entries). The 4-bit field can spell
-//      15; a character cannot buy it.
-//   3. The same attribute twice. A record has one rank per attribute, so the
-//      second entry would silently overwrite the first and the code would not
-//      round-trip.
-//   4. Trailing bits that are not zero. §5.1 says to ignore everything after
-//      the eighth skill, but it says so only because §6's padding rule is
-//      unsettled — and the *whole* disagreement between those two rules is
-//      trailing zero bits. Accepting non-zero trailing bits would make an
-//      unbounded family of strings decode to one build, none of which
-//      `encodeSkillTemplate` would ever produce, so `decode` would stop being
-//      the inverse of `encode` for no gain. Zero bits are accepted at any
-//      length up to §5.1's 84-character maximum, which is what keeps both
-//      padding rules valid.
-//
-// Application-level rules stay out of here, per §7.3: whether the player's
-// character has the right profession, whether the skills are unlocked, whether
-// two elites are on one bar. A valid code describing an illegal build is a
-// valid code.
-//
-// ## Why the head and the body are separate functions
-//
-// A party loadout carries the same body under an 8-bit hero id instead of the
-// 8-bit `kind`/`version` head (§9), so `party-loadout.ts` needs the body and not
-// the code. It gets `encodeTemplateBody`/`decodeTemplateBody`, which are the
-// same two functions this file's own codec runs on rather than a second path
-// beside them. The alternative — handing that file a string and letting it find
-// where a body ends — makes it a second reader of §5.2's width rules, and the
-// two would disagree the first time a width moved.
+/**
+ * The Guild Wars skill template codec: the `OwFj0…` string a player pastes into
+ * chat or saves under `Templates/Skills`, decoded into the three fields of a
+ * stored build that a template actually carries, and encoded back.
+ *
+ * The layout is `plans/tools/hero-builds/evidence/skill-template-codec.md`, and
+ * that document is honest about what it is: the authoritative encoder was never
+ * read (GWCA ships as a compiled DLL), so the bit layout is reconstructed from
+ * GWToolbox's party-loadout encoder, which shares the alphabet, the bit order
+ * and the per-entry body. Section numbers below refer to that document. Two
+ * consequences worth carrying in your head while reading this file:
+ *
+ * - Every DERIVED vector in §8 is a regression vector, not a conformance one.
+ * They prove this codec agrees with that document; nothing here has been
+ * accepted by a Guild Wars client. §10 items 1 and 2 are what would change
+ * that, and both need the hosted client.
+ * - §6 is genuinely open: the client may or may not round the payload up to a
+ * whole byte before base64. The two rules differ by at most one trailing
+ * `A`. This encoder implements the 6-bit rule (§6's recommendation) and the
+ * decoder accepts both, so a disagreement stays cosmetic.
+ *
+ * The bit order is the part that breaks naive implementations, so it is stated
+ * once here rather than rediscovered at each field. The alphabet is standard
+ * RFC 4648, but character *n* contributes bits `6n…6n+5` **least significant
+ * bit first**, and a field of width `w` at offset `o` is `Σ bits[o+i] << i`.
+ * There is no byte in the format at all; feeding a code to a stock base64
+ * decoder produces noise that still looks like data.
+ *
+ * ## What this decoder refuses, and why it is stricter than §5.1
+ *
+ * `decodeSkillTemplate` is total: it returns `null` for everything it cannot
+ * fully decode and never throws, because its input is a string a stranger
+ * pasted into Discord. It never returns a partially-filled template — §7.2
+ * records that GWCA leaves the caller's struct indeterminate on failure, and
+ * that is exactly the shape a caller misreads as success.
+ *
+ * Beyond §7.1's confirmed rejections (empty, truncated, wrong kind, wrong
+ * version, attribute count above 12, character outside the alphabet) this file
+ * refuses four more things. Three of them are forced by the record the result
+ * has to fit in — a template that cannot become a `Build` is not a template we
+ * can honour, and pretending otherwise only moves the failure somewhere with
+ * less context:
+ *
+ * 1. A profession or attribute id the client has no name for (the 26-28 gap
+ * included). `Profession` and `Attribute` are closed unions in
+ * `library.ts`; there is no value to put in the record, and `heroes.ts`
+ * owns which numbers name which member of them. Note the contrast with
+ * *skill* ids, which stay bare numbers precisely so §7.3 holds: a skill
+ * from a newer client decodes, carries its number, and renders as `#3512`
+ * rather than sinking the whole paste.
+ * 2. An attribute rank above 12, which `AttributeRank` cannot hold (the
+ * game's cumulative cost table has 13 entries). The 4-bit field can spell
+ * 15; a character cannot buy it.
+ * 3. The same attribute twice. A record has one rank per attribute, so the
+ * second entry would silently overwrite the first and the code would not
+ * round-trip.
+ * 4. Trailing bits that are not zero. §5.1 says to ignore everything after
+ * the eighth skill, but it says so only because §6's padding rule is
+ * unsettled — and the *whole* disagreement between those two rules is
+ * trailing zero bits. Accepting non-zero trailing bits would make an
+ * unbounded family of strings decode to one build, none of which
+ * `encodeSkillTemplate` would ever produce, so `decode` would stop being
+ * the inverse of `encode` for no gain. Zero bits are accepted at any
+ * length up to §5.1's 84-character maximum, which is what keeps both
+ * padding rules valid.
+ *
+ * Application-level rules stay out of here, per §7.3: whether the player's
+ * character has the right profession, whether the skills are unlocked, whether
+ * two elites are on one bar. A valid code describing an illegal build is a
+ * valid code.
+ *
+ * ## Why the head and the body are separate functions
+ *
+ * A party loadout carries the same body under an 8-bit hero id instead of the
+ * 8-bit `kind`/`version` head (§9), so `party-loadout.ts` needs the body and not
+ * the code. It gets `encodeTemplateBody`/`decodeTemplateBody`, which are the
+ * same two functions this file's own codec runs on rather than a second path
+ * beside them. The alternative — handing that file a string and letting it find
+ * where a body ends — makes it a second reader of §5.2's width rules, and the
+ * two would disagree the first time a width moved.
+ */
 
 import type {
   AttributeRank,
