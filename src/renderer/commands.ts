@@ -46,6 +46,9 @@
       case 'input.reset':
         dispatch('gw:input-reset');
         break;
+      case 'tools.toggle':
+        dispatch('gw:tools-toggle');
+        break;
       case 'settings.open':
         dispatch('gw:settings', {
           pane: command.pane,

@@ -160,7 +160,7 @@ export function createToolboxFoundation(
   const open = document.createElement("button");
   open.type = "button";
   open.textContent = "Tools";
-  open.title = "Open Tools (Control+Shift+Space)";
+  open.title = "Open Tools (Command+B)";
   open.setAttribute("aria-label", "Open Tools");
   open.setAttribute("aria-controls", "toolbox-foundation-panel");
   open.setAttribute("aria-expanded", "false");
@@ -374,6 +374,12 @@ export function createToolboxFoundation(
   });
   mirrorCursor();
 
+  // The menu's accelerator arrives here as a command, already taken by the
+  // main process before the renderer -- and so before the game -- could see
+  // the key at all. The chord below stays as the keyboard-only route for a
+  // build with no menu.
+  const onCommand = () => setOpen(!overlayOpen);
+  window.addEventListener("gw:tools-toggle", onCommand);
   window.addEventListener("keydown", onToggleChord, true);
   window.addEventListener("resize", onResize);
   open.addEventListener("click", () => setOpen(true));
@@ -404,6 +410,7 @@ export function createToolboxFoundation(
       tool?.dispose();
       surface.dispose();
       cursorMirror.disconnect();
+      window.removeEventListener("gw:tools-toggle", onCommand);
       window.removeEventListener("keydown", onToggleChord, true);
       window.removeEventListener("resize", onResize);
       releaseGameInput();

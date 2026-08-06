@@ -101,6 +101,18 @@ export function installApplicationMenu({
         },
         { type: "separator" },
         {
+          label: "Toggle Tools",
+          // A menu accelerator rather than a key the renderer listens for: the
+          // main process takes it before the web contents exist in the picture,
+          // so the game cannot also act on it. A renderer chord has to race the
+          // game's own handlers and win; this one never enters that contest.
+          accelerator: "CmdOrCtrl+B",
+          click: async () => {
+            await resetGameInput(win);
+            await sendRendererCommand(win, { type: "tools.toggle" });
+          },
+        },
+        {
           label: "Toggle Diagnostics",
           click: async () => {
             await resetGameInput(win);

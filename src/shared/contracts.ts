@@ -733,6 +733,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
+  | { type: "tools.toggle" }
   | {
       type: "settings.open";
       pane?: SettingsPane;
