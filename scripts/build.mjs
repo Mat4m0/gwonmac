@@ -152,8 +152,10 @@ export const BUILD_STEPS = [
   // about four milliseconds, once, per icon that is ever looked at.
   //
   // -Wall/-Wextra/-Werror are deliberately not applied: this is vendored source
-  // carried unmodified, and the two -D/-Wno flags stand in for MSVC builtins
-  // clang lacks rather than patching it.
+  // carried unmodified, and the -D/-Wno flags stand in for MSVC builtins clang
+  // lacks rather than patching it. The third silences a warning about an `&&`
+  // that reads like a typo and is not one — src/native/gw-dat/vendor/README.md
+  // records why changing it would break the decode.
   [
     "xcrun",
     [
@@ -165,6 +167,7 @@ export const BUILD_STEPS = [
       "-O2",
       '-D__int64=long long',
       "-Wno-multichar",
+      "-Wno-constant-logical-operand",
       "-Isrc/native/gw-dat",
       "src/native/gw-dat/decoder-main.cpp",
       "src/native/gw-dat/vendor/gwdat/xentax.cpp",

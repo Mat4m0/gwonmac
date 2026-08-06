@@ -23,8 +23,27 @@ and should not be edited to fix a bug; take the upstream change instead. The
 wrapper in the parent directory is where this project's own code lives, and it
 bounds every input and output dimension before the derived routines run.
 
-Two local build adjustments are required and are applied in `scripts/build.mjs`
+Three local build adjustments are required and are applied in `scripts/build.mjs`
 rather than by patching the sources, so they stay diffable against upstream:
 
 - `-D__int64="long long"` — `__int64` is an MSVC builtin that clang lacks.
 - `-Wno-multichar` — `ProcessImageFile` compares four-character constants.
+- `-Wno-constant-logical-operand` — see below.
+
+## The `&&` in `AtexDecompress.cpp:24` is not a bug to fix
+
+    int AlphaDataSize2 = ((ImageFormat && 21) - 1) & 2;
+
+clang warns that the logical `&&` was probably meant to be a bitwise `&`, and
+read as English it clearly was. Do not change it.
+
+`AlphaDataSize2` is summed into `BlockSize`, so it affects every decode. As
+written, any non-zero `ImageFormat` makes the parenthesised term `1`, so the
+whole expression is `0` and the term is dead. With `&`, DXTL — format `0x12`,
+which is what skill icons are — would instead yield `2` and shift every block.
+
+Skill icons decode correctly with the code exactly as it stands here, verified
+against real archive contents rather than by reading it. This is also the form
+GWToolbox++ ships and uses in production. Whatever the original author intended,
+`0` is the value that produces correct images, so the warning is silenced rather
+than the source corrected.
