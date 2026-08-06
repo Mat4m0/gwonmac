@@ -166,8 +166,53 @@ passes unchanged; teardown leaves no listener and no held input.
 ## Track B — the certified command
 
 Track B exists to answer one question: **is there a natural game-owned execution
-boundary that can drain one typed team-apply intent?** If the answer is no, it
-ends there and Track A is the product.
+boundary that can drain one typed team-apply intent?**
+
+Reference research has now largely answered it, and the answer changes the
+odds. Three findings, each from a shipping implementation:
+
+**1. The rejected route was the wrong route, not the only route.** GWToolbox++
+never uses a UI dispatcher as a command gateway. Its hero-build load defers
+every action onto a queue drained from a game-thread callback hooked on the
+engine frame API (`p:\code\engine\frame\frapi.cpp`, `!s_bufferBits` +0x5f) —
+not the render path and not UI dispatch. Its per-hero sequence is a state
+machine: `AddHero` → poll until the hero appears in *both* `PartyInfo::heroes`
+and `WorldContext::hero_flags` → `LoadSkillTemplate(agent_id, code)` →
+8× `SetHeroSkillDisabled` → show/hide hero panel → `SetHeroBehavior`. Outpost
+only, kick-all first, bounded by timeouts.
+
+**2. `PropContext` is solvable, and the ledger's objection was precise.** It
+rejected *guessing* a context. GWCAjs — which targets this same Wasm client —
+installs a **structurally validated** context root into the slot `PropGet`
+reads, runs the call, and restores the previous value in `finally`. The root is
+rediscovered per load by pointer-relationship anchors, never a constant, and
+only calls whose decompiled body reaches `PropGet` are wrapped.
+
+**3. Target selection matters more than scheduling.** GWCAjs deliberately calls
+low-level packet builders rather than the high-level wrappers, because the
+wrappers "enter an incompatible asyncify/prologue path" — which this client has,
+being JSPI. It also records that calling the lowest sender is *not* sufficient
+on its own: `MsgSendLeave` returned normally without leaving the party, because
+the real button also ran two further calls.
+
+Against that, the existing work is further along than it looks. The eight
+dispatch functions are already certified for build 38,797 — hero add `6883`,
+kick `6884`, difficulty `6885`, secondary profession `6914`, attributes `6870`,
+skillbar `6940`, behaviour `6875`, skill toggle `6878` — chosen as context-free
+dispatchers rather than veneers. The kernel state machine already matches
+GWToolbox++'s shape. What failed was the execution point and the fabricated
+context, and both now have an evidenced alternative.
+
+This does not lower the admission bar. Every requirement below still applies,
+and a live promotion still comes last. It means the honest expectation is a
+command that can be certified, not a research track likely to end in Rejected.
+
+Two portability facts constrain any of it: function indices are **not** portable
+across builds — GWCAjs records cluster-local deltas of −2/−6/−7/−9 between
+adjacent builds and a real fault from reusing stale ones — and its runtime gate
+therefore refuses to patch unless the build id, section counts, and *every*
+patched function's Wasm type index match the manifest. Whatever we build
+inherits that fail-closed rule.
 
 The ledger's target shape is already drawn, and this work adopts it verbatim:
 
@@ -214,15 +259,21 @@ candidate reaches **Candidate** grade.
 
 ### B1 — the gateway
 
-Answer ledger open question 3: is there a natural client command queue or domain
-callback that drains one typed intent without fabricating `PropContext`?
+Answer ledger open question 3, now with two candidate shapes rather than none:
 
-Prefer the highest-level official request function whose normal caller already
-establishes every invariant. Event-context functions `#230`–`#234` are leads,
-not permission to fabricate a context.
+- **The frame-API drain.** Locate this client's Wasm equivalent of the engine
+  frame-API function GWToolbox++ hooks, and drain one intent there. This is the
+  natural game-owned execution point the ledger asked for.
+- **The validated context wrapper.** For calls that reach `PropGet`, install a
+  structurally validated context root around the call and restore it after, as
+  GWCAjs does — validated by pointer-relationship anchors, never a constant, and
+  never fabricated.
+
+Both must be proved against build 38,797 specifically. Neither is inherited from
+the reference implementations as a certificate; only the method is.
 
 **If no natural gateway is proved, Track B stops and is recorded as Rejected.**
-That is a successful outcome, not a failure.
+That remains a successful outcome.
 
 ### B2 — the intent slot
 
@@ -284,8 +335,10 @@ until B3 passes in full.
 
 - **A3 is the merge risk.** Two rewrites of the same stylesheets; budget review
   time and check it visually, not only by test.
-- **Track B may return nothing.** That is the expected case, and the plan is
-  built so it costs Track A nothing.
+- **Track B may still return nothing.** Reference research moved this from
+  likely to unlikely, but every finding is about a different binary — a Win32
+  client and a different Wasm build. Nothing transfers as a certificate. The
+  plan is still built so a Rejected outcome costs Track A nothing.
 - **Cross-build portability is unproven.** One official module is archived
   locally. Any certified command inherits the ledger's standing caveat that a
   single build cannot demonstrate relocation recovery.
