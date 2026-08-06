@@ -9,13 +9,9 @@
  * re-implemented the input protection; two boundaries around one panel is how
  * a held movement key ends up stuck when only one of them is torn down.
  *
- * The window furniture is the tool's own: it draws and drags its own window.
- *
- * KNOWN GAP, predating this module's current shape: `mountToolsApp` accepts an
- * `onVisibilityChange` callback and nothing here passes it, so the tool's own
- * close control hides the tool without telling the overlay. The overlay goes on
- * believing it is open, which keeps the HUD chip hidden, and the next toggle
- * spends itself restoring the chip rather than reopening the tool.
+ * The window furniture is the tool's own: it draws and drags its own window,
+ * and reports back when it closes itself so the overlay does not go on
+ * believing it is open.
  *
  * What is left is the two things the Vue bundle genuinely cannot know: where a
  * build is written so Guild Wars can load it, and whether a team may be applied
@@ -50,6 +46,7 @@ type ToolsBundle = Readonly<{
     target: HTMLElement,
     options: {
       initiallyVisible?: boolean;
+      onVisibilityChange?(visible: boolean): void;
       publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
       applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
     },
@@ -120,6 +117,7 @@ function applyTeam(): Promise<TeamApplyResult> {
  */
 export function mountToolsInto(
   host: HTMLElement,
+  onVisibilityChange: (visible: boolean) => void,
 ): Promise<MountedTool | null> {
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
@@ -129,6 +127,7 @@ export function mountToolsInto(
     .then((bundle: ToolsBundle) => {
       const app = bundle.mountToolsApp(host, {
         initiallyVisible: false,
+        onVisibilityChange,
         publishTemplate,
         applyTeam,
       });

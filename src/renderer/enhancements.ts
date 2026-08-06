@@ -516,9 +516,9 @@ export async function installEnhancements(
 
     const toolbox = foundation
       ? createToolboxFoundation(document.body, {
-          mountTool: (host) =>
+          mountTool: (host, onVisibilityChange) =>
             import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host),
+              mountToolsInto(host, onVisibilityChange),
             ),
         })
       : null;

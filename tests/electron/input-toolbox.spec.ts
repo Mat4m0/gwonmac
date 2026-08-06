@@ -25,13 +25,30 @@ import { startGameInput } from "./input-helpers.js";
  * what a real tool does and the non-activating rule turns on exactly that
  * distinction: you operate a button, you type in a field.
  */
+/**
+ * Where the stub tool draws its window, in viewport pixels.
+ *
+ * The game click below is derived from this rather than written out again. A
+ * tool draws a real window, and a window covering a pixel is entitled to that
+ * pixel — so a game click aimed *through* the tool does not fail, it hangs on
+ * Playwright's actionability check until the test times out. Deriving the point
+ * is what stops the two from silently drifting on top of each other.
+ */
+const TOOL_WINDOW = { left: 24, top: 24, width: 280, height: 160 } as const;
+
+/** A point on the canvas that the tool's window does not cover. */
+const GAME_POINT = {
+  x: 64,
+  y: TOOL_WINDOW.top + TOOL_WINDOW.height + 80,
+} as const;
+
 test.describe("renderer Tools input", () => {
   test("floats over the game without stealing it", async () => {
     const fixture = await launchOffline("gw-toolbox-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
-      await page.evaluate(async () => {
+      await page.evaluate(async (toolWindow) => {
         globalThis.document.getElementById("loading")?.classList.add("gone");
         const canvas = globalThis.document.getElementById("canvas");
         if (!(canvas instanceof globalThis.HTMLCanvasElement)) {
@@ -42,7 +59,10 @@ test.describe("renderer Tools input", () => {
           createToolboxFoundation(
             parent: HTMLElement,
             options: {
-              mountTool(host: HTMLElement): Promise<{
+              mountTool(
+                host: HTMLElement,
+                onVisibilityChange: (visible: boolean) => void,
+              ): Promise<{
                 setVisible(visible: boolean): void;
                 dispose(): void;
               } | null>;
@@ -63,11 +83,15 @@ test.describe("renderer Tools input", () => {
           // A tool draws its own window against the viewport and is handed the
           // overlay's layer to attach to. Everything else — the event stops,
           // the cursor mirror, the non-activating surface — it inherits.
-          mountTool: (host: HTMLElement) => {
+          mountTool: (
+            host: HTMLElement,
+            onVisibilityChange: (visible: boolean) => void,
+          ) => {
             const panel = document.createElement("div");
             panel.dataset.testid = "stub-tool";
             panel.style.cssText =
-              "position:fixed;left:24px;top:24px;width:280px;height:160px;"
+              `position:fixed;left:${toolWindow.left}px;top:${toolWindow.top}px;`
+              + `width:${toolWindow.width}px;height:${toolWindow.height}px;`
               + "padding:12px;background:#141414;pointer-events:auto;display:none";
             const action = document.createElement("button");
             action.type = "button";
@@ -75,7 +99,16 @@ test.describe("renderer Tools input", () => {
             const field = document.createElement("input");
             field.type = "text";
             field.setAttribute("aria-label", "Tool field");
-            panel.append(action, field);
+            // A real tool draws its own close control and hides itself. The
+            // overlay learns about it only through the callback.
+            const close = document.createElement("button");
+            close.type = "button";
+            close.textContent = "Close tool";
+            close.addEventListener("click", () => {
+              panel.style.display = "none";
+              onVisibilityChange(false);
+            });
+            panel.append(action, field, close);
             host.append(panel);
             return Promise.resolve({
               setVisible: (visible: boolean) => {
@@ -122,7 +155,7 @@ test.describe("renderer Tools input", () => {
           toolboxInputResets: "0",
         });
         canvas.focus();
-      });
+      }, TOOL_WINDOW);
 
       const body = page.locator("body");
       const root = page.locator("#toolbox-foundation");
@@ -131,7 +164,7 @@ test.describe("renderer Tools input", () => {
       await expect(tool).toBeHidden();
 
       // The game owns canvas clicks while the palette is closed.
-      await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
+      await page.locator("#canvas").click({ position: GAME_POINT });
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "1");
 
       // Opening Tools is not a statement that you have stopped playing. The
@@ -155,8 +188,9 @@ test.describe("renderer Tools input", () => {
       // The HUD chip gives way to the tool rather than sitting on top of it.
       await expect(page.getByRole("button", { name: "Open Tools" })).toBeHidden();
 
-      // Non-modal: a game click lands in the game and the tool stays open.
-      await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
+      // Non-modal: a game click outside the tool lands in the game, and the
+      // tool stays open rather than dismissing itself.
+      await page.locator("#canvas").click({ position: GAME_POINT });
       await expect(tool).toBeVisible();
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
       await expect(page.locator("#canvas")).toBeFocused();
@@ -181,8 +215,7 @@ test.describe("renderer Tools input", () => {
 
       // Escape means "stop typing" and gives the game back. It never reaches
       // Guild Wars from here, and it does not close the tool: closing is the
-      // chord or the menu. The mounted tool's own close control does NOT
-      // currently reach the overlay — see the note in tools-host.ts.
+      // chord, the menu, or the tool's own close control.
       await page.keyboard.press("Escape");
       await expect(page.locator("#canvas")).toBeFocused();
       await expect(tool).toBeVisible();
@@ -198,6 +231,17 @@ test.describe("renderer Tools input", () => {
       await expect(tool).toBeHidden();
       await expect(page.getByRole("button", { name: "Open Tools" })).toBeVisible();
       await page.keyboard.press("Control+Shift+Space");
+      await expect(tool).toBeVisible();
+
+      // A tool that hides itself has to say so, because the overlay cannot see
+      // it happen. Left unreported, the overlay goes on believing it is open:
+      // the HUD chip stays hidden and the next toggle spends itself restoring
+      // the chip instead of reopening the tool.
+      await page.getByRole("button", { name: "Close tool" }).click();
+      await expect(tool).toBeHidden();
+      await expect(page.getByRole("button", { name: "Open Tools" }))
+        .toBeVisible();
+      await page.getByRole("button", { name: "Open Tools" }).click();
       await expect(tool).toBeVisible();
 
       // The menu route: the main process sends `tools.toggle`, and the renderer

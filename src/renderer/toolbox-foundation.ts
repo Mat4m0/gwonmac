@@ -121,8 +121,16 @@ export function createToolboxFoundation(
      * Required. The overlay has nothing to show without it, and an overlay
      * that could be built without a tool is a configuration nothing ships and
      * every test would then be free to certify.
+     *
+     * `onVisibilityChange` is how a tool that hides itself — its own close
+     * control — says so. Without it the overlay goes on believing it is open,
+     * which keeps the HUD chip hidden and spends the next toggle restoring the
+     * chip rather than reopening the tool.
      */
-    mountTool: (host: HTMLElement) => Promise<MountedTool | null>;
+    mountTool: (
+      host: HTMLElement,
+      onVisibilityChange: (visible: boolean) => void,
+    ) => Promise<MountedTool | null>;
   },
 ) {
   const document = parent.ownerDocument;
@@ -172,11 +180,15 @@ export function createToolboxFoundation(
   const ensureTool = () => {
     if (toolRequested) return;
     toolRequested = true;
-    void options.mountTool(toolHost).then((mounted) => {
-      tool = mounted;
-      // The overlay may have been closed again while the bundle loaded.
-      tool?.setVisible(overlayOpen);
-    });
+    // The tool reports its own visibility back, which is how its close control
+    // reaches the overlay. Echoes of the overlay's own `setVisible` come back
+    // through here too and stop at `setOpen`'s no-change guard.
+    void options.mountTool(toolHost, (visible) => setOpen(visible))
+      .then((mounted) => {
+        tool = mounted;
+        // The overlay may have been closed again while the bundle loaded.
+        tool?.setVisible(overlayOpen);
+      });
   };
 
   let state: ToolboxState = Object.freeze({ status: "waiting" });
