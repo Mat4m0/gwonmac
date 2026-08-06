@@ -70,8 +70,9 @@
   --ui-font-display: "QT Friz Quad", Georgia, serif;
 
   /* -- Neutrals ---------------------------------------------------------- */
-  /* Brass is the default: the launcher's existing warmth, promoted to a
-   * first-class theme so the two surfaces stop disagreeing. */
+  /* The warm room Reforged and Brass share. Brass restates them anyway in its
+   * own block: a theme that inherits half a palette is the combination nobody
+   * designed, so the rule is completeness even where a value repeats. */
   --ui-base: oklch(20% 0.014 73);
   --ui-raised: oklch(24% 0.016 73);
   --ui-well: oklch(16% 0.012 73);
@@ -93,14 +94,20 @@
    * has to paint a swatch for a theme that is not the active one. Without
    * these the swatches would be a second, silently-drifting copy of the
    * palette — which is exactly the bug this file exists to prevent. */
+  /* Reforged is the product's own colour and so the default: the panel opens
+   * on top of chrome already painted this orange, and a tool that does not
+   * match the application it is inside reads as a different program. It is
+   * `#e87038` from the shipped harness, converted rather than re-picked, so
+   * the two surfaces agree by construction instead of by eye. */
+  --ui-theme-reforged: oklch(68% 0.164 44);
   --ui-theme-brass: oklch(78% 0.105 78);
   --ui-theme-steel: oklch(75% 0.11 245);
   --ui-theme-jade: oklch(76% 0.12 157);
 
-  --ui-accent: var(--ui-theme-brass);
-  --ui-accent-strong: oklch(66% 0.11 76);
+  --ui-accent: var(--ui-theme-reforged);
+  --ui-accent-strong: oklch(54% 0.142 43);
   --ui-accent-ink: oklch(20% 0.03 69);
-  --ui-focus: oklch(86% 0.1 81);
+  --ui-focus: oklch(79% 0.137 49);
 
   /* -- The metal edge ---------------------------------------------------- */
   --ui-frame-top: oklch(86% 0.055 80);
@@ -224,6 +231,31 @@
 /* A theme is a complete override: neutrals, ink, accent, frame, focus. Adding
  * only an accent is not a theme — it inherits half a palette from the default
  * and produces a combination nobody designed. The unit test enforces this. */
+
+/* Brass. The launcher's original warmth, kept as a theme now that Reforged
+ * orange is the product's own colour and holds the default. Same room as the
+ * default, different metal on the accent. */
+:root[data-ui-theme="brass"] {
+  --ui-base: oklch(20% 0.014 73);
+  --ui-raised: oklch(24% 0.016 73);
+  --ui-well: oklch(16% 0.012 73);
+  --ui-hover: oklch(29% 0.018 73);
+  --ui-selected: oklch(31% 0.035 78);
+  --ui-line: oklch(44% 0.025 76);
+  --ui-line-soft: oklch(34% 0.018 76);
+  --ui-text: oklch(91% 0.025 81);
+  --ui-text-bright: oklch(97% 0.03 83);
+  --ui-text-muted: oklch(76% 0.028 78);
+  --ui-text-faint: oklch(65% 0.025 76);
+  --ui-accent: var(--ui-theme-brass);
+  --ui-accent-strong: oklch(66% 0.11 76);
+  --ui-accent-ink: oklch(20% 0.03 69);
+  --ui-frame-top: oklch(86% 0.055 80);
+  --ui-frame-mid: oklch(58% 0.052 75);
+  --ui-frame-bottom: oklch(72% 0.06 79);
+  --ui-outline: oklch(10% 0.01 70);
+  --ui-focus: oklch(86% 0.1 81);
+}
 
 /* Steel. The client's own selected-tab blue, calmed. */
 :root[data-ui-theme="steel"] {
