@@ -2,6 +2,22 @@ import { expect, test } from "@playwright/test";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
+/**
+ * The overlay's boundary, driven through the configuration the app actually
+ * ships: an overlay with a tool mounted in it.
+ *
+ * The tool here is a stub, not the Tools bundle. The subject of this file is
+ * the boundary — what reaches the game, what stops at the overlay, and who
+ * holds the keyboard — and the tool is a collaborator behind a two-method
+ * interface. Mounting the real Vue application would test Vue, make this suite
+ * fail for reasons that have nothing to do with input, and duplicate
+ * apps/tools/tests/workbench.spec.ts, which owns that.
+ *
+ * What the stub is not allowed to be is a *different* configuration. It draws
+ * its own window with its own controls, including a text field, because that is
+ * what a real tool does and the non-activating rule turns on exactly that
+ * distinction: you operate a button, you type in a field.
+ */
 test.describe("renderer Tools input", () => {
   test("floats over the game without stealing it", async () => {
     const fixture = await launchOffline("gw-toolbox-input-e2e-");
@@ -18,8 +34,15 @@ test.describe("renderer Tools input", () => {
         const module = (await import(specifier)) as {
           createToolboxFoundation(
             parent: HTMLElement,
+            options: {
+              mountTool(host: HTMLElement): Promise<{
+                setVisible(visible: boolean): void;
+                dispose(): void;
+              } | null>;
+            },
           ): {
             update(state: object): void;
+            readonly state: { playerChatCount?: number };
           };
         };
         let gameKeys = 0;
@@ -30,7 +53,32 @@ test.describe("renderer Tools input", () => {
           inputResets += 1;
           document.body.dataset.toolboxInputResets = String(inputResets);
         });
-        const toolbox = module.createToolboxFoundation(document.body);
+        const toolbox = module.createToolboxFoundation(document.body, {
+          // A tool draws its own window against the viewport and is handed the
+          // overlay's layer to attach to. Everything else — the event stops,
+          // the cursor mirror, the non-activating surface — it inherits.
+          mountTool: (host: HTMLElement) => {
+            const panel = document.createElement("div");
+            panel.dataset.testid = "stub-tool";
+            panel.style.cssText =
+              "position:fixed;left:24px;top:24px;width:280px;height:160px;"
+              + "padding:12px;background:#141414;pointer-events:auto;display:none";
+            const action = document.createElement("button");
+            action.type = "button";
+            action.textContent = "Tool action";
+            const field = document.createElement("input");
+            field.type = "text";
+            field.setAttribute("aria-label", "Tool field");
+            panel.append(action, field);
+            host.append(panel);
+            return Promise.resolve({
+              setVisible: (visible: boolean) => {
+                panel.style.display = visible ? "block" : "none";
+              },
+              dispose: () => panel.remove(),
+            });
+          },
+        });
         toolbox.update({
           status: "ready",
           playerChatCount: 3,
@@ -39,6 +87,9 @@ test.describe("renderer Tools input", () => {
           firstHeroId: 7,
           panelState: 1,
         });
+        // The companion projection outlives the readout that used to draw it.
+        (globalThis as unknown as Record<string, unknown>).gwToolboxUnderTest =
+          toolbox;
         // Registered after the Tools capture/bubble boundary, standing in for
         // the game's global handlers. Events on Tools chrome must never reach
         // them; events on the game canvas always must, and a release for a
@@ -67,8 +118,9 @@ test.describe("renderer Tools input", () => {
 
       const body = page.locator("body");
       const root = page.locator("#toolbox-foundation");
-      const panel = page.getByRole("region", { name: "Tools" });
+      const tool = page.getByTestId("stub-tool");
       await expect(root).not.toHaveAttribute("data-open");
+      await expect(tool).toBeHidden();
 
       // The game owns canvas clicks while the palette is closed.
       await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
@@ -81,74 +133,90 @@ test.describe("renderer Tools input", () => {
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
       await page.getByRole("button", { name: "Open Tools" }).click();
       await expect(root).toHaveAttribute("data-open", "true");
-      await expect(panel).toBeVisible();
+      await expect(tool).toBeVisible();
       await expect(page.locator("#canvas")).toBeFocused();
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
       await page.keyboard.up("KeyW");
       await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
       await expect(body).toHaveAttribute("data-toolbox-last-key-up", "KeyW");
 
-      // The panel is open and the game still has the keyboard.
+      // The tool is open and the game still has the keyboard.
       await page.keyboard.press("x");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
-      await expect(page.getByText("Hero panel observed · hidden")).toBeVisible();
 
-      // Non-modal: a game click lands in the game and the palette stays open.
+      // The HUD chip gives way to the tool rather than sitting on top of it.
+      await expect(page.getByRole("button", { name: "Open Tools" })).toBeHidden();
+
+      // Non-modal: a game click lands in the game and the tool stays open.
       await page.locator("#canvas").click({ position: { x: 64, y: 64 } });
-      await expect(panel).toBeVisible();
+      await expect(tool).toBeVisible();
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
       await expect(page.locator("#canvas")).toBeFocused();
 
-      // Non-activating: clicking Tools chrome operates it without taking the
-      // keyboard, and without leaking the click into the game. This is the
-      // whole point — the player clicks the panel and can still run.
-      await panel.click({ position: { x: 8, y: 60 } });
+      // Non-activating: operating a tool control does not take the keyboard,
+      // and does not leak the click into the game. This is the whole point —
+      // the player clicks the panel and can still run.
+      await page.getByRole("button", { name: "Tool action" }).click();
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
       await expect(page.locator("#canvas")).toBeFocused();
       await page.keyboard.press("x");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
-      // Dragging the titlebar moves the panel and the position survives
-      // closing and reopening.
-      const before = await panel.boundingBox();
-      if (!before) throw new Error("panel bounding box is missing");
-      await page.mouse.move(before.x + 120, before.y + 14);
-      await page.mouse.down();
-      await page.mouse.move(before.x + 40, before.y - 106, { steps: 4 });
-      await page.mouse.up();
-      const after = await panel.boundingBox();
-      if (!after) throw new Error("panel bounding box is missing");
-      // Synthetic move interpolation can be coalesced under suite load, so the
-      // exact delta is not the invariant — movement and persistence are.
-      expect(after.x).toBeLessThan(before.x);
-      expect(after.y).toBeLessThan(before.y);
-      await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
-      await page.getByRole("button", { name: "Close Tools" }).click();
-      await expect(panel).toBeHidden();
-      await page.getByRole("button", { name: "Open Tools" }).click();
-      const reopened = await panel.boundingBox();
-      if (!reopened) throw new Error("panel bounding box is missing");
-      expect(reopened.x).toBeCloseTo(after.x, 0);
-      expect(reopened.y).toBeCloseTo(after.y, 0);
+      // Clicking into a text field is the one gesture that means "I want to
+      // type", so it hands the keyboard over — and what is typed stays inside
+      // the overlay rather than reaching the game.
+      await page.getByLabel("Tool field").click();
+      await expect(page.getByLabel("Tool field")).toBeFocused();
+      await page.keyboard.type("aggro");
+      await expect(page.getByLabel("Tool field")).toHaveValue("aggro");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
-      // Escape belongs to Guild Wars while the game holds the keyboard, which
-      // is now the resting state, so it reaches the game rather than closing
-      // the palette. Closing is the Close button or the chord.
+      // Escape means "stop typing" and gives the game back. It never reaches
+      // Guild Wars from here, and it does not close the tool: closing is the
+      // chord, the menu, or the tool's own control.
       await page.keyboard.press("Escape");
-      await expect(panel).toBeVisible();
+      await expect(page.locator("#canvas")).toBeFocused();
+      await expect(tool).toBeVisible();
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
+
+      // With the game holding the keyboard again, Escape belongs to Guild Wars.
+      await page.keyboard.press("Escape");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "4");
-      await page.getByRole("button", { name: "Close Tools" }).click();
-      await expect(panel).toBeHidden();
+      await expect(tool).toBeVisible();
 
       // The chord toggles from anywhere.
       await page.keyboard.press("Control+Shift+Space");
-      await expect(panel).toBeVisible();
+      await expect(tool).toBeHidden();
+      await expect(page.getByRole("button", { name: "Open Tools" })).toBeVisible();
       await page.keyboard.press("Control+Shift+Space");
-      await expect(panel).toBeHidden();
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect(tool).toBeVisible();
+
+      // The menu route: the main process sends `tools.toggle`, and the renderer
+      // command handler needs to know whether anything was listening. The
+      // overlay answers by cancelling the event — an uncancelled one is how
+      // `commands.ts` tells a player the capability is not installed.
+      const claimed = await page.evaluate(() =>
+        !window.dispatchEvent(
+          new CustomEvent("gw:tools-toggle", { cancelable: true }),
+        ),
+      );
+      expect(claimed).toBe(true);
+      await expect(tool).toBeHidden();
 
       // The palette never reset game input during any of the above.
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
+
+      // The companion's toolbox projection is still published for a live
+      // console session, even though nothing draws it any more.
+      const projected = await page.evaluate(
+        () =>
+          (
+            globalThis as unknown as {
+              gwToolboxUnderTest: { state: { playerChatCount?: number } };
+            }
+          ).gwToolboxUnderTest.state.playerChatCount,
+      );
+      expect(projected).toBe(3);
 
       // The native game cursor published on the canvas is mirrored over
       // Tools chrome, and clears back to the system arrow with it.
