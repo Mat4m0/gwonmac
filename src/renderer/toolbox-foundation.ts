@@ -52,11 +52,16 @@ const OVERLAY_CSS = `
   pointer-events: none;
   color: #e8e4d8;
   font: 12px/1.45 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-  -webkit-user-select: none;
 }
-#toolbox-foundation button {
+/*
+ * Scoped to the chip, not to the root. A bare "#toolbox-foundation button" is
+ * specificity (1,0,1) and the tool mounts in light DOM inside this root, so it
+ * outranked ".ui-button" (0,1,0) and dressed every button in the Tools window
+ * in the overlay's chip skin -- including "cursor: inherit", over a design
+ * system that deliberately says otherwise. The overlay draws one button; it
+ * should style one button.
+ */
+#toolbox-foundation [data-role="hud"] button {
   pointer-events: auto;
   padding: 4px 10px;
   border: 1px solid #524e44;
@@ -67,12 +72,12 @@ const OVERLAY_CSS = `
   cursor: inherit;
   transition: background-color 80ms linear, border-color 80ms linear;
 }
-#toolbox-foundation button:hover {
+#toolbox-foundation [data-role="hud"] button:hover {
   background: #2a2823;
   border-color: #6b6557;
 }
-#toolbox-foundation button:active { background: #161512; }
-#toolbox-foundation button:focus-visible {
+#toolbox-foundation [data-role="hud"] button:active { background: #161512; }
+#toolbox-foundation [data-role="hud"] button:focus-visible {
   outline: 1px solid #c8aa6e;
   outline-offset: 1px;
 }
@@ -81,13 +86,17 @@ const OVERLAY_CSS = `
   align-items: center;
   padding: 6px 8px;
   pointer-events: auto;
+  /* On the chip only: inherited from the root it would forbid selecting a
+     build name or a template code inside the tool, which owns that decision. */
+  user-select: none;
+  -webkit-user-select: none;
   background: rgba(10, 10, 12, 0.82);
   border: 1px solid #3c3a34;
   border-radius: 3px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
 }
 @media (prefers-reduced-motion: reduce) {
-  #toolbox-foundation button { transition: none; }
+  #toolbox-foundation [data-role="hud"] button { transition: none; }
 }
 `;
 

@@ -503,7 +503,8 @@ traffic through the central UI dispatcher does not schedule a traversal. The
 next tick resolves only the game/party vector and at most seven owned heroes,
 with one low-rate reconciliation every 120 ticks. It never scans the agent array
 for Toolbox. The kernel republishes only changed scalar state, and the renderer
-updates the Toolbox DOM only when decoded values change. There is no hero
+stores it as the companion projection only when decoded values change — the
+overlay draws none of it; the tool it hosts draws its own. There is no hero
 Show/Hide command: the companion has
 no game-function imports and never writes the game's PropContext slot. The
 thirteen observed/dirty message IDs come from the exact build certificate

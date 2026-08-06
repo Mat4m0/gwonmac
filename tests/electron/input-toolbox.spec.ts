@@ -9,9 +9,16 @@ import { startGameInput } from "./input-helpers.js";
  * The tool here is a stub, not the Tools bundle. The subject of this file is
  * the boundary — what reaches the game, what stops at the overlay, and who
  * holds the keyboard — and the tool is a collaborator behind a two-method
- * interface. Mounting the real Vue application would test Vue, make this suite
- * fail for reasons that have nothing to do with input, and duplicate
- * apps/tools/tests/workbench.spec.ts, which owns that.
+ * interface. Mounting the real Vue application would test Vue and make this
+ * suite fail for reasons that have nothing to do with input.
+ *
+ * Be clear about what that leaves uncovered rather than implying a sibling
+ * suite has it: apps/tools/tests/workbench.spec.ts drives the application in
+ * `standalone` mode, where the dragged position, the window close control and
+ * Escape-to-close are all switched off, and it runs under `tools:test:e2e`,
+ * which is in neither `pnpm check`, `pnpm test` nor `pnpm verify`. So the
+ * embedded window furniture the overlay used to own and now delegates is at
+ * present tested by nothing, here or there.
  *
  * What the stub is not allowed to be is a *different* configuration. It draws
  * its own window with its own controls, including a text field, because that is
@@ -42,7 +49,6 @@ test.describe("renderer Tools input", () => {
             },
           ): {
             update(state: object): void;
-            readonly state: { playerChatCount?: number };
           };
         };
         let gameKeys = 0;
@@ -79,6 +85,11 @@ test.describe("renderer Tools input", () => {
             });
           },
         });
+        // The projection still takes what the observer feeds it. What those
+        // values mean is pinned at the real boundary by
+        // tests/packaged-enhancement-runtime.ts, which reads them back through
+        // window.gwCompanionRuntime.toolbox after a real kernel wrote them.
+        // Asserting them here would only prove that an assignment assigns.
         toolbox.update({
           status: "ready",
           playerChatCount: 3,
@@ -87,9 +98,6 @@ test.describe("renderer Tools input", () => {
           firstHeroId: 7,
           panelState: 1,
         });
-        // The companion projection outlives the readout that used to draw it.
-        (globalThis as unknown as Record<string, unknown>).gwToolboxUnderTest =
-          toolbox;
         // Registered after the Tools capture/bubble boundary, standing in for
         // the game's global handlers. Events on Tools chrome must never reach
         // them; events on the game canvas always must, and a release for a
@@ -173,7 +181,8 @@ test.describe("renderer Tools input", () => {
 
       // Escape means "stop typing" and gives the game back. It never reaches
       // Guild Wars from here, and it does not close the tool: closing is the
-      // chord, the menu, or the tool's own control.
+      // chord or the menu. The mounted tool's own close control does NOT
+      // currently reach the overlay — see the note in tools-host.ts.
       await page.keyboard.press("Escape");
       await expect(page.locator("#canvas")).toBeFocused();
       await expect(tool).toBeVisible();
@@ -206,17 +215,14 @@ test.describe("renderer Tools input", () => {
       // The palette never reset game input during any of the above.
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
 
-      // The companion's toolbox projection is still published for a live
-      // console session, even though nothing draws it any more.
-      const projected = await page.evaluate(
-        () =>
-          (
-            globalThis as unknown as {
-              gwToolboxUnderTest: { state: { playerChatCount?: number } };
-            }
-          ).gwToolboxUnderTest.state.playerChatCount,
-      );
-      expect(projected).toBe(3);
+      // The chip says what it controls, and what it names exists. Two spellings
+      // with nothing tying them together is how an aria reference goes dangling
+      // in a rename; the projection it used to point at was `display: none` for
+      // the whole life of every shipped launch.
+      await expect(
+        page.getByRole("button", { name: "Open Tools" }),
+      ).toHaveAttribute("aria-controls", "toolbox-tool");
+      await expect(page.locator("#toolbox-tool")).toHaveCount(1);
 
       // The native game cursor published on the canvas is mirrored over
       // Tools chrome, and clears back to the system arrow with it.
