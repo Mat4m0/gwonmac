@@ -5,6 +5,12 @@ import { heroLabel } from "../model";
 
 const props = defineProps<{ party: LiveParty }>();
 
+const BEHAVIOUR_LABELS = {
+  fight: "Fight",
+  guard: "Guard",
+  avoid: "Avoid",
+} as const;
+
 /**
  * How many heroes are counted but not named.
  *
@@ -37,6 +43,18 @@ const unnamed = computed(() =>
         <li v-for="hero in party.heroes" :key="hero.hero" class="live-party-row">
           <span class="ui-mark" aria-hidden="true">{{ heroLabel(hero.hero)[0] }}</span>
           <span class="live-party-name">{{ heroLabel(hero.hero) }}</span>
+          <!--
+            Only what was read. A hero whose professions the kernel could not
+            reach shows no professions rather than a dash that reads like a
+            monoclass character, and behaviour is absent rather than defaulted
+            to Guard, which is a real setting somebody might act on.
+          -->
+          <span v-if="hero.professions" class="live-party-meta">
+            {{ hero.professions[1] ? `${hero.professions[0]}/${hero.professions[1]}` : hero.professions[0] }}
+          </span>
+          <span v-if="hero.behaviour" class="ui-chip live-party-behaviour">
+            {{ BEHAVIOUR_LABELS[hero.behaviour] }}
+          </span>
         </li>
       </ul>
 
@@ -96,12 +114,22 @@ const unnamed = computed(() =>
   min-width: 0;
 }
 
+.live-party-meta {
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+  white-space: nowrap;
+}
+
+.live-party-behaviour { margin-left: auto; }
+
 .live-party-name {
   overflow: hidden;
   font-size: var(--ui-font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.live-party-row .ui-chip { padding: 0 var(--ui-space-1); }
 
 .live-party-note {
   margin: 0;

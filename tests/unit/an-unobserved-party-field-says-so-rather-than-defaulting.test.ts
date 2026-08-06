@@ -180,3 +180,79 @@ test("profession ids become acronyms, and None is a secondary rather than a refu
   assert.equal(professionPair(1, 99), null);
   assert.equal(professionPair(99, 1), null);
 });
+
+// The party region supersedes the scalar summary, and the summary stays as the
+// fallback rather than being deleted: a build whose layout carries no detail
+// offsets still publishes the one-hero projection, and that is better than
+// nothing on screen.
+test("the full roster wins over the summary, and carries what was read", () => {
+  const party = liveParty({
+    status: "ready",
+    partyObserved: true,
+    heroAvailable: true,
+    heroCount: 1,
+    firstHeroId: 6,
+    party: {
+      status: "ready",
+      rosterObserved: true,
+      unlockObserved: true,
+      slotCount: 2,
+      unlocked: [38, 39],
+      slots: [
+        {
+          index: 0, occupied: false, hero: null, agentId: null, level: null,
+          professions: null, behaviour: null, skills: null, disabled: null,
+        },
+        {
+          index: 1, occupied: true, hero: 38, agentId: 43, level: 16,
+          professions: [1, 2], behaviour: 1,
+          skills: [354, 357, 0, 351, 316, 371, 446, 2], disabled: 0b0000_0101,
+        },
+        {
+          index: 2, occupied: true, hero: 39, agentId: 21, level: 15,
+          professions: [5, 0], behaviour: null, skills: null, disabled: null,
+        },
+      ],
+    },
+  });
+
+  assert.equal(party.heroes.length, 2, "the region's roster, not the summary's");
+  assert.equal(party.partial, false);
+
+  const [devona, althea] = party.heroes;
+  // Party position is a fact now, not a guess: the kernel publishes the slot.
+  assert.equal(devona?.slot, 1);
+  assert.equal(devona?.hero, heroId(38));
+  assert.deepEqual(devona?.professions, ["W", "R"]);
+  assert.equal(devona?.behaviour, "guard");
+  assert.equal(devona?.level, 16);
+  // A zero skill id is an empty slot on the bar, not skill zero.
+  assert.deepEqual(devona?.skills?.[2], null);
+  assert.deepEqual(devona?.disabled, [0, 2]);
+
+  // A monoclass hero has a real `null` secondary, and unread fields stay null
+  // beside a sibling that was read — the flags are per slot, not per party.
+  assert.deepEqual(althea?.professions, ["Me", null]);
+  assert.equal(althea?.behaviour, null);
+  assert.equal(althea?.skills, null);
+  assert.equal(althea?.disabled, null);
+
+  assert.deepEqual([...party.unlocked ?? []], [heroId(38), heroId(39)]);
+});
+
+test("a region whose walk was rejected is not an empty party", () => {
+  const rejected = liveParty({
+    status: "ready",
+    partyObserved: true,
+    heroAvailable: true,
+    heroCount: 2,
+    firstHeroId: 38,
+    // Decodable, but nobody read it: eight empty slots that must not be shown
+    // as a party of none. The summary is the fallback, so it answers instead.
+    party: { status: "ready", rosterObserved: false, slotCount: 0, slots: [] },
+  });
+
+  assert.equal(rejected.heroCount, 2, "the summary still counted two");
+  assert.equal(rejected.heroes.length, 1);
+  assert.equal(rejected.partial, true);
+});

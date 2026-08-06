@@ -14,6 +14,7 @@
 import {
   type CompanionToolboxState,
   readChangedCompanionToolbox,
+  readCompanionParty,
   readCompanionSnapshot,
   sameCompanionToolboxState,
 } from "./companion-snapshot.js";
@@ -22,6 +23,7 @@ type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
   snapshotPointer: number;
   toolboxPointer: number;
+  partyPointer: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -33,8 +35,19 @@ type StateConsumer = {
   update(state: CompanionState): void;
 };
 
+/**
+ * The two party regions arrive as one projection.
+ *
+ * They are separate records because one is a per-change scalar summary and the
+ * other is half a kilobyte of roster, but a consumer that had to correlate two
+ * feeds would eventually draw a roster from one publication beside a count
+ * from another. Merging here, at the only place that reads either, means the
+ * interface never sees them disagree.
+ */
 type ToolboxConsumer = {
-  update(state: CompanionToolboxState): void;
+  update(state: CompanionToolboxState & {
+    party?: ReturnType<typeof readCompanionParty>;
+  }): void;
 };
 
 export function recordCompanionLifecycle(state: CompanionState) {
@@ -104,7 +117,10 @@ export function observeCompanion(
         toolboxSequence = change.sequence;
         if (!sameCompanionToolboxState(previousToolbox, change.state)) {
           previousToolbox = change.state;
-          toolbox.update(change.state);
+          toolbox.update({
+            ...change.state,
+            party: readCompanionParty(runtime.memory.buffer, runtime.partyPointer),
+          });
         }
       }
     }

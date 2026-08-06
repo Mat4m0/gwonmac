@@ -19,6 +19,7 @@
  * drawing it.
  */
 import { HERO_BY_ID, PROFESSION_BY_ID, PROFESSION_NONE_ID } from "./heroes.js";
+import { skillId } from "./library.js";
 import type {
   HeroBehaviour,
   HeroId,
@@ -49,6 +50,29 @@ export type ToolboxObservation = Readonly<{
   heroCount?: number;
   firstHeroId?: number;
   firstHeroAgentId?: number;
+  /**
+   * The full roster, when the party region has published one. Its own
+   * `rosterObserved` governs it: a decodable region whose walk was rejected
+   * carries eight empty slots, and those are not an empty party.
+   */
+  party?: {
+    readonly status: string;
+    readonly rosterObserved?: boolean;
+    readonly unlockObserved?: boolean;
+    readonly slotCount?: number;
+    readonly unlocked?: readonly number[] | null;
+    readonly slots?: readonly {
+      readonly index: number;
+      readonly occupied: boolean;
+      readonly hero: number | null;
+      readonly agentId: number | null;
+      readonly level: number | null;
+      readonly professions: readonly number[] | null;
+      readonly behaviour: number | null;
+      readonly skills: readonly number[] | null;
+      readonly disabled: number | null;
+    }[];
+  };
 }>;
 
 /** One hero the companion can currently identify in the player's own party. */
@@ -137,6 +161,15 @@ export function liveParty(observation: ToolboxObservation): LiveParty {
     ? Math.max(0, observation.heroCount as number)
     : 0;
 
+  // The full roster supersedes the scalar summary whenever it is present and
+  // was actually observed. The summary stays the fallback rather than being
+  // deleted: the party region is newer, and a build whose layout does not
+  // carry the detail offsets still publishes the one-hero projection.
+  const region = observation.party;
+  if (region?.status === "ready" && region.rosterObserved === true) {
+    return fromRegion(region, observation);
+  }
+
   const heroes: LivePartyHero[] = [];
   const id = observation.firstHeroId;
   if (
@@ -186,4 +219,68 @@ export function professionPair(
   if (secondary === PROFESSION_NONE_ID) return [first, null];
   const second = PROFESSION_BY_ID.get(secondary);
   return second === undefined ? null : [first, second];
+}
+
+const BEHAVIOURS: readonly HeroBehaviour[] = ["fight", "guard", "avoid"];
+
+/** The client's numeric hero behaviour, or `null` for a value it never uses. */
+function behaviourOf(value: number | null): HeroBehaviour | null {
+  return value === null ? null : BEHAVIOURS[value] ?? null;
+}
+
+/**
+ * Reads the party region into the domain.
+ *
+ * Every field arrives already paired with whether the kernel read it, so this
+ * translates rather than decides — the one judgement it makes is dropping a
+ * hero the table cannot name, for the same reason the scalar path does.
+ */
+function fromRegion(
+  region: NonNullable<ToolboxObservation["party"]>,
+  observation: ToolboxObservation,
+): LiveParty {
+  const heroes: LivePartyHero[] = [];
+  for (const slot of region.slots ?? []) {
+    if (!slot.occupied || slot.hero === null) continue;
+    if (!HERO_BY_ID.has(slot.hero as HeroId)) continue;
+    heroes.push(Object.freeze({
+      // The kernel's slot indices are the party positions, player at 0.
+      slot: slot.index as TeamSlotIndex,
+      hero: slot.hero as HeroId,
+      agentId: slot.agentId ?? 0,
+      professions: slot.professions === null
+        ? null
+        : professionPair(slot.professions[0] ?? 0, slot.professions[1] ?? 0),
+      behaviour: behaviourOf(slot.behaviour),
+      level: slot.level,
+      skills: slot.skills === null
+        ? null
+        : (Object.freeze(
+            slot.skills.map((id) => id === 0 ? null : skillId(id)),
+          ) as unknown as SkillBar),
+      disabled: slot.disabled === null
+        ? null
+        : Object.freeze(
+            [0, 1, 2, 3, 4, 5, 6, 7].filter(
+              (index) => (slot.disabled! & (1 << index)) !== 0,
+            ) as SkillSlotIndex[],
+          ),
+    }));
+  }
+  const counted = region.slotCount ?? heroes.length;
+  return Object.freeze({
+    status: "ready",
+    heroCount: counted,
+    heroes: Object.freeze(heroes),
+    partial: heroes.length < counted,
+    unlocked: region.unlockObserved === true && region.unlocked
+      ? Object.freeze(new Set(
+          region.unlocked.filter((id) => HERO_BY_ID.has(id as HeroId))
+            .map((id) => id as HeroId),
+        ))
+      : null,
+    // Neither reaches the region yet; the toolbox summary never carried them.
+    hardMode: null,
+    inOutpost: observation.status === "ready" ? true : null,
+  });
 }

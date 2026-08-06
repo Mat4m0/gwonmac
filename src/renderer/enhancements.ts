@@ -546,6 +546,7 @@ export async function installEnhancements(
       memory,
       snapshotPointer,
       toolboxPointer,
+      partyPointer,
       hertz: 0,
       lastRenderUs: 0,
       renderSamples: [] as number[],
