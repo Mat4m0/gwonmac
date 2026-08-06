@@ -15,9 +15,19 @@
     { type: 'diagnostics.capture' }
   >;
 
-  const dispatch = (name: string, detail?: unknown) => {
-    window.dispatchEvent(new window.CustomEvent(name, { detail }));
-  };
+  /**
+   * Fires a renderer event and reports whether anything claimed it.
+   *
+   * Every event here is cancelable, and cancelling one is how a listener says
+   * "handled". That is the only honest answer available: dispatching to an
+   * empty room succeeds exactly like dispatching to a listener that worked, so
+   * a command whose completion the main process reports back to a player needs
+   * the listener to say so. Callers that cannot fail ignore the result.
+   */
+  const dispatch = (name: string, detail?: unknown): boolean =>
+    !window.dispatchEvent(
+      new window.CustomEvent(name, { cancelable: true, detail }),
+    );
 
   async function capture(command: CaptureCommand) {
     const diagnostics = window.gwDiagnostics;
@@ -47,15 +57,16 @@
         dispatch('gw:input-reset');
         break;
       case 'tools.toggle':
-        // Nothing listens unless the Toolbox capability installed, and an
-        // event with no listener is indistinguishable from one that worked.
-        // A player who pressed the shortcut is owed the difference.
-        if (window.document.getElementById('toolbox-foundation') === null) {
+        // Nothing listens unless the Toolbox capability installed, and a player
+        // who pressed the shortcut is owed the difference between "opened" and
+        // "nothing happened". The overlay cancels the event to claim it; an
+        // uncancelled one means no overlay is installed, which is the ordinary
+        // case on a launch that did not ask for the capability.
+        if (!dispatch('gw:tools-toggle')) {
           throw new Error(
             'Tools is not available in this launch: the Toolbox capability is not installed.',
           );
         }
-        dispatch('gw:tools-toggle');
         break;
       case 'settings.open':
         dispatch('gw:settings', {

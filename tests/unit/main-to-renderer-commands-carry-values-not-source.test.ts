@@ -87,15 +87,13 @@ function harness(argv: string[]) {
   const flushed = new Promise<void>((resolve) => {
     releaseFlush = resolve;
   });
-  // The Toolbox overlay, present or not. `tools.toggle` is refused when it is
-  // absent, which is the ordinary case on a launch without the capability.
-  let toolbox: object | null = null;
+  // The Toolbox overlay, present or not. It claims the toggle by cancelling
+  // the event, exactly as the real overlay does, and `tools.toggle` is refused
+  // when nothing claims it — the ordinary case on a launch without the
+  // capability.
+  let toolboxListening = false;
   const window = {
     gwNative: api,
-    document: {
-      getElementById: (id: string) =>
-        id === "toolbox-foundation" ? toolbox : null,
-    },
     gwDiagnostics: {
       resetForCapture: () => Promise.resolve(),
       captureStarted(level: unknown) {
@@ -112,14 +110,31 @@ function harness(argv: string[]) {
         return flushed;
       },
     },
+    // Enough of the real contract to be able to fail: an event that can be
+    // cancelled, and a dispatch that reports whether it was. A fake that
+    // always returns nothing would make every command look handled.
     CustomEvent: class {
       readonly type: string;
-      constructor(type: string) {
+      readonly cancelable: boolean;
+      defaultPrevented = false;
+      constructor(type: string, init?: { cancelable?: boolean }) {
         this.type = type;
+        this.cancelable = Boolean(init?.cancelable);
+      }
+      preventDefault() {
+        if (this.cancelable) this.defaultPrevented = true;
       }
     },
-    dispatchEvent(event: { type: string }) {
+    dispatchEvent(event: {
+      type: string;
+      preventDefault(): void;
+      defaultPrevented: boolean;
+    }) {
       dispatched.push(event.type);
+      if (toolboxListening && event.type === "gw:tools-toggle") {
+        event.preventDefault();
+      }
+      return !event.defaultPrevented;
     },
   };
   const context: Record<string, unknown> = { console, window };
@@ -145,7 +160,7 @@ function harness(argv: string[]) {
     releaseFlush,
     window,
     installToolbox: () => {
-      toolbox = {};
+      toolboxListening = true;
     },
   };
 }
@@ -221,10 +236,13 @@ test("the Tools shortcut is refused when there is no Toolbox to toggle", async (
   // The capability is off on an ordinary launch, and an event nobody listens
   // for is indistinguishable from one that worked. The command has to fail so
   // the menu can say so rather than appear to have done something.
+  //
+  // The event is still dispatched: asking is how the router finds out. Nothing
+  // cancels it, and that uncancelled dispatch is the refusal.
   const fixture = harness(ARGV);
   fixture.deliver(1, { type: "tools.toggle" });
   await new Promise(setImmediate);
-  assert.deepEqual(fixture.dispatched, []);
+  assert.deepEqual(fixture.dispatched, ["gw:tools-toggle"]);
   assert.deepEqual(fixture.acknowledgements(), [[1, "failed"]]);
 });
 
