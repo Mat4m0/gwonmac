@@ -294,11 +294,19 @@ export function readCompanionCursorPixels(buffer: ArrayBuffer, pointer: number) 
   return Object.freeze({ ...header, pixels });
 }
 
-export const COMPANION_TOOLBOX_ABI = 2;
+export const COMPANION_TOOLBOX_ABI = 3;
 export const COMPANION_TOOLBOX_BYTES = 64;
 
 const TOOLBOX_MAGIC = 0x58545747;
 const TOOLBOX_HERO_AVAILABLE = 1 << 0;
+/*
+ * The kernel completed a party walk on a live game for this publication.
+ * Its absence is the difference between "you have no heroes" and "nobody
+ * looked" — during a map load the second is true, and without this bit the
+ * two arrive as identical bytes.
+ */
+const TOOLBOX_PARTY_OBSERVED = 1 << 1;
+const KNOWN_TOOLBOX_FLAGS = TOOLBOX_HERO_AVAILABLE | TOOLBOX_PARTY_OBSERVED;
 
 function readCompanionToolboxSequence(
   buffer: ArrayBuffer,
@@ -358,15 +366,20 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
   }
   const secondSequence = view.getUint32(8, true);
   const heroAvailable = (flags & TOOLBOX_HERO_AVAILABLE) !== 0;
+  const partyObserved = (flags & TOOLBOX_PARTY_OBSERVED) !== 0;
   if (
     magic !== TOOLBOX_MAGIC
     || abi !== COMPANION_TOOLBOX_ABI
     || byteLength !== COMPANION_TOOLBOX_BYTES
     || firstSequence !== secondSequence
     || (secondSequence & 1) !== 0
-    || (flags & ~TOOLBOX_HERO_AVAILABLE) !== 0
+    || (flags & ~KNOWN_TOOLBOX_FLAGS) !== 0
     || reserved !== 0
     || state.panelState > 2
+    // A hero cannot be available in a party nobody read. Checked here rather
+    // than trusted: the kernel enforces it by construction, which is exactly
+    // why agreeing with it by construction would prove nothing.
+    || (heroAvailable && !partyObserved)
     || (heroAvailable
       ? state.heroCount < 1
         || state.heroCount > 7
@@ -382,6 +395,7 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
     status: "ready",
     sequence: secondSequence,
     heroAvailable,
+    partyObserved,
     ...state,
   });
 }
@@ -423,6 +437,7 @@ export function sameCompanionToolboxState(
   return previous.playerChatCount === next.playerChatCount
     && previous.cursorEventCount === next.cursorEventCount
     && previous.heroAvailable === next.heroAvailable
+    && previous.partyObserved === next.partyObserved
     && previous.heroCount === next.heroCount
     && previous.firstHeroId === next.firstHeroId
     && previous.firstHeroAgentId === next.firstHeroAgentId

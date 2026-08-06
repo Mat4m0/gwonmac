@@ -38,6 +38,13 @@ import type {
  */
 export type ToolboxObservation = Readonly<{
   status: string;
+  /**
+   * The kernel completed a party walk on a live game. Absent or false means
+   * nobody looked — a map load, a game not yet running, a walk that rejected
+   * what it found — which is a different statement from an empty party and is
+   * the one the interface must not turn into "you have no heroes".
+   */
+  partyObserved?: boolean;
   heroAvailable?: boolean;
   heroCount?: number;
   firstHeroId?: number;
@@ -117,7 +124,14 @@ export function unavailableParty(): LiveParty {
  * one layer up.
  */
 export function liveParty(observation: ToolboxObservation): LiveParty {
-  if (observation.status !== "ready") return UNAVAILABLE;
+  // A decodable record is not an observation. `status: "ready"` says the bytes
+  // were well-formed; `partyObserved` says somebody actually read the party.
+  // Zoning between outposts produces the first without the second, and treating
+  // that as a ready party is what put "No heroes in your party" on screen mid-
+  // load — a claim, where the truth was that nothing had been looked at.
+  if (observation.status !== "ready" || observation.partyObserved !== true) {
+    return UNAVAILABLE;
+  }
 
   const heroCount = Number.isSafeInteger(observation.heroCount)
     ? Math.max(0, observation.heroCount as number)

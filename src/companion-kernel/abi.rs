@@ -30,8 +30,19 @@ pub(crate) const KNOWN_FEATURES: u32 =
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
-pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 2;
+pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 3;
 pub(crate) const FLAG_HERO_AVAILABLE: u32 = 1 << 0;
+/// The party walk ran to completion on a live game this publication.
+///
+/// Without it, "you have no heroes" and "your party could not be read" are the
+/// same bytes — `hero_count` 0 with no hero flag — and a reader has no way to
+/// tell them apart. During a map load the second is true and the first is what
+/// the interface said.
+///
+/// A positive assertion on purpose: a publication claims an observation only
+/// when one happened, so anything that goes wrong anywhere in the walk leaves
+/// the claim unmade rather than needing its own error bit.
+pub(crate) const FLAG_PARTY_OBSERVED: u32 = 1 << 1;
 
 pub(crate) const DISPATCH_TICK: u32 = 0;
 pub(crate) const DISPATCH_CURSOR: u32 = 1;

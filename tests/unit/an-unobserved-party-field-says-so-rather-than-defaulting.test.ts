@@ -38,9 +38,41 @@ test("an observation that is not ready is a party nobody can draw", () => {
   assert.deepEqual(liveParty({ status: "waiting" }), unavailableParty());
 });
 
+// The one this module was written to prevent and shipped with anyway. Zoning
+// between outposts publishes a perfectly well-formed record in which the
+// kernel has read nothing: hero count 0, no hero available. Read as a party,
+// that is the claim "you have no heroes", and the panel duly made it in the
+// middle of every map load. `partyObserved` is the difference between a record
+// that decoded and a party that was looked at.
+test("a well-formed record nobody took a reading for is not an empty party", () => {
+  const midZone = liveParty({
+    status: "ready",
+    heroCount: 0,
+    firstHeroId: 0,
+    firstHeroAgentId: 0,
+  });
+
+  assert.equal(midZone.status, "unavailable");
+  assert.deepEqual(midZone, unavailableParty(), "the same statement, one value");
+
+  // Explicit false is the same statement as absent, and must not read as a
+  // weaker one.
+  assert.deepEqual(
+    liveParty({ status: "ready", partyObserved: false, heroCount: 0 }),
+    unavailableParty(),
+  );
+
+  // And an observed empty party is a real, different answer: the walk ran, and
+  // you genuinely have no heroes.
+  const observedEmpty = liveParty({ status: "ready", partyObserved: true, heroCount: 0 });
+  assert.equal(observedEmpty.status, "ready");
+  assert.notDeepEqual(observedEmpty, unavailableParty());
+});
+
 test("a counted but unnamed hero is counted, not invented", () => {
   const party = liveParty({
     status: "ready",
+    partyObserved: true,
     heroAvailable: true,
     heroCount: 3,
     firstHeroId: 6,
@@ -58,6 +90,7 @@ test("a counted but unnamed hero is counted, not invented", () => {
 test("every field the companion has not published reads as not observed", () => {
   const [hero] = liveParty({
     status: "ready",
+    partyObserved: true,
     heroAvailable: true,
     heroCount: 1,
     firstHeroId: 6,
@@ -77,7 +110,7 @@ test("every field the companion has not published reads as not observed", () => 
 });
 
 test("account and instance facts stay unknown rather than defaulting to false", () => {
-  const party = liveParty({ status: "ready", heroCount: 0 });
+  const party = liveParty({ status: "ready", partyObserved: true, heroCount: 0 });
 
   // `unlocked: null` and an empty set are different claims. Only one of them
   // may grey a hero out in the picker.
@@ -90,6 +123,7 @@ test("a hero the table cannot name is dropped rather than published as a number"
   for (const firstHeroId of [0, 40, 999, -1, 6.5]) {
     const party = liveParty({
       status: "ready",
+      partyObserved: true,
       heroAvailable: true,
       heroCount: 2,
       firstHeroId,
@@ -105,6 +139,7 @@ test("a hero the table cannot name is dropped rather than published as a number"
 test("the flag says available or the hero is not listed, whatever the id says", () => {
   const party = liveParty({
     status: "ready",
+    partyObserved: true,
     heroAvailable: false,
     heroCount: 2,
     firstHeroId: 6,
@@ -115,6 +150,7 @@ test("the flag says available or the hero is not listed, whatever the id says", 
 test("a fully named party is not partial", () => {
   const party = liveParty({
     status: "ready",
+    partyObserved: true,
     heroAvailable: true,
     heroCount: 1,
     firstHeroId: 6,
@@ -124,12 +160,12 @@ test("a fully named party is not partial", () => {
 
 test("a nonsense count is floored rather than trusted", () => {
   for (const heroCount of [-3, Number.NaN, 1.5]) {
-    const party = liveParty({ status: "ready", heroCount });
+    const party = liveParty({ status: "ready", partyObserved: true, heroCount });
     assert.equal(party.heroCount, 0, `count ${String(heroCount)}`);
     assert.equal(party.partial, false);
   }
   // Absent entirely, which is what an older decoder would send.
-  const party = liveParty({ status: "ready" });
+  const party = liveParty({ status: "ready", partyObserved: true });
   assert.equal(party.heroCount, 0);
   assert.equal(party.partial, false);
 });

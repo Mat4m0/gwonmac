@@ -344,11 +344,18 @@ unsafe fn collect(layout: Layout) -> State {
     state
 }
 
+/// The player's own hero count and the identity of the first of them.
+///
+/// `None` is "the party could not be read" — a rejected pointer, an array whose
+/// header contradicts itself, a hero id outside the table. `Some((0, 0, 0))` is
+/// "read fine, you have no heroes". Both used to be `(0, 0, 0)`, which made a
+/// failed walk indistinguishable from an empty party, and the interface duly
+/// reported an empty party during every map load.
 pub(crate) unsafe fn collect_first_owned_hero(
     layout: Layout,
     game: u32,
     player_number: u32,
-) -> (u32, u32, u32) {
+) -> Option<(u32, u32, u32)> {
     if game == 0
         || player_number == 0
         || layout.hero_member_stride < 12
@@ -357,50 +364,50 @@ pub(crate) unsafe fn collect_first_owned_hero(
         || layout.hero_owner_player_id + 4 > layout.hero_member_stride
         || layout.hero_id + 4 > layout.hero_member_stride
     {
-        return (0, 0, 0);
+        return None;
     }
     let party_required = match checked_add(layout.player_party, 4) {
         Some(value) => value,
-        None => return (0, 0, 0),
+        None => return None,
     };
     let info_required = match checked_add(layout.party_heroes, 12) {
         Some(value) => value,
-        None => return (0, 0, 0),
+        None => return None,
     };
     let party = match offset(game, layout.party_context)
         .and_then(|at| unsafe { pointer(at, party_required) })
     {
         Some(value) => value,
-        None => return (0, 0, 0),
+        None => return None,
     };
     let info = match offset(party, layout.player_party)
         .and_then(|at| unsafe { pointer(at, info_required) })
     {
         Some(value) => value,
-        None => return (0, 0, 0),
+        None => return None,
     };
     let array = match offset(info, layout.party_heroes) {
         Some(value) if contains(value, 12) => value,
-        _ => return (0, 0, 0),
+        _ => return None,
     };
     let Some(buffer) = (unsafe { read_u32(array) }) else {
-        return (0, 0, 0);
+        return None;
     };
     let Some(capacity) = offset(array, 4).and_then(|at| unsafe { read_u32(at) }) else {
-        return (0, 0, 0);
+        return None;
     };
     let Some(size) = offset(array, 8).and_then(|at| unsafe { read_u32(at) }) else {
-        return (0, 0, 0);
+        return None;
     };
     if size > capacity || capacity > 64 {
-        return (0, 0, 0);
+        return None;
     }
     if size > 0 {
         let Some(bytes) = checked_mul(size, layout.hero_member_stride) else {
-            return (0, 0, 0);
+            return None;
         };
         if buffer == 0 || buffer & 3 != 0 || !contains(buffer, bytes) {
-            return (0, 0, 0);
+            return None;
         }
     }
 
@@ -410,30 +417,30 @@ pub(crate) unsafe fn collect_first_owned_hero(
     let mut owned_ids = [0_u32; 7];
     for index in 0..size {
         let Some(member) = indexed(buffer, index, layout.hero_member_stride) else {
-            return (0, 0, 0);
+            return None;
         };
         let Some(owner) =
             offset(member, layout.hero_owner_player_id).and_then(|at| unsafe { read_u32(at) })
         else {
-            return (0, 0, 0);
+            return None;
         };
         let Some(hero_id) = offset(member, layout.hero_id).and_then(|at| unsafe { read_u32(at) })
         else {
-            return (0, 0, 0);
+            return None;
         };
         let Some(agent_id) =
             offset(member, layout.hero_agent_id).and_then(|at| unsafe { read_u32(at) })
         else {
-            return (0, 0, 0);
+            return None;
         };
         if !(1..=39).contains(&hero_id) {
-            return (0, 0, 0);
+            return None;
         }
         if owner != player_number {
             continue;
         }
         if count >= 7 || owned_ids[..count as usize].contains(&hero_id) {
-            return (0, 0, 0);
+            return None;
         }
         owned_ids[count as usize] = hero_id;
         if count == 0 {
@@ -442,7 +449,7 @@ pub(crate) unsafe fn collect_first_owned_hero(
         }
         count += 1;
     }
-    (count, first_id, first_agent)
+    Some((count, first_id, first_agent))
 }
 
 // The odd sequence brackets the write: a reader that sees it discards the

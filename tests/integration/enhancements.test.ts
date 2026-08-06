@@ -824,6 +824,8 @@ describe("Companion kernel", () => {
     let state = readyToolbox(kernel.toolbox());
     assert.equal(state.sequence, ready.sequence);
     assert.equal(state.heroAvailable, true);
+    // No walk ran, so the last real reading stands rather than being retracted.
+    assert.equal(state.partyObserved, true);
 
     // The certified party removal is dirty-only: it publishes nothing in the
     // callback, then the next tick traverses and invalidates stale hero state.
@@ -833,6 +835,13 @@ describe("Companion kernel", () => {
     state = readyToolbox(kernel.toolbox());
     assert.ok(state.sequence > ready.sequence);
     assert.equal(state.heroAvailable, false);
+    // The party pointer is still the invalid one installed above, so this walk
+    // began and rejected what it found. That is *not* an empty party, and the
+    // kernel used to publish it as one — hero count 0 with no hero flag, the
+    // same bytes a heroless outpost produces. A reader could not tell them
+    // apart, and the panel reported "no heroes in your party" through every map
+    // load. Absence of this bit is the only thing that says nobody read.
+    assert.equal(state.partyObserved, false);
 
     // A certified map-loaded boundary also restores a replaced party graph.
     kernel.view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
@@ -840,6 +849,7 @@ describe("Companion kernel", () => {
     kernel.tick();
     state = readyToolbox(kernel.toolbox());
     assert.equal(state.heroAvailable, true);
+    assert.equal(state.partyObserved, true, "a completed walk claims its reading");
     assert.deepEqual(
       [state.firstHeroId, state.firstHeroAgentId],
       [1, 77],

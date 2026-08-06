@@ -32,6 +32,7 @@ static mut FIRST_HERO_ID: u32 = 0;
 static mut FIRST_HERO_AGENT_ID: u32 = 0;
 static mut PANEL_STATE: u32 = PANEL_UNKNOWN;
 static mut PARTY_DIRTY: bool = true;
+static mut PARTY_OBSERVED: bool = false;
 
 fn is_party_dirty_message(layout: Layout, message: u32) -> bool {
     let dirty = layout.party_dirty_messages;
@@ -56,6 +57,10 @@ unsafe fn publish() {
     let snapshot = unsafe { POINTER as *mut ToolboxSnapshot };
     let flags = if unsafe { FIRST_HERO_ID } != 0 {
         FLAG_HERO_AVAILABLE
+    } else {
+        0
+    } | if unsafe { PARTY_OBSERVED } {
+        FLAG_PARTY_OBSERVED
     } else {
         0
     };
@@ -85,6 +90,9 @@ pub(crate) unsafe fn initialize(pointer: u32) {
         FIRST_HERO_AGENT_ID = 0;
         PANEL_STATE = PANEL_UNKNOWN;
         PARTY_DIRTY = true;
+        // Nothing has been read yet, and the first publish below must say so
+        // rather than assert an empty party the kernel has never looked for.
+        PARTY_OBSERVED = false;
     }
     // SAFETY: `pointer` is the caller's validated `TOOLBOX_BYTES` region, so
     // the last word this loop reaches is its final four bytes and the sum
@@ -96,14 +104,15 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     unsafe { publish() };
 }
 
-unsafe fn apply_hero_state(count: u32, hero_id: u32, agent_id: u32) {
+unsafe fn apply_hero_state(observed: bool, count: u32, hero_id: u32, agent_id: u32) {
     let panel_state = if unsafe { FIRST_HERO_ID } == hero_id {
         unsafe { PANEL_STATE }
     } else {
         PANEL_UNKNOWN
     };
     if unsafe {
-        HERO_COUNT == count
+        PARTY_OBSERVED == observed
+            && HERO_COUNT == count
             && FIRST_HERO_ID == hero_id
             && FIRST_HERO_AGENT_ID == agent_id
             && PANEL_STATE == panel_state
@@ -111,6 +120,7 @@ unsafe fn apply_hero_state(count: u32, hero_id: u32, agent_id: u32) {
         return;
     }
     unsafe {
+        PARTY_OBSERVED = observed;
         HERO_COUNT = count;
         FIRST_HERO_ID = hero_id;
         FIRST_HERO_AGENT_ID = agent_id;
@@ -124,15 +134,20 @@ pub(crate) unsafe fn tick(layout: Layout, tick_count: u32) {
         return;
     }
     unsafe { PARTY_DIRTY = false };
-    let state = match unsafe { resolve_game(layout) } {
+    // Loading and Unavailable are both "no reading was taken", and so is a walk
+    // that started and rejected something. Only a completed walk publishes an
+    // observation, which is why the failure cases collapse into the same `None`
+    // rather than each needing to be spelled out here.
+    let observation = match unsafe { resolve_game(layout) } {
         GameState::Ready {
             game,
             player_number,
             ..
         } => unsafe { collect_first_owned_hero(layout, game, player_number) },
-        GameState::Loading | GameState::Unavailable => (0, 0, 0),
+        GameState::Loading | GameState::Unavailable => None,
     };
-    unsafe { apply_hero_state(state.0, state.1, state.2) };
+    let (count, hero_id, agent_id) = observation.unwrap_or((0, 0, 0));
+    unsafe { apply_hero_state(observation.is_some(), count, hero_id, agent_id) };
 }
 
 pub(crate) unsafe fn observe_ui(layout: Layout, message: u32, wparam: u32) {

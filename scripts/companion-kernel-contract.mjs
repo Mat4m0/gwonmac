@@ -23,7 +23,11 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
 ]);
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  0x01, 0x05, 0xb5, 0x02, 0x02, 0x00, 0x00,
+  // Memory footprint 310 bytes (0xb6 0x02). Grew by one from 309 when the
+  // Toolbox observer gained PARTY_OBSERVED — the byte that separates "you have
+  // no heroes" from "nobody read the party". This constant exists so a kernel
+  // whose footprint moves cannot ship without someone saying why.
+  0x01, 0x05, 0xb6, 0x02, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES

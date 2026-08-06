@@ -478,6 +478,7 @@ describe("ToolsApp", () => {
 
     host.party.value = liveParty({
       status: "ready",
+      partyObserved: true,
       heroAvailable: true,
       heroCount: 1,
       firstHeroId: 24,

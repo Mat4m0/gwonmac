@@ -133,6 +133,7 @@ function slots(ids: readonly (string | null)[]): BuildLibrary["teams"][number]["
  */
 export const demoParty = liveParty({
   status: "ready",
+  partyObserved: true,
   heroAvailable: true,
   heroCount: 3,
   firstHeroId: 6,
