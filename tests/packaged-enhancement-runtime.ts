@@ -1119,7 +1119,6 @@ async function assertToolboxFoundationLifecycle() {
         requestAnimationFrame(observe);
       });
 
-      const root = document.getElementById("toolbox-foundation");
       const canvas = document.getElementById("canvas");
       const before = {
         allocations,
@@ -1147,7 +1146,6 @@ async function assertToolboxFoundationLifecycle() {
         targetCount: document.querySelectorAll("#enhancement-target").length,
         toolbox: runtime.toolbox,
         toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
-        toolboxText: root?.textContent ?? null,
       };
 
       dispatchEvent(new Event("pagehide"));
@@ -1202,18 +1200,11 @@ async function assertToolboxFoundationLifecycle() {
     assert.equal(result.before.tableOwns, true);
     assert.equal(result.before.targetCount, 0);
     assert.equal(result.before.toolboxCount, 1);
-    assert.match(
-      result.before.toolboxText ?? "",
-      /Player chat events · 1/u,
-    );
-    assert.match(
-      result.before.toolboxText ?? "",
-      /First owned hero · 1 \(1 owned\)/u,
-    );
-    assert.match(
-      result.before.toolboxText ?? "",
-      /Hero panel observed · shown/u,
-    );
+    // The projection is the assertion. Three regexes used to read the same
+    // numbers back off the overlay's own readout rows, which the overlay no
+    // longer draws — a tool draws its own window now. Nothing is lost: the
+    // deepEqual below already pins every value those regexes sampled, and it
+    // pins them at the boundary the kernel actually publishes.
     assert.deepEqual(result.before.toolbox, {
       cursorEventCount: 1,
       firstHeroAgentId: 77,

@@ -626,9 +626,20 @@ async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
 }
 
 async function openToolboxOverlay(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Open Toolbox" }).click();
+  await page.getByRole("button", { name: "Open Tools" }).click();
   await page.waitForFunction(() =>
     document.getElementById("toolbox-foundation")?.dataset.open === "true",
+  );
+}
+
+/**
+ * The chord, because the overlay has no close control of its own: it hosts a
+ * tool, and the tool owns its own window furniture.
+ */
+async function closeToolboxOverlay(page: Page): Promise<void> {
+  await page.keyboard.press("Control+Shift+Space");
+  await page.waitForFunction(() =>
+    document.getElementById("toolbox-foundation")?.dataset.open === "false",
   );
 }
 
@@ -760,9 +771,11 @@ async function runToolboxFoundation({ page }: AutomationContext) {
       && "panelState" in toolbox
       && toolbox.panelState === 1;
   }, undefined, { timeout: 1_000 });
+  // The overlay draws no state of its own any more, so opening it proves the
+  // chrome still works over a live client; the panel state was just asserted
+  // through the projection above, which is where it actually lives.
   await openToolboxOverlay(page);
-  await page.getByText("Hero panel observed · hidden").waitFor();
-  await page.getByRole("button", { name: "Close Toolbox" }).click();
+  await closeToolboxOverlay(page);
   const final = await readToolboxState(page);
   return {
     baseline: baseline.playerChatCount,
@@ -815,9 +828,11 @@ async function runToolboxHeroPanel({ page }: AutomationContext) {
       && "panelState" in toolbox
       && toolbox.panelState === 1;
   }, undefined, { timeout: 1_000 });
+  // The overlay draws no state of its own any more, so opening it proves the
+  // chrome still works over a live client; the panel state was just asserted
+  // through the projection above, which is where it actually lives.
   await openToolboxOverlay(page);
-  await page.getByText("Hero panel observed · hidden").waitFor();
-  await page.getByRole("button", { name: "Close Toolbox" }).click();
+  await closeToolboxOverlay(page);
   const final = await readToolboxState(page);
   return {
     heroId: initial.firstHeroId,

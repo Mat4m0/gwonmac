@@ -122,14 +122,18 @@ The developer surface is a same-renderer Chromium overlay, not an injected game
 frame or a second Electron window. It is a non-modal palette: the overlay root
 never intercepts the pointer, so the game keeps owning every click that is not
 on Tools chrome, and the open panel floats beside play instead of blocking it.
-Keyboard focus follows the click — opening exits pointer lock, keyboard and
-pointer events inside the panel stop at the overlay boundary, and clicking the
-canvas hands keyboard input straight back to the game while the panel stays
-open. Held game input carries across the transfer: a movement key held while
-clicking into the panel keeps acting, and the input host replays its eventual
-release at the canvas, so a press the game received can never stay stuck. The panel drags by its titlebar and keeps its
-position for the session. Escape closes it only while it has focus; Close and
-the Control+Shift+Space chord work from anywhere. Moving focus between the
+Keyboard focus follows the intent to type, not the click. Opening exits pointer
+lock but takes nothing else: the game keeps the keyboard, so a held movement key
+keeps acting and the player can press more of them with the overlay open.
+Operating a control — a button, a checkbox — does not take focus either; only
+clicking into a text field does, which is the one gesture that means "I want to
+type here". Keyboard and pointer events inside the overlay stop at its boundary,
+and a release for a press the canvas received is replayed there, so a press the
+game received can never stay stuck. Escape while typing returns the keyboard to
+the game rather than closing anything; with the game focused it belongs to Guild
+Wars. The overlay draws no window of its own — the tool it hosts brings and
+drags its own — and the Control+Shift+Space chord, Command+B and the View menu
+toggle it from anywhere. Moving focus between the
 canvas and this one overlay is internal, so it does not run the client's
 canvas-blur audio mute. A real application blur still follows the normal
 input-release and audio behavior.
