@@ -292,15 +292,29 @@ export async function installEnhancements(
     ];
     for (const region of ownedRegions) {
       const end = region.pointer + region.size;
-      if (
-        !Number.isSafeInteger(region.pointer)
-        || region.pointer <= 0
-        || region.pointer % region.align !== 0
-        || !Number.isSafeInteger(end)
-        || end > memory.buffer.byteLength
-        || end > 0x7fff_ffff
-      ) {
-        throw new Error(`Companion ${region.name} allocation is invalid`);
+      // Named individually rather than or-ed into one verdict. The conditions
+      // fail for unrelated reasons -- an allocator that guarantees less
+      // alignment than we ask for, a heap that has grown past what a signed
+      // 32-bit offset can address, a pointer past the end of memory -- and a
+      // launch that only says "invalid" cannot tell them apart afterwards.
+      const refusal =
+        !Number.isSafeInteger(region.pointer) || region.pointer <= 0
+          ? "not a pointer"
+          : region.pointer % region.align !== 0
+            ? `not ${region.align}-byte aligned`
+            : !Number.isSafeInteger(end)
+              ? "end is not a safe integer"
+              : end > memory.buffer.byteLength
+                ? "ends past the heap"
+                : end > 0x7fff_ffff
+                  ? "ends past the signed 32-bit limit"
+                  : null;
+      if (refusal !== null) {
+        throw new Error(
+          `Companion ${region.name} allocation is invalid: ${refusal}`
+          + ` (pointer ${region.pointer}, size ${region.size},`
+          + ` heap ${memory.buffer.byteLength})`,
+        );
       }
     }
     for (let left = 0; left < ownedRegions.length; left += 1) {
