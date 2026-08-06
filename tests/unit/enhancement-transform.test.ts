@@ -5,12 +5,15 @@ import {
   enhancementCapabilityProfile,
   ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_TRANSFORM_ABI,
+  ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_LAYOUT_WORD_COUNT,
   type EnhancementCapabilities,
 } from "../../src/shared/contracts.js";
 import {
   enhancementConfigWords,
   enhancementOutputSha256,
   ENHANCEMENT_BUILDS,
+  ENHANCEMENT_LAYOUT_FIELDS,
   type EnhancementOutputHashes,
   type KnownEnhancementBuild,
 } from "../../src/main/certification/enhancement-builds.js";
@@ -193,6 +196,17 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
       partyContext: 28, playerParty: 32, partyHeroes: 36,
       heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
+      // Distinct values rather than zeros: the config ABI is positional, so a
+      // fixture padded with zeros would let a mis-ordered field pass.
+      heroPrimary: 40, heroSecondary: 41, heroLevel: 42,
+      partyPlayers: 43, partyHenchmen: 44, partyFlag: 45,
+      worldContext: 46, worldHeroFlags: 47, heroFlagStride: 48,
+      flagHeroId: 49, flagAgentId: 50, flagBehavior: 51,
+      worldHeroInfo: 52, heroInfoStride: 53, infoHeroId: 54,
+      infoPrimary: 55, infoSecondary: 56, infoAppearanceBitmap: 57,
+      worldSkillbars: 58, skillbarStride: 59, skillbarAgentId: 60,
+      skillbarSkills: 61, skillSlotStride: 62, skillSlotId: 63,
+      skillbarDisabled: 64,
     },
   };
 }
@@ -508,7 +522,14 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const configWords = evidence.configWords as number[];
     assert.deepEqual(evidence.capabilities, CURSOR_ONLY);
     assert.deepEqual(configWords.slice(0, 17), Array<number>(17).fill(0));
-    assert.deepEqual(configWords.slice(29), Array<number>(20).fill(0));
+    // Everything past the cursor block belongs to Toolbox, which is off here.
+    // Sized from the contract rather than written out: a literal length has to
+    // be found and corrected every time the layout grows, and is just as likely
+    // to be corrected into agreement with a bug.
+    assert.deepEqual(
+      configWords.slice(29),
+      Array<number>(ENHANCEMENT_CONFIG_WORD_COUNT - 29).fill(0),
+    );
     assert.deepEqual(
       decodeEnhancementManifest(module, CURSOR_ONLY)?.hooks,
       { tick: true, cursor: true, ui: false },
@@ -537,7 +558,10 @@ describe("targeted Enhancement WebAssembly transform", () => {
     ));
     const tickOnly = decodeEnhancementManifest(tickOnlyModule, TARGET_ONLY);
     assert.ok(tickOnly);
-    assert.deepEqual(tickOnly.configWords.slice(17), Array<number>(32).fill(0));
+    assert.deepEqual(
+      tickOnly.configWords.slice(17),
+      Array<number>(ENHANCEMENT_CONFIG_WORD_COUNT - 17).fill(0),
+    );
 
     const originals: number[][] = [];
     const dispatches: number[][] = [];
@@ -646,6 +670,27 @@ describe("targeted Enhancement WebAssembly transform", () => {
     duplicate.messages.partyDirty[1] = duplicate.messages.partyDirty[0]!;
     duplicate.configWords[40] = duplicate.configWords[39]!;
     assert.equal(decodeEnhancementManifest(moduleWithManifest(duplicate)), null);
+  });
+
+  // The message words start where the address words stop, and three places
+  // used to carry that boundary as the literal `36`: the manifest decoder, the
+  // integration fixtures, and the layout field list that actually determines
+  // it. Growing the layout moved the messages and two of the three did not
+  // notice — the decoder went on reading party-dirty messages out of address
+  // words and refused every manifest. This binds the constant to the list, so
+  // the next field added moves it or fails here.
+  it("starts the message words exactly where the layout words end", () => {
+    assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, ENHANCEMENT_LAYOUT_FIELDS.length);
+    assert.equal(
+      ENHANCEMENT_CONFIG_WORD_COUNT,
+      ENHANCEMENT_LAYOUT_FIELDS.length + 3 + PARTY_DIRTY_MESSAGES.length,
+    );
+    // And the list itself carries no duplicate, which would make two config
+    // positions the same field and hide the drift this test looks for.
+    assert.equal(
+      new Set(ENHANCEMENT_LAYOUT_FIELDS).size,
+      ENHANCEMENT_LAYOUT_FIELDS.length,
+    );
   });
 
   it("gives Toolbox only the target-core words its hero path reads", () => {

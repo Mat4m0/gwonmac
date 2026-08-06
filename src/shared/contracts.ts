@@ -363,11 +363,28 @@ export function enhancementCapabilityProfile(
 /** Exact-build UI messages that can invalidate the Toolbox party projection. */
 export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = 10;
 
-/** Fixed companion layout: 17 core, 12 cursor, 7 party, 13 message words. */
-export const ENHANCEMENT_CONFIG_WORD_COUNT = 49;
+/**
+ * Where the message words begin: 17 core + 12 cursor + 7 party + 25 party
+ * detail address words come first.
+ *
+ * The config ABI is positional — the kernel decodes these words by index — so
+ * a field inserted mid-list silently changes what every later word means.
+ * Party detail is therefore appended, never interleaved.
+ *
+ * This lives here because three places used to carry it as a literal `36`: the
+ * manifest decoder, the integration fixtures, and the layout field list that
+ * actually determines it. Growing the layout moved the messages and two of the
+ * three did not notice. Bound to the real list by
+ * `tests/unit/enhancement-transform.test.ts`.
+ */
+export const ENHANCEMENT_LAYOUT_WORD_COUNT = 61;
+
+/** Layout words, then playerChat/hide/show, then the party-dirty tuple. */
+export const ENHANCEMENT_CONFIG_WORD_COUNT =
+  ENHANCEMENT_LAYOUT_WORD_COUNT + 3 + ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT;
 
 /** One identity shared by the transformer, cache, manifest, and renderer. */
-export const ENHANCEMENT_TRANSFORM_ABI = 11;
+export const ENHANCEMENT_TRANSFORM_ABI = 12;
 
 /**
  * Whether one config word belongs to an active capability. Toolbox reuses only

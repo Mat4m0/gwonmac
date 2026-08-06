@@ -73,6 +73,31 @@ export interface EnhancementLayout {
   heroAgentId: number;
   heroOwnerPlayerId: number;
   heroId: number;
+  heroPrimary: number;
+  heroSecondary: number;
+  heroLevel: number;
+  partyPlayers: number;
+  partyHenchmen: number;
+  partyFlag: number;
+  worldContext: number;
+  worldHeroFlags: number;
+  heroFlagStride: number;
+  flagHeroId: number;
+  flagAgentId: number;
+  flagBehavior: number;
+  worldHeroInfo: number;
+  heroInfoStride: number;
+  infoHeroId: number;
+  infoPrimary: number;
+  infoSecondary: number;
+  infoAppearanceBitmap: number;
+  worldSkillbars: number;
+  skillbarStride: number;
+  skillbarAgentId: number;
+  skillbarSkills: number;
+  skillSlotStride: number;
+  skillSlotId: number;
+  skillbarDisabled: number;
 }
 
 /**
@@ -138,10 +163,50 @@ export const ENHANCEMENT_PARTY_LAYOUT_FIELDS = [
   "heroId",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
+/**
+ * Everything the full party projection needs beyond the first owned hero.
+ *
+ * A separate group because it is a separate certification: the seven fields
+ * above were measured against a live game, and none of these have been. They
+ * are appended rather than interleaved so the words the kernel already decodes
+ * keep their positions — the config ABI is positional, and a field inserted
+ * mid-list changes what every later word means.
+ *
+ * Zero until certified, which the kernel reads as "do not walk this".
+ */
+export const ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS = [
+  "heroPrimary",
+  "heroSecondary",
+  "heroLevel",
+  "partyPlayers",
+  "partyHenchmen",
+  "partyFlag",
+  "worldContext",
+  "worldHeroFlags",
+  "heroFlagStride",
+  "flagHeroId",
+  "flagAgentId",
+  "flagBehavior",
+  "worldHeroInfo",
+  "heroInfoStride",
+  "infoHeroId",
+  "infoPrimary",
+  "infoSecondary",
+  "infoAppearanceBitmap",
+  "worldSkillbars",
+  "skillbarStride",
+  "skillbarAgentId",
+  "skillbarSkills",
+  "skillSlotStride",
+  "skillSlotId",
+  "skillbarDisabled",
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
 export const ENHANCEMENT_LAYOUT_FIELDS = [
   ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
   ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
   ...ENHANCEMENT_PARTY_LAYOUT_FIELDS,
+  ...ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
@@ -313,6 +378,39 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       heroAgentId: 0x00,
       heroOwnerPlayerId: 0x04,
       heroId: 0x08,
+      // Not yet certified. Candidates and their provenance are tabulated in
+      // plans/tools/hero-builds/evidence/party-memory-layout.md; the eight
+      // offsets above were measured live and all eight agree with the same
+      // source, and #8812 corroborates the WorldContext array starts from the
+      // module bytes. None of that is live evidence for *these*, and the rule
+      // in primitives.md §4 step 3 is that only live evidence promotes a value.
+      // Zero reads as "do not walk this", so the kernel publishes no detail
+      // until each one is measured.
+      heroPrimary: 0,
+      heroSecondary: 0,
+      heroLevel: 0,
+      partyPlayers: 0,
+      partyHenchmen: 0,
+      partyFlag: 0,
+      worldContext: 0,
+      worldHeroFlags: 0,
+      heroFlagStride: 0,
+      flagHeroId: 0,
+      flagAgentId: 0,
+      flagBehavior: 0,
+      worldHeroInfo: 0,
+      heroInfoStride: 0,
+      infoHeroId: 0,
+      infoPrimary: 0,
+      infoSecondary: 0,
+      infoAppearanceBitmap: 0,
+      worldSkillbars: 0,
+      skillbarStride: 0,
+      skillbarAgentId: 0,
+      skillbarSkills: 0,
+      skillSlotStride: 0,
+      skillSlotId: 0,
+      skillbarDisabled: 0,
     }),
   }),
 ]);

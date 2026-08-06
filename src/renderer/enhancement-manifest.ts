@@ -13,6 +13,7 @@
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
   ENHANCEMENT_TRANSFORM_ABI,
   enhancementConfigWordActive,
@@ -21,7 +22,7 @@ import {
   type EnhancementHooks,
 } from "../shared/contracts.js";
 
-const MESSAGE_CONFIG_START = 36;
+const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
 const PARTY_DIRTY_CONFIG_START = MESSAGE_CONFIG_START + 3;
 
 /** The validated subset of the derived module's fixed evidence. */

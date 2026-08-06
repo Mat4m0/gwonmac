@@ -12,6 +12,10 @@ import {
   COMPANION_CURSOR_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
+import {
+  ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_LAYOUT_WORD_COUNT,
+} from "../../src/shared/contracts.ts";
 
 // Every read returns a discriminated union: `reason` belongs to the members
 // that rejected the region, the decoded fields to the members that accepted
@@ -252,9 +256,9 @@ const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0124,
   0x1000_0126,
 ] as const);
-const CONFIG_WORDS = 49;
+const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
-const MESSAGE_CONFIG_START = 36;
+const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
 const TEXTURE_KEY = 0x6772_7478;
 
 interface KernelOverrides {
@@ -338,6 +342,10 @@ async function createKernel() {
   });
   const exports = kernelExports(instance.exports);
   const config = new Uint32Array(memory.buffer, ADDRESSES.config, CONFIG_WORDS);
+  // Address words first: core, cursor, then the first-owned-hero party chain.
+  // The 25 party-detail words after them stay zero — these fixtures exercise
+  // the walk that does not read them, and zero is what the kernel treats as
+  // "not certified, do not traverse".
   config.set([
     ADDRESSES.contextRoot, ADDRESSES.agentArray,
     ADDRESSES.manualTargetId, ADDRESSES.automaticTargetId,
@@ -347,9 +355,15 @@ async function createKernel() {
     ADDRESSES.colorBuffer,
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
     0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
-    0x1000_0082, 0x1000_01a3, 0x1000_01a4,
-    ...PARTY_DIRTY_MESSAGES,
   ]);
+  // Placed at the boundary rather than appended to the literal above. Written
+  // as one flat list, the messages sat directly after the party chain — and
+  // when the layout grew they silently stayed there, twenty-five words short of
+  // where the kernel now reads them, and every init refused.
+  config.set(
+    [0x1000_0082, 0x1000_01a3, 0x1000_01a4, ...PARTY_DIRTY_MESSAGES],
+    MESSAGE_CONFIG_START,
+  );
   return {
     instance,
     memory,
