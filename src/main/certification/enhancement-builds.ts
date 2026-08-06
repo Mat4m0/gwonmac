@@ -275,11 +275,15 @@ export interface KnownEnhancementBuild {
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
+    // Recomputed when the party layout landed. All four move together whenever
+    // the manifest's bytes do, and the manifest carries the transform ABI and
+    // every config word -- so growing the layout changes the output of profiles
+    // that do not use one word of it.
     outputSha256: Object.freeze({
-      cursor: "a29b20f64cffff774b554787bf595a6aa8a6d56ff25e66ee73bf944cff5a1da3",
-      target: "d2b6970f61026b48f01defd4fbb59032544c27c89684abffed77987b06292f11",
-      cursorTarget: "63a330bc7b922ce2432298e8b6f30eb2e4940a218acc999c243c1b0653b28997",
-      cursorToolbox: "8ba7836b7d27d9a9e31cd85359b2964d5c88b4f577ea3648fb874155fec6da70",
+      cursor: "b9bcbaeec39e1c7fa81c55a9689bf93e71996f5ce9d3946b996de584472fdc6e",
+      target: "335b840dce7bf3b2066f18d826592404c6adede07d25b24ee10d9d28185de32b",
+      cursorTarget: "efb35cefe41e70622baf2a430e481857f99185b4ea884b810ebbf6411fa3c4ea",
+      cursorToolbox: "8b33d4ccf3498d80ff11cb03c359db9d20fcb910b29893cc60fe850d77100132",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
