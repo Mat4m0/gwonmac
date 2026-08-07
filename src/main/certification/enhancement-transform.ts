@@ -60,6 +60,9 @@ export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 const DISPATCH_PARAMS = 6;
+/** `(opcode, a0, a1, a2, a3) -> i32`. Four arguments covers every certified
+ *  command; the widest builder we have takes four scalars. */
+const COMMAND_PARAMS = 5;
 const DISPATCH_TICK = 0;
 const DISPATCH_CURSOR = 1;
 const DISPATCH_UI = 2;
@@ -75,13 +78,15 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
   if (
-    keys.length !== 3
+    keys.length !== 4
     || !Object.hasOwn(record, "nativeCursor")
     || !Object.hasOwn(record, "targetObservation")
     || !Object.hasOwn(record, "toolbox")
+    || !Object.hasOwn(record, "commands")
     || typeof record.nativeCursor !== "boolean"
     || typeof record.targetObservation !== "boolean"
     || typeof record.toolbox !== "boolean"
+    || typeof record.commands !== "boolean"
   ) {
     return null;
   }
@@ -89,6 +94,7 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
     nativeCursor: record.nativeCursor,
     targetObservation: record.targetObservation,
     toolbox: record.toolbox,
+    commands: record.commands,
   });
 }
 
@@ -180,6 +186,52 @@ function dispatcher(
     Uint8Array.of(0x6b, 0x11),
     uleb(dispatchTypeIndex),
     uleb(0),
+    Uint8Array.of(0x0b),
+  );
+}
+
+/**
+ * The command thunk: one exported function, one `br_table`-free chain of exact
+ * opcode comparisons, one direct call each.
+ *
+ *     enhancement_command(opcode, a0, a1, a2, a3) -> i32   // 1 sent, 0 refused
+ *
+ * This is the whole write surface and it is deliberately shaped so that there
+ * is no other. The companion kernel is a Wasm side module: its only route into
+ * the client is the imported function table, and not one packet builder — nor
+ * the sender, nor the connection read — is in that table. So without this
+ * function there is no call from the kernel to any of them anywhere in the
+ * module. Not a forbidden call; a nonexistent one.
+ *
+ * That property is what makes the capability meaningful. With `commands` off
+ * the thunk is not emitted, and "the companion cannot send a packet" is a fact
+ * about the bytes rather than a runtime check somebody could get wrong.
+ *
+ * Unknown opcodes return 0 rather than trapping. A refusal the caller can
+ * observe is worth more than an abort: the kernel reports it, and a stale
+ * command from an older renderer is a no-op instead of a dead client.
+ */
+function commandThunk(
+  entries: readonly Readonly<{ opcode: number; functionIndex: number; params: readonly string[] }>[],
+): Uint8Array {
+  return concat(
+    uleb(0),                                          // no locals
+    ...entries.map((entry) => concat(
+      Uint8Array.of(0x20), uleb(0),                   // local.get opcode
+      Uint8Array.of(0x41), sleb(entry.opcode),
+      Uint8Array.of(0x46),                            // i32.eq
+      Uint8Array.of(0x04, 0x40),                      // if
+      // Arguments come from locals 1..n, in order. A builder takes fixed
+      // scalars and nothing else, so there is no pointer to validate and no
+      // buffer for a caller to point anywhere.
+      ...entry.params.map((_, index) =>
+        concat(Uint8Array.of(0x20), uleb(index + 1))),
+      Uint8Array.of(0x10), uleb(entry.functionIndex),
+      Uint8Array.of(0x41), sleb(1),
+      Uint8Array.of(0x0f),                            // return
+      Uint8Array.of(0x0b),                            // end if
+    )),
+    Uint8Array.of(0x41), sleb(0),                     // refused
     Uint8Array.of(0x0b),
   );
 }
@@ -426,6 +478,47 @@ export function transformEnhancementWasm(
     fail("selected hooks must resolve to distinct functions");
   }
 
+  // Every certified command, verified before a byte of the thunk is written.
+  // The type check is the same standard the hooks are held to; the body hash is
+  // what actually pins the function. An index that has drifted -- the failure
+  // this whole surface was reshaped around -- lands on a different body and is
+  // refused here rather than dispatched to.
+  const commands = capabilities.commands
+    ? build.commands.entries.map((entry) => {
+        const localIndex = entry.functionIndex - importCount;
+        if (localIndex < 0 || localIndex >= bodies.length) {
+          fail(`command opcode ${entry.opcode} is out of range`);
+        }
+        const typeIndex = functionTypes[localIndex]!;
+        const type = types[typeIndex]
+          ?? fail(`command opcode ${entry.opcode} references an unknown type`);
+        assertSignature(
+          `command opcode ${entry.opcode}`,
+          type,
+          entry.params,
+          entry.results,
+        );
+        const body = createHash("sha256").update(bodies[localIndex]!).digest("hex");
+        if (body !== entry.bodySha256) {
+          fail(
+            `command opcode ${entry.opcode} resolves to function `
+            + `${entry.functionIndex}, whose body is ${body} and not the `
+            + `certified ${entry.bodySha256}`,
+          );
+        }
+        return entry;
+      })
+    : [];
+  if (new Set(commands.map((entry) => entry.opcode)).size !== commands.length) {
+    fail("certified commands must have distinct opcodes");
+  }
+  if (
+    capabilities.commands
+    && new Set(commands.map((entry) => entry.functionIndex)).size !== commands.length
+  ) {
+    fail("certified commands must resolve to distinct functions");
+  }
+
   const table = parseTable(sectionById(sections, 4));
   if (
     table.flags !== 1 ||
@@ -455,7 +548,9 @@ export function transformEnhancementWasm(
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
   const existingExports = parseExports(sectionById(sections, 7));
-  const addedExportNames = [ENHANCEMENT_HOOK_EXPORT];
+  const addedExportNames = capabilities.commands
+    ? [ENHANCEMENT_HOOK_EXPORT, build.commands.thunkExport]
+    : [ENHANCEMENT_HOOK_EXPORT];
   for (const name of addedExportNames) {
     if (existingExports.some((entry) => entry.name === name)) {
       fail(`export ${name} already exists`);
@@ -465,18 +560,29 @@ export function transformEnhancementWasm(
   const hookGlobalIndex = globals.count;
   const dispatchTypeIndex = types.length;
 
+  // After the dispatch type, so `dispatchTypeIndex` is `types.length` whether or
+  // not commands are on and the read profiles gain no unused type.
+  const commandTypeIndex = types.length + 1;
   const nextTypes = [
     ...types,
     { params: Array<number>(DISPATCH_PARAMS).fill(0x7f), results: [] },
+    ...(capabilities.commands
+      ? [{ params: Array<number>(COMMAND_PARAMS).fill(0x7f), results: [0x7f] }]
+      : []),
   ];
   const nextFunctionTypes = [
     ...functionTypes,
     ...selected.map((hook) => hook.typeIndex),
+    ...(capabilities.commands ? [commandTypeIndex] : []),
   ];
   const nextBodies = [
     ...bodies,
     ...selected.map((hook) => bodies[hook.localIndex]!),
+    ...(capabilities.commands ? [commandThunk(commands)] : []),
   ];
+  // After the relocated originals, so their indices -- which the dispatchers
+  // encode -- do not depend on whether a command thunk exists.
+  const commandFunctionIndex = originalBaseIndex + selected.length;
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(
       hook.type.params.length,
@@ -492,11 +598,18 @@ export function transformEnhancementWasm(
     Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
   );
   const nextExports = concat(
-    uleb(exports.count + 1),
+    uleb(exports.count + addedExportNames.length),
     exports.entries,
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
     uleb(hookGlobalIndex),
+    ...(capabilities.commands
+      ? [
+          encodeName(build.commands.thunkExport),
+          Uint8Array.of(0x00),
+          uleb(commandFunctionIndex),
+        ]
+      : []),
   );
 
   const rewritten = sections.map((section): Section => {

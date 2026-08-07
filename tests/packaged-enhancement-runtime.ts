@@ -117,11 +117,13 @@ const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
   toolbox: false,
+  commands: false,
 });
 const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: true,
+  commands: false,
 });
 const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;

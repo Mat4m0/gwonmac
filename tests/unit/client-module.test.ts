@@ -41,21 +41,25 @@ const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: true,
+  commands: false,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: false,
+  commands: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   toolbox: false,
+  commands: false,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   toolbox: false,
+  commands: false,
 });
 
 const scratchDirs: string[] = [];
@@ -183,6 +187,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       target: "0".repeat(64),
       cursorTarget: "0".repeat(64),
       cursorToolbox: "0".repeat(64),
+      cursorToolboxCommands: "0".repeat(64),
     }),
     programId: 1,
     buildId: 1,
@@ -190,6 +195,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 4,
+    commands: { thunkExport: "enhancement_command", entries: [] },
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],

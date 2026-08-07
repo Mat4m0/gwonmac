@@ -296,6 +296,10 @@ export const ENHANCEMENT_PROGRAMS = [
   "cursor-observer",
   "target-observer",
   "toolbox-foundation",
+  // The only program that derives a module able to write. Separate from
+  // `toolbox-foundation` so choosing the read foundation can never carry the
+  // write capability in by association.
+  "toolbox-commands",
 ] as const;
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
@@ -308,6 +312,16 @@ export type EnhancementCapabilities = Readonly<{
   nativeCursor: boolean;
   targetObservation: boolean;
   toolbox: boolean;
+  /**
+   * The client carries a command thunk: one exported function that switches on
+   * a certified opcode and calls the matching packet builder directly.
+   *
+   * This is the only capability that can change game state, and it is the only
+   * one whose absence is enforced by the *bytes* rather than by a runtime
+   * check. With it off the thunk is not emitted at all, so there is no call
+   * from anywhere to any builder — not a forbidden one, a nonexistent one.
+   */
+  commands: boolean;
 }>;
 
 /** The complete set of capability combinations allowed to become executable. */
@@ -316,21 +330,37 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     toolbox: false,
+    commands: false,
   }),
   target: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     toolbox: false,
+    commands: false,
   }),
   cursorTarget: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     toolbox: false,
+    commands: false,
   }),
   cursorToolbox: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     toolbox: true,
+    commands: false,
+  }),
+  /**
+   * The only profile that can write. Kept separate rather than folded into
+   * `cursorToolbox` so the four read profiles keep their exact output bytes and
+   * their certified hashes — a launch that does not ask to write derives a
+   * module byte-identical to the one certified before commands existed.
+   */
+  cursorToolboxCommands: Object.freeze({
+    nativeCursor: true,
+    targetObservation: false,
+    toolbox: true,
+    commands: true,
   }),
 } as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
 
@@ -341,6 +371,7 @@ const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   toolbox: false,
+  commands: false,
 });
 
 export function enhancementCapabilityProfile(
@@ -353,6 +384,7 @@ export function enhancementCapabilityProfile(
       candidate.nativeCursor === capabilities.nativeCursor
       && candidate.targetObservation === capabilities.targetObservation
       && candidate.toolbox === capabilities.toolbox
+      && candidate.commands === capabilities.commands
     ) {
       return profile;
     }
@@ -384,7 +416,7 @@ export const ENHANCEMENT_CONFIG_WORD_COUNT =
   ENHANCEMENT_LAYOUT_WORD_COUNT + 3 + ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT;
 
 /** One identity shared by the transformer, cache, manifest, and renderer. */
-export const ENHANCEMENT_TRANSFORM_ABI = 13;
+export const ENHANCEMENT_TRANSFORM_ABI = 14;
 
 /**
  * Whether one config word belongs to an active capability. Toolbox reuses only
@@ -437,6 +469,8 @@ export function enhancementCapabilitiesFor(
       return ENHANCEMENT_CAPABILITY_PROFILES.target;
     case "toolbox-foundation":
       return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
+    case "toolbox-commands":
+      return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolboxCommands;
   }
 }
 
@@ -456,7 +490,8 @@ export function enhancementCapabilitiesRequested(
 ): boolean {
   return capabilities.nativeCursor
     || capabilities.targetObservation
-    || capabilities.toolbox;
+    || capabilities.toolbox
+    || capabilities.commands;
 }
 
 /**

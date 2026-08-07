@@ -25,36 +25,54 @@ import {
   transformEnhancementWasm,
 } from "../../src/main/certification/enhancement-transform.js";
 import { decodeEnhancementManifest } from "../../src/renderer/enhancement-manifest.js";
+import {
+  parseCode,
+  parseExports,
+  sectionById,
+  splitSections,
+} from "../../src/main/core/wasm-binary.js";
 
 const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   toolbox: true,
+  commands: false,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: false,
+  commands: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   toolbox: false,
+  commands: false,
 });
 const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
   toolbox: false,
+  commands: false,
 });
 const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: true,
+  commands: false,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   toolbox: false,
+  commands: false,
+});
+const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  toolbox: true,
+  commands: true,
 });
 const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
@@ -74,6 +92,7 @@ const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   target: "0".repeat(64),
   cursorTarget: "0".repeat(64),
   cursorToolbox: "0".repeat(64),
+  cursorToolboxCommands: "0".repeat(64),
 });
 
 function uleb(value: number): number[] {
@@ -120,7 +139,11 @@ function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  const functions = section(3, [3, 0, 1, 2]);
+  // Four defined functions: the three hooks plus one for a command to resolve
+  // to. Its body deliberately differs from the tick hook's -- an identical body
+  // would hash the same, and the whole point of `bodySha256` is that two
+  // different functions cannot pass for each other.
+  const functions = section(3, [4, 0, 1, 2, 0]);
   const table = section(4, [1, 0x70, 1, 4, 4]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
@@ -141,17 +164,24 @@ function fixture(hookParamType = 0x7f): Uint8Array {
     0, 0x20, 0, 0x20, 1, 0x20, 2, 0x20, 3, 0x20, 4, 0x10, 1, 0x0b,
   ];
   const ui = [0, 0x20, 0, 0x20, 1, 0x20, 2, 0x10, 2, 0x0b];
+  const command = [0, 0x41, 0, 0x1a, 0x20, 0, 0x10, 0, 0x0b];
   const code = section(10, [
-    3,
+    4,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
+    ...uleb(command.length), ...command,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
     ...type, ...imports, ...functions, ...table, ...globals, ...exports,
     ...elements, ...code,
   ]);
+}
+
+/** The fixture's fourth function body, as the transform will read it. */
+function commandBody(bytes: Uint8Array): Uint8Array {
+  return parseCode(sectionById(splitSections(bytes), 10))[3]!;
 }
 
 function manifest(bytes: Uint8Array): KnownEnhancementBuild {
@@ -164,6 +194,19 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 4,
+    commands: {
+      thunkExport: "enhancement_command",
+      entries: [{
+        opcode: 31,
+        functionIndex: 6,
+        params: ["i32"],
+        results: [],
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes))
+          .digest("hex"),
+        label: "fixture command",
+      }],
+    },
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],
@@ -748,6 +791,111 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.equal(decodeEnhancementManifest(moduleWithManifest(evidence)), null);
   });
 
+  // The command thunk is the entire write surface. These are the tests that
+  // decide whether this app can send a packet, so they instantiate the
+  // transformed module and drive the function rather than inspecting bytes.
+  it("emits the command thunk for exactly one profile", () => {
+    const input = fixture();
+    const build = manifest(input);
+    for (const capabilities of [CURSOR_ONLY, TARGET_ONLY, CURSOR_TARGET, CURSOR_TOOLBOX]) {
+      const output = transformEnhancementWasm(input, build, capabilities);
+      const exports = parseExports(sectionById(splitSections(output), 7));
+      assert.equal(
+        exports.some((entry) => entry.name === build.commands.thunkExport),
+        false,
+        "a read profile must carry no way to reach a packet builder at all",
+      );
+    }
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
+    const exports = parseExports(sectionById(splitSections(output), 7));
+    assert.equal(
+      exports.filter((entry) => entry.name === build.commands.thunkExport).length,
+      1,
+    );
+  });
+
+  it("dispatches the certified opcode and refuses every other", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
+
+    const sent: number[] = [];
+    const instance = new WebAssembly.Instance(new WebAssembly.Module(new Uint8Array(output)), {
+      env: {
+        // The fixture's command function calls this; on the real client it is
+        // the packet builder.
+        t: (value: number) => { sent.push(value); },
+        c: () => {},
+        u: () => {},
+        tbl: new WebAssembly.Table({ initial: 5, maximum: 5, element: "anyfunc" }),
+      },
+    });
+    const command = instance.exports[build.commands.thunkExport] as
+      (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
+    assert.equal(typeof command, "function");
+
+    assert.equal(command(31, 4242, 0, 0, 0), 1, "certified opcode is sent");
+    assert.deepEqual(sent, [4242], "the argument reaches the builder unchanged");
+
+    // Everything else, including the neighbours of the one we certified: the
+    // opcodes are a dense range on the real client, so an off-by-one would
+    // otherwise land on a real message.
+    for (const opcode of [0, 1, 30, 32, 93, -1, 0x7fff_ffff]) {
+      assert.equal(command(opcode, 4242, 0, 0, 0), 0, `opcode ${opcode}`);
+    }
+    assert.deepEqual(sent, [4242], "and nothing else was sent");
+  });
+
+  it("refuses a command whose function is not the one certified", () => {
+    const input = fixture();
+    const build = manifest(input);
+    // The failure this whole surface was reshaped around: an index that has
+    // drifted onto some other function. The type still matches -- the fixture's
+    // tick hook is also `(i32) -> void` -- so only the body hash catches it.
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            entries: [{ ...build.commands.entries[0]!, functionIndex: 3 }],
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /whose body is .* and not the certified/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            entries: [{ ...build.commands.entries[0]!, functionIndex: 4 }],
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /command opcode 31 signature is/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            entries: [{ ...build.commands.entries[0]!, functionIndex: 9_999 }],
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /out of range/,
+    );
+  });
+
   it("checks the existing cursor table relation only when cursor is selected", () => {
     const input = fixture();
     const build = manifest(input);
@@ -775,13 +923,23 @@ describe("targeted Enhancement WebAssembly transform", () => {
 });
 
 describe("Enhancement client chain", () => {
-  it("has exactly four source-pinned executable capability profiles", () => {
+  it("has exactly five source-pinned executable capability profiles", () => {
+    // Five, and exactly one of them can write. Adding a profile costs an
+    // `outputSha256` entry and a review; this list is where that becomes
+    // unavoidable rather than incidental.
     assert.deepEqual(Object.keys(ENHANCEMENT_CAPABILITY_PROFILES), [
       "cursor",
       "target",
       "cursorTarget",
       "cursorToolbox",
+      "cursorToolboxCommands",
     ]);
+    assert.deepEqual(
+      Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
+        .filter(([, capabilities]) => capabilities.commands)
+        .map(([profile]) => profile),
+      ["cursorToolboxCommands"],
+    );
     for (const [profile, capabilities] of Object.entries(
       ENHANCEMENT_CAPABILITY_PROFILES,
     )) {
@@ -794,7 +952,12 @@ describe("Enhancement client chain", () => {
     for (const unsupported of [
       NO_CAPABILITIES,
       UNSUPPORTED_ALL_CAPABILITIES,
-      { nativeCursor: false, targetObservation: false, toolbox: true },
+      { nativeCursor: false, targetObservation: false, toolbox: true, commands: false },
+      // Commands without the Toolbox that would drive them, and commands on
+      // top of a combination nothing certifies: both are refused, so the write
+      // capability cannot arrive by being switched on beside anything.
+      { nativeCursor: false, targetObservation: false, toolbox: false, commands: true },
+      { nativeCursor: true, targetObservation: true, toolbox: true, commands: true },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);
     }

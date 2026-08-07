@@ -120,6 +120,7 @@ export function decodeEnhancementManifest(
       "nativeCursor",
       "targetObservation",
       "toolbox",
+      "commands",
     ]);
     const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
     if (
@@ -128,6 +129,7 @@ export function decodeEnhancementManifest(
       || typeof capabilityRecord.nativeCursor !== "boolean"
       || typeof capabilityRecord.targetObservation !== "boolean"
       || typeof capabilityRecord.toolbox !== "boolean"
+      || typeof capabilityRecord.commands !== "boolean"
     ) {
       return null;
     }
@@ -136,6 +138,7 @@ export function decodeEnhancementManifest(
       nativeCursor: capabilityRecord.nativeCursor,
       targetObservation: capabilityRecord.targetObservation,
       toolbox: capabilityRecord.toolbox,
+      commands: capabilityRecord.commands,
     });
     const selectedHooks: EnhancementHooks = Object.freeze({
       tick: hooks.tick !== null,

@@ -277,6 +277,32 @@ export interface KnownEnhancementBuild {
     tableSlot: number;
     producerFunctions: readonly [number, number];
   }>;
+  /**
+   * The commands the client may be given the ability to send, and nothing
+   * else. Emitted into the module as one thunk when — and only when — the
+   * `commands` capability is on.
+   *
+   * Certified on the **opcode**, which is the wire protocol and is identical in
+   * every build because the server is on the other end of it. `functionIndex`
+   * is a per-build recovery, not a certificate: the eight indices this work
+   * originally carried were off by exactly three, and a bare index has no way
+   * to notice. `bodySha256` is what makes it fail closed — the transform hashes
+   * the body at that index and refuses unless it is byte-for-byte the function
+   * that was certified. Recover a new build's indices with
+   * `tools/packet_builders.py`.
+   */
+  commands: Readonly<{
+    thunkExport: string;
+    entries: readonly Readonly<{
+      opcode: number;
+      functionIndex: number;
+      params: readonly "i32"[];
+      results: readonly [];
+      bodySha256: string;
+      /** What this sends, for the reader. Never used to decide anything. */
+      label: string;
+    }>[];
+  }>;
   uiDispatcher: Readonly<{
     functionIndex: number;
     params: readonly ["i32", "i32", "i32"];
@@ -319,10 +345,13 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "faba79311104826daba7aea1891948a66f64cf1efca60fdec6c8506a58a20ab3",
-      target: "3e37335f7766cc52285ffb08f4723c2506e9e9f4871ed6c16ad37c6cc2a1f3c6",
-      cursorTarget: "3175e6a43db3ac24a25c497d848657ff1ee74041ccb95dcead81268fd5fb77b7",
-      cursorToolbox: "a9e073b5468a4cb0fccfbada4ec8600bef8b4bd7f6bb98d879d28f4a8af34c9d",
+      cursor: "2f2bd8ebe8eff7053203e701835bbd50d0e6201f0adbf21d758e7d1474c8e184",
+      target: "d6d0c861a768eaa879d81678610720d2bfb52767bae3d3d67a7637f6bcff88f5",
+      cursorTarget: "bf8b16593abd2699fabe61e3c6ca5ea21e3daccc572ab130bc1d47cb2d10d425",
+      cursorToolbox: "1a84d44ca33b68ab53f2076eee6b7840fd415401f3f3ce8a2ac3d671abb4182e",
+      // The only derived module that can send anything. Every other profile
+      // above is byte-identical to one that carries no command thunk at all.
+      cursorToolboxCommands: "8d7b3897e9c69c374cf26a17250b23acf6441333ef593b90b155e68403439580",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -344,6 +373,29 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       results: Object.freeze([] as const),
       tableSlot: 922,
       producerFunctions: Object.freeze([2828, 2834] as const),
+    }),
+    // One command, deliberately. Kicking a hero is the cheapest reversible
+    // thing the client can be asked to do: one packet, one argument, and the
+    // party window shows the result immediately. Everything else waits until
+    // this has been sent once against a live game.
+    //
+    // `KickAllHeroes` is the same call with hero id 0x26 and is *not* offered:
+    // 0x26 is 38, and Devona is hero 38. GWCAjs verified the sentinel live on
+    // build 38,615, which predates her. Kicking heroes one at a time covers
+    // every case and never touches the ambiguous value.
+    commands: Object.freeze({
+      thunkExport: "enhancement_command",
+      entries: Object.freeze([
+        Object.freeze({
+          opcode: 31,
+          functionIndex: 6887,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "ad54846e78e293ba4c2a6cef392bb3f3cb62fdd5209d8aadf0e99c75a4914e59",
+          label: "CharMsgSendHeroDeactivate(heroId)",
+        }),
+      ] as const),
     }),
     uiDispatcher: Object.freeze({
       functionIndex: 6842,

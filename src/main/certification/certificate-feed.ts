@@ -348,6 +348,67 @@ function uiDispatcher(value: unknown, where: string): KnownEnhancementBuild["uiD
   };
 }
 
+/**
+ * The command table a feed proposes.
+ *
+ * Read with the same suspicion as everything else here, and one rule of its
+ * own: a feed may not propose a command whose opcode this build of the app has
+ * never certified. A feed is signed data from off this machine, and the whole
+ * point of `commands` is that the callable set is fixed by review rather than
+ * by whatever arrives. Widening it is a code change.
+ */
+function commands(
+  value: unknown,
+  where: string,
+): KnownEnhancementBuild["commands"] {
+  const record = object(value, where, ["thunkExport", "entries"]);
+  const thunkExport = record["thunkExport"];
+  if (typeof thunkExport !== "string" || !/^[a-z_][a-z0-9_]{0,63}$/.test(thunkExport)) {
+    refuse(`${where}.thunkExport must be a plain export name`);
+  }
+  const known = new Set(
+    ENHANCEMENT_BUILDS.flatMap((build) =>
+      build.commands.entries.map((entry) => entry.opcode)),
+  );
+  const entries = list(record, "entries", where, { min: 0, max: 32 })
+    .map((item, index) => {
+      const at = `${where}.entries[${index}]`;
+      const entry = object(item, at, [
+        "opcode", "functionIndex", "params", "results", "bodySha256", "label",
+      ]);
+      const opcode = unsignedWord(entry["opcode"], `${at}.opcode`);
+      if (!known.has(opcode)) {
+        refuse(`${at}.opcode ${opcode} is not a command this build certifies`);
+      }
+      const label = entry["label"];
+      if (typeof label !== "string" || label.length > 96) {
+        refuse(`${at}.label must be a short string`);
+      }
+      valueTypes(entry, "params", at, valueTypeCount(entry["params"], at));
+      valueTypes(entry, "results", at, 0);
+      return Object.freeze({
+        opcode,
+        functionIndex: unsignedWord(entry["functionIndex"], `${at}.functionIndex`),
+        params: (entry["params"] as readonly string[]).map(() => "i32" as const),
+        results: [] as const,
+        bodySha256: digest(entry, "bodySha256", at),
+        label,
+      });
+    });
+  if (new Set(entries.map((entry) => entry.opcode)).size !== entries.length) {
+    refuse(`${where}.entries repeats an opcode`);
+  }
+  return Object.freeze({ thunkExport, entries: Object.freeze(entries) });
+}
+
+/** How many arguments a proposed command declares, bounded before it is read. */
+function valueTypeCount(value: unknown, where: string): number {
+  if (!Array.isArray(value) || value.length > 4) {
+    refuse(`${where}.params must be at most four value types`);
+  }
+  return value.length;
+}
+
 function enhancementBuild(value: unknown, where: string): KnownEnhancementBuild {
   const record = object(value, where, [
     "sha256",
@@ -358,6 +419,7 @@ function enhancementBuild(value: unknown, where: string): KnownEnhancementBuild 
     "hookParams",
     "hookResults",
     "tableSlot",
+    "commands",
     "cursorEvent",
     "uiDispatcher",
     "layout",
@@ -373,6 +435,7 @@ function enhancementBuild(value: unknown, where: string): KnownEnhancementBuild 
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: word(record, "tableSlot", where),
+    commands: commands(record["commands"], `${where}.commands`),
     cursorEvent: cursorEvent(record["cursorEvent"], where),
     uiDispatcher: uiDispatcher(record["uiDispatcher"], where),
     layout: layout(record["layout"], `${where}.layout`),
@@ -501,6 +564,17 @@ function writeEnhancement(build: KnownEnhancementBuild): unknown {
     hookParams: [...build.hookParams],
     hookResults: [...build.hookResults],
     tableSlot: build.tableSlot,
+    commands: {
+      thunkExport: build.commands.thunkExport,
+      entries: build.commands.entries.map((entry) => ({
+        opcode: entry.opcode,
+        functionIndex: entry.functionIndex,
+        params: [...entry.params],
+        results: [...entry.results],
+        bodySha256: entry.bodySha256,
+        label: entry.label,
+      })),
+    },
     cursorEvent: {
       functionIndex: build.cursorEvent.functionIndex,
       params: [...build.cursorEvent.params],
