@@ -48,6 +48,14 @@ export interface TeamApplyResult {
   readonly commandId: number;
   readonly completedChanges: number;
   readonly skillsSkipped: boolean;
+  /**
+   * The skill ids the game would not put on a bar, named rather than counted.
+   *
+   * "Guild Wars skipped a skill" tells a player nothing they can act on. The
+   * skill it skipped tells them it is one their account has not unlocked, or
+   * one the hero's professions do not reach — which is a thing they can fix.
+   */
+  readonly skippedSkills?: readonly number[];
 }
 
 export type TeamApplyProblem =

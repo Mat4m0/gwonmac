@@ -304,6 +304,69 @@ test("professions nobody read are not treated as a mismatch", async () => {
   assert.equal(game.sent.some((one) => one.startsWith("secondary:")), false);
 });
 
+// The bug the panel showed: change a hero's secondary, send a bar with skills
+// from the new profession, and the client equips the ones it will and leaves
+// the rest alone. The bar then matches neither the request nor its previous
+// state, and waiting for an exact match reported a partly-applied bar as
+// "did not take effect" — with a change count of zero, which was also wrong.
+test("a bar the game only partly equips is applied, and says what it dropped", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [90, 91, 92, 93, 94, 95, 96, 97],
+  }]);
+  // Four of the eight land; the other four keep what was there, which is what
+  // the client does with a skill the account has not unlocked.
+  const partial = [1, 2, 3, 4, 94, 95, 96, 97];
+  game.react("skills:11:1,2,3,4,5,6,7,8", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2], skills: partial,
+  }]);
+  game.react("attributes:11:17=7,19=12", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2], skills: partial,
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }]);
+
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), build: build() })]),
+    game.environment,
+    1,
+  );
+  assert.equal(result.skillsSkipped, true);
+  // Named, so the panel can say which ones rather than "one or more".
+  assert.deepEqual(result.skippedSkills, [5, 6, 7, 8]);
+  assert.equal(result.completedChanges, 2, "the bar and the attributes");
+});
+
+test("a bar that never moves is still a refusal", async () => {
+  // The partial case must not turn every failure into a success. A bar that
+  // stays exactly as it was is a bar the game ignored.
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [90, 91, 92, 93, 94, 95, 96, 97],
+  }]);
+  await assert.rejects(
+    runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
+    /the skill bar for hero 6 did not take effect/,
+  );
+});
+
+test("a bar and ranks already in place send nothing at all", async () => {
+  // The second Apply of the same team. Every step compares before it sends, so
+  // a team already in place costs zero packets and reports zero changes.
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }]);
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+  assert.deepEqual(game.sent, []);
+  assert.equal(result.completedChanges, 0);
+  assert.equal(result.skillsSkipped, false);
+});
+
 test("a behaviour already set is not sent again", async () => {
   const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
   const result = await runTeamApply(

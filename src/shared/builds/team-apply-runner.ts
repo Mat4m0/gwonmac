@@ -59,6 +59,15 @@ export interface TeamApplyEnvironment {
 /** Matches GWToolbox++'s per-hero budget; a roster change is a server round trip. */
 const CONFIRM_MS = 1_000;
 const POLL_MS = 50;
+/**
+ * When a step is re-sent once, if it is allowed to be.
+ *
+ * Only the skill bar uses it, and only because it follows a profession change:
+ * the client rebuilds the bar when the secondary moves, and a set that arrives
+ * during that rebuild can be dropped. Re-sending is safe because writing the
+ * same bar twice is the same bar.
+ */
+const RETRY_MS = 300;
 
 const BEHAVIOUR_IDS = Object.freeze({ fight: 0, guard: 1, avoid: 2 });
 
@@ -75,8 +84,11 @@ async function confirm(
   environment: TeamApplyEnvironment,
   what: string,
   check: (party: LiveParty) => boolean,
+  retry?: () => void,
 ): Promise<void> {
-  const deadline = Date.now() + CONFIRM_MS;
+  const started = Date.now();
+  const deadline = started + CONFIRM_MS;
+  let resent = false;
   for (;;) {
     const party = environment.party();
     if (party.status !== "ready") {
@@ -86,9 +98,24 @@ async function confirm(
     if (Date.now() >= deadline) {
       throw new ApplyRefused(`${what} did not take effect`);
     }
+    if (retry && !resent && Date.now() - started >= RETRY_MS) {
+      resent = true;
+      retry();
+    }
     await environment.settle();
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
+}
+
+/** The bar the game currently shows for `hero`, or `null` if it was not read. */
+function liveBar(party: LiveParty, hero: number): readonly number[] | null {
+  const skills = party.heroes.find((one) => one.hero === hero)?.skills;
+  return skills ? skills.map((skill) => skill ?? 0) : null;
+}
+
+function sameBar(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length
+    && left.every((skill, slot) => skill === right[slot]);
 }
 
 /** The attribute ranks of one member, as the client's numeric pairs. */
@@ -145,6 +172,7 @@ export async function runTeamApply(
   const wantedHeroes = new Set(wanted.map((member) => member.hero));
   let completedChanges = 0;
   let skillsSkipped = false;
+  let skipped: readonly number[] = [];
 
   try {
     // Out first, so a full party has room for the heroes coming in.
@@ -217,48 +245,64 @@ export async function runTeamApply(
         }
 
         const skills = skillIds(member);
-        environment.commands.setHeroSkills(agentId, skills);
-        await confirm(
-          environment,
-          `the skill bar for hero ${member.hero}`,
-          (party) => {
-            const live = party.heroes.find((hero) => hero.hero === member.hero);
-            const bar = live?.skills;
-            if (!bar) return false;
-            const applied = bar.map((skill) => skill ?? 0);
-            if (applied.every((skill, slot) => skill === skills[slot])) return true;
-            // The client drops a skill the character cannot use rather than
-            // refusing the bar. That is a real, reportable outcome and not a
-            // failure to apply — but only once the bar has stopped changing.
-            if (applied.some((skill, slot) => skill !== 0 && skill !== skills[slot])) {
-              return false;
-            }
-            skillsSkipped = applied.some((skill) => skill === 0)
-              && skills.some((skill) => skill !== 0);
-            return skillsSkipped;
-          },
-        );
-        completedChanges += 1;
+        const before = liveBar(environment.party(), member.hero);
+        if (before === null || !sameBar(before, skills)) {
+          const send = () => environment.commands.setHeroSkills(agentId, skills);
+          send();
+          // The client keeps a skill the hero may not use out of the bar, and
+          // leaves whatever was in that slot. So the answer is not "the bar
+          // matches" or "the bar is empty where it could not comply" — it is
+          // whatever the bar settles on, which may differ from the request in
+          // slots the request cared about. Waiting for an exact match is what
+          // reported a partly-applied bar as a failure.
+          let steady: readonly number[] | null = null;
+          await confirm(
+            environment,
+            `the skill bar for hero ${member.hero}`,
+            (party) => {
+              const bar = liveBar(party, member.hero);
+              if (bar === null) return false;
+              if (sameBar(bar, skills)) return true;
+              // A bar still showing what it showed before is a bar in flight,
+              // not the client's answer.
+              if (before !== null && sameBar(bar, before)) return false;
+              // And the same different bar twice, because the client can
+              // publish an intermediate state on its way to the final one.
+              if (steady === null || !sameBar(steady, bar)) {
+                steady = bar;
+                return false;
+              }
+              skipped = skills
+                .map((skill, slot) => (skill !== 0 && bar[slot] !== skill ? skill : 0))
+                .filter((skill) => skill !== 0);
+              skillsSkipped = skipped.length > 0;
+              return true;
+            },
+            send,
+          );
+          completedChanges += 1;
+        }
 
         const ranks = attributePairs(member);
-        if (ranks.length > 0) {
-          const wanted = member.build.attributes;
+        const wanted = member.build.attributes;
+        const settled = (party: LiveParty) => {
+          const live = party.heroes
+            .find((hero) => hero.hero === member.hero)?.attributes;
+          if (!live) return false;
+          // Every rank asked for, at the value asked for. Not equality: the
+          // client keeps ranks the build says nothing about, and a build that
+          // mentions eight attributes is not a claim that the other
+          // thirty-four are zero.
+          return Object.entries(wanted).every(([name, rank]) =>
+            rank === undefined || rank === 0
+            || live[name as keyof typeof wanted] === rank);
+        };
+        if (ranks.length > 0 && !settled(environment.party())) {
           environment.commands.setHeroAttributes(agentId, ranks);
           await confirm(
             environment,
             `the attributes of hero ${member.hero}`,
-            (party) => {
-              const live = party.heroes
-                .find((hero) => hero.hero === member.hero)?.attributes;
-              if (!live) return false;
-              // Every rank asked for, at the value asked for. Not equality:
-              // the client keeps ranks the build says nothing about, and a
-              // build that mentions eight attributes is not a claim that the
-              // other thirty-four are zero.
-              return Object.entries(wanted).every(([name, rank]) =>
-                rank === undefined || rank === 0
-                || live[name as keyof typeof wanted] === rank);
-            },
+            settled,
           );
           completedChanges += 1;
         }
@@ -292,5 +336,12 @@ export async function runTeamApply(
     throw cause;
   }
 
-  return Object.freeze({ commandId, completedChanges, skillsSkipped });
+  return Object.freeze({
+    commandId,
+    completedChanges,
+    skillsSkipped,
+    // Named, not counted. "Guild Wars skipped a skill" is not actionable; the
+    // skill it skipped tells the player it is one they have not unlocked.
+    skippedSkills: Object.freeze(skipped),
+  });
 }

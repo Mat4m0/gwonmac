@@ -4,6 +4,7 @@ import {
   buildId as canonicalBuildId,
   mapTeamSlots,
   skillBarOf,
+  skillId,
   teamSlotsOf,
 } from "../../../src/shared/builds/library";
 import {
@@ -605,9 +606,19 @@ export function useLibrary(host: ToolsHost) {
         );
         return result;
       }
-      showNotice(result.skillsSkipped
-        ? `Team applied · ${changes}. Guild Wars skipped one or more unavailable skills.`
-        : `Team applied · ${changes}.`);
+      // Named, not counted. A skill the game refused is almost always one the
+      // account has not unlocked, and the name is what tells the player that.
+      const skipped = (result.skippedSkills ?? [])
+        .map((id) => skillId(id))
+        .map((skill) => host.skills.has(skill) ? host.skills.get(skill).name : `#${skill}`);
+      showNotice(skipped.length
+        ? `Team applied · ${changes}. Guild Wars would not equip `
+          + `${skipped.slice(0, 3).join(", ")}`
+          + `${skipped.length > 3 ? ` and ${skipped.length - 3} more` : ""}`
+          + " — those are usually skills the account has not unlocked."
+        : result.skillsSkipped
+          ? `Team applied · ${changes}. Guild Wars skipped one or more unavailable skills.`
+          : `Team applied · ${changes}.`);
       return result;
     } catch (cause) {
       showNotice(
