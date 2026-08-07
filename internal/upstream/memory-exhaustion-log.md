@@ -371,7 +371,29 @@ player was revisiting. Vanquishing is the maximal case by definition — clearin
 an explorable area means loading all of it — and it is reachable from every
 campaign, on any account.
 
-**The ask, stated precisely.** Rebuild with `-sMAXIMUM_MEMORY=4GB`. wasm32
-addresses up to 4 GB, the comment already in their glue is Emscripten's
-guidance for exactly that configuration, and it is one build flag rather than a
-change to how the client allocates.
+**The ask, stated precisely, and what it is not.** `-sMAXIMUM_MEMORY=4GB` is
+one build flag, and wasm32 addresses up to 4 GB, so it is cheap. It is
+mitigation and not a cure, and the report must say so or the first engineer to
+read it will say it for us.
+
+Boot costs a fixed ~700 MiB, so the usable budget goes from ~1,348 MiB to
+~3,396 MiB: about **2.5x**. On the measured session that turns a death at 66
+minutes into one at roughly two and a half hours, and a 25-minute vanquish
+death into about 65 minutes. Useful, and still bounded.
+
+The heap does not converge under continuous new content. It grew steadily to
+the cap across 65 minutes with no plateau, and the only flat stretches were
+the player standing still. So a bigger ceiling buys time proportional to the
+ceiling and nothing else.
+
+What we cannot say is *why* it grows without bound. Round 3 already framed this
+as leak vs. fragmentation vs. per-zone accumulation, and nothing since has
+separated them. We do know `malloc`/`free` work normally — 500 rounds of
+8 MiB alloc/free against the real wasm kept the heap flat — so it is not a
+stubbed allocator. Beyond that: revisiting a zone costs no growth, which is
+equally consistent with content being cached deliberately and with it being
+freed and the blocks reused. From outside the client those look the same.
+
+So the report asks for the flag as breathing room, and reports the growth
+itself as the defect. wasm32 has no ceiling above 4 GB, which is the argument
+for treating the flag as time bought rather than the answer.
