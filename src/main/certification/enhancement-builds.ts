@@ -351,7 +351,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       cursorToolbox: "1a84d44ca33b68ab53f2076eee6b7840fd415401f3f3ce8a2ac3d671abb4182e",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "8d7b3897e9c69c374cf26a17250b23acf6441333ef593b90b155e68403439580",
+      cursorToolboxCommands: "8c99cb76ee4ba20fc0487c215ee93838c09036e57c5eebafc04355a3fe1eef4d",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -374,15 +374,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       tableSlot: 922,
       producerFunctions: Object.freeze([2828, 2834] as const),
     }),
-    // One command, deliberately. Kicking a hero is the cheapest reversible
-    // thing the client can be asked to do: one packet, one argument, and the
-    // party window shows the result immediately. Everything else waits until
-    // this has been sent once against a live game.
+    // Everything a team apply needs, and nothing else. Kick was sent first,
+    // alone, against a live game; the rest joined it once that had worked.
     //
-    // `KickAllHeroes` is the same call with hero id 0x26 and is *not* offered:
-    // 0x26 is 38, and Devona is hero 38. GWCAjs verified the sentinel live on
-    // build 38,615, which predates her. Kicking heroes one at a time covers
-    // every case and never touches the ambiguous value.
+    // `KickAllHeroes` is `kick` with hero id 0x26 and is deliberately *not*
+    // here: 0x26 is 38, and Devona is hero 38. GWCAjs verified the sentinel
+    // live on build 38,615, which predates her. Kicking heroes one at a time
+    // covers every case and never touches the ambiguous value.
+    //
+    // Absent for the same kind of reason: secondary profession (65) and hard
+    // mode (155) are certified in the evidence file and are not needed to
+    // apply a team, so they are not offered. The callable set is the smallest
+    // one that does the job.
     commands: Object.freeze({
       thunkExport: "enhancement_command",
       entries: Object.freeze([
@@ -394,6 +397,45 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
           bodySha256:
             "ad54846e78e293ba4c2a6cef392bb3f3cb62fdd5209d8aadf0e99c75a4914e59",
           label: "CharMsgSendHeroDeactivate(heroId)",
+        }),
+        Object.freeze({
+          opcode: 30,
+          functionIndex: 6886,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "709ce8b36ecd5bb269d211d38a7d504a7577e40312be7c74c125f02bbb3be697",
+          label: "CharMsgSendHeroActivate(heroId)",
+        }),
+        Object.freeze({
+          opcode: 21,
+          functionIndex: 6878,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "e8c9b33da97ad99f4fabcca08fabf29ecb8a08fb400d8e161bba659775234157",
+          label: "CharMsgSendCommandAiMode(agentId, behavior)",
+        }),
+        // The two that carry a payload. Their third and fourth arguments are
+        // addresses of buffers the renderer owns and fills; the client copies
+        // out of them and sends. See `COMMAND_PAYLOAD_WORDS`.
+        Object.freeze({
+          opcode: 93,
+          functionIndex: 6943,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "37f53da3c4edecbf9438f093b90e3aff5e65eeac018835da016c472c5fa15a23",
+          label: "skillbar set (agentId, count, skills[])",
+        }),
+        Object.freeze({
+          opcode: 16,
+          functionIndex: 6873,
+          params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "c2b8c55c9cddf538e61911cb6d542196a35700c1d6e5a5e693ab627ca4e53041",
+          label: "attributes set (agentId, count, ids[], ranks[])",
         }),
       ] as const),
     }),

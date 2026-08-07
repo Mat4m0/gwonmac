@@ -127,10 +127,11 @@ function moduleWithManifest(value: unknown): WebAssembly.Module {
 // otherwise.
 function fixture(hookParamType = 0x7f): Uint8Array {
   const type = section(1, [
-    3,
+    4,
     0x60, 1, hookParamType, 0,
     0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
+    0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const env = [3, 101, 110, 118];
   const imports = section(2, [
@@ -143,7 +144,7 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   // to. Its body deliberately differs from the tick hook's -- an identical body
   // would hash the same, and the whole point of `bodySha256` is that two
   // different functions cannot pass for each other.
-  const functions = section(3, [4, 0, 1, 2, 0]);
+  const functions = section(3, [5, 0, 1, 2, 0, 3]);
   const table = section(4, [1, 0x70, 1, 4, 4]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
@@ -165,12 +166,16 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   ];
   const ui = [0, 0x20, 0, 0x20, 1, 0x20, 2, 0x10, 2, 0x0b];
   const command = [0, 0x41, 0, 0x1a, 0x20, 0, 0x10, 0, 0x0b];
+  // Two arguments, so a command that takes more than one is exercised too --
+  // the real skillbar and attribute commands take three and four.
+  const pair = [0, 0x20, 0, 0x10, 0, 0x20, 1, 0x10, 0, 0x0b];
   const code = section(10, [
-    4,
+    5,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
     ...uleb(command.length), ...command,
+    ...uleb(pair.length), ...pair,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -179,9 +184,9 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   ]);
 }
 
-/** The fixture's fourth function body, as the transform will read it. */
-function commandBody(bytes: Uint8Array): Uint8Array {
-  return parseCode(sectionById(splitSections(bytes), 10))[3]!;
+/** A fixture function body, as the transform will read it. */
+function commandBody(bytes: Uint8Array, index: number): Uint8Array {
+  return parseCode(sectionById(splitSections(bytes), 10))[index]!;
 }
 
 function manifest(bytes: Uint8Array): KnownEnhancementBuild {
@@ -202,9 +207,18 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
         params: ["i32"],
         results: [],
         bodySha256: createHash("sha256")
-          .update(commandBody(bytes))
+          .update(commandBody(bytes, 3))
           .digest("hex"),
         label: "fixture command",
+      }, {
+        opcode: 93,
+        functionIndex: 7,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes, 4))
+          .digest("hex"),
+        label: "fixture pair command",
       }],
     },
     cursorEvent: {
@@ -837,13 +851,19 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.equal(command(31, 4242, 0, 0, 0), 1, "certified opcode is sent");
     assert.deepEqual(sent, [4242], "the argument reaches the builder unchanged");
 
-    // Everything else, including the neighbours of the one we certified: the
+    // A command taking more than one argument gets all of them, in order, and
+    // the arguments past its arity are ignored rather than passed on.
+    assert.equal(command(93, 11, 22, 33, 44), 1);
+    assert.deepEqual(sent, [4242, 11, 22]);
+
+    // Everything else, including the neighbours of the ones we certified: the
     // opcodes are a dense range on the real client, so an off-by-one would
     // otherwise land on a real message.
-    for (const opcode of [0, 1, 30, 32, 93, -1, 0x7fff_ffff]) {
+    sent.length = 0;
+    for (const opcode of [0, 1, 16, 21, 30, 32, 92, 94, -1, 0x7fff_ffff]) {
       assert.equal(command(opcode, 4242, 0, 0, 0), 0, `opcode ${opcode}`);
     }
-    assert.deepEqual(sent, [4242], "and nothing else was sent");
+    assert.deepEqual(sent, [], "and nothing was sent");
   });
 
   it("refuses a command whose function is not the one certified", () => {

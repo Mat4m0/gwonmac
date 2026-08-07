@@ -59,6 +59,20 @@ const COMPANION_RUNTIME_BYTES = 65_536;
  * rounded up inside it; the raw pointer is what has to be freed.
  */
 const COMPANION_RUNTIME_ALIGN = 16;
+
+/**
+ * The scratch the two payload-carrying commands copy out of, as word counts.
+ *
+ * Eight is a skill bar. Sixteen is what the attribute buffer inside the client
+ * actually holds — its own clamp is 64, into a 144-byte frame with room for
+ * sixteen ids and sixteen ranks, so a count between 17 and 64 passes the
+ * client's check and writes past the arrays. The bound has to be ours. Nine is
+ * the most any character can have invested, so sixteen is already generous.
+ */
+const COMMAND_SKILL_WORDS = 8;
+const COMMAND_ATTRIBUTE_WORDS = 16;
+const COMMAND_PAYLOAD_WORDS =
+  COMMAND_SKILL_WORDS + COMMAND_ATTRIBUTE_WORDS * 2;
 let companionInstallations = 0;
 
 /**
@@ -242,6 +256,7 @@ export async function installEnhancements(
   let cursorPointer = 0;
   let toolboxPointer = 0;
   let partyPointer = 0;
+  let payloadPointer = 0;
   // What malloc returned, which is what free must be given. The aligned base
   // used by the module lives inside it and is not a valid argument to free.
   let runtimeAllocation = 0;
@@ -272,6 +287,7 @@ export async function installEnhancements(
     }
     if (toolboxPointer) free(toolboxPointer);
     if (partyPointer) free(partyPointer);
+    if (payloadPointer) free(payloadPointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
@@ -310,6 +326,11 @@ export async function installEnhancements(
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
       partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
     }
+    if (capabilities.commands) {
+      payloadPointer = Number(
+        exports.malloc(COMMAND_PAYLOAD_WORDS * Uint32Array.BYTES_PER_ELEMENT),
+      );
+    }
     if (
       !runtimeAllocation
       || !configPointer
@@ -317,6 +338,7 @@ export async function installEnhancements(
       || (capabilities.nativeCursor && !cursorPointer)
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
+      || (capabilities.commands && !payloadPointer)
     ) {
       throw new Error("Companion allocation failed");
     }
@@ -616,29 +638,105 @@ export async function installEnhancements(
       },
     };
     /**
-     * Kicks one hero out of the party, and does nothing else.
+     * The five commands, one named function each.
      *
-     * The bounded live promotion the ledger asks for, in the smallest shape
-     * that exists: one packet, one argument, and a result the party window
-     * shows immediately. It is deliberately not `command(opcode, ...)` — the
-     * opcode is not a parameter anywhere outside the certified table, so no
-     * caller here or in a console can choose a different message.
+     * Deliberately not `command(opcode, ...)`. The opcode is not a parameter
+     * anywhere outside the certified table, so nothing here — and nothing in a
+     * console — can choose a message that was not reviewed. Each wrapper takes
+     * the domain values and nothing that looks like an address.
      *
-     * Preconditions are checked against what the companion already observes,
-     * not asserted. Outside an outpost the client will refuse anyway; refusing
-     * first means the refusal is ours and is legible.
+     * Preconditions are checked against what the companion already observes
+     * rather than asserted. The client refuses most of this anyway; refusing
+     * first means the refusal is ours and says which rule it was.
      */
-    const kickHero = commandThunk === null ? null : (heroId: number) => {
-      if (cleaned) throw new Error("Enhancement installation is no longer active");
-      if (!Number.isInteger(heroId) || heroId < 1 || heroId > 39) {
-        throw new Error(`hero id ${heroId} is not a hero`);
-      }
-      const party = toolbox?.state ?? null;
-      if (party === null || party.status !== "ready") {
-        throw new Error("no party has been observed yet");
-      }
-      return commandThunk(31, heroId, 0, 0, 0) === 1;
-    };
+    const commands = commandThunk === null ? null : (() => {
+      const send = commandThunk;
+      const ready = () => {
+        if (cleaned) throw new Error("Enhancement installation is no longer active");
+        const observed = toolbox?.state ?? null;
+        if (observed === null || observed.status !== "ready") {
+          throw new Error("no party has been observed yet");
+        }
+      };
+      const hero = (heroId: number) => {
+        if (!Number.isInteger(heroId) || heroId < 1 || heroId > 39) {
+          throw new Error(`hero id ${heroId} is not a hero`);
+        }
+      };
+      const agent = (agentId: number) => {
+        if (!Number.isInteger(agentId) || agentId < 1) {
+          throw new Error(`agent id ${agentId} is not an agent`);
+        }
+      };
+      // A fresh view every call: `memory.buffer` detaches when the heap grows,
+      // and a cached view would write into a buffer nothing reads.
+      const payload = (offset: number, values: readonly number[]) => {
+        const words = new Uint32Array(
+          memory.buffer,
+          payloadPointer + offset * Uint32Array.BYTES_PER_ELEMENT,
+          values.length,
+        );
+        words.set(values);
+        return payloadPointer + offset * Uint32Array.BYTES_PER_ELEMENT;
+      };
+      return {
+        addHero(heroId: number) {
+          ready();
+          hero(heroId);
+          return send(30, heroId, 0, 0, 0) === 1;
+        },
+        kickHero(heroId: number) {
+          ready();
+          hero(heroId);
+          return send(31, heroId, 0, 0, 0) === 1;
+        },
+        setHeroBehaviour(agentId: number, behaviour: number) {
+          ready();
+          agent(agentId);
+          // Fight, Guard, Avoid. The client's own enum stops there.
+          if (!Number.isInteger(behaviour) || behaviour < 0 || behaviour > 2) {
+            throw new Error(`behaviour ${behaviour} is not one the client defines`);
+          }
+          return send(21, agentId, behaviour, 0, 0) === 1;
+        },
+        setHeroSkills(agentId: number, skillIds: readonly number[]) {
+          ready();
+          agent(agentId);
+          if (skillIds.length > COMMAND_SKILL_WORDS) {
+            throw new Error(`a skill bar holds ${COMMAND_SKILL_WORDS} skills`);
+          }
+          if (skillIds.some((id) => !Number.isInteger(id) || id < 0)) {
+            throw new Error("every skill must be a non-negative id");
+          }
+          const at = payload(0, skillIds);
+          return send(93, agentId, skillIds.length, at, 0) === 1;
+        },
+        setHeroAttributes(
+          agentId: number,
+          ranks: readonly (readonly [attribute: number, rank: number])[],
+        ) {
+          ready();
+          agent(agentId);
+          // Our bound, not the client's. Its own clamp is 64 into a buffer that
+          // holds sixteen, so a count above sixteen writes past the arrays.
+          if (ranks.length > COMMAND_ATTRIBUTE_WORDS) {
+            throw new Error(`at most ${COMMAND_ATTRIBUTE_WORDS} attributes`);
+          }
+          if (ranks.some(([id, rank]) =>
+            !Number.isInteger(id) || id < 0 || id > 44
+            || !Number.isInteger(rank) || rank < 0 || rank > 12
+          )) {
+            throw new Error("every attribute must be a known id at a rank of 0-12");
+          }
+          const ids = payload(COMMAND_SKILL_WORDS, ranks.map(([id]) => id));
+          const levels = payload(
+            COMMAND_SKILL_WORDS + COMMAND_ATTRIBUTE_WORDS,
+            ranks.map(([, rank]) => rank),
+          );
+          return send(16, agentId, ranks.length, ids, levels) === 1;
+        },
+      };
+    })();
     // The observer program is the one explicit harness capability. Toolbox
     // publishes projections only: it cannot read arbitrary game addresses or
     // mutate the hook after installation. The commands program adds exactly
@@ -655,9 +753,9 @@ export async function installEnhancements(
               : 0;
           },
         })
-      : kickHero === null
+      : commands === null
         ? runtimeProjection
-        : Object.assign(runtimeProjection, { kickHero }));
+        : Object.assign(runtimeProjection, commands));
     installedRuntime = runtime;
     // The retry loop rides the observer's own cadence: it runs exactly when
     // the consumer polls, and pauses with it when the page is hidden.
