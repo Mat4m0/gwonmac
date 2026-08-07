@@ -26,7 +26,7 @@
  * worse than one that refused: the player can see a refusal, and cannot see
  * that hero four kept yesterday's bar.
  */
-import { ATTRIBUTES } from "./heroes.js";
+import { ATTRIBUTES, PROFESSIONS } from "./heroes.js";
 import { SKILL_SLOTS } from "./library.js";
 import type {
   TeamApplyMember,
@@ -40,6 +40,7 @@ export interface TeamApplyCommands {
   addHero(heroId: number): boolean;
   kickHero(heroId: number): boolean;
   setHeroBehaviour(agentId: number, behaviour: number): boolean;
+  setHeroSecondary(agentId: number, profession: number): boolean;
   setHeroSkills(agentId: number, skillIds: readonly number[]): boolean;
   setHeroAttributes(
     agentId: number,
@@ -184,12 +185,37 @@ export async function runTeamApply(
       }
 
       if (member.build !== null) {
-        // A build's secondary profession is deliberately not applied. The
-        // command exists — opcode 65 is certified — but changing a hero's
-        // secondary is an unlock-gated decision about that hero, not part of
-        // loading a bar onto it. A bar needing a secondary the hero does not
-        // have is dropped skill by skill by the client, which is exactly what
-        // `skillsSkipped` reports.
+        // The secondary profession comes first, and it is not optional.
+        //
+        // Changing it resets the bar and the attribute lines that belonged to
+        // the old one, so setting skills or ranks before it would apply them
+        // and then throw them away. GWCA's `LoadSkillTemplate` runs the same
+        // three in this order for the same reason.
+        //
+        // Only the secondary. A hero's *primary* is who they are and no
+        // message changes it — a build whose primary the hero does not have is
+        // a build for a different hero, and the client drops the skills it
+        // cannot use, which is what `skillsSkipped` reports.
+        const [, secondary] = member.build.professions;
+        const live = environment.party().heroes
+          .find((hero) => hero.hero === member.hero);
+        const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
+        // Unread professions are not a mismatch. Sending a change nobody asked
+        // for costs a wasted reset of the bar we are about to write.
+        if (live?.professions !== null
+          && live?.professions !== undefined
+          && (live.professions[1] ?? null) !== secondary) {
+          environment.commands.setHeroSecondary(agentId, wantedSecondary);
+          await confirm(
+            environment,
+            `the secondary profession of hero ${member.hero}`,
+            (party) => (party.heroes.find(
+              (hero) => hero.hero === member.hero)?.professions?.[1] ?? null)
+              === secondary,
+          );
+          completedChanges += 1;
+        }
+
         const skills = skillIds(member);
         environment.commands.setHeroSkills(agentId, skills);
         await confirm(

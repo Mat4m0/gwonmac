@@ -628,6 +628,16 @@ export async function installEnhancements(
           }
           return send(21, agentId, behaviour, 0, 0) === 1;
         },
+        setHeroSecondary(agentId: number, profession: number) {
+          ready();
+          agent(agentId);
+          // The ten the client defines. Zero is `Profession::None`, which is a
+          // real secondary — a monoclass hero — and so is allowed.
+          if (!Number.isInteger(profession) || profession < 0 || profession > 10) {
+            throw new Error(`profession ${profession} is not one the client defines`);
+          }
+          return send(65, agentId, profession, 0, 0) === 1;
+        },
         setHeroSkills(agentId: number, skillIds: readonly number[]) {
           ready();
           agent(agentId);

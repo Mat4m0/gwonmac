@@ -351,7 +351,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       cursorToolbox: "1a84d44ca33b68ab53f2076eee6b7840fd415401f3f3ce8a2ac3d671abb4182e",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "8c99cb76ee4ba20fc0487c215ee93838c09036e57c5eebafc04355a3fe1eef4d",
+      cursorToolboxCommands: "dd1eb8f219295a16df65e35e3ecf1057eb7d1c4bb423089af9f8bf13563a031a",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -382,10 +382,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // live on build 38,615, which predates her. Kicking heroes one at a time
     // covers every case and never touches the ambiguous value.
     //
-    // Absent for the same kind of reason: secondary profession (65) and hard
-    // mode (155) are certified in the evidence file and are not needed to
-    // apply a team, so they are not offered. The callable set is the smallest
-    // one that does the job.
+    // Hard mode (155) is certified in the evidence file and deliberately not
+    // offered: an apply does not need it. The callable set is the smallest one
+    // that does the job.
     commands: Object.freeze({
       thunkExport: "enhancement_command",
       entries: Object.freeze([
@@ -427,6 +426,15 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
           bodySha256:
             "37f53da3c4edecbf9438f093b90e3aff5e65eeac018835da016c472c5fa15a23",
           label: "skillbar set (agentId, count, skills[])",
+        }),
+        Object.freeze({
+          opcode: 65,
+          functionIndex: 6917,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "7ea3e38a9cb5dd4bd6edc4d86a89f1e98c531d005b4f3e08a8142b50146f688c",
+          label: "CharMsgSendOrderSetProfessionSecondary(agentId, profession)",
         }),
         Object.freeze({
           opcode: 16,

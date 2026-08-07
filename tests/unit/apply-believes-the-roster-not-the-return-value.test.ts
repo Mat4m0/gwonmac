@@ -27,6 +27,7 @@ import type {
 type Slot = {
   hero: number;
   agentId: number;
+  professions?: readonly number[] | null;
   behaviour: number | null;
   skills: readonly number[] | null;
   attributes?: readonly (readonly number[])[] | null;
@@ -57,7 +58,9 @@ function party(slots: readonly Slot[], inOutpost: boolean | null = true): LivePa
           hero: slot.hero,
           agentId: slot.agentId,
           level: 20,
-          professions: [1, 2] as readonly number[],
+          professions: slot.professions === undefined
+            ? [1, 2] as readonly number[]
+            : slot.professions,
           behaviour: slot.behaviour,
           skills: slot.skills,
           disabled: 0,
@@ -83,6 +86,9 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
     kickHero: (heroId) => { sent.push(`kick:${heroId}`); return true; },
     setHeroBehaviour: (agentId, behaviour) => {
       sent.push(`behaviour:${agentId}:${behaviour}`); return true;
+    },
+    setHeroSecondary: (agentId, profession) => {
+      sent.push(`secondary:${agentId}:${profession}`); return true;
     },
     setHeroSkills: (agentId, skills) => {
       sent.push(`skills:${agentId}:${skills.join(",")}`); return true;
@@ -190,7 +196,7 @@ test("a full apply reports only the changes the roster confirmed", async () => {
     "skills:11:1,2,3,4,5,6,7,8",
     "attributes:11:17=7,19=12",
     "behaviour:11:0",
-  ], "no add and no kick: the hero was already there");
+  ], "no add, no kick, and no secondary: all three already matched");
   // Bar, attributes, behaviour. The hero itself was not a change.
   assert.equal(result.completedChanges, 3);
 });
@@ -212,6 +218,90 @@ test("attributes the game never applies are a refusal too", async () => {
     /the attributes of hero 6 did not take effect/,
   );
   assert.deepEqual(game.sent.at(-1), "attributes:11:17=7,19=12");
+});
+
+// Changing the secondary resets the bar and the attribute lines that belonged
+// to the old profession, so it has to happen before either of them. A run that
+// wrote skills first would apply them and then throw them away.
+test("a new secondary profession is set, and set before the bar", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  }]);
+  game.react("secondary:11:2", [{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 2],
+  }]);
+  game.react("skills:11:1,2,3,4,5,6,7,8", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+  }]);
+  game.react("attributes:11:17=7,19=12", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }]);
+
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), build: build() })]),
+    game.environment,
+    1,
+  );
+  assert.deepEqual(game.sent, [
+    "secondary:11:2",
+    "skills:11:1,2,3,4,5,6,7,8",
+    "attributes:11:17=7,19=12",
+  ]);
+  assert.equal(result.completedChanges, 3);
+});
+
+test("a monoclass build clears the secondary rather than leaving it", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  }]);
+  const monoclass = { ...build(), professions: ["W", null] } as ReturnType<typeof build>;
+  game.react("secondary:11:0", [{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 0],
+  }]);
+  game.react("skills:11:1,2,3,4,5,6,7,8", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 0],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+  }]);
+  game.react("attributes:11:17=7,19=12", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 0],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }]);
+  await runTeamApply(plan([member({ hero: heroId(6), build: monoclass })]), game.environment, 1);
+  assert.equal(game.sent[0], "secondary:11:0", "Profession::None is a real secondary");
+});
+
+test("a secondary the game never changes is a refusal, not a bar written anyway", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  }]);
+  await assert.rejects(
+    runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
+    /the secondary profession of hero 6 did not take effect/,
+  );
+  assert.deepEqual(game.sent, ["secondary:11:2"], "and the bar was never sent");
+});
+
+test("professions nobody read are not treated as a mismatch", async () => {
+  // Sending a change that was not asked for costs a reset of the bar we are
+  // about to write, so an unread secondary leaves it alone.
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: null,
+  }]);
+  game.react("skills:11:1,2,3,4,5,6,7,8", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: null,
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+  }]);
+  game.react("attributes:11:17=7,19=12", [{
+    hero: 6, agentId: 11, behaviour: 1, professions: null,
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }]);
+  await runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1);
+  assert.equal(game.sent.some((one) => one.startsWith("secondary:")), false);
 });
 
 test("a behaviour already set is not sent again", async () => {
