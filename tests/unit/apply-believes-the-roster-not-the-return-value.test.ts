@@ -29,6 +29,7 @@ type Slot = {
   agentId: number;
   behaviour: number | null;
   skills: readonly number[] | null;
+  attributes?: readonly (readonly number[])[] | null;
 };
 
 /** A published party, built the way the decoder publishes one. */
@@ -60,7 +61,7 @@ function party(slots: readonly Slot[], inOutpost: boolean | null = true): LivePa
           behaviour: slot.behaviour,
           skills: slot.skills,
           disabled: 0,
-          attributes: [] as readonly (readonly number[])[],
+          attributes: slot.attributes ?? [],
         })),
       ],
     },
@@ -169,8 +170,12 @@ test("a full apply reports only the changes the roster confirmed", async () => {
     agentId: 11,
     behaviour: 0,
     skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
   }];
-  game.react("skills:11:1,2,3,4,5,6,7,8", wanted.map((slot) => ({ ...slot, behaviour: 1 })));
+  game.react("skills:11:1,2,3,4,5,6,7,8",
+    wanted.map((slot) => ({ ...slot, behaviour: 1, attributes: [] })));
+  game.react("attributes:11:17=7,19=12",
+    wanted.map((slot) => ({ ...slot, behaviour: 1 })));
   game.react("behaviour:11:0", wanted);
 
   const result = await runTeamApply(
@@ -188,6 +193,25 @@ test("a full apply reports only the changes the roster confirmed", async () => {
   ], "no add and no kick: the hero was already there");
   // Bar, attributes, behaviour. The hero itself was not a change.
   assert.equal(result.completedChanges, 3);
+});
+
+// Attributes are published per hero, so they are confirmed like everything
+// else. The runner used to count this step the moment the packet went out --
+// a comment that had gone stale when the region grew the field.
+test("attributes the game never applies are a refusal too", async () => {
+  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
+  game.react("skills:11:1,2,3,4,5,6,7,8", [{
+    hero: 6, agentId: 11, behaviour: 1, skills: [1, 2, 3, 4, 5, 6, 7, 8],
+  }]);
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build() })]),
+      game.environment,
+      1,
+    ),
+    /the attributes of hero 6 did not take effect/,
+  );
+  assert.deepEqual(game.sent.at(-1), "attributes:11:17=7,19=12");
 });
 
 test("a behaviour already set is not sent again", async () => {

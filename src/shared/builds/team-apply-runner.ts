@@ -216,11 +216,24 @@ export async function runTeamApply(
 
         const ranks = attributePairs(member);
         if (ranks.length > 0) {
+          const wanted = member.build.attributes;
           environment.commands.setHeroAttributes(agentId, ranks);
-          // Attributes are not published per hero, so there is nothing to
-          // confirm them against. The change is counted only after the roster
-          // has settled, which at least proves the party survived the packet.
-          await environment.settle();
+          await confirm(
+            environment,
+            `the attributes of hero ${member.hero}`,
+            (party) => {
+              const live = party.heroes
+                .find((hero) => hero.hero === member.hero)?.attributes;
+              if (!live) return false;
+              // Every rank asked for, at the value asked for. Not equality:
+              // the client keeps ranks the build says nothing about, and a
+              // build that mentions eight attributes is not a claim that the
+              // other thirty-four are zero.
+              return Object.entries(wanted).every(([name, rank]) =>
+                rank === undefined || rank === 0
+                || live[name as keyof typeof wanted] === rank);
+            },
+          );
           completedChanges += 1;
         }
       }
