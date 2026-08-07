@@ -11,9 +11,17 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import {
   COMPANION_KERNEL_DYLINK0,
+  COMPANION_KERNEL_EXPORT_VALUES,
   COMPANION_KERNEL_SIGNATURES,
   validateCompanionKernelContract,
 } from "../../scripts/companion-kernel-contract.mjs";
+import {
+  COMPANION_CURSOR_BYTES,
+  COMPANION_PARTY_BYTES,
+  COMPANION_SNAPSHOT_BYTES,
+  COMPANION_TOOLBOX_BYTES,
+} from "../../src/renderer/companion-snapshot.ts";
+import { ENHANCEMENT_CONFIG_WORD_COUNT } from "../../src/shared/contracts.ts";
 import {
   COMPANION_KERNEL_HASH_BINDING,
   COMPANION_KERNEL_HASH_PLACEHOLDER,
@@ -203,6 +211,33 @@ describe("companion kernel build contract", () => {
     assert.throws(
       () => validateCompanionKernelContract(bytes),
       /exports have invalid function types/,
+    );
+  });
+
+  // `verify-companion-kernel.mjs` asks the built kernel what its regions are
+  // and compares the answers to these constants. It needs a built artifact, so
+  // it is not part of `pnpm check` and nothing ran it for two ABI moves — it
+  // was still asserting ABI 6 and a 196-byte config against a kernel that had
+  // gone to 7 and 296. Nothing there could have caught that; the numbers had no
+  // second holder. Here they do: every one is checked against the decoder or
+  // the contract that has to agree with it, inside the suite that always runs.
+  it("states region sizes the decoder and the config ABI already fix", () => {
+    assert.deepEqual(COMPANION_KERNEL_EXPORT_VALUES, {
+      companion_abi: COMPANION_KERNEL_EXPORT_VALUES.companion_abi,
+      companion_config_bytes: ENHANCEMENT_CONFIG_WORD_COUNT * 4,
+      companion_snapshot_bytes: COMPANION_SNAPSHOT_BYTES,
+      companion_cursor_bytes: COMPANION_CURSOR_BYTES,
+      companion_toolbox_bytes: COMPANION_TOOLBOX_BYTES,
+      companion_party_bytes: COMPANION_PARTY_BYTES,
+    });
+    // One export per value, so a region added to the kernel cannot be left
+    // unverified by forgetting to state its size.
+    assert.deepEqual(
+      Object.keys(COMPANION_KERNEL_EXPORT_VALUES).sort(),
+      COMPANION_KERNEL_SIGNATURES
+        .map(({ name }) => name)
+        .filter((name) => name.endsWith("_bytes") || name === "companion_abi")
+        .sort(),
     );
   });
 

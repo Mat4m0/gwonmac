@@ -12,9 +12,10 @@
  * and is not something to rediscover per frame.
  */
 import {
+  type CompanionPartyState,
   type CompanionToolboxState,
+  readChangedCompanionParty,
   readChangedCompanionToolbox,
-  readCompanionParty,
   readCompanionSnapshot,
   sameCompanionToolboxState,
 } from "./companion-snapshot.js";
@@ -46,7 +47,7 @@ type StateConsumer = {
  */
 type ToolboxConsumer = {
   update(state: CompanionToolboxState & {
-    party?: ReturnType<typeof readCompanionParty>;
+    party?: CompanionPartyState;
   }): void;
 };
 
@@ -75,6 +76,8 @@ export function observeCompanion(
   let cadenceTick = 0;
   let previousToolbox: CompanionToolboxState | null = null;
   let toolboxSequence: number | null = null;
+  let previousParty: CompanionPartyState | null = null;
+  let partySequence: number | null = null;
   let publishedState: CompanionState | null = null;
   const observe = () => {
     if (observeState) {
@@ -108,20 +111,38 @@ export function observeCompanion(
       readout?.update(state);
     }
     if (toolbox) {
+      // Both regions are watched, because each carries facts the other does
+      // not. The toolbox summary moves when a hero joins or the panel opens;
+      // the roster moves when a skill on a bar changes, which is invisible in
+      // every scalar the summary holds. Watching only the summary is why the
+      // panel — and capture with it — kept serving the bar from before an edit.
       const change = readChangedCompanionToolbox(
         runtime.memory.buffer,
         runtime.toolboxPointer,
         toolboxSequence,
       );
-      if (change.changed) {
-        toolboxSequence = change.sequence;
-        if (!sameCompanionToolboxState(previousToolbox, change.state)) {
-          previousToolbox = change.state;
-          toolbox.update({
-            ...change.state,
-            party: readCompanionParty(runtime.memory.buffer, runtime.partyPointer),
-          });
-        }
+      if (change.changed) toolboxSequence = change.sequence;
+      const partyChange = readChangedCompanionParty(
+        runtime.memory.buffer,
+        runtime.partyPointer,
+        partySequence,
+      );
+      if (partyChange.changed) partySequence = partyChange.sequence;
+
+      const state = change.changed ? change.state : previousToolbox;
+      const party = partyChange.changed ? partyChange.state : previousParty;
+      // The kernel publishes the roster only when it differs, so a moved party
+      // sequence *is* a change and needs no second comparison here. The toolbox
+      // region has no such promise and keeps its own.
+      if (
+        state !== null
+        && (partyChange.changed || !sameCompanionToolboxState(previousToolbox, state))
+      ) {
+        previousToolbox = state;
+        previousParty = party;
+        // Absent, rather than present and undefined: the field means "the
+        // roster region was read", and a key holding nothing says the opposite.
+        toolbox.update(party === null ? state : { ...state, party });
       }
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.

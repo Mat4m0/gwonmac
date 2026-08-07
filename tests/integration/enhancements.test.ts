@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
+  readChangedCompanionParty,
   readChangedCompanionToolbox,
   readCompanionSnapshot,
   readCompanionToolbox,
@@ -898,6 +899,69 @@ describe("Companion kernel", () => {
     assert.equal(party.rosterObserved, false);
     assert.equal(party.slotCount, 0);
     assert.equal(party.slots.every((slot) => slot.occupied === false), true);
+  });
+
+  // The reconciliation walk exists to catch changes no certified message
+  // announces — editing a hero's skill bar is exactly that — so it runs on a
+  // timer whether or not anything happened. Republishing what it already
+  // published would move the sequence twice a second forever, which makes
+  // "the sequence moved" useless as the cheap question a reader wants to ask.
+  it("republishes the roster only when the roster changed", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    const { sequence, generation } = readyParty(kernel.party());
+
+    // Well past RECONCILE_TICKS, so the recovery walk has run several times.
+    for (let tick = 0; tick < 300; tick += 1) kernel.tick();
+    const idle = readyParty(kernel.party());
+    assert.equal(idle.sequence, sequence, "sequence");
+    assert.equal(idle.generation, generation, "generation");
+
+    // And a change nothing announced is still picked up — by that same walk,
+    // which is the whole reason it runs on a timer.
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, 5, true);
+    for (let tick = 0; tick < 130; tick += 1) kernel.tick();
+    const changed = readyParty(kernel.party());
+    assert.notEqual(changed.sequence, sequence);
+    assert.equal(changed.generation, generation + 1, "exactly one publication");
+    assert.equal(changed.slots[1]?.hero, 5);
+  });
+
+  // The counterpart of the Toolbox header test below it, and the bug it exists
+  // for: the party was originally re-read on the *toolbox* sequence, which
+  // counts a different thing. Swapping a skill on a hero's bar moves no scalar
+  // the toolbox summary carries, so the panel — and capture with it — kept
+  // serving the roster from before the edit.
+  it("reads only the party header while its sequence is unchanged", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const first = readChangedCompanionParty(
+      kernel.memory.buffer,
+      ADDRESSES.party,
+      null,
+    );
+    assert.equal(first.changed, true);
+    assert.notEqual(first.sequence, null);
+    assert.deepEqual(
+      readChangedCompanionParty(kernel.memory.buffer, ADDRESSES.party, first.sequence),
+      { changed: false, sequence: first.sequence },
+    );
+
+    kernel.view.setUint32(ADDRESSES.heroBuffer + 0x08, 5, true);
+    kernel.uiEvent(0x1000_011f, 0, 0);
+    kernel.tick();
+    const changed = readChangedCompanionParty(
+      kernel.memory.buffer,
+      ADDRESSES.party,
+      first.sequence,
+    );
+    assert.equal(changed.changed, true);
+    assert.notEqual(changed.sequence, first.sequence);
   });
 
   it("traverses party state only for the exact dirty-message set", async () => {

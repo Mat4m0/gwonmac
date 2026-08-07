@@ -20,7 +20,7 @@
 //! belong to another player in the party; publishing theirs as ours is how a
 //! roster silently gains members the player did not add.
 
-use core::ptr::write_volatile;
+use core::ptr::{read_volatile, write_volatile};
 
 use crate::abi::*;
 use crate::memory::*;
@@ -98,6 +98,56 @@ fn pack_professions(primary: u32, secondary: u32) -> Option<u32> {
         return None;
     }
     Some(primary | (secondary << 8))
+}
+
+/// Whether the region already holds exactly this observation.
+///
+/// The published record *is* the previous walk, in memory this module owns, so
+/// there is nothing to keep a second copy of. Reading it back is what lets a
+/// walk that found nothing new leave the sequence alone — which is the whole
+/// point: `generation` is documented as bumping on a party change, and a
+/// reconciliation tick that republishes an identical roster makes that false
+/// and every reader downstream re-decode for nothing.
+unsafe fn matches_published(
+    heroes: &[Hero; PARTY_SLOTS],
+    count: u32,
+    flags: u32,
+    unlock: [u32; 4],
+) -> bool {
+    // SAFETY: as `publish` — the region `companion_init` accepted, written only
+    // by this module, and never read here before `initialize` has zeroed it.
+    let region = unsafe { POINTER as *const PartySnapshot };
+    unsafe {
+        if read_volatile(&(*region).flags) != flags
+            || read_volatile(&(*region).slot_count) != count
+            || read_volatile(&(*region).unlocked_low) != unlock[0]
+            || read_volatile(&(*region).unlocked_high) != unlock[1]
+            || read_volatile(&(*region).unlock_known_low) != unlock[2]
+            || read_volatile(&(*region).unlock_known_high) != unlock[3]
+        {
+            return false;
+        }
+        for index in 0..PARTY_SLOTS {
+            let slot = &(*region).slots[index];
+            let hero = heroes[index];
+            if read_volatile(&slot.hero_id) != hero.hero_id
+                || read_volatile(&slot.agent_id) != hero.agent_id
+                || read_volatile(&slot.professions) != hero.professions
+                || read_volatile(&slot.level) != hero.level
+                || read_volatile(&slot.behaviour) != hero.behaviour
+                || read_volatile(&slot.flags) != hero.flags
+                || read_volatile(&slot.disabled) != hero.disabled
+            {
+                return false;
+            }
+            for skill in 0..SKILL_SLOTS {
+                if read_volatile(&slot.skills[skill]) != hero.skills[skill] {
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }
 
 unsafe fn publish(heroes: &[Hero; PARTY_SLOTS], count: u32, flags: u32, unlock: [u32; 4]) {
@@ -345,6 +395,13 @@ pub(crate) unsafe fn mark_dirty() {
 /// `RECONCILE_TICKS` as the missed-event recovery path. A per-frame traversal
 /// of eight heroes, three arrays and sixty-four skill ids is not something to
 /// do because nothing happened.
+///
+/// And a walk that found nothing new publishes nothing. The reconciliation tick
+/// exists to catch changes no certified message announced — a hero's skill bar
+/// being edited is exactly that — so it fires regardless of `DIRTY` and would
+/// otherwise bump the sequence twice a second forever. Leaving the record alone
+/// is what makes "the sequence moved" mean "the party changed" to every reader
+/// downstream, which is the only cheap question they can ask.
 pub(crate) unsafe fn tick_if_dirty(layout: Layout, tick_count: u32) {
     if !unsafe { DIRTY } && tick_count.wrapping_sub(1) % RECONCILE_TICKS != 0 {
         return;
@@ -353,6 +410,9 @@ pub(crate) unsafe fn tick_if_dirty(layout: Layout, tick_count: u32) {
     let observation = unsafe { collect(layout) };
     let (heroes, count, flags, unlock) =
         observation.unwrap_or(([Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4]));
+    if unsafe { matches_published(&heroes, count, flags, unlock) } {
+        return;
+    }
     unsafe {
         GENERATION = GENERATION.wrapping_add(1);
         publish(&heroes, count, flags, unlock);

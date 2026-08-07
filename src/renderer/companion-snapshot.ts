@@ -613,3 +613,58 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
 }
 
 export type CompanionPartyState = ReturnType<typeof readCompanionParty>;
+
+/** The party sequence alone, for the frames where nothing has been published. */
+function readCompanionPartySequence(
+  buffer: ArrayBuffer,
+  pointer: number,
+): number | null {
+  if (
+    !(buffer instanceof ArrayBuffer)
+    || !Number.isInteger(pointer)
+    || pointer < 0
+    || pointer + COMPANION_PARTY_BYTES > buffer.byteLength
+  ) {
+    return null;
+  }
+  const view = new DataView(buffer, pointer, 12);
+  const first = view.getUint32(8, true);
+  if (
+    (first & 1) !== 0
+    || view.getUint32(0, true) !== PARTY_MAGIC
+    || view.getUint32(4, true) !== ((COMPANION_PARTY_BYTES << 16) | COMPANION_PARTY_ABI)
+    || view.getUint32(8, true) !== first
+  ) {
+    return null;
+  }
+  return first;
+}
+
+/**
+ * The party, decoded only when the kernel has published since it was last read.
+ *
+ * The counterpart of `readChangedCompanionToolbox`, and needed for the same
+ * reason it is: 544 bytes and 64 skill ids are not worth re-deriving sixty
+ * times a second to discover nothing moved.
+ *
+ * It exists at all because the party was originally re-read on the *toolbox*
+ * sequence, which counts a different thing. Editing a hero's skill bar changes
+ * no scalar the toolbox summary carries, so the panel kept showing — and
+ * capture kept saving — the bar from before the edit.
+ */
+export function readChangedCompanionParty(
+  buffer: ArrayBuffer,
+  pointer: number,
+  previousSequence: number | null,
+) {
+  const sequence = readCompanionPartySequence(buffer, pointer);
+  if (sequence !== null && sequence === previousSequence) {
+    return Object.freeze({ changed: false as const, sequence });
+  }
+  const state = readCompanionParty(buffer, pointer);
+  return Object.freeze({
+    changed: true as const,
+    sequence: state.status === "ready" ? state.sequence : null,
+    state,
+  });
+}

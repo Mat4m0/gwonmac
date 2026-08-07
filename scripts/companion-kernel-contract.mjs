@@ -23,6 +23,26 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
   { name: "companion_party_bytes", typeIndex: 2 },
 ]);
 
+/**
+ * What each nullary export must answer, restated where a human changes it.
+ *
+ * These lived inline in `verify-companion-kernel.mjs` and went stale: the party
+ * work moved the ABI to 7 and the config block to 296 bytes while that script
+ * still asserted 6 and 196, because it needs a built artifact and so is not
+ * part of `pnpm check`. Here they are inside a module the unit suite already
+ * imports, and the seal test ties every byte count back to the decoder that
+ * reads the region — so the two halves of each number cannot drift apart again
+ * without one test or the other saying so.
+ */
+export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
+  companion_abi: 7,
+  companion_config_bytes: 296,
+  companion_snapshot_bytes: 64,
+  companion_cursor_bytes: 4_160,
+  companion_toolbox_bytes: 64,
+  companion_party_bytes: 544,
+});
+
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   // Memory footprint 908 bytes (0x8c 0x07). Three documented moves:
   //   309 -> 310  the Toolbox observer gained PARTY_OBSERVED, the byte that
