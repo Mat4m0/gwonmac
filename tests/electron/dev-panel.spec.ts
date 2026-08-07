@@ -102,4 +102,72 @@ test.describe("memory debug panel", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("keeps the warning's own clicks off the game behind it", async () => {
+    const fixture = await launchOffline("gw-notice-events-");
+    try {
+      const { page } = fixture;
+      await togglePanel(page);
+      await page.locator('#dev-panel button[data-role="low"]').click();
+      await expect(page.locator("#memory-notice")).toBeVisible();
+
+      // The client listens on the window, so without a boundary at the notice
+      // root, dismissing the warning also hands the game a click — in the
+      // middle of whatever the player was doing when it appeared.
+      const reached = await page.evaluate(async () => {
+        let seen = 0;
+        const count = () => {
+          seen += 1;
+        };
+        for (const name of ["click", "pointerdown", "mousedown", "keydown"]) {
+          window.addEventListener(name, count);
+        }
+        document.getElementById("memory-notice-later")?.click();
+        return seen;
+      });
+      expect(reached).toBe(0);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("holds the keyboard inside the explanation it says is modal", async () => {
+    const fixture = await launchOffline("gw-notice-modal-");
+    try {
+      const { page } = fixture;
+      await togglePanel(page);
+      // The warning is drawn over a running game, and this fixture never gets
+      // one — the launcher is still up, and it is meant to cover the notice.
+      // The panel's own Dismiss is how the launcher goes away.
+      await page.locator('#dev-panel button[data-role="dismiss"]').click();
+      await page.locator('#dev-panel button[data-role="critical"]').click();
+      // The notice's copy arrives with a deferred import, so its own controls
+      // have no box until it does.
+      await expect(page.locator("#memory-notice")).toBeVisible();
+      await page.locator("#memory-notice-why").click();
+
+      const why = page.locator("#memory-why");
+      await expect(why).toBeVisible();
+      await expect(why).toHaveAttribute("aria-modal", "true");
+      // aria-modal tells a screen reader the game behind this is not there.
+      // The keyboard has to agree, or the two describe different apps.
+      const focused = () => page.evaluate(() => document.activeElement?.id ?? "");
+      expect(await focused()).toBe("memory-why-close");
+      for (const key of ["Tab", "Tab", "Shift+Tab"]) {
+        await page.keyboard.press(key);
+        expect(await focused()).toBe("memory-why-close");
+      }
+
+      // And Escape closes it, which is the only way out that does not need a
+      // pointer the game may be holding. The dimming goes with it — a scrim
+      // left over a live game is the worst thing this surface could leave
+      // behind. (The notice does not return here: this one was the panel's
+      // preview, so there is no real escalation to come back to.)
+      await page.keyboard.press("Escape");
+      await expect(why).toBeHidden();
+      await expect(page.locator("#memory-scrim")).toBeHidden();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

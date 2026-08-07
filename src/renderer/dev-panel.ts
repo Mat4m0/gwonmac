@@ -218,6 +218,17 @@ export interface DevPanelHost {
   capBytes(): number;
   /** The escalation the real watcher has reached. Read only. */
   realNoticeLevel(): string;
+  /**
+   * What the warning itself last concluded, as against this panel's own
+   * arithmetic. They measure over different windows on purpose, and when they
+   * disagree it is the warning's number that explains what the player saw.
+   */
+  pressure(): {
+    minutes: number | null;
+    bytesPerMinute: number | null;
+    /** The span the rate was measured over; null while there is no rate. */
+    measuredOverMs: number | null;
+  } | null;
   /** Draws the notice without touching the watcher's own state. */
   previewNotice(level: 'low' | 'critical'): void;
   hideNotice(): void;
@@ -270,6 +281,7 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
       <dt>notice</dt><dd data-role="notice"></dd>
       <dt>growth</dt><dd data-role="growth"></dd>
       <dt>to cap</dt><dd data-role="tocap"></dd>
+      <dt>warning</dt><dd data-role="warning"></dd>
       <dt>steps</dt><dd data-role="steps"></dd>
       <dt>sockets</dt><dd data-role="sockets"></dd>
       <dt>uptime</dt><dd data-role="uptime"></dd>
@@ -310,6 +322,7 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
   const noticeCell = cell('notice');
   const growthCell = cell('growth');
   const toCapCell = cell('tocap');
+  const warningCell = cell('warning');
   const stepsCell = cell('steps');
   const socketsCell = cell('sockets');
   const uptimeCell = cell('uptime');
@@ -382,7 +395,28 @@ export function createDevPanel(host: DevPanelHost): DevPanel {
     growthCell.textContent =
       `${perHour(summary.recentBytesPerMinute)} 30m`
       + ` · ${perHour(summary.runBytesPerMinute)} since open`;
-    toCapCell.textContent = minutesText(summary.minutesToCap);
+    toCapCell.textContent = `${minutesText(summary.minutesToCap)}  (since open)`;
+    // The warning's own reading. It measures step to step over a longer span
+    // and ignores the startup ramp, so this is the number that explains what
+    // the player was told — and a disagreement with the line above is
+    // information, not a bug in either.
+    const pressure = host.pressure();
+    if (pressure === null) {
+      warningCell.textContent = 'no reading yet';
+    } else if (pressure.measuredOverMs === null) {
+      // It has a reading and no rate, which is a different thing from having
+      // no reading — and on a quiet session it is the state the panel sits in
+      // for an hour. A bare dash here read as a broken instrument, so it says
+      // what it is waiting for. The steps row above counts this panel's own
+      // samples, including the boot-ramp rises the warning excludes, so the
+      // two numbers are not meant to agree.
+      warningCell.textContent = 'waiting for two steps 10 min apart';
+    } else {
+      warningCell.textContent =
+        `${pressure.minutes === null ? '—' : `~${pressure.minutes} m`}`
+        + ` at ${perHour(pressure.bytesPerMinute)}`
+        + ` over ${Math.round(pressure.measuredOverMs / 60_000)} m`;
+    }
     stepsCell.textContent = summary.lastStepBytes === null
       ? String(summary.steps)
       : `${summary.steps} · last +${Math.round(summary.lastStepBytes / MIB)} MiB`;

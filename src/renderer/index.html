@@ -200,19 +200,36 @@
 
 <div id="log"></div>
 <output id="diagnostics" aria-live="off"></output>
-<!-- The heap watermark notice: shown over the running game when WASM memory
-     nears its 2 GiB cap, so the player can reload from a safe place instead
-     of crashing mid-mission. harness.ts owns when; failure-messages.ts owns
-     the words. -->
+<!-- The memory warning: shown over the running game when the client's heap is
+     running out, so the player can reload at a moment they choose instead of
+     crashing at one they did not. harness.ts owns when and how many minutes;
+     failure-messages.ts owns every word. -->
 <div id="memory-notice" role="status" aria-live="polite" hidden>
   <div id="memory-notice-text">
     <strong id="memory-notice-label"></strong>
     <span id="memory-notice-detail"></span>
+    <button type="button" id="memory-notice-why"></button>
   </div>
   <div id="memory-notice-actions">
     <button type="button" id="memory-notice-later"></button>
-    <button type="button" id="memory-notice-reload"></button>
+    <button type="button" id="memory-notice-reload" class="primary"></button>
   </div>
+</div>
+<!-- What Later leaves behind. The banner's figure is frozen when it is shown,
+     so this is the surface that keeps counting — a dismissal is a deferral,
+     not the silence that preceded the crashes this warning exists for. -->
+<button type="button" id="memory-chip" hidden>
+  <span class="memory-chip-dot" aria-hidden="true"></span>
+  <span id="memory-chip-text"></span>
+</button>
+<!-- The explanation is a modal task, so unlike the notice it dims the game.
+     It opens in the notice's place: two translucent surfaces never stack. -->
+<div id="memory-scrim" hidden></div>
+<div id="memory-why" role="dialog" aria-modal="true"
+     aria-labelledby="memory-why-title" hidden>
+  <h2 id="memory-why-title" class="sr-only"></h2>
+  <div id="memory-why-blocks"></div>
+  <button type="button" id="memory-why-close"></button>
 </div>
 <output id="capture-status" hidden aria-live="off">
   <span class="capture-dot" aria-hidden="true"></span>

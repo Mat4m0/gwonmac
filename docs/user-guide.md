@@ -272,11 +272,39 @@ known patterns, so treat it as strong rather than absolute. The export is an
 ordinary ZIP you can open and read before attaching it. GitHub issues are
 public, so review the bug form’s privacy notice as well.
 
+## If the game warns that memory is running out
+
+ArenaNet's game client can only use 2 GB of memory and does not release what
+it loads, so a long session eventually fills it and the client stops. Neither
+the limit nor the memory use is something this app can change; what it can do
+is watch, and warn before it happens.
+
+A notice appears over the game at two points: once with roughly twenty minutes
+of play left, and again with about five. Those points are worked out from how
+fast memory has been filling in this session, so in areas that load a lot of
+new scenery the warning comes sooner in wall-clock terms, which is the whole
+idea — the same notice used to mean half an hour in the open world and two
+minutes inside a mission.
+
+The notice does not print a countdown. It could be worked out, but replayed
+against a real crash it was wrong by enough to matter in both directions, and
+a number on a banner is a promise. What is worth acting on is that the warning
+appeared.
+
+**Reload Now** restarts the client with fresh memory. It takes under a minute,
+and Guild Wars puts you back where you were — the same way it handles a
+dropped connection. That was tested from inside an instance on every way this
+app can reload the game, and progress survived each time; a town or outpost is
+still the one place with nothing at all to lose. **Later** leaves a small
+counter in the corner rather than going quiet; the full notice returns if time
+runs short. **Why is this happening?** explains it in the game.
+
 ## If the game crashes
 
 When the running game client stops unexpectedly, the launcher screen returns
 with **Retry** and **Report a Problem…**. Retry starts the client again; a
-single crash is usually transient.
+single crash is usually transient. A crash that ran out of memory says so
+under **Technical details**, with the heap size it reached.
 
 If the client crashes again in the same app run, the message changes to say
 so and leads with reporting: **Report a Problem…** on the launcher is the
