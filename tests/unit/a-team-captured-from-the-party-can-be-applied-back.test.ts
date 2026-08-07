@@ -51,6 +51,7 @@ function hero(
     behaviour: 1,
     skills: [101, 102, 103, 104, 105, 106, 107, 108],
     disabled: 0,
+    attributes: [[17, 7], [19, 12]],
     ...over,
   };
 }
@@ -67,6 +68,7 @@ function vacant(index: number): RegionSlot {
     behaviour: null,
     skills: null,
     disabled: null,
+    attributes: null,
   };
 }
 
@@ -174,20 +176,60 @@ test("the player's own slot stays empty, which is the only shape it may have", (
   );
 });
 
-test("a captured build carries no attributes and does not pretend otherwise", () => {
+test("a captured build carries the ranks that were read, by name", () => {
   const captured = captureParty(party([hero(1, 38)]), "Current party", counter());
   assert.ok(captured);
 
   const [build] = captured.builds;
   assert.ok(build);
-  // `AttributeRanks` has no spelling for unknown — absent *is* rank zero — so
-  // the prose is the only honest place, and it must not be silently dropped.
-  assert.deepEqual(build.attributes, {});
-  assert.match(build.notes, /attribute ranks were not read/iu);
+  assert.deepEqual(build.attributes, { Strength: 7, HammerMastery: 12 });
   assert.equal(build.origin, CAPTURE_ORIGIN);
   assert.equal(build.parent, null);
   assert.equal(build.lastUsed, null);
   assert.equal(build.name, "Devona", "the display spelling, not the enum id");
+});
+
+// The reason attributes gate a build rather than defaulting to none.
+// `AttributeRanks` cannot say *unknown* — an absent attribute is rank 0 — so a
+// bar saved without ranks publishes as a template that gives the character its
+// skills at rank 0, and reads in the library exactly like one that genuinely
+// invested nothing. The hero keeps their place; the build does not exist.
+test("a bar read without its ranks is not a build", () => {
+  const captured = captureParty(
+    party([hero(1, 38, { attributes: null })]),
+    "Current party",
+    counter(),
+  );
+  assert.ok(captured);
+
+  assert.deepEqual(captured.builds, []);
+  assert.equal(captured.team.slots[1]?.hero, 38);
+  assert.equal(captured.team.slots[1]?.build, null);
+  assert.ok(captured.gaps.some((gap) => gap.includes("attribute ranks")));
+});
+
+// And a character who has genuinely spent nothing is a different answer from
+// one nobody read, which is the whole point of the flag beside the value.
+test("nothing invested is an empty build, not a missing one", () => {
+  const captured = captureParty(
+    party([hero(1, 38, { attributes: [] })]),
+    "Current party",
+    counter(),
+  );
+  assert.equal(captured?.builds.length, 1);
+  assert.deepEqual(captured?.builds[0]?.attributes, {});
+});
+
+// The client's enum leaves 26, 27 and 28 unnamed. A rank against one of them
+// is a rank nothing downstream can spell, encode or draw, so it is dropped for
+// the same reason a hero the table cannot name is.
+test("a rank against an attribute the table cannot name is dropped", () => {
+  const captured = captureParty(
+    party([hero(1, 38, { attributes: [[17, 7], [27, 9], [99, 3]] })]),
+    "Current party",
+    counter(),
+  );
+  assert.deepEqual(captured?.builds[0]?.attributes, { Strength: 7 });
 });
 
 test("a hero whose bar was not read keeps their place and gets no build", () => {

@@ -19,6 +19,7 @@
  * drawing it.
  */
 import {
+  ATTRIBUTE_BY_ID,
   HERO_BY_ID,
   PROFESSION_BY_ID,
   PROFESSION_NONE_ID,
@@ -26,6 +27,9 @@ import {
 } from "./heroes.js";
 import { PARTY_SIZE, buildId, skillId, teamId, teamSlotsOf } from "./library.js";
 import type {
+  Attribute,
+  AttributeRank,
+  AttributeRanks,
   Build,
   BuildId,
   HeroBehaviour,
@@ -80,6 +84,8 @@ export type ToolboxObservation = Readonly<{
       readonly behaviour: number | null;
       readonly skills: readonly number[] | null;
       readonly disabled: number | null;
+      /** `[attributeId, rank]` for each invested attribute, or unread. */
+      readonly attributes: readonly (readonly number[])[] | null;
     }[];
   };
 }>;
@@ -104,6 +110,14 @@ export interface LivePartyHero {
   /** The bar as equipped. `null` until observed; never eight empty slots. */
   readonly skills: SkillBar | null;
   readonly disabled: readonly SkillSlotIndex[] | null;
+  /**
+   * Invested ranks, or `null` until observed. An observed character who has
+   * spent nothing publishes `{}` — which is the same value as "not observed"
+   * in `AttributeRanks`, and precisely why the two cannot share a spelling
+   * here. A build captured with invented ranks is a template that gives the
+   * character its skills at rank 0.
+   */
+  readonly attributes: AttributeRanks | null;
 }
 
 export interface LiveParty {
@@ -197,6 +211,7 @@ export function liveParty(observation: ToolboxObservation): LiveParty {
       level: null,
       skills: null,
       disabled: null,
+      attributes: null,
     }));
   }
 
@@ -228,6 +243,25 @@ export function professionPair(
   if (secondary === PROFESSION_NONE_ID) return [first, null];
   const second = PROFESSION_BY_ID.get(secondary);
   return second === undefined ? null : [first, second];
+}
+
+/**
+ * `[id, rank]` pairs as the domain's ranks.
+ *
+ * An id the table does not name is dropped rather than kept as a number: the
+ * client's enum has three unnamed ids (26-28), and a rank against one of them
+ * is a rank nothing downstream can spell, encode, or show. Same refusal as the
+ * one `liveParty` makes for a hero the table cannot name.
+ */
+function attributeRanks(pairs: readonly (readonly number[])[]): AttributeRanks {
+  const ranks: { -readonly [Name in Attribute]?: AttributeRank } = {};
+  for (const [id, rank] of pairs) {
+    const name = id === undefined ? undefined : ATTRIBUTE_BY_ID.get(id);
+    if (name === undefined || rank === undefined) continue;
+    if (!Number.isInteger(rank) || rank < 1 || rank > 12) continue;
+    ranks[name] = rank as AttributeRank;
+  }
+  return Object.freeze(ranks);
 }
 
 const BEHAVIOURS: readonly HeroBehaviour[] = ["fight", "guard", "avoid"];
@@ -274,6 +308,9 @@ function fromRegion(
               (index) => (slot.disabled! & (1 << index)) !== 0,
             ) as SkillSlotIndex[],
           ),
+      attributes: slot.attributes === null
+        ? null
+        : attributeRanks(slot.attributes),
     }));
   }
   const counted = region.slotCount ?? heroes.length;
@@ -339,11 +376,13 @@ const EMPTY_SLOT: TeamSlot = Object.freeze({
  * 2. **A hero whose bar was not read gets no build**, rather than a build of
  *    eight empty slots. The slot still carries the hero, so the team is right
  *    about who was there and silent about what they were holding.
- * 3. **Attributes are empty and the notes say so.** `AttributeRanks` has no
- *    spelling for *unknown* — an absent attribute is rank 0 by definition — so
- *    the only place left to be honest is the prose, and a captured build
- *    published as a template before its attributes are set is a bar the
- *    character cannot use. That warning is worth more than a tidier notice.
+ * 3. **A build needs its attributes read, not just its bar.** They come from a
+ *    different structure and can fail independently, and `AttributeRanks` has
+ *    no spelling for *unknown* — an absent attribute is rank 0 by definition.
+ *    So a bar without ranks would be a build that publishes as a template
+ *    giving the character its skills at rank 0, indistinguishable from one
+ *    that genuinely invested nothing. There is no honest place to put that, so
+ *    the hero keeps their slot and gets no build.
  *
  * Returns `null` when there is nothing to capture: no observation, or an
  * observed party with no hero in it. A team of one empty player slot is not a
@@ -378,19 +417,20 @@ export function captureParty(
   for (const [index, hero] of placed.entries()) {
     const heroName = heroLabel(hero.hero);
     let build: BuildId | null = null;
-    if (hero.professions !== null && hero.skills !== null) {
+    if (
+      hero.professions !== null
+      && hero.skills !== null
+      && hero.attributes !== null
+    ) {
       const id = buildId(mint("build"));
       builds.push({
         id,
         name: heroName,
         professions: hero.professions,
         skills: hero.skills,
-        attributes: {},
+        attributes: hero.attributes,
         tags: [],
-        notes:
-          "Captured from the running game. Attribute ranks were not read — set "
-          + "them before publishing this as a template, or the character will "
-          + "get the skills at rank 0.",
+        notes: "Captured from the running game.",
         favourite: false,
         lastUsed: null,
         parent: null,
@@ -398,11 +438,12 @@ export function captureParty(
       });
       build = id;
     } else {
-      gaps.push(
-        `${heroName} was saved without a build: `
-        + `${hero.skills === null ? "their skill bar" : "their professions"} `
-        + "was not observed.",
-      );
+      const missing = hero.skills === null
+        ? "their skill bar"
+        : hero.attributes === null
+          ? "their attribute ranks"
+          : "their professions";
+      gaps.push(`${heroName} was saved without a build: ${missing} was not observed.`);
     }
     if (hero.behaviour === null) {
       gaps.push(`${heroName}'s behaviour was not observed. Choose one before Apply.`);

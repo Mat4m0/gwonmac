@@ -35,26 +35,29 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
  * without one test or the other saying so.
  */
 export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
-  companion_abi: 7,
-  companion_config_bytes: 296,
+  companion_abi: 8,
+  companion_config_bytes: 324,
   companion_snapshot_bytes: 64,
   companion_cursor_bytes: 4_160,
   companion_toolbox_bytes: 64,
-  companion_party_bytes: 544,
+  companion_party_bytes: 832,
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 908 bytes (0x8c 0x07). Three documented moves:
-  //   309 -> 310  the Toolbox observer gained PARTY_OBSERVED, the byte that
-  //               separates "you have no heroes" from "nobody read the party";
-  //   310 -> 410  Layout grew by the 25 party-detail address words, at 4 bytes
-  //               each, so the config block the host copies in got 100 larger;
-  //   410 -> 908  party.rs, whose zeroed `[Hero; PARTY_SLOTS]` const is 8 x 60
-  //               bytes of data on its own.
+  // Memory footprint 1222 bytes (0xc6 0x09 as LEB128). Four documented moves:
+  //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
+  //                separates "you have no heroes" from "nobody read the party";
+  //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
+  //                each, so the config block the host copies in got 100 larger;
+  //   410 ->  908  party.rs, whose zeroed `[Hero; PARTY_SLOTS]` const is 8 x 60
+  //                bytes of data on its own;
+  //   908 -> 1222  attribute ranks: `Hero` grew a `[u32; 9]`, so that same
+  //                const went from 8 x 60 to 8 x 96 (+288), and Layout took
+  //                seven more address words (+28).
   // This constant exists so a kernel whose footprint moves cannot ship without
-  // someone saying why. One page is still the ceiling, and 908 is a long way
+  // someone saying why. One page is still the ceiling, and 1222 is a long way
   // under it.
-  0x01, 0x05, 0x8c, 0x07, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xc6, 0x09, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES

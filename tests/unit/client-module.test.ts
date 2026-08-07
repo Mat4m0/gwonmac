@@ -283,6 +283,13 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       skillSlotStride: 62,
       skillSlotId: 63,
       skillbarDisabled: 64,
+      worldAttributes: 65,
+      attributeStride: 66,
+      attributeAgentId: 67,
+      attributeEntries: 68,
+      attributeEntryStride: 69,
+      attributeEntryId: 70,
+      attributeEntryRank: 71,
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;

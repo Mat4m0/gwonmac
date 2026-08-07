@@ -98,6 +98,13 @@ export interface EnhancementLayout {
   skillSlotStride: number;
   skillSlotId: number;
   skillbarDisabled: number;
+  worldAttributes: number;
+  attributeStride: number;
+  attributeAgentId: number;
+  attributeEntries: number;
+  attributeEntryStride: number;
+  attributeEntryId: number;
+  attributeEntryRank: number;
 }
 
 /**
@@ -204,11 +211,35 @@ export const ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS = [
   "skillbarDisabled",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
+/**
+ * The attribute table, which is what makes a captured build publishable.
+ *
+ * Its own group, appended for the same positional reason as the one above: a
+ * word inserted anywhere earlier changes what every later word means.
+ *
+ * There is no entry-count word. The array is sparse and indexed by attribute
+ * id — every real entry satisfies `index == id` — so the walk runs the 45 ids
+ * the client defines and takes that equality as the admission rule. The
+ * reference struct pads to 54 entries, and indices 51-53 hold values that
+ * decode as plausible ranks; a count word would have walked straight into
+ * them. See the evidence file, C5.
+ */
+export const ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS = [
+  "worldAttributes",
+  "attributeStride",
+  "attributeAgentId",
+  "attributeEntries",
+  "attributeEntryStride",
+  "attributeEntryId",
+  "attributeEntryRank",
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
 export const ENHANCEMENT_LAYOUT_FIELDS = [
   ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
   ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
   ...ENHANCEMENT_PARTY_LAYOUT_FIELDS,
   ...ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
+  ...ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
@@ -275,15 +306,23 @@ export interface KnownEnhancementBuild {
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
-    // Recomputed when the party layout landed. All four move together whenever
-    // the manifest's bytes do, and the manifest carries the transform ABI and
-    // every config word -- so growing the layout changes the output of profiles
-    // that do not use one word of it.
+    // Recomputed when the attribute layout landed, as they were for the party
+    // layout before it. All four move together whenever the manifest's bytes
+    // do, and the manifest carries the transform ABI and every config word --
+    // so growing the layout changes the output of profiles that do not use one
+    // word of it.
+    //
+    // `pnpm check` cannot catch a stale value here. The transform input is a
+    // derived game binary this repository does not contain, so nothing in the
+    // suite can run the transform; the first thing that notices is a launch
+    // that installs no enhancement at all. Recompute by running
+    // `transformEnhancementWasm` against the real derived module whenever
+    // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "b9bcbaeec39e1c7fa81c55a9689bf93e71996f5ce9d3946b996de584472fdc6e",
-      target: "335b840dce7bf3b2066f18d826592404c6adede07d25b24ee10d9d28185de32b",
-      cursorTarget: "efb35cefe41e70622baf2a430e481857f99185b4ea884b810ebbf6411fa3c4ea",
-      cursorToolbox: "8b33d4ccf3498d80ff11cb03c359db9d20fcb910b29893cc60fe850d77100132",
+      cursor: "faba79311104826daba7aea1891948a66f64cf1efca60fdec6c8506a58a20ab3",
+      target: "3e37335f7766cc52285ffb08f4723c2506e9e9f4871ed6c16ad37c6cc2a1f3c6",
+      cursorTarget: "3175e6a43db3ac24a25c497d848657ff1ee74041ccb95dcead81268fd5fb77b7",
+      cursorToolbox: "a9e073b5468a4cb0fccfbada4ec8600bef8b4bd7f6bb98d879d28f4a8af34c9d",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -420,6 +459,22 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       skillSlotStride: 0x14,
       skillSlotId: 0x0c,
       skillbarDisabled: 0xa4,
+      // Certified live in the same outpost. The stride is proved outright: the
+      // words at +0x43c from each row are the next row's agent id. Every real
+      // entry satisfies `index == id`, and the set of entries present is each
+      // character's primary profession's attributes plus all but one of its
+      // secondary's — the one missing is always that secondary's own primary
+      // attribute, which no character may invest in. Three rows, three
+      // professions pairs, no exception.
+      worldAttributes: 0xac,
+      attributeStride: 0x43c,
+      attributeAgentId: 0x00,
+      attributeEntries: 0x04,
+      attributeEntryStride: 0x14,
+      attributeEntryId: 0x00,
+      // `level_base`. `level` at 0x08 adds runes, and a stored build holds the
+      // invested rank — Devona reads Strength 7 there and 8 with her rune.
+      attributeEntryRank: 0x04,
     }),
   }),
 ]);

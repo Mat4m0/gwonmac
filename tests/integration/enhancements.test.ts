@@ -19,6 +19,10 @@ import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
 } from "../../src/shared/contracts.ts";
+import {
+  ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
+  ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
+} from "../../src/main/certification/enhancement-builds.ts";
 
 // Every read returns a discriminated union: `reason` belongs to the members
 // that rejected the region, the decoded fields to the members that accepted
@@ -253,7 +257,37 @@ const ADDRESSES = Object.freeze({
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
+  world: 0x1_0000,
+  heroFlagBuffer: 0x1_1000,
+  heroInfoBuffer: 0x1_2000,
+  skillbarBuffer: 0x1_3000,
+  attributeBuffer: 0x1_4000,
   companionRuntime: 0x30_0000,
+});
+
+/**
+ * The party-detail offsets, exactly as certified against build 38,797.
+ *
+ * Written out rather than imported from `enhancement-builds.ts`: the fixture
+ * has to be able to disagree with the shipped table, or it is checking that
+ * the kernel reads the words it was given rather than that it reads them
+ * correctly.
+ */
+const DETAIL = Object.freeze({
+  heroLevel: 0x14,
+  partyPlayers: 0x04, partyHenchmen: 0x14, partyFlag: 0x14,
+  worldContext: 0x2c,
+  heroFlags: 0x584, flagStride: 0x24,
+  flagHeroId: 0x00, flagAgentId: 0x04, flagBehavior: 0x0c,
+  heroInfo: 0x594, infoStride: 0x9c,
+  infoHeroId: 0x00, infoAgentId: 0x04, infoLevel: 0x08,
+  infoPrimary: 0x0c, infoSecondary: 0x10, infoAppearance: 0x48,
+  skillbars: 0x6f0, skillbarStride: 0xbc,
+  skillbarAgentId: 0x00, skillbarSkills: 0x04,
+  skillSlotStride: 0x14, skillSlotId: 0x0c, skillbarDisabled: 0xa4,
+  attributes: 0xac, attributeStride: 0x43c,
+  attributeAgentId: 0x00, attributeEntries: 0x04,
+  attributeEntryStride: 0x14, attributeEntryId: 0x00, attributeEntryRank: 0x04,
 });
 const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
@@ -267,6 +301,17 @@ const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0124,
   0x1000_0126,
 ] as const);
+/**
+ * Where the party-detail block starts, derived rather than written as `36`.
+ *
+ * That literal is exactly the shape of the bug `MESSAGE_CONFIG_START` below
+ * records: the messages were written as a flat continuation of the address
+ * words, the layout grew, and they silently stayed twenty-five words short of
+ * where the kernel reads them.
+ */
+const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT
+  - ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS.length
+  - ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS.length;
 const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
 const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
@@ -331,7 +376,11 @@ function kernelExports(exports: WebAssembly.Exports) {
   };
 }
 
-async function createKernel() {
+async function createKernel(
+  /** Write the party-detail and attribute words. Zero otherwise, which is what
+   *  the kernel reads as "not certified, do not traverse". */
+  { partyDetail = false }: { partyDetail?: boolean } = {},
+) {
   const bytes = await readFile("build/renderer/companion-kernel.wasm");
   const memory = new WebAssembly.Memory({ initial: 256 });
   const view = new DataView(memory.buffer);
@@ -371,6 +420,27 @@ async function createKernel() {
     0x00, 0x0c, 0x08, 0x00, 0x08, 0x0c, 0x14, 0x18,
     0x4c, 0x54, 0x24, 0x18, 0x00, 0x04, 0x08,
   ]);
+  // The detail words stay zero unless asked for: zero is what the kernel reads
+  // as "not certified, do not traverse", and most of these fixtures exercise
+  // the walk that stops at the roster.
+  if (partyDetail) {
+    config.set([
+      DETAIL.heroLevel, DETAIL.partyPlayers, DETAIL.partyHenchmen, DETAIL.partyFlag,
+      DETAIL.worldContext,
+      DETAIL.heroFlags, DETAIL.flagStride,
+      DETAIL.flagHeroId, DETAIL.flagAgentId, DETAIL.flagBehavior,
+      DETAIL.heroInfo, DETAIL.infoStride,
+      DETAIL.infoHeroId, DETAIL.infoAgentId, DETAIL.infoLevel,
+      DETAIL.infoPrimary, DETAIL.infoSecondary, DETAIL.infoAppearance,
+      DETAIL.skillbars, DETAIL.skillbarStride,
+      DETAIL.skillbarAgentId, DETAIL.skillbarSkills,
+      DETAIL.skillSlotStride, DETAIL.skillSlotId, DETAIL.skillbarDisabled,
+      DETAIL.attributes, DETAIL.attributeStride,
+      DETAIL.attributeAgentId, DETAIL.attributeEntries,
+      DETAIL.attributeEntryStride, DETAIL.attributeEntryId,
+      DETAIL.attributeEntryRank,
+    ], DETAIL_CONFIG_START);
+  }
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, twenty-five words short of
@@ -479,6 +549,91 @@ function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.heroBuffer + 0x18, 88, true);
   view.setUint32(ADDRESSES.heroBuffer + 0x1c, 99, true);
   view.setUint32(ADDRESSES.heroBuffer + 0x20, 2, true);
+}
+
+/**
+ * Everything hanging off `WorldContext`, for the two heroes `installGameGraph`
+ * puts in the party.
+ *
+ * Only hero 1 at agent 77 is *ours*: hero 2 at agent 88 belongs to player 99,
+ * and the owner filter drops it. Its rows are installed anyway, and every
+ * assertion below checks it stayed out — a fixture in which the foreign hero
+ * has no data cannot show that the filter did anything.
+ *
+ * The attribute rows are modelled on the live readings, anomaly included. The
+ * client's array is sparse and indexed by attribute id, and the reference
+ * struct pads well past the highest real id (44) — indices 51-53 on a running
+ * client hold values that decode as perfectly plausible ranks. One of them is
+ * reproduced here, because a fixture that only contains well-formed data
+ * cannot show that the walk rejects anything.
+ */
+function installPartyDetailGraph(view: DataView) {
+  const array = (at: number, buffer: number, size: number) => {
+    view.setUint32(at, buffer, true);
+    view.setUint32(at + 4, size, true);
+    view.setUint32(at + 8, size, true);
+  };
+  view.setUint32(ADDRESSES.game + DETAIL.worldContext, ADDRESSES.world, true);
+
+  array(ADDRESSES.world + DETAIL.heroFlags, ADDRESSES.heroFlagBuffer, 2);
+  for (const [index, [heroId, agentId, behaviour]] of [
+    [1, 77, 1],
+    [2, 88, 2],
+  ].entries()) {
+    const at = ADDRESSES.heroFlagBuffer + index * DETAIL.flagStride;
+    view.setUint32(at + DETAIL.flagHeroId, heroId as number, true);
+    view.setUint32(at + DETAIL.flagAgentId, agentId as number, true);
+    view.setUint32(at + DETAIL.flagBehavior, behaviour as number, true);
+  }
+
+  array(ADDRESSES.world + DETAIL.heroInfo, ADDRESSES.heroInfoBuffer, 2);
+  for (const [index, [heroId, agentId, primary, secondary]] of [
+    [1, 77, 1, 2],
+    [2, 88, 5, 3],
+  ].entries()) {
+    const at = ADDRESSES.heroInfoBuffer + index * DETAIL.infoStride;
+    view.setUint32(at + DETAIL.infoHeroId, heroId as number, true);
+    view.setUint32(at + DETAIL.infoAgentId, agentId as number, true);
+    view.setUint32(at + DETAIL.infoLevel, 20, true);
+    view.setUint32(at + DETAIL.infoPrimary, primary as number, true);
+    view.setUint32(at + DETAIL.infoSecondary, secondary as number, true);
+  }
+
+  array(ADDRESSES.world + DETAIL.skillbars, ADDRESSES.skillbarBuffer, 2);
+  for (const [index, agentId] of [77, 88].entries()) {
+    const at = ADDRESSES.skillbarBuffer + index * DETAIL.skillbarStride;
+    view.setUint32(at + DETAIL.skillbarAgentId, agentId, true);
+    for (let slot = 0; slot < 8; slot += 1) {
+      view.setUint32(
+        at + DETAIL.skillbarSkills + slot * DETAIL.skillSlotStride + DETAIL.skillSlotId,
+        100 + index * 10 + slot,
+        true,
+      );
+    }
+    view.setUint32(at + DETAIL.skillbarDisabled, index === 0 ? 0b101 : 0, true);
+  }
+
+  array(ADDRESSES.world + DETAIL.attributes, ADDRESSES.attributeBuffer, 2);
+  const rows: readonly (readonly [number, readonly (readonly [number, number])[]])[] = [
+    // A Warrior/Ranger: every Warrior attribute, and the Ranger ones except
+    // Expertise (23), which is the Ranger *primary* and so unavailable.
+    [77, [[17, 7], [18, 0], [19, 12], [20, 0], [21, 0], [22, 0], [24, 3], [25, 0]]],
+    [88, [[0, 0], [1, 2], [2, 0], [3, 5], [13, 0], [14, 10], [15, 0]]],
+  ];
+  for (const [index, [agentId, entries]] of rows.entries()) {
+    const at = ADDRESSES.attributeBuffer + index * DETAIL.attributeStride;
+    view.setUint32(at + DETAIL.attributeAgentId, agentId, true);
+    for (const [id, rank] of entries) {
+      const slot = at + DETAIL.attributeEntries + id * DETAIL.attributeEntryStride;
+      view.setUint32(slot + DETAIL.attributeEntryId, id, true);
+      view.setUint32(slot + DETAIL.attributeEntryRank, rank, true);
+    }
+    // The padding past id 44, as a live client actually holds it: index 53
+    // reads `id=8 base=8`, which is Air Magic at rank 8 — on a Warrior.
+    const padding = at + DETAIL.attributeEntries + 53 * DETAIL.attributeEntryStride;
+    view.setUint32(padding + DETAIL.attributeEntryId, 8, true);
+    view.setUint32(padding + DETAIL.attributeEntryRank, 8, true);
+  }
 }
 
 // s_activeArt -> art -> handle -> view -> GrTex2d, exactly the chain the
@@ -899,6 +1054,68 @@ describe("Companion kernel", () => {
     assert.equal(party.rosterObserved, false);
     assert.equal(party.slotCount, 0);
     assert.equal(party.slots.every((slot) => slot.occupied === false), true);
+  });
+
+  // The certified party-detail layout, walked end to end. Everything above
+  // exercises the roster with the detail words zeroed; this is the walk that
+  // actually reads three arrays and sixty-four skill ids.
+  it("fills the roster in from the certified detail offsets", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const party = readyParty(kernel.party());
+    assert.equal(party.slotCount, 1, "the foreign hero stayed out");
+    const hero = party.slots[1];
+    assert.equal(hero?.hero, 1);
+    assert.deepEqual(hero?.professions, [1, 2], "primary and secondary");
+    assert.equal(hero?.behaviour, 1);
+    assert.deepEqual(
+      hero?.skills,
+      [100, 101, 102, 103, 104, 105, 106, 107],
+      "eight ids at the certified slot stride",
+    );
+    assert.equal(hero?.disabled, 0b101);
+
+    // Ranks by id, invested only. Rank 0 is not published: an absent attribute
+    // already means zero on the other side, and publishing it would make a
+    // character who spent nothing indistinguishable from one nobody read.
+    assert.deepEqual(hero?.attributes, [[17, 7], [19, 12], [24, 3]]);
+    assert.equal(party.unlockObserved, true);
+    assert.deepEqual(party.unlocked, [1, 2], "hero_info is account-scoped");
+  });
+
+  // The anomaly the live session turned up, as a regression: `index == id` is
+  // the admission rule precisely because the reference struct's padding past
+  // id 44 decodes as a plausible rank. Without it the fixture's row publishes
+  // Air Magic at rank 8 on a Warrior, and a captured build would carry it into
+  // the library and out again as a template.
+  it("takes index == id as the rule, so struct padding is not a rank", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    // Exactly the three invested ranks. Air Magic (8) is what the padding at
+    // index 53 reads as, and it is absent because the whole list is asserted
+    // rather than a predicate over it.
+    const ranks = readyParty(kernel.party()).slots[1]?.attributes;
+    assert.deepEqual(ranks, [[17, 7], [19, 12], [24, 3]]);
+    // And the rule is structural, not a range check on the index: an entry
+    // *inside* the walked range whose id disagrees with its position is
+    // rejected the same way.
+    const at = ADDRESSES.attributeBuffer
+      + DETAIL.attributeEntries + 20 * DETAIL.attributeEntryStride;
+    kernel.view.setUint32(at + DETAIL.attributeEntryId, 21, true);
+    kernel.view.setUint32(at + DETAIL.attributeEntryRank, 9, true);
+    kernel.uiEvent(0x1000_011f, 0, 0);
+    kernel.tick();
+
+    const after = readyParty(kernel.party()).slots[1]?.attributes ?? [];
+    assert.deepEqual(after, ranks, "a mismatched entry changes nothing");
   });
 
   // The reconciliation walk exists to catch changes no certified message

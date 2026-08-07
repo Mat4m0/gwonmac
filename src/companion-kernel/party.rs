@@ -45,6 +45,7 @@ struct Hero {
     behaviour: u32,
     disabled: u32,
     skills: [u32; SKILL_SLOTS],
+    attributes: [u32; ATTRIBUTE_SLOTS],
     flags: u32,
 }
 
@@ -57,6 +58,7 @@ impl Hero {
         behaviour: 0,
         disabled: 0,
         skills: [0; SKILL_SLOTS],
+        attributes: [0; ATTRIBUTE_SLOTS],
         flags: 0,
     };
 }
@@ -145,6 +147,11 @@ unsafe fn matches_published(
                     return false;
                 }
             }
+            for entry in 0..ATTRIBUTE_SLOTS {
+                if read_volatile(&slot.attributes[entry]) != hero.attributes[entry] {
+                    return false;
+                }
+            }
         }
     }
     true
@@ -179,6 +186,9 @@ unsafe fn publish(heroes: &[Hero; PARTY_SLOTS], count: u32, flags: u32, unlock: 
             write_volatile(&mut slot.disabled, hero.disabled);
             for skill in 0..SKILL_SLOTS {
                 write_volatile(&mut slot.skills[skill], hero.skills[skill]);
+            }
+            for entry in 0..ATTRIBUTE_SLOTS {
+                write_volatile(&mut slot.attributes[entry], hero.attributes[entry]);
             }
         }
         write_volatile(&mut (*region).sequence, next);
@@ -374,6 +384,66 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
                 }
                 hero.disabled = unsafe { field(entry, layout.skillbar_disabled) }? & 0xff;
                 hero.flags |= SLOT_SKILLS;
+            }
+        }
+    }
+
+    // attributes: keyed by agent id like the skillbars, and the reason a
+    // captured build can be published as a template at all — a bar written out
+    // with every attribute at rank 0 is a bar the character cannot use.
+    if layout.world_attributes != 0 && layout.attribute_stride != 0 {
+        let (buffer, size) = unsafe {
+            read_array(
+                offset(world, layout.world_attributes)?,
+                layout.attribute_stride,
+                64,
+            )
+        }?;
+        for index in 0..size {
+            let entry = indexed(buffer, index, layout.attribute_stride)?;
+            let agent_id = unsafe { field(entry, layout.attribute_agent_id) }?;
+            if agent_id == 0 {
+                continue;
+            }
+            for hero in heroes.iter_mut() {
+                if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+                    continue;
+                }
+                let mut written = 0_usize;
+                for id in 0..=ATTRIBUTE_ID_MAX {
+                    let at = checked_add(
+                        layout.attribute_entries,
+                        checked_mul(id, layout.attribute_entry_stride)?,
+                    )?;
+                    // The array is sparse and indexed by attribute id, so this
+                    // equality is what says the entry is an attribute at all.
+                    // Without it the walk reads whatever the reference struct's
+                    // padding holds past id 44 — which on a live client decodes
+                    // as Air Magic at rank 8 on a Warrior.
+                    if unsafe { field(entry, checked_add(at, layout.attribute_entry_id)?) }? != id {
+                        continue;
+                    }
+                    let rank =
+                        unsafe { field(entry, checked_add(at, layout.attribute_entry_rank)?) }?;
+                    // 12 is what the client's own cost table can buy. Nothing
+                    // invested is not published: an absent attribute already
+                    // means rank zero on the other side.
+                    if rank == 0 {
+                        continue;
+                    }
+                    if rank > 12 {
+                        return None;
+                    }
+                    // More than a character can have means this is not the
+                    // table we think it is, and a truncated list of ranks is a
+                    // build that looks complete and is not.
+                    if written >= ATTRIBUTE_SLOTS {
+                        return None;
+                    }
+                    hero.attributes[written] = id | (rank << 8);
+                    written += 1;
+                }
+                hero.flags |= SLOT_ATTRIBUTES;
             }
         }
     }

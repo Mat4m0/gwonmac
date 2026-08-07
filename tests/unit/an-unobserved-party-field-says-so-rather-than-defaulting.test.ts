@@ -202,15 +202,18 @@ test("the full roster wins over the summary, and carries what was read", () => {
         {
           index: 0, occupied: false, hero: null, agentId: null, level: null,
           professions: null, behaviour: null, skills: null, disabled: null,
+          attributes: null,
         },
         {
           index: 1, occupied: true, hero: 38, agentId: 43, level: 16,
           professions: [1, 2], behaviour: 1,
           skills: [354, 357, 0, 351, 316, 371, 446, 2], disabled: 0b0000_0101,
+          attributes: [[17, 7], [19, 12]],
         },
         {
           index: 2, occupied: true, hero: 39, agentId: 21, level: 15,
           professions: [5, 0], behaviour: null, skills: null, disabled: null,
+          attributes: null,
         },
       ],
     },

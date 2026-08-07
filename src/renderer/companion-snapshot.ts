@@ -455,14 +455,20 @@ export function sameCompanionToolboxState(
  * re-derives every implication it can check instead of trusting the writer
  * that enforced it.
  */
-export const COMPANION_PARTY_ABI = 1;
-export const COMPANION_PARTY_BYTES = 544;
+export const COMPANION_PARTY_ABI = 2;
+export const COMPANION_PARTY_BYTES = 832;
 
 const PARTY_MAGIC = 0x50545747;
 const PARTY_SLOT_COUNT = 8;
-const PARTY_SLOT_BYTES = 60;
+const PARTY_SLOT_BYTES = 96;
 const PARTY_HEADER_BYTES = 64;
 const PARTY_SKILL_SLOTS = 8;
+/** Five attributes from a primary profession plus four from a secondary. */
+const PARTY_ATTRIBUTE_SLOTS = 9;
+/** The highest attribute id the client defines. */
+const ATTRIBUTE_ID_MAX = 44;
+/** The highest rank the client's own cumulative cost table can buy. */
+const ATTRIBUTE_RANK_MAX = 12;
 
 const PARTY_FLAGS = Object.freeze({ roster: 1 << 0, unlock: 1 << 1 });
 const KNOWN_PARTY_FLAGS = PARTY_FLAGS.roster | PARTY_FLAGS.unlock;
@@ -471,10 +477,11 @@ const SLOT_FLAGS = Object.freeze({
   professions: 1 << 1,
   behaviour: 1 << 2,
   skills: 1 << 3,
+  attributes: 1 << 4,
 });
 const KNOWN_SLOT_FLAGS =
   SLOT_FLAGS.occupied | SLOT_FLAGS.professions | SLOT_FLAGS.behaviour
-  | SLOT_FLAGS.skills;
+  | SLOT_FLAGS.skills | SLOT_FLAGS.attributes;
 
 /** `hero_id`s the account owns, as the kernel's two bitmaps decode. */
 function unlockedHeroes(known: bigint, unlocked: bigint): number[] {
@@ -531,6 +538,32 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     for (let skill = 0; skill < PARTY_SKILL_SLOTS; skill += 1) {
       skills.push(view.getUint32(at + 28 + skill * 4, true));
     }
+    // `id | rank << 8`, invested only. Re-derived rather than trusted: an id
+    // past 44, a rank past 12, or the same attribute twice would each be a
+    // rank the library keeps and a template publishes.
+    const attributes: Array<readonly [number, number]> = [];
+    const attributeIds = new Set<number>();
+    for (let entry = 0; entry < PARTY_ATTRIBUTE_SLOTS; entry += 1) {
+      const packed = view.getUint32(at + 60 + entry * 4, true);
+      const rank = (packed >>> 8) & 0xff;
+      const id = packed & 0xff;
+      // A zero rank is an unused entry — the kernel publishes only invested
+      // attributes — so it ends the list rather than naming attribute zero.
+      if (rank === 0) {
+        if (packed !== 0) malformed = true;
+        continue;
+      }
+      if (
+        id > ATTRIBUTE_ID_MAX
+        || rank > ATTRIBUTE_RANK_MAX
+        || (packed >>> 16) !== 0
+        || attributeIds.has(id)
+      ) {
+        malformed = true;
+      }
+      attributeIds.add(id);
+      attributes.push(Object.freeze([id, rank]));
+    }
     const isOccupied = (slotFlags & SLOT_FLAGS.occupied) !== 0;
     if ((slotFlags & ~KNOWN_SLOT_FLAGS) !== 0) malformed = true;
     if (isOccupied) {
@@ -553,6 +586,7 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
       heroId !== 0 || agentId !== 0 || professions !== 0 || level !== 0
       || behaviour !== 0 || disabled !== 0 || slotFlags !== 0
       || skills.some((skill) => skill !== 0)
+      || attributes.length !== 0
     ) {
       // An empty slot carrying values is a torn write, not an empty slot.
       malformed = true;
@@ -571,6 +605,12 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
         ? Object.freeze(skills)
         : null,
       disabled: (slotFlags & SLOT_FLAGS.skills) !== 0 ? disabled : null,
+      // Its own flag, not `attributes.length`: a character who has invested
+      // nothing publishes an empty list, and that is a real answer rather than
+      // a table nobody read.
+      attributes: (slotFlags & SLOT_FLAGS.attributes) !== 0
+        ? Object.freeze(attributes)
+        : null,
     }));
   }
 
