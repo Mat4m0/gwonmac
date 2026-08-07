@@ -26,14 +26,14 @@
  * worse than one that refused: the player can see a refusal, and cannot see
  * that hero four kept yesterday's bar.
  */
-import { ATTRIBUTES } from "../shared/builds/heroes.js";
-import { SKILL_SLOTS } from "../shared/builds/library.js";
+import { ATTRIBUTES } from "./heroes.js";
+import { SKILL_SLOTS } from "./library.js";
 import type {
   TeamApplyMember,
   TeamApplyPlan,
   TeamApplyResult,
-} from "../shared/builds/team-apply.js";
-import type { LiveParty } from "../shared/builds/live-party.js";
+} from "./team-apply.js";
+import type { LiveParty } from "./live-party.js";
 
 /** The commands the enhancement exposes, as this module needs them. */
 export interface TeamApplyCommands {

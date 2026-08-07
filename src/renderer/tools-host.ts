@@ -18,16 +18,9 @@
  * applied to the running game, and the companion's observation of that game —
  * which passes straight through, unread. The bundle owns what a party means.
  */
-import type {
-  TeamApplyPlan,
-  TeamApplyResult,
-} from "../shared/builds/team-apply.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import type { TeamApplyCommands } from "../shared/builds/team-apply-runner.js";
 import type { MountedTool } from "./toolbox-foundation.js";
-import {
-  runTeamApply,
-  type TeamApplyEnvironment,
-} from "./team-apply-runner.js";
 import {
   applyImport,
   planImport,
@@ -55,7 +48,7 @@ type ToolsBundle = Readonly<{
       initiallyVisible?: boolean;
       onVisibilityChange?(visible: boolean): void;
       publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
-      applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
+      commands: TeamApplyCommands | null;
       applyUnavailable: string | null;
     },
   ): ToolsAppHandle;
@@ -115,10 +108,6 @@ const APPLY_UNAVAILABLE =
   "Applying a team to the running game is not available yet. Publish the "
   + "builds as templates and load them in Guild Wars.";
 
-function refuseApply(): Promise<TeamApplyResult> {
-  return Promise.reject(new Error(APPLY_UNAVAILABLE));
-}
-
 /**
  * Loads the Tools bundle and hands the overlay a handle to it.
  *
@@ -134,19 +123,18 @@ export function mountToolsInto(
   host: HTMLElement,
   onVisibilityChange: (visible: boolean) => void,
   /**
-   * The commands and the projection that confirms them, or `null` for a module
-   * derived without them. `null` is the ordinary case: only the commands
-   * profile carries a call to a packet builder at all, so this is an absence in
-   * the bytes rather than a switch.
+   * The certified commands, or `null` for a module derived without them.
+   * `null` is the ordinary case: only the commands profile carries a call to a
+   * packet builder at all, so this is an absence in the bytes rather than a
+   * switch.
+   *
+   * Handed straight through. This module is a courier and does not learn what
+   * a hero is — the sequence that turns a plan into commands lives beside the
+   * domain it reasons about, in `src/shared/builds`, which this bundle cannot
+   * import at run time and the Tools bundle compiles in.
    */
-  applyEnvironment: TeamApplyEnvironment | null,
+  commands: TeamApplyCommands | null,
 ): Promise<MountedTool | null> {
-  // One counter per session, so a result can be tied to the request that asked
-  // for it in a log where several ran.
-  let commandId = 0;
-  const applyTeam = applyEnvironment === null
-    ? refuseApply
-    : (plan: TeamApplyPlan) => runTeamApply(plan, applyEnvironment, ++commandId);
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
   // not try to resolve a file that only exists after the build step.
@@ -157,8 +145,8 @@ export function mountToolsInto(
         initiallyVisible: false,
         onVisibilityChange,
         publishTemplate,
-        applyTeam,
-        applyUnavailable: applyEnvironment === null ? APPLY_UNAVAILABLE : null,
+        commands,
+        applyUnavailable: commands === null ? APPLY_UNAVAILABLE : null,
       });
       return {
         setVisible: (visible: boolean) => {

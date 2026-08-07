@@ -13,7 +13,7 @@ import {
   runTeamApply,
   type TeamApplyCommands,
   type TeamApplyEnvironment,
-} from "../../src/renderer/team-apply-runner.ts";
+} from "../../src/shared/builds/team-apply-runner.ts";
 import {
   liveParty,
   type LiveParty,

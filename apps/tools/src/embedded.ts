@@ -9,7 +9,7 @@ export function mountToolsApp(
     initiallyVisible?: boolean;
     onVisibilityChange?: (visible: boolean) => void;
     publishTemplate: Parameters<typeof createNativeHost>[1];
-    applyTeam: Parameters<typeof createNativeHost>[2];
+    commands: Parameters<typeof createNativeHost>[2];
     applyUnavailable: Parameters<typeof createNativeHost>[3];
   },
 ) {
@@ -17,7 +17,7 @@ export function mountToolsApp(
     host: createNativeHost(
       window.gwNative,
       options.publishTemplate,
-      options.applyTeam,
+      options.commands,
       options.applyUnavailable,
     ),
     mode: "embedded",

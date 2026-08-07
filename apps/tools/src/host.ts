@@ -22,6 +22,10 @@ import type {
   TeamApplyResult,
 } from "../../../src/shared/builds/team-apply";
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
+import {
+  runTeamApply,
+  type TeamApplyCommands,
+} from "../../../src/shared/builds/team-apply-runner";
 import { demoLibrary, demoParty, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import {
@@ -146,9 +150,18 @@ export type PublishableTemplate = Readonly<{ name: string; code: string }>;
 export function createNativeHost(
   api: GwNativeApi,
   publishTemplate: (template: PublishableTemplate) => Promise<PublishedTemplate>,
-  applyTeam: (plan: TeamApplyPlan) => Promise<TeamApplyResult>,
+  /**
+   * The certified commands, or `null` for a client module derived without
+   * them. The renderer hands them straight through without reading them; the
+   * sequence that turns a plan into a party lives here, beside the domain.
+   */
+  commands: TeamApplyCommands | null,
   applyUnavailable: string | null,
 ): ToolsHost {
+  const party = ref(unavailableParty());
+  // One counter per session, so a result can be tied to the request that asked
+  // for it in a log where several ran.
+  let commandId = 0;
   const skills = createSkillCatalogue([]);
   const profession = new Set<Profession>(
     Object.keys(PROFESSIONS) as Profession[],
@@ -218,7 +231,7 @@ export function createNativeHost(
   return {
     label: "Saved on this Mac",
     skills,
-    party: ref(unavailableParty()),
+    party,
     applyUnavailable,
     async loadLibrary() {
       const [library, skills] = await Promise.all([
@@ -245,6 +258,20 @@ export function createNativeHost(
       }
       return publishTemplate({ name: build.name, code });
     },
-    applyTeam,
+    applyTeam(plan) {
+      if (commands === null) {
+        throw new Error(applyUnavailable ?? "Applying a team is unavailable.");
+      }
+      return runTeamApply(plan, {
+        commands,
+        // Read through the ref rather than captured: the overlay rewrites it on
+        // every published change, and a captured value would let the sequence
+        // confirm each step against the party as it was before it started.
+        party: () => party.value,
+        settle: () => new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        }),
+      }, ++commandId);
+    },
   };
 }

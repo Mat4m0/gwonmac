@@ -26,8 +26,6 @@ import {
   type HiddenCursorRetry,
 } from "./cursor-refresh.js";
 import { createToolboxFoundation } from "./toolbox-foundation.js";
-import { liveParty, type LiveParty } from "../shared/builds/live-party.js";
-import type { TeamApplyEnvironment } from "./team-apply-runner.js";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_SNAPSHOT_BYTES,
@@ -668,24 +666,11 @@ export async function installEnhancements(
         },
       };
     })();
-    /**
-     * What `runTeamApply` needs, assembled here because this is the only place
-     * that holds both halves: the commands and the projection that confirms
-     * them. The runner takes it as one value so it can be driven by a fixture.
-     */
-    const applyEnvironment: TeamApplyEnvironment | null = commands === null ? null : {
-      commands,
-      party: (): LiveParty => liveParty(toolbox?.state ?? { status: "unavailable" }),
-      settle: () => new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve());
-      }),
-    };
-
     const toolbox = foundation
       ? createToolboxFoundation(document.body, {
           mountTool: (host, onVisibilityChange) =>
             import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host, onVisibilityChange, applyEnvironment),
+              mountToolsInto(host, onVisibilityChange, commands),
             ),
         })
       : null;
