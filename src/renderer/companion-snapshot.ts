@@ -455,7 +455,7 @@ export function sameCompanionToolboxState(
  * re-derives every implication it can check instead of trusting the writer
  * that enforced it.
  */
-export const COMPANION_PARTY_ABI = 2;
+export const COMPANION_PARTY_ABI = 3;
 export const COMPANION_PARTY_BYTES = 832;
 
 const PARTY_MAGIC = 0x50545747;
@@ -470,8 +470,13 @@ const ATTRIBUTE_ID_MAX = 44;
 /** The highest rank the client's own cumulative cost table can buy. */
 const ATTRIBUTE_RANK_MAX = 12;
 
-const PARTY_FLAGS = Object.freeze({ roster: 1 << 0, unlock: 1 << 1 });
-const KNOWN_PARTY_FLAGS = PARTY_FLAGS.roster | PARTY_FLAGS.unlock;
+const PARTY_FLAGS = Object.freeze({
+  roster: 1 << 0,
+  unlock: 1 << 1,
+  outpost: 1 << 2,
+});
+const KNOWN_PARTY_FLAGS =
+  PARTY_FLAGS.roster | PARTY_FLAGS.unlock | PARTY_FLAGS.outpost;
 const SLOT_FLAGS = Object.freeze({
   occupied: 1 << 0,
   professions: 1 << 1,
@@ -628,6 +633,9 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     || slotCount !== occupied
     // Nothing may be occupied, and no hero owned, in a party nobody read.
     || (!rosterObserved && (occupied !== 0 || slotCount !== 0))
+    // Where the party is standing is something the walk read. A record nobody
+    // walked cannot claim an outpost.
+    || (!rosterObserved && (flags & PARTY_FLAGS.outpost) !== 0)
     || (!unlockObserved && (knownLow !== 0 || knownHigh !== 0))
     // A hero cannot be unlocked without that having been decided.
     || (unlockedLow & ~knownLow) !== 0
@@ -641,6 +649,7 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     generation,
     rosterObserved,
     unlockObserved,
+    inOutpost: rosterObserved ? (flags & PARTY_FLAGS.outpost) !== 0 : null,
     slotCount,
     slots: Object.freeze(slots),
     unlocked: unlockObserved

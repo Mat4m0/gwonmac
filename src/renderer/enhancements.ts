@@ -26,6 +26,8 @@ import {
   type HiddenCursorRetry,
 } from "./cursor-refresh.js";
 import { createToolboxFoundation } from "./toolbox-foundation.js";
+import { liveParty, type LiveParty } from "../shared/builds/live-party.js";
+import type { TeamApplyEnvironment } from "./team-apply-runner.js";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_SNAPSHOT_BYTES,
@@ -566,77 +568,6 @@ export async function installEnhancements(
       : null;
     if (readout) disposeReadout = readout.dispose;
 
-    const toolbox = foundation
-      ? createToolboxFoundation(document.body, {
-          mountTool: (host, onVisibilityChange) =>
-            import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host, onVisibilityChange),
-            ),
-        })
-      : null;
-    if (toolbox) disposeToolbox = toolbox.dispose;
-
-    table.set(manifest.tableSlot, kernelDispatch);
-    installedCallback = kernelDispatch;
-    const observerRuntime = {
-      memory,
-      snapshotPointer,
-      toolboxPointer,
-      partyPointer,
-      hertz: 0,
-      lastRenderUs: 0,
-      renderSamples: [] as number[],
-      snapshotReads: 0,
-      rejectedSnapshots: 0,
-    };
-    const installation = companionInstallations + 1;
-    const runtimeProjection = {
-      status: "installed" as const,
-      buildId: manifest.buildId,
-      programId: manifest.programId,
-      companionAbi: COMPANION_ABI,
-      kernelSha256,
-      installation,
-      get hertz() {
-        return observerRuntime.hertz;
-      },
-      get lastRenderUs() {
-        return observerRuntime.lastRenderUs;
-      },
-      get renderP95Us() {
-        return percentile95(observerRuntime.renderSamples);
-      },
-      get snapshotReads() {
-        return observerRuntime.snapshotReads;
-      },
-      get rejectedSnapshots() {
-        return observerRuntime.rejectedSnapshots;
-      },
-      get cursorRefreshes() {
-        return cursorRefreshes;
-      },
-      get cursorHiddenRetests() {
-        return hiddenRetry?.retests ?? 0;
-      },
-      get cursorHiddenGapMs() {
-        return hiddenRetry?.lastGapMs ?? null;
-      },
-      get wasmMemoryBytes() {
-        return memory.buffer.byteLength;
-      },
-      // Presentation state only: no pixels and no pointer leave this module.
-      get cursor() {
-        return cursor?.state ?? null;
-      },
-      // The rendered line, so a live run can read the feature without a
-      // screenshot. Text only: the readout owns its own element.
-      get readout() {
-        return readout?.state ?? null;
-      },
-      get toolbox() {
-        return toolbox?.state ?? null;
-      },
-    };
     /**
      * The five commands, one named function each.
      *
@@ -737,6 +668,90 @@ export async function installEnhancements(
         },
       };
     })();
+    /**
+     * What `runTeamApply` needs, assembled here because this is the only place
+     * that holds both halves: the commands and the projection that confirms
+     * them. The runner takes it as one value so it can be driven by a fixture.
+     */
+    const applyEnvironment: TeamApplyEnvironment | null = commands === null ? null : {
+      commands,
+      party: (): LiveParty => liveParty(toolbox?.state ?? { status: "unavailable" }),
+      settle: () => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      }),
+    };
+
+    const toolbox = foundation
+      ? createToolboxFoundation(document.body, {
+          mountTool: (host, onVisibilityChange) =>
+            import("./tools-host.js").then(({ mountToolsInto }) =>
+              mountToolsInto(host, onVisibilityChange, applyEnvironment),
+            ),
+        })
+      : null;
+    if (toolbox) disposeToolbox = toolbox.dispose;
+
+    table.set(manifest.tableSlot, kernelDispatch);
+    installedCallback = kernelDispatch;
+    const observerRuntime = {
+      memory,
+      snapshotPointer,
+      toolboxPointer,
+      partyPointer,
+      hertz: 0,
+      lastRenderUs: 0,
+      renderSamples: [] as number[],
+      snapshotReads: 0,
+      rejectedSnapshots: 0,
+    };
+    const installation = companionInstallations + 1;
+    const runtimeProjection = {
+      status: "installed" as const,
+      buildId: manifest.buildId,
+      programId: manifest.programId,
+      companionAbi: COMPANION_ABI,
+      kernelSha256,
+      installation,
+      get hertz() {
+        return observerRuntime.hertz;
+      },
+      get lastRenderUs() {
+        return observerRuntime.lastRenderUs;
+      },
+      get renderP95Us() {
+        return percentile95(observerRuntime.renderSamples);
+      },
+      get snapshotReads() {
+        return observerRuntime.snapshotReads;
+      },
+      get rejectedSnapshots() {
+        return observerRuntime.rejectedSnapshots;
+      },
+      get cursorRefreshes() {
+        return cursorRefreshes;
+      },
+      get cursorHiddenRetests() {
+        return hiddenRetry?.retests ?? 0;
+      },
+      get cursorHiddenGapMs() {
+        return hiddenRetry?.lastGapMs ?? null;
+      },
+      get wasmMemoryBytes() {
+        return memory.buffer.byteLength;
+      },
+      // Presentation state only: no pixels and no pointer leave this module.
+      get cursor() {
+        return cursor?.state ?? null;
+      },
+      // The rendered line, so a live run can read the feature without a
+      // screenshot. Text only: the readout owns its own element.
+      get readout() {
+        return readout?.state ?? null;
+      },
+      get toolbox() {
+        return toolbox?.state ?? null;
+      },
+    };
     // The observer program is the one explicit harness capability. Toolbox
     // publishes projections only: it cannot read arbitrary game addresses or
     // mutate the hook after installation. The commands program adds exactly

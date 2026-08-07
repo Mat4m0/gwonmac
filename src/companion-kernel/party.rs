@@ -217,12 +217,13 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 /// thing this must never publish: half a roster is indistinguishable from a
 /// small one, and the interface would present it as the party.
 unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32; 4])> {
-    let (game, player_number) = match unsafe { resolve_game(layout) } {
+    let (game, player_number, instance_type) = match unsafe { resolve_game(layout) } {
         GameState::Ready {
             game,
             player_number,
+            instance_type,
             ..
-        } => (game, player_number),
+        } => (game, player_number, instance_type),
         GameState::Loading | GameState::Unavailable => return None,
     };
 
@@ -269,7 +270,8 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
         count += 1;
     }
 
-    let mut flags = FLAG_ROSTER_OBSERVED;
+    let mut flags = FLAG_ROSTER_OBSERVED
+        | if instance_type == 0 { FLAG_IN_OUTPOST } else { 0 };
     let mut unlock = [0_u32; 4];
 
     // -- everything below hangs off WorldContext, and is skipped whole when

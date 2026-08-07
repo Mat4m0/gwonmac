@@ -25,6 +25,10 @@ import type {
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { MountedTool } from "./toolbox-foundation.js";
 import {
+  runTeamApply,
+  type TeamApplyEnvironment,
+} from "./team-apply-runner.js";
+import {
   applyImport,
   planImport,
   templateFilesystem,
@@ -111,7 +115,7 @@ const APPLY_UNAVAILABLE =
   "Applying a team to the running game is not available yet. Publish the "
   + "builds as templates and load them in Guild Wars.";
 
-function applyTeam(): Promise<TeamApplyResult> {
+function refuseApply(): Promise<TeamApplyResult> {
   return Promise.reject(new Error(APPLY_UNAVAILABLE));
 }
 
@@ -129,7 +133,20 @@ function applyTeam(): Promise<TeamApplyResult> {
 export function mountToolsInto(
   host: HTMLElement,
   onVisibilityChange: (visible: boolean) => void,
+  /**
+   * The commands and the projection that confirms them, or `null` for a module
+   * derived without them. `null` is the ordinary case: only the commands
+   * profile carries a call to a packet builder at all, so this is an absence in
+   * the bytes rather than a switch.
+   */
+  applyEnvironment: TeamApplyEnvironment | null,
 ): Promise<MountedTool | null> {
+  // One counter per session, so a result can be tied to the request that asked
+  // for it in a log where several ran.
+  let commandId = 0;
+  const applyTeam = applyEnvironment === null
+    ? refuseApply
+    : (plan: TeamApplyPlan) => runTeamApply(plan, applyEnvironment, ++commandId);
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
   // not try to resolve a file that only exists after the build step.
@@ -141,7 +158,7 @@ export function mountToolsInto(
         onVisibilityChange,
         publishTemplate,
         applyTeam,
-        applyUnavailable: APPLY_UNAVAILABLE,
+        applyUnavailable: applyEnvironment === null ? APPLY_UNAVAILABLE : null,
       });
       return {
         setVisible: (visible: boolean) => {

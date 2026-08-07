@@ -1085,6 +1085,28 @@ describe("Companion kernel", () => {
     assert.deepEqual(hero?.attributes, [[17, 7], [19, 12], [24, 3]]);
     assert.equal(party.unlockObserved, true);
     assert.deepEqual(party.unlocked, [1, 2], "hero_info is account-scoped");
+    // The fixture's character context says outpost, and applying a team is an
+    // outpost-only operation — so the flag has to survive the walk rather than
+    // being something the interface assumes.
+    assert.equal(party.inOutpost, true);
+  });
+
+  // A party nobody walked cannot say where it is standing, and the difference
+  // decides whether Apply refuses or explains that it does not know yet.
+  it("says nothing about the instance when the walk was rejected", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+    assert.equal(readyParty(kernel.party()).inOutpost, true);
+
+    kernel.view.setUint32(ADDRESSES.game + 0x4c, 0xffff_fffc, true);
+    kernel.uiEvent(0x1000_011f, 0, 0);
+    kernel.tick();
+    const rejected = readyParty(kernel.party());
+    assert.equal(rejected.rosterObserved, false);
+    assert.equal(rejected.inOutpost, null, "not false: nobody looked");
   });
 
   // The anomaly the live session turned up, as a regression: `index == id` is

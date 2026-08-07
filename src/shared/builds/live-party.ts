@@ -72,6 +72,8 @@ export type ToolboxObservation = Readonly<{
     readonly status: string;
     readonly rosterObserved?: boolean;
     readonly unlockObserved?: boolean;
+    /** Whether the walk found an outpost. `null` when nobody walked. */
+    readonly inOutpost?: boolean | null;
     readonly slotCount?: number;
     readonly unlocked?: readonly number[] | null;
     readonly slots?: readonly {
@@ -190,7 +192,7 @@ export function liveParty(observation: ToolboxObservation): LiveParty {
   // carry the detail offsets still publishes the one-hero projection.
   const region = observation.party;
   if (region?.status === "ready" && region.rosterObserved === true) {
-    return fromRegion(region, observation);
+    return fromRegion(region);
   }
 
   const heroes: LivePartyHero[] = [];
@@ -280,7 +282,6 @@ function behaviourOf(value: number | null): HeroBehaviour | null {
  */
 function fromRegion(
   region: NonNullable<ToolboxObservation["party"]>,
-  observation: ToolboxObservation,
 ): LiveParty {
   const heroes: LivePartyHero[] = [];
   for (const slot of region.slots ?? []) {
@@ -325,9 +326,10 @@ function fromRegion(
             .map((id) => id as HeroId),
         ))
       : null,
-    // Neither reaches the region yet; the toolbox summary never carried them.
+    // Hard mode still does not reach the region; the toolbox summary never
+    // carried it and nothing has certified where it lives.
     hardMode: null,
-    inOutpost: observation.status === "ready" ? true : null,
+    inOutpost: region.inOutpost ?? null,
   });
 }
 

@@ -54,7 +54,7 @@ pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
 pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;
 pub(crate) const PARTY_MAGIC: u32 = 0x5054_5747;
-pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 2;
+pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 3;
 
 /// The walk completed on a live game. Same meaning, and the same reason, as
 /// `FLAG_PARTY_OBSERVED` on the toolbox region: an empty roster and an unread
@@ -63,6 +63,12 @@ pub(crate) const FLAG_ROSTER_OBSERVED: u32 = 1 << 0;
 /// The account's hero table was read, so `unlocked_*` and `unlock_known_*`
 /// mean something. Without it both pairs are zero and claim nothing.
 pub(crate) const FLAG_UNLOCK_OBSERVED: u32 = 1 << 1;
+/// The instance is an outpost. Meaningful only beside `FLAG_ROSTER_OBSERVED`,
+/// which is the walk that read it — a party nobody looked at says nothing about
+/// where it is standing. Published because applying a team is an outpost-only
+/// operation and the interface has to be able to refuse before it starts
+/// rather than half-way through.
+pub(crate) const FLAG_IN_OUTPOST: u32 = 1 << 2;
 
 /// This slot holds a hero. An unoccupied slot publishes nothing else.
 pub(crate) const SLOT_OCCUPIED: u32 = 1 << 0;
