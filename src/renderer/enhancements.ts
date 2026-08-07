@@ -203,6 +203,20 @@ export async function installEnhancements(
   const table = exports.__indirect_function_table;
   const hookSlot = exports.enhancement_hook_slot;
   const memory = exports.memory;
+  // Present only in the module derived for the commands capability, because
+  // the transform emits it only there. A profile without it has no call to a
+  // packet builder anywhere in its bytes, so this is a real absence rather
+  // than a disabled feature.
+  const commandThunk = capabilities.commands
+    ? (typeof exports.enhancement_command === "function"
+        ? exports.enhancement_command as (
+            opcode: number, a0: number, a1: number, a2: number, a3: number,
+          ) => number
+        : null)
+    : null;
+  if (capabilities.commands && commandThunk === null) {
+    throw new Error("the commands profile derived a module with no command thunk");
+  }
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
   // call sites below stop checking what they pass.
@@ -601,9 +615,35 @@ export async function installEnhancements(
         return toolbox?.state ?? null;
       },
     };
+    /**
+     * Kicks one hero out of the party, and does nothing else.
+     *
+     * The bounded live promotion the ledger asks for, in the smallest shape
+     * that exists: one packet, one argument, and a result the party window
+     * shows immediately. It is deliberately not `command(opcode, ...)` — the
+     * opcode is not a parameter anywhere outside the certified table, so no
+     * caller here or in a console can choose a different message.
+     *
+     * Preconditions are checked against what the companion already observes,
+     * not asserted. Outside an outpost the client will refuse anyway; refusing
+     * first means the refusal is ours and is legible.
+     */
+    const kickHero = commandThunk === null ? null : (heroId: number) => {
+      if (cleaned) throw new Error("Enhancement installation is no longer active");
+      if (!Number.isInteger(heroId) || heroId < 1 || heroId > 39) {
+        throw new Error(`hero id ${heroId} is not a hero`);
+      }
+      const party = toolbox?.state ?? null;
+      if (party === null || party.status !== "ready") {
+        throw new Error("no party has been observed yet");
+      }
+      return commandThunk(31, heroId, 0, 0, 0) === 1;
+    };
     // The observer program is the one explicit harness capability. Toolbox
     // publishes projections only: it cannot read arbitrary game addresses or
-    // mutate the hook after installation.
+    // mutate the hook after installation. The commands program adds exactly
+    // one function to that surface, and it takes a hero id rather than a
+    // message.
     const runtime = Object.freeze(program === "target-observer"
       ? Object.assign(runtimeProjection, {
           setHookEnabledForBenchmark(enabled: boolean) {
@@ -615,7 +655,9 @@ export async function installEnhancements(
               : 0;
           },
         })
-      : runtimeProjection);
+      : kickHero === null
+        ? runtimeProjection
+        : Object.assign(runtimeProjection, { kickHero }));
     installedRuntime = runtime;
     // The retry loop rides the observer's own cadence: it runs exactly when
     // the consumer polls, and pauses with it when the page is hidden.
