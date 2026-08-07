@@ -318,3 +318,60 @@ cap and one short of it, is not enough to say what that is.
 **Lesson.** An estimate can be good enough to decide something and not good
 enough to say out loud. The level is a decision the app makes and can defend;
 the figure was a claim the player would check against their own clock.
+
+## Round 8 — correcting our own reading of the cap, and widening the repro (2026-08-06)
+
+**We misread ArenaNet's glue.** Round 3 and the "Open" list say the comment
+above `getHeapMax` shows the 2 GiB cap "only exists to stay clear of 4 GB
+wraparound". It does not. The full text in `Gw.jspi.js` is:
+
+```js
+var getHeapMax = () =>
+    // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
+    // full 4GB Wasm memories, the size will wrap back to 0 bytes in Wasm side
+    // for any code that deals with heap sizes, which would require special
+    // casing all heap size related code to treat 0 specially.
+    2147483648;
+```
+
+2147483648 is **not** one page short of 4 GB — that would be 4294901760. The
+comment is Emscripten's stock text, emitted above whatever `MAXIMUM_MEMORY`
+was configured, and 2147483648 is Emscripten's *default* (2 GB). So the
+correct reading is narrower and, for the report, stronger: the ceiling looks
+like a default nobody changed rather than a constraint anybody chose. We must
+not tell ArenaNet their own comment says something it doesn't.
+
+The ceiling is declared twice, and both agree — the glue constant above, and
+the wasm binary's own memory section:
+
+| artifact | initial | maximum |
+| --- | --- | --- |
+| `Gw.wasm` (27 MiB) | 256 MiB | **2048 MiB** |
+| `Gw.jspi.wasm` (8 MiB) | 256 MiB | **2048 MiB** |
+
+**The causal chain, end to end.** `wasmMemory.grow()` throws once the module's
+declared maximum is reached; `growMemory` catches it, logs
+`growMemory: Attempted to grow heap from … but got error: …` and returns
+undefined, which the caller reads as 0; `_emscripten_resize_heap` fails; the
+allocator returns null; and ArenaNet's own texture path asserts. The recorded
+death is `ASSERTION FAILED: Out of memory!` at `Engine/Gr/Gles3/GlTex.cpp:397`
+with `heapBytes` exactly 2147483648. Which assertion trips first is incidental
+— at the cap, whichever allocation lands next fails.
+
+**It is not an Eye of the North problem.** Two further player reports, neither
+in EotN:
+
+- Vanquishing **Resplendent Makuun** (Nightfall, Vabbi) — crashed ~25 minutes in.
+- **Dunes of Despair** in Hard Mode with a consumable set — crashed ~20 minutes in.
+
+Both are long runs through a lot of an area's content, which is what the
+2026-08-04 staircase already implied: the heap tracks *novel* content, not map
+changes. Five map connections in that bundle cost zero growth because the
+player was revisiting. Vanquishing is the maximal case by definition — clearing
+an explorable area means loading all of it — and it is reachable from every
+campaign, on any account.
+
+**The ask, stated precisely.** Rebuild with `-sMAXIMUM_MEMORY=4GB`. wasm32
+addresses up to 4 GB, the comment already in their glue is Emscripten's
+guidance for exactly that configuration, and it is one build flag rather than a
+change to how the client allocates.
