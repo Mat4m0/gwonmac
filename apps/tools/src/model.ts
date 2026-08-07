@@ -10,7 +10,7 @@ import {
   type Team,
 } from "../../../src/shared/builds/library";
 import { diffBuilds } from "../../../src/shared/builds/diff";
-import { HERO_BY_ID } from "../../../src/shared/builds/heroes";
+import { heroLabel } from "../../../src/shared/builds/heroes";
 import type { SkillCatalogue } from "./skill-catalog";
 
 export type {
@@ -119,16 +119,14 @@ export function removeBuild(
   };
 }
 
-export function heroLabel(hero: Team["slots"][number]["hero"]): string {
-  if (hero === null) return "Choose hero";
-  return HERO_BY_ID.get(hero)?.name.replace(/([a-z])([A-Z])/gu, "$1 $2") ?? `Hero ${hero}`;
-}
-
 export function teamMemberLabel(
   hero: Team["slots"][number]["hero"],
   slotIndex: number,
 ): string {
-  return slotIndex === 0 ? "You" : heroLabel(hero);
+  if (slotIndex === 0) return "You";
+  // The placeholder is this function's business, not the label's: an empty hero
+  // slot is a prompt to pick one, and only a picker knows that.
+  return hero === null ? "Choose hero" : heroLabel(hero);
 }
 
 export function searchLibrary(

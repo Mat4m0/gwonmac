@@ -380,7 +380,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </div>
           </div>
 
-          <LiveParty :party="host.party.value" />
+          <LiveParty
+            :party="host.party.value"
+            :saving="controller.saving.value"
+            @capture="controller.captureCurrentParty"
+          />
 
           <footer class="library-footer">
             <button v-if="host.reset" class="ui-link" @click="controller.reset">

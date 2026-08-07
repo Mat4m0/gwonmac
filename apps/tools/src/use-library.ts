@@ -16,6 +16,7 @@ import {
   validateBuildFor,
 } from "../../../src/shared/builds/validate";
 import { resolveTeamApplyPlan } from "../../../src/shared/builds/team-apply";
+import { captureParty } from "../../../src/shared/builds/live-party";
 import type { ToolsHost } from "./host";
 import {
   buildById,
@@ -40,6 +41,19 @@ type Notice = Readonly<{
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+/**
+ * `base`, or `base (2)`, or the first suffix nobody has taken.
+ *
+ * Three call sites grew their own copy of this loop and capture would have been
+ * the fourth — one of which numbers a whole party at once, so `taken` is a set
+ * the caller keeps adding to rather than a library it re-reads per name.
+ */
+function uniqueName(taken: ReadonlySet<string>, base: string): string {
+  let name = base;
+  for (let suffix = 2; taken.has(name); suffix++) name = `${base} (${suffix})`;
+  return name;
 }
 
 function emptyTeamSlots(): Team["slots"] {
@@ -419,8 +433,7 @@ export function useLibrary(host: ToolsHost) {
       || elite?.name
       || `${decoded.professions.filter(Boolean).join("/")} build`;
     const names = new Set(library.value.builds.map((build) => build.name));
-    let name = baseName;
-    for (let suffix = 2; names.has(name); suffix++) name = `${baseName} (${suffix})`;
+    const name = uniqueName(names, baseName);
     const nextId = id("build");
     await commit("Build imported", (current) => ({
       ...current,
@@ -447,8 +460,7 @@ export function useLibrary(host: ToolsHost) {
     const nextId = id("build");
     const baseName = requestedName.trim() || "New build";
     const names = new Set(library.value.builds.map((build) => build.name));
-    let name = baseName;
-    for (let suffix = 2; names.has(name); suffix++) name = `${baseName} (${suffix})`;
+    const name = uniqueName(names, baseName);
     await commit("Blank build created", (current) => ({
       ...current,
       builds: [{
@@ -487,6 +499,55 @@ export function useLibrary(host: ToolsHost) {
     }));
     kind.value = "team";
     selectedId.value = nextId;
+  };
+
+  /**
+   * Saves the party the player is standing in as a team.
+   *
+   * `captureParty` decides the shape and knows nothing about the library; this
+   * decides what the result is called. Uniquing happens here because it is the
+   * one thing that needs to know what is already stored, and the set is carried
+   * across the whole party so two heroes cannot both become "Livia".
+   */
+  const captureCurrentParty = async () => {
+    if (!library.value || saving.value) return null;
+    const teamNames = new Set(library.value.teams.map((team) => team.name));
+    const captured = captureParty(
+      host.party.value,
+      uniqueName(teamNames, "Current party"),
+      (kind) => id(kind),
+    );
+    if (!captured) {
+      showNotice(
+        host.party.value.status === "ready"
+          ? "There are no heroes in your party to save."
+          : "No party observed yet. Guild Wars may still be loading.",
+        "warning",
+      );
+      return null;
+    }
+    const buildNames = new Set(library.value.builds.map((build) => build.name));
+    const builds = captured.builds.map((build) => {
+      const name = uniqueName(buildNames, build.name);
+      buildNames.add(name);
+      return { ...build, name };
+    });
+    await commit("Team saved from your party", (current) => ({
+      ...current,
+      builds: [...builds, ...current.builds],
+      teams: [captured.team, ...current.teams],
+    }));
+    kind.value = "team";
+    selectedId.value = captured.team.id;
+    // Overwrites the commit's own notice on purpose: the gaps are the part
+    // worth reading, and "saved" was already visible in the panel behind it.
+    showNotice(
+      `Saved ${builds.length} ${builds.length === 1 ? "build" : "builds"}. `
+      + `${captured.gaps.length} ${captured.gaps.length === 1 ? "thing" : "things"} `
+      + "could not be read — the team's notes say which.",
+      "warning",
+    );
+    return captured;
   };
 
   const publish = async (build: Build) => {
@@ -606,7 +667,7 @@ export function useLibrary(host: ToolsHost) {
     createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
     publish, applyTeam, undo, reset,
-    importBuild, createBlankBuild, createTeam,
+    importBuild, createBlankBuild, createTeam, captureCurrentParty,
   };
 }
 

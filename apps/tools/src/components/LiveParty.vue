@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { LiveParty } from "../../../../src/shared/builds/live-party";
-import { heroLabel } from "../model";
+import { heroLabel } from "../../../../src/shared/builds/heroes";
 
-const props = defineProps<{ party: LiveParty }>();
+const props = defineProps<{ party: LiveParty; saving: boolean }>();
+defineEmits<{ capture: [] }>();
 
 const BEHAVIOUR_LABELS = {
   fight: "Fight",
@@ -71,6 +72,21 @@ const unnamed = computed(() =>
       <p v-else-if="!party.heroes.length" class="live-party-note">
         No heroes in your party.
       </p>
+
+      <!--
+        Absent rather than disabled when there is nothing to save. A greyed-out
+        button is a promise that some state makes it work, and the state that
+        makes this work is "you have heroes" — which the list above already says
+        plainly.
+      -->
+      <button
+        v-if="party.heroes.length"
+        class="ui-button"
+        :disabled="saving"
+        @click="$emit('capture')"
+      >
+        Save as team
+      </button>
     </template>
   </section>
 </template>
@@ -130,6 +146,8 @@ const unnamed = computed(() =>
 }
 
 .live-party-row .ui-chip { padding: 0 var(--ui-space-1); }
+
+.live-party > .ui-button { justify-self: start; }
 
 .live-party-note {
   margin: 0;

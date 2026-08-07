@@ -156,6 +156,31 @@ export const HERO_BY_ID: ReadonlyMap<HeroId, Hero> = new Map(
 );
 
 /**
+ * The fallback label for a hero id: the `HeroID` identifier with its words
+ * separated, so `GhostOfAlthea` reads as `Ghost Of Althea`.
+ *
+ * Deliberately *not* a display-name table. The real display name is localised
+ * and belongs to the client, and this file's header says so — adding an English
+ * name column here would be a second answer to what a hero is called, and the
+ * wrong one in nine languages. This is the derived spelling of the identifier
+ * the table already holds, which is why it is a function over `HEROES` and not
+ * a column in it.
+ *
+ * It lives here rather than in the panel because capture writes hero names into
+ * the stored library. A library holding `GhostOfAlthea` beside a list showing
+ * `Ghost Of Althea` is one hero rendered as two, and that outlives the session.
+ *
+ * An id the table does not know keeps its number rather than going blank: a
+ * hero we cannot name is still a hero, and hiding the id hides the evidence.
+ */
+export function heroLabel(hero: HeroId): string {
+  const known = HERO_BY_ID.get(hero);
+  return known === undefined
+    ? `Hero ${hero}`
+    : known.name.replace(/([a-z])([A-Z])/gu, "$1 $2");
+}
+
+/**
  * The same heroes in the client's hero-panel order, which is the order a hero
  * picker must offer them in. Derived by sorting `HEROES` on `panelOrder` rather
  * than written out again: two orderings of the same 39 rows would be two places

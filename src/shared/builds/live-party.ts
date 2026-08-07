@@ -18,14 +18,23 @@
  * is a change to the kernel and the decoder, not to this type or to anything
  * drawing it.
  */
-import { HERO_BY_ID, PROFESSION_BY_ID, PROFESSION_NONE_ID } from "./heroes.js";
-import { skillId } from "./library.js";
+import {
+  HERO_BY_ID,
+  PROFESSION_BY_ID,
+  PROFESSION_NONE_ID,
+  heroLabel,
+} from "./heroes.js";
+import { PARTY_SIZE, buildId, skillId, teamId, teamSlotsOf } from "./library.js";
 import type {
+  Build,
+  BuildId,
   HeroBehaviour,
   HeroId,
   ProfessionPair,
   SkillBar,
   SkillSlotIndex,
+  Team,
+  TeamSlot,
   TeamSlotIndex,
 } from "./library.js";
 
@@ -283,4 +292,162 @@ function fromRegion(
     hardMode: null,
     inOutpost: observation.status === "ready" ? true : null,
   });
+}
+
+/** Where a captured build came from, in `Build.origin`'s vocabulary. */
+export const CAPTURE_ORIGIN = "live-party";
+
+/**
+ * A team and its builds, taken from the party the player is standing in, plus
+ * the list of everything that could not be taken.
+ *
+ * `gaps` is not diagnostics. It is the honest half of the answer, and it is
+ * written into the team's notes so it survives the notice that announced it.
+ */
+export interface PartyCapture {
+  readonly team: Team;
+  readonly builds: readonly Build[];
+  readonly gaps: readonly string[];
+}
+
+/** Every position empty, which is also exactly what slot 0 must look like. */
+const EMPTY_SLOT: TeamSlot = Object.freeze({
+  build: null,
+  hero: null,
+  behaviour: null,
+  panel: false,
+  disabled: Object.freeze([]),
+});
+
+/**
+ * Turns the observed party into a stored team.
+ *
+ * Pure, and deliberately without a clock, a library or an id source of its own:
+ * `mint` is injected because `src/shared` is imported by main and the renderer
+ * both, and neither may assume the other's `crypto`. Nothing here reads the
+ * library, so nothing here can collide with it — the caller uniques the names
+ * it gets back, which is the only thing that needs to know what is already
+ * stored.
+ *
+ * Three rules, all of them about not making things up:
+ *
+ * 1. **Heroes are compacted into slots 1..n.** `hero.slot` is the party
+ *    position, and a henchman standing between two heroes puts a hole in it.
+ *    `resolveTeamApplyPlan` refuses a `party-gap`, so preserving the game's
+ *    indices would capture teams that can never be applied. The position is
+ *    used for ordering and then dropped, which is what it is actually good for.
+ * 2. **A hero whose bar was not read gets no build**, rather than a build of
+ *    eight empty slots. The slot still carries the hero, so the team is right
+ *    about who was there and silent about what they were holding.
+ * 3. **Attributes are empty and the notes say so.** `AttributeRanks` has no
+ *    spelling for *unknown* — an absent attribute is rank 0 by definition — so
+ *    the only place left to be honest is the prose, and a captured build
+ *    published as a template before its attributes are set is a bar the
+ *    character cannot use. That warning is worth more than a tidier notice.
+ *
+ * Returns `null` when there is nothing to capture: no observation, or an
+ * observed party with no hero in it. A team of one empty player slot is not a
+ * team, and saving one would leave the library holding the moment the player
+ * happened to press the button.
+ */
+export function captureParty(
+  live: LiveParty,
+  name: string,
+  mint: (kind: "build" | "team") => string,
+): PartyCapture | null {
+  if (live.status !== "ready" || live.heroes.length === 0) return null;
+
+  const gaps: string[] = [];
+  const builds: Build[] = [];
+  const filled = new Map<TeamSlotIndex, TeamSlot>();
+
+  // Party order where it was observed, discovery order where it was not. Slot 0
+  // is the player and never holds a hero, so `PARTY_SIZE` sorts the unpositioned
+  // to the back rather than into the player's place.
+  const ordered = [...live.heroes].sort(
+    (left, right) => (left.slot ?? PARTY_SIZE) - (right.slot ?? PARTY_SIZE),
+  );
+  const placed = ordered.slice(0, PARTY_SIZE - 1);
+  if (ordered.length > placed.length) {
+    gaps.push(
+      `${ordered.length - placed.length} hero could not be saved: a team has `
+      + `${PARTY_SIZE - 1} hero positions.`,
+    );
+  }
+
+  for (const [index, hero] of placed.entries()) {
+    const heroName = heroLabel(hero.hero);
+    let build: BuildId | null = null;
+    if (hero.professions !== null && hero.skills !== null) {
+      const id = buildId(mint("build"));
+      builds.push({
+        id,
+        name: heroName,
+        professions: hero.professions,
+        skills: hero.skills,
+        attributes: {},
+        tags: [],
+        notes:
+          "Captured from the running game. Attribute ranks were not read — set "
+          + "them before publishing this as a template, or the character will "
+          + "get the skills at rank 0.",
+        favourite: false,
+        lastUsed: null,
+        parent: null,
+        origin: CAPTURE_ORIGIN,
+      });
+      build = id;
+    } else {
+      gaps.push(
+        `${heroName} was saved without a build: `
+        + `${hero.skills === null ? "their skill bar" : "their professions"} `
+        + "was not observed.",
+      );
+    }
+    if (hero.behaviour === null) {
+      gaps.push(`${heroName}'s behaviour was not observed. Choose one before Apply.`);
+    }
+    filled.set((index + 1) as TeamSlotIndex, {
+      build,
+      hero: hero.hero,
+      behaviour: hero.behaviour,
+      panel: false,
+      // Disabled positions name places on a bar. With no build there is no bar,
+      // and `resolveTeamApplyPlan` rejects the pair outright — the professions
+      // can be unread while the bar was read, so this is reachable.
+      disabled: build === null ? [] : hero.disabled ?? [],
+    });
+  }
+
+  const unnamed = live.heroCount - live.heroes.length;
+  if (unnamed > 0) {
+    gaps.push(
+      `${unnamed} more ${unnamed === 1 ? "hero is" : "heroes are"} in your `
+      + `party but could not be identified, and ${unnamed === 1 ? "is" : "are"} `
+      + "not in this team.",
+    );
+  }
+  gaps.push(
+    "Your own build was not captured: the companion cannot read the player's "
+    + "own skill bar.",
+  );
+
+  return {
+    team: {
+      id: teamId(mint("team")),
+      name,
+      tags: [],
+      // Not `"normal"`. Hard mode is unobserved, and `"none"` is the spelling
+      // for having never said — claiming normal would be a setting the player
+      // did not choose showing up as one they did.
+      mode: "none",
+      favourite: false,
+      lastUsed: null,
+      notes: ["Captured from the party you were in.", ...gaps.map((gap) => `• ${gap}`)]
+        .join("\n"),
+      slots: teamSlotsOf((position) => filled.get(position) ?? EMPTY_SLOT),
+    },
+    builds,
+    gaps,
+  };
 }

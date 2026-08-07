@@ -280,6 +280,12 @@ test("the module exports nothing the source could not supply", () => {
   // whole export surface so that adding the point budget, an English hero-name
   // list, or the missing eight primaries has to come here first — where the
   // reason they are absent is written down.
+  // `heroLabel` is the one deliberate exception and stays a derivation, not a
+  // column: it separates the words of the identifier this table already holds.
+  // The English *name* is still absent, and the reason is unchanged — the
+  // display name is localised and belongs to the client. If a name column ever
+  // shows up in `HEROES`, this list has to change and this comment has to be
+  // argued with first.
   assert.deepEqual(Object.keys(tables).sort(), [
     "ATTRIBUTES",
     "ATTRIBUTE_BY_ID",
@@ -290,5 +296,6 @@ test("the module exports nothing the source could not supply", () => {
     "PROFESSIONS",
     "PROFESSION_BY_ID",
     "PROFESSION_NONE_ID",
+    "heroLabel",
   ]);
 });
