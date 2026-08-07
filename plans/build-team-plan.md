@@ -296,13 +296,33 @@ being JSPI. It also records that calling the lowest sender is *not* sufficient
 on its own: `MsgSendLeave` returned normally without leaving the party, because
 the real button also ran two further calls.
 
-Against that, the existing work is further along than it looks. The eight
-dispatch functions are already certified for build 38,797 — hero add `6883`,
-kick `6884`, difficulty `6885`, secondary profession `6914`, attributes `6870`,
-skillbar `6940`, behaviour `6875`, skill toggle `6878` — chosen as context-free
-dispatchers rather than veneers. The kernel state machine already matches
-GWToolbox++'s shape. What failed was the execution point and the fabricated
-context, and both now have an evidenced alternative.
+Against that, the existing work is further along than it looks — though not in
+the way this paragraph used to claim.
+
+**The eight indices it listed were wrong, by exactly three.** They were never
+consumed by anything, so the error cost nothing, but it is the reason the
+identification now keys on the **opcode** rather than the index. Each of these
+functions is a client-to-server *packet builder*: it writes an opcode at the
+head of a stack buffer, copies the caller's arguments after it, and hands the
+buffer to the client's single sender. The opcode is the wire protocol and is
+stable across builds; the index is recovered per build by
+`tools/packet_builders.py`, which finds the sole builder that emits it and
+returns the arity and payload size with it, so a drifted index is a refusal
+rather than a call to the wrong function.
+
+The certified table lives in the untracked working evidence file
+`plans/tools/hero-builds/evidence/party-memory-layout.md`, and moves into
+`enhancement-builds.ts` only when a command capability exists to consume it.
+Six of the eight actions agree exactly — opcode, arity and payload size — with
+GWCAjs's Ghidra-named, live-verified table, derived independently. The two that
+do not appear there at all, skillbar (opcode 93) and attributes (opcode 16),
+were decoded field by field from our own module.
+
+That shape is also *better* than a dispatcher for the ledger's purposes: a
+builder needs no `PropContext`, reads no UI state, takes fixed typed scalar
+arguments, and its effect is observable only through normal game state because
+the reply comes back from the server. The original objection — a fabricated
+context — does not apply to it at all.
 
 This does not lower the admission bar. Every requirement below still applies,
 and a live promotion still comes last. It means the honest expectation is a

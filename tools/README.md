@@ -47,6 +47,26 @@ They rewrote far more of the client than the production hook requires.
 derived-cache validation, and atomic publication. The CLI invokes the same
 pure byte transform directly for an explicit input and output.
 
+### `packet_builders.py` — the client-to-server message table
+
+Every message the client sends goes through one sender. Each message has one
+small builder that writes its opcode at the head of a stack buffer, copies the
+caller's arguments after it, and hands the buffer to that sender. This finds
+all of them and keys them by opcode.
+
+    python3 tools/packet_builders.py dist/Gw.jspi.wasm 30 31 21
+
+On build 38,797: 147 builders, 147 distinct opcodes, no collisions.
+
+**Use the opcode, never the function index.** The opcode is the wire protocol
+and is identical in every build — the server is on the other end of it.
+Indices are not: GWCAjs records deltas of −2/−6/−7/−9 between *adjacent*
+builds, and this repository's own hand-written list of eight hero-command
+indices was off by exactly three against the build it claimed to describe. A
+bare index carries no way to check itself; recovering it from the opcode brings
+the arity and payload size back with it, so a mismatch is a refusal rather than
+a call to the wrong function.
+
 ### `gensyms.py` — symbol recovery
 The module is stripped, but naming information survives: 219 imports and 44
 exports carry real names, and all 850 source paths in `.data` are referenced
