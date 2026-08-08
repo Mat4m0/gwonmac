@@ -639,7 +639,8 @@
   background: var(--ui-raised-fill);
 }
 
-.ui-row[aria-selected="true"] {
+.ui-row[aria-selected="true"],
+.ui-row[aria-current="page"] {
   border-color: var(--ui-accent-strong);
   background: var(--ui-selected);
   color: var(--ui-text-bright);

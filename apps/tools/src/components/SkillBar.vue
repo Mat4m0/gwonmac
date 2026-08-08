@@ -46,13 +46,14 @@ const drop = (event: DragEvent, index: number) => {
 
 <template>
   <div class="skill-bar" :class="{ 'skill-bar--compact': compact }" aria-label="Skill bar">
-    <button
+    <component
+      :is="editable ? 'button' : 'span'"
       v-for="(skill, index) in skills"
       :key="`${skill ?? 'empty'}-${index}`"
       class="ui-slot skill"
       :class="{ 'skill--editable': editable }"
       :type="editable ? 'button' : undefined"
-      :disabled="!editable"
+      :role="editable ? undefined : 'img'"
       :data-changed="changedSlots?.includes(index) ? '' : undefined"
       :data-invalid="invalidSlots?.includes(index) ? '' : undefined"
       :data-active="activeSlot === index ? '' : undefined"
@@ -83,6 +84,6 @@ const drop = (event: DragEvent, index: number) => {
         {{ catalogue.get(skill).name.split(" ").map((part) => part[0]).join("").slice(0, 2) }}
       </span>
       <span v-if="editable" class="skill-slot-number" aria-hidden="true">{{ index + 1 }}</span>
-    </button>
+    </component>
   </div>
 </template>

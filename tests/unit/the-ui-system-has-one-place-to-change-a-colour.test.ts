@@ -26,6 +26,11 @@ const TOKENS = "src/shared/ui/tokens.css";
 const CONSUMERS = [
   "src/shared/ui/components.css",
   "apps/tools/src/styles.css",
+  "apps/tools/src/styles/base-shell.css",
+  "apps/tools/src/styles/library.css",
+  "apps/tools/src/styles/build.css",
+  "apps/tools/src/styles/catalogue.css",
+  "apps/tools/src/styles/team.css",
 ];
 
 /**

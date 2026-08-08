@@ -16,6 +16,7 @@ const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
 const inspected = ref<SkillPresentation | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
+const focusedResult = ref<number | null>(null);
 // The `:ref` callback below only ever writes, so narrowing a search left the
 // buttons for every index ever rendered — detached subtrees, each holding a
 // decoded icon — and `focusResult` read a stale length off the end.
@@ -113,13 +114,24 @@ function useSkill(skill: SkillPresentation): void {
 function focusResult(index: number): void {
   const buttons = resultButtons.value;
   if (!buttons.length) return;
-  buttons[Math.max(0, Math.min(buttons.length - 1, index))]?.focus();
+  const next = Math.max(0, Math.min(buttons.length - 1, index));
+  focusedResult.value = next;
+  buttons[next]?.focus();
 }
 
-function onResultKeydown(index: number, event: KeyboardEvent): void {
+function onResultKeydown(
+  index: number,
+  skill: SkillPresentation,
+  event: KeyboardEvent,
+): void {
   if (event.key === "Escape") {
     event.preventDefault();
     emit("close");
+    return;
+  }
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    useSkill(skill);
     return;
   }
   const movement = {
@@ -218,11 +230,12 @@ function clear(): void {
           class="skill-result"
           role="option"
           :aria-selected="inspected?.id === skill.id"
+          :tabindex="focusedResult === index || (focusedResult === null && index === 0) ? 0 : -1"
           :disabled="duplicateSlot(skill) !== null"
-          @focus="inspected = skill"
+          @focus="focusedResult = index; inspected = skill"
           @click="inspected = skill"
           @dblclick="useSkill(skill)"
-          @keydown="onResultKeydown(index, $event)"
+          @keydown="onResultKeydown(index, skill, $event)"
         >
           <span
             class="ui-slot skill"

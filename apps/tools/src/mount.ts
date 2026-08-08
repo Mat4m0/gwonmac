@@ -31,6 +31,7 @@ export function mountToolsApp(
     onVisibilityChange?: (visible: boolean) => void;
   },
 ): ToolsAppHandle {
+  let lastProfessionProbe = "";
   const visible = ref(options.initiallyVisible ?? options.mode === "standalone");
   const setVisible = (next: boolean) => {
     visible.value = next;
@@ -57,7 +58,38 @@ export function mountToolsApp(
     toggle: () => setVisible(!visible.value),
     update: (observation: ToolboxObservation) => {
       options.host.party.value = liveParty(observation);
+      const party = observation.party;
+      const player = party?.slots?.[0];
+      if (
+        party?.status === "ready"
+        && party.rosterObserved === true
+        && player?.occupied === true
+        && player.professions === null
+      ) {
+        const diagnostic = Object.freeze({
+          schema: 1,
+          probe: party.playerProfessionProbe ?? null,
+          playerAgentId: player.agentId,
+          investedAttributeIds:
+            player.attributes?.map((entry) => entry[0]) ?? null,
+          equippedSkillIds: player.skills ?? null,
+        });
+        Reflect.set(window, "gwPlayerProfessionProbe", diagnostic);
+        const probe = JSON.stringify(party.playerProfessionProbe ?? null);
+        if (probe !== lastProfessionProbe) {
+          lastProfessionProbe = probe;
+          console.warn(
+            "[tools] player profession probe "
+            + JSON.stringify(diagnostic),
+          );
+        }
+      } else {
+        Reflect.deleteProperty(window, "gwPlayerProfessionProbe");
+      }
     },
-    dispose: () => app.unmount(),
+    dispose: () => {
+      Reflect.deleteProperty(window, "gwPlayerProfessionProbe");
+      app.unmount();
+    },
   });
 }
