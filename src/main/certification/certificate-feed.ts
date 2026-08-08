@@ -54,7 +54,7 @@ import {
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   type EnhancementCapabilityProfile,
-} from "../../shared/contracts.js";
+} from "../../shared/enhancement-contracts.js";
 import { AppError } from "../../shared/errors.js";
 
 /**

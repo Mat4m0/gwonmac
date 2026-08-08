@@ -13,7 +13,8 @@ export const COMPANION_KERNEL_CANDIDATE =
   "build/.companion-kernel.unsealed.wasm";
 export const COMPANION_KERNEL_ARTIFACT =
   "build/renderer/companion-kernel.wasm";
-export const COMPANION_RENDERER = "build/renderer/enhancements.js";
+export const COMPANION_RENDERER =
+  "build/renderer/certified-companion-installation.js";
 export const COMPANION_KERNEL_HASH_PLACEHOLDER =
   "__COMPANION_KERNEL_SHA256_PLACEHOLDER__";
 export const COMPANION_KERNEL_HASH_BINDING =

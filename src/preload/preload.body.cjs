@@ -57,7 +57,7 @@ function rendererInit() {
   // the canonical tuple is exhaustive, and listing the tools here to satisfy it
   // would be the second copy the tuple exists to prevent.
   const enhancementSelection =
-    /** @type {import("../shared/contracts.js").EnhancementSelection} */ ({});
+    /** @type {import("../shared/enhancement-contracts.js").EnhancementSelection} */ ({});
   /** @type {Record<string, unknown>} */
   const selected = isRecord(parsed.enhancementSelection)
     ? parsed.enhancementSelection
@@ -67,10 +67,10 @@ function rendererInit() {
   }
   Object.freeze(enhancementSelection);
   const requestedProgram = parsed.enhancementProgram;
-  /** @type {import("../shared/contracts.js").EnhancementProgram} */
+  /** @type {import("../shared/enhancement-contracts.js").EnhancementProgram} */
   const enhancementProgram = typeof requestedProgram === "string"
       && ENHANCEMENT_PROGRAMS.some((program) => program === requestedProgram)
-    ? /** @type {import("../shared/contracts.js").EnhancementProgram} */ (
+    ? /** @type {import("../shared/enhancement-contracts.js").EnhancementProgram} */ (
         requestedProgram
       )
     : "none";

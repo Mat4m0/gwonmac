@@ -341,7 +341,8 @@ export class SkillAssets {
    * so it is computed once here rather than memoised behind a method.
    */
   private readonly cacheDir: string;
-  private extractValue: Promise<Extracted | CatalogueRefusal> | null = null;
+  private extracted: Extracted | null = null;
+  private extractInFlight: Promise<Extracted | CatalogueRefusal> | null = null;
   private readonly swept = new Set<string>();
   private readonly icons = new Map<number, Promise<Buffer | null>>();
 
@@ -528,7 +529,9 @@ export class SkillAssets {
    * so a cache hit never has to re-read the client binary to serve an icon.
    */
   private extract(): Promise<Extracted | CatalogueRefusal> {
-    this.extractValue ??= (async () => {
+    if (this.extracted) return Promise.resolve(this.extracted);
+    if (this.extractInFlight) return this.extractInFlight;
+    const request = (async () => {
       const file = path.join(this.cacheDir, "catalogue.json");
       try {
         const cached = readExtracted(JSON.parse(await readFile(file, "utf8")));
@@ -545,9 +548,13 @@ export class SkillAssets {
           // A cache that cannot be written costs speed, never correctness.
         }
       }
+      if (typeof extracted !== "string") this.extracted = extracted;
       return extracted;
-    })();
-    return this.extractValue;
+    })().finally(() => {
+      if (this.extractInFlight === request) this.extractInFlight = null;
+    });
+    this.extractInFlight = request;
+    return request;
   }
 
   async catalogue(): Promise<CatalogueRead> {
@@ -565,7 +572,11 @@ export class SkillAssets {
   icon(skillId: number): Promise<Buffer | null> {
     const existing = this.icons.get(skillId);
     if (existing) return existing;
-    const request = this.decodeIcon(skillId).catch(() => null);
+    const request = this.decodeIcon(skillId)
+      .catch(() => null)
+      .finally(() => {
+        if (this.icons.get(skillId) === request) this.icons.delete(skillId);
+      });
     this.icons.set(skillId, request);
     return request;
   }

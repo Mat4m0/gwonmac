@@ -12,11 +12,14 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import * as contracts from "../../src/shared/contracts.ts";
+import * as enhancementContracts from "../../src/shared/enhancement-contracts.ts";
 import type { GwNativeApi } from "../../src/shared/contracts.ts";
 import {
   PRELOAD_CONSTANTS,
   preloadSource,
 } from "../../scripts/generate-preload.js";
+
+const allContracts = { ...contracts, ...enhancementContracts };
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -60,7 +63,7 @@ const plainInit = (value: GwNativeApi["init"]): GwNativeApi["init"] => ({
 });
 
 test("the exposed method invokes the channel the contracts name", async () => {
-  const { api, invoked, listened } = run(preloadSource(contracts, root));
+  const { api, invoked, listened } = run(preloadSource(allContracts, root));
   await api.progress.current();
   await api.credentials.save({ username: "u", password: "p" });
   api.sockets.onEvent(() => {});
@@ -79,7 +82,7 @@ test("the exposed method invokes the channel the contracts name", async () => {
 
 test("renaming a canonical channel moves the call, with no edit to the body", async () => {
   const renamed = {
-    ...contracts,
+    ...allContracts,
     IPC: { ...contracts.IPC, progressCurrent: "gw:progress:renamedByThisTest" },
   };
   const { api, invoked } = run(preloadSource(renamed, root));
@@ -90,7 +93,7 @@ test("renaming a canonical channel moves the call, with no edit to the body", as
 });
 
 test("the derived client's bridge markers cross unchanged, and follow an edit", () => {
-  const { api } = run(preloadSource(contracts, root));
+  const { api } = run(preloadSource(allContracts, root));
   assert.deepEqual(
     { ...api.wasmBridgeMarkers },
     { ...contracts.WASM_BRIDGE_MARKERS },
@@ -101,7 +104,7 @@ test("the derived client's bridge markers cross unchanged, and follow an edit", 
   const edited = run(
     preloadSource(
       {
-        ...contracts,
+        ...allContracts,
         WASM_BRIDGE_MARKERS: {
           ...contracts.WASM_BRIDGE_MARKERS,
           findFiles: -80_002,
@@ -116,7 +119,7 @@ test("the derived client's bridge markers cross unchanged, and follow an edit", 
 test("the launch argument prefix comes from the contracts too", () => {
   const prefix = "--renamed-by-this-test=";
   const source = preloadSource(
-    { ...contracts, RENDERER_INIT_ARGUMENT: prefix },
+    { ...allContracts, RENDERER_INIT_ARGUMENT: prefix },
     root,
   );
 
@@ -179,7 +182,8 @@ test("every canonical Enhancement tool crosses without another field list", () =
   const source = preloadSource(
     {
       ...contracts,
-      ENHANCEMENTS: [...contracts.ENHANCEMENTS, futureTool],
+      ...enhancementContracts,
+      ENHANCEMENTS: [...enhancementContracts.ENHANCEMENTS, futureTool],
     },
     root,
   );

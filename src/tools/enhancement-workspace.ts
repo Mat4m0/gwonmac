@@ -28,7 +28,7 @@ import {
   enhancementCapabilitiesFor,
   enhancementCapabilitiesRequested,
   type EnhancementProgram,
-} from "../shared/contracts.js";
+} from "../shared/enhancement-contracts.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,

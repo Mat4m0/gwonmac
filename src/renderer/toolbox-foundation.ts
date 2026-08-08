@@ -182,6 +182,7 @@ export function createToolboxFoundation(
 
   let tool: MountedTool | null = null;
   let toolRequested = false;
+  let disposed = false;
   const ensureTool = () => {
     if (toolRequested) return;
     toolRequested = true;
@@ -190,6 +191,10 @@ export function createToolboxFoundation(
     // through here too and stop at `setOpen`'s no-change guard.
     void options.mountTool(toolHost, (visible) => setOpen(visible))
       .then((mounted) => {
+        if (disposed) {
+          mounted?.dispose();
+          return;
+        }
         tool = mounted;
         // The overlay may have been closed again while the bundle loaded, and
         // the companion has almost certainly published since — the tool loads
@@ -317,7 +322,9 @@ export function createToolboxFoundation(
       return state;
     },
     dispose() {
+      disposed = true;
       tool?.dispose();
+      tool = null;
       surface.dispose();
       cursorMirror.disconnect();
       window.removeEventListener("gw:tools-toggle", onCommand);

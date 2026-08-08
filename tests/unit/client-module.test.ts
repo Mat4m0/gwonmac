@@ -16,7 +16,7 @@ import {
   ENHANCEMENT_TRANSFORM_ABI,
   type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
-} from "../../src/shared/contracts.js";
+} from "../../src/shared/enhancement-contracts.js";
 import {
   inspectEnhancementCache,
   prepareClientModule,
@@ -301,8 +301,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       areaInfoCount: 73,
       areaInfoStride: 74,
       areaInfoFlags: 75,
-      agentPrimary: 76,
-      agentSecondary: 77,
+      worldProfessionStates: 76,
+      professionStateStride: 77,
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;

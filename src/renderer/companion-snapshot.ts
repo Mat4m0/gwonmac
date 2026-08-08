@@ -16,8 +16,8 @@
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
-export const COMPANION_SNAPSHOT_ABI = 2;
-export const COMPANION_SNAPSHOT_BYTES = 64;
+export const COMPANION_SNAPSHOT_ABI = COMPANION_ABI.snapshot.abi;
+export const COMPANION_SNAPSHOT_BYTES = COMPANION_ABI.snapshot.bytes;
 
 const MAGIC = 0x42545747;
 const INSTANCE_NAMES = Object.freeze(["Outpost", "Explorable", "Loading"]);
@@ -174,8 +174,8 @@ export function readCompanionSnapshot(buffer: ArrayBuffer, pointer: number) {
 
 /* The cursor bitmap lives in its own region: the core snapshot is full, and
    4 KB of pixels do not belong in a per-frame read. */
-export const COMPANION_CURSOR_ABI = 1;
-export const COMPANION_CURSOR_BYTES = 4160;
+export const COMPANION_CURSOR_ABI = COMPANION_ABI.cursor.abi;
+export const COMPANION_CURSOR_BYTES = COMPANION_ABI.cursor.bytes;
 
 const CURSOR_MAGIC = 0x43545747;
 const CURSOR_EDGE = 32;
@@ -302,8 +302,8 @@ export function readCompanionCursorPixels(buffer: ArrayBuffer, pointer: number) 
   return Object.freeze({ ...header, pixels });
 }
 
-export const COMPANION_TOOLBOX_ABI = 4;
-export const COMPANION_TOOLBOX_BYTES = 64;
+export const COMPANION_TOOLBOX_ABI = COMPANION_ABI.toolbox.abi;
+export const COMPANION_TOOLBOX_BYTES = COMPANION_ABI.toolbox.bytes;
 
 const TOOLBOX_MAGIC = 0x58545747;
 const TOOLBOX_HERO_AVAILABLE = 1 << 0;
@@ -460,13 +460,15 @@ export function sameCompanionToolboxState(
  * re-derives every implication it can check instead of trusting the writer
  * that enforced it.
  */
-export const COMPANION_PARTY_ABI = 4;
-export const COMPANION_PARTY_BYTES = 832;
+export const COMPANION_PARTY_ABI = COMPANION_ABI.party.abi;
+export const COMPANION_PARTY_BYTES = COMPANION_ABI.party.bytes;
 
 const PARTY_MAGIC = 0x50545747;
 const PARTY_SLOT_COUNT = 8;
 const PARTY_SLOT_BYTES = 96;
-const PARTY_HEADER_BYTES = 64;
+const PARTY_FIXED_HEADER_BYTES = 64;
+const ACCOUNT_HERO_SLOTS = 40;
+const PARTY_HEADER_BYTES = PARTY_FIXED_HEADER_BYTES + ACCOUNT_HERO_SLOTS * 4;
 const PARTY_SKILL_SLOTS = 8;
 /** Five attributes from a primary profession plus four from a secondary. */
 const PARTY_ATTRIBUTE_SLOTS = 9;
@@ -530,9 +532,45 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
   const knownHigh = view.getUint32(36, true);
   const playRegionValue = view.getUint32(40, true);
   const hardModeValue = view.getUint32(44, true);
-  let reserved = 0;
-  for (let at = 48; at < PARTY_HEADER_BYTES; at += 4) {
-    reserved |= view.getUint32(at, true);
+  const directProfessions = view.getUint32(48, true);
+  const attributeIdsLow = view.getUint32(52, true);
+  const attributeIdsHigh = view.getUint32(56, true);
+  const professionSources = view.getUint32(60, true);
+  let malformed = false;
+  const playerProfessionProbe = Object.freeze({
+    statePrimary: directProfessions & 0xff,
+    stateSecondary: (directProfessions >>> 8) & 0xff,
+    attributeIdsLow,
+    attributeIdsHigh,
+    stateRowObserved: (professionSources & 1) !== 0,
+    stateAccepted: (professionSources & 2) !== 0,
+    attributeRowObserved: (professionSources & 4) !== 0,
+  });
+  const accountProfessions: Array<Readonly<{
+    hero: number;
+    professions: readonly [number, number];
+  }>> = [];
+  let accountProfessionBits = 0n;
+  for (let hero = 0; hero < ACCOUNT_HERO_SLOTS; hero += 1) {
+    const packed = view.getUint32(PARTY_FIXED_HEADER_BYTES + hero * 4, true);
+    if (packed === 0) continue;
+    const primary = packed & 0xff;
+    const secondary = (packed >>> 8) & 0xff;
+    if (
+      hero === 0
+      || primary < 1
+      || primary > 10
+      || secondary > 10
+      || (packed >>> 16) !== 0
+    ) {
+      malformed = true;
+      continue;
+    }
+    accountProfessionBits |= 1n << BigInt(hero);
+    accountProfessions.push(Object.freeze({
+      hero,
+      professions: Object.freeze([primary, secondary] as const),
+    }));
   }
 
   type PartySlot = NonNullable<
@@ -540,7 +578,6 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
   >[number];
   const slots: PartySlot[] = [];
   let occupied = 0;
-  let malformed = false;
   const seen = new Set<number>();
   for (let index = 0; index < PARTY_SLOT_COUNT; index += 1) {
     const at = PARTY_HEADER_BYTES + index * PARTY_SLOT_BYTES;
@@ -644,7 +681,9 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     || (flags & ~KNOWN_PARTY_FLAGS) !== 0
     || playRegionValue > 2
     || hardModeValue > 1
-    || reserved !== 0
+    || (directProfessions >>> 16) !== 0
+    || (attributeIdsHigh >>> 13) !== 0
+    || (professionSources & ~7) !== 0
     || malformed
     || slotCount !== Math.max(0, occupied - (slots[0]?.occupied ? 1 : 0))
     || (rosterObserved && !slots[0]?.occupied)
@@ -659,9 +698,13 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     // graph is walked there.
     || (playRegionValue !== 1 && (rosterObserved || unlockObserved))
     || (!unlockObserved && (knownLow !== 0 || knownHigh !== 0))
+    || (!unlockObserved && accountProfessions.length !== 0)
     // A hero cannot be unlocked without that having been decided.
     || (unlockedLow & ~knownLow) !== 0
     || (unlockedHigh & ~knownHigh) !== 0
+    || (accountProfessionBits & ~(
+      (BigInt(unlockedHigh) << 32n) | BigInt(unlockedLow)
+    )) !== 0n
   ) {
     return Object.freeze({ status: "waiting", reason: "party" });
   }
@@ -684,6 +727,10 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
           (BigInt(unlockedHigh) << 32n) | BigInt(unlockedLow),
         ))
       : null,
+    accountProfessions: unlockObserved
+      ? Object.freeze(accountProfessions)
+      : null,
+    playerProfessionProbe,
   });
 }
 
@@ -743,3 +790,4 @@ export function readChangedCompanionParty(
     state,
   });
 }
+import { COMPANION_ABI } from "../shared/companion-abi.js";

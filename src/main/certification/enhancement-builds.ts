@@ -18,7 +18,16 @@ import {
   enhancementConfigWordActive,
   type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
-} from "../../shared/contracts.js";
+} from "../../shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_CONFIG_FIELDS,
+  ENHANCEMENT_LAYOUT_FIELDS,
+  type EnhancementLayout,
+} from "../../shared/enhancement-config.js";
+export {
+  ENHANCEMENT_LAYOUT_FIELDS,
+  type EnhancementLayout,
+} from "../../shared/enhancement-config.js";
 
 export type EnhancementOutputHashes = Readonly<
   Record<EnhancementCapabilityProfile, string>
@@ -34,83 +43,6 @@ export function enhancementOutputSha256(
   return typeof output === "string" && /^[0-9a-f]{64}$/.test(output)
     ? output
     : null;
-}
-
-export interface EnhancementLayout {
-  contextRoot: number;
-  agentArray: number;
-  manualTargetAgentId: number;
-  automaticTargetAgentId: number;
-  gameContextSlot: number;
-  characterContext: number;
-  mapId: number;
-  isExplorable: number;
-  currentMapId: number;
-  currentInstanceType: number;
-  playerNumber: number;
-  agentId: number;
-  agentX: number;
-  agentY: number;
-  agentType: number;
-  agentPlayerNumber: number;
-  agentModelType: number;
-  cursorActiveArt: number;
-  cursorSoftwareModel: number;
-  cursorShowCount: number;
-  cursorColorBuffer: number;
-  cursorArtHotspot: number;
-  cursorArtTexture: number;
-  cursorHandleKey: number;
-  cursorHandleObject: number;
-  cursorViewTexture: number;
-  cursorTextureType: number;
-  cursorTextureWidth: number;
-  cursorTextureHeight: number;
-  partyContext: number;
-  playerParty: number;
-  partyHeroes: number;
-  heroMemberStride: number;
-  heroAgentId: number;
-  heroOwnerPlayerId: number;
-  heroId: number;
-  heroLevel: number;
-  partyPlayers: number;
-  partyHenchmen: number;
-  partyFlag: number;
-  worldContext: number;
-  worldHeroFlags: number;
-  heroFlagStride: number;
-  flagHeroId: number;
-  flagAgentId: number;
-  flagBehavior: number;
-  worldHeroInfo: number;
-  heroInfoStride: number;
-  infoHeroId: number;
-  infoAgentId: number;
-  infoLevel: number;
-  infoPrimary: number;
-  infoSecondary: number;
-  infoAppearanceBitmap: number;
-  worldSkillbars: number;
-  skillbarStride: number;
-  skillbarAgentId: number;
-  skillbarSkills: number;
-  skillSlotStride: number;
-  skillSlotId: number;
-  skillbarDisabled: number;
-  worldAttributes: number;
-  attributeStride: number;
-  attributeAgentId: number;
-  attributeEntries: number;
-  attributeEntryStride: number;
-  attributeEntryId: number;
-  attributeEntryRank: number;
-  areaInfo: number;
-  areaInfoCount: number;
-  areaInfoStride: number;
-  areaInfoFlags: number;
-  agentPrimary: number;
-  agentSecondary: number;
 }
 
 /**
@@ -131,51 +63,6 @@ export type EnhancementPartyDirtyMessages = readonly [
   partyRemovePlayer: number,
 ];
 
-export const ENHANCEMENT_CORE_LAYOUT_FIELDS = [
-  "contextRoot",
-  "agentArray",
-  "manualTargetAgentId",
-  "automaticTargetAgentId",
-  "gameContextSlot",
-  "characterContext",
-  "mapId",
-  "isExplorable",
-  "currentMapId",
-  "currentInstanceType",
-  "playerNumber",
-  "agentId",
-  "agentX",
-  "agentY",
-  "agentType",
-  "agentPlayerNumber",
-  "agentModelType",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-export const ENHANCEMENT_CURSOR_LAYOUT_FIELDS = [
-  "cursorActiveArt",
-  "cursorSoftwareModel",
-  "cursorShowCount",
-  "cursorColorBuffer",
-  "cursorArtHotspot",
-  "cursorArtTexture",
-  "cursorHandleKey",
-  "cursorHandleObject",
-  "cursorViewTexture",
-  "cursorTextureType",
-  "cursorTextureWidth",
-  "cursorTextureHeight",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-export const ENHANCEMENT_PARTY_LAYOUT_FIELDS = [
-  "partyContext",
-  "playerParty",
-  "partyHeroes",
-  "heroMemberStride",
-  "heroAgentId",
-  "heroOwnerPlayerId",
-  "heroId",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
 /**
  * Everything the full party projection needs beyond the first owned hero.
  *
@@ -189,34 +76,6 @@ export const ENHANCEMENT_PARTY_LAYOUT_FIELDS = [
  * are read from `HeroInfo` instead. A field whose value the client does not
  * populate is worse than a missing one — it reads as Profession::None.
  */
-export const ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS = [
-  "heroLevel",
-  "partyPlayers",
-  "partyHenchmen",
-  "partyFlag",
-  "worldContext",
-  "worldHeroFlags",
-  "heroFlagStride",
-  "flagHeroId",
-  "flagAgentId",
-  "flagBehavior",
-  "worldHeroInfo",
-  "heroInfoStride",
-  "infoHeroId",
-  "infoAgentId",
-  "infoLevel",
-  "infoPrimary",
-  "infoSecondary",
-  "infoAppearanceBitmap",
-  "worldSkillbars",
-  "skillbarStride",
-  "skillbarAgentId",
-  "skillbarSkills",
-  "skillSlotStride",
-  "skillSlotId",
-  "skillbarDisabled",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
 /**
  * The attribute table, which is what makes a captured build publishable.
  *
@@ -230,40 +89,6 @@ export const ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS = [
  * decode as plausible ranks; a count word would have walked straight into
  * them. See the evidence file, C5.
  */
-export const ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS = [
-  "worldAttributes",
-  "attributeStride",
-  "attributeAgentId",
-  "attributeEntries",
-  "attributeEntryStride",
-  "attributeEntryId",
-  "attributeEntryRank",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-/** Client-owned `AreaInfo` metadata behind GWToolbox++'s PvP boundary. */
-export const ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS = [
-  "areaInfo",
-  "areaInfoCount",
-  "areaInfoStride",
-  "areaInfoFlags",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-/** Direct profession bytes on the player's live AgentLiving record. */
-export const ENHANCEMENT_PLAYER_LAYOUT_FIELDS = [
-  "agentPrimary",
-  "agentSecondary",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-export const ENHANCEMENT_LAYOUT_FIELDS = [
-  ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
-  ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
-  ...ENHANCEMENT_PARTY_LAYOUT_FIELDS,
-  ...ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
-  ...ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
-  ...ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS,
-  ...ENHANCEMENT_PLAYER_LAYOUT_FIELDS,
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
   return ENHANCEMENT_LAYOUT_FIELDS.map((field) => layout[field]);
 }
@@ -272,13 +97,11 @@ export function enhancementConfigWords(
   build: KnownEnhancementBuild,
   capabilities: EnhancementCapabilities,
 ): number[] {
-  const words = [
-    ...ENHANCEMENT_LAYOUT_FIELDS.map((field) => build.layout[field]),
-    build.uiDispatcher.playerChatMessage,
-    build.uiDispatcher.hideHeroPanelMessage,
-    build.uiDispatcher.showHeroPanelMessage,
-    ...build.uiDispatcher.partyDirtyMessages,
-  ];
+  const words = ENHANCEMENT_CONFIG_FIELDS.map((field) => {
+    if (field.source === "layout") return build.layout[field.key];
+    if (field.source === "dispatcher") return build.uiDispatcher[field.key];
+    return build.uiDispatcher.partyDirtyMessages[field.index] ?? 0;
+  });
   return words.map((word, index) =>
     enhancementConfigWordActive(capabilities, index) ? word : 0);
 }
@@ -370,11 +193,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       cursor: "b31bb8f673a999ce54195e6473dc05427477dd5d3ddbb6a8e1f0dc7a81e543ae",
       target: "db44c3985a4083a3ab3fa402b35f4764d23b48e72f724ac906c7891404ad52e9",
       cursorTarget: "76c17e628f00f5200676727c61e77bd9c5982c72b2a5df9637b8f5a42bb0be52",
-      cursorToolbox: "b65ad5275d6e636cee7f8be7e6c36233018cf7b15b12110e53347e34fc465c22",
+      cursorToolbox: "556b13c558dd0abe239c71b4bcd273a114fe18a6ea5630cc62a57fe256e7f995",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "615ac2a211ca4e3648052c972d22e5184d536fe39b10975d8b9a32b49ff7bb0e",
-      cursorTargetToolboxCommands: "69215661c370bc7a3a66aaedbe924f4fca2abe79ce36c1198e5a3a59d2905721",
+      cursorToolboxCommands: "b449db30b989d3625a6622de7e5ac646582230dd1147b16373cb451739223e03",
+      cursorTargetToolboxCommands: "8c746483f39f0fcf41e700ec5a07b0fb098dbe87cdffe7b81d2d28070e6ca363",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -533,8 +356,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       agentType: 0x9c,
       agentPlayerNumber: 0xf4,
       agentModelType: 0xf6,
-      agentPrimary: 0x10a,
-      agentSecondary: 0x10b,
+      // WorldContext::party_profession_states, the same canonical table the
+      // client's skill-template loader uses for player and hero professions.
+      worldProfessionStates: 0x6bc,
+      professionStateStride: 0x14,
       cursorActiveArt: 0x5a16e0,
       cursorSoftwareModel: 0x5a16e4,
       cursorShowCount: 0x5a16e8,

@@ -13,8 +13,8 @@ import type {
   ClientCompatibility,
   ClientCompatibilityState,
   ClientSession,
-  EnhancementSelection,
 } from "../../src/shared/contracts.js";
+import type { EnhancementSelection } from "../../src/shared/enhancement-contracts.js";
 
 const compatibility = (
   state: ClientCompatibilityState,

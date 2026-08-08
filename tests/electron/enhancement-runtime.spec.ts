@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   enhancementCapabilitiesFor,
   enhancementCapabilitiesRequested,
-} from "../../src/shared/contracts.js";
+} from "../../src/shared/enhancement-contracts.js";
 import {
   closeOffline,
   launchOffline,

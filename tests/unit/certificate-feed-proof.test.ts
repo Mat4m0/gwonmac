@@ -18,7 +18,7 @@ import {
   ENHANCEMENT_BUILDS,
   enhancementOutputSha256,
 } from "../../src/main/certification/enhancement-builds.ts";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/contracts.ts";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/enhancement-contracts.ts";
 import {
   rewriteTemplateSaveWasm,
   type KnownTemplateSaveBuild,

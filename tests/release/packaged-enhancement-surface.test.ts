@@ -133,9 +133,9 @@ writeFileSync(
   `import { register } from "node:module";
 register(new URL("./resolve.mjs", import.meta.url));
 const policy = await import(process.env.GW_PROBE_POLICY);
-const contracts = await import(process.env.GW_PROBE_CONTRACTS);
-const enabled = (selection) => contracts.enhancementCapabilitiesRequested(
-  contracts.enhancementCapabilitiesFor(
+const enhancement = await import(process.env.GW_PROBE_ENHANCEMENT);
+const enabled = (selection) => enhancement.enhancementCapabilitiesRequested(
+  enhancement.enhancementCapabilitiesFor(
     selection,
     policy.DEVELOPER_ENHANCEMENT_PROGRAM,
   ),
@@ -190,8 +190,8 @@ function enhancementGate({
   environment.GW_PROBE_POLICY = pathToFileURL(
     path.join(root, "build/main/certification/enhancement-policy.js"),
   ).href;
-  environment.GW_PROBE_CONTRACTS = pathToFileURL(
-    path.join(root, "build/shared/contracts.js"),
+  environment.GW_PROBE_ENHANCEMENT = pathToFileURL(
+    path.join(root, "build/shared/enhancement-contracts.js"),
   ).href;
 
   return JSON.parse(

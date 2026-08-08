@@ -21,13 +21,15 @@ import { register } from "node:module";
 import test from "node:test";
 import {
   DEFAULT_SETTINGS,
+} from "../../src/shared/contracts.ts";
+import {
   ENHANCEMENTS,
   ENHANCEMENT_CAPABILITY_PROFILES,
   enhancementCapabilityProfile,
   enhancementCapabilitiesFor,
   enhancementCapabilitiesRequested,
   enhancementHooksFor,
-} from "../../src/shared/contracts.ts";
+} from "../../src/shared/enhancement-contracts.ts";
 
 register(
   `data:text/javascript,${encodeURIComponent(

@@ -18,10 +18,12 @@ import type {
   AppSettingsPatch,
   DownloadProgress,
   RendererInit,
-  EnhancementProgram,
-  EnhancementSelection,
 } from "../shared/contracts.js";
 import { RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
+import type {
+  EnhancementProgram,
+  EnhancementSelection,
+} from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";

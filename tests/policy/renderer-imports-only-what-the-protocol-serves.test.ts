@@ -1,5 +1,5 @@
 // The renderer is served over `gw://app/`, and the protocol hands out exactly
-// two modules from `src/shared` — `RENDERER_SHARED_MODULES` in protocol.ts,
+// a closed module graph from `src/shared` — `RENDERER_SHARED_MODULES` in protocol.ts,
 // with a comment that calls itself "deliberately not a generic build/shared
 // route". Everything else under `src/shared` is compiled but unreachable.
 //
@@ -17,7 +17,7 @@
 // they are erased before anything is fetched.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -88,6 +88,23 @@ test("the renderer imports nothing from src/shared the protocol will not serve",
     "these resolve to a 404 at launch and take the whole module graph with them; "
     + `the protocol serves only ${[...served].join(", ")}`,
   );
+});
+
+test("every served shared runtime module has its relative runtime graph served too", () => {
+  const served = servedModules();
+  const missing: string[] = [];
+  for (const module of served) {
+    const source = path.join(root, "src/shared", module.replace(/\.js$/u, ".ts"));
+    if (!existsSync(source)) continue;
+    const text = readFileSync(source, "utf8");
+    for (const match of text.matchAll(
+      /(^|\n)\s*(?:import|export)(?!\s+type\b)[^;]*?from\s*"\.\/([^"/]+)\.js"/gu,
+    )) {
+      const dependency = `${match[2]}.js`;
+      if (!served.has(dependency)) missing.push(`${module} imports ${dependency}`);
+    }
+  }
+  assert.deepEqual(missing, []);
 });
 
 test("the guard is looking at something, and can tell the two apart", () => {

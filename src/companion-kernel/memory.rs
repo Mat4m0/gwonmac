@@ -69,10 +69,6 @@ pub(crate) unsafe fn read_u16(address: u32) -> Option<u16> {
     contains(address, 2).then(|| unsafe { read_volatile(address as *const u16) })
 }
 
-pub(crate) unsafe fn read_u8(address: u32) -> Option<u8> {
-    contains(address, 1).then(|| unsafe { read_volatile(address as *const u8) })
-}
-
 pub(crate) unsafe fn read_f32(address: u32) -> Option<f32> {
     contains(address, 4).then(|| unsafe { read_volatile(address as *const f32) })
 }

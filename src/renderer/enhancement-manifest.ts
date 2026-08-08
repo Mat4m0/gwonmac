@@ -20,7 +20,7 @@ import {
   enhancementHooksFor,
   type EnhancementCapabilities,
   type EnhancementHooks,
-} from "../shared/contracts.js";
+} from "../shared/enhancement-contracts.js";
 
 const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
 const PARTY_DIRTY_CONFIG_START = MESSAGE_CONFIG_START + 3;
@@ -92,7 +92,8 @@ function sameCapabilities(
 ): boolean {
   return left.nativeCursor === right.nativeCursor
     && left.targetObservation === right.targetObservation
-    && left.toolbox === right.toolbox;
+    && left.toolbox === right.toolbox
+    && left.commands === right.commands;
 }
 
 export function decodeEnhancementManifest(

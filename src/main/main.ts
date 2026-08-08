@@ -24,14 +24,16 @@ import {
   EXTERNAL_URLS,
   DEFAULT_SETTINGS,
   IPC,
-  enhancementCapabilitiesFor,
   type AppSettings,
   type AppSettingsPatch,
   type DownloadProgress,
-  type EnhancementProgram,
   type PrefetchProgress,
-  type EnhancementSelection,
 } from "../shared/contracts.js";
+import {
+  enhancementCapabilitiesFor,
+  type EnhancementProgram,
+  type EnhancementSelection,
+} from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
@@ -53,7 +55,7 @@ import {
   stopDiagnosticCapture,
   stopDiagnostics,
 } from "./diagnostics.js";
-import type { AppPhase } from "./diagnostics/schema.js";
+import type { AppPhase } from "./diagnostics/schema-fields.js";
 import { emitSocketEvent, registerIpcHandlers } from "./ipc.js";
 import {
   AppUpdater,

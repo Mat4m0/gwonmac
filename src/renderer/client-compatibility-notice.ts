@@ -11,8 +11,8 @@ import type {
   ClientCompatibility,
   ClientCompatibilityState,
   ClientSession,
-  EnhancementSelection,
 } from '../shared/contracts.js';
+import type { EnhancementSelection } from '../shared/enhancement-contracts.js';
 
 /**
  * The compatibility transform repairs three call-site families, not one.

@@ -115,6 +115,8 @@ unsafe fn matches_published(
     count: u32,
     flags: u32,
     unlock: [u32; 4],
+    account_professions: &[u32; ACCOUNT_HERO_SLOTS],
+    player_profession_probe: [u32; 4],
     play_region: u32,
     hard_mode: u32,
 ) -> bool {
@@ -132,6 +134,13 @@ unsafe fn matches_published(
             || read_volatile(&(*region).hard_mode) != hard_mode
         {
             return false;
+        }
+        for index in 0..4 {
+            if read_volatile(&(*region).player_profession_probe[index])
+                != player_profession_probe[index]
+            {
+                return false;
+            }
         }
         for index in 0..PARTY_SLOTS {
             let slot = &(*region).slots[index];
@@ -157,6 +166,11 @@ unsafe fn matches_published(
                 }
             }
         }
+        for id in 0..ACCOUNT_HERO_SLOTS {
+            if read_volatile(&(*region).account_professions[id]) != account_professions[id] {
+                return false;
+            }
+        }
     }
     true
 }
@@ -166,6 +180,8 @@ unsafe fn publish(
     count: u32,
     flags: u32,
     unlock: [u32; 4],
+    account_professions: &[u32; ACCOUNT_HERO_SLOTS],
+    player_profession_probe: [u32; 4],
     play_region: u32,
     hard_mode: u32,
 ) {
@@ -187,6 +203,15 @@ unsafe fn publish(
         write_volatile(&mut (*region).unlock_known_high, unlock[3]);
         write_volatile(&mut (*region).play_region, play_region);
         write_volatile(&mut (*region).hard_mode, hard_mode);
+        for index in 0..4 {
+            write_volatile(
+                &mut (*region).player_profession_probe[index],
+                player_profession_probe[index],
+            );
+        }
+        for id in 0..ACCOUNT_HERO_SLOTS {
+            write_volatile(&mut (*region).account_professions[id], account_professions[id]);
+        }
         for index in 0..PARTY_SLOTS {
             let slot = &mut (*region).slots[index];
             let hero = heroes[index];
@@ -227,6 +252,8 @@ pub(crate) unsafe fn initialize(pointer: u32) {
             0,
             0,
             [0; 4],
+            &[0; ACCOUNT_HERO_SLOTS],
+            [0; 4],
             PLAY_REGION_UNKNOWN,
             0,
         )
@@ -240,7 +267,9 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 /// small one, and the interface would present it as the party.
 unsafe fn collect(
     layout: Layout,
-) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32; 4], u32, u32)> {
+) -> Option<(
+    [Hero; PARTY_SLOTS], u32, u32, [u32; 4], [u32; ACCOUNT_HERO_SLOTS], [u32; 4], u32, u32,
+)> {
     let (game, player_number, instance_type, play_region) = match unsafe { resolve_game(layout) } {
         GameState::Ready {
             game,
@@ -252,7 +281,10 @@ unsafe fn collect(
         GameState::Loading | GameState::Unavailable => return None,
     };
     if play_region != PLAY_REGION_PVE {
-        return Some(([Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4], play_region, 0));
+        return Some((
+            [Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4],
+            [0; ACCOUNT_HERO_SLOTS], [0; 4], play_region, 0,
+        ));
     }
 
     // -- roster, from the offsets certified before this work --------------
@@ -273,13 +305,10 @@ unsafe fn collect(
     }?;
 
     let mut heroes = [Hero::EMPTY; PARTY_SLOTS];
-    let player = unsafe { find_player_agent(layout, player_number) }?;
-    heroes[0].agent_id = player.id;
+    let player_agent_id = unsafe { find_player_agent(layout, player_number) }?;
+    let mut player_profession_probe = [0; 4];
+    heroes[0].agent_id = player_agent_id;
     heroes[0].flags = SLOT_OCCUPIED;
-    if let Some(professions) = pack_professions(player.primary, player.secondary) {
-        heroes[0].professions = professions;
-        heroes[0].flags |= SLOT_PROFESSIONS;
-    }
     let mut count = 0_u32;
     for index in 0..size {
         let member = indexed(buffer, index, layout.hero_member_stride)?;
@@ -309,6 +338,7 @@ unsafe fn collect(
     let mut flags = FLAG_ROSTER_OBSERVED | FLAG_HARD_MODE_OBSERVED
         | if instance_type == 0 { FLAG_IN_OUTPOST } else { 0 };
     let mut unlock = [0_u32; 4];
+    let mut account_professions = [0_u32; ACCOUNT_HERO_SLOTS];
 
     // -- everything below hangs off WorldContext, and is skipped whole when
     //    the layout does not carry it -------------------------------------
@@ -318,8 +348,54 @@ unsafe fn collect(
         offset(game, layout.world_context).and_then(|at| unsafe { pointer(at, 4) })
     };
     let Some(world) = world else {
-        return Some((heroes, count, flags, unlock, play_region, u32::from(hard_mode != 0)));
+        return Some((
+            heroes, count, flags, unlock, account_professions,
+            player_profession_probe, play_region, u32::from(hard_mode != 0),
+        ));
     };
+
+    // The client's canonical current profession state, used by its own skill
+    // template loader. Unlike AgentLiving bytes or attribute-family shape,
+    // this table states primary and secondary explicitly and is keyed by the
+    // same live agent ids already proved above.
+    if layout.world_profession_states != 0
+        && layout.profession_state_stride >= 12
+        && layout.profession_state_stride <= 64
+        && layout.profession_state_stride & 3 == 0
+    {
+        let (buffer, size) = unsafe {
+            read_array(
+                offset(world, layout.world_profession_states)?,
+                layout.profession_state_stride,
+                64,
+            )
+        }?;
+        for index in 0..size {
+            let entry = indexed(buffer, index, layout.profession_state_stride)?;
+            let agent_id = unsafe { field(entry, 0) }?;
+            if agent_id == 0 {
+                continue;
+            }
+            let primary = unsafe { field(entry, 4) }?;
+            let secondary = unsafe { field(entry, 8) }?;
+            for hero in heroes.iter_mut() {
+                if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+                    continue;
+                }
+                if hero.hero_id == 0 {
+                    player_profession_probe[0] = primary | (secondary << 8);
+                    player_profession_probe[3] |= 1;
+                }
+                if let Some(professions) = pack_professions(primary, secondary) {
+                    hero.professions = professions;
+                    hero.flags |= SLOT_PROFESSIONS;
+                    if hero.hero_id == 0 {
+                        player_profession_probe[3] |= 2;
+                    }
+                }
+            }
+        }
+    }
 
     // hero_info: the account's unlock table, and where professions live.
     if layout.world_hero_info != 0 && layout.hero_info_stride != 0 {
@@ -354,6 +430,9 @@ unsafe fn collect(
                     unsafe { field(entry, layout.info_secondary) }?,
                 );
                 if let Some(packed) = packed {
+                    if (hero_id as usize) < ACCOUNT_HERO_SLOTS {
+                        account_professions[hero_id as usize] = packed;
+                    }
                     for hero in heroes.iter_mut() {
                         if hero.flags & SLOT_OCCUPIED != 0 && hero.hero_id == hero_id {
                             hero.professions = packed;
@@ -448,6 +527,7 @@ unsafe fn collect(
                     continue;
                 }
                 let mut written = 0_usize;
+                let mut present = [false; 45];
                 for id in 0..=ATTRIBUTE_ID_MAX {
                     let at = checked_add(
                         layout.attribute_entries,
@@ -461,6 +541,7 @@ unsafe fn collect(
                     if unsafe { field(entry, checked_add(at, layout.attribute_entry_id)?) }? != id {
                         continue;
                     }
+                    present[id as usize] = true;
                     let rank =
                         unsafe { field(entry, checked_add(at, layout.attribute_entry_rank)?) }?;
                     // 12 is what the client's own cost table can buy. Nothing
@@ -482,11 +563,27 @@ unsafe fn collect(
                     written += 1;
                 }
                 hero.flags |= SLOT_ATTRIBUTES;
+                if hero.hero_id == 0 {
+                    player_profession_probe[3] |= 4;
+                    for id in 0..=ATTRIBUTE_ID_MAX {
+                        if !present[id as usize] {
+                            continue;
+                        }
+                        if id < 32 {
+                            player_profession_probe[1] |= 1_u32 << id;
+                        } else {
+                            player_profession_probe[2] |= 1_u32 << (id - 32);
+                        }
+                    }
+                }
             }
         }
     }
 
-    Some((heroes, count, flags, unlock, play_region, u32::from(hard_mode != 0)))
+    Some((
+        heroes, count, flags, unlock, account_professions,
+        player_profession_probe, play_region, u32::from(hard_mode != 0),
+    ))
 }
 
 /// Armed by the same certified UI messages that dirty the toolbox projection.
@@ -516,19 +613,27 @@ pub(crate) unsafe fn tick_if_dirty(layout: Layout, tick_count: u32) {
     }
     unsafe { DIRTY = false };
     let observation = unsafe { collect(layout) };
-    let (heroes, count, flags, unlock, play_region, hard_mode) = observation.unwrap_or((
+    let (heroes, count, flags, unlock, account_professions, player_profession_probe, play_region, hard_mode) = observation.unwrap_or((
         [Hero::EMPTY; PARTY_SLOTS],
         0,
         0,
         [0; 4],
+        [0; ACCOUNT_HERO_SLOTS],
+        [0; 4],
         PLAY_REGION_UNKNOWN,
         0,
     ));
-    if unsafe { matches_published(&heroes, count, flags, unlock, play_region, hard_mode) } {
+    if unsafe { matches_published(
+        &heroes, count, flags, unlock, &account_professions, player_profession_probe,
+        play_region, hard_mode,
+    ) } {
         return;
     }
     unsafe {
         GENERATION = GENERATION.wrapping_add(1);
-        publish(&heroes, count, flags, unlock, play_region, hard_mode);
+        publish(
+            &heroes, count, flags, unlock, &account_professions, player_profession_probe,
+            play_region, hard_mode,
+        );
     }
 }

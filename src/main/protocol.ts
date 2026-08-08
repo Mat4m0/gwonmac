@@ -67,7 +67,10 @@ const CSP =
   "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 const RENDERER_SHARED_MODULES = new Set([
+  "companion-abi.js",
   "contracts.js",
+  "enhancement-config.js",
+  "enhancement-contracts.js",
   "project-identity.js",
 ]);
 
@@ -463,7 +466,10 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     const empty = () =>
       new Response("[]", {
         status: 503,
-        headers: headers({ "Content-Type": "application/json" }),
+        headers: headers({
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        }),
       });
     const active = deps.getActiveClient();
     if (!active || request.method !== "GET") return empty();
@@ -478,9 +484,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
       headers: headers({
         "Content-Type": "application/json",
         "Content-Length": String(Buffer.byteLength(body)),
-        // The catalogue is a property of the client build, and a new build
-        // arrives as a new `wasmPath`, so this can be held for the session.
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "no-store",
       }),
     });
   }
@@ -491,7 +495,10 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   if (iconMatch) {
     const active = deps.getActiveClient();
     const missing = () =>
-      new Response("not found", { status: 404, headers: headers() });
+      new Response("not found", {
+        status: 404,
+        headers: headers({ "Cache-Control": "no-store" }),
+      });
     if (!active || request.method !== "GET") return missing();
     const icon = await assetsFor(active).icon(Number(iconMatch[1]));
     return icon
@@ -500,9 +507,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
           headers: headers({
             "Content-Type": "image/bmp",
             "Content-Length": String(icon.byteLength),
-            // Decoded from an archive this cache key is derived from, so it
-            // cannot go stale without the client itself changing.
-            "Cache-Control": "private, max-age=86400",
+            "Cache-Control": "no-store",
           }),
         })
       : missing();
@@ -529,7 +534,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
 
   // The dynamically loaded Enhancement installer imports the canonical
   // capability contract. TypeScript emits that contract beside main rather
-  // than copying it into renderer/, so expose only its exact two-module graph.
+  // than copying it into renderer/, so expose only its exact closed graph.
   // This is deliberately not a generic build/shared route.
   if (first === "shared") {
     const moduleName = base.slice("shared/".length);

@@ -23,7 +23,7 @@ import {
   enhancementHooksFor,
   ENHANCEMENT_TRANSFORM_ABI,
   type EnhancementCapabilities,
-} from "../../shared/contracts.js";
+} from "../../shared/enhancement-contracts.js";
 import {
   findEnhancementBuild,
   enhancementConfigWords,

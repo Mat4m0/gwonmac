@@ -32,7 +32,7 @@
  * and no file.
  */
 import { createHash } from "node:crypto";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/contracts.js";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/enhancement-contracts.js";
 import {
   certifiedEnhancementFromFeed,
   type CertificateFeedEntry,

@@ -52,7 +52,7 @@ pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
 pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;
 pub(crate) const PARTY_MAGIC: u32 = 0x5054_5747;
-pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 4;
+pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 6;
 
 /// The walk completed on a live game. Same meaning, and the same reason, as
 /// `FLAG_PARTY_OBSERVED` on the toolbox region: an empty roster and an unread
@@ -87,6 +87,7 @@ pub(crate) const SLOT_SKILLS: u32 = 1 << 3;
 pub(crate) const SLOT_ATTRIBUTES: u32 = 1 << 4;
 
 pub(crate) const PARTY_SLOTS: usize = 8;
+pub(crate) const ACCOUNT_HERO_SLOTS: usize = 40;
 pub(crate) const SKILL_SLOTS: usize = 8;
 
 /// The highest attribute id the client defines. The array is walked to here
@@ -204,9 +205,9 @@ pub(crate) struct Layout {
     pub(crate) area_info_stride: u32,
     pub(crate) area_info_flags: u32,
     // Appended to preserve the positional meaning of every earlier config
-    // word. These are bytes on the player's AgentLiving record.
-    pub(crate) agent_primary: u32,
-    pub(crate) agent_secondary: u32,
+    // word. This is WorldContext::party_profession_states and its row stride.
+    pub(crate) world_profession_states: u32,
+    pub(crate) profession_state_stride: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -287,8 +288,8 @@ impl Layout {
         area_info_count: 0,
         area_info_stride: 0,
         area_info_flags: 0,
-        agent_primary: 0,
-        agent_secondary: 0,
+        world_profession_states: 0,
+        profession_state_stride: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -396,13 +397,19 @@ pub(crate) struct PartySnapshot {
     pub(crate) unlock_known_high: u32,
     pub(crate) play_region: u32,
     pub(crate) hard_mode: u32,
-    pub(crate) reserved: [u32; 4],
+    /// Bounded player-profession probe: canonical state values, admitted
+    /// attribute ids 0..31 and 32..44, then source flags. It exists so
+    /// an unsupported official-client layout can be diagnosed without names,
+    /// account data, pointers, or arbitrary memory leaving the kernel.
+    pub(crate) player_profession_probe: [u32; 4],
+    /// `primary | secondary << 8`, indexed by HeroId. Zero means unread.
+    pub(crate) account_professions: [u32; ACCOUNT_HERO_SLOTS],
     pub(crate) slots: [PartySlot; PARTY_SLOTS],
 }
 
 const _: [(); 348] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
-const _: [(); 832] = [(); size_of::<PartySnapshot>()];
+const _: [(); 992] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];

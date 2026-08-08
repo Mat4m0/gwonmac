@@ -226,15 +226,8 @@ unsafe fn read_agent(layout: Layout, agent_buffer: u32, size: u32, id: u32) -> O
     Some(AgentState { id, kind, x, y })
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct PlayerAgent {
-    pub(crate) id: u32,
-    pub(crate) primary: u32,
-    pub(crate) secondary: u32,
-}
-
 /** The current player's live agent, proved by login number and model bits. */
-pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Option<PlayerAgent> {
+pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Option<u32> {
     if !contains(layout.agent_array, 16) {
         return None;
     }
@@ -248,7 +241,7 @@ pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Op
     {
         return None;
     }
-    let required = checked_add(layout.agent_secondary, 1)?;
+    let required = checked_add(layout.agent_model_type, 2)?;
     for id in 1..size {
         let address = indexed(buffer, id, 4).and_then(|at| unsafe { pointer(at, required) });
         let Some(address) = address else { continue };
@@ -258,11 +251,7 @@ pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Op
             && unsafe { read_u16(offset(address, layout.agent_model_type)?) }
                 .map(|value| value & 0xf000) == Some(0x3000)
         {
-            return Some(PlayerAgent {
-                id,
-                primary: unsafe { read_u8(offset(address, layout.agent_primary)?)? } as u32,
-                secondary: unsafe { read_u8(offset(address, layout.agent_secondary)?)? } as u32,
-            });
+            return Some(id);
         }
     }
     None
@@ -736,7 +725,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    11
+    12
 }
 
 #[no_mangle]

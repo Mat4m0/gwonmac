@@ -26,7 +26,6 @@ import type {
   ClientCompatibility,
   ClientHealthToken,
   DownloadProgress,
-  EnhancementCapabilities,
   FullDownloadOutcome,
   NoticeCode,
   PrefetchProgress,
@@ -35,7 +34,8 @@ import type {
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_TRANSFORM_ABI,
-} from "../shared/contracts.js";
+  type EnhancementCapabilities,
+} from "../shared/enhancement-contracts.js";
 import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";

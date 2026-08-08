@@ -11,11 +11,13 @@
  */
 import { app } from "electron";
 import {
-  ENHANCEMENT_PROGRAMS,
   type AppSettings,
+} from "../../shared/contracts.js";
+import {
+  ENHANCEMENT_PROGRAMS,
   type EnhancementProgram,
   type EnhancementSelection,
-} from "../../shared/contracts.js";
+} from "../../shared/enhancement-contracts.js";
 
 export const ENHANCEMENT_AUTOMATION_ENABLED =
   !app.isPackaged && process.env.GW_ENHANCEMENT_AUTOMATION === "1";

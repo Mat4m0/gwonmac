@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const runtimeSource = readFileSync(
-  path.join(repoRoot, "src/renderer/enhancements.ts"),
+  path.join(repoRoot, "src/renderer/certified-companion-installation.ts"),
   "utf8",
 );
 const verifierSource = readFileSync(

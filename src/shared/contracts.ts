@@ -24,6 +24,10 @@ import type {
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
+import type {
+  EnhancementProgram,
+  EnhancementSelection,
+} from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
@@ -270,234 +274,6 @@ export interface GraphicsDiagnostics {
 export interface ClockSyncResponse {
   mainReceiveUs: number;
   mainSendUs: number;
-}
-
-/**
- * The complete set of Enhancement features carried in the launch contract.
- *
- * Canonical here because settings, main-process policy, and the generated
- * preload transport all need the same names. A new tool is declared once;
- * its implementation still has to decide what enabling it does.
- */
-export const ENHANCEMENTS = [
-  "nativeCursor",
-  "tools",
-] as const;
-
-export type Enhancement = (typeof ENHANCEMENTS)[number];
-export type EnhancementSelection = Record<Enhancement, boolean>;
-
-/**
- * Developer-only programs are launch intent, not persisted tools and not an
- * automation permission. Keeping the states explicit prevents a test
- * harness flag from silently installing the Toolbox overlay or extra hooks.
- */
-export const ENHANCEMENT_PROGRAMS = [
-  "none",
-  "cursor-observer",
-  "target-observer",
-  "toolbox-foundation",
-  // The only program that derives a module able to write. Separate from
-  // `toolbox-foundation` so choosing the read foundation can never carry the
-  // write capability in by association.
-  "toolbox-commands",
-] as const;
-
-export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
-
-/**
- * The exact behavior the companion may perform for this launch. This is the
- * transform/cache/manifest identity; hooks are only its derived mechanism.
- */
-export type EnhancementCapabilities = Readonly<{
-  nativeCursor: boolean;
-  targetObservation: boolean;
-  toolbox: boolean;
-  /**
-   * The client carries a command thunk: one exported function that switches on
-   * a certified opcode and calls the matching packet builder directly.
-   *
-   * This is the only capability that can change game state, and it is the only
-   * one whose absence is enforced by the *bytes* rather than by a runtime
-   * check. With it off the thunk is not emitted at all, so there is no call
-   * from anywhere to any builder — not a forbidden one, a nonexistent one.
-   */
-  commands: boolean;
-}>;
-
-/** The complete set of capability combinations allowed to become executable. */
-export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
-  cursor: Object.freeze({
-    nativeCursor: true,
-    targetObservation: false,
-    toolbox: false,
-    commands: false,
-  }),
-  target: Object.freeze({
-    nativeCursor: false,
-    targetObservation: true,
-    toolbox: false,
-    commands: false,
-  }),
-  cursorTarget: Object.freeze({
-    nativeCursor: true,
-    targetObservation: true,
-    toolbox: false,
-    commands: false,
-  }),
-  cursorToolbox: Object.freeze({
-    nativeCursor: true,
-    targetObservation: false,
-    toolbox: true,
-    commands: false,
-  }),
-  /**
-   * The only profile that can write. Kept separate rather than folded into
-   * `cursorToolbox` so the four read profiles keep their exact output bytes and
-   * their certified hashes — a launch that does not ask to write derives a
-   * module byte-identical to the one certified before commands existed.
-   */
-  cursorToolboxCommands: Object.freeze({
-    nativeCursor: true,
-    targetObservation: false,
-    toolbox: true,
-    commands: true,
-  }),
-  /** Complete optional Tools Beta capability; runtime settings gate each tool. */
-  cursorTargetToolboxCommands: Object.freeze({
-    nativeCursor: true,
-    targetObservation: true,
-    toolbox: true,
-    commands: true,
-  }),
-} as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
-
-export type EnhancementCapabilityProfile =
-  keyof typeof ENHANCEMENT_CAPABILITY_PROFILES;
-
-const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
-  nativeCursor: false,
-  targetObservation: false,
-  toolbox: false,
-  commands: false,
-});
-
-export function enhancementCapabilityProfile(
-  capabilities: EnhancementCapabilities,
-): EnhancementCapabilityProfile | null {
-  for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
-    EnhancementCapabilityProfile[]) {
-    const candidate = ENHANCEMENT_CAPABILITY_PROFILES[profile];
-    if (
-      candidate.nativeCursor === capabilities.nativeCursor
-      && candidate.targetObservation === capabilities.targetObservation
-      && candidate.toolbox === capabilities.toolbox
-      && candidate.commands === capabilities.commands
-    ) {
-      return profile;
-    }
-  }
-  return null;
-}
-
-/** Exact-build UI messages that can invalidate the Toolbox party projection. */
-export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = 10;
-
-/**
- * Where the message words begin: all certified layout words come first.
- *
- * The config ABI is positional — the kernel decodes these words by index — so
- * a field inserted mid-list silently changes what every later word means.
- * Party detail is therefore appended, never interleaved.
- *
- * This lives here because three places used to carry it as a literal `36`: the
- * manifest decoder, the integration fixtures, and the layout field list that
- * actually determines it. Growing the layout moved the messages and two of the
- * three did not notice. Bound to the real list by
- * `tests/unit/enhancement-transform.test.ts`.
- */
-export const ENHANCEMENT_LAYOUT_WORD_COUNT = 74;
-
-/** Layout words, then playerChat/hide/show, then the party-dirty tuple. */
-export const ENHANCEMENT_CONFIG_WORD_COUNT =
-  ENHANCEMENT_LAYOUT_WORD_COUNT + 3 + ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT;
-
-/** One identity shared by the transformer, cache, manifest, and renderer. */
-export const ENHANCEMENT_TRANSFORM_ABI = 16;
-
-/**
- * Whether one config word belongs to an active capability. Toolbox reuses only
- * the game/character-context portion of core: word 0 and words 4 through 10.
- * Agent-array, target, agent identity, position, and type fields remain zero
- * unless target observation itself is enabled.
- */
-export function enhancementConfigWordActive(
-  capabilities: EnhancementCapabilities,
-  index: number,
-): boolean {
-  if (!Number.isInteger(index) || index < 0 || index >= ENHANCEMENT_CONFIG_WORD_COUNT) {
-    return false;
-  }
-  if (index < 17) {
-    return capabilities.targetObservation
-      || (capabilities.toolbox && (index === 0 || (index >= 4 && index <= 10)));
-  }
-  if (index < 29) return capabilities.nativeCursor;
-  return capabilities.toolbox;
-}
-
-/** The exact game entry points derived from the capability plan. */
-export type EnhancementHooks = Readonly<{
-  tick: boolean;
-  cursor: boolean;
-  ui: boolean;
-}>;
-
-/**
- * Resolve product settings or one fixed developer program once. A developer
- * program replaces the saved selection for that launch, so its derivative and
- * live evidence cannot depend on the profile that happened to run it.
- */
-export function enhancementCapabilitiesFor(
-  selection: EnhancementSelection,
-  program: EnhancementProgram,
-): EnhancementCapabilities {
-  switch (program) {
-    case "none":
-      return selection.tools
-        ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetToolboxCommands
-        : selection.nativeCursor
-          ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
-          : NO_ENHANCEMENT_CAPABILITIES;
-    case "cursor-observer":
-      return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
-    case "target-observer":
-      return ENHANCEMENT_CAPABILITY_PROFILES.target;
-    case "toolbox-foundation":
-      return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
-    case "toolbox-commands":
-      return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolboxCommands;
-  }
-}
-
-/** Cursor and Toolbox share the tick reconciliation entry point. */
-export function enhancementHooksFor(
-  capabilities: EnhancementCapabilities,
-): EnhancementHooks {
-  return Object.freeze({
-    tick: enhancementCapabilitiesRequested(capabilities),
-    cursor: capabilities.nativeCursor,
-    ui: capabilities.toolbox,
-  });
-}
-
-export function enhancementCapabilitiesRequested(
-  capabilities: EnhancementCapabilities,
-): boolean {
-  return capabilities.nativeCursor
-    || capabilities.targetObservation
-    || capabilities.toolbox
-    || capabilities.commands;
 }
 
 /**
@@ -973,7 +749,7 @@ export interface GwNativeApi {
   };
   buildLibrary: {
     get(): Promise<{ library: BuildLibrary; recovered: boolean }>;
-    set(value: BuildLibrary): Promise<void>;
+    set(value: BuildLibrary): Promise<BuildLibrary>;
   };
   credentials: {
     load(): Promise<StoredCredentials | null>;

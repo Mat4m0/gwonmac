@@ -21,7 +21,7 @@ import {
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
-import { ENHANCEMENT_CONFIG_WORD_COUNT } from "../../src/shared/contracts.ts";
+import { ENHANCEMENT_CONFIG_WORD_COUNT } from "../../src/shared/enhancement-contracts.ts";
 import {
   COMPANION_KERNEL_HASH_BINDING,
   COMPANION_KERNEL_HASH_PLACEHOLDER,

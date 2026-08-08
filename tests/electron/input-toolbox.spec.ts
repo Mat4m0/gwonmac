@@ -329,4 +329,45 @@ test.describe("renderer Tools input", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("disposes a lazy tool that resolves after its overlay was removed", async () => {
+    const fixture = await launchOffline("gw-toolbox-late-mount-e2e-");
+    try {
+      const disposed = await fixture.page.evaluate(async () => {
+        const specifier = "./toolbox-foundation.js";
+        const module = await import(specifier) as {
+          createToolboxFoundation(
+            parent: HTMLElement,
+            options: { mountTool(): Promise<{
+              setVisible(visible: boolean): void;
+              update(state: object): void;
+              dispose(): void;
+            }> },
+          ): { dispose(): void };
+        };
+        let resolveMount!: (tool: {
+          setVisible(visible: boolean): void;
+          update(state: object): void;
+          dispose(): void;
+        }) => void;
+        let count = 0;
+        const foundation = module.createToolboxFoundation(document.body, {
+          mountTool: () => new Promise((resolve) => { resolveMount = resolve; }),
+        });
+        document.querySelector<HTMLButtonElement>("#toolbox-foundation button")!.click();
+        foundation.dispose();
+        resolveMount({
+          setVisible: () => undefined,
+          update: () => undefined,
+          dispose: () => { count += 1; },
+        });
+        await Promise.resolve();
+        return count;
+      });
+      expect(disposed).toBe(1);
+      await expect(fixture.page.locator("#toolbox-foundation")).toHaveCount(0);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

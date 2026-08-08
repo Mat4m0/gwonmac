@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { COMPANION_ABI } from "../src/shared/companion-abi.ts";
 
 export const COMPANION_KERNEL_IMPORTS = Object.freeze([
   "env.__indirect_function_table:table",
@@ -35,16 +36,16 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
  * without one test or the other saying so.
  */
 export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
-  companion_abi: 11,
-  companion_config_bytes: 348,
-  companion_snapshot_bytes: 64,
-  companion_cursor_bytes: 4_160,
-  companion_toolbox_bytes: 64,
-  companion_party_bytes: 832,
+  companion_abi: COMPANION_ABI.kernel,
+  companion_config_bytes: COMPANION_ABI.config.bytes,
+  companion_snapshot_bytes: COMPANION_ABI.snapshot.bytes,
+  companion_cursor_bytes: COMPANION_ABI.cursor.bytes,
+  companion_toolbox_bytes: COMPANION_ABI.toolbox.bytes,
+  companion_party_bytes: COMPANION_ABI.party.bytes,
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 1277 bytes (0xfd 0x09 as LEB128). Eight documented moves:
+  // Memory footprint 1437 bytes (0x9d 0x0b as LEB128). Eleven documented moves:
   //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //                separates "you have no heroes" from "nobody read the party";
   //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
@@ -62,10 +63,17 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //                archive, removing its one u32 static.
   //   1345 -> 1277 two direct AgentLiving profession offsets replace the
   //                larger attribute-to-profession inference tables.
+  //   1277 -> 1437 the bounded 40-word account hero profession table lets
+  //                Apply reject an incompatible build before roster mutation.
+  //   1437 -> 1513 the certified attribute-family fallback keeps player build
+  //                capture working when AgentLiving profession bytes are not
+  //                populated by the official-client representation.
+  //   1513 -> 1437 the client's canonical party profession-state table
+  //                replaces both untrustworthy guesses and their lookup data.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0xfd, 0x09, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0x9d, 0x0b, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES

@@ -2,22 +2,17 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
-  enhancementCapabilityProfile,
-  ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_TRANSFORM_ABI,
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   type EnhancementCapabilities,
-} from "../../src/shared/contracts.js";
+} from "../../src/shared/enhancement-contracts.js";
 import {
   enhancementConfigWords,
-  enhancementOutputSha256,
-  ENHANCEMENT_BUILDS,
   ENHANCEMENT_LAYOUT_FIELDS,
   type EnhancementOutputHashes,
   type KnownEnhancementBuild,
 } from "../../src/main/certification/enhancement-builds.js";
-import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import {
   inspectEnhancementCandidate,
   ENHANCEMENT_HOOK_EXPORT,
@@ -31,7 +26,6 @@ import {
   sectionById,
   splitSections,
 } from "../../src/main/core/wasm-binary.js";
-
 const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
@@ -283,8 +277,8 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       areaInfoCount: 73,
       areaInfoStride: 74,
       areaInfoFlags: 75,
-      agentPrimary: 76,
-      agentSecondary: 77,
+      worldProfessionStates: 76,
+      professionStateStride: 77,
     },
   };
 }
@@ -840,6 +834,16 @@ describe("targeted Enhancement WebAssembly transform", () => {
         exports.filter((entry) => entry.name === build.commands.thunkExport).length,
         1,
       );
+      const module = new WebAssembly.Module(new Uint8Array(output));
+      assert.ok(decodeEnhancementManifest(module, capabilities));
+      assert.equal(
+        decodeEnhancementManifest(module, {
+          ...capabilities,
+          commands: false,
+        }),
+        null,
+        "a read-only profile must not accept a command-capable manifest",
+      );
     }
   });
 
@@ -954,60 +958,5 @@ describe("targeted Enhancement WebAssembly transform", () => {
       ),
       /cursor table slot/,
     );
-  });
-});
-
-describe("Enhancement client chain", () => {
-  it("has exactly six source-pinned executable capability profiles", () => {
-    // Adding a profile costs an
-    // `outputSha256` entry and a review; this list is where that becomes
-    // unavoidable rather than incidental.
-    assert.deepEqual(Object.keys(ENHANCEMENT_CAPABILITY_PROFILES), [
-      "cursor",
-      "target",
-      "cursorTarget",
-      "cursorToolbox",
-      "cursorToolboxCommands",
-      "cursorTargetToolboxCommands",
-    ]);
-    assert.deepEqual(
-      Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
-        .filter(([, capabilities]) => capabilities.commands)
-        .map(([profile]) => profile),
-      ["cursorToolboxCommands", "cursorTargetToolboxCommands"],
-    );
-    for (const [profile, capabilities] of Object.entries(
-      ENHANCEMENT_CAPABILITY_PROFILES,
-    )) {
-      assert.equal(enhancementCapabilityProfile(capabilities), profile);
-      for (const build of ENHANCEMENT_BUILDS) {
-        const output = enhancementOutputSha256(build, capabilities);
-        assert.match(output ?? "", /^[0-9a-f]{64}$/);
-      }
-    }
-    for (const unsupported of [
-      NO_CAPABILITIES,
-      UNSUPPORTED_ALL_CAPABILITIES,
-      { nativeCursor: false, targetObservation: false, toolbox: true, commands: false },
-      // Commands without the Toolbox that would drive them are refused.
-      { nativeCursor: false, targetObservation: false, toolbox: false, commands: true },
-    ]) {
-      assert.equal(enhancementCapabilityProfile(unsupported), null);
-    }
-  });
-
-  it("certifies the Enhancement transform against the template-save output", () => {
-    // The Enhancement transform is layered on the template-save client so opting
-    // into the game cursor never costs template save/load. If either manifest
-    // is recertified without the other, this pairing is what breaks first.
-    for (const build of ENHANCEMENT_BUILDS) {
-      const source = TEMPLATE_SAVE_BUILDS.find(
-        (candidate) => candidate.outputSha256 === build.sha256,
-      );
-      assert.ok(
-        source,
-        `Enhancement build ${build.buildId} does not consume any template-save output`,
-      );
-    }
   });
 });
