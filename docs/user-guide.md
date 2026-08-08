@@ -120,6 +120,14 @@ switch on or off immediately. Team Management stores builds and full teams,
 captures the player and their heroes, exchanges team codes, and applies a
 chosen team after an explicit click in a PvE outpost. An explicit Normal or
 Hard Mode and the player's own build are included.
+**Share team** produces a `gwonmac-team:` code that preserves the complete
+GWonMac team, its referenced builds, repeated slots, notes, tags, and variant
+lineage. **Import team** accepts that code; it is a GWonMac exchange format,
+not a Guild Wars or GWToolbox++ party code. Copy and paste are conveniences—the
+code always remains visible for manual exchange.
+If skill names or icons are temporarily unavailable, the saved library remains
+usable. Choose **Retry skill data** in Tools after the game data becomes
+available; restarting the app is not required.
 Tools is the home for authored builds and teams. **Settings → Templates** keeps
 the separate file-migration jobs: importing an old Windows folder, bulk
 clipboard/file import, export, and rescuing templates stranded in subfolders.
