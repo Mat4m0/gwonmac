@@ -35,6 +35,7 @@ import type {
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_TRANSFORM_ABI,
+  WASM_HEAP_CAP_BYTES,
 } from "../shared/contracts.js";
 import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
@@ -46,6 +47,7 @@ import {
 import type { CertificateFeed } from "./certification/certificate-feed.js";
 import { proveCertificateFeedEntry } from "./certification/certificate-feed-proof.js";
 import type { ClientCertification } from "./certification/client-module.js";
+import { EXTENDED_MEMORY_MAX_BYTES } from "./certification/extended-memory.js";
 import {
   PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
@@ -259,6 +261,7 @@ export class ClientRuntime {
 
   private async selectClientWasm(): Promise<{
     wasmPath: string;
+    jsPath: string;
     build: ActiveClient["enhancementBuild"];
   }> {
     const officialWasm = clientArtifactPath(
@@ -276,7 +279,11 @@ export class ClientRuntime {
       logEvent({ k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
-      return { wasmPath: officialWasm, build: null };
+      return {
+        wasmPath: officialWasm,
+        jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
+        build: null,
+      };
     }
 
     let certification = certifyClientBuild(officialSha256);
@@ -305,12 +312,14 @@ export class ClientRuntime {
     }
     const prepared = await prepareClientModule({
       officialWasmPath: officialWasm,
+      officialJsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
       officialSha256,
       certification,
       enhancementCapabilities: this.options.enhancementCapabilities,
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
+      extendedMemoryCacheRoot: this.options.paths.extendedMemory,
     });
     const state = prepared.state;
     this.compatibilityValue = {
@@ -350,7 +359,30 @@ export class ClientRuntime {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
     gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);
-    return { wasmPath: prepared.wasmPath, build: prepared.enhancementBuild };
+    const extendedCap = prepared.extendedMemory.status === "active"
+      ? EXTENDED_MEMORY_MAX_BYTES
+      : WASM_HEAP_CAP_BYTES;
+    gauge("wasm.extendedMemoryMode", prepared.extendedMemory.status);
+    gauge("wasm.heapCapBytes", extendedCap);
+    logEvent({
+      k: "wasm.extendedMemory",
+      mode: prepared.extendedMemory.status,
+      profile: prepared.extendedMemory.status === "active"
+        ? prepared.extendedMemory.profile
+        : "none",
+      capBytes: extendedCap,
+    });
+    if (prepared.failure?.stage === "extended-memory") {
+      logEvent({
+        k: "wasm.extendedMemoryPrepareFailed",
+        code: errorCode(prepared.failure.error),
+      });
+    }
+    return {
+      wasmPath: prepared.wasmPath,
+      jsPath: prepared.jsPath,
+      build: prepared.enhancementBuild,
+    };
   }
 
   private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {
@@ -392,6 +424,7 @@ export class ClientRuntime {
       store,
       snapshotMeta,
       wasmPath: enhancement.wasmPath,
+      jsPath: enhancement.jsPath,
       enhancementBuild: enhancement.build,
     });
     this.candidateHealthToken = candidateFingerprint

@@ -279,19 +279,19 @@ export function installWasmMemoryAttribution({
 
   const readTextureIds = (pointer: number, countValue: number): number[] => {
     const heap = module.HEAPU8;
+    const address = pointer >>> 0;
     if (
       !heap
       || !Number.isSafeInteger(pointer)
-      || pointer < 0
       || !Number.isSafeInteger(countValue)
       || countValue < 0
       || countValue > MAX_TEXTURE_IDS_PER_CALL
-      || pointer + countValue * 4 > heap.buffer.byteLength
+      || address + countValue * 4 > heap.buffer.byteLength
     ) return [];
     const view = new DataView(heap.buffer);
     return Array.from(
       { length: countValue },
-      (_unused, index) => view.getUint32(pointer + index * 4, true),
+      (_unused, index) => view.getUint32(address + index * 4, true),
     );
   };
 

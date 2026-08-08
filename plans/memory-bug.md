@@ -363,21 +363,19 @@ official WASM
   -> template compatibility
   -> optional Enhancement
   -> native double-click
-  -> targeted lifecycle telemetry
   -> paired 4 GB JS/WASM transform
 ```
 
 The final stage runs only with:
 
 ```text
-GWONMAC_MEMORY_ATTRIBUTION_RESEARCH=1
 GWONMAC_EXTENDED_MEMORY_RESEARCH=1
 ```
 
 Launch command:
 
 ```bash
-cd /path/to/gwonmac-memory-investigation
+cd /path/to/gwonmac-memory-4gb
 pnpm dev:memory:4gb
 ```
 
@@ -403,14 +401,22 @@ The exact generated-glue transform:
 The transform is exact-input hash-gated. It is not a general JavaScript
 rewriter.
 
-### Current certified research pair
+### Current certified research pairs
 
 | Artifact | SHA-256 |
 | --- | --- |
 | Official JS input | `58ecc6377397f01919d8def58e802e19fbfd6ce13f421dbf14123a667e34f7d0` |
 | Transformed JS output | `1dd5d798b1491f46a7c128c641053c8488211bbc193fe40bdf1d7a886517993d` |
-| ABI-11 WASM input, widest Enhancement profile | `3f7ec5ab3a957103bd3ac3068e6e2cb6d5203b4ccb0afc08dfd4329ff150a9c6` |
-| 4 GB WASM output | `20f36cf63dd0082fc3e888d66d63cfafd73b99aa4e5e937dc446f2aea52f0ec5` |
+| WASM input, Enhancements off | `e7d86cfcf7b09abbedd3afca758dbf4a3f3c6e1aa4d44e53b31e45e886d7f250` |
+| 4 GB output, Enhancements off | `862f97fc87267e3b4d342ea01f15834cc60a7be982fd9741cf0ae31b8a18a00b` |
+| WASM input, cursor | `2c03fb7ac535508d99bc96212d2e087d4322ef7d11cf3e0049f4019035326d50` |
+| 4 GB output, cursor | `c65ba2c246e45a1c013f32e51451537775bb2ae6d5a5ae3a9f3240b2594efb91` |
+| WASM input, target | `e69c026e942496b2fbd6bef056fb1eeb0b6ff5e51fed02846fb37a27c53a49f7` |
+| 4 GB output, target | `da872c47a3846427a5c00685d99064a02b7ce809aca6ea2073c92d84f891d8cc` |
+| WASM input, cursor + target | `ee642435a41221dd8d2db1dd326d650c1a86e00cd823743d867505a4246bfdc9` |
+| 4 GB output, cursor + target | `d5f4b161124cc1829c7a1f23859da2a1f9290c668c8fad1d9d316428034c1190` |
+| WASM input, cursor + Toolbox | `35d258f8373ccf3eb0321a48b98c0ace61a304683d3295b1712a5a71102d1da6` |
+| 4 GB output, cursor + Toolbox | `a0bd482dda0476f36feed1104033041057e10062775424088c4961a142fac8e1` |
 
 WASM maximum: 65,535 pages = 4 GiB minus 64 KiB.
 
@@ -442,7 +448,7 @@ callback path under all gameplay conditions.
 ```bash
 pnpm memory:qualify:4gb \
   "/path/to/Gw.jspi.js" \
-  "/path/to/certified/ABI11/Gw.jspi.wasm"
+  "/path/to/official/Gw.jspi.wasm"
 ```
 
 ### Proposed experimental product shape
@@ -466,21 +472,18 @@ If released before ArenaNet ships a correction:
 The current implementation is a research profile, not yet a user-facing
 setting. Before release:
 
-1. Certify every supported post-double-click/Enhancement variant intended for
-   the option, including Enhancements disabled. The current 4 GB output is
-   pinned only for the widest ABI-11 research predecessor.
-2. Add the explicit persisted opt-in and clear explanatory copy.
-3. Record the effective mode and cap in the closed diagnostics schema.
-4. Test one content-heavy zone transition while allocations above 2 GiB remain
+1. Add an explicit persisted user opt-in and clear explanatory copy if the
+   developer-only environment switch is promoted into a packaged feature.
+2. Test one content-heavy zone transition while allocations above 2 GiB remain
    live, covering image upload, WebGL, sockets, filesystem, and UI strings.
-5. Test representative 8 GB, 16 GB, and 32 GB Macs. The option should be
+3. Test representative 8 GB, 16 GB, and 32 GB Macs. The option should be
    discouraged or refused where system pressure makes it counterproductive.
-6. Verify warning thresholds and the reload path against the effective 4 GB
+4. Verify warning thresholds and the reload path against the effective 4 GB
    cap.
-7. Verify transform refusal and cache deletion after a one-byte JS or WASM
+5. Verify transform refusal and cache deletion after a one-byte JS or WASM
    change.
-8. Package and smoke-test, rather than relying only on the development host.
-9. Keep the offline >2 GiB qualification in the release checklist.
+6. Package and smoke-test, rather than relying only on the development host.
+7. Keep the offline >2 GiB qualification in the release checklist.
 
 Default activation should require substantially more live coverage and a clear
 understanding of system-memory behavior. ArenaNet's source-level fix remains

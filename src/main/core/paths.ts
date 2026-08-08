@@ -29,6 +29,7 @@ export interface GamePaths {
   compatibility: string;
   enhancements: string;
   nativeDoubleClick: string;
+  extendedMemory: string;
   chunks: string;
   bootChunks: string;
   cacheClearRequest: string;
@@ -55,6 +56,7 @@ export function gamePaths(userData: string): GamePaths {
     compatibility: path.join(game, "compatibility"),
     enhancements: path.join(game, "enhancements"),
     nativeDoubleClick: path.join(game, "double-click"),
+    extendedMemory: path.join(game, "extended-memory"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),

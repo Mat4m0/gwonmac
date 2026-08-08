@@ -109,6 +109,7 @@ type GwGameModule = {
 
   // Published by the generated glue, so absent until it has run.
   HEAPU8?: Uint8Array;
+  gwonmacHeapCapBytes?: number;
   SDL2?: { audioContext?: AudioContext };
   audioContext?: AudioContext;
   oskIsActive?: boolean;
@@ -303,8 +304,9 @@ function requestHeapCap() {
     import('./heap-pressure.js'),
   ])
     .then(([{ WASM_HEAP_CAP_BYTES }, { createHeapPressureWatch }]) => {
-      heapCapBytes = WASM_HEAP_CAP_BYTES;
-      heapWatch = createHeapPressureWatch({ capBytes: WASM_HEAP_CAP_BYTES });
+      const capBytes = Module.gwonmacHeapCapBytes ?? WASM_HEAP_CAP_BYTES;
+      heapCapBytes = capBytes;
+      heapWatch = createHeapPressureWatch({ capBytes });
     })
     // A failed load retries on the next tick rather than silencing the
     // warning for the whole session.
@@ -1394,7 +1396,8 @@ function loadGlue() {
     const source = createImageSource({
       metadata: meta,
       fetchRange: fetchSnapshotRange,
-      writeBytes: (data, address) => clientRuntime().HEAPU8.set(data, address),
+      writeBytes: (data, address) =>
+        clientRuntime().HEAPU8.set(data, address >>> 0),
       diagnostics: window.gwDiagnostics,
       log,
     });

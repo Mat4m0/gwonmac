@@ -97,6 +97,7 @@ test.describe("Enhancement runtime selection", () => {
       expect(settings).toMatchObject(init.enhancementSelection);
       const selected = await prepareClientModule({
         officialWasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
+        officialJsPath: path.join(paths.artifacts, "Gw.jspi.js"),
         officialSha256: OFFICIAL_SHA256,
         certification: {
           state: "certified",
@@ -116,6 +117,7 @@ test.describe("Enhancement runtime selection", () => {
         compatibilityCacheRoot: paths.compatibility,
         enhancementCacheRoot: paths.enhancements,
         nativeDoubleClickCacheRoot: paths.nativeDoubleClick,
+        extendedMemoryCacheRoot: paths.extendedMemory,
       });
       const bytes = await readFile(selected.wasmPath);
       const module = new WebAssembly.Module(bytes);

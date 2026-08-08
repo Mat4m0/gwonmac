@@ -265,6 +265,14 @@ artifact before assigning a source symbol. A capture can conclusively show a
 client request being refused at its compiled limit; assigning ownership still
 requires controlled runs of the same client build.
 
+The opt-in 4 GiB research profile records `wasm.extendedMemory` with its
+closed mode, exact post-double-click profile, and effective cap. The summary's
+heap denominator comes from the same runtime cap gauge. `unsupported` means an
+explicit research request did not match the pinned JS/WASM pair and the
+ordinary 2 GiB artifacts were served; `disabled` means the research profile
+was not requested. A preparation fault is additionally recorded as
+`wasm.extendedMemoryPrepareFailed` without exposing its free-text exception.
+
 ## Verification boundaries
 
 ### Claims and the tests that prove them
