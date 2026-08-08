@@ -80,40 +80,13 @@
 <div class="controls">
   <h1>UI system</h1>
   <p class="sub">
-    Every control below writes the same thing Settings writes — a data
-    attribute or a custom property on <code>:root</code>. Nothing on this page
-    is a special case.
+    The one OG Guild Wars interface shipped by GWonMac. This gallery links the
+    production tokens and components directly; only panel opacity is variable.
   </p>
-
-  <div class="ctl">
-    <label>Theme</label>
-    <div class="ui-segment" data-fill id="themes">
-      <button type="button" data-theme="" aria-selected="true">Brass</button>
-      <button type="button" data-theme="steel" aria-selected="false">Steel</button>
-      <button type="button" data-theme="jade" aria-selected="false">Jade</button>
-    </div>
-  </div>
-
-  <div class="ctl">
-    <label>Density</label>
-    <div class="ui-segment" data-fill id="densities">
-      <button type="button" data-density="compact" aria-selected="false">Compact</button>
-      <button type="button" data-density="" aria-selected="true">Balanced</button>
-      <button type="button" data-density="comfortable" aria-selected="false">Roomy</button>
-    </div>
-  </div>
 
   <div class="ctl ui-range-field">
     <span>Panel opacity <output id="v-opacity">94%</output></span>
     <input type="range" class="ui-range" id="opacity" min="65" max="100" value="94">
-  </div>
-  <div class="ctl ui-range-field">
-    <span>Border <output id="v-border">2px</output></span>
-    <input type="range" class="ui-range" id="border" min="0" max="4" value="2">
-  </div>
-  <div class="ctl ui-range-field">
-    <span>Corner radius <output id="v-radius">8px</output></span>
-    <input type="range" class="ui-range" id="radius" min="0" max="16" value="8">
   </div>
 </div>
 
@@ -278,11 +251,10 @@
 
   <section>
     <p class="band">Settings — the same system, on a surface that already existed</p>
-    <div class="ui-frame" style="display:flex;width:600px;height:260px;overflow:hidden">
+    <div class="ui-frame" style="display:flex;width:600px;height:280px">
       <nav class="ui-rail" style="width:152px">
         <button aria-selected="true">Game Data</button>
         <button aria-selected="false">Display</button>
-        <button aria-selected="false">Appearance</button>
         <button aria-selected="false">Controls</button>
         <button aria-selected="false">Advanced</button>
       </nav>
@@ -329,8 +301,6 @@
 const root = document.documentElement;
 const KNOBS = [
   { id: "opacity", token: "--ui-panel-opacity", scale: 0.01, unit: "%" },
-  { id: "border", token: "--ui-border-width", scale: 1, unit: "px" },
-  { id: "radius", token: "--ui-radius", scale: 1, unit: "px" },
 ];
 
 function apply() {
@@ -357,33 +327,7 @@ window.gwSyncGalleryControls = () => {
     document.getElementById(knob.id).value = String(raw);
     document.getElementById(`v-${knob.id}`).textContent = `${raw}${knob.unit}`;
   }
-  for (const [id, key, fallback] of [
-    ["themes", "uiTheme", ""],
-    ["densities", "uiDensity", ""],
-  ]) {
-    const active = root.dataset[key] ?? fallback;
-    for (const button of document.getElementById(id).querySelectorAll("button")) {
-      button.setAttribute("aria-selected", String(button.dataset[key === "uiTheme" ? "theme" : "density"] === active));
-    }
-  }
 };
-
-// The theme and density groups write exactly what `appearance.ts` writes.
-function group(containerId, dataKey, attribute) {
-  const container = document.getElementById(containerId);
-  container.addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    for (const other of container.querySelectorAll("button")) {
-      other.setAttribute("aria-selected", String(other === button));
-    }
-    const value = button.dataset[dataKey];
-    if (value) root.dataset[attribute] = value;
-    else delete root.dataset[attribute];
-  });
-}
-group("themes", "theme", "uiTheme");
-group("densities", "density", "uiDensity");
 
 // Tabs, rails and rows are real controls here, so their selected states are
 // worth clicking rather than only worth looking at.

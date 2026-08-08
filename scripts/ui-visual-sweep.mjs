@@ -2,9 +2,9 @@
 //
 // The unit test proves no component owns a colour. It cannot prove the result
 // looks like one interface. This drives the gallery and the Tools workbench
-// through the whole preference matrix a player can actually reach — three
-// themes, three densities, and the extremes of opacity, border and radius —
-// screenshots each, and reports any layout fault a machine can see: a surface
+// through the whole preference range a player can actually reach — the
+// extremes and default of panel opacity — screenshots each, and reports any
+// layout fault a machine can see: a surface
 // that scrolls sideways, content clipped by its own container, a control
 // shorter than the touch target, a panel corner the frame does not reach.
 //
@@ -29,40 +29,29 @@ const outDir = path.resolve(flag("out", "/tmp/ui-sweep"));
 const toolsUrl = flag("url", "http://127.0.0.1:4179/");
 const galleryUrl = pathToFileURL(path.resolve("docs/ui-gallery.html")).href;
 
-const THEMES = ["brass", "steel", "jade"];
-const DENSITIES = ["compact", "balanced", "comfortable"];
-// The corners of the space a player can reach, not every point in it.
-const SHAPES = [
-  { name: "default", opacity: 0.94, border: 2, radius: 8 },
-  { name: "min", opacity: 0.65, border: 0, radius: 0 },
-  { name: "max", opacity: 1, border: 4, radius: 16 },
+const OPACITIES = [
+  { name: "minimum", value: 0.65 },
+  { name: "default", value: 0.94 },
+  { name: "opaque", value: 1 },
 ];
 
 /**
  * Apply exactly what `src/renderer/appearance.ts` applies.
  * @param {import("@playwright/test").Page} page
- * @param {string} theme
- * @param {string} density
- * @param {{name: string, opacity: number, border: number, radius: number}} shape
+ * @param {number} opacity
  */
-async function applyAppearance(page, theme, density, shape) {
+async function applyAppearance(page, opacity) {
   await page.evaluate(
-    ({ theme, density, shape }) => {
+    (opacity) => {
       const root = document.documentElement;
-      if (theme === "brass") delete root.dataset.uiTheme;
-      else root.dataset.uiTheme = theme;
-      if (density === "balanced") delete root.dataset.uiDensity;
-      else root.dataset.uiDensity = density;
-      root.style.setProperty("--ui-panel-opacity", String(shape.opacity));
-      root.style.setProperty("--ui-border-width", `${shape.border}px`);
-      root.style.setProperty("--ui-radius", `${shape.radius}px`);
+      root.style.setProperty("--ui-panel-opacity", String(opacity));
       // The gallery draws its own controls; keep them honest so a screenshot
       // never captions itself with the values it is not showing.
       /** @type {{gwSyncGalleryControls?: () => void}} */ (
         /** @type {unknown} */ (window)
       ).gwSyncGalleryControls?.();
     },
-    { theme, density, shape },
+    opacity,
   );
   await page.waitForTimeout(60);
 }
@@ -192,24 +181,14 @@ async function sweep(pageUrl, tag, prepare) {
   await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (prepare) await prepare(page);
 
-  for (const theme of THEMES) {
-    for (const density of DENSITIES) {
-      for (const shape of SHAPES) {
-        // The full matrix is 27 shots per surface; screenshot the readable
-        // slice and audit every combination.
-        const interesting =
-          shape.name !== "default" ? density === "balanced" : true;
-        await applyAppearance(page, theme, density, shape);
-        const label = `${tag}/${theme}-${density}-${shape.name}`;
-        findings.push(...(await audit(page, label)));
-        if (interesting) {
-          await page.screenshot({
-            path: path.join(outDir, `${label.replaceAll("/", "__")}.png`),
-            fullPage: false,
-          });
-        }
-      }
-    }
+  for (const opacity of OPACITIES) {
+    await applyAppearance(page, opacity.value);
+    const label = `${tag}/${opacity.name}`;
+    findings.push(...(await audit(page, label)));
+    await page.screenshot({
+      path: path.join(outDir, `${label.replaceAll("/", "__")}.png`),
+      fullPage: false,
+    });
   }
   await page.close();
 }
@@ -222,7 +201,7 @@ await sweep(toolsUrl, "tools", async (page) => {
 await sweep(toolsUrl, "tools-build", async (page) => {
   await page.waitForSelector("#app[data-ready=true]", { timeout: 15_000 });
   await page.getByRole("tab", { name: /Builds/ }).click();
-  await page.getByRole("option", { name: /Word of Healing Monk/ }).first().click();
+  await page.getByRole("button", { name: /Word of Healing.*Mo\/Me/ }).first().click();
 });
 
 await browser.close();
