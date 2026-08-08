@@ -7,10 +7,12 @@
  * arrive under a different name.
  */
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
-  type EnhancementCapabilityProfile,
   type GraphicsDiagnostics,
 } from "../../shared/contracts.js";
+import {
+  ENHANCEMENT_CAPABILITY_PROFILES,
+  type EnhancementCapabilityProfile,
+} from "../../shared/enhancement-contracts.js";
 import {
   RENDERER_HISTOGRAMS,
   type RendererFrameBatch,
@@ -21,7 +23,7 @@ import {
 } from "../../shared/diagnostics.js";
 import { activeCaptureLevel } from "./capture.js";
 import { logEvent, recordEvent, recorder } from "./recorder.js";
-import { asRendererFingerprint } from "./schema.js";
+import { asRendererFingerprint } from "./schema-fields.js";
 
 let graphics: GraphicsDiagnostics | null = null;
 let rendererClockOffsetUs = 0;

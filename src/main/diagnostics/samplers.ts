@@ -13,7 +13,7 @@ import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { app, powerMonitor, screen } from "electron";
 import { runtimeVersions } from "./flight-recorder.js";
 import { logEvent, recorder } from "./recorder.js";
-import { asAppVersion } from "./schema.js";
+import { asAppVersion } from "./schema-fields.js";
 
 const SAMPLE_INTERVAL_MS = 1_000;
 const PROCESS_SAMPLE_INTERVAL = 5;

@@ -38,9 +38,9 @@ import { diagnosticFramesPath } from "../core/paths.js";
 import { parseLogRecords } from "./report.js";
 import {
   diagnosticEventRecord,
-  type CaptureStopReason,
   type DiagnosticEvent,
 } from "./schema.js";
+import type { CaptureStopReason } from "./schema-fields.js";
 import { gamePaths } from "../paths.js";
 
 const MAX_FILES = 5;

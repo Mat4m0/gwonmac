@@ -118,7 +118,10 @@ describe("the closed diagnostics schema", () => {
     // would route around it. A closed union, a number, a boolean and the
     // neutral shared Digest type must all survive.
     assert.deepEqual(
-      compile(withField("phase: AppPhase; count: number; retried: boolean; digest: Digest")),
+      compile(withField(
+        'phase: "startup" | "quit"; count: number; retried: boolean; '
+        + 'digest: import("../../shared/digest.js").Digest',
+      )),
       [],
     );
   });
