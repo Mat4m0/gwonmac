@@ -26,7 +26,7 @@
  * worse than one that refused: the player can see a refusal, and cannot see
  * that hero four kept yesterday's bar.
  */
-import { ATTRIBUTES, PROFESSIONS } from "./heroes.js";
+import { ATTRIBUTES, heroLabel, PROFESSIONS } from "./heroes.js";
 import { SKILL_SLOTS } from "./library.js";
 import type {
   TeamApplyMember,
@@ -170,6 +170,19 @@ export async function runTeamApply(
     .filter((member): member is TeamApplyMember & { hero: number } =>
       member.hero !== null);
   const wantedHeroes = new Set(wanted.map((member) => member.hero));
+
+  // Preflight the complete opening party before changing it. Devona's hero id
+  // is also the client's kick-all sentinel; discovering her after removing an
+  // earlier hero would turn a refusal into a half-applied team.
+  if (opening.heroes.some(
+    (present) => present.hero === 38 && !wantedHeroes.has(present.hero),
+  )) {
+    throw new Error(
+      "Devona shares her hero id with the client's kick-all sentinel, so this "
+      + "cannot remove her. Remove her in the party window first. 0 changes "
+      + "were made.",
+    );
+  }
   let completedChanges = 0;
   let skillsSkipped = false;
   let skipped: readonly number[] = [];
@@ -178,16 +191,10 @@ export async function runTeamApply(
     // Out first, so a full party has room for the heroes coming in.
     for (const present of opening.heroes) {
       if (wantedHeroes.has(present.hero)) continue;
-      if (present.hero === 38) {
-        throw new ApplyRefused(
-          "Devona shares her hero id with the client's kick-all sentinel, "
-          + "so this cannot remove her. Remove her in the party window first.",
-        );
-      }
       environment.commands.kickHero(present.hero);
       await confirm(
         environment,
-        `removing hero ${present.hero}`,
+        `removing ${heroLabel(present.hero)}`,
         (party) => !party.heroes.some((hero) => hero.hero === present.hero),
       );
       completedChanges += 1;
@@ -198,7 +205,7 @@ export async function runTeamApply(
         environment.commands.addHero(member.hero);
         await confirm(
           environment,
-          `adding hero ${member.hero}`,
+          `adding ${heroLabel(member.hero)}`,
           // Both the identity and the agent id: the hero appears in the roster
           // before it has one, and every command below is keyed by it.
           (party) => party.heroes.some(
@@ -209,7 +216,9 @@ export async function runTeamApply(
       const agentId = environment.party().heroes
         .find((hero) => hero.hero === member.hero)?.agentId ?? 0;
       if (agentId === 0) {
-        throw new ApplyRefused(`hero ${member.hero} has no agent to command`);
+        throw new ApplyRefused(
+          `${heroLabel(member.hero)} has no agent to command`,
+        );
       }
 
       if (member.build !== null) {
@@ -236,7 +245,7 @@ export async function runTeamApply(
           environment.commands.setHeroSecondary(agentId, wantedSecondary);
           await confirm(
             environment,
-            `the secondary profession of hero ${member.hero}`,
+            `${heroLabel(member.hero)}'s secondary profession`,
             (party) => (party.heroes.find(
               (hero) => hero.hero === member.hero)?.professions?.[1] ?? null)
               === secondary,
@@ -258,7 +267,7 @@ export async function runTeamApply(
           let steady: readonly number[] | null = null;
           await confirm(
             environment,
-            `the skill bar for hero ${member.hero}`,
+            `${heroLabel(member.hero)}'s skill bar`,
             (party) => {
               const bar = liveBar(party, member.hero);
               if (bar === null) return false;
@@ -301,7 +310,7 @@ export async function runTeamApply(
           environment.commands.setHeroAttributes(agentId, ranks);
           await confirm(
             environment,
-            `the attributes of hero ${member.hero}`,
+            `${heroLabel(member.hero)}'s attributes`,
             settled,
           );
           completedChanges += 1;
@@ -316,7 +325,7 @@ export async function runTeamApply(
           environment.commands.setHeroBehaviour(agentId, behaviour);
           await confirm(
             environment,
-            `the behaviour of hero ${member.hero}`,
+            `${heroLabel(member.hero)}'s behaviour`,
             (party) => party.heroes.find(
               (hero) => hero.hero === member.hero)?.behaviour === member.behaviour,
           );

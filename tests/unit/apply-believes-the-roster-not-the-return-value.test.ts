@@ -152,7 +152,7 @@ test("a hero the game never adds is a refusal, however cheerful the command", as
   const game = harness([]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /adding hero 6 did not take effect/,
+    /adding Koss did not take effect/,
   );
   assert.deepEqual(game.sent, ["add:6"], "and it did not go on to the next step");
 });
@@ -165,7 +165,7 @@ test("a hero that appears without an agent id is not yet added", async () => {
   game.react("add:6", [{ hero: 6, agentId: 0, behaviour: null, skills: null }]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6) })]), game.environment, 1),
-    /adding hero 6 did not take effect/,
+    /adding Koss did not take effect/,
   );
 });
 
@@ -215,7 +215,7 @@ test("attributes the game never applies are a refusal too", async () => {
       game.environment,
       1,
     ),
-    /the attributes of hero 6 did not take effect/,
+    /Koss's attributes did not take effect/,
   );
   assert.deepEqual(game.sent.at(-1), "attributes:11:17=7,19=12");
 });
@@ -280,7 +280,7 @@ test("a secondary the game never changes is a refusal, not a bar written anyway"
   }]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
-    /the secondary profession of hero 6 did not take effect/,
+    /Koss's secondary profession did not take effect/,
   );
   assert.deepEqual(game.sent, ["secondary:11:2"], "and the bar was never sent");
 });
@@ -345,7 +345,7 @@ test("a bar that never moves is still a refusal", async () => {
   }]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
-    /the skill bar for hero 6 did not take effect/,
+    /Koss's skill bar did not take effect/,
   );
 });
 
@@ -393,11 +393,14 @@ test("heroes that are not in the team leave before the ones that are arrive", as
   assert.equal(result.completedChanges, 2);
 });
 
-test("Devona is never kicked, because the client's kick-all is her id", async () => {
+test("Devona refuses the whole Apply before another hero is removed", async () => {
   // `KickAllHeroes` is `kick(0x26)` and 0x26 is 38. One of those two meanings
   // is wrong on a build that has her and nobody has established which, so the
   // runner refuses rather than finding out during someone's apply.
-  const game = harness([{ hero: 38, agentId: 11, behaviour: 1, skills: null }]);
+  const game = harness([
+    { hero: 7, agentId: 10, behaviour: 1, skills: null },
+    { hero: 38, agentId: 11, behaviour: 1, skills: null },
+  ]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
     /Devona shares her hero id/,
