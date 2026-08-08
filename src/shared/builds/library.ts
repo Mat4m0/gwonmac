@@ -356,6 +356,10 @@ export function buildById(
   return library.builds.find((candidate) => candidate.id === id) ?? null;
 }
 
+export function teamById(library: BuildLibrary, id: TeamId): Team | null {
+  return library.teams.find((candidate) => candidate.id === id) ?? null;
+}
+
 /** Direct children of `id`. One level deep, so these never have children of their own. */
 export function variantsOf(
   library: BuildLibrary,
@@ -389,4 +393,68 @@ export function usedBy(library: BuildLibrary, id: BuildId): readonly Team[] {
  */
 export function forkParentOf(build: Build): BuildId {
   return build.parent ?? build.id;
+}
+
+export function forkBuild(
+  library: BuildLibrary,
+  sourceId: BuildId,
+  nextId: BuildId,
+): BuildLibrary {
+  const source = buildById(library, sourceId);
+  if (!source) throw new Error("Build not found");
+  return {
+    ...library,
+    builds: [{
+      ...structuredClone(source),
+      id: nextId,
+      name: `${source.name} — variant`,
+      parent: forkParentOf(source),
+      favourite: false,
+      lastUsed: null,
+    }, ...library.builds],
+  };
+}
+
+export function removeBuild(library: BuildLibrary, removedId: BuildId): BuildLibrary {
+  return {
+    ...library,
+    builds: library.builds
+      .filter((build) => build.id !== removedId)
+      .map((build) => build.parent === removedId ? { ...build, parent: null } : build),
+    teams: library.teams.map((team) => ({
+      ...team,
+      slots: mapTeamSlots(team.slots, (slot) =>
+        slot.build === removedId ? { ...slot, build: null } : slot),
+    })),
+  };
+}
+
+export function exclusiveTeamBuildIds(
+  library: BuildLibrary,
+  selectedTeamId: TeamId,
+): readonly BuildId[] {
+  const team = teamById(library, selectedTeamId);
+  if (!team) return [];
+  const referenced = new Set(team.slots.flatMap((slot) =>
+    slot.build === null ? [] : [slot.build]));
+  for (const other of library.teams) {
+    if (other.id === team.id) continue;
+    for (const slot of other.slots) if (slot.build !== null) referenced.delete(slot.build);
+  }
+  return [...referenced];
+}
+
+export function removeTeam(
+  library: BuildLibrary,
+  removedId: TeamId,
+  removeExclusiveBuilds = false,
+): BuildLibrary {
+  const exclusive = removeExclusiveBuilds
+    ? exclusiveTeamBuildIds(library, removedId)
+    : [];
+  const withoutTeam = {
+    ...library,
+    teams: library.teams.filter((team) => team.id !== removedId),
+  };
+  return exclusive.reduce(removeBuild, withoutTeam);
 }

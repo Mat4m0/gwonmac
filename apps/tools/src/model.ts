@@ -1,9 +1,4 @@
 import {
-  buildId,
-  forkParentOf,
-  mapTeamSlots,
-  teamId,
-  usedBy,
   type Build,
   type BuildId,
   type BuildLibrary,
@@ -29,24 +24,6 @@ export type LibraryItem =
 
 export function cloneLibrary(library: BuildLibrary): BuildLibrary {
   return structuredClone(library);
-}
-
-export function buildById(
-  library: BuildLibrary,
-  id: string,
-): Build | undefined {
-  return library.builds.find((build) => build.id === id);
-}
-
-export function teamById(
-  library: BuildLibrary,
-  id: string,
-): Team | undefined {
-  return library.teams.find((team) => team.id === id);
-}
-
-export function buildUsage(library: BuildLibrary, id: string): readonly Team[] {
-  return usedBy(library, buildId(id));
 }
 
 /**
@@ -76,86 +53,6 @@ export function orderedBuilds(builds: readonly Build[]): Build[] {
   ];
 }
 
-export function forkBuild(
-  library: BuildLibrary,
-  sourceId: string,
-  nextId: string,
-): BuildLibrary {
-  const source = buildById(library, sourceId);
-  if (!source) throw new Error("Build not found");
-  return {
-    ...library,
-    builds: [
-      {
-        ...structuredClone(source),
-        id: buildId(nextId),
-        name: `${source.name} — variant`,
-        parent: forkParentOf(source),
-        favourite: false,
-        lastUsed: null,
-      },
-      ...library.builds,
-    ],
-  };
-}
-
-export function removeBuild(
-  library: BuildLibrary,
-  removedId: string,
-): BuildLibrary {
-  return {
-    ...library,
-    builds: library.builds
-      .filter((build) => build.id !== removedId)
-      .map((build) =>
-        build.parent === removedId ? { ...build, parent: null } : build,
-      ),
-    teams: library.teams.map((team) => ({
-      ...team,
-      slots: mapTeamSlots(team.slots, (slot) =>
-        slot.build === removedId ? { ...slot, build: null } : slot,
-      ),
-    })),
-  };
-}
-
-/** Builds owned only by one team, and therefore safe to remove with it. */
-export function exclusiveTeamBuildIds(
-  library: BuildLibrary,
-  teamId: string,
-): BuildId[] {
-  const team = teamById(library, teamId);
-  if (!team) return [];
-  const referenced = new Set(
-    team.slots.flatMap((slot) => slot.build === null ? [] : [slot.build]),
-  );
-  for (const other of library.teams) {
-    if (other.id === team.id) continue;
-    for (const slot of other.slots) {
-      if (slot.build !== null) referenced.delete(slot.build);
-    }
-  }
-  return [...referenced];
-}
-
-export function removeTeam(
-  library: BuildLibrary,
-  removedId: string,
-  removeExclusiveBuilds = false,
-): BuildLibrary {
-  const buildIds = removeExclusiveBuilds
-    ? exclusiveTeamBuildIds(library, removedId)
-    : [];
-  const withoutTeam: BuildLibrary = {
-    ...library,
-    teams: library.teams.filter((team) => team.id !== removedId),
-  };
-  return buildIds.reduce<BuildLibrary>(
-    (current, id) => removeBuild(current, id),
-    withoutTeam,
-  );
-}
-
 export function teamMemberLabel(
   hero: Team["slots"][number]["hero"],
   slotIndex: number,
@@ -164,6 +61,10 @@ export function teamMemberLabel(
   // The placeholder is this function's business, not the label's: an empty hero
   // slot is a prompt to pick one, and only a picker knows that.
   return hero === null ? "Choose hero" : heroLabel(hero);
+}
+
+export function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 export function searchLibrary(
@@ -187,5 +88,3 @@ export function searchLibrary(
       .includes(term);
   });
 }
-
-export { buildId, teamId };

@@ -1,16 +1,28 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import {
   LIBRARY_VERSION,
+  buildById,
   buildId as canonicalBuildId,
+  forkBuild,
   mapTeamSlots,
+  removeBuild,
+  removeTeam,
   skillBarOf,
   skillId,
+  teamById,
+  teamId,
   teamSlotsOf,
+  usedBy,
 } from "../../../src/shared/builds/library";
 import {
   decodeSkillTemplate,
   type SkillTemplate,
 } from "../../../src/shared/builds/skill-template";
+import {
+  decodeTeamBundle,
+  encodeTeamBundle,
+  importTeamBundle,
+} from "../../../src/shared/builds/team-bundle";
 import { diffBuilds } from "../../../src/shared/builds/diff";
 import {
   validateBuild,
@@ -20,30 +32,29 @@ import { resolveTeamApplyPlan } from "../../../src/shared/builds/team-apply";
 import { captureParty } from "../../../src/shared/builds/live-party";
 import type { ToolsHost } from "./host";
 import {
-  buildById,
-  buildId,
-  buildUsage,
-  cloneLibrary,
-  forkBuild,
-  removeBuild,
-  removeTeam,
   searchLibrary,
-  teamById,
-  teamId,
+  teamMemberLabel,
   type Build,
   type BuildLibrary,
   type LibraryItem,
   type Team,
 } from "./model";
+import { createLibraryStore } from "./use-library-store";
 
 type Notice = Readonly<{
   tone: "success" | "warning" | "error";
   message: string;
+  persistent: boolean;
 }> | null;
+type ApplyStatusDetail = Readonly<{
+  member: string;
+  skills: readonly string[];
+}>;
 type ApplyStatus = Readonly<{
   teamId: string;
   tone: "progress" | "success" | "warning" | "error";
   message: string;
+  details?: readonly ApplyStatusDetail[];
 }> | null;
 
 function id(prefix: string): string {
@@ -91,16 +102,12 @@ export function useLibrary(host: ToolsHost) {
   const saving = ref(false);
   const error = ref<string | null>(null);
   const notice = ref<Notice>(null);
+  const skillProblem = ref<string | null>(null);
   const applyStatus = ref<ApplyStatus>(null);
   const kind = ref<LibraryItem["kind"]>("team");
   const selectedId = ref("");
   const query = ref("");
   const tag = ref<string | null>(null);
-  const undoStack = shallowRef<Array<{
-    label: string;
-    library: BuildLibrary;
-    selection: LibraryItem;
-  }>>([]);
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
   const catalogueLookup = (skill: Build["skills"][number]) =>
     skill !== null && host.skills.has(skill)
@@ -121,22 +128,31 @@ export function useLibrary(host: ToolsHost) {
     message: string,
     tone: NonNullable<Notice>["tone"] = "success",
   ) => {
-    notice.value = { message, tone };
     if (noticeTimer) clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => {
-      notice.value = null;
-      noticeTimer = null;
-    }, 4_500);
+    noticeTimer = null;
+    const persistent = tone !== "success";
+    notice.value = { message, tone, persistent };
+    if (!persistent) {
+      noticeTimer = setTimeout(() => {
+        notice.value = null;
+        noticeTimer = null;
+      }, 4_500);
+    }
+  };
+  const dismissNotice = () => {
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = null;
+    notice.value = null;
   };
 
   const selectedBuild = computed(() =>
     kind.value === "build" && library.value
-      ? buildById(library.value, selectedId.value)
+      ? buildById(library.value, canonicalBuildId(selectedId.value))
       : undefined,
   );
   const selectedTeam = computed(() =>
     kind.value === "team" && library.value
-      ? teamById(library.value, selectedId.value)
+      ? teamById(library.value, teamId(selectedId.value))
       : undefined,
   );
   const items = computed(() =>
@@ -145,6 +161,14 @@ export function useLibrary(host: ToolsHost) {
       : [],
   );
   const tags = computed(() => library.value?.tags ?? []);
+  const { commit, undo, undoStack } = createLibraryStore({
+    host,
+    library,
+    saving,
+    kind,
+    selectedId,
+    notice: showNotice,
+  });
   const canUndo = computed(() => undoStack.value.length > 0);
 
   const selectKind = (next: LibraryItem["kind"]) => {
@@ -156,54 +180,6 @@ export function useLibrary(host: ToolsHost) {
       ?? "";
   };
 
-  const commit = async (
-    label: string,
-    change: (current: BuildLibrary) => BuildLibrary,
-  ) => {
-    if (!library.value || saving.value) return;
-    const previous = cloneLibrary(library.value);
-    const previousSelection: LibraryItem = kind.value === "build"
-      ? { kind: "build", id: buildId(selectedId.value) }
-      : { kind: "team", id: teamId(selectedId.value) };
-    const next = change(previous);
-    library.value = next;
-    saving.value = true;
-    error.value = null;
-    try {
-      await host.saveLibrary(next);
-      undoStack.value = [
-        ...undoStack.value,
-        { label, library: previous, selection: previousSelection },
-      ].slice(-40);
-      showNotice(label);
-    } catch (cause) {
-      library.value = previous;
-      error.value = cause instanceof Error ? cause.message : "The library could not be saved.";
-      showNotice("Nothing changed—the save failed.", "error");
-    } finally {
-      saving.value = false;
-    }
-  };
-
-  const undo = async () => {
-    if (saving.value) return;
-    const previous = undoStack.value.at(-1);
-    if (!previous) return;
-    saving.value = true;
-    try {
-      await host.saveLibrary(previous.library);
-      library.value = previous.library;
-      kind.value = previous.selection.kind;
-      selectedId.value = previous.selection.id;
-      undoStack.value = undoStack.value.slice(0, -1);
-      showNotice(`Undid “${previous.label}”.`);
-    } catch {
-      showNotice("Undo failed. Nothing changed.", "error");
-    } finally {
-      saving.value = false;
-    }
-  };
-
   const replaceBuild = (source: BuildLibrary, next: Build): BuildLibrary => ({
     ...source,
     builds: source.builds.map((build) => build.id === next.id ? next : build),
@@ -211,7 +187,7 @@ export function useLibrary(host: ToolsHost) {
 
   const renameBuild = (id: string, name: string) =>
     commit("Build renamed", (current) => {
-      const build = buildById(current, id);
+      const build = buildById(current, canonicalBuildId(id));
       return build && name.trim()
         ? replaceBuild(current, { ...build, name: name.trim() })
         : current;
@@ -219,7 +195,7 @@ export function useLibrary(host: ToolsHost) {
 
   const toggleBuildFavourite = (id: string) =>
     commit("Favourite updated", (current) => {
-      const build = buildById(current, id);
+      const build = buildById(current, canonicalBuildId(id));
       return build
         ? replaceBuild(current, { ...build, favourite: !build.favourite })
         : current;
@@ -227,7 +203,7 @@ export function useLibrary(host: ToolsHost) {
 
   const updateBuildNotes = (id: string, notes: string) =>
     commit("Notes saved", (current) => {
-      const build = buildById(current, id);
+      const build = buildById(current, canonicalBuildId(id));
       return build ? replaceBuild(current, { ...build, notes }) : current;
     });
 
@@ -276,16 +252,16 @@ export function useLibrary(host: ToolsHost) {
     rebindTeamIds: readonly string[] = [],
   ): Promise<boolean> => {
     const nextId = id("build");
-    await commit(
+    const saved = await commit(
       mode === "fork" ? "Variant created with your changes" : "Build changes saved",
       (current) => {
-        const source = buildById(current, sourceId);
+        const source = buildById(current, canonicalBuildId(sourceId));
         if (!source) return current;
         if (mode === "all") {
           return replaceBuild(current, { ...source, ...content });
         }
-        const forked = forkBuild(current, sourceId, nextId);
-        const variant = buildById(forked, nextId);
+        const forked = forkBuild(current, canonicalBuildId(sourceId), canonicalBuildId(nextId));
+        const variant = buildById(forked, canonicalBuildId(nextId));
         if (!variant) return current;
         const updated = replaceBuild(forked, {
           ...variant,
@@ -300,7 +276,7 @@ export function useLibrary(host: ToolsHost) {
                   ...team,
                   slots: mapTeamSlots(team.slots, (slot) =>
                     slot.build === sourceId
-                      ? { ...slot, build: buildId(nextId) }
+                      ? { ...slot, build: canonicalBuildId(nextId) }
                       : slot,
                   ),
                 }
@@ -309,17 +285,17 @@ export function useLibrary(host: ToolsHost) {
         };
       },
     );
-    if (mode === "fork") {
+    if (saved && mode === "fork") {
       kind.value = "build";
       selectedId.value = nextId;
     }
-    return true;
+    return saved;
   };
 
   const createFork = async (sourceId: string, rebindTeamIds: readonly string[]) => {
     const nextId = id("build");
-    await commit("Variant created", (current) => {
-      const forked = forkBuild(current, sourceId, nextId);
+    const saved = await commit("Variant created", (current) => {
+      const forked = forkBuild(current, canonicalBuildId(sourceId), canonicalBuildId(nextId));
       return {
         ...forked,
         teams: forked.teams.map((team) =>
@@ -327,36 +303,41 @@ export function useLibrary(host: ToolsHost) {
             ? {
                 ...team,
                 slots: mapTeamSlots(team.slots, (slot) =>
-                  slot.build === sourceId ? { ...slot, build: buildId(nextId) } : slot,
+                  slot.build === sourceId ? { ...slot, build: canonicalBuildId(nextId) } : slot,
                 ),
               }
             : team,
         ),
       };
     });
-    kind.value = "build";
-    selectedId.value = nextId;
+    if (saved) {
+      kind.value = "build";
+      selectedId.value = nextId;
+    }
+    return saved;
   };
 
   const deleteBuild = async (id: string) => {
-    await commit("Build deleted", (current) => removeBuild(current, id));
-    selectedId.value = library.value?.builds[0]?.id ?? "";
+    const saved = await commit("Build deleted", (current) =>
+      removeBuild(current, canonicalBuildId(id)));
+    if (saved) selectedId.value = library.value?.builds[0]?.id ?? "";
+    return saved;
   };
 
   const detachVariant = (id: string) =>
     commit("Variant detached", (current) => {
-      const build = buildById(current, id);
+      const build = buildById(current, canonicalBuildId(id));
       return build
         ? replaceBuild(current, { ...build, parent: null })
         : current;
     });
 
   const mergeVariant = async (id: string) => {
-    const variant = library.value ? buildById(library.value, id) : undefined;
+    const variant = library.value ? buildById(library.value, canonicalBuildId(id)) : null;
     const parentId = variant?.parent;
     if (!parentId) return;
-    await commit("Variant merged into its original", (current) => {
-      const child = buildById(current, id);
+    const saved = await commit("Variant merged into its original", (current) => {
+      const child = buildById(current, canonicalBuildId(id));
       const parent = child?.parent ? buildById(current, child.parent) : undefined;
       if (!child || !parent) return current;
       const updated = replaceBuild(current, {
@@ -376,7 +357,8 @@ export function useLibrary(host: ToolsHost) {
         })),
       };
     });
-    selectedId.value = parentId;
+    if (saved) selectedId.value = parentId;
+    return saved;
   };
 
   const updateTeam = (
@@ -393,8 +375,8 @@ export function useLibrary(host: ToolsHost) {
 
   const duplicateTeam = async (id: string) => {
     const nextId = `team-${crypto.randomUUID()}`;
-    await commit("Team duplicated", (current) => {
-      const source = teamById(current, id);
+    const saved = await commit("Team duplicated", (current) => {
+      const source = teamById(current, teamId(id));
       return source
         ? {
             ...current,
@@ -408,16 +390,20 @@ export function useLibrary(host: ToolsHost) {
           }
         : current;
     });
-    kind.value = "team";
-    selectedId.value = nextId;
+    if (saved) {
+      kind.value = "team";
+      selectedId.value = nextId;
+    }
+    return saved;
   };
 
   const deleteTeam = async (id: string, deleteExclusiveBuilds = false) => {
-    await commit(
+    const saved = await commit(
       deleteExclusiveBuilds ? "Team and unused builds deleted" : "Team deleted",
-      (current) => removeTeam(current, id, deleteExclusiveBuilds),
+      (current) => removeTeam(current, teamId(id), deleteExclusiveBuilds),
     );
-    selectedId.value = library.value?.teams[0]?.id ?? "";
+    if (saved) selectedId.value = library.value?.teams[0]?.id ?? "";
+    return saved;
   };
 
   const importBuild = async (code: string, requestedName = "") => {
@@ -443,7 +429,7 @@ export function useLibrary(host: ToolsHost) {
     const names = new Set(library.value.builds.map((build) => build.name));
     const name = uniqueName(names, baseName);
     const nextId = id("build");
-    await commit("Build imported", (current) => ({
+    const saved = await commit("Build imported", (current) => ({
       ...current,
       version: LIBRARY_VERSION,
       builds: [{
@@ -458,18 +444,20 @@ export function useLibrary(host: ToolsHost) {
         origin: "template-code",
       }, ...current.builds],
     }));
-    kind.value = "build";
-    selectedId.value = nextId;
-    return true;
+    if (saved) {
+      kind.value = "build";
+      selectedId.value = nextId;
+    }
+    return saved;
   };
 
   const createBlankBuild = async (requestedName = "") => {
-    if (!library.value) return;
+    if (!library.value) return false;
     const nextId = id("build");
     const baseName = requestedName.trim() || "New build";
     const names = new Set(library.value.builds.map((build) => build.name));
     const name = uniqueName(names, baseName);
-    await commit("Blank build created", (current) => ({
+    const saved = await commit("Blank build created", (current) => ({
       ...current,
       builds: [{
         id: canonicalBuildId(nextId),
@@ -485,14 +473,17 @@ export function useLibrary(host: ToolsHost) {
         origin: null,
       }, ...current.builds],
     }));
-    kind.value = "build";
-    selectedId.value = nextId;
+    if (saved) {
+      kind.value = "build";
+      selectedId.value = nextId;
+    }
+    return saved;
   };
 
   const createTeam = async (requestedName = "") => {
     const nextId = id("team");
     const name = requestedName.trim() || "New team";
-    await commit("Team created", (current) => ({
+    const saved = await commit("Team created", (current) => ({
       ...current,
       teams: [{
         id: teamId(nextId),
@@ -505,8 +496,57 @@ export function useLibrary(host: ToolsHost) {
         slots: emptyTeamSlots(),
       }, ...current.teams],
     }));
-    kind.value = "team";
-    selectedId.value = nextId;
+    if (saved) {
+      kind.value = "team";
+      selectedId.value = nextId;
+    }
+    return saved;
+  };
+
+  const importTeamCode = async (code: string): Promise<boolean> => {
+    if (!library.value || saving.value) return false;
+    let bundle;
+    try {
+      bundle = decodeTeamBundle(code);
+    } catch (cause) {
+      showNotice(
+        cause instanceof Error ? cause.message : "That team code could not be read.",
+        "error",
+      );
+      return false;
+    }
+    let importedId = "";
+    const saved = await commit("Team imported", (current) =>
+      importTeamBundle(current, bundle, (kind) => {
+        const next = id(kind);
+        if (kind === "team") importedId = next;
+        return next;
+      }));
+    if (saved) {
+      kind.value = "team";
+      selectedId.value = importedId;
+    }
+    return saved;
+  };
+
+  const teamCode = (team: Team): string => {
+    if (!library.value) throw new Error("The library is not ready.");
+    return encodeTeamBundle(library.value, team.id);
+  };
+
+  const retrySkills = async (): Promise<boolean> => {
+    try {
+      await host.reloadSkills();
+      skillProblem.value = null;
+      showNotice("Skill data is ready.");
+      return true;
+    } catch (cause) {
+      skillProblem.value = cause instanceof Error
+        ? cause.message
+        : "The skill catalogue did not load.";
+      showNotice(skillProblem.value, "error");
+      return false;
+    }
   };
 
   /**
@@ -522,13 +562,13 @@ export function useLibrary(host: ToolsHost) {
     const teamNames = new Set(library.value.teams.map((team) => team.name));
     const captured = captureParty(
       host.party.value,
-      uniqueName(teamNames, "Current party"),
+      uniqueName(teamNames, "Saved party"),
       (kind) => id(kind),
     );
     if (!captured) {
       showNotice(
         host.party.value.status === "ready"
-          ? "There are no heroes in your party to save."
+          ? "No identifiable party members are available to save."
           : "No party observed yet. Guild Wars may still be loading.",
         "warning",
       );
@@ -540,21 +580,28 @@ export function useLibrary(host: ToolsHost) {
       buildNames.add(name);
       return { ...build, name };
     });
-    await commit("Team saved from your party", (current) => ({
+    const saved = await commit("Team saved from your party", (current) => ({
       ...current,
       builds: [...builds, ...current.builds],
       teams: [captured.team, ...current.teams],
     }));
+    if (!saved) return null;
     kind.value = "team";
     selectedId.value = captured.team.id;
-    // Overwrites the commit's own notice on purpose: the gaps are the part
-    // worth reading, and "saved" was already visible in the panel behind it.
-    showNotice(
-      `Saved ${builds.length} ${builds.length === 1 ? "build" : "builds"}. `
-      + `${captured.gaps.length} ${captured.gaps.length === 1 ? "thing" : "things"} `
-      + "could not be read — the team's notes say which.",
-      "warning",
-    );
+    const savedBuilds = `Saved ${builds.length} ${builds.length === 1 ? "build" : "builds"}.`;
+    if (captured.gaps.length === 0) {
+      showNotice(`${savedBuilds} The complete observed party is ready in your library.`);
+    } else {
+      const firstGap = captured.gaps[0]!;
+      const more = captured.gaps.slice(1);
+      showNotice(
+        `${savedBuilds} ${firstGap}`
+        + (more.length > 0
+          ? ` ${more.length} more ${more.length === 1 ? "issue is" : "issues are"} in the team notes.`
+          : " The team notes keep this issue."),
+        "warning",
+      );
+    }
     return captured;
   };
 
@@ -608,8 +655,7 @@ export function useLibrary(host: ToolsHost) {
         ),
       };
       try {
-        await host.saveLibrary(next);
-        library.value = next;
+        library.value = await host.saveLibrary(next);
       } catch {
         const message = `Team applied (${changes}), but its last-used time could not be saved.`;
         applyStatus.value = { teamId: team.id, tone: "warning", message };
@@ -617,20 +663,35 @@ export function useLibrary(host: ToolsHost) {
       }
       // Named, not counted. A skill the game refused is almost always one the
       // account has not unlocked, and the name is what tells the player that.
-      const skipped = (result.skippedSkills ?? [])
+      const skipped = result.skippedSkills
         .map((id) => skillId(id))
         .map((skill) => host.skills.has(skill) ? host.skills.get(skill).name : `#${skill}`);
+      const skippedIds = new Set(result.skippedSkills.map((id) => Number(skillId(id))));
+      const details = team.slots.flatMap((slot, index) => {
+        if (slot.build === null) return [];
+        const build = buildById(source, slot.build);
+        if (!build) return [];
+        const skills = [...new Set(build.skills.flatMap((id) => {
+          if (id === null || !skippedIds.has(Number(id))) return [];
+          return [host.skills.has(id) ? host.skills.get(id).name : `#${id}`];
+        }))];
+        return skills.length === 0
+          ? []
+          : [{ member: teamMemberLabel(slot.hero, index), skills }];
+      });
       const message = skipped.length
-        ? `Team applied · ${changes}. Guild Wars would not equip `
+        ? `Team applied with skipped skills · ${changes}. Guild Wars did not equip `
           + `${skipped.slice(0, 3).join(", ")}`
-          + `${skipped.length > 3 ? ` and ${skipped.length - 3} more` : ""}`
-          + " — those are usually skills the account has not unlocked."
-        : result.skillsSkipped
-          ? `Team applied · ${changes}. Guild Wars skipped one or more unavailable skills.`
-          : result.completedChanges === 0
+          + `${skipped.length > 3 ? ` and ${skipped.length - 3} more` : ""}.`
+        : result.completedChanges === 0
             ? "Team already matches the observed party."
             : `Team applied · ${changes}.`;
-      applyStatus.value = { teamId: team.id, tone: "success", message };
+      applyStatus.value = {
+        teamId: team.id,
+        tone: skipped.length ? "warning" : "success",
+        message,
+        ...(details.length > 0 ? { details } : {}),
+      };
       return result;
     } catch (cause) {
       const message = cause instanceof Error
@@ -657,11 +718,11 @@ export function useLibrary(host: ToolsHost) {
     try {
       const loaded = await host.loadLibrary();
       library.value = loaded.library;
-      selectedId.value = loaded.library.teams[0]?.id ?? loaded.library.builds[0]?.id ?? "";
-      if (loaded.library.teams.length === 0 && loaded.library.builds.length > 0) kind.value = "build";
+      selectedId.value = loaded.library.teams[0]?.id ?? "";
       if (loaded.recovered) {
         showNotice("The damaged library was preserved and a new empty library opened.", "warning");
       } else if (loaded.skillProblem) {
+        skillProblem.value = loaded.skillProblem;
         showNotice(loaded.skillProblem, "error");
       }
     } catch (cause) {
@@ -678,20 +739,22 @@ export function useLibrary(host: ToolsHost) {
     // refused, not the ability to call around the controller for everything
     // else it wraps.
     applyUnavailable: host.applyUnavailable,
-    library, loading, saving, error, notice, applyStatus, kind, selectedId, query, tag,
+    library, loading, saving, error, notice, skillProblem, applyStatus, kind, selectedId, query, tag,
     items, tags, selectedBuild, selectedTeam, canUndo, selectKind,
     select: (next: LibraryItem) => {
       kind.value = next.kind;
       selectedId.value = next.id;
     },
-    usage: (id: string) => library.value ? buildUsage(library.value, id) : [],
+    usage: (id: string) => library.value ? usedBy(library.value, canonicalBuildId(id)) : [],
     validate: validateInContext,
     renameBuild, toggleBuildFavourite, updateBuildNotes, setTags,
     saveBuildDraft,
     createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
     publish, applyTeam, undo, reset,
-    importBuild, createBlankBuild, createTeam, captureCurrentParty,
+    importBuild, createBlankBuild, createTeam, importTeamCode, teamCode,
+    readClipboard: host.readClipboard, writeClipboard: host.writeClipboard,
+    retrySkills, captureCurrentParty, dismissNotice,
   };
 }
 

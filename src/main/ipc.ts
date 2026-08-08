@@ -52,9 +52,10 @@ import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js"
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import {
   loadBuildLibrary,
-  parseBuildLibrary,
   saveBuildLibrary,
 } from "./core/build-library.js";
+import { parseBuildLibrary } from "../shared/builds/parse-library.js";
+import { isGraphicsDiagnostics, toWireSocketEvent } from "./ipc-values.js";
 import { resolveDns } from "./core/dns.js";
 import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
@@ -83,7 +84,7 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { isRendererFingerprint } from "./diagnostics/schema.js";
+import { isRendererFingerprint } from "./diagnostics/schema-fields.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
@@ -131,16 +132,6 @@ function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
     throw new AllowlistError("invalid ipc origin");
   }
   return win;
-}
-
-function toWireSocketEvent(event: SocketEvent): SocketEvent {
-  if (event.type !== "data") return event;
-  // Structured clone requires a plain ArrayBuffer-backed view.
-  return {
-    type: "data",
-    socketId: event.socketId,
-    data: Uint8Array.from(event.data),
-  };
 }
 
 function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolean {
@@ -620,7 +611,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     buildLibrarySet: channel(one(parseBuildLibrary), async (_win, library) => {
-      await saveBuildLibrary(paths.buildLibrary, library);
+      return saveBuildLibrary(paths.buildLibrary, library);
     }),
 
     settingsGet: channel(nothing, async () => {
@@ -989,57 +980,6 @@ export function registerSteamIpcHandlers(
 
   registerChannelDefinitions(handlers);
   return () => steam.settled();
-}
-
-function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.userAgent === "string" &&
-    typeof record.jspi === "boolean" &&
-    typeof record.webglVersion === "string" &&
-    typeof record.renderer === "string" &&
-    typeof record.vendor === "string" &&
-    typeof record.hardwareAcceleration === "boolean" &&
-    [
-      "canvasWidth",
-      "canvasHeight",
-      "offscreenWidth",
-      "offscreenHeight",
-      "drawingBufferWidth",
-      "drawingBufferHeight",
-      "devicePixelRatio",
-      "renderScale",
-      "samples",
-    ].every(
-      (key) => typeof record[key] === "number" && Number.isFinite(record[key]),
-    ) &&
-    typeof record.antialias === "boolean" &&
-    record.userAgent.length <= 2_048 &&
-    record.webglVersion.length <= 1_024 &&
-    record.renderer.length <= 1_024 &&
-    record.vendor.length <= 1_024 &&
-    (record.canvasWidth as number) >= 0 &&
-    (record.canvasWidth as number) <= 32_768 &&
-    (record.canvasHeight as number) >= 0 &&
-    (record.canvasHeight as number) <= 32_768 &&
-    (record.offscreenWidth as number) >= 0 &&
-    (record.offscreenWidth as number) <= 32_768 &&
-    (record.offscreenHeight as number) >= 0 &&
-    (record.offscreenHeight as number) <= 32_768 &&
-    (record.drawingBufferWidth as number) >= 0 &&
-    (record.drawingBufferWidth as number) <= 32_768 &&
-    (record.drawingBufferHeight as number) >= 0 &&
-    (record.drawingBufferHeight as number) <= 32_768 &&
-    Number.isInteger(record.samples) &&
-    (record.samples as number) >= 0 &&
-    (record.samples as number) <= 64 &&
-    (record.devicePixelRatio as number) > 0 &&
-    (record.devicePixelRatio as number) <= 16 &&
-    (record.renderScale === 1 ||
-      record.renderScale === 1.5 ||
-      record.renderScale === 2)
-  );
 }
 
 export function emitSocketEvent(ownerId: number, event: SocketEvent): void {

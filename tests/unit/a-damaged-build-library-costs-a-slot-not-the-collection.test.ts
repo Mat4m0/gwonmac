@@ -29,12 +29,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
-  EMPTY_LIBRARY,
   loadBuildLibrary,
-  parseBuildLibrary,
   referencedBuildIds,
   saveBuildLibrary,
 } from "../../src/main/core/build-library.ts";
+import {
+  EMPTY_LIBRARY,
+  parseBuildLibrary,
+} from "../../src/shared/builds/parse-library.ts";
 import {
   LIBRARY_VERSION,
   buildId,

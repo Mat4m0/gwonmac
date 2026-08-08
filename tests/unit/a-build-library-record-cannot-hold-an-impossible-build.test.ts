@@ -195,7 +195,7 @@ test("a bar is eight slots, and a ninth cannot be written", () => {
 
 test("the slot list every module iterates is as long as the bar it walks", () => {
   // The tuple above is genuinely fixed; the loops that *consume* it were not.
-  // `validate.ts`, `diff.ts`, `skill-template.ts` and `party-loadout.ts` each
+  // validation, diffing, and the two documented template formats each
   // restated "eight", none of them anchored to `SkillBar`, and the usual
   // `as const satisfies readonly SkillSlotIndex[]` constrains membership rather
   // than length — so cutting a list to six left `tsc` green and a validator

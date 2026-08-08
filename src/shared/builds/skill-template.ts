@@ -71,11 +71,11 @@
  *
  * ## Why the head and the body are separate functions
  *
- * A party loadout carries the same body under an 8-bit hero id instead of the
- * 8-bit `kind`/`version` head (§9), so `party-loadout.ts` needs the body and not
- * the code. It gets `encodeTemplateBody`/`decodeTemplateBody`, which are the
- * same two functions this file's own codec runs on rather than a second path
- * beside them. The alternative — handing that file a string and letting it find
+ * The retained party-loadout evidence carries the same body under an 8-bit
+ * hero id instead of the 8-bit `kind`/`version` head (§9). The shared
+ * `encodeTemplateBody`/`decodeTemplateBody` functions keep that evidence
+ * reproducible without retaining an unproven production codec. The alternative
+ * — handing another format a string and letting it find
  * where a body ends — makes it a second reader of §5.2's width rules, and the
  * two would disagree the first time a width moved.
  */

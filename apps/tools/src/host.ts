@@ -64,7 +64,10 @@ export interface ToolsHost {
    */
   readonly party: Ref<LiveParty>;
   loadLibrary(): Promise<LibraryLoad>;
-  saveLibrary(library: BuildLibrary): Promise<void>;
+  saveLibrary(library: BuildLibrary): Promise<BuildLibrary>;
+  readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
+  reloadSkills(): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
   applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
   /**
@@ -92,6 +95,7 @@ function safeFileName(value: string): string {
 
 export function createDemoHost(storage: Storage | null = null): ToolsHost {
   let memory = cloneLibrary(demoLibrary);
+  let clipboard = "";
   const read = (): BuildLibrary => {
     if (!storage) return cloneLibrary(memory);
     const saved = storage.getItem(STORAGE_KEY);
@@ -127,14 +131,26 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     async saveLibrary(library) {
       memory = cloneLibrary(library);
       storage?.setItem(STORAGE_KEY, JSON.stringify(memory));
+      return cloneLibrary(memory);
     },
+    readClipboard: async () =>
+      typeof navigator !== "undefined" && navigator.clipboard
+        ? navigator.clipboard.readText()
+        : clipboard,
+    writeClipboard: async (text) => {
+      clipboard = text;
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      }
+    },
+    reloadSkills: async () => undefined,
     async publishBuild(build) {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { fileName: safeFileName(build.name), location: "Templates/Skills" };
     },
     async applyTeam() {
       await new Promise((resolve) => setTimeout(resolve, 180));
-      return { commandId: 1, completedChanges: 0, skillsSkipped: false };
+      return { commandId: 1, completedChanges: 0, skippedSkills: [] };
     },
     async reset() {
       storage?.removeItem(STORAGE_KEY);
@@ -253,9 +269,10 @@ export function createNativeHost(
       ]);
       return skills === null ? library : { ...library, skillProblem: skills };
     },
-    async saveLibrary(library) {
-      await api.buildLibrary.set(library);
-    },
+    saveLibrary: (library) => api.buildLibrary.set(library),
+    readClipboard: () => api.clipboard.readText(),
+    writeClipboard: (text) => api.clipboard.writeText(text),
+    reloadSkills: loadSkills,
     async publishBuild(build) {
       const code = encodeSkillTemplate(build);
       if (code === null) {
