@@ -42,11 +42,7 @@ import type {
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import {
-  createTeamApplyCommands,
-  TEAM_COMMAND_PAYLOAD_BYTES,
-  type EnhancementCommandThunk,
-} from "./enhancement-team-commands.js";
+import type { EnhancementCommandThunk } from "./enhancement-team-commands.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
@@ -222,6 +218,11 @@ export async function installEnhancements(
   if (capabilities.commands && commandThunk === null) {
     throw new Error("the commands profile derived a module with no command thunk");
   }
+  // Keep the command implementation out of Core-only sessions altogether.
+  // The derived module and its JavaScript boundary arrive as one capability.
+  const teamCommands = capabilities.commands
+    ? await import("./enhancement-team-commands.js")
+    : null;
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
   // call sites below stop checking what they pass.
@@ -321,7 +322,7 @@ export async function installEnhancements(
     }
     if (capabilities.commands) {
       payloadPointer = Number(
-        exports.malloc(TEAM_COMMAND_PAYLOAD_BYTES),
+        exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
       );
     }
     if (
@@ -359,7 +360,7 @@ export async function installEnhancements(
         ? [{
             name: "command payload",
             pointer: payloadPointer,
-            size: TEAM_COMMAND_PAYLOAD_BYTES,
+            size: teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES,
             align: 4,
           }]
         : []),
@@ -601,7 +602,7 @@ export async function installEnhancements(
         | (teamEnabled() ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
       kernelDispatch(3, active, 0, 0, 0, 0);
     };
-    const commands = commandThunk === null ? null : createTeamApplyCommands({
+    const commands = commandThunk === null ? null : teamCommands!.createTeamApplyCommands({
       memory,
       payloadPointer,
       send: commandThunk,
