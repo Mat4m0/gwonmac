@@ -32,9 +32,15 @@ type Slot = {
   skills: readonly number[] | null;
   attributes?: readonly (readonly number[])[] | null;
 };
+type Player = Omit<Slot, "hero" | "behaviour">;
 
 /** A published party, built the way the decoder publishes one. */
-function party(slots: readonly Slot[], inOutpost: boolean | null = true): LiveParty {
+function party(
+  slots: readonly Slot[],
+  inOutpost: boolean | null = true,
+  hardMode = false,
+  player: Player | null = null,
+): LiveParty {
   return liveParty({
     status: "ready",
     partyObserved: true,
@@ -44,13 +50,17 @@ function party(slots: readonly Slot[], inOutpost: boolean | null = true): LivePa
     party: {
       status: "ready",
       rosterObserved: true,
+      playRegion: "pve",
+      hardMode,
       inOutpost,
       slotCount: slots.length,
       slots: [
         {
-          index: 0, occupied: false, hero: null, agentId: null, level: null,
-          professions: null, behaviour: null, skills: null, disabled: null,
-          attributes: null,
+          index: 0, occupied: player !== null, hero: null,
+          agentId: player?.agentId ?? null, level: player === null ? null : 20,
+          professions: player?.professions ?? null, behaviour: null,
+          skills: player?.skills ?? null, disabled: player === null ? null : 0,
+          attributes: player?.attributes ?? null,
         },
         ...slots.map((slot, index) => ({
           index: index + 1,
@@ -81,7 +91,20 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
   const sent: string[] = [];
   let world = [...initial];
   let outpost = inOutpost;
+  let hardMode = false;
+  let player: Player | null = null;
   const commands: TeamApplyCommands = {
+    setHardMode: (enabled) => { sent.push(`hard:${enabled}`); return true; },
+    setPlayerSecondary: (agentId, profession) => {
+      sent.push(`player-secondary:${agentId}:${profession}`); return true;
+    },
+    setPlayerSkills: (agentId, skills) => {
+      sent.push(`player-skills:${agentId}:${skills.join(",")}`); return true;
+    },
+    setPlayerAttributes: (agentId, ranks) => {
+      sent.push(`player-attributes:${agentId}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
+      return true;
+    },
     addHero: (heroId) => { sent.push(`add:${heroId}`); return true; },
     kickHero: (heroId) => { sent.push(`kick:${heroId}`); return true; },
     setHeroBehaviour: (agentId, behaviour) => {
@@ -100,13 +123,15 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
   };
   const environment: TeamApplyEnvironment = {
     commands,
-    party: () => party(world, outpost),
+    party: () => party(world, outpost, hardMode, player),
     settle: () => Promise.resolve(),
   };
   return {
     sent,
     environment,
     set(next: readonly Slot[]) { world = [...next]; },
+    setHard(next: boolean) { hardMode = next; },
+    setPlayer(next: Player | null) { player = next; },
     leave() { outpost = false; },
     /** Apply the change the next time the runner looks, as the game would. */
     react(when: string, next: readonly Slot[]) {
@@ -129,7 +154,7 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
 }
 
 function member(over: Partial<TeamApplyMember> = {}): TeamApplyMember {
-  return { hero: null, build: null, behaviour: null, disabled: [], ...over };
+  return { hero: null, build: null, behaviour: null, ...over };
 }
 
 function plan(members: readonly TeamApplyMember[]): TeamApplyPlan {
@@ -147,6 +172,70 @@ function build() {
     ],
   } as unknown as NonNullable<TeamApplyMember["build"]>;
 }
+
+test("Hard Mode is changed and confirmed before any team command", async () => {
+  const game = harness([]);
+  const original = game.environment.commands.setHardMode;
+  game.environment.commands.setHardMode = (enabled) => {
+    const sent = original(enabled);
+    game.setHard(enabled);
+    return sent;
+  };
+  const result = await runTeamApply(
+    { mode: "hard", members: [member()] },
+    game.environment,
+    1,
+  );
+  assert.deepEqual(game.sent, ["hard:true"]);
+  assert.equal(result.completedChanges, 1);
+});
+
+test("the player's build is applied before hero work and confirmed field by field", async () => {
+  const game = harness([]);
+  game.setPlayer({
+    agentId: 7,
+    professions: [1, 3],
+    skills: [90, 91, 92, 93, 94, 95, 96, 97],
+    attributes: [],
+  });
+  const secondary = game.environment.commands.setPlayerSecondary;
+  game.environment.commands.setPlayerSecondary = (agentId, profession) => {
+    const sent = secondary(agentId, profession);
+    game.setPlayer({
+      agentId: 7, professions: [1, 2], skills: null, attributes: [],
+    });
+    return sent;
+  };
+  const skills = game.environment.commands.setPlayerSkills;
+  game.environment.commands.setPlayerSkills = (agentId, ids) => {
+    const sent = skills(agentId, ids);
+    game.setPlayer({
+      agentId: 7, professions: [1, 2], skills: ids, attributes: [],
+    });
+    return sent;
+  };
+  const attributes = game.environment.commands.setPlayerAttributes;
+  game.environment.commands.setPlayerAttributes = (agentId, ranks) => {
+    const sent = attributes(agentId, ranks);
+    game.setPlayer({
+      agentId: 7, professions: [1, 2],
+      skills: [1, 2, 3, 4, 5, 6, 7, 8], attributes: ranks,
+    });
+    return sent;
+  };
+
+  const result = await runTeamApply(
+    { mode: "normal", members: [member({ build: build() })] },
+    game.environment,
+    2,
+  );
+  assert.deepEqual(game.sent, [
+    "player-secondary:7:2",
+    "player-skills:7:1,2,3,4,5,6,7,8",
+    "player-attributes:7:17=7,19=12",
+  ]);
+  assert.equal(result.completedChanges, 3);
+});
 
 test("a hero the game never adds is a refusal, however cheerful the command", async () => {
   const game = harness([]);

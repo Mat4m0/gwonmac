@@ -15,7 +15,7 @@ use core::mem::size_of;
 pub(crate) const SNAPSHOT_BYTES: u32 = size_of::<Snapshot>() as u32;
 pub(crate) const CONFIG_BYTES: u32 = size_of::<Layout>() as u32;
 pub(crate) const MAGIC: u32 = 0x4254_5747;
-pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 1;
+pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 2;
 
 pub(crate) const FLAG_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAYER_VALID: u32 = 1 << 1;
@@ -30,7 +30,7 @@ pub(crate) const KNOWN_FEATURES: u32 =
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
-pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 3;
+pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 4;
 pub(crate) const FLAG_HERO_AVAILABLE: u32 = 1 << 0;
 /// The party walk ran to completion on a live game this publication.
 ///
@@ -47,14 +47,12 @@ pub(crate) const FLAG_PARTY_OBSERVED: u32 = 1 << 1;
 pub(crate) const DISPATCH_TICK: u32 = 0;
 pub(crate) const DISPATCH_CURSOR: u32 = 1;
 pub(crate) const DISPATCH_UI: u32 = 2;
-pub(crate) const PANEL_UNKNOWN: u32 = 0;
-pub(crate) const PANEL_HIDDEN: u32 = 1;
-pub(crate) const PANEL_SHOWN: u32 = 2;
+pub(crate) const DISPATCH_ACTIVE_FEATURES: u32 = 3;
 pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
 pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;
 pub(crate) const PARTY_MAGIC: u32 = 0x5054_5747;
-pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 3;
+pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 4;
 
 /// The walk completed on a live game. Same meaning, and the same reason, as
 /// `FLAG_PARTY_OBSERVED` on the toolbox region: an empty roster and an unread
@@ -69,6 +67,12 @@ pub(crate) const FLAG_UNLOCK_OBSERVED: u32 = 1 << 1;
 /// operation and the interface has to be able to refuse before it starts
 /// rather than half-way through.
 pub(crate) const FLAG_IN_OUTPOST: u32 = 1 << 2;
+/// The party context's difficulty bit was read.
+pub(crate) const FLAG_HARD_MODE_OBSERVED: u32 = 1 << 3;
+
+pub(crate) const PLAY_REGION_UNKNOWN: u32 = 0;
+pub(crate) const PLAY_REGION_PVE: u32 = 1;
+pub(crate) const PLAY_REGION_PVP: u32 = 2;
 
 /// This slot holds a hero. An unoccupied slot publishes nothing else.
 pub(crate) const SLOT_OCCUPIED: u32 = 1 << 0;
@@ -195,6 +199,10 @@ pub(crate) struct Layout {
     pub(crate) attribute_entry_stride: u32,
     pub(crate) attribute_entry_id: u32,
     pub(crate) attribute_entry_rank: u32,
+    pub(crate) area_info: u32,
+    pub(crate) area_info_count: u32,
+    pub(crate) area_info_stride: u32,
+    pub(crate) area_info_flags: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -271,6 +279,10 @@ impl Layout {
         attribute_entry_stride: 0,
         attribute_entry_id: 0,
         attribute_entry_rank: 0,
+        area_info: 0,
+        area_info_count: 0,
+        area_info_stride: 0,
+        area_info_flags: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -287,7 +299,8 @@ pub(crate) struct Snapshot {
     pub(crate) flags: u32,
     pub(crate) tick_count: u32,
     pub(crate) map_id: u32,
-    pub(crate) instance_type: u32,
+    /// Instance type in the low byte, `PLAY_REGION_*` in the next byte.
+    pub(crate) instance_and_region: u32,
     pub(crate) player_id: u32,
     pub(crate) player_x: f32,
     pub(crate) player_y: f32,
@@ -326,8 +339,7 @@ pub(crate) struct ToolboxSnapshot {
     pub(crate) hero_count: u32,
     pub(crate) first_hero_id: u32,
     pub(crate) first_hero_agent_id: u32,
-    pub(crate) panel_state: u32,
-    pub(crate) reserved: [u32; 6],
+    pub(crate) reserved: [u32; 7],
 }
 
 /// One party position, as much of it as has been read.
@@ -376,11 +388,13 @@ pub(crate) struct PartySnapshot {
     /// the two must not arrive as the same zero bit.
     pub(crate) unlock_known_low: u32,
     pub(crate) unlock_known_high: u32,
-    pub(crate) reserved: [u32; 6],
+    pub(crate) play_region: u32,
+    pub(crate) hard_mode: u32,
+    pub(crate) reserved: [u32; 4],
     pub(crate) slots: [PartySlot; PARTY_SLOTS],
 }
 
-const _: [(); 324] = [(); size_of::<Layout>()];
+const _: [(); 340] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 832] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];

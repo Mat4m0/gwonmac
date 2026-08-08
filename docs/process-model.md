@@ -27,7 +27,7 @@ Chromium renderer
   loading/settings UI
   Emscripten Module host
   JSPI WASM + WebGL/ANGLE
-  default-on exact-build Enhancement foundation
+  always-on certified Core plus opt-in GWonMac Tools Beta
 ```
 
 The renderer has no Node integration. Context isolation, Chromium sandboxing,

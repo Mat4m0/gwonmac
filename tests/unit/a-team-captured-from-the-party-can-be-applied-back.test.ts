@@ -73,7 +73,7 @@ function vacant(index: number): RegionSlot {
   };
 }
 
-function party(slots: readonly RegionSlot[]) {
+function party(slots: readonly RegionSlot[], player: RegionSlot = vacant(0)) {
   return liveParty({
     status: "ready",
     partyObserved: true,
@@ -84,7 +84,7 @@ function party(slots: readonly RegionSlot[]) {
       status: "ready",
       rosterObserved: true,
       slotCount: slots.filter((slot) => slot.occupied).length,
-      slots: [vacant(0), ...slots],
+      slots: [player, ...slots],
     },
   });
 }
@@ -170,11 +170,36 @@ test("the player's own slot stays empty, which is the only shape it may have", (
   assert.equal(player?.hero, null);
   assert.equal(player?.build, null, "the player's own bar is not readable");
   assert.equal(player?.behaviour, null);
-  assert.deepEqual(player?.disabled, []);
   assert.ok(
     captured.gaps.some((gap) => gap.includes("Your own build")),
     "and capture says so rather than leaving it to be noticed",
   );
+});
+
+test("a fully observed player is saved into slot zero", () => {
+  const observedPlayer = hero(0, 0, {
+    hero: null,
+    agentId: 7,
+    behaviour: null,
+    professions: [3, 5],
+    skills: [201, 202, 203, 204, 205, 206, 207, 208],
+    attributes: [[16, 8], [1, 3]],
+  });
+  const captured = captureParty(
+    party([hero(1, 38)], observedPlayer),
+    "Current party",
+    counter(),
+  );
+  assert.ok(captured);
+  const playerBuild = captured.builds.find(
+    ({ id }) => id === captured.team.slots[0]?.build,
+  );
+  assert.ok(playerBuild);
+  assert.deepEqual(playerBuild.professions, ["Mo", "Me"]);
+  assert.deepEqual(playerBuild.skills.map(Number), [201, 202, 203, 204, 205, 206, 207, 208]);
+  assert.deepEqual(playerBuild.attributes, { DivineFavor: 8, IllusionMagic: 3 });
+  assert.equal(captured.team.slots[0]?.hero, null);
+  assert.equal(captured.team.slots[0]?.behaviour, null);
 });
 
 test("a captured build carries the ranks that were read, by name", () => {
@@ -254,52 +279,7 @@ test("a hero whose bar was not read keeps their place and gets no build", () => 
   assert.ok(resolution.valid, "a build-less hero is a legal team member");
 });
 
-test("disabled slots are dropped with the build they point at", () => {
-  // Reachable: `disabled` rides the skillbar read and the professions come from
-  // a different structure, so a bar can be read for a hero whose professions
-  // were not. `disabled-without-build` refuses the pair, so capture must not
-  // make it.
-  const captured = captureParty(
-    party([hero(1, 38, { professions: null, disabled: 0b0000_0101 })]),
-    "Current party",
-    counter(),
-  );
-  assert.ok(captured);
-
-  assert.equal(captured.builds.length, 0);
-  assert.deepEqual(captured.team.slots[1]?.disabled, []);
-
-  const resolution = resolveTeamApplyPlan(
-    captured.team,
-    libraryOf(captured),
-    (build) => validateBuild(build, anySkill),
-  );
-  assert.ok(resolution.valid);
-});
-
-test("disabled slots survive when the build they point at does", () => {
-  const captured = captureParty(
-    party([hero(1, 38, { disabled: 0b0000_0101 })]),
-    "Current party",
-    counter(),
-  );
-  assert.ok(captured);
-  assert.deepEqual(captured.team.slots[1]?.disabled, [0, 2]);
-
-  const resolution = resolveTeamApplyPlan(
-    captured.team,
-    libraryOf(captured),
-    (build) => validateBuild(build, anySkill),
-  );
-  assert.equal(resolution.valid, false);
-  assert.ok(
-    !resolution.valid
-      && resolution.problems.some(({ rule }) => rule === "disabled-skills"),
-    "the value is refused until its setter is certified, not silently ignored",
-  );
-});
-
-test("a stored player build is refused until the player setter is certified", () => {
+test("a stored player build is admitted for the certified player setter", () => {
   const captured = captureParty(party([hero(1, 38)]), "Current party", counter());
   assert.ok(captured);
   const playerBuild = captured.builds[0];
@@ -315,12 +295,7 @@ test("a stored player build is refused until the player setter is certified", ()
     libraryOf(captured),
     (build) => validateBuild(build, anySkill),
   );
-  assert.equal(resolution.valid, false);
-  assert.ok(
-    !resolution.valid
-      && resolution.problems.some(({ rule }) => rule === "player-build"),
-    "slot 0 cannot pass through a runner that does not apply it",
-  );
+  assert.equal(resolution.valid, true);
 });
 
 test("behaviour is carried, never defaulted to Guard", () => {

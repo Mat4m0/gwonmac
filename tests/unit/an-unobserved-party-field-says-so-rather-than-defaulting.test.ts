@@ -106,7 +106,6 @@ test("every field the companion has not published reads as not observed", () => 
   assert.equal(hero.behaviour, null, "behaviour");
   assert.equal(hero.level, null, "level");
   assert.equal(hero.skills, null, "skill bar");
-  assert.equal(hero.disabled, null, "disabled slots");
 });
 
 test("account and instance facts stay unknown rather than defaulting to false", () => {
@@ -231,14 +230,12 @@ test("the full roster wins over the summary, and carries what was read", () => {
   assert.equal(devona?.level, 16);
   // A zero skill id is an empty slot on the bar, not skill zero.
   assert.deepEqual(devona?.skills?.[2], null);
-  assert.deepEqual(devona?.disabled, [0, 2]);
 
   // A monoclass hero has a real `null` secondary, and unread fields stay null
   // beside a sibling that was read — the flags are per slot, not per party.
   assert.deepEqual(althea?.professions, ["Me", null]);
   assert.equal(althea?.behaviour, null);
   assert.equal(althea?.skills, null);
-  assert.equal(althea?.disabled, null);
 
   assert.deepEqual([...party.unlocked ?? []], [heroId(38), heroId(39)]);
 });

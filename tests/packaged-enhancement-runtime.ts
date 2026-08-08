@@ -38,6 +38,7 @@ import {
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_PARTY_BYTES,
+  COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../src/renderer/companion-snapshot.ts";
 import { root } from "./electron/fixtures.mts";
@@ -126,9 +127,16 @@ const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   toolbox: true,
   commands: false,
 });
+const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: true,
+  toolbox: true,
+  commands: true,
+});
 const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;
-const TOOLBOX_CONFIG_POINTER = 0x11_010;
+const TOOLBOX_SNAPSHOT_POINTER = 0x11_010;
+const TOOLBOX_CONFIG_POINTER = TOOLBOX_SNAPSHOT_POINTER + COMPANION_SNAPSHOT_BYTES;
 const TOOLBOX_CURSOR_POINTER = (TOOLBOX_CONFIG_POINTER + CONFIG_BYTES + 7) & ~7;
 const TOOLBOX_STATE_POINTER =
   (TOOLBOX_CURSOR_POINTER + COMPANION_CURSOR_BYTES + 7) & ~7;
@@ -155,6 +163,19 @@ const DEVELOPER_RUNTIME_KEYS = Object.freeze([
   "toolbox",
   "wasmMemoryBytes",
 ]);
+const PRODUCT_RUNTIME_KEYS = Object.freeze([
+  ...DEVELOPER_RUNTIME_KEYS,
+  "addHero",
+  "kickHero",
+  "setHardMode",
+  "setHeroAttributes",
+  "setHeroBehaviour",
+  "setHeroSecondary",
+  "setHeroSkills",
+  "setPlayerAttributes",
+  "setPlayerSecondary",
+  "setPlayerSkills",
+].sort());
 // The readout fixture drives the bundled installer as the target-observer
 // program — the only path to the readout since the user setting retired — and
 // that program alone carries the explicit benchmark hook control.
@@ -489,6 +510,7 @@ async function assertPackagedOffSession() {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
+          tools: false,
         },
         templateFsTrace: false,
       },
@@ -668,12 +690,12 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
       const view = new DataView(memory.buffer, snapshotPointer, 64);
       view.setUint32(8, sequence - 1, true);
       view.setUint32(0, 0x4254_5747, true);
-      view.setUint16(4, 1, true);
+      view.setUint16(4, 2, true);
       view.setUint16(6, 64, true);
       view.setUint32(12, target ? 7 : 3, true);
       view.setUint32(16, sequence, true);
       view.setUint32(20, 133, true);
-      view.setUint32(24, 0, true);
+      view.setUint32(24, 1 << 8, true);
       view.setUint32(28, 7, true);
       view.setFloat32(32, 10, true);
       view.setFloat32(36, 20, true);
@@ -711,7 +733,10 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
 }
 
 async function assertTargetReadoutLifecycle() {
-  const fixture = await launchPackaged("gw-packaged-target-readout-", {});
+  const fixture = await launchPackaged("gw-packaged-target-readout-", {
+    gwonmacTools: true,
+    targetReadout: true,
+  });
   try {
     const resources: string[] = [];
     fixture.page.on("request", (request) => resources.push(request.url()));
@@ -721,7 +746,7 @@ async function assertTargetReadoutLifecycle() {
     });
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init.enhancementSelection),
-      { nativeCursor: true },
+      { nativeCursor: true, tools: true },
     );
 
     assert.deepEqual(
@@ -863,7 +888,7 @@ async function assertTargetReadoutLifecycle() {
       [
         {
           name: "enhancement.installed",
-          companionAbi: 8,
+          companionAbi: 10,
           capabilityProfile: "target",
           installation: 1,
         },
@@ -953,6 +978,8 @@ async function assertToolboxFoundationLifecycle() {
         party: 0x70_3000,
         partyInfo: 0x70_4000,
         heroBuffer: 0x70_5000,
+        agentBuffer: 0x71_0000,
+        player: 0x71_1000,
       });
       view.setUint32(layout.contextRoot, game.contexts, true);
       view.setUint32(
@@ -970,6 +997,22 @@ async function assertToolboxFoundationLifecycle() {
       view.setUint32(game.character + layout.currentMapId, 133, true);
       view.setUint32(game.character + layout.currentInstanceType, 0, true);
       view.setUint32(game.character + layout.playerNumber, 42, true);
+      const area = layout.areaInfo + 133 * layout.areaInfoStride;
+      view.setUint32(area + 0x00, 1, true);
+      view.setUint32(area + 0x04, 0, true);
+      view.setUint32(area + 0x08, 0, true);
+      view.setUint32(area + 0x0c, 13, true);
+      view.setUint32(area + layout.areaInfoFlags, 0, true);
+      view.setUint32(layout.agentArray, game.agentBuffer, true);
+      view.setUint32(layout.agentArray + 4, 64, true);
+      view.setUint32(layout.agentArray + 8, 64, true);
+      view.setUint32(game.agentBuffer + 42 * 4, game.player, true);
+      view.setUint32(game.player + layout.agentId, 42, true);
+      view.setFloat32(game.player + layout.agentX, 10, true);
+      view.setFloat32(game.player + layout.agentY, 20, true);
+      view.setUint32(game.player + layout.agentType, 0xdb, true);
+      view.setUint16(game.player + layout.agentPlayerNumber, 42, true);
+      view.setUint16(game.player + layout.agentModelType, 0x3000, true);
       view.setUint32(game.game + layout.partyContext, game.party, true);
       view.setUint32(game.party + layout.playerParty, game.partyInfo, true);
       const heroArray = game.partyInfo + layout.partyHeroes;
@@ -1019,7 +1062,7 @@ async function assertToolboxFoundationLifecycle() {
               && readHook() === 0
               && toolboxCount() === 0
               && targetCount() === 0
-              && window.gwCompanionRuntime != null,
+              && window.gwCompanionRuntime == null,
             "clear did not own a disabled, disposed installation",
           );
           setTable(index, value);
@@ -1034,7 +1077,7 @@ async function assertToolboxFoundationLifecycle() {
             value !== null
               && table.get(index) === value
               && readHook() === 0
-              && toolboxCount() === 1
+              && toolboxCount() === 0
               && targetCount() === 0
               && window.gwCompanionRuntime == null,
             "callback publication did not precede runtime and hook publication",
@@ -1053,9 +1096,9 @@ async function assertToolboxFoundationLifecycle() {
             const enabling = value !== 0;
             requireStage(
               table.get(tableSize - 1) === installedCallback
-                && toolboxCount() === 1
+                && (enabling ? toolboxCount() === 0 : toolboxCount() <= 1)
                 && targetCount() === 0
-                && window.gwCompanionRuntime != null
+                && window.gwCompanionRuntime == null
                 && (enabling
                   ? transitions.at(-1) === "table-published"
                   : transitions.at(-1) === "enabled"),
@@ -1087,13 +1130,12 @@ async function assertToolboxFoundationLifecycle() {
             malloc,
             free,
             enhancement_hook_slot: hookSlot,
+            enhancement_command: () => 1,
           },
         },
         module,
-        // A fixed developer program replaces the saved selection: Toolbox
-        // must include cursor and exclude target observation for this launch.
-        { nativeCursor: false, tools: false },
-        "toolbox-foundation",
+        { nativeCursor: true, tools: true },
+        "none",
       );
       if (!runtime) throw new Error("Toolbox foundation did not install");
       const callback = table.get(tableSize - 1);
@@ -1101,21 +1143,38 @@ async function assertToolboxFoundationLifecycle() {
         throw new Error("Toolbox callback was not published");
       }
       callback(0, 123, 0, 0, 0, 0);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 2_000;
+        const observe = () => {
+          if (document.querySelectorAll("#toolbox-foundation").length === 1) {
+            resolve();
+          } else if (performance.now() >= deadline) {
+            reject(new Error(
+              `PvE policy did not enable the Toolbox: ${JSON.stringify({
+                rejectedSnapshots: runtime.rejectedSnapshots,
+                snapshotReads: runtime.snapshotReads,
+                toolbox: runtime.toolbox,
+              })}`,
+            ));
+          } else {
+            requestAnimationFrame(observe);
+          }
+        };
+        requestAnimationFrame(observe);
+      });
       callback(1, 1, 2, 3, 4, 5);
       callback(2, messages.playerChat, 0xdead_beef, 0x7fff_fffd, 0, 0);
-      callback(2, messages.showHeroPanel, 1, 0, 0, 0);
       callback(0, 124, 0, 0, 0, 0);
 
       await new Promise<void>((resolve, reject) => {
         const deadline = performance.now() + 2_000;
         const observe = () => {
-          const projected = window.gwCompanionRuntime?.toolbox;
+          const projected = runtime.toolbox;
           if (
             projected?.status === "ready"
             && projected.playerChatCount === 1
             && projected.cursorEventCount === 1
             && projected.heroAvailable === true
-            && projected.panelState === 2
           ) {
             resolve();
             return;
@@ -1172,7 +1231,7 @@ async function assertToolboxFoundationLifecycle() {
       };
       return { after, before };
     }, {
-      bytes: [...installableManifestModule(TOOLBOX_PROGRAM_CAPABILITIES)],
+      bytes: [...installableManifestModule(PRODUCT_TOOLS_CAPABILITIES)],
       layout: ENHANCEMENT_BUILD.layout,
       messages: {
         playerChat: ENHANCEMENT_BUILD.uiDispatcher.playerChatMessage,
@@ -1183,6 +1242,7 @@ async function assertToolboxFoundationLifecycle() {
 
     assert.deepEqual(result.before.allocations, [
       { pointer: 0x1000, size: 65_551 },
+      { pointer: TOOLBOX_SNAPSHOT_POINTER, size: COMPANION_SNAPSHOT_BYTES },
       {
         pointer: TOOLBOX_CONFIG_POINTER,
         size: CONFIG_BYTES,
@@ -1190,22 +1250,27 @@ async function assertToolboxFoundationLifecycle() {
       { pointer: TOOLBOX_CURSOR_POINTER, size: COMPANION_CURSOR_BYTES },
       { pointer: TOOLBOX_STATE_POINTER, size: COMPANION_TOOLBOX_BYTES },
       { pointer: TOOLBOX_PARTY_POINTER, size: COMPANION_PARTY_BYTES },
+      {
+        pointer: TOOLBOX_PARTY_POINTER + COMPANION_PARTY_BYTES,
+        size: 160,
+      },
     ]);
     assert.equal(result.before.companionStatePublished, false);
-    assert.equal(result.before.globalRuntimeIsRuntime, true);
+    assert.equal(result.before.globalRuntimeIsRuntime, false);
     assert.equal(result.before.hook, ENHANCEMENT_BUILD.tableSlot + 1);
     assert.match(result.before.kernelSha256, /^[0-9a-f]{64}$/u);
     assert.equal(result.before.readout, null);
     assert.equal(result.before.runtimeFrozen, true);
-    assert.deepEqual(result.before.runtimeKeys, DEVELOPER_RUNTIME_KEYS);
-    assert.deepEqual(result.before.scalar, {
+    assert.deepEqual(result.before.runtimeKeys, PRODUCT_RUNTIME_KEYS);
+    const { snapshotReads, ...scalar } = result.before.scalar;
+    assert.ok(snapshotReads > 0);
+    assert.deepEqual(scalar, {
       buildId: ENHANCEMENT_BUILD.buildId,
-      companionAbi: 8,
+      companionAbi: 10,
       hertz: 0,
       installation: 1,
       programId: ENHANCEMENT_BUILD.programId,
       rejectedSnapshots: 0,
-      snapshotReads: 0,
       status: "installed",
     });
     assert.equal(result.before.tableOwns, true);
@@ -1225,10 +1290,9 @@ async function assertToolboxFoundationLifecycle() {
       firstHeroId: 1,
       heroAvailable: true,
       heroCount: 1,
-      panelState: 2,
       partyObserved: true,
       playerChatCount: 1,
-      sequence: 10,
+      sequence: 8,
       status: "ready",
     });
     assert.equal(party?.status, "ready");
@@ -1259,12 +1323,14 @@ async function assertToolboxFoundationLifecycle() {
     assert.deepEqual(result.after.freed, [
       TOOLBOX_STATE_POINTER,
       TOOLBOX_PARTY_POINTER,
+      TOOLBOX_PARTY_POINTER + COMPANION_PARTY_BYTES,
       TOOLBOX_CURSOR_POINTER,
       TOOLBOX_CONFIG_POINTER,
+      TOOLBOX_SNAPSHOT_POINTER,
       0x1000,
     ]);
     assert.equal(result.after.hook, 0);
-    assert.equal(result.after.runtime, null);
+    assert.equal(result.after.runtime, undefined);
     assert.equal(result.after.tableEmpty, true);
     assert.equal(result.after.targetCount, 0);
     assert.equal(result.after.toolboxCount, 0);
@@ -1412,22 +1478,29 @@ async function assertRollbackAfterTablePublication() {
       bytes: [...installableManifestModule(TOOLBOX_PROGRAM_CAPABILITIES)],
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
+    const rollbackConfigPointer = 0x11_010;
+    const rollbackCursorPointer =
+      (rollbackConfigPointer + CONFIG_BYTES + 7) & ~7;
+    const rollbackToolboxPointer =
+      rollbackCursorPointer + COMPANION_CURSOR_BYTES;
+    const rollbackPartyPointer =
+      rollbackToolboxPointer + COMPANION_TOOLBOX_BYTES;
     assert.deepEqual(result, {
       allocations: [
         { pointer: 0x1000, size: 65_551 },
         {
-          pointer: TOOLBOX_CONFIG_POINTER,
+          pointer: rollbackConfigPointer,
           size: CONFIG_BYTES,
         },
-        { pointer: TOOLBOX_CURSOR_POINTER, size: COMPANION_CURSOR_BYTES },
-        { pointer: TOOLBOX_STATE_POINTER, size: COMPANION_TOOLBOX_BYTES },
-        { pointer: TOOLBOX_PARTY_POINTER, size: COMPANION_PARTY_BYTES },
+        { pointer: rollbackCursorPointer, size: COMPANION_CURSOR_BYTES },
+        { pointer: rollbackToolboxPointer, size: COMPANION_TOOLBOX_BYTES },
+        { pointer: rollbackPartyPointer, size: COMPANION_PARTY_BYTES },
       ],
       freed: [
-        TOOLBOX_STATE_POINTER,
-        TOOLBOX_PARTY_POINTER,
-        TOOLBOX_CURSOR_POINTER,
-        TOOLBOX_CONFIG_POINTER,
+        rollbackToolboxPointer,
+        rollbackPartyPointer,
+        rollbackCursorPointer,
+        rollbackConfigPointer,
         0x1000,
       ],
       hook: 0,

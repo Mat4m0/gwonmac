@@ -384,33 +384,31 @@ build. It is `pointer-events: none` and `aria-live="off"`. Automation selects no
 feature. One explicit unpackaged `toolbox-foundation` program mounts the proof in
 `docs/gwonmac-tools-wasm.md`; that surface is unreachable in packaged builds.
 
-`ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. There is
-no stored or transported master switch. Main snapshots the per-tool record and
-one fixed developer program at startup, then derives the exact cursor,
-target-observation, and Toolbox capabilities with the shared canonical
+`ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. Main
+snapshots the required Core state, the stored Tools Beta master opt-in, and one
+fixed developer program at startup, then derives the exact cursor,
+target-observation, Toolbox, and commands capabilities with the shared canonical
 function. That capability set owns the transform, manifest, config, and cache
 identity. The renderer recomputes it from the same immutable launch intent and
-requires an exact manifest match. Automation is independent permission for the
-live harness to act on the player's behalf; it selects no capability. Both
-automation and every developer program remain unreachable from a packaged
-build whatever the environment says. Program `none` uses the saved tools;
-cursor-observer is cursor-only, target-observer is target-only, and
-toolbox-foundation is cursor plus Toolbox. A developer program replaces rather
-than merges with saved tool choices and never changes those settings.
+requires an exact manifest match. Developer automation permission remains
+unreachable from a packaged build and selects no capability. Packaged Team
+Apply instead receives only the closed commands profile selected by the master
+opt-in. A developer program replaces rather than merges with saved choices.
 
-Those inputs resolve to four and only four executable derivatives: cursor,
-target, cursor plus target, and cursor plus Toolbox. Each exact Enhancement
-certificate pins the output SHA-256 for all four. Cache metadata records what
+Those inputs resolve to the six closed profiles in
+`ENHANCEMENT_CAPABILITY_PROFILES`, including the two commands-bearing Toolbox
+profiles. Each exact Enhancement certificate pins every output SHA-256. Cache metadata records what
 was published but is never authority: reuse requires the bytes and metadata to
 match the capability-specific hash shipped in the application. A missing hash
 or any other capability combination fails closed before transformation.
 
-A running session cannot honour a tool change because the kernel feature flags
-are fixed at initialization, so the write and restart are one action:
-`settingsSet` asks `enhancementSelectionChanged` whether the patch alters a tool,
-confirms before saving, and relaunches immediately. Both launcher and Settings
-re-render from main's returned settings, so a declined restart cannot leave a
-checkbox claiming something the session is not doing.
+The first Tools opt-in changes which derived client module the renderer needs,
+so that one write is paired with a confirmed restart. Once that commands-capable
+module is resident, individual Target and Team toggles update the kernel's
+active-observer mask live. Core cursor observation stays active; disabled
+optional observers stop traversing their target or party graphs. The minimal
+map-policy projection remains live to enforce PvP/guild-hall/unknown shutdown
+and restore the selected tools on return to PvE.
 
 The harness uses request and effective state without conflating them. A selected
 tool or fixed developer program requests a capability, while the

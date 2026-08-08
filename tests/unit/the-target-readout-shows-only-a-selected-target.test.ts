@@ -32,13 +32,14 @@ function bytes(options: {
   const buffer = new ArrayBuffer(64);
   const view = new DataView(buffer);
   view.setUint32(0, MAGIC, true);
-  view.setUint16(4, 1, true);
+  view.setUint16(4, 2, true);
   view.setUint16(6, 64, true);
   view.setUint32(8, options.sequence ?? 2, true);
   view.setUint32(12, flags, true);
   view.setUint32(16, 40, true);
   view.setUint32(20, flags === LOADING ? 0 : 133, true);
-  view.setUint32(24, 0, true);
+  // Outpost in the low byte, certified PvE in the next byte.
+  view.setUint32(24, 1 << 8, true);
   view.setUint32(28, flags === LOADING ? 0 : 7, true);
   view.setFloat32(32, flags === LOADING ? 0 : -9827.3, true);
   view.setFloat32(36, flags === LOADING ? 0 : 34130.2, true);

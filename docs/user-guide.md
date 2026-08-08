@@ -112,16 +112,19 @@ Controls list shows the binding's stable reference character rather than
 relabeling it after an input-source change. A custom binding first saved by an
 older app build under a non-US input source may need to be rebound once; its
 stored character does not retain the physical position needed for migration.
-**Controls** owns two independent GWonMac Tools choices. **Use the game's own
-cursor** is on by default: the host reads the cursor Guild Wars itself draws
-out of your installed client and shows it over the game view; no cursor artwork
-ships with this app and none is downloaded. **Show target distance and range**
-is off by default and adds the selected target's distance and range band at the
-top of the game view. Either choice can be changed without enabling the other.
-Changing either one changes which observations the launch prepares, so the app
-has to restart to apply it: it asks first, and if you cancel, nothing is saved
-and the boxes return to what they were. **Reset Launcher Settings…** restores
-the cursor to on and the target readout to off.
+**Controls** keeps the game's own cursor on as a required Core feature; no
+cursor artwork ships with this app. **GWonMac Tools Beta** is off by default.
+The first enable asks for one restart so the launch can select the certified
+Tools module. Once enabled, **Team Management** and **Target Distance (Test)**
+switch on or off immediately. Team Management stores builds and full teams,
+captures the player and their heroes, exchanges team codes, and applies a
+chosen team after an explicit click in a PvE outpost. An explicit Normal or
+Hard Mode and the player's own build are included.
+Tools is the home for authored builds and teams. **Settings → Templates** keeps
+the separate file-migration jobs: importing an old Windows folder, bulk
+clipboard/file import, export, and rescuing templates stranded in subfolders.
+Tools can publish one authored build into Guild Wars; neither surface treats
+the other's files as a second library.
 **Reload Game** reuses the module the launch already chose.
 When the cursor is off — and whenever it cannot be read, or
 your client build is not one this host has certified — you get the normal macOS
@@ -415,9 +418,8 @@ ArenaNet client updates remain separate and automatic.
 
 ## When the client build is not certified
 
-Each ArenaNet client build is checked separately for two things: the repair
-that makes build templates, screenshots, and chat logs work, and the read-only
-enhancement transform used by the cursor and target readout. When ArenaNet
+Each ArenaNet client build is checked separately for Core compatibility and the
+exact Tools transform. When ArenaNet
 ships a new build, the launcher checks a local copy in an isolated process.
 When the structures it uses are unchanged or have only moved in the one
 supported way, everything continues normally without an app update or an
@@ -428,22 +430,24 @@ GWonMac Tools you selected — the loading screen says so once for that build,
 names exactly what is affected, and offers **Play Guild Wars** as the primary
 action. The notice explains; it does not block you.
 
-Gameplay is unaffected either way: no stat or timing changes, and no gameplay
-command is generated. If the local check refuses a changed structure, support
+Gameplay is never blocked. If the local check refuses a changed structure, Core
+continues wherever safely certified and optional Tools stay off; support
 may need a new app release; retrying, reinstalling, or clearing downloaded game
 data will not change that decision. The same status is always visible under
 **Settings → Controls**. An uncertified client build does not mean the app is
 out of date — whether a newer release exists is the separate question above,
 which the notice's own **Check for Updates** button answers.
 
-The two GWonMac Tools choices control their observations independently. The cursor
-choice reads only the cursor Guild Wars is drawing. The target-readout choice
-reads map, player, and selected-target state and shows a small line at the top
-of the game view; it disappears with no target, cannot be clicked, and never
-covers anything interactive. A disabled tool performs no per-tick collection.
-With both choices off, no enhancement hook is installed, no companion kernel
-loads, and nothing observes game memory. Neither tool chooses a target, moves
-the character, uses a skill, sends chat, or performs another gameplay action.
+Optional tools control their observations independently. Target Distance reads
+only the state needed for its Test readout; Team Management reads party/build
+state and exposes only its fixed certified Apply commands. A disabled optional
+tool stops its observer. A small map-policy read remains so the app can enforce
+the boundary and safely restore tools when the player returns to PvE.
+
+In PvP, guild halls, and any region the client cannot positively classify,
+every optional surface, observer, and command is disabled. Core remains active.
+Apply additionally requires a positively observed PvE outpost and stops if that
+condition changes while confirmation is in progress.
 The native-cursor tool has one bounded exception: after your own trusted click,
 if Guild Wars emitted no cursor event, it replays an out-and-back pointer
 hit-test so an interaction-mode cursor appears without waiting for physical

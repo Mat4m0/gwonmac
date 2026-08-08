@@ -180,7 +180,6 @@ const slot = (
   build: build === null ? null : buildId(build),
   hero: hero === null ? null : heroId(hero),
   behaviour: null,
-  disabled: [],
   ...extra,
 });
 
@@ -212,15 +211,15 @@ const library = (teams: readonly Team[]): BuildLibrary => ({
 /** A full party: the player in slot 0, seven heroes behind them. */
 const FULL_TEAM = makeTeam([
   slot("b-player", null),
-  slot("b-monk", 1, { behaviour: "guard", disabled: [0, 3] }),
-  slot("b-ele", 2, { behaviour: "avoid", disabled: [7] }),
-  slot("b-empty-bar", 3, { behaviour: "fight", disabled: [] }),
-  slot("b-wide", 22, { behaviour: "guard", disabled: [1, 2] }),
+  slot("b-monk", 1, { behaviour: "guard" }),
+  slot("b-ele", 2, { behaviour: "avoid" }),
+  slot("b-empty-bar", 3, { behaviour: "fight" }),
+  slot("b-wide", 22, { behaviour: "guard" }),
   // 39 is `GhostOfAlthea`, the highest id `heroes.ts` holds, so the widest hero
   // byte a party can legally carry is in the fixture.
-  slot("b-monk", 39, { behaviour: "fight", disabled: [] }),
-  slot("b-ele", 15, { behaviour: "avoid", disabled: [4, 5, 6] }),
-  slot("b-player", 8, { behaviour: "guard", disabled: [] }),
+  slot("b-monk", 39, { behaviour: "fight" }),
+  slot("b-ele", 15, { behaviour: "avoid" }),
+  slot("b-player", 8, { behaviour: "guard" }),
 ]);
 
 const membersOf = (team: Team): readonly PartyLoadoutMember[] => {

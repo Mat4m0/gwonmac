@@ -39,13 +39,12 @@ function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
                 slots: mapTeamSlots(team.slots, (slot, slotIndex) => slotIndex === 0
                   ? { ...slot, build: null }
                   : slotIndex === 1
-                    ? { ...slot, disabled: [] }
+                    ? slot
                   : {
                       ...slot,
                       hero: null,
                       build: null,
                       behaviour: null,
-                      disabled: [],
                     }),
               }
             : team),
@@ -66,8 +65,7 @@ describe("ToolsApp", () => {
       wrapper.findAll(".team-controls .ui-segment button").map((button) =>
         button.text()
       ),
-    ).toEqual(["Keep current", "Normal"]);
-    expect(wrapper.text()).toContain("Hard-mode Apply is not available yet");
+    ).toEqual(["Keep current", "Normal", "Hard"]);
     expect(
       wrapper.findAll<HTMLSelectElement>(".behavior-picker select")[1]!
         .findAll("option")
@@ -216,7 +214,7 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
-  it("assigns heroes and persists the controls that belong to a team slot", async () => {
+  it("assigns heroes and persists their selected build", async () => {
     const wrapper = await workbench();
     const hero = wrapper.findAll<HTMLSelectElement>(".hero-picker select")[0]!;
     await hero.setValue("6");
@@ -224,24 +222,13 @@ describe("ToolsApp", () => {
     expect(hero.element.value).toBe("6");
     expect(wrapper.text()).toContain("Koss");
 
-    await wrapper.findAll(".slot-settings")[0]!.trigger("click");
-    const firstSkill = wrapper.findAll(".disabled-skills button")[0]!;
-    expect(firstSkill.attributes("aria-pressed")).toBe("true");
-    await firstSkill.trigger("click");
-    await flushPromises();
-    expect(wrapper.findAll(".disabled-skills button")[0]!.attributes("aria-pressed")).toBe("false");
-
     const build = wrapper.findAll<HTMLSelectElement>(".build-picker select")[1]!;
     const alternative = build.findAll("option").find(
       (option) => option.attributes("value") && option.attributes("value") !== build.element.value,
     );
     await build.setValue(alternative!.attributes("value"));
     await flushPromises();
-    expect(
-      wrapper.findAll(".disabled-skills button").every(
-        (button) => button.attributes("aria-pressed") === "true",
-      ),
-    ).toBe(true);
+    expect(build.element.value).toBe(alternative!.attributes("value"));
     wrapper.unmount();
   });
 

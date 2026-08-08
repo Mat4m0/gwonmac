@@ -24,7 +24,7 @@ use core::ptr::{read_volatile, write_volatile};
 
 use crate::abi::*;
 use crate::memory::*;
-use crate::{resolve_game, GameState};
+use crate::{find_player_agent_id, resolve_game, GameState};
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
@@ -61,6 +61,54 @@ impl Hero {
         attributes: [0; ATTRIBUTE_SLOTS],
         flags: 0,
     };
+}
+
+fn primary_attribute(profession: u32) -> u32 {
+    match profession {
+        1 => 17, 2 => 23, 3 => 16, 4 => 6, 5 => 0,
+        6 => 12, 7 => 35, 8 => 36, 9 => 40, 10 => 44,
+        _ => u32::MAX,
+    }
+}
+
+fn attribute_profession(id: u32) -> u32 {
+    match id {
+        17..=21 => 1,
+        22..=25 => 2,
+        13..=16 => 3,
+        4..=7 => 4,
+        0..=3 => 5,
+        8..=12 => 6,
+        29..=31 | 35 => 7,
+        32..=34 | 36 => 8,
+        37..=40 => 9,
+        41..=44 => 10,
+        _ => 0,
+    }
+}
+
+/** Profession pair encoded by the attribute row's admitted ids. */
+fn professions_from_attributes(present: &[bool; 45]) -> Option<u32> {
+    let mut primary = 0_u32;
+    for profession in 1..=10 {
+        let id = primary_attribute(profession);
+        if present[id as usize] {
+            if primary != 0 { return None; }
+            primary = profession;
+        }
+    }
+    if primary == 0 { return None; }
+    let mut secondary = 0_u32;
+    for id in 0..=ATTRIBUTE_ID_MAX {
+        if !present[id as usize] { continue; }
+        let profession = attribute_profession(id);
+        if profession == 0 || profession == primary || id == primary_attribute(profession) {
+            continue;
+        }
+        if secondary != 0 && secondary != profession { return None; }
+        secondary = profession;
+    }
+    Some(primary | (secondary << 8))
 }
 
 /// A game array header: buffer, capacity, size, validated together.
@@ -115,6 +163,8 @@ unsafe fn matches_published(
     count: u32,
     flags: u32,
     unlock: [u32; 4],
+    play_region: u32,
+    hard_mode: u32,
 ) -> bool {
     // SAFETY: as `publish` — the region `companion_init` accepted, written only
     // by this module, and never read here before `initialize` has zeroed it.
@@ -126,6 +176,8 @@ unsafe fn matches_published(
             || read_volatile(&(*region).unlocked_high) != unlock[1]
             || read_volatile(&(*region).unlock_known_low) != unlock[2]
             || read_volatile(&(*region).unlock_known_high) != unlock[3]
+            || read_volatile(&(*region).play_region) != play_region
+            || read_volatile(&(*region).hard_mode) != hard_mode
         {
             return false;
         }
@@ -157,7 +209,14 @@ unsafe fn matches_published(
     true
 }
 
-unsafe fn publish(heroes: &[Hero; PARTY_SLOTS], count: u32, flags: u32, unlock: [u32; 4]) {
+unsafe fn publish(
+    heroes: &[Hero; PARTY_SLOTS],
+    count: u32,
+    flags: u32,
+    unlock: [u32; 4],
+    play_region: u32,
+    hard_mode: u32,
+) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
     // SAFETY: `POINTER` is the region `companion_init` accepted through
     // `valid_region` for `FEATURE_TOOLBOX_FOUNDATION` — non-null, aligned, and
@@ -174,6 +233,8 @@ unsafe fn publish(heroes: &[Hero; PARTY_SLOTS], count: u32, flags: u32, unlock: 
         write_volatile(&mut (*region).unlocked_high, unlock[1]);
         write_volatile(&mut (*region).unlock_known_low, unlock[2]);
         write_volatile(&mut (*region).unlock_known_high, unlock[3]);
+        write_volatile(&mut (*region).play_region, play_region);
+        write_volatile(&mut (*region).hard_mode, hard_mode);
         for index in 0..PARTY_SLOTS {
             let slot = &mut (*region).slots[index];
             let hero = heroes[index];
@@ -208,7 +269,16 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     for index in 0..PARTY_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };
     }
-    unsafe { publish(&[Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4]) };
+    unsafe {
+        publish(
+            &[Hero::EMPTY; PARTY_SLOTS],
+            0,
+            0,
+            [0; 4],
+            PLAY_REGION_UNKNOWN,
+            0,
+        )
+    };
 }
 
 /// Walks the roster, then fills in whatever the certified layout reaches.
@@ -216,16 +286,22 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 /// Returns `None` for any rejection at all. A partly-walked party is the one
 /// thing this must never publish: half a roster is indistinguishable from a
 /// small one, and the interface would present it as the party.
-unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32; 4])> {
-    let (game, player_number, instance_type) = match unsafe { resolve_game(layout) } {
+unsafe fn collect(
+    layout: Layout,
+) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32; 4], u32, u32)> {
+    let (game, player_number, instance_type, play_region) = match unsafe { resolve_game(layout) } {
         GameState::Ready {
             game,
             player_number,
             instance_type,
+            play_region,
             ..
-        } => (game, player_number, instance_type),
+        } => (game, player_number, instance_type, play_region),
         GameState::Loading | GameState::Unavailable => return None,
     };
+    if play_region != PLAY_REGION_PVE {
+        return Some(([Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4], play_region, 0));
+    }
 
     // -- roster, from the offsets certified before this work --------------
     if layout.hero_member_stride < 12 || layout.hero_member_stride > 64 {
@@ -235,6 +311,7 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
         .and_then(|at| unsafe { pointer(at, checked_add(layout.player_party, 4)?) })?;
     let info = offset(party, layout.player_party)
         .and_then(|at| unsafe { pointer(at, checked_add(layout.party_heroes, 12)?) })?;
+    let hard_mode = unsafe { field(party, layout.party_flag) }? & 0x10;
     let (buffer, size) = unsafe {
         read_array(
             offset(info, layout.party_heroes)?,
@@ -244,6 +321,8 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
     }?;
 
     let mut heroes = [Hero::EMPTY; PARTY_SLOTS];
+    heroes[0].agent_id = unsafe { find_player_agent_id(layout, player_number) }?;
+    heroes[0].flags = SLOT_OCCUPIED;
     let mut count = 0_u32;
     for index in 0..size {
         let member = indexed(buffer, index, layout.hero_member_stride)?;
@@ -270,7 +349,7 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
         count += 1;
     }
 
-    let mut flags = FLAG_ROSTER_OBSERVED
+    let mut flags = FLAG_ROSTER_OBSERVED | FLAG_HARD_MODE_OBSERVED
         | if instance_type == 0 { FLAG_IN_OUTPOST } else { 0 };
     let mut unlock = [0_u32; 4];
 
@@ -282,7 +361,7 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
         offset(game, layout.world_context).and_then(|at| unsafe { pointer(at, 4) })
     };
     let Some(world) = world else {
-        return Some((heroes, count, flags, unlock));
+        return Some((heroes, count, flags, unlock, play_region, u32::from(hard_mode != 0)));
     };
 
     // hero_info: the account's unlock table, and where professions live.
@@ -412,6 +491,7 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
                     continue;
                 }
                 let mut written = 0_usize;
+                let mut present = [false; 45];
                 for id in 0..=ATTRIBUTE_ID_MAX {
                     let at = checked_add(
                         layout.attribute_entries,
@@ -425,6 +505,7 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
                     if unsafe { field(entry, checked_add(at, layout.attribute_entry_id)?) }? != id {
                         continue;
                     }
+                    present[id as usize] = true;
                     let rank =
                         unsafe { field(entry, checked_add(at, layout.attribute_entry_rank)?) }?;
                     // 12 is what the client's own cost table can buy. Nothing
@@ -446,11 +527,17 @@ unsafe fn collect(layout: Layout) -> Option<([Hero; PARTY_SLOTS], u32, u32, [u32
                     written += 1;
                 }
                 hero.flags |= SLOT_ATTRIBUTES;
+                if hero.hero_id == 0 {
+                    if let Some(professions) = professions_from_attributes(&present) {
+                        hero.professions = professions;
+                        hero.flags |= SLOT_PROFESSIONS;
+                    }
+                }
             }
         }
     }
 
-    Some((heroes, count, flags, unlock))
+    Some((heroes, count, flags, unlock, play_region, u32::from(hard_mode != 0)))
 }
 
 /// Armed by the same certified UI messages that dirty the toolbox projection.
@@ -480,13 +567,19 @@ pub(crate) unsafe fn tick_if_dirty(layout: Layout, tick_count: u32) {
     }
     unsafe { DIRTY = false };
     let observation = unsafe { collect(layout) };
-    let (heroes, count, flags, unlock) =
-        observation.unwrap_or(([Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4]));
-    if unsafe { matches_published(&heroes, count, flags, unlock) } {
+    let (heroes, count, flags, unlock, play_region, hard_mode) = observation.unwrap_or((
+        [Hero::EMPTY; PARTY_SLOTS],
+        0,
+        0,
+        [0; 4],
+        PLAY_REGION_UNKNOWN,
+        0,
+    ));
+    if unsafe { matches_published(&heroes, count, flags, unlock, play_region, hard_mode) } {
         return;
     }
     unsafe {
         GENERATION = GENERATION.wrapping_add(1);
-        publish(&heroes, count, flags, unlock);
+        publish(&heroes, count, flags, unlock, play_region, hard_mode);
     }
 }

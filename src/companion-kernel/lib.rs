@@ -51,6 +51,7 @@ static mut SNAPSHOT_PTR: u32 = 0;
 static mut LAYOUT: Layout = Layout::EMPTY;
 static mut INITIALIZED: bool = false;
 static mut FEATURES: u32 = 0;
+static mut ACTIVE_FEATURES: u32 = 0;
 static mut TICK_COUNT: u32 = 0;
 static mut SEQUENCE: u32 = 0;
 
@@ -133,6 +134,7 @@ struct State {
     flags: u32,
     map_id: u32,
     instance_type: u32,
+    play_region: u32,
     player: AgentState,
     target: AgentState,
     distance: f32,
@@ -148,6 +150,7 @@ pub(crate) enum GameState {
         map_id: u32,
         instance_type: u32,
         player_number: u32,
+        play_region: u32,
     },
 }
 
@@ -163,11 +166,45 @@ impl State {
             flags: 0,
             map_id: 0,
             instance_type: 0,
+            play_region: PLAY_REGION_UNKNOWN,
             player: EMPTY_AGENT,
             target: EMPTY_AGENT,
             distance: 0.0,
             band: 0,
         }
+    }
+}
+
+/** The client-owned map policy used by GWToolbox++ itself. */
+unsafe fn classify_play_region(layout: Layout, map_id: u32) -> u32 {
+    if layout.area_info == 0
+        || layout.area_info_count == 0
+        || layout.area_info_stride < 20
+        || layout.area_info_flags + 4 > layout.area_info_stride
+        || map_id >= layout.area_info_count
+    {
+        return PLAY_REGION_UNKNOWN;
+    }
+    let Some(record) = indexed(layout.area_info, map_id, layout.area_info_stride) else {
+        return PLAY_REGION_UNKNOWN;
+    };
+    for (field, maximum) in [0_u32, 4, 8, 12].iter().zip([4_u32, 5, 27, 21].iter()) {
+        let Some(value) = offset(record, *field).and_then(|at| unsafe { read_u32(at) }) else {
+            return PLAY_REGION_UNKNOWN;
+        };
+        if value > *maximum {
+            return PLAY_REGION_UNKNOWN;
+        }
+    }
+    let Some(flags) = offset(record, layout.area_info_flags)
+        .and_then(|at| unsafe { read_u32(at) })
+    else {
+        return PLAY_REGION_UNKNOWN;
+    };
+    if flags & (0x0004_0001 | 0x0080_0000) != 0 {
+        PLAY_REGION_PVP
+    } else {
+        PLAY_REGION_PVE
     }
 }
 
@@ -187,6 +224,36 @@ unsafe fn read_agent(layout: Layout, agent_buffer: u32, size: u32, id: u32) -> O
         return None;
     }
     Some(AgentState { id, kind, x, y })
+}
+
+/** The current player's live agent id, proved by login number and model bits. */
+pub(crate) unsafe fn find_player_agent_id(layout: Layout, player_number: u32) -> Option<u32> {
+    if !contains(layout.agent_array, 16) {
+        return None;
+    }
+    let buffer = unsafe { read_u32(layout.agent_array) }?;
+    let capacity = unsafe { read_u32(offset(layout.agent_array, 4)?) }?;
+    let size = unsafe { read_u32(offset(layout.agent_array, 8)?) }?;
+    if size == 0
+        || size > capacity
+        || capacity > 4_096
+        || !contains(buffer, checked_mul(size, 4)?)
+    {
+        return None;
+    }
+    for id in 1..size {
+        let address = indexed(buffer, id, 4).and_then(|at| unsafe { pointer(at, 0x100) });
+        let Some(address) = address else { continue };
+        if unsafe { read_u32(offset(address, layout.agent_id)?) } == Some(id)
+            && unsafe { read_u16(offset(address, layout.agent_player_number)?) }
+                == Some(player_number as u16)
+            && unsafe { read_u16(offset(address, layout.agent_model_type)?) }
+                .map(|value| value & 0xf000) == Some(0x3000)
+        {
+            return Some(id);
+        }
+    }
+    None
 }
 
 pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
@@ -245,12 +312,13 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
         map_id,
         instance_type,
         player_number,
+        play_region: unsafe { classify_play_region(layout, map_id) },
     }
 }
 
-unsafe fn collect(layout: Layout) -> State {
+unsafe fn collect(layout: Layout, observe_target: bool) -> State {
     let mut state = State::empty();
-    let (map_id, instance_type, player_number) = match unsafe { resolve_game(layout) } {
+    let (map_id, instance_type, player_number, play_region) = match unsafe { resolve_game(layout) } {
         GameState::Unavailable => return state,
         GameState::Loading => {
             state.flags = FLAG_LOADING;
@@ -260,8 +328,9 @@ unsafe fn collect(layout: Layout) -> State {
             map_id,
             instance_type,
             player_number,
+            play_region,
             ..
-        } => (map_id, instance_type, player_number),
+        } => (map_id, instance_type, player_number, play_region),
     };
 
     if !contains(layout.agent_array, 16) {
@@ -317,6 +386,7 @@ unsafe fn collect(layout: Layout) -> State {
         state.flags = FLAG_READY | FLAG_PLAYER_VALID;
         state.map_id = map_id;
         state.instance_type = instance_type;
+        state.play_region = play_region;
         state.player = player;
         break;
     }
@@ -324,7 +394,11 @@ unsafe fn collect(layout: Layout) -> State {
         return State::empty();
     }
 
-    if layout.manual_target_agent_id != 0 && layout.automatic_target_agent_id != 0 {
+    if observe_target
+        && play_region == PLAY_REGION_PVE
+        && layout.manual_target_agent_id != 0
+        && layout.automatic_target_agent_id != 0
+    {
         let target_id = unsafe { read_u32(layout.manual_target_agent_id) }
             .filter(|id| *id != 0)
             .or_else(|| unsafe { read_u32(layout.automatic_target_agent_id) });
@@ -471,7 +545,10 @@ unsafe fn publish(state: State) {
         write_volatile(&mut (*snapshot).flags, state.flags);
         write_volatile(&mut (*snapshot).tick_count, TICK_COUNT);
         write_volatile(&mut (*snapshot).map_id, state.map_id);
-        write_volatile(&mut (*snapshot).instance_type, state.instance_type);
+        write_volatile(
+            &mut (*snapshot).instance_and_region,
+            state.instance_type | (state.play_region << 8),
+        );
         write_volatile(&mut (*snapshot).player_id, state.player.id);
         write_volatile(&mut (*snapshot).player_x, state.player.x);
         write_volatile(&mut (*snapshot).player_y, state.player.y);
@@ -551,6 +628,10 @@ pub unsafe extern "C" fn companion_init(
         SNAPSHOT_PTR = snapshot_ptr;
         LAYOUT = layout;
         FEATURES = features;
+        // The renderer replaces this with its live settings before installing
+        // the callback. Keeping init self-contained also makes the ABI useful
+        // to the standalone validation harness.
+        ACTIVE_FEATURES = features;
         INITIALIZED = true;
         TICK_COUNT = 0;
         SEQUENCE = 0;
@@ -576,17 +657,18 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
                 return;
             }
             let features = unsafe { FEATURES };
+            let active = unsafe { ACTIVE_FEATURES };
             let layout = unsafe { LAYOUT };
             unsafe { TICK_COUNT = TICK_COUNT.wrapping_add(1) };
             let state = if features & FEATURE_TARGET_READOUT != 0 {
-                unsafe { collect(layout) }
+                unsafe { collect(layout, active & FEATURE_TARGET_READOUT != 0) }
             } else {
                 State::empty()
             };
             if features & FEATURE_TARGET_READOUT != 0 {
                 unsafe { publish(state) };
             }
-            if features & FEATURE_TOOLBOX_FOUNDATION != 0 {
+            if active & FEATURE_TOOLBOX_FOUNDATION != 0 {
                 unsafe { toolbox::tick(layout, TICK_COUNT) };
                 unsafe { party::tick_if_dirty(layout, TICK_COUNT) };
             }
@@ -598,19 +680,42 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
             if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_NATIVE_CURSOR != 0 {
                 unsafe {
                     cursor::mark_dirty();
-                    if FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
+                    if ACTIVE_FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
                         toolbox::publish_cursor_event();
                     }
                 }
             }
         }
         DISPATCH_UI => {
-            if !unsafe { INITIALIZED } || unsafe { FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0 {
+            if !unsafe { INITIALIZED }
+                || unsafe { ACTIVE_FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0
+            {
                 return;
             }
             unsafe {
                 let layout = LAYOUT;
                 toolbox::observe_ui(layout, a, b);
+            }
+        }
+        DISPATCH_ACTIVE_FEATURES => {
+            if !unsafe { INITIALIZED } {
+                return;
+            }
+            let available = unsafe { FEATURES };
+            if a & !available != 0
+                || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
+            {
+                return;
+            }
+            let previous = unsafe { ACTIVE_FEATURES };
+            unsafe { ACTIVE_FEATURES = a };
+            if previous & FEATURE_TOOLBOX_FOUNDATION == 0
+                && a & FEATURE_TOOLBOX_FOUNDATION != 0
+            {
+                unsafe {
+                    toolbox::mark_dirty();
+                    party::mark_dirty();
+                }
             }
         }
         _ => {}
@@ -619,7 +724,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    8
+    10
 }
 
 #[no_mangle]

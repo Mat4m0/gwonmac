@@ -16,7 +16,7 @@
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
-export const COMPANION_SNAPSHOT_ABI = 1;
+export const COMPANION_SNAPSHOT_ABI = 2;
 export const COMPANION_SNAPSHOT_BYTES = 64;
 
 const MAGIC = 0x42545747;
@@ -81,11 +81,16 @@ export function readCompanionSnapshot(buffer: ArrayBuffer, pointer: number) {
   const abi = view.getUint16(4, true);
   const byteLength = view.getUint16(6, true);
   const flags = view.getUint32(12, true);
+  const instanceAndRegion = view.getUint32(24, true);
+  const playRegion = instanceAndRegion >>> 8;
   const state = {
     sequence: firstSequence,
     tickCount: view.getUint32(16, true),
     mapId: view.getUint32(20, true),
-    instanceType: view.getUint32(24, true),
+    instanceType: instanceAndRegion & 0xff,
+    playRegion: playRegion === 1 ? "pve" as const
+      : playRegion === 2 ? "pvp" as const
+        : "unknown" as const,
     playerId: view.getUint32(28, true),
     playerX: view.getFloat32(32, true),
     playerY: view.getFloat32(36, true),
@@ -130,6 +135,7 @@ export function readCompanionSnapshot(buffer: ArrayBuffer, pointer: number) {
     state.mapId === 0
     || state.mapId > 2_000
     || state.instanceType > 1
+    || playRegion > 2
     || state.playerId === 0
     || !validCoordinate(state.playerX)
     || !validCoordinate(state.playerY)
@@ -296,7 +302,7 @@ export function readCompanionCursorPixels(buffer: ArrayBuffer, pointer: number) 
   return Object.freeze({ ...header, pixels });
 }
 
-export const COMPANION_TOOLBOX_ABI = 3;
+export const COMPANION_TOOLBOX_ABI = 4;
 export const COMPANION_TOOLBOX_BYTES = 64;
 
 const TOOLBOX_MAGIC = 0x58545747;
@@ -360,10 +366,9 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
     heroCount: view.getUint32(24, true),
     firstHeroId: view.getUint32(28, true),
     firstHeroAgentId: view.getUint32(32, true),
-    panelState: view.getUint32(36, true),
   };
   let reserved = 0;
-  for (let offset = 40; offset < COMPANION_TOOLBOX_BYTES; offset += 4) {
+  for (let offset = 36; offset < COMPANION_TOOLBOX_BYTES; offset += 4) {
     reserved |= view.getUint32(offset, true);
   }
   const secondSequence = view.getUint32(8, true);
@@ -377,7 +382,6 @@ export function readCompanionToolbox(buffer: ArrayBuffer, pointer: number) {
     || (secondSequence & 1) !== 0
     || (flags & ~KNOWN_TOOLBOX_FLAGS) !== 0
     || reserved !== 0
-    || state.panelState > 2
     // A hero cannot be available in a party nobody read. Checked here rather
     // than trusted: the kernel enforces it by construction, which is exactly
     // why agreeing with it by construction would prove nothing.
@@ -442,8 +446,7 @@ export function sameCompanionToolboxState(
     && previous.partyObserved === next.partyObserved
     && previous.heroCount === next.heroCount
     && previous.firstHeroId === next.firstHeroId
-    && previous.firstHeroAgentId === next.firstHeroAgentId
-    && previous.panelState === next.panelState;
+    && previous.firstHeroAgentId === next.firstHeroAgentId;
 }
 
 /**
@@ -457,7 +460,7 @@ export function sameCompanionToolboxState(
  * re-derives every implication it can check instead of trusting the writer
  * that enforced it.
  */
-export const COMPANION_PARTY_ABI = 3;
+export const COMPANION_PARTY_ABI = 4;
 export const COMPANION_PARTY_BYTES = 832;
 
 const PARTY_MAGIC = 0x50545747;
@@ -476,9 +479,11 @@ const PARTY_FLAGS = Object.freeze({
   roster: 1 << 0,
   unlock: 1 << 1,
   outpost: 1 << 2,
+  hardMode: 1 << 3,
 });
 const KNOWN_PARTY_FLAGS =
-  PARTY_FLAGS.roster | PARTY_FLAGS.unlock | PARTY_FLAGS.outpost;
+  PARTY_FLAGS.roster | PARTY_FLAGS.unlock | PARTY_FLAGS.outpost
+  | PARTY_FLAGS.hardMode;
 const SLOT_FLAGS = Object.freeze({
   occupied: 1 << 0,
   professions: 1 << 1,
@@ -523,8 +528,10 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
   const unlockedHigh = view.getUint32(28, true);
   const knownLow = view.getUint32(32, true);
   const knownHigh = view.getUint32(36, true);
+  const playRegionValue = view.getUint32(40, true);
+  const hardModeValue = view.getUint32(44, true);
   let reserved = 0;
-  for (let at = 40; at < PARTY_HEADER_BYTES; at += 4) {
+  for (let at = 48; at < PARTY_HEADER_BYTES; at += 4) {
     reserved |= view.getUint32(at, true);
   }
 
@@ -578,13 +585,14 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     if ((slotFlags & ~KNOWN_SLOT_FLAGS) !== 0) malformed = true;
     if (isOccupied) {
       occupied += 1;
-      // Slot 0 is the player, who is never a hero, and a hero cannot hold two
-      // positions at once. Both are enforced by the writer; agreeing with it by
-      // construction would prove nothing, so they are checked again here.
-      if (index === 0 || heroId < 1 || heroId > 39 || seen.has(heroId)) {
-        malformed = true;
+      if (index === 0) {
+        if (heroId !== 0 || agentId === 0 || (slotFlags & SLOT_FLAGS.behaviour) !== 0) {
+          malformed = true;
+        }
+      } else {
+        if (heroId < 1 || heroId > 39 || seen.has(heroId)) malformed = true;
+        seen.add(heroId);
       }
-      seen.add(heroId);
       if ((slotFlags & SLOT_FLAGS.behaviour) !== 0 && behaviour > 2) malformed = true;
       if ((slotFlags & SLOT_FLAGS.skills) !== 0 && disabled > 0xff) malformed = true;
       if ((slotFlags & SLOT_FLAGS.professions) !== 0) {
@@ -604,7 +612,7 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     slots.push(Object.freeze({
       index,
       occupied: isOccupied,
-      hero: isOccupied ? heroId : null,
+      hero: isOccupied && index !== 0 ? heroId : null,
       agentId: isOccupied ? agentId : null,
       level: isOccupied && level !== 0 ? level : null,
       professions: (slotFlags & SLOT_FLAGS.professions) !== 0
@@ -627,20 +635,29 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
   const secondSequence = view.getUint32(8, true);
   const rosterObserved = (flags & PARTY_FLAGS.roster) !== 0;
   const unlockObserved = (flags & PARTY_FLAGS.unlock) !== 0;
+  const hardModeObserved = (flags & PARTY_FLAGS.hardMode) !== 0;
   if (
     magic !== PARTY_MAGIC
     || abiAndSize !== ((COMPANION_PARTY_BYTES << 16) | COMPANION_PARTY_ABI)
     || firstSequence !== secondSequence
     || (secondSequence & 1) !== 0
     || (flags & ~KNOWN_PARTY_FLAGS) !== 0
+    || playRegionValue > 2
+    || hardModeValue > 1
     || reserved !== 0
     || malformed
-    || slotCount !== occupied
+    || slotCount !== Math.max(0, occupied - (slots[0]?.occupied ? 1 : 0))
+    || (rosterObserved && !slots[0]?.occupied)
     // Nothing may be occupied, and no hero owned, in a party nobody read.
     || (!rosterObserved && (occupied !== 0 || slotCount !== 0))
     // Where the party is standing is something the walk read. A record nobody
     // walked cannot claim an outpost.
     || (!rosterObserved && (flags & PARTY_FLAGS.outpost) !== 0)
+    || (!rosterObserved && hardModeObserved)
+    || (!hardModeObserved && hardModeValue !== 0)
+    // A blocked or unknown region publishes policy only. No optional party
+    // graph is walked there.
+    || (playRegionValue !== 1 && (rosterObserved || unlockObserved))
     || (!unlockObserved && (knownLow !== 0 || knownHigh !== 0))
     // A hero cannot be unlocked without that having been decided.
     || (unlockedLow & ~knownLow) !== 0
@@ -654,6 +671,10 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     generation,
     rosterObserved,
     unlockObserved,
+    playRegion: playRegionValue === 1 ? "pve" as const
+      : playRegionValue === 2 ? "pvp" as const
+        : "unknown" as const,
+    hardMode: hardModeObserved ? hardModeValue === 1 : null,
     inOutpost: rosterObserved ? (flags & PARTY_FLAGS.outpost) !== 0 : null,
     slotCount,
     slots: Object.freeze(slots),

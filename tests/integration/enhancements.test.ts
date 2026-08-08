@@ -21,6 +21,7 @@ import {
 } from "../../src/shared/contracts.ts";
 import {
   ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
+  ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS,
   ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
 } from "../../src/main/certification/enhancement-builds.ts";
 
@@ -103,6 +104,7 @@ interface SnapshotOverrides {
   tickCount?: number;
   mapId?: number;
   instanceType?: number;
+  playRegion?: number;
   playerId?: number;
   playerX?: number;
   playerY?: number;
@@ -118,7 +120,7 @@ function snapshot(overrides: SnapshotOverrides = {}) {
   const buffer = new ArrayBuffer(64);
   const view = new DataView(buffer);
   view.setUint32(0, MAGIC, true);
-  view.setUint16(4, 1, true);
+  view.setUint16(4, 2, true);
   view.setUint16(6, 64, true);
   view.setUint32(8, overrides.sequence ?? 2, true);
   const flags = overrides.flags ?? 7;
@@ -127,7 +129,11 @@ function snapshot(overrides: SnapshotOverrides = {}) {
   view.setUint32(12, flags, true);
   view.setUint32(16, overrides.tickCount ?? 40, true);
   view.setUint32(20, overrides.mapId ?? (hasPlayer ? 133 : 0), true);
-  view.setUint32(24, overrides.instanceType ?? 0, true);
+  view.setUint32(
+    24,
+    (overrides.instanceType ?? 0) | ((overrides.playRegion ?? 1) << 8),
+    true,
+  );
   view.setUint32(28, overrides.playerId ?? (hasPlayer ? 7 : 0), true);
   view.setFloat32(32, overrides.playerX ?? (hasPlayer ? -9827.3 : 0), true);
   view.setFloat32(36, overrides.playerY ?? (hasPlayer ? 34130.2 : 0), true);
@@ -262,6 +268,7 @@ const ADDRESSES = Object.freeze({
   heroInfoBuffer: 0x1_2000,
   skillbarBuffer: 0x1_3000,
   attributeBuffer: 0x1_4000,
+  areaInfo: 0x20_0000,
   companionRuntime: 0x30_0000,
 });
 
@@ -311,7 +318,10 @@ const PARTY_DIRTY_MESSAGES = Object.freeze([
  */
 const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT
   - ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS.length
-  - ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS.length;
+  - ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS.length
+  - ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS.length;
+const POLICY_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT
+  - ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS.length;
 const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
 const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
@@ -441,6 +451,7 @@ async function createKernel(
       DETAIL.attributeEntryRank,
     ], DETAIL_CONFIG_START);
   }
+  config.set([ADDRESSES.areaInfo, 883, 0x7c, 0x10], POLICY_CONFIG_START);
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, twenty-five words short of
@@ -498,6 +509,8 @@ async function createKernel(
         args[3] ?? 4, args[4] ?? 5),
     uiEvent: (message: number, wparam: number, lparam: number) =>
       exports.dispatch(2, message, wparam, lparam, 0, 0),
+    activeFeatures: (features: number) =>
+      exports.dispatch(3, features, 0, 0, 0, 0),
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     party: () => readCompanionParty(memory.buffer, ADDRESSES.party),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
@@ -522,6 +535,12 @@ function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.character + 0x234, 133, true);
   view.setUint32(ADDRESSES.character + 0x23c, 0, true);
   view.setUint32(ADDRESSES.character + 0x2ac, 42, true);
+  const area = ADDRESSES.areaInfo + 133 * 0x7c;
+  view.setUint32(area + 0x00, 1, true);
+  view.setUint32(area + 0x04, 0, true);
+  view.setUint32(area + 0x08, 0, true);
+  view.setUint32(area + 0x0c, 13, true);
+  view.setUint32(area + 0x10, 0, true);
   view.setUint32(ADDRESSES.agentArray, ADDRESSES.agentBuffer, true);
   view.setUint32(ADDRESSES.agentArray + 4, 16, true);
   view.setUint32(ADDRESSES.agentArray + 8, 10, true);
@@ -599,8 +618,8 @@ function installPartyDetailGraph(view: DataView) {
     view.setUint32(at + DETAIL.infoSecondary, secondary as number, true);
   }
 
-  array(ADDRESSES.world + DETAIL.skillbars, ADDRESSES.skillbarBuffer, 2);
-  for (const [index, agentId] of [77, 88].entries()) {
+  array(ADDRESSES.world + DETAIL.skillbars, ADDRESSES.skillbarBuffer, 3);
+  for (const [index, agentId] of [77, 88, 7].entries()) {
     const at = ADDRESSES.skillbarBuffer + index * DETAIL.skillbarStride;
     view.setUint32(at + DETAIL.skillbarAgentId, agentId, true);
     for (let slot = 0; slot < 8; slot += 1) {
@@ -613,16 +632,21 @@ function installPartyDetailGraph(view: DataView) {
     view.setUint32(at + DETAIL.skillbarDisabled, index === 0 ? 0b101 : 0, true);
   }
 
-  array(ADDRESSES.world + DETAIL.attributes, ADDRESSES.attributeBuffer, 2);
+  array(ADDRESSES.world + DETAIL.attributes, ADDRESSES.attributeBuffer, 3);
   const rows: readonly (readonly [number, readonly (readonly [number, number])[]])[] = [
     // A Warrior/Ranger: every Warrior attribute, and the Ranger ones except
     // Expertise (23), which is the Ranger *primary* and so unavailable.
     [77, [[17, 7], [18, 0], [19, 12], [20, 0], [21, 0], [22, 0], [24, 3], [25, 0]]],
     [88, [[0, 0], [1, 2], [2, 0], [3, 5], [13, 0], [14, 10], [15, 0]]],
+    [7, [[13, 0], [14, 10], [15, 0], [16, 8], [1, 3], [2, 0], [3, 0]]],
   ];
   for (const [index, [agentId, entries]] of rows.entries()) {
     const at = ADDRESSES.attributeBuffer + index * DETAIL.attributeStride;
     view.setUint32(at + DETAIL.attributeAgentId, agentId, true);
+    for (let id = 0; id <= 44; id += 1) {
+      const slot = at + DETAIL.attributeEntries + id * DETAIL.attributeEntryStride;
+      view.setUint32(slot + DETAIL.attributeEntryId, 0xffff_ffff, true);
+    }
     for (const [id, rank] of entries) {
       const slot = at + DETAIL.attributeEntries + id * DETAIL.attributeEntryStride;
       view.setUint32(slot + DETAIL.attributeEntryId, id, true);
@@ -689,7 +713,7 @@ describe("Companion snapshot ABI", () => {
       "writing",
     );
     const corrupt = snapshot();
-    new DataView(corrupt).setUint16(4, 2, true);
+    new DataView(corrupt).setUint16(4, 1, true);
     assert.equal(rejected(readCompanionSnapshot(corrupt, 0)), "snapshot");
     assert.equal(
       rejected(readCompanionSnapshot(snapshot({ flags: 8 }), 0)),
@@ -955,6 +979,27 @@ describe("Companion kernel", () => {
 
   });
 
+  it("keeps map policy live while a disabled target observer stops reading targets", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: ALL_FEATURES }), 1);
+    kernel.tick();
+    assert.equal(
+      decoded(readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot)).targetId,
+      9,
+    );
+
+    kernel.activeFeatures(FEATURE_NATIVE_CURSOR);
+    kernel.view.setUint32(ADDRESSES.agentBuffer + 9 * 4, 0xffff_fffc, true);
+    kernel.tick();
+    const policy = decoded(
+      readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot),
+    );
+    assert.equal(policy.playRegion, "pve");
+    assert.equal(policy.playerId, 7);
+    assert.equal(policy.targetValid, false);
+  });
+
   it("requires UI message configuration only for the Toolbox capability", async () => {
     const cursorOnly = await createKernel();
     cursorOnly.config.fill(0, MESSAGE_CONFIG_START);
@@ -987,12 +1032,9 @@ describe("Companion kernel", () => {
     );
   });
 
-  it("observes Toolbox heroes without traversing the agent array", async () => {
+  it("observes Toolbox heroes and the exact player agent", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    kernel.view.setUint32(ADDRESSES.agentArray, 0xffff_fffc, true);
-    kernel.view.setUint32(ADDRESSES.agentArray + 4, 0xffff_ffff, true);
-    kernel.view.setUint32(ADDRESSES.agentArray + 8, 0xffff_ffff, true);
     assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
     kernel.tick();
     const toolbox = readyToolbox(kernel.toolbox());
@@ -1020,10 +1062,11 @@ describe("Companion kernel", () => {
     assert.equal(party.rosterObserved, true);
     assert.equal(party.slotCount, 1);
 
-    // Slot 0 is the player and is never a hero, so a one-hero party occupies
-    // slot 1. A roster that started at 0 would put a hero where the player is.
+    // Slot 0 is the player, so a one-hero party occupies slot 1.
     const [player, hero] = party.slots;
-    assert.equal(player?.occupied, false);
+    assert.equal(player?.occupied, true);
+    assert.equal(player?.hero, null);
+    assert.equal(player?.agentId, 7);
     assert.equal(hero?.occupied, true);
     assert.equal(hero?.hero, 1);
     assert.equal(hero?.agentId, 77);
@@ -1068,7 +1111,16 @@ describe("Companion kernel", () => {
 
     const party = readyParty(kernel.party());
     assert.equal(party.slotCount, 1, "the foreign hero stayed out");
+    const player = party.slots[0];
     const hero = party.slots[1];
+    assert.equal(player?.agentId, 7);
+    assert.deepEqual(player?.professions, [3, 5], "player professions");
+    assert.deepEqual(
+      player?.skills,
+      [120, 121, 122, 123, 124, 125, 126, 127],
+      "player skill bar",
+    );
+    assert.deepEqual(player?.attributes, [[1, 3], [14, 10], [16, 8]]);
     assert.equal(hero?.hero, 1);
     assert.deepEqual(hero?.professions, [1, 2], "primary and secondary");
     assert.equal(hero?.behaviour, 1);
@@ -1267,7 +1319,7 @@ describe("Companion kernel", () => {
     }
   });
 
-  it("counts chat and observes hero-panel events without calling back into the game", async () => {
+  it("counts chat without calling back into the game", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
     assert.equal(
@@ -1294,14 +1346,6 @@ describe("Companion kernel", () => {
     kernel.uiEvent(0x1000_0082, 0xdead_beef, 0x7fff_fffd);
     state = readyToolbox(kernel.toolbox());
     assert.equal(state.playerChatCount, 1);
-    kernel.uiEvent(0x1000_01a4, 1, 0);
-    state = readyToolbox(kernel.toolbox());
-    assert.equal(state.panelState, 2);
-    const shownSequence = state.sequence;
-    kernel.uiEvent(0x1000_01a4, 1, 0);
-    assert.equal(readyToolbox(kernel.toolbox()).sequence, shownSequence);
-    kernel.uiEvent(0x1000_01a3, 1, 0);
-    assert.equal(readyToolbox(kernel.toolbox()).panelState, 1);
   });
 
   it("observes heroes on UI changes with a bounded quiet reconciliation", async () => {

@@ -39,6 +39,11 @@ type Notice = Readonly<{
   tone: "success" | "warning" | "error";
   message: string;
 }> | null;
+type ApplyStatus = Readonly<{
+  teamId: string;
+  tone: "progress" | "success" | "warning" | "error";
+  message: string;
+}> | null;
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -62,7 +67,6 @@ function emptyTeamSlots(): Team["slots"] {
     build: null,
     hero: null,
     behaviour: position === 0 ? null : "guard",
-    disabled: [],
   }));
 }
 
@@ -86,6 +90,7 @@ export function useLibrary(host: ToolsHost) {
   const saving = ref(false);
   const error = ref<string | null>(null);
   const notice = ref<Notice>(null);
+  const applyStatus = ref<ApplyStatus>(null);
   const kind = ref<LibraryItem["kind"]>("team");
   const selectedId = ref("");
   const query = ref("");
@@ -377,11 +382,13 @@ export function useLibrary(host: ToolsHost) {
     id: string,
     update: (team: Team) => Team,
     label: string,
-  ) =>
-    commit(label, (current) => ({
+  ) => {
+    if (applyStatus.value?.teamId === id) applyStatus.value = null;
+    return commit(label, (current) => ({
       ...current,
       teams: current.teams.map((team) => team.id === id ? update(team) : team),
     }));
+  };
 
   const duplicateTeam = async (id: string) => {
     const nextId = `team-${crypto.randomUUID()}`;
@@ -567,6 +574,11 @@ export function useLibrary(host: ToolsHost) {
   const applyTeam = async (team: Team) => {
     if (!library.value || saving.value) return null;
     saving.value = true;
+    applyStatus.value = {
+      teamId: team.id,
+      tone: "progress",
+      message: "Applying team · checking difficulty and player build…",
+    };
     const source = library.value;
     try {
       const resolution = resolveTeamApplyPlan(
@@ -575,19 +587,10 @@ export function useLibrary(host: ToolsHost) {
         (build, context) => validateInContext(build, context),
       );
       if (!resolution.valid) {
-        const rules = new Set(resolution.problems.map(({ rule }) => rule));
-        showNotice(
-          rules.has("hard-mode")
-            ? "Hard-mode team application is not available yet."
-            : rules.has("player-build")
-              ? "Applying your own build is not available yet. Remove it from slot 1 first."
-              : rules.has("disabled-skills")
-                ? "Applying disabled hero skills is not available yet. Enable every slot first."
-                : `${resolution.problems.length} team ${
-                  resolution.problems.length === 1 ? "assignment needs" : "assignments need"
-                } attention before Apply.`,
-          "warning",
-        );
+        const message = `${resolution.problems.length} team ${
+            resolution.problems.length === 1 ? "assignment needs" : "assignments need"
+          } attention before Apply.`;
+        applyStatus.value = { teamId: team.id, tone: "warning", message };
         return null;
       }
       const result = await host.applyTeam(resolution.plan);
@@ -607,10 +610,8 @@ export function useLibrary(host: ToolsHost) {
         await host.saveLibrary(next);
         library.value = next;
       } catch {
-        showNotice(
-          `Team applied (${changes}), but its last-used time could not be saved.`,
-          "warning",
-        );
+        const message = `Team applied (${changes}), but its last-used time could not be saved.`;
+        applyStatus.value = { teamId: team.id, tone: "warning", message };
         return result;
       }
       // Named, not counted. A skill the game refused is almost always one the
@@ -618,20 +619,23 @@ export function useLibrary(host: ToolsHost) {
       const skipped = (result.skippedSkills ?? [])
         .map((id) => skillId(id))
         .map((skill) => host.skills.has(skill) ? host.skills.get(skill).name : `#${skill}`);
-      showNotice(skipped.length
+      const message = skipped.length
         ? `Team applied · ${changes}. Guild Wars would not equip `
           + `${skipped.slice(0, 3).join(", ")}`
           + `${skipped.length > 3 ? ` and ${skipped.length - 3} more` : ""}`
           + " — those are usually skills the account has not unlocked."
         : result.skillsSkipped
           ? `Team applied · ${changes}. Guild Wars skipped one or more unavailable skills.`
-          : `Team applied · ${changes}.`);
+          : result.completedChanges === 0
+            ? "Team already matches the observed party."
+            : `Team applied · ${changes}.`;
+      applyStatus.value = { teamId: team.id, tone: "success", message };
       return result;
     } catch (cause) {
-      showNotice(
-        cause instanceof Error ? cause.message : "The team could not be applied.",
-        "error",
-      );
+      const message = cause instanceof Error
+        ? cause.message
+        : "The team could not be applied.";
+      applyStatus.value = { teamId: team.id, tone: "error", message };
       return null;
     } finally {
       saving.value = false;
@@ -668,11 +672,12 @@ export function useLibrary(host: ToolsHost) {
 
   return {
     skills: host.skills,
+    party: host.party,
     // Narrower than handing components the host: they need the reason Apply is
     // refused, not the ability to call around the controller for everything
     // else it wraps.
     applyUnavailable: host.applyUnavailable,
-    library, loading, saving, error, notice, kind, selectedId, query, tag,
+    library, loading, saving, error, notice, applyStatus, kind, selectedId, query, tag,
     items, tags, selectedBuild, selectedTeam, canUndo, selectKind,
     select: (next: LibraryItem) => {
       kind.value = next.kind;

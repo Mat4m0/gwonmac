@@ -30,7 +30,6 @@ static mut PLAYER_CHAT_COUNT: u32 = 0;
 static mut HERO_COUNT: u32 = 0;
 static mut FIRST_HERO_ID: u32 = 0;
 static mut FIRST_HERO_AGENT_ID: u32 = 0;
-static mut PANEL_STATE: u32 = PANEL_UNKNOWN;
 static mut PARTY_DIRTY: bool = true;
 static mut PARTY_OBSERVED: bool = false;
 
@@ -74,7 +73,6 @@ unsafe fn publish() {
         write_volatile(&mut (*snapshot).hero_count, HERO_COUNT);
         write_volatile(&mut (*snapshot).first_hero_id, FIRST_HERO_ID);
         write_volatile(&mut (*snapshot).first_hero_agent_id, FIRST_HERO_AGENT_ID);
-        write_volatile(&mut (*snapshot).panel_state, PANEL_STATE);
         write_volatile(&mut (*snapshot).sequence, next);
         SEQUENCE = next;
     }
@@ -88,7 +86,6 @@ pub(crate) unsafe fn initialize(pointer: u32) {
         HERO_COUNT = 0;
         FIRST_HERO_ID = 0;
         FIRST_HERO_AGENT_ID = 0;
-        PANEL_STATE = PANEL_UNKNOWN;
         PARTY_DIRTY = true;
         // Nothing has been read yet, and the first publish below must say so
         // rather than assert an empty party the kernel has never looked for.
@@ -105,17 +102,11 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 }
 
 unsafe fn apply_hero_state(observed: bool, count: u32, hero_id: u32, agent_id: u32) {
-    let panel_state = if unsafe { FIRST_HERO_ID } == hero_id {
-        unsafe { PANEL_STATE }
-    } else {
-        PANEL_UNKNOWN
-    };
     if unsafe {
         PARTY_OBSERVED == observed
             && HERO_COUNT == count
             && FIRST_HERO_ID == hero_id
             && FIRST_HERO_AGENT_ID == agent_id
-            && PANEL_STATE == panel_state
     } {
         return;
     }
@@ -124,7 +115,6 @@ unsafe fn apply_hero_state(observed: bool, count: u32, hero_id: u32, agent_id: u
         HERO_COUNT = count;
         FIRST_HERO_ID = hero_id;
         FIRST_HERO_AGENT_ID = agent_id;
-        PANEL_STATE = panel_state;
         publish();
     }
 }
@@ -142,15 +132,17 @@ pub(crate) unsafe fn tick(layout: Layout, tick_count: u32) {
         GameState::Ready {
             game,
             player_number,
+            play_region: PLAY_REGION_PVE,
             ..
         } => unsafe { collect_first_owned_hero(layout, game, player_number) },
+        GameState::Ready { .. } => None,
         GameState::Loading | GameState::Unavailable => None,
     };
     let (count, hero_id, agent_id) = observation.unwrap_or((0, 0, 0));
     unsafe { apply_hero_state(observation.is_some(), count, hero_id, agent_id) };
 }
 
-pub(crate) unsafe fn observe_ui(layout: Layout, message: u32, wparam: u32) {
+pub(crate) unsafe fn observe_ui(layout: Layout, message: u32, _wparam: u32) {
     unsafe {
         // The exact build supplies the closed party/hero/map lifecycle set.
         // Rust deliberately knows only the configured values, not global GWCA
@@ -166,22 +158,12 @@ pub(crate) unsafe fn observe_ui(layout: Layout, message: u32, wparam: u32) {
                 PLAYER_CHAT_COUNT = next;
                 publish();
             }
-        } else if FIRST_HERO_ID != 0
-            && wparam == FIRST_HERO_ID
-            && message == layout.hide_hero_panel_message
-            && PANEL_STATE != PANEL_HIDDEN
-        {
-            PANEL_STATE = PANEL_HIDDEN;
-            publish();
-        } else if FIRST_HERO_ID != 0
-            && wparam == FIRST_HERO_ID
-            && message == layout.show_hero_panel_message
-            && PANEL_STATE != PANEL_SHOWN
-        {
-            PANEL_STATE = PANEL_SHOWN;
-            publish();
         }
     }
+}
+
+pub(crate) unsafe fn mark_dirty() {
+    unsafe { PARTY_DIRTY = true };
 }
 
 pub(crate) unsafe fn publish_cursor_event() {

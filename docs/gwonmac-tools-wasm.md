@@ -31,8 +31,9 @@ The companion is one Wasm instance, but it is not one source-code monolith:
 | `abi.rs` | fixed feature bits, layout words, snapshot structs, and size assertions |
 | `memory.rs` | overflow-checked, bounds-checked volatile reads from game memory |
 | `cursor.rs` | cursor dirty state, bitmap validation, conversion, and publication |
-| `toolbox.rs` | developer chat and read-only hero/panel state |
-| `lib.rs` | world collection, post-original dispatch, and exported ABI |
+| `toolbox.rs` | bounded chat and party-summary observation |
+| `party.rs` | player/hero builds, difficulty, and party publication |
+| `lib.rs` | map policy, target collection, dispatch, and exported ABI |
 
 Renderer ownership is similarly split. `enhancement-manifest.ts` validates the
 derived module's fixed evidence, `companion-observer.ts` projects stable
@@ -53,7 +54,6 @@ The certificate consumes post-template SHA-256
 | Shared callback | dedicated appended table slot 4683 |
 | Player chat | `ChCliApi` function 8947, three `0x10000082` sites calling 6842 |
 | Neighbor messages | functions 8942/8945 emit `0x1000007f`/`0x10000080` to 6842 |
-| Hero panel | Hide `0x100001a3`, Show `0x100001a4`, argument is current owned HeroID |
 | Party dirty set | Hero agent/data `0x10000038`, `0x10000039`; map loaded/context/start/change `0x1000008c`, `0x10000098`, `0x100000c2`, `0x10000111`; party add/remove hero/player `0x1000011e`, `0x1000011f`, `0x10000124`, `0x10000126` |
 
 The static addresses and relative structure fields live only in
@@ -107,16 +107,10 @@ original. It saturating-increments one scalar. It never dereferences, stores,
 logs, or publishes the pointer-shaped message arguments, so it counts local
 server echoes as well as other players and does not claim sender identity.
 
-The developer hero example validates the live party array, selects the first
-hero owned by the current player, and publishes only HeroID/AgentID/count. It
-also observes certified Show/Hide messages emitted by normal game actions. It
-deliberately has no Show/Hide command: live experiments proved that calling the
-UI dispatcher after a tick lacks `PropContext`, while consuming an arbitrary
-later UI event can re-enter a still-active text-parser producer. The companion
-never calls a game function or writes the game's PropContext slot.
-
-The developer snapshot ABI 2 is fixed at 64 bytes and contains only the two
-counters, first-hero scalar state, and observed panel state.
+The party observer validates the exact player agent and owned-hero roster, then
+publishes only bounded scalar build state. The retired hero-panel visibility
+experiment and its proof remain in `internal/archive/hero-panel`; production
+does not observe or expose that state.
 
 The developer surface is a same-renderer Chromium overlay, not an injected game
 frame or a second Electron window. It is a non-modal palette: the overlay root
@@ -170,7 +164,24 @@ only for fields independently recovered by their own anchors; accepting one
 shared address delta for the entire tool bundle would turn update continuity
 into silent memory corruption.
 
-## Commands
+## Apply boundary
+
+The commands derivative contains only the fixed builders certified for team
+configuration; there is no generic opcode or address courier. The renderer
+requires the master Beta opt-in, Team Management enabled, a positively
+classified PvE region, and a fresh outpost party before any command. The runner
+applies and confirms difficulty first, then the player's secondary/bar/ranks,
+then roster and hero builds. It rechecks policy before every send and during
+every confirmation. PvP, guild halls, unknown regions, and map transitions
+remove the optional UI and observer access while Core remains active.
+
+Normal/Hard uses the exact opcode 155 builder. Hard Mode remains Beta until the
+external unlocked-account matrix is recorded; a failed server-side eligibility
+check is reported as a refusal, never inferred from the builder's return value.
+Disabled hero-skill automation is not a released team field because no setter
+met the same certification standard.
+
+## Verification commands
 
 ```bash
 pnpm enhancements:kernel:verify

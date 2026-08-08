@@ -146,7 +146,6 @@ test.describe("renderer Tools input", () => {
           heroAvailable: true,
           heroCount: 1,
           firstHeroId: 7,
-          panelState: 1,
         });
         // Registered after the Tools capture/bubble boundary, standing in for
         // the game's global handlers. Events on Tools chrome must never reach

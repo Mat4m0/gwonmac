@@ -105,6 +105,10 @@ export interface EnhancementLayout {
   attributeEntryStride: number;
   attributeEntryId: number;
   attributeEntryRank: number;
+  areaInfo: number;
+  areaInfoCount: number;
+  areaInfoStride: number;
+  areaInfoFlags: number;
 }
 
 /**
@@ -234,12 +238,21 @@ export const ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS = [
   "attributeEntryRank",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
+/** Client-owned `AreaInfo` metadata behind GWToolbox++'s PvP boundary. */
+export const ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS = [
+  "areaInfo",
+  "areaInfoCount",
+  "areaInfoStride",
+  "areaInfoFlags",
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
 export const ENHANCEMENT_LAYOUT_FIELDS = [
   ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
   ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
   ...ENHANCEMENT_PARTY_LAYOUT_FIELDS,
   ...ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
   ...ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
+  ...ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS,
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
@@ -345,14 +358,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "2f2bd8ebe8eff7053203e701835bbd50d0e6201f0adbf21d758e7d1474c8e184",
-      target: "d6d0c861a768eaa879d81678610720d2bfb52767bae3d3d67a7637f6bcff88f5",
-      cursorTarget: "bf8b16593abd2699fabe61e3c6ca5ea21e3daccc572ab130bc1d47cb2d10d425",
-      cursorToolbox: "1a84d44ca33b68ab53f2076eee6b7840fd415401f3f3ce8a2ac3d671abb4182e",
+      cursor: "b61bd939c833183a5308eacb57729fcdbd48368c0c698aba6fc42fadf21c1168",
+      target: "c05af4e9228f321cd3578ca7df0b1213ecf52436b375ba68296469f8d3f321af",
+      cursorTarget: "69d2caaa2bc2cd7e1c4012bee544f9c474d9b25919da646fae3ef2841cbfa944",
+      cursorToolbox: "59c765a518c6fa3024e89a308c84db659a1bdb7a9ecec609c8223adea9c959bc",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "dd1eb8f219295a16df65e35e3ecf1057eb7d1c4bb423089af9f8bf13563a031a",
-      cursorTargetToolboxCommands: "b2436888e475cf0f9339a80b58c74462406ea74d2ffc224250371cdb1645f67a",
+      cursorToolboxCommands: "a298f6b511fed0e7f6d8b973521521730e1528a1bf211bebe9f0ab0a877a2d3e",
+      cursorTargetToolboxCommands: "ed306c54e775a065476a823018a07234fe144c0322496a892ea25093fe9a9ec8",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -383,9 +396,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // live on build 38,615, which predates her. Kicking heroes one at a time
     // covers every case and never touches the ambiguous value.
     //
-    // Hard mode (155) is certified in the evidence file and deliberately not
-    // offered: an apply does not need it. The callable set is the smallest one
-    // that does the job.
     commands: Object.freeze({
       thunkExport: "enhancement_command",
       entries: Object.freeze([
@@ -445,6 +455,15 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
           bodySha256:
             "c2b8c55c9cddf538e61911cb6d542196a35700c1d6e5a5e693ab627ca4e53041",
           label: "attributes set (agentId, count, ids[], ranks[])",
+        }),
+        Object.freeze({
+          opcode: 155,
+          functionIndex: 10650,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "99cb42fb99f1503f80beb589f43c7f9bb841352bd95344a7d96f243f0f639287",
+          label: "CharMsgSendSetHardMode(enabled)",
         }),
       ] as const),
     }),
@@ -578,6 +597,13 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       // `level_base`. `level` at 0x08 adds runes, and a stored build holds the
       // invested rank — Devona reads Strength 7 there and 8 with her rune.
       attributeEntryRank: 0x04,
+      // Exact-build initialised `AreaInfo[mapId]`. Cross-checked against
+      // GWToolbox++'s flags: Lion's Arch (55) is PvE, Random Arenas (188)
+      // carries the PvP bit, and Isle of Wurms (529) the guild-hall bit.
+      areaInfo: 0x1cc630,
+      areaInfoCount: 883,
+      areaInfoStride: 0x7c,
+      areaInfoFlags: 0x10,
     }),
   }),
 ]);

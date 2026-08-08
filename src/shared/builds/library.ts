@@ -155,7 +155,7 @@ export type AttributeRank = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
 /** Only the attributes actually invested in appear. An absent attribute is rank 0. */
 export type AttributeRanks = Readonly<Partial<Record<Attribute, AttributeRank>>>;
 
-/** The eight positions on a bar, and the only thing `TeamSlot.disabled` may name. */
+/** The eight positions on a bar. */
 export type SkillSlotIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** An empty slot is a real, saveable state — a half-written bar is not corrupt. */
@@ -257,8 +257,6 @@ export interface TeamSlot {
   readonly build: BuildId | null;
   readonly hero: HeroId | null;
   readonly behaviour: HeroBehaviour | null;
-  /** Positions on this slot's bar the hero must not use of its own accord. */
-  readonly disabled: readonly SkillSlotIndex[];
 }
 
 /** Eight positions, index 0 being the player. Fixed length for the same reason a bar is. */

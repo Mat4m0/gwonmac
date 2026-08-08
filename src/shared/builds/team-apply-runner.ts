@@ -37,6 +37,13 @@ import type { LiveParty } from "./live-party.js";
 
 /** The commands the enhancement exposes, as this module needs them. */
 export interface TeamApplyCommands {
+  setHardMode(enabled: boolean): boolean;
+  setPlayerSecondary(agentId: number, profession: number): boolean;
+  setPlayerSkills(agentId: number, skillIds: readonly number[]): boolean;
+  setPlayerAttributes(
+    agentId: number,
+    ranks: readonly (readonly [attribute: number, rank: number])[],
+  ): boolean;
   addHero(heroId: number): boolean;
   kickHero(heroId: number): boolean;
   setHeroBehaviour(agentId: number, behaviour: number): boolean;
@@ -73,6 +80,24 @@ const BEHAVIOUR_IDS = Object.freeze({ fight: 0, guard: 1, avoid: 2 });
 
 class ApplyRefused extends Error {}
 
+function writableParty(environment: TeamApplyEnvironment): LiveParty {
+  const party = environment.party();
+  if (party.status !== "ready") {
+    throw new ApplyRefused("the game stopped publishing a party");
+  }
+  if (party.playRegion !== "pve") {
+    throw new ApplyRefused(
+      party.playRegion === "pvp"
+        ? "the party entered PvP"
+        : "the current region became unknown",
+    );
+  }
+  if (party.inOutpost !== true) {
+    throw new ApplyRefused("the party left the outpost");
+  }
+  return party;
+}
+
 /**
  * Waits for `check` to hold, or gives up.
  *
@@ -90,10 +115,7 @@ async function confirm(
   const deadline = started + CONFIRM_MS;
   let resent = false;
   for (;;) {
-    const party = environment.party();
-    if (party.status !== "ready") {
-      throw new ApplyRefused("the game stopped publishing a party");
-    }
+    const party = writableParty(environment);
     if (check(party)) return;
     if (Date.now() >= deadline) {
       throw new ApplyRefused(`${what} did not take effect`);
@@ -111,6 +133,10 @@ async function confirm(
 function liveBar(party: LiveParty, hero: number): readonly number[] | null {
   const skills = party.heroes.find((one) => one.hero === hero)?.skills;
   return skills ? skills.map((skill) => skill ?? 0) : null;
+}
+
+function livePlayerBar(party: LiveParty): readonly number[] | null {
+  return party.player?.skills?.map((skill) => skill ?? 0) ?? null;
 }
 
 function sameBar(left: readonly number[], right: readonly number[]): boolean {
@@ -165,6 +191,13 @@ export async function runTeamApply(
         : "Whether this is an outpost has not been observed yet.",
     );
   }
+  if (opening.playRegion !== "pve") {
+    throw new Error(
+      opening.playRegion === "pvp"
+        ? "GWonMac Tools are unavailable in PvP."
+        : "GWonMac Tools are unavailable while the region is unknown.",
+    );
+  }
 
   const wanted = plan.members
     .filter((member): member is TeamApplyMember & { hero: number } =>
@@ -188,9 +221,103 @@ export async function runTeamApply(
   let skipped: readonly number[] = [];
 
   try {
+    if (plan.mode !== "none") {
+      if (opening.hardMode === null) {
+        throw new ApplyRefused("the current Normal or Hard Mode was not observed");
+      }
+      const wantedHard = plan.mode === "hard";
+      if (opening.hardMode !== wantedHard) {
+        writableParty(environment);
+        environment.commands.setHardMode(wantedHard);
+        await confirm(
+          environment,
+          wantedHard ? "enabling Hard Mode" : "enabling Normal Mode",
+          (party) => party.playRegion === "pve" && party.hardMode === wantedHard,
+        );
+        completedChanges += 1;
+      }
+    }
+
+    const playerMember = plan.members[0];
+    if (playerMember?.build !== null && playerMember?.build !== undefined) {
+      const current = writableParty(environment).player;
+      if (current === null || current.agentId === 0) {
+        throw new ApplyRefused("the player's own build was not observed");
+      }
+      const [primary, secondary] = playerMember.build.professions;
+      if (current.professions !== null && current.professions[0] !== primary) {
+        throw new ApplyRefused(
+          `the player is ${current.professions[0]}, but this build is for ${primary}`,
+        );
+      }
+      const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
+      if (current.professions !== null
+        && (current.professions[1] ?? null) !== secondary) {
+        writableParty(environment);
+        environment.commands.setPlayerSecondary(current.agentId, wantedSecondary);
+        await confirm(
+          environment,
+          "the player's secondary profession",
+          (party) => (party.player?.professions?.[1] ?? null) === secondary,
+        );
+        completedChanges += 1;
+      }
+
+      const skills = skillIds(playerMember);
+      const before = livePlayerBar(environment.party());
+      if (before === null || !sameBar(before, skills)) {
+        const send = () => {
+          const player = writableParty(environment).player;
+          if (player === null) throw new ApplyRefused("the player was no longer observed");
+          environment.commands.setPlayerSkills(player.agentId, skills);
+        };
+        send();
+        let steady: readonly number[] | null = null;
+        await confirm(
+          environment,
+          "the player's skill bar",
+          (party) => {
+            const bar = livePlayerBar(party);
+            if (bar === null) return false;
+            if (sameBar(bar, skills)) return true;
+            if (before !== null && sameBar(bar, before)) return false;
+            if (steady === null || !sameBar(steady, bar)) {
+              steady = bar;
+              return false;
+            }
+            skipped = skills
+              .map((skill, slot) => (skill !== 0 && bar[slot] !== skill ? skill : 0))
+              .filter((skill) => skill !== 0);
+            skillsSkipped = skipped.length > 0;
+            return true;
+          },
+          send,
+        );
+        completedChanges += 1;
+      }
+
+      const ranks = attributePairs(playerMember);
+      const wantedRanks = playerMember.build.attributes;
+      const settled = (party: LiveParty) => {
+        const live = party.player?.attributes;
+        return live !== null && live !== undefined
+          && Object.entries(wantedRanks).every(([name, rank]) =>
+            rank === undefined || rank === 0
+            || live[name as keyof typeof wantedRanks] === rank);
+      };
+      if (ranks.length > 0 && !settled(environment.party())) {
+        const player = writableParty(environment).player;
+        if (player === null) throw new ApplyRefused("the player was no longer observed");
+        environment.commands.setPlayerAttributes(player.agentId, ranks);
+        await confirm(environment, "the player's attributes", settled);
+        completedChanges += 1;
+      }
+    }
+
     // Out first, so a full party has room for the heroes coming in.
     for (const present of opening.heroes) {
       if (wantedHeroes.has(present.hero)) continue;
+      writableParty(environment);
       environment.commands.kickHero(present.hero);
       await confirm(
         environment,
@@ -202,6 +329,7 @@ export async function runTeamApply(
 
     for (const member of wanted) {
       if (!environment.party().heroes.some((hero) => hero.hero === member.hero)) {
+        writableParty(environment);
         environment.commands.addHero(member.hero);
         await confirm(
           environment,
@@ -242,6 +370,7 @@ export async function runTeamApply(
         if (live?.professions !== null
           && live?.professions !== undefined
           && (live.professions[1] ?? null) !== secondary) {
+          writableParty(environment);
           environment.commands.setHeroSecondary(agentId, wantedSecondary);
           await confirm(
             environment,
@@ -256,7 +385,10 @@ export async function runTeamApply(
         const skills = skillIds(member);
         const before = liveBar(environment.party(), member.hero);
         if (before === null || !sameBar(before, skills)) {
-          const send = () => environment.commands.setHeroSkills(agentId, skills);
+          const send = () => {
+            writableParty(environment);
+            environment.commands.setHeroSkills(agentId, skills);
+          };
           send();
           // The client keeps a skill the hero may not use out of the bar, and
           // leaves whatever was in that slot. So the answer is not "the bar
@@ -307,6 +439,7 @@ export async function runTeamApply(
             || live[name as keyof typeof wanted] === rank);
         };
         if (ranks.length > 0 && !settled(environment.party())) {
+          writableParty(environment);
           environment.commands.setHeroAttributes(agentId, ranks);
           await confirm(
             environment,
@@ -322,6 +455,7 @@ export async function runTeamApply(
         const live = environment.party().heroes
           .find((hero) => hero.hero === member.hero);
         if (live?.behaviour !== member.behaviour) {
+          writableParty(environment);
           environment.commands.setHeroBehaviour(agentId, behaviour);
           await confirm(
             environment,

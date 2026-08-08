@@ -23,26 +23,23 @@ Wine, or a browser tab.
 Windows.**
 They are not asking for a plugin platform. They want the handful of readouts
 the game itself never showed them, and they notice the absence within an hour
-of playing. The exact-build certification, the read-only snapshot, and the
-fail-closed transform all exist to serve that person without asking them to
-trust us with their account.
+of playing. Exact-build certification, bounded snapshots and commands, and the
+fail-closed transform serve that person without exposing a generic automation
+surface.
 
-## The first feature
+## The first tool set
 
-**A target distance and range readout.** With a target selected, show how far
-away it is and which range band it falls in — the number players use to pull
-safely, to stay inside casting range, and to judge aggro.
+**Builds and teams.** Players can keep builds and team configurations, capture
+the current player-and-hero party, exchange whole-team codes, and explicitly
+Apply a saved team in a PvE outpost. Apply confirms difficulty, the player's
+build, the hero roster, professions, bars, attributes, and behavior against
+fresh observations. Target distance remains a clearly labelled Test tool.
 
-It is first because it is the smallest genuinely useful thing and the evidence
-already exists: the certified snapshot publishes target identity, position,
-distance, and semantic range, and a live run has confirmed those values against
-a real target. It needs a decoder and a small piece of UI, not a new ABI.
-
-It ships read-only through the pipeline that exists, with no plugin system, no
-event bus, and no command framework. Semantics the client has not certified are
-shown raw or as unknown rather than guessed at. If a second feature does not
-reuse what this one builds, that is information about the design, not a reason
-to generalise in advance.
+Core cursor and template support are always on for a certified client. Optional
+Tools are a Beta opt-in. Their first enable requires one restart to select the
+certified client module; after that, individual tool toggles are live. Optional
+observers, UI, and command access are disabled in PvP, guild halls, and unknown
+regions.
 
 ## Non-goals
 
@@ -51,13 +48,13 @@ Refusals, not a backlog.
 - **No Windows or Linux build.**
 - **No modification of ArenaNet's client.** The downloaded artifact stays
   canonical and is never redistributed.
-- **No gameplay automation.** The app never chooses a target, moves a
-  character, uses a skill, sends chat, or takes another gameplay action for the
-  player. After the player's own trusted click, the native-cursor tool may
+- **No autonomous gameplay automation.** The app never chooses a target, moves
+  a character, uses a skill, sends chat, farms, or acts without an explicit
+  player command. Team Apply is a bounded, user-initiated PvE configuration
+  action and every step is confirmed before the next. After a trusted click,
+  the native-cursor tool may
   replay one bounded out-and-back pointer hit-test when Guild Wars emitted no
   cursor event; it cannot originate a click or leave the pointer displaced.
-  The development-only gameplay automation tier cannot be reached by a
-  packaged build at all — a gate in code, not a promise.
 - **No account features.** No bots, macros, multiboxing help, or trading tools.
 - **No telemetry.** Nothing leaves the machine unless the player attaches a
   diagnostics file to a bug report themselves.

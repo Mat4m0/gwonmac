@@ -57,7 +57,6 @@ import {
   type ProfessionPair,
   type SkillBar,
   type SkillSlot,
-  type SkillSlotIndex,
   type Team,
   type TeamMode,
   type TeamSlot,
@@ -188,21 +187,6 @@ function parseBuild(value: unknown, field: string): Build {
   };
 }
 
-/**
- * The positions on this slot's bar the hero may not use of its own accord.
- * Deduplicated, because the set is what is meant and a repeated index would
- * render as a second identical toggle.
- */
-const asDisabled = (value: unknown, field: string): readonly SkillSlotIndex[] => {
-  const seen = new Set<SkillSlotIndex>();
-  for (const [index, entry] of asArray(value, field).entries()) {
-    const slot = SKILL_SLOTS.find((candidate) => candidate === entry);
-    if (slot === undefined) return fail(`${field}[${index}]`, "is not a bar position");
-    seen.add(slot);
-  }
-  return [...seen];
-};
-
 function parseSlot(value: unknown, field: string, known: ReadonlySet<string>): TeamSlot {
   const raw = asObject(value, field);
   const named = raw.build === null ? null : asId(raw.build, `${field}.build`);
@@ -222,7 +206,6 @@ function parseSlot(value: unknown, field: string, known: ReadonlySet<string>): T
         : BEHAVIOURS.has(raw.behaviour as HeroBehaviour)
           ? (raw.behaviour as HeroBehaviour)
           : fail(`${field}.behaviour`, "names no hero behaviour"),
-    disabled: asDisabled(raw.disabled, `${field}.disabled`),
   };
 }
 

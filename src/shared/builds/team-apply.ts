@@ -7,7 +7,7 @@
  * the rules — a caller that holds a plan holds proof the rules passed.
  *
  * The plan is deliberately scalar and closed: hero ids, profession ids,
- * attribute ranks, eight skill ids, a behaviour, and which slots are disabled.
+ * attribute ranks, eight skill ids, and a behaviour.
  * No pointers, no packets, no free text. That is what lets it cross into the
  * companion as a fixed-size record rather than as a command surface, and it is
  * why the refusals (`hard-mode`, `player-slot`, `party-gap`, ...) are values
@@ -21,7 +21,6 @@ import {
   type BuildLibrary,
   type HeroBehaviour,
   type HeroId,
-  type SkillSlotIndex,
   type Team,
   type TeamMode,
 } from "./library.js";
@@ -36,7 +35,6 @@ export interface TeamApplyMember {
   readonly hero: HeroId | null;
   readonly build: ApplicableBuild | null;
   readonly behaviour: HeroBehaviour | null;
-  readonly disabled: readonly SkillSlotIndex[];
 }
 
 export interface TeamApplyPlan {
@@ -59,16 +57,12 @@ export interface TeamApplyResult {
 }
 
 export type TeamApplyProblem =
-  | { readonly rule: "hard-mode" }
   | { readonly rule: "player-slot" }
-  | { readonly rule: "player-build" }
   | { readonly rule: "missing-hero"; readonly slot: number }
   | { readonly rule: "missing-behaviour"; readonly slot: number }
   | { readonly rule: "unknown-hero"; readonly slot: number }
   | { readonly rule: "duplicate-hero"; readonly slot: number }
   | { readonly rule: "party-gap"; readonly slot: number }
-  | { readonly rule: "disabled-without-build"; readonly slot: number }
-  | { readonly rule: "disabled-skills"; readonly slot: number }
   | { readonly rule: "invalid-build"; readonly slot: number };
 
 export type TeamApplyResolution =
@@ -88,7 +82,6 @@ function snapshotMember(member: TeamApplyMember): TeamApplyMember {
           attributes: Object.freeze({ ...member.build.attributes }),
           skills: Object.freeze([...member.build.skills]) as Build["skills"],
         }),
-    disabled: Object.freeze([...member.disabled]),
   });
 }
 
@@ -109,17 +102,12 @@ export function resolveTeamApplyPlan(
   const members: TeamApplyMember[] = [];
   const seen = new Set<HeroId>();
   let emptyHeroSlotSeen = false;
-  if (team.mode === "hard") {
-    problems.push({ rule: "hard-mode" });
-  }
-
   for (const [index, slot] of team.slots.entries()) {
     const build = slot.build === null ? null : buildById(library, slot.build);
     if (index === 0) {
       if (
         slot.hero !== null ||
-        slot.behaviour !== null ||
-        slot.disabled.length !== 0
+        slot.behaviour !== null
       ) {
         problems.push({ rule: "player-slot" });
       }
@@ -132,17 +120,10 @@ export function resolveTeamApplyPlan(
       ) {
         problems.push({ rule: "invalid-build", slot: index });
       }
-      if (build !== null) {
-        // The player observer and certified setters land together. Until then,
-        // accepting this plan would silently count a stored player build that
-        // the runner never applies.
-        problems.push({ rule: "player-build" });
-      }
       members.push({
         hero: null,
         build,
         behaviour: null,
-        disabled: [],
       });
       continue;
     }
@@ -167,14 +148,6 @@ export function resolveTeamApplyPlan(
     if (slot.behaviour === null) {
       problems.push({ rule: "missing-behaviour", slot: index });
     }
-    if (build === null && slot.disabled.length !== 0) {
-      problems.push({ rule: "disabled-without-build", slot: index });
-    }
-    if (build !== null && slot.disabled.length !== 0) {
-      // The setter is not certified yet. Refuse the value instead of carrying
-      // it through a plan whose runner would ignore it.
-      problems.push({ rule: "disabled-skills", slot: index });
-    }
     if (slot.build !== null && build === null) {
       problems.push({ rule: "invalid-build", slot: index });
     }
@@ -185,7 +158,6 @@ export function resolveTeamApplyPlan(
       hero: slot.hero,
       build,
       behaviour: slot.behaviour,
-      disabled: slot.disabled,
     });
   }
 

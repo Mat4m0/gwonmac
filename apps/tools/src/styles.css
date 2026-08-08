@@ -1016,6 +1016,10 @@ body:has(.tools-stage[data-mode="standalone"]) {
    not exist rather than as a panel that is broken. Not faint: it is the only
    thing in the footer that explains the control. */
 .detail-actions--explain > .apply-unavailable { color: var(--ui-warning); }
+.detail-actions--explain > .apply-status[data-tone="success"] { color: var(--ui-success); }
+.detail-actions--explain > .apply-status[data-tone="warning"],
+.detail-actions--explain > .apply-status[data-tone="progress"] { color: var(--ui-warning); }
+.detail-actions--explain > .apply-status[data-tone="error"] { color: var(--ui-danger); }
 
 /* ----------------------------------------------------------------- team */
 
@@ -1111,46 +1115,12 @@ body:has(.tools-stage[data-mode="standalone"]) {
   color: var(--ui-danger);
 }
 .behavior-picker select { width: 84px; }
-.slot-settings { min-width: 32px; padding-inline: 0; }
 
 .empty-bar {
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
 }
 
-.slot-options {
-  display: grid;
-  padding: var(--ui-space-2) 0 0;
-  grid-column: 2 / -1;
-  gap: var(--ui-space-2);
-  border-top: 1px solid var(--ui-line-soft);
-}
-
-.disabled-skills {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--ui-space-1);
-}
-
-.disabled-skills > span {
-  margin-right: var(--ui-space-1);
-  color: var(--ui-text-faint);
-  font-size: var(--ui-font-size-sm);
-}
-
-.disabled-skills .ui-chip {
-  max-width: 150px;
-  opacity: 0.55;
-}
-
-.disabled-skills .ui-chip[aria-pressed="true"] { opacity: 1; }
-
-.disabled-skills .ui-chip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .handoff-sheet {
   margin-top: var(--ui-space-4);
@@ -1336,7 +1306,6 @@ body:has(.tools-stage[data-mode="standalone"]) {
     grid-row: 2;
   }
 
-  .slot-options { grid-column: 1 / -1; }
   .handoff-sheet li { grid-template-columns: 20px 1fr auto; }
   .handoff-sheet li > span:last-child { grid-column: 2 / -1; }
 

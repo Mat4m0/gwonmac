@@ -335,7 +335,7 @@ hashes use the shipped tables. An unknown hash is checked by the bounded
 isolated process in `src/main/certification/local-client-verifier-host.ts`; only an exact
 structural proof may supply locally derived records. The template proof hashes
 the complete affected caller bodies after normalising only the selected call
-indices; the Enhancement proof requires all eight static addresses in the same
+indices; the Enhancement proof requires every certified static address in the same
 complete code-reference contexts. Any other change serves the untouched
 official module. The
 `client.buildCertification` gauge in a `.gwdiag` names it —
@@ -377,6 +377,15 @@ For enhancement work, begin with `pnpm certification doctor`, use the offline la
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
 scenario. Live enhancement runs are cached-only unless `--allow-update` is
 explicit; do not bypass that guard or use a temporary Electron profile.
+
+Certified Core (native cursor and template support) remains active whenever its
+exact build proof passes. GWonMac Tools Beta is optional and off by default; its
+first enable may restart to select the commands derivative, but individual tool
+toggles are live afterward. Optional observers and commands must be inactive in
+PvP, guild halls, and unknown regions. Team Apply is an explicit PvE-outpost
+configuration action: include the player, confirm every step from observed
+state, and expose no generic opcode command. Unsupported team fields are
+deleted from the released model rather than stored and ignored.
 
 Before finishing, check for a second source of truth, retained old paths,
 unnecessary structure, harder debugging, broken architecture decisions, and

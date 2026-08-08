@@ -117,7 +117,6 @@ function slots(ids: readonly (string | null)[]): BuildLibrary["teams"][number]["
     hero: heroIds[position] ?? null,
     build: ids[position] ? buildId(ids[position]!) : null,
     behaviour: position === 0 ? null : "guard",
-    disabled: [],
   }));
 }
 

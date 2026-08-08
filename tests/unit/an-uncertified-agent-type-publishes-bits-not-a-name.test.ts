@@ -19,13 +19,13 @@ function snapshot(agentTypeBits: number): ArrayBuffer {
   const buffer = new ArrayBuffer(64);
   const view = new DataView(buffer);
   view.setUint32(0, MAGIC, true);
-  view.setUint16(4, 1, true);
+  view.setUint16(4, 2, true);
   view.setUint16(6, 64, true);
   view.setUint32(8, 2, true);
   view.setUint32(12, 7, true);
   view.setUint32(16, 40, true);
   view.setUint32(20, 133, true);
-  view.setUint32(24, 0, true);
+  view.setUint32(24, 0 | (1 << 8), true);
   view.setUint32(28, 7, true);
   view.setFloat32(32, -9827.3, true);
   view.setFloat32(36, 34130.2, true);

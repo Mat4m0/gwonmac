@@ -4,7 +4,6 @@ import { HEROES_IN_PANEL_ORDER } from "../../../../src/shared/builds/heroes";
 import {
   heroId,
   mapTeamSlots,
-  type SkillSlotIndex,
   type TeamSlot,
 } from "../../../../src/shared/builds/library";
 import type { LibraryController } from "../use-library";
@@ -26,12 +25,10 @@ const emit = defineEmits<{
 }>();
 const name = ref(props.team.name);
 const notes = ref(props.team.notes);
-const expandedSlot = ref<number | null>(null);
 const deleting = ref(false);
 watch(
   () => props.team.id,
   () => {
-    expandedSlot.value = null;
     deleting.value = false;
   },
 );
@@ -56,6 +53,65 @@ const configured = computed(() =>
     (slot, index) => slot.build !== null || (index > 0 && slot.hero !== null),
   ).length,
 );
+const currentApplyStatus = computed(() =>
+  props.controller.applyStatus.value?.teamId === props.team.id
+    ? props.controller.applyStatus.value
+    : null,
+);
+const applyPreview = computed(() => {
+  const party = props.controller.party.value;
+  if (party.status !== "ready") return "Waiting for a playable character and party observation.";
+  if (party.playRegion !== "pve") {
+    return party.playRegion === "pvp"
+      ? "Core only in PvP and guild halls — Team Apply is unavailable."
+      : "Core only until the current region is safely identified.";
+  }
+  if (party.inOutpost !== true) return "Enter a PvE outpost to apply this team.";
+
+  const changes: string[] = [];
+  if (props.team.mode !== "none") {
+    const wantedHard = props.team.mode === "hard";
+    if (party.hardMode === null || party.hardMode !== wantedHard) {
+      changes.push(`set ${wantedHard ? "Hard" : "Normal"} Mode`);
+    }
+  }
+  const wantedHeroes = props.team.slots
+    .slice(1)
+    .flatMap((slot) => slot.hero === null ? [] : [slot.hero]);
+  const presentHeroes = party.heroes.map(({ hero }) => hero);
+  const leaving = presentHeroes.filter((hero) => !wantedHeroes.includes(hero));
+  const joining = wantedHeroes.filter((hero) => !presentHeroes.includes(hero));
+  if (leaving.length) changes.push(`remove ${leaving.length} ${leaving.length === 1 ? "hero" : "heroes"}`);
+  if (joining.length) changes.push(`add ${joining.length} ${joining.length === 1 ? "hero" : "heroes"}`);
+
+  let builds = 0;
+  props.team.slots.forEach((slot, index) => {
+    if (slot.build === null || !props.controller.library.value) return;
+    const build = buildById(props.controller.library.value, slot.build);
+    const live = index === 0
+      ? props.controller.party.value.player
+      : props.controller.party.value.heroes.find(({ hero }) => hero === slot.hero);
+    if (!build || !live) {
+      builds += 1;
+      return;
+    }
+    const sameProfessions = live.professions !== null
+      && live.professions[0] === build.professions[0]
+      && live.professions[1] === build.professions[1];
+    const sameSkills = live.skills !== null
+      && live.skills.every((skill, skillIndex) => skill === build.skills[skillIndex]);
+    const sameAttributes = live.attributes !== null
+      && Object.entries(build.attributes).every(([name, rank]) =>
+        live.attributes?.[name as keyof typeof live.attributes] === rank)
+      && Object.entries(live.attributes).every(([name, rank]) =>
+        build.attributes[name as keyof typeof build.attributes] === rank);
+    const sameBehaviour = index === 0
+      || ("behaviour" in live && slot.behaviour === live.behaviour);
+    if (!sameProfessions || !sameSkills || !sameAttributes || !sameBehaviour) builds += 1;
+  });
+  if (builds) changes.push(`update ${builds} ${builds === 1 ? "build" : "builds"}`);
+  return changes.length ? `Preview: ${changes.join(" · ")}.` : "Team already matches the observed party.";
+});
 
 const assignmentValid = (slot: TeamSlot, index: number): boolean => {
   if (slot.build === null || !props.controller.library.value) return true;
@@ -96,15 +152,6 @@ const chooseHero = (index: number, value: string) => {
   void updateSlot(index, { hero }, "Hero assignment updated");
 };
 
-const toggleDisabled = (index: number, skillSlot: SkillSlotIndex) => {
-  const slot = props.team.slots[index];
-  if (!slot) return;
-  const disabled = slot.disabled.includes(skillSlot)
-    ? slot.disabled.filter((value) => value !== skillSlot)
-    : [...slot.disabled, skillSlot].sort((left, right) => left - right);
-  void updateSlot(index, { disabled }, "Hero skill automation updated");
-};
-
 const apply = () => props.controller.applyTeam(props.team);
 </script>
 
@@ -141,17 +188,14 @@ const apply = () => props.controller.applyTeam(props.team);
       <div class="team-controls">
         <div class="ui-segment" aria-label="Difficulty">
           <button
-            v-for="mode in (['none', 'normal'] as const)"
+            v-for="mode in (['none', 'normal', 'hard'] as const)"
             :key="mode"
             :aria-pressed="team.mode === mode"
             @click="controller.updateTeam(team.id, (draft) => ({ ...draft, mode }), `${mode} mode selected`)"
           >
-            {{ mode === "none" ? "Keep current" : "Normal" }}
+            {{ mode === "none" ? "Keep current" : mode === "normal" ? "Normal" : "Hard" }}
           </button>
         </div>
-        <small v-if="team.mode === 'hard'" class="assignment-error">
-          Hard-mode Apply is not available yet. Choose Keep current or Normal.
-        </small>
         <TagEditor
           :tags="team.tags"
           :options="controller.tags.value"
@@ -183,7 +227,7 @@ const apply = () => props.controller.applyTeam(props.team);
         <li
           v-for="(slot, index) in team.slots"
           :key="`${slot.hero}-${index}`"
-          :class="{ 'team-slot--empty': !slot.build, 'team-slot--expanded': expandedSlot === index }"
+          :class="{ 'team-slot--empty': !slot.build }"
           :data-invalid="!assignmentValid(slot, index) ? '' : undefined"
         >
           <span class="slot-number">{{ index + 1 }}</span>
@@ -237,7 +281,7 @@ const apply = () => props.controller.applyTeam(props.team);
                 index,
                 { build: ($event.target as HTMLSelectElement).value
                   ? buildId(($event.target as HTMLSelectElement).value)
-                  : null, disabled: [] },
+                  : null },
                 `${teamMemberLabel(slot.hero, index)}'s build updated`,
               )"
             >
@@ -288,35 +332,6 @@ const apply = () => props.controller.applyTeam(props.team);
             </select>
           </label>
 
-          <button
-            v-if="index > 0"
-            class="ui-button slot-settings"
-            data-icon
-            :disabled="slot.hero === null"
-            :aria-expanded="expandedSlot === index"
-            :aria-label="`Hero controls for ${teamMemberLabel(slot.hero, index)}`"
-            @click="expandedSlot = expandedSlot === index ? null : index"
-          >
-            ⚙
-          </button>
-
-          <div v-if="expandedSlot === index && slot.hero !== null" class="slot-options">
-            <div v-if="slot.build && controller.library.value" class="disabled-skills">
-              <span>Hero may use</span>
-              <button
-                v-for="(skill, skillIndex) in buildById(controller.library.value, slot.build)?.skills ?? []"
-                :key="`${skill}-${skillIndex}`"
-                class="ui-chip"
-                :aria-pressed="!slot.disabled.includes(skillIndex as SkillSlotIndex)"
-                :title="skill === null ? 'Empty skill slot' : controller.skills.get(skill).name"
-                :disabled="skill === null"
-                @click="toggleDisabled(index, skillIndex as SkillSlotIndex)"
-              >
-                {{ skillIndex + 1 }}
-                <span>{{ skill === null ? "Empty" : controller.skills.get(skill).name }}</span>
-              </button>
-            </div>
-          </div>
         </li>
       </ol>
 
@@ -352,13 +367,20 @@ const apply = () => props.controller.applyTeam(props.team);
         what Apply would do, beside a control that cannot do it, is the sentence
         that made the button look ready in the first place.
       -->
-      <span v-if="controller.applyUnavailable" class="apply-unavailable">
+      <span
+        v-if="currentApplyStatus"
+        class="apply-status"
+        :data-tone="currentApplyStatus.tone"
+        role="status"
+        aria-live="polite"
+      >
+        {{ currentApplyStatus.message }}
+      </span>
+      <span v-else-if="controller.applyUnavailable" class="apply-unavailable">
         {{ controller.applyUnavailable }}
       </span>
       <span v-else>
-        Applies the hero roster, secondary professions, skill bars, attributes,
-        and behavior. Player builds, difficulty, and disabled skills are not
-        applied yet.
+        {{ applyPreview }}
       </span>
       <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
       <button

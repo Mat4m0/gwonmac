@@ -279,6 +279,10 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       attributeEntryStride: 69,
       attributeEntryId: 70,
       attributeEntryRank: 71,
+      areaInfo: 72,
+      areaInfoCount: 73,
+      areaInfoStride: 74,
+      areaInfoFlags: 75,
     },
   };
 }

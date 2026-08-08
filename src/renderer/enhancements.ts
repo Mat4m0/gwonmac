@@ -41,11 +41,12 @@ import type {
   RendererMilestone,
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
+import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const COMPANION_ABI = 8;
+const COMPANION_ABI = 10;
 const COMPANION_RUNTIME_BYTES = 65_536;
 /**
  * The side module's `__memory_base` must be 16-byte aligned: the wasm linker
@@ -564,10 +565,15 @@ export async function installEnhancements(
       window.gwCursorState = () => cursor?.state ?? null;
     }
     let optionalSettings = window.gwToolsSettings();
+    let playRegion: "pve" | "pvp" | "unknown" = foundation
+      ? "unknown"
+      : "pve";
     let readout: ReturnType<typeof createTargetReadout> | null = null;
     const targetEnabled = () =>
       program === "target-observer"
-      || (optionalSettings.enabled && optionalSettings.targetReadout);
+      || (optionalSettings.enabled
+        && optionalSettings.targetReadout
+        && playRegion === "pve");
     const setTargetEnabled = () => {
       if (!observeState) return;
       if (targetEnabled()) readout ??= createTargetReadout(document.body);
@@ -595,14 +601,31 @@ export async function installEnhancements(
      * first means the refusal is ours and says which rule it was.
      */
     let toolbox: ReturnType<typeof createToolboxFoundation> | null = null;
+    let toolboxObservation: ToolboxObservation | null = null;
     const teamEnabled = () =>
-      optionalSettings.enabled && optionalSettings.teamManagement;
+      optionalSettings.enabled
+      && optionalSettings.teamManagement
+      && playRegion === "pve";
+    const syncActiveObservers = () => {
+      const active =
+        (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
+        | (targetEnabled() ? ENHANCEMENT_FEATURE_TARGET_READOUT : 0)
+        | (teamEnabled() ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
+      kernelDispatch(3, active, 0, 0, 0, 0);
+    };
     const commands = commandThunk === null ? null : (() => {
       const send = commandThunk;
       const ready = () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
         if (!teamEnabled()) throw new Error("Team management is disabled");
-        const observed = toolbox?.state ?? null;
+        if (playRegion !== "pve") {
+          throw new Error(
+            playRegion === "pvp"
+              ? "GWonMac Tools are unavailable in PvP"
+              : "GWonMac Tools are unavailable while the region is unknown",
+          );
+        }
+        const observed = toolboxObservation;
         if (observed === null || observed.status !== "ready") {
           throw new Error("no party has been observed yet");
         }
@@ -628,7 +651,75 @@ export async function installEnhancements(
         words.set(values);
         return payloadPointer + offset * Uint32Array.BYTES_PER_ELEMENT;
       };
+      const playerAgent = (agentId: number) => {
+        agent(agentId);
+        const observed = toolboxObservation?.party?.slots?.[0];
+        if (!observed?.occupied || observed.agentId !== agentId) {
+          throw new Error("that agent is not the observed player");
+        }
+      };
+      const validProfession = (value: number) => {
+        if (!Number.isInteger(value) || value < 0 || value > 10) {
+          throw new Error(`profession ${value} is not one the client defines`);
+        }
+      };
+      const skills = (agentId: number, skillIds: readonly number[]) => {
+        if (skillIds.length > COMMAND_SKILL_WORDS) {
+          throw new Error(`a skill bar holds ${COMMAND_SKILL_WORDS} skills`);
+        }
+        if (skillIds.some((id) => !Number.isInteger(id) || id < 0)) {
+          throw new Error("every skill must be a non-negative id");
+        }
+        const at = payload(0, skillIds);
+        return send(93, agentId, skillIds.length, at, 0) === 1;
+      };
+      const attributes = (
+        agentId: number,
+        ranks: readonly (readonly [attribute: number, rank: number])[],
+      ) => {
+        if (ranks.length > COMMAND_ATTRIBUTE_WORDS) {
+          throw new Error(`at most ${COMMAND_ATTRIBUTE_WORDS} attributes`);
+        }
+        if (ranks.some(([id, rank]) =>
+          !Number.isInteger(id) || id < 0 || id > 44
+          || !Number.isInteger(rank) || rank < 0 || rank > 12
+        )) {
+          throw new Error("every attribute must be a known id at a rank of 0-12");
+        }
+        const ids = payload(COMMAND_SKILL_WORDS, ranks.map(([id]) => id));
+        const levels = payload(
+          COMMAND_SKILL_WORDS + COMMAND_ATTRIBUTE_WORDS,
+          ranks.map(([, rank]) => rank),
+        );
+        return send(16, agentId, ranks.length, ids, levels) === 1;
+      };
       return {
+        setHardMode(enabled: boolean) {
+          ready();
+          if (typeof enabled !== "boolean") {
+            throw new Error("Hard Mode must be enabled or disabled");
+          }
+          return send(155, enabled ? 1 : 0, 0, 0, 0) === 1;
+        },
+        setPlayerSecondary(agentId: number, value: number) {
+          ready();
+          playerAgent(agentId);
+          validProfession(value);
+          return send(65, agentId, value, 0, 0) === 1;
+        },
+        setPlayerSkills(agentId: number, skillIds: readonly number[]) {
+          ready();
+          playerAgent(agentId);
+          return skills(agentId, skillIds);
+        },
+        setPlayerAttributes(
+          agentId: number,
+          ranks: readonly (readonly [attribute: number, rank: number])[],
+        ) {
+          ready();
+          playerAgent(agentId);
+          return attributes(agentId, ranks);
+        },
         addHero(heroId: number) {
           ready();
           hero(heroId);
@@ -653,22 +744,13 @@ export async function installEnhancements(
           agent(agentId);
           // The ten the client defines. Zero is `Profession::None`, which is a
           // real secondary — a monoclass hero — and so is allowed.
-          if (!Number.isInteger(profession) || profession < 0 || profession > 10) {
-            throw new Error(`profession ${profession} is not one the client defines`);
-          }
+          validProfession(profession);
           return send(65, agentId, profession, 0, 0) === 1;
         },
         setHeroSkills(agentId: number, skillIds: readonly number[]) {
           ready();
           agent(agentId);
-          if (skillIds.length > COMMAND_SKILL_WORDS) {
-            throw new Error(`a skill bar holds ${COMMAND_SKILL_WORDS} skills`);
-          }
-          if (skillIds.some((id) => !Number.isInteger(id) || id < 0)) {
-            throw new Error("every skill must be a non-negative id");
-          }
-          const at = payload(0, skillIds);
-          return send(93, agentId, skillIds.length, at, 0) === 1;
+          return skills(agentId, skillIds);
         },
         setHeroAttributes(
           agentId: number,
@@ -676,23 +758,7 @@ export async function installEnhancements(
         ) {
           ready();
           agent(agentId);
-          // Our bound, not the client's. Its own clamp is 64 into a buffer that
-          // holds sixteen, so a count above sixteen writes past the arrays.
-          if (ranks.length > COMMAND_ATTRIBUTE_WORDS) {
-            throw new Error(`at most ${COMMAND_ATTRIBUTE_WORDS} attributes`);
-          }
-          if (ranks.some(([id, rank]) =>
-            !Number.isInteger(id) || id < 0 || id > 44
-            || !Number.isInteger(rank) || rank < 0 || rank > 12
-          )) {
-            throw new Error("every attribute must be a known id at a rank of 0-12");
-          }
-          const ids = payload(COMMAND_SKILL_WORDS, ranks.map(([id]) => id));
-          const levels = payload(
-            COMMAND_SKILL_WORDS + COMMAND_ATTRIBUTE_WORDS,
-            ranks.map(([, rank]) => rank),
-          );
-          return send(16, agentId, ranks.length, ids, levels) === 1;
+          return attributes(agentId, ranks);
         },
       };
     })();
@@ -718,6 +784,7 @@ export async function installEnhancements(
       optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
       setTeamEnabled();
       setTargetEnabled();
+      syncActiveObservers();
     };
     window.addEventListener("gw:tools-settings", onToolSettings);
     disposeToolSettings = () =>
@@ -727,6 +794,8 @@ export async function installEnhancements(
       toolbox = null;
     };
 
+    // Apply opt-in state before the callback becomes reachable from the game.
+    syncActiveObservers();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
     const observerRuntime = {
@@ -820,10 +889,25 @@ export async function installEnhancements(
       observerRuntime,
       polledCursor,
       observeState
-        ? { update: (state) => readout?.update(state) }
+        ? { update: (state) => {
+            const next: typeof playRegion = state.status === "ready"
+              && (state.playRegion === "pve" || state.playRegion === "pvp")
+              ? state.playRegion
+              : "unknown";
+            if (foundation && next !== playRegion) {
+              playRegion = next;
+              setTeamEnabled();
+              setTargetEnabled();
+              syncActiveObservers();
+            }
+            readout?.update(state);
+          } }
         : null,
       foundation
-        ? { update: (state) => toolbox?.update(state) }
+        ? { update: (state) => {
+            toolboxObservation = state;
+            toolbox?.update(state);
+          } }
         : null,
       observeState,
       publishObserverState,

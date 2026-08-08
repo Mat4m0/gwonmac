@@ -36,7 +36,6 @@ import type {
   HeroId,
   ProfessionPair,
   SkillBar,
-  SkillSlotIndex,
   Team,
   TeamSlot,
   TeamSlotIndex,
@@ -65,7 +64,6 @@ export type ToolboxObservation = Readonly<{
   heroCount?: number;
   firstHeroId?: number;
   firstHeroAgentId?: number;
-  panelState?: number;
   /**
    * The full roster, when the party region has published one. Its own
    * `rosterObserved` governs it: a decodable region whose walk was rejected
@@ -77,6 +75,8 @@ export type ToolboxObservation = Readonly<{
     readonly unlockObserved?: boolean;
     /** Whether the walk found an outpost. `null` when nobody walked. */
     readonly inOutpost?: boolean | null;
+    readonly playRegion?: PlayRegion;
+    readonly hardMode?: boolean | null;
     readonly slotCount?: number;
     readonly unlocked?: readonly number[] | null;
     readonly slots?: readonly {
@@ -114,7 +114,6 @@ export interface LivePartyHero {
   readonly level: number | null;
   /** The bar as equipped. `null` until observed; never eight empty slots. */
   readonly skills: SkillBar | null;
-  readonly disabled: readonly SkillSlotIndex[] | null;
   /**
    * Invested ranks, or `null` until observed. An observed character who has
    * spent nothing publishes `{}` — which is the same value as "not observed"
@@ -125,8 +124,17 @@ export interface LivePartyHero {
   readonly attributes: AttributeRanks | null;
 }
 
+export interface LivePartyPlayer {
+  readonly agentId: number;
+  readonly professions: ProfessionPair | null;
+  readonly level: number | null;
+  readonly skills: SkillBar | null;
+  readonly attributes: AttributeRanks | null;
+}
+
 export interface LiveParty {
   readonly status: "unavailable" | "ready";
+  readonly player: LivePartyPlayer | null;
   /**
    * How many heroes the player owns in the current party. Known whenever the
    * status is `ready`, including when no individual hero has been identified.
@@ -149,22 +157,29 @@ export interface LiveParty {
   readonly unlocked: ReadonlySet<HeroId> | null;
   readonly hardMode: boolean | null;
   readonly inOutpost: boolean | null;
+  readonly playRegion: PlayRegion;
 }
+
+export type PlayRegion = "pve" | "pvp" | "unknown";
 
 const UNAVAILABLE: LiveParty = Object.freeze({
   status: "unavailable",
+  player: null,
   heroCount: 0,
   heroes: Object.freeze([]),
   partial: false,
   unlocked: null,
   hardMode: null,
   inOutpost: null,
+  playRegion: "unknown",
 });
 
 /** The party before anything has been observed. Also what a host with no
  *  running game reports, which is the same statement and deserves one value. */
-export function unavailableParty(): LiveParty {
-  return UNAVAILABLE;
+export function unavailableParty(playRegion: PlayRegion = "unknown"): LiveParty {
+  return playRegion === "unknown"
+    ? UNAVAILABLE
+    : Object.freeze({ ...UNAVAILABLE, playRegion });
 }
 
 /**
@@ -176,13 +191,14 @@ export function unavailableParty(): LiveParty {
  * one layer up.
  */
 export function liveParty(observation: ToolboxObservation): LiveParty {
+  const playRegion = observation.party?.playRegion ?? "unknown";
   // A decodable record is not an observation. `status: "ready"` says the bytes
   // were well-formed; `partyObserved` says somebody actually read the party.
   // Zoning between outposts produces the first without the second, and treating
   // that as a ready party is what put "No heroes in your party" on screen mid-
   // load — a claim, where the truth was that nothing had been looked at.
   if (observation.status !== "ready" || observation.partyObserved !== true) {
-    return UNAVAILABLE;
+    return unavailableParty(playRegion);
   }
 
   const heroCount = Number.isSafeInteger(observation.heroCount)
@@ -222,12 +238,14 @@ export function liveParty(observation: ToolboxObservation): LiveParty {
 
   return Object.freeze({
     status: "ready",
+    player: null,
     heroCount,
     heroes: Object.freeze(heroes),
     partial: heroes.length < heroCount,
     unlocked: null,
     hardMode: null,
     inOutpost: null,
+    playRegion,
   });
 }
 
@@ -287,8 +305,28 @@ function fromRegion(
   region: NonNullable<ToolboxObservation["party"]>,
 ): LiveParty {
   const heroes: LivePartyHero[] = [];
+  let player: LivePartyPlayer | null = null;
   for (const slot of region.slots ?? []) {
-    if (!slot.occupied || slot.hero === null) continue;
+    if (!slot.occupied) continue;
+    if (slot.index === 0) {
+      player = Object.freeze({
+        agentId: slot.agentId ?? 0,
+        professions: slot.professions === null
+          ? null
+          : professionPair(slot.professions[0] ?? 0, slot.professions[1] ?? 0),
+        level: slot.level,
+        skills: slot.skills === null
+          ? null
+          : (Object.freeze(
+              slot.skills.map((id) => id === 0 ? null : skillId(id)),
+            ) as unknown as SkillBar),
+        attributes: slot.attributes === null
+          ? null
+          : attributeRanks(slot.attributes),
+      });
+      continue;
+    }
+    if (slot.hero === null) continue;
     if (!HERO_BY_ID.has(slot.hero as HeroId)) continue;
     heroes.push(Object.freeze({
       // The kernel's slot indices are the party positions, player at 0.
@@ -305,13 +343,6 @@ function fromRegion(
         : (Object.freeze(
             slot.skills.map((id) => id === 0 ? null : skillId(id)),
           ) as unknown as SkillBar),
-      disabled: slot.disabled === null
-        ? null
-        : Object.freeze(
-            [0, 1, 2, 3, 4, 5, 6, 7].filter(
-              (index) => (slot.disabled! & (1 << index)) !== 0,
-            ) as SkillSlotIndex[],
-          ),
       attributes: slot.attributes === null
         ? null
         : attributeRanks(slot.attributes),
@@ -320,6 +351,7 @@ function fromRegion(
   const counted = region.slotCount ?? heroes.length;
   return Object.freeze({
     status: "ready",
+    player,
     heroCount: counted,
     heroes: Object.freeze(heroes),
     partial: heroes.length < counted,
@@ -329,10 +361,9 @@ function fromRegion(
             .map((id) => id as HeroId),
         ))
       : null,
-    // Hard mode still does not reach the region; the toolbox summary never
-    // carried it and nothing has certified where it lives.
-    hardMode: null,
+    hardMode: region.hardMode ?? null,
     inOutpost: region.inOutpost ?? null,
+    playRegion: region.playRegion ?? "unknown",
   });
 }
 
@@ -357,7 +388,6 @@ const EMPTY_SLOT: TeamSlot = Object.freeze({
   build: null,
   hero: null,
   behaviour: null,
-  disabled: Object.freeze([]),
 });
 
 /**
@@ -398,11 +428,46 @@ export function captureParty(
   name: string,
   mint: (kind: "build" | "team") => string,
 ): PartyCapture | null {
-  if (live.status !== "ready" || live.heroes.length === 0) return null;
+  if (
+    live.status !== "ready"
+    || (live.player === null && live.heroes.length === 0)
+  ) return null;
 
   const gaps: string[] = [];
   const builds: Build[] = [];
   const filled = new Map<TeamSlotIndex, TeamSlot>();
+
+  if (
+    live.player?.professions !== null
+    && live.player?.professions !== undefined
+    && live.player.skills !== null
+    && live.player.attributes !== null
+  ) {
+    const id = buildId(mint("build"));
+    builds.push({
+      id,
+      name: "Player",
+      professions: live.player.professions,
+      skills: live.player.skills,
+      attributes: live.player.attributes,
+      tags: [],
+      notes: "Captured from the running game.",
+      favourite: false,
+      lastUsed: null,
+      parent: null,
+      origin: CAPTURE_ORIGIN,
+    });
+    filled.set(0, { ...EMPTY_SLOT, build: id });
+  } else {
+    const missing = live.player === null
+      ? "the player was not observed"
+      : live.player.skills === null
+        ? "the player's skill bar was not observed"
+        : live.player.attributes === null
+          ? "the player's attribute ranks were not observed"
+          : "the player's professions were not observed";
+    gaps.push(`Your own build was not saved: ${missing}.`);
+  }
 
   // Party order where it was observed, discovery order where it was not. Slot 0
   // is the player and never holds a hero, so `PARTY_SIZE` sorts the unpositioned
@@ -456,10 +521,6 @@ export function captureParty(
       build,
       hero: hero.hero,
       behaviour: hero.behaviour,
-      // Disabled positions name places on a bar. With no build there is no bar,
-      // and `resolveTeamApplyPlan` rejects the pair outright — the professions
-      // can be unread while the bar was read, so this is reachable.
-      disabled: build === null ? [] : hero.disabled ?? [],
     });
   }
 
@@ -471,11 +532,6 @@ export function captureParty(
       + "not in this team.",
     );
   }
-  gaps.push(
-    "Your own build was not captured: the companion cannot read the player's "
-    + "own skill bar.",
-  );
-
   return {
     team: {
       id: teamId(mint("team")),

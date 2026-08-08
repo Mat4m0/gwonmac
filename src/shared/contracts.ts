@@ -417,14 +417,14 @@ export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = 10;
  * three did not notice. Bound to the real list by
  * `tests/unit/enhancement-transform.test.ts`.
  */
-export const ENHANCEMENT_LAYOUT_WORD_COUNT = 68;
+export const ENHANCEMENT_LAYOUT_WORD_COUNT = 72;
 
 /** Layout words, then playerChat/hide/show, then the party-dirty tuple. */
 export const ENHANCEMENT_CONFIG_WORD_COUNT =
   ENHANCEMENT_LAYOUT_WORD_COUNT + 3 + ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT;
 
 /** One identity shared by the transformer, cache, manifest, and renderer. */
-export const ENHANCEMENT_TRANSFORM_ABI = 14;
+export const ENHANCEMENT_TRANSFORM_ABI = 15;
 
 /**
  * Whether one config word belongs to an active capability. Toolbox reuses only
