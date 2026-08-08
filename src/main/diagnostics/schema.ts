@@ -43,6 +43,7 @@ import {
   CERTIFICATE_FEED_SOURCES,
 } from "../certification/certificate-feed-delivery.js";
 import { LOCAL_VERIFICATION_REASONS } from "../certification/local-client-verifier.js";
+import { EXTENDED_MEMORY_PROFILES } from "../certification/extended-memory.js";
 import {
   isProxyRoute,
   type ProxyRoute,
@@ -809,6 +810,20 @@ export const DIAGNOSTIC_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "info",
     fields: none,
+  },
+  "wasm.extendedMemory": {
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      mode: literal(["disabled", "unsupported", "active"] as const),
+      profile: literal(["none", ...EXTENDED_MEMORY_PROFILES] as const),
+      capBytes: finiteNumber,
+    },
+  },
+  "wasm.extendedMemoryPrepareFailed": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { code },
   },
   "enhancement.prepareFailed": {
     subsystem: "wasm",

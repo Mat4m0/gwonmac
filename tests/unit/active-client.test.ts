@@ -24,6 +24,7 @@ function generation(
     store: { size } as ClientGeneration["store"],
     snapshotMeta: snapshot(size),
     wasmPath,
+    jsPath: wasmPath.replace(/\.wasm$/, ".js"),
     enhancementBuild: null,
   };
 }

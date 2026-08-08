@@ -19,6 +19,7 @@ export interface ActiveClient {
   readonly store: ChunkStore;
   readonly snapshotMeta: SnapshotMetadata;
   readonly wasmPath: string;
+  readonly jsPath: string;
   readonly enhancementBuild: KnownEnhancementBuild | null;
 }
 

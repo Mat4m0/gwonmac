@@ -22,6 +22,7 @@
     "postinstall": "install-electron",
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && electron-forge start",
+    "dev:memory:4gb": "GWONMAC_EXTENDED_MEMORY_RESEARCH=1 pnpm dev",
     "dev:signed": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/run-signed-dev.ts",
     "test:signed-dev": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/run-signed-dev.ts --test-keychain",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.tests.json",
@@ -51,6 +52,7 @@
     "diagnostics:compare": "tsc && node build/tools/diagnostics/compare.js",
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
+    "memory:qualify:4gb": "GWONMAC_EXTENDED_MEMORY_RESEARCH=1 node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/qualify-extended-memory.ts",
     "verify": "pnpm check && pnpm build && node scripts/verify-companion-kernel.mjs && pnpm test:integration && pnpm test:release && pnpm test:electron && pnpm package && pnpm test:packaged"
   },
   "devDependencies": {
