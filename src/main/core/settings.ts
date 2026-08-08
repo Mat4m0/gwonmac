@@ -17,8 +17,6 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
-  UI_DENSITIES,
-  UI_THEMES,
   type AppSettings,
   type AppSettingsPatch,
 } from "../../shared/contracts.js";
@@ -27,8 +25,6 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
-const THEMES = new Set<AppSettings["uiTheme"]>(UI_THEMES);
-const DENSITIES = new Set<AppSettings["uiDensity"]>(UI_DENSITIES);
 
 /**
  * A whole number inside a closed range.
@@ -96,18 +92,6 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
-  if ("uiTheme" in src) {
-    if (!THEMES.has(src.uiTheme as AppSettings["uiTheme"])) {
-      throw new AppError("bad_settings", "settings.uiTheme has unknown value");
-    }
-    out.uiTheme = src.uiTheme as AppSettings["uiTheme"];
-  }
-  if ("uiDensity" in src) {
-    if (!DENSITIES.has(src.uiDensity as AppSettings["uiDensity"])) {
-      throw new AppError("bad_settings", "settings.uiDensity has unknown value");
-    }
-    out.uiDensity = src.uiDensity as AppSettings["uiDensity"];
-  }
   if ("uiPanelOpacity" in src) {
     out.uiPanelOpacity = asBoundedInteger(
       src.uiPanelOpacity,
@@ -115,12 +99,6 @@ export function parseSettings(raw: unknown): AppSettings {
       65,
       100,
     );
-  }
-  if ("uiBorderWidth" in src) {
-    out.uiBorderWidth = asBoundedInteger(src.uiBorderWidth, "uiBorderWidth", 0, 4);
-  }
-  if ("uiRadius" in src) {
-    out.uiRadius = asBoundedInteger(src.uiRadius, "uiRadius", 0, 16);
   }
   for (const setting of ["gwonmacTools", "teamManagement", "targetReadout"] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);

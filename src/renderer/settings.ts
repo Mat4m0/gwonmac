@@ -22,6 +22,7 @@
     return element;
   };
   const dialog = byId('settings-dialog') as HTMLDialogElement;
+  const settingsResize = byId('settings-resize') as HTMLButtonElement;
   const form = byId('settings-form') as HTMLFormElement;
   const settingsDownload = byId('settings-download-full') as HTMLButtonElement;
   const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
@@ -53,13 +54,11 @@
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
-  const uiTheme = form.elements.namedItem('uiTheme') as HTMLSelectElement;
-  const uiDensity = form.elements.namedItem('uiDensity') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   /**
-   * The three appearance sliders, each beside the `output` that reads it back.
+   * The appearance slider beside the `output` that reads it back.
    *
    * `main` rejects an out-of-range value rather than clamping it, so the
    * bounds live on the `input` elements in `index.html` and this table only
@@ -67,8 +66,6 @@
    */
   const appearanceRanges = [
     { name: 'uiPanelOpacity', suffix: '%' },
-    { name: 'uiBorderWidth', suffix: 'px' },
-    { name: 'uiRadius', suffix: 'px' },
   ] as const;
   const appearanceRange = (name: string) =>
     form.elements.namedItem(name) as HTMLInputElement | null;
@@ -104,6 +101,29 @@
   const downloadActive = () =>
     downloadPhase === 'running' || downloadPhase === 'stopping';
 
+  void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
+    installResizeGrip(settingsResize, {
+      size: () => {
+        const box = dialog.getBoundingClientRect();
+        return { width: box.width, height: box.height };
+      },
+      limits: () => ({
+        minWidth: Math.min(480, window.innerWidth - 32),
+        minHeight: Math.min(380, window.innerHeight - 32),
+        maxWidth: Math.max(280, window.innerWidth - 32),
+        maxHeight: Math.max(280, window.innerHeight - 32),
+      }),
+      resize: (width, height) => {
+        dialog.style.width = `${width}px`;
+        dialog.style.height = `${height}px`;
+      },
+      setActive: (active) => {
+        if (active) dialog.dataset.resizing = '';
+        else delete dialog.dataset.resizing;
+      },
+    });
+  });
+
   // Auto-save proof: a brief "Saved" note in the header when a change lands.
   function flashSaved() {
     if (!settingsSaved) return;
@@ -126,6 +146,22 @@
   for (const tab of railTabs) {
     tab.addEventListener('click', () => {
       if (tab.dataset.pane) selectPane(tab.dataset.pane);
+    });
+    tab.addEventListener('keydown', (event) => {
+      const vertical = window.innerWidth > 560;
+      const previous = vertical ? 'ArrowUp' : 'ArrowLeft';
+      const next = vertical ? 'ArrowDown' : 'ArrowRight';
+      if (![previous, next, 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = railTabs.indexOf(tab);
+      const target = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? railTabs.length - 1
+          : (current + (event.key === previous ? -1 : 1) + railTabs.length) % railTabs.length;
+      const destination = railTabs[target];
+      if (destination?.dataset.pane) selectPane(destination.dataset.pane);
+      destination?.focus();
     });
   }
 
@@ -366,18 +402,8 @@
           ? { renderScale: value }
           : null;
       }
-      // A select can only hold one of its own options, so the vocabulary is
-      // the markup and there is nothing for this file to re-check. That the
-      // markup still agrees with `UI_THEMES`/`UI_DENSITIES` is pinned by
-      // tests/policy/source-settings-appearance.test.ts, because this script
-      // is classic and cannot import the list to compare against.
-      case 'uiTheme':
-        return { uiTheme: control.value as AppSettings['uiTheme'] };
-      case 'uiDensity':
-        return { uiDensity: control.value as AppSettings['uiDensity'] };
       case 'uiPanelOpacity':
-      case 'uiBorderWidth':
-      case 'uiRadius': {
+      {
         // The slider's own min/max/step are the bounds; a value outside them
         // is a broken control, not a choice, and `main` would refuse it.
         const value = Number(control.value);
@@ -414,8 +440,6 @@
 
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
-    uiTheme.value = settings.uiTheme;
-    uiDensity.value = settings.uiDensity;
     for (const { name } of appearanceRanges) {
       const range = appearanceRange(name);
       if (range) range.value = String(settings[name]);

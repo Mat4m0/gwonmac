@@ -276,40 +276,13 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
-/**
- * The interface vocabularies, as values rather than as a type alone.
- *
- * A union type cannot be iterated or membership-tested at run time, so main's
- * validator and the renderer's form each need the same list of names. Written
- * out twice they are two sources of truth for one vocabulary, and the way that
- * fails is silent: a theme added here and not there is offered to a player and
- * then refused on save. Deriving the type from the array — the shape
- * `ENHANCEMENTS` already uses above — leaves one list that `tsc` checks.
- */
-export const UI_THEMES = ["reforged", "brass", "steel", "jade"] as const;
-export const UI_DENSITIES = ["compact", "balanced", "comfortable"] as const;
-
-export type UiTheme = (typeof UI_THEMES)[number];
-export type UiDensity = (typeof UI_DENSITIES)[number];
-
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
   /**
-   * How the application's own interface looks — the launcher chrome, the
-   * Settings dialog and the Tools panel, which share one design system.
-   *
-   * These are presentation only and deliberately never reach the game: no
-   * value here changes what the client renders, what it sends, or what it is
-   * allowed to do. `src/shared/ui/tokens.css` is where each of them lands.
+   * The application's Guild Wars panels stay translucent enough to see the
+   * game behind them. This is presentation only and never reaches the game.
    */
-  uiTheme: UiTheme;
-  uiDensity: UiDensity;
-  /** Panel translucency, as a percentage. Bounded so a panel stays readable. */
   uiPanelOpacity: number;
-  /** Border thickness in pixels. `0` is a legitimate answer. */
-  uiBorderWidth: number;
-  /** Corner radius in pixels. `0` squares the whole interface. */
-  uiRadius: number;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
   /** Live selection restored whenever optional tools are allowed. */
@@ -349,11 +322,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
-  uiTheme: "reforged",
-  uiDensity: "balanced",
   uiPanelOpacity: 94,
-  uiBorderWidth: 2,
-  uiRadius: 8,
   gwonmacTools: false,
   teamManagement: true,
   targetReadout: false,
