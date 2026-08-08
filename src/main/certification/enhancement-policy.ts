@@ -1,6 +1,5 @@
 /**
- * The two developer-only Enhancement switches, resolved once, and the rule that
- * decides when a tool change needs a relaunch.
+ * The developer-only Enhancement switches and the shipped Core selection.
  *
  * Both switches are read from the environment and both are refused in a
  * packaged application, so no shipped build can be talked into automation
@@ -9,16 +8,11 @@
  * capabilities, the program chooses which example is installed, and neither
  * implies the other.
  *
- * `enhancementSelectionChanged` exists because the client module is chosen
- * before the renderer exists. A selection the running session cannot honour
- * makes the settings write and the relaunch one action rather than two.
  */
 import { app } from "electron";
 import {
-  ENHANCEMENTS,
   ENHANCEMENT_PROGRAMS,
   type AppSettings,
-  type AppSettingsPatch,
   type EnhancementProgram,
   type EnhancementSelection,
 } from "../../shared/contracts.js";
@@ -39,24 +33,7 @@ export const DEVELOPER_ENHANCEMENT_PROGRAM: EnhancementProgram =
     ? requestedProgram as EnhancementProgram
     : "none";
 
-/** Copy only the selected tools into the launch contract. */
+/** Core is required product behavior, not a persisted player preference. */
 export const enhancementSelectionFor = (
-  settings: AppSettings,
-): EnhancementSelection =>
-  Object.fromEntries(
-    ENHANCEMENTS.map((tool) => [tool, settings[tool]]),
-  ) as EnhancementSelection;
-
-/**
- * Whether a settings write asks for a different set of tools than the ones
- * this launch was started with. Because the module is chosen before the
- * renderer exists, a `true` here is a change the running session cannot honour
- * — so the write and a relaunch have to be one action.
- */
-export const enhancementSelectionChanged = (
-  settings: AppSettings,
-  patch: AppSettingsPatch,
-): boolean =>
-  ENHANCEMENTS.some(
-    (tool) => patch[tool] !== undefined && patch[tool] !== settings[tool],
-  );
+  _settings: AppSettings,
+): EnhancementSelection => Object.freeze({ nativeCursor: true });

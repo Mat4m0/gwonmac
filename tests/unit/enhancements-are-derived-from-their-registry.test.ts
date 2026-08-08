@@ -1,9 +1,6 @@
-// P7.4 replaced the single `settings.nativeCursor` read with a tool registry,
-// and the thing worth proving is what was deliberately *not* added: there is no
-// stored `enhancementsEnabled` master switch. "Is the Enhancement active" is derived
-// from the tools, so the two cannot disagree — and P7.6's restart is decided by
-// the same registry, so a tool the session cannot honour cannot be saved
-// quietly.
+// The cursor is required Core. This executes the real launch policy and proves
+// that persisted settings cannot disable it while developer programs retain
+// their separate, packaged-off posture.
 //
 // This executes the real module. `enhancement-policy.ts` resolves its automation
 // gate once at import time from `app.isPackaged` and `GW_ENHANCEMENT_AUTOMATION`,
@@ -22,10 +19,6 @@
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
-import type {
-  AppSettings,
-  AppSettingsPatch,
-} from "../../src/shared/contracts.ts";
 import {
   DEFAULT_SETTINGS,
   ENHANCEMENTS,
@@ -61,22 +54,7 @@ const {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
-  enhancementSelectionChanged,
 } = await import("../../src/main/certification/enhancement-policy.ts");
-
-const enabledFor = (settings: AppSettings) => enhancementCapabilitiesRequested(
-  enhancementCapabilitiesFor(
-    enhancementSelectionFor(settings),
-    DEVELOPER_ENHANCEMENT_PROGRAM,
-  ),
-);
-
-/** The shipped defaults with every registered tool switched off. */
-const allToolsOff = (): AppSettings => {
-  const settings: AppSettings = { ...DEFAULT_SETTINGS };
-  for (const tool of ENHANCEMENTS) settings[tool] = false;
-  return settings;
-};
 
 test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide alone", () => {
   assert.equal(process.env.GW_ENHANCEMENT_AUTOMATION, "1");
@@ -84,53 +62,14 @@ test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide 
   assert.equal(DEVELOPER_ENHANCEMENT_PROGRAM, "none");
 });
 
-test("every tool off means the Enhancement is off, and any tool on turns it on", () => {
-  const off = allToolsOff();
-  assert.equal(enabledFor(off), false);
-
-  // Written as a loop over the registry on purpose: a tool added later is
-  // covered by this test the moment it is declared, and a tool that stops
-  // reaching the derivation fails it.
-  for (const tool of ENHANCEMENTS) {
-    assert.equal(enabledFor({ ...off, [tool]: true }), true, tool);
-  }
-});
-
-test("no non-tool setting can switch the Enhancement on", () => {
-  // The derivation reads the registry and the registry only. Every other
-  // boolean in AppSettings is somebody else's answer.
-  const off = allToolsOff();
-  const tools = new Set<string>(ENHANCEMENTS);
-  for (const [key, value] of Object.entries(off)) {
-    if (typeof value !== "boolean" || tools.has(key)) continue;
-    assert.equal(enabledFor({ ...off, [key]: true }), false, key);
-  }
-  // Including a key that looks like the master switch this design refuses.
-  assert.equal(
-    enabledFor({ ...off, enhancementsEnabled: true } as AppSettings),
-    false,
-  );
-});
-
-test("the shipped defaults run the Enhancement with only the cursor selected", () => {
-  assert.equal(enabledFor(DEFAULT_SETTINGS), true);
-  assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
-  // Every tool but the cursor defaults off, so a build that adds one does not
-  // silently start doing more on a fresh profile.
-  for (const tool of ENHANCEMENTS) {
-    if (tool === "nativeCursor") continue;
-    assert.equal(DEFAULT_SETTINGS[tool], false, tool);
-  }
-  assert.equal(
-    enabledFor({ ...DEFAULT_SETTINGS, nativeCursor: false }),
-    false,
-  );
-});
-
-test("the launch selection carries every tool and no unrelated setting", () => {
+test("the launch selection carries required Core and no setting can disable it", () => {
   assert.deepEqual(enhancementSelectionFor(DEFAULT_SETTINGS), {
     nativeCursor: true,
   });
+  assert.equal(enhancementCapabilitiesRequested(enhancementCapabilitiesFor(
+    enhancementSelectionFor(DEFAULT_SETTINGS),
+    "none",
+  )), true);
   assert.deepEqual(
     Object.keys(enhancementSelectionFor(DEFAULT_SETTINGS)).sort(),
     [...ENHANCEMENTS].sort(),
@@ -209,32 +148,4 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     )),
     null,
   );
-});
-
-test("only a write that changes a tool asks the session to restart", () => {
-  const on = DEFAULT_SETTINGS;
-  const patches: [AppSettingsPatch, boolean][] = [
-    [{}, false],
-    // A write that repeats what is already saved is not a change: re-opening
-    // Settings and re-saving must not offer to close the player's game.
-    [{ nativeCursor: true }, false],
-    [{ renderScale: 1 }, false],
-    [{ dataStrategy: "full", autoCheckUpdates: true }, false],
-    [{ nativeCursor: false }, true],
-    [{ renderScale: 1, nativeCursor: false }, true],
-  ];
-  for (const [patch, expected] of patches) {
-    assert.equal(
-      enhancementSelectionChanged(on, patch),
-      expected,
-      JSON.stringify(patch),
-    );
-  }
-
-  // Symmetric: turning a tool back on is just as unreachable for this session.
-  for (const tool of ENHANCEMENTS) {
-    const off = allToolsOff();
-    assert.equal(enhancementSelectionChanged(off, { [tool]: true }), true, tool);
-    assert.equal(enhancementSelectionChanged(off, { [tool]: false }), false, tool);
-  }
 });

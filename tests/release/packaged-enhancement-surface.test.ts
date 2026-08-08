@@ -241,7 +241,7 @@ test("packaged builds refuse automation and developer programs independently", (
   assert.equal(foundation.none, true);
 });
 
-test("the tools keep independent defaults and explicit choices", async () => {
+test("Core is required and retired cursor preferences are dropped", async () => {
   // Loaded from `build/`, which is this suite's subject, and typed from the
   // `src/` modules `build/` is emitted from. The annotation is on the
   // declaration rather than an assertion on the call: a dynamic `import()`
@@ -252,12 +252,9 @@ test("the tools keep independent defaults and explicit choices", async () => {
   const { parseSettings }: typeof import("../../src/main/core/settings.ts") =
     await import(new URL("../../build/main/core/settings.js", import.meta.url).href);
 
-  assert.equal(DEFAULT_SETTINGS.nativeCursor, true);
-  // A profile from before the flip never wrote the key; it gets the default.
-  assert.equal(parseSettings({ renderScale: 1 }).nativeCursor, true);
-  // A player who turned it off keeps it off across the same read path. The
-  // default must never be re-applied over a recorded "no".
-  assert.equal(parseSettings({ nativeCursor: false }).nativeCursor, false);
+  assert.equal("nativeCursor" in DEFAULT_SETTINGS, false);
+  assert.equal("nativeCursor" in parseSettings({ renderScale: 1 }), false);
+  assert.equal("nativeCursor" in parseSettings({ nativeCursor: false }), false);
   // The retired target readout stays retired: a legacy value is ignored and
   // the shipped UI offers no checkbox for it.
   assert.equal(
@@ -265,8 +262,8 @@ test("the tools keep independent defaults and explicit choices", async () => {
     false,
   );
 
-  // Every choice is reachable from the shipped UI, not only from the file.
-  assert.match(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
+  assert.doesNotMatch(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
+  assert.match(shippedText("/build/renderer/index.html"), /GWonMac Core is always active/u);
   assert.doesNotMatch(
     shippedText("/build/renderer/index.html"),
     /name="targetReadout"/u,

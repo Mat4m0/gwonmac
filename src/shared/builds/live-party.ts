@@ -59,10 +59,13 @@ export type ToolboxObservation = Readonly<{
    * the one the interface must not turn into "you have no heroes".
    */
   partyObserved?: boolean;
+  playerChatCount?: number;
+  cursorEventCount?: number;
   heroAvailable?: boolean;
   heroCount?: number;
   firstHeroId?: number;
   firstHeroAgentId?: number;
+  panelState?: number;
   /**
    * The full roster, when the party region has published one. Its own
    * `rosterObserved` governs it: a decodable region whose walk was rejected

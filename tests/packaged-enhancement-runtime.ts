@@ -37,6 +37,7 @@ import {
 } from "../src/main/certification/enhancement-builds.ts";
 import {
   COMPANION_CURSOR_BYTES,
+  COMPANION_PARTY_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../src/renderer/companion-snapshot.ts";
 import { root } from "./electron/fixtures.mts";
@@ -127,10 +128,11 @@ const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
 });
 const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;
-const TOOLBOX_CONFIG_POINTER = 0x11_000;
+const TOOLBOX_CONFIG_POINTER = 0x11_010;
 const TOOLBOX_CURSOR_POINTER = (TOOLBOX_CONFIG_POINTER + CONFIG_BYTES + 7) & ~7;
 const TOOLBOX_STATE_POINTER =
   (TOOLBOX_CURSOR_POINTER + COMPANION_CURSOR_BYTES + 7) & ~7;
+const TOOLBOX_PARTY_POINTER = TOOLBOX_STATE_POINTER + COMPANION_TOOLBOX_BYTES;
 const DEVELOPER_RUNTIME_KEYS = Object.freeze([
   "buildId",
   "companionAbi",
@@ -461,7 +463,6 @@ async function assertPackagedOffSession() {
     {
       compatibilityNoticeSeenFor: OFFICIAL_SHA256,
       dataStrategy: "quick",
-      nativeCursor: false,
     },
     {
       cachedOnly: true,
@@ -487,7 +488,7 @@ async function assertPackagedOffSession() {
       {
         enhancementProgram: "none",
         enhancementSelection: {
-          nativeCursor: false,
+          nativeCursor: true,
         },
         templateFsTrace: false,
       },
@@ -547,7 +548,7 @@ async function assertPackagedOffSession() {
     // official module, proving it did not serve either seeded derived output.
     // Replace only the test artifact with a manifest-bearing module, then run
     // the real harness instantiation again: now the module-side gate is open
-    // and the all-false launch selection is the sole reason Enhancement stays dark.
+    // and proves that module metadata still gates Core installation.
     await writeFile(
       path.join(
         fixture.userData,
@@ -579,8 +580,12 @@ async function assertPackagedOffSession() {
     );
     assert.deepEqual(
       [...new Set(allResources.filter(enhancementResource))],
-      [],
-      "an all-tools-off packaged runtime loaded Enhancement code or its kernel",
+      [
+        "gw://app/enhancement-cursor.js",
+        "gw://app/enhancement-readout.js",
+        "gw://app/enhancement-manifest.js",
+      ],
+      "required Core did not stop at the unproved module manifest",
     );
     assert.deepEqual(
       await fixture.page.evaluate(() => ({
@@ -630,6 +635,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
     const specifier = "./enhancements.js";
     const { installEnhancements }: typeof import("../src/renderer/enhancements.ts") =
       await import(specifier);
+    globalThis.dispatchEvent(new Event("pagehide"));
     const runtime = await installEnhancements(
       {
         exports: {
@@ -705,9 +711,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
 }
 
 async function assertTargetReadoutLifecycle() {
-  const fixture = await launchPackaged("gw-packaged-target-readout-", {
-    nativeCursor: false,
-  });
+  const fixture = await launchPackaged("gw-packaged-target-readout-", {});
   try {
     const resources: string[] = [];
     fixture.page.on("request", (request) => resources.push(request.url()));
@@ -717,7 +721,7 @@ async function assertTargetReadoutLifecycle() {
     });
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init.enhancementSelection),
-      { nativeCursor: false },
+      { nativeCursor: true },
     );
 
     assert.deepEqual(
@@ -727,7 +731,7 @@ async function assertTargetReadoutLifecycle() {
       ),
       {
         allocations: [
-          65_536,
+          65_551,
           64,
           CONFIG_BYTES,
         ],
@@ -810,7 +814,7 @@ async function assertTargetReadoutLifecycle() {
       "pagehide did not dispose the target readout",
     );
     assert.deepEqual(disposed, {
-      freed: [0x1000, 0x11_000, 0x11_040],
+      freed: [0x1000, 0x11_010, 0x11_050],
       hook: 0,
       // Cleanup withdraws the published runtime by writing null over it.
       runtime: null,
@@ -859,7 +863,7 @@ async function assertTargetReadoutLifecycle() {
       [
         {
           name: "enhancement.installed",
-          companionAbi: 6,
+          companionAbi: 8,
           capabilityProfile: "target",
           installation: 1,
         },
@@ -904,9 +908,7 @@ async function assertTargetReadoutLifecycle() {
 }
 
 async function assertToolboxFoundationLifecycle() {
-  const fixture = await launchPackaged("gw-packaged-toolbox-foundation-", {
-    nativeCursor: false,
-  });
+  const fixture = await launchPackaged("gw-packaged-toolbox-foundation-", {});
   try {
     await fixture.page.waitForFunction(() => {
       const { Module } = globalThis as PageGlobals;
@@ -1071,6 +1073,7 @@ async function assertToolboxFoundationLifecycle() {
       const { installEnhancements }:
         typeof import("../src/renderer/enhancements.ts") =
           await import(specifier);
+      globalThis.dispatchEvent(new Event("pagehide"));
       const runtime = await installEnhancements(
         {
           exports: {
@@ -1174,13 +1177,14 @@ async function assertToolboxFoundationLifecycle() {
     });
 
     assert.deepEqual(result.before.allocations, [
-      { pointer: 0x1000, size: 65_536 },
+      { pointer: 0x1000, size: 65_551 },
       {
         pointer: TOOLBOX_CONFIG_POINTER,
         size: CONFIG_BYTES,
       },
       { pointer: TOOLBOX_CURSOR_POINTER, size: COMPANION_CURSOR_BYTES },
       { pointer: TOOLBOX_STATE_POINTER, size: COMPANION_TOOLBOX_BYTES },
+      { pointer: TOOLBOX_PARTY_POINTER, size: COMPANION_PARTY_BYTES },
     ]);
     assert.equal(result.before.companionStatePublished, false);
     assert.equal(result.before.globalRuntimeIsRuntime, true);
@@ -1191,7 +1195,7 @@ async function assertToolboxFoundationLifecycle() {
     assert.deepEqual(result.before.runtimeKeys, DEVELOPER_RUNTIME_KEYS);
     assert.deepEqual(result.before.scalar, {
       buildId: ENHANCEMENT_BUILD.buildId,
-      companionAbi: 6,
+      companionAbi: 8,
       hertz: 0,
       installation: 1,
       programId: ENHANCEMENT_BUILD.programId,
@@ -1207,16 +1211,36 @@ async function assertToolboxFoundationLifecycle() {
     // longer draws — a tool draws its own window now. Nothing is lost: the
     // deepEqual below already pins every value those regexes sampled, and it
     // pins them at the boundary the kernel actually publishes.
-    assert.deepEqual(result.before.toolbox, {
+    const projection = result.before.toolbox;
+    assert.ok(projection);
+    const { party, ...toolbox } = projection;
+    assert.deepEqual(toolbox, {
       cursorEventCount: 1,
       firstHeroAgentId: 77,
       firstHeroId: 1,
       heroAvailable: true,
       heroCount: 1,
       panelState: 2,
+      partyObserved: true,
       playerChatCount: 1,
       sequence: 10,
       status: "ready",
+    });
+    assert.equal(party?.status, "ready");
+    assert.equal(party?.rosterObserved, true);
+    assert.equal(party?.inOutpost, true);
+    assert.equal(party?.slotCount, 1);
+    assert.deepEqual(party?.slots?.[1], {
+      index: 1,
+      occupied: true,
+      hero: 1,
+      agentId: 77,
+      level: null,
+      professions: null,
+      behaviour: null,
+      skills: null,
+      disabled: null,
+      attributes: null,
     });
     assert.deepEqual(result.before.cursor, {
       cssLength: 0,
@@ -1229,6 +1253,7 @@ async function assertToolboxFoundationLifecycle() {
 
     assert.deepEqual(result.after.freed, [
       TOOLBOX_STATE_POINTER,
+      TOOLBOX_PARTY_POINTER,
       TOOLBOX_CURSOR_POINTER,
       TOOLBOX_CONFIG_POINTER,
       0x1000,
@@ -1251,9 +1276,7 @@ async function assertToolboxFoundationLifecycle() {
 }
 
 async function assertRollbackAfterTablePublication() {
-  const fixture = await launchPackaged("gw-packaged-foundation-rollback-", {
-    nativeCursor: false,
-  });
+  const fixture = await launchPackaged("gw-packaged-foundation-rollback-", {});
   try {
     await fixture.page.waitForFunction(() => {
       const { Module } = globalThis as PageGlobals;
@@ -1336,6 +1359,7 @@ async function assertRollbackAfterTablePublication() {
       const requestFrame = globalThis.requestAnimationFrame;
       let rejected = false;
       try {
+        globalThis.dispatchEvent(new Event("pagehide"));
         globalThis.requestAnimationFrame = () => {
           throw new Error("intentional post-table failure");
         };
@@ -1380,16 +1404,18 @@ async function assertRollbackAfterTablePublication() {
     });
     assert.deepEqual(result, {
       allocations: [
-        { pointer: 0x1000, size: 65_536 },
+        { pointer: 0x1000, size: 65_551 },
         {
           pointer: TOOLBOX_CONFIG_POINTER,
           size: CONFIG_BYTES,
         },
         { pointer: TOOLBOX_CURSOR_POINTER, size: COMPANION_CURSOR_BYTES },
         { pointer: TOOLBOX_STATE_POINTER, size: COMPANION_TOOLBOX_BYTES },
+        { pointer: TOOLBOX_PARTY_POINTER, size: COMPANION_PARTY_BYTES },
       ],
       freed: [
         TOOLBOX_STATE_POINTER,
+        TOOLBOX_PARTY_POINTER,
         TOOLBOX_CURSOR_POINTER,
         TOOLBOX_CONFIG_POINTER,
         0x1000,

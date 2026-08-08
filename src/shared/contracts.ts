@@ -273,7 +273,7 @@ export interface ClockSyncResponse {
 }
 
 /**
- * The complete set of independently selectable Enhancement features.
+ * The complete set of Enhancement features carried in the launch contract.
  *
  * Canonical here because settings, main-process policy, and the generated
  * preload transport all need the same names. A new tool is declared once;
@@ -510,7 +510,7 @@ export const UI_DENSITIES = ["compact", "balanced", "comfortable"] as const;
 export type UiTheme = (typeof UI_THEMES)[number];
 export type UiDensity = (typeof UI_DENSITIES)[number];
 
-export interface AppSettings extends EnhancementSelection {
+export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
   /**
    * How the application's own interface looks — the launcher chrome, the
@@ -566,7 +566,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiPanelOpacity: 94,
   uiBorderWidth: 2,
   uiRadius: 8,
-  nativeCursor: true,
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
@@ -751,8 +750,8 @@ export interface ClientSession {
 /**
  * Everything the renderer must know before its first script runs. It used to
  * ride on the renderer URL as query parameters, which forced the trust root to
- * allow-list them — including `nativeCursor`, which is user product state and
- * has no business in a navigation check. It travels as a preload argument
+ * allow-list them — including the Core cursor capability, which is launch
+ * state and has no business in a navigation check. It travels as a preload argument
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {

@@ -23,9 +23,6 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       uiBorderWidth: 2,
       uiRadius: 8,
-      // On since P3.34: the game's own cursor is what a Guild Wars player
-      // expects to see, so the setting is how it is switched off.
-      nativeCursor: true,
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -38,7 +35,7 @@ describe("settings", () => {
     });
   });
 
-  it("gives an alpha profile the game cursor and drops retired fields", () => {
+  it("drops retired cursor fields from an alpha profile", () => {
     // A profile written before the cursor became a boolean carries
     // `cursorTheme` and a selectable input mode. They are unknown fields now,
     // so they are ignored rather than rejected: nothing else the player chose
@@ -55,7 +52,7 @@ describe("settings", () => {
       dataStrategy: "full",
     });
     assert.equal("cursorTheme" in got, false);
-    assert.equal(got.nativeCursor, true);
+    assert.equal("nativeCursor" in got, false);
     assert.deepEqual(got, {
       // Presentation-only, so an alpha profile simply arrives at the current
       // look rather than a remembered one.
@@ -65,7 +62,6 @@ describe("settings", () => {
       uiBorderWidth: 2,
       uiRadius: 8,
       renderScale: 1,
-      nativeCursor: true,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -102,7 +98,7 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ uiPanelOpacity: 94.5 }), AppError);
     assert.throws(() => parseSettings({ uiBorderWidth: 5 }), AppError);
     assert.throws(() => parseSettings({ uiRadius: -1 }), AppError);
-    assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
+    assert.equal("nativeCursor" in parseSettings({ nativeCursor: "yes" }), false);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
@@ -148,9 +144,7 @@ describe("settings", () => {
   });
 
   it("validates patches without filling fields from defaults", () => {
-    assert.deepEqual(parseSettingsPatch({ nativeCursor: true }), {
-      nativeCursor: true,
-    });
+    assert.throws(() => parseSettingsPatch({ nativeCursor: true }), AppError);
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
       lastUpdateCheckAt: 1_000,
     });
@@ -195,7 +189,6 @@ describe("settings", () => {
       "dataStrategy",
       "formatVersion",
       "lastUpdateCheckAt",
-      "nativeCursor",
       "renderScale",
       "showDiagnostics",
       "uiBorderWidth",
@@ -236,7 +229,6 @@ describe("settings", () => {
       uiBorderWidth: 2,
       uiRadius: 8,
       renderScale: 1.5,
-      nativeCursor: true,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately

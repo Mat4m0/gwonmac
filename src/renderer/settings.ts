@@ -211,21 +211,12 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      toolSettings.render(saved);
       window.gwApplySettings?.(saved);
       return saved;
     });
     settingsWrite = operation.catch(() => undefined);
     return operation;
   }
-
-  // The tool surface is rendered from the settings main returned, never from
-  // requested state. Declining the required restart therefore restores what
-  // is actually running.
-  const toolSettings = window.gwEnhancementSettings.create({
-    form,
-    selection: window.gwNative.init.enhancementSelection,
-  });
 
   function requestUpdateCheck() {
     void updateAction?.check();
@@ -364,8 +355,6 @@
   function patchForControl(
     control: HTMLInputElement | HTMLSelectElement,
   ): AppSettingsPatch | null {
-    const toolPatch = toolSettings.patchFor(control);
-    if (toolPatch) return toolPatch;
     switch (control.name) {
       case 'renderScale': {
         const value = Number(control.value);
@@ -422,7 +411,6 @@
       if (range) range.value = String(settings[name]);
     }
     showAppearanceValues(settings);
-    toolSettings.render(settings);
     showDiagnostics.checked = settings.showDiagnostics;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     for (const radio of form.querySelectorAll<HTMLInputElement>(
@@ -855,17 +843,7 @@
     const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
     void persistSettings(patch)
-      .then(async (saved) => {
-        // A tool selects which client module this launch serves, and that
-        // choice is made before the renderer exists, so saving it restarts the
-        // app. A player who declined the restart saved nothing, and the box has
-        // already gone back to what is true; the sentence explains why.
-        const toolResult = toolSettings.resultFor(control, patch, saved);
-        if (toolResult) {
-          if (toolResult.applied) flashSaved();
-          feedback.textContent = toolResult.text;
-          return;
-        }
+      .then(async () => {
         flashSaved();
         if (!strategyChanged) {
           feedback.textContent = 'Settings saved.';

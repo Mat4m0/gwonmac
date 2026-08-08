@@ -18,24 +18,16 @@
  * not on Tools chrome still belongs to the game.
  */
 import { createNonActivatingSurface } from "./non-activating-surface.js";
+import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
 /**
  * The companion's toolbox projection, as `window.gwCompanionRuntime.toolbox`
  * publishes it. The overlay draws none of it — it holds the latest one and
  * hands it to the mounted tool, which is the only thing here that draws.
  *
- * Structural on purpose. The decoder in `companion-snapshot.ts` owns the wire
- * format and `src/shared/builds/live-party.ts` owns the domain; the overlay is
- * a courier between them and should need to know neither.
+ * The shared domain owns this projection. This overlay is only its courier.
  */
-type ToolboxState = Readonly<{
-  status: string;
-  playerChatCount?: number;
-  heroAvailable?: boolean;
-  heroCount?: number;
-  firstHeroId?: number;
-  panelState?: number;
-}>;
+type ToolboxState = ToolboxObservation;
 
 /**
  * Non-modal palette styling. The overlay root never intercepts the pointer;

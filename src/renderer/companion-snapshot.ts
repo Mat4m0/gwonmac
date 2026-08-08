@@ -14,6 +14,8 @@
  * layout change has to move both sides, so a mismatched pair decodes to a
  * refusal instead of to plausible numbers.
  */
+import type { ToolboxObservation } from "../shared/builds/live-party.js";
+
 export const COMPANION_SNAPSHOT_ABI = 1;
 export const COMPANION_SNAPSHOT_BYTES = 64;
 
@@ -526,7 +528,10 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     reserved |= view.getUint32(at, true);
   }
 
-  const slots: Array<Record<string, unknown>> = [];
+  type PartySlot = NonNullable<
+    NonNullable<ToolboxObservation["party"]>["slots"]
+  >[number];
+  const slots: PartySlot[] = [];
   let occupied = 0;
   let malformed = false;
   const seen = new Set<number>();

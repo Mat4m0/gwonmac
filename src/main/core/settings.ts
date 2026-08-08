@@ -17,7 +17,6 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
-  ENHANCEMENTS,
   UI_DENSITIES,
   UI_THEMES,
   type AppSettings,
@@ -122,11 +121,6 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   if ("uiRadius" in src) {
     out.uiRadius = asBoundedInteger(src.uiRadius, "uiRadius", 0, 16);
-  }
-  for (const tool of ENHANCEMENTS) {
-    if (tool in src) {
-      out[tool] = asBool(src[tool], tool);
-    }
   }
   if ("showDiagnostics" in src) {
     out.showDiagnostics = asBool(src.showDiagnostics, "showDiagnostics");

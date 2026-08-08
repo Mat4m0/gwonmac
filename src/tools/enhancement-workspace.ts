@@ -22,9 +22,7 @@ import {
 } from "../main/core/access-key.js";
 import { certifyClientBuild } from "../main/certification/client-certification.js";
 import { inspectEnhancementCache } from "../main/certification/client-module.js";
-import { parseSettings } from "../main/core/settings.js";
 import {
-  DEFAULT_SETTINGS,
   ENHANCEMENT_PROGRAMS,
   enhancementCapabilitiesFor,
   enhancementCapabilitiesRequested,
@@ -81,20 +79,12 @@ async function isFile(filename: string): Promise<boolean> {
 }
 
 /**
- * Read-only on purpose. `loadSettings` moves a corrupt file aside and writes a
- * backup; a doctor must not change the profile it is inspecting, and both of
- * its failure paths end at the defaults anyway.
+ * Core is required and therefore independent of the profile's settings file.
  */
 async function readEnhancementSettings(
-  profile: string,
+  _profile: string,
 ): Promise<Pick<EnhancementDoctorReport, "nativeCursor">> {
-  try {
-    const text = await readFile(path.join(profile, "settings.json"), "utf8");
-    const settings = parseSettings(JSON.parse(text));
-    return { nativeCursor: settings.nativeCursor };
-  } catch {
-    return { nativeCursor: DEFAULT_SETTINGS.nativeCursor };
-  }
+  return { nativeCursor: true };
 }
 
 async function snapshotResidency(
