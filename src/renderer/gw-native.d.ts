@@ -212,6 +212,11 @@ declare global {
       };
     };
     gwApplySettings?(settings: AppSettings): void;
+    gwToolsSettings(): Readonly<{
+      enabled: boolean;
+      teamManagement: boolean;
+      targetReadout: boolean;
+    }>;
     gwLoading: LoadingController;
     gwDiagnostics: RendererDiagnostics;
     gwSnapshotState?(): Partial<RendererMetrics>;

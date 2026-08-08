@@ -56,6 +56,7 @@ export type CompatibilityReport = {
 function selectedToolNames(selection: EnhancementSelection): string[] {
   return [
     selection.nativeCursor ? 'game cursor' : '',
+    selection.tools ? 'GWonMac Tools Beta' : '',
   ].filter(Boolean);
 }
 

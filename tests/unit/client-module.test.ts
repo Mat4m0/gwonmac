@@ -188,6 +188,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       cursorTarget: "0".repeat(64),
       cursorToolbox: "0".repeat(64),
       cursorToolboxCommands: "0".repeat(64),
+      cursorTargetToolboxCommands: "0".repeat(64),
     }),
     programId: 1,
     buildId: 1,

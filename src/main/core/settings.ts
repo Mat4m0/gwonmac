@@ -122,6 +122,9 @@ export function parseSettings(raw: unknown): AppSettings {
   if ("uiRadius" in src) {
     out.uiRadius = asBoundedInteger(src.uiRadius, "uiRadius", 0, 16);
   }
+  for (const setting of ["gwonmacTools", "teamManagement", "targetReadout"] as const) {
+    if (setting in src) out[setting] = asBool(src[setting], setting);
+  }
   if ("showDiagnostics" in src) {
     out.showDiagnostics = asBool(src.showDiagnostics, "showDiagnostics");
   }

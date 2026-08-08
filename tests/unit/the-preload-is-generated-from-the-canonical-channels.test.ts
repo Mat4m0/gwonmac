@@ -157,7 +157,7 @@ test("the launch argument prefix comes from the contracts too", () => {
     ),
     {
       enhancementProgram: "none",
-      enhancementSelection: { nativeCursor: false },
+      enhancementSelection: { nativeCursor: false, tools: false },
       templateFsTrace: false,
     },
   );
@@ -170,7 +170,7 @@ test("the launch argument prefix comes from the contracts too", () => {
           }),
       ]).init.enhancementSelection,
     },
-    { nativeCursor: true },
+    { nativeCursor: true, tools: false },
   );
 });
 

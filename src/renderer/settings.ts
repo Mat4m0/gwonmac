@@ -55,6 +55,9 @@
   ) as HTMLInputElement;
   const uiTheme = form.elements.namedItem('uiTheme') as HTMLSelectElement;
   const uiDensity = form.elements.namedItem('uiDensity') as HTMLSelectElement;
+  const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
+  const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
+  const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   /**
    * The three appearance sliders, each beside the `output` that reads it back.
    *
@@ -211,6 +214,7 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
+      fillForm(saved);
       window.gwApplySettings?.(saved);
       return saved;
     });
@@ -383,6 +387,12 @@
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
           : null;
+      case 'gwonmacTools':
+      case 'teamManagement':
+      case 'targetReadout':
+        return control instanceof globalThis.HTMLInputElement
+          ? { [control.name]: control.checked }
+          : null;
       case 'autoCheckUpdates':
         return control instanceof globalThis.HTMLInputElement
           ? { autoCheckUpdates: control.checked }
@@ -412,6 +422,11 @@
     }
     showAppearanceValues(settings);
     showDiagnostics.checked = settings.showDiagnostics;
+    gwonmacTools.checked = settings.gwonmacTools;
+    teamManagement.checked = settings.teamManagement;
+    targetReadout.checked = settings.targetReadout;
+    teamManagement.disabled = !settings.gwonmacTools;
+    targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     for (const radio of form.querySelectorAll<HTMLInputElement>(
       'input[name="dataStrategy"]',
@@ -843,7 +858,14 @@
     const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
     void persistSettings(patch)
-      .then(async () => {
+      .then(async (saved) => {
+        if (
+          patch.gwonmacTools !== undefined
+          && saved.gwonmacTools !== patch.gwonmacTools
+        ) {
+          feedback.textContent = 'GWonMac Tools Beta was not changed.';
+          return;
+        }
         flashSaved();
         if (!strategyChanged) {
           feedback.textContent = 'Settings saved.';

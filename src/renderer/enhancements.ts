@@ -264,6 +264,7 @@ export async function installEnhancements(
   let disposeCursor = () => {};
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
+  let disposeToolSettings = () => {};
   let disposeCursorRefresh = () => {};
   let installedCallback: CallableFunction | null = null;
   let installedRuntime: object | null = null;
@@ -279,6 +280,7 @@ export async function installEnhancements(
     disposeCursor();
     disposeReadout();
     disposeToolbox();
+    disposeToolSettings();
     if (
       installedCallback !== null
       && table.get(manifest.tableSlot) === installedCallback
@@ -561,10 +563,24 @@ export async function installEnhancements(
       // state only — no pixels, no pointers.
       window.gwCursorState = () => cursor?.state ?? null;
     }
-    const readout = observeState
-      ? createTargetReadout(document.body)
-      : null;
-    if (readout) disposeReadout = readout.dispose;
+    let optionalSettings = window.gwToolsSettings();
+    let readout: ReturnType<typeof createTargetReadout> | null = null;
+    const targetEnabled = () =>
+      program === "target-observer"
+      || (optionalSettings.enabled && optionalSettings.targetReadout);
+    const setTargetEnabled = () => {
+      if (!observeState) return;
+      if (targetEnabled()) readout ??= createTargetReadout(document.body);
+      else {
+        readout?.dispose();
+        readout = null;
+      }
+    };
+    setTargetEnabled();
+    disposeReadout = () => {
+      readout?.dispose();
+      readout = null;
+    };
 
     /**
      * The five commands, one named function each.
@@ -578,10 +594,14 @@ export async function installEnhancements(
      * rather than asserted. The client refuses most of this anyway; refusing
      * first means the refusal is ours and says which rule it was.
      */
+    let toolbox: ReturnType<typeof createToolboxFoundation> | null = null;
+    const teamEnabled = () =>
+      optionalSettings.enabled && optionalSettings.teamManagement;
     const commands = commandThunk === null ? null : (() => {
       const send = commandThunk;
       const ready = () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
+        if (!teamEnabled()) throw new Error("Team management is disabled");
         const observed = toolbox?.state ?? null;
         if (observed === null || observed.status !== "ready") {
           throw new Error("no party has been observed yet");
@@ -676,15 +696,36 @@ export async function installEnhancements(
         },
       };
     })();
-    const toolbox = foundation
-      ? createToolboxFoundation(document.body, {
-          mountTool: (host, onVisibilityChange) =>
-            import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host, onVisibilityChange, commands),
-            ),
-        })
-      : null;
-    if (toolbox) disposeToolbox = toolbox.dispose;
+    const setTeamEnabled = () => {
+      if (!foundation) return;
+      if (teamEnabled()) {
+        if (toolbox === null) {
+          toolbox = createToolboxFoundation(document.body, {
+            mountTool: (host, onVisibilityChange) =>
+              import("./tools-host.js").then(({ mountToolsInto }) =>
+                mountToolsInto(host, onVisibilityChange, commands),
+              ),
+          });
+        }
+      } else if (toolbox !== null) {
+        toolbox.dispose();
+        toolbox = null;
+      }
+    };
+    setTeamEnabled();
+    const onToolSettings = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
+      setTeamEnabled();
+      setTargetEnabled();
+    };
+    window.addEventListener("gw:tools-settings", onToolSettings);
+    disposeToolSettings = () =>
+      window.removeEventListener("gw:tools-settings", onToolSettings);
+    disposeToolbox = () => {
+      toolbox?.dispose();
+      toolbox = null;
+    };
 
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
@@ -778,8 +819,12 @@ export async function installEnhancements(
     stopObserver = observeCompanion(
       observerRuntime,
       polledCursor,
-      readout,
-      toolbox,
+      observeState
+        ? { update: (state) => readout?.update(state) }
+        : null,
+      foundation
+        ? { update: (state) => toolbox?.update(state) }
+        : null,
       observeState,
       publishObserverState,
     );

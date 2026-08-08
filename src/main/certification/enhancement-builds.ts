@@ -352,6 +352,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
       cursorToolboxCommands: "dd1eb8f219295a16df65e35e3ecf1057eb7d1c4bb423089af9f8bf13563a031a",
+      cursorTargetToolboxCommands: "b2436888e475cf0f9339a80b58c74462406ea74d2ffc224250371cdb1645f67a",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime

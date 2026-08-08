@@ -22,6 +22,7 @@ import {
 } from "../main/core/access-key.js";
 import { certifyClientBuild } from "../main/certification/client-certification.js";
 import { inspectEnhancementCache } from "../main/certification/client-module.js";
+import { parseSettings } from "../main/core/settings.js";
 import {
   ENHANCEMENT_PROGRAMS,
   enhancementCapabilitiesFor,
@@ -41,6 +42,7 @@ export interface EnhancementDoctorReport {
    * mutate or depend on it.
    */
   nativeCursor: boolean;
+  gwonmacTools: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -82,9 +84,17 @@ async function isFile(filename: string): Promise<boolean> {
  * Core is required and therefore independent of the profile's settings file.
  */
 async function readEnhancementSettings(
-  _profile: string,
-): Promise<Pick<EnhancementDoctorReport, "nativeCursor">> {
-  return { nativeCursor: true };
+  profile: string,
+): Promise<Pick<EnhancementDoctorReport, "nativeCursor" | "gwonmacTools">> {
+  try {
+    const text = await readFile(path.join(profile, "settings.json"), "utf8");
+    return {
+      nativeCursor: true,
+      gwonmacTools: parseSettings(JSON.parse(text)).gwonmacTools,
+    };
+  } catch {
+    return { nativeCursor: true, gwonmacTools: false };
+  }
 }
 
 async function snapshotResidency(
@@ -140,9 +150,9 @@ export async function inspectEnhancementWorkspace(
     .map((entry) => entry.name);
   const profileReady = (await isFile(path.join(profile, "settings.json")))
     || missing.length < required.length;
-  const { nativeCursor } = await readEnhancementSettings(profile);
+  const { nativeCursor, gwonmacTools } = await readEnhancementSettings(profile);
   const enhancementCapabilities = enhancementCapabilitiesFor(
-    { nativeCursor },
+    { nativeCursor, tools: gwonmacTools },
     program,
   );
   let manifest: PublishedClientManifest | null = null;
@@ -191,6 +201,7 @@ export async function inspectEnhancementWorkspace(
   return {
     profile: profileReady ? "ready" : "missing",
     nativeCursor,
+    gwonmacTools,
     artifacts: {
       ready: artifactsReady,
       missing,

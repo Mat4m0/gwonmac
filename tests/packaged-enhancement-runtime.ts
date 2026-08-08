@@ -649,7 +649,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
       module,
       // The retired user setting cannot request the readout; its developer
       // program derives the same `target` capability profile.
-      { nativeCursor: false },
+      { nativeCursor: false, tools: false },
       "target-observer",
     );
     if (!runtime) throw new Error("target readout did not install");
@@ -1074,6 +1074,11 @@ async function assertToolboxFoundationLifecycle() {
         typeof import("../src/renderer/enhancements.ts") =
           await import(specifier);
       globalThis.dispatchEvent(new Event("pagehide"));
+      window.gwToolsSettings = () => Object.freeze({
+        enabled: true,
+        teamManagement: true,
+        targetReadout: false,
+      });
       const runtime = await installEnhancements(
         {
           exports: {
@@ -1087,7 +1092,7 @@ async function assertToolboxFoundationLifecycle() {
         module,
         // A fixed developer program replaces the saved selection: Toolbox
         // must include cursor and exclude target observation for this launch.
-        { nativeCursor: false },
+        { nativeCursor: false, tools: false },
         "toolbox-foundation",
       );
       if (!runtime) throw new Error("Toolbox foundation did not install");
@@ -1360,6 +1365,11 @@ async function assertRollbackAfterTablePublication() {
       let rejected = false;
       try {
         globalThis.dispatchEvent(new Event("pagehide"));
+        window.gwToolsSettings = () => Object.freeze({
+          enabled: true,
+          teamManagement: true,
+          targetReadout: false,
+        });
         globalThis.requestAnimationFrame = () => {
           throw new Error("intentional post-table failure");
         };
@@ -1374,7 +1384,7 @@ async function assertRollbackAfterTablePublication() {
             },
           },
           module,
-          { nativeCursor: false },
+          { nativeCursor: false, tools: false },
           "toolbox-foundation",
         );
       } catch {

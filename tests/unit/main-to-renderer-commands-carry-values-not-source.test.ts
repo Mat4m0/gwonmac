@@ -169,6 +169,7 @@ const INIT: RendererInit = {
   enhancementProgram: "toolbox-foundation",
   enhancementSelection: {
     nativeCursor: false,
+    tools: false,
   },
   templateFsTrace: true,
 };
@@ -187,6 +188,7 @@ test("a renderer with no readable init argument gets the production posture", ()
     enhancementProgram: "none",
     enhancementSelection: {
       nativeCursor: false,
+      tools: false,
     },
     templateFsTrace: false,
   };

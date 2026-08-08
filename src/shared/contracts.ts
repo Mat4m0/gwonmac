@@ -281,6 +281,7 @@ export interface ClockSyncResponse {
  */
 export const ENHANCEMENTS = [
   "nativeCursor",
+  "tools",
 ] as const;
 
 export type Enhancement = (typeof ENHANCEMENTS)[number];
@@ -359,6 +360,13 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
   cursorToolboxCommands: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
+    toolbox: true,
+    commands: true,
+  }),
+  /** Complete optional Tools Beta capability; runtime settings gate each tool. */
+  cursorTargetToolboxCommands: Object.freeze({
+    nativeCursor: true,
+    targetObservation: true,
     toolbox: true,
     commands: true,
   }),
@@ -457,12 +465,11 @@ export function enhancementCapabilitiesFor(
 ): EnhancementCapabilities {
   switch (program) {
     case "none":
-      // The target readout retired from user settings, so a launch without a
-      // developer program can select nothing but the cursor. The other
-      // profiles stay certified as developer-side capability vocabulary.
-      return selection.nativeCursor
-        ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
-        : NO_ENHANCEMENT_CAPABILITIES;
+      return selection.tools
+        ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetToolboxCommands
+        : selection.nativeCursor
+          ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
+          : NO_ENHANCEMENT_CAPABILITIES;
     case "cursor-observer":
       return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
     case "target-observer":
@@ -528,6 +535,12 @@ export interface AppSettings {
   uiBorderWidth: number;
   /** Corner radius in pixels. `0` squares the whole interface. */
   uiRadius: number;
+  /** Master opt-in for the optional executable Tools Beta capability. */
+  gwonmacTools: boolean;
+  /** Live selection restored whenever optional tools are allowed. */
+  teamManagement: boolean;
+  /** Experimental live target distance/range readout. */
+  targetReadout: boolean;
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
@@ -566,6 +579,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiPanelOpacity: 94,
   uiBorderWidth: 2,
   uiRadius: 8,
+  gwonmacTools: false,
+  teamManagement: true,
+  targetReadout: false,
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,

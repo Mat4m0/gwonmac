@@ -35,5 +35,8 @@ export const DEVELOPER_ENHANCEMENT_PROGRAM: EnhancementProgram =
 
 /** Core is required product behavior, not a persisted player preference. */
 export const enhancementSelectionFor = (
-  _settings: AppSettings,
-): EnhancementSelection => Object.freeze({ nativeCursor: true });
+  settings: AppSettings,
+): EnhancementSelection => Object.freeze({
+  nativeCursor: true,
+  tools: settings.gwonmacTools,
+});

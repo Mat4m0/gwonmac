@@ -65,6 +65,7 @@ test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide 
 test("the launch selection carries required Core and no setting can disable it", () => {
   assert.deepEqual(enhancementSelectionFor(DEFAULT_SETTINGS), {
     nativeCursor: true,
+    tools: false,
   });
   assert.equal(enhancementCapabilitiesRequested(enhancementCapabilitiesFor(
     enhancementSelectionFor(DEFAULT_SETTINGS),
@@ -78,7 +79,7 @@ test("the launch selection carries required Core and no setting can disable it",
 
 test("one capability plan derives hooks without losing feature identity", () => {
   const cursorOnly = enhancementCapabilitiesFor(
-    { nativeCursor: true },
+    { nativeCursor: true, tools: false },
     "none",
   );
   // No user selection reaches cursorTarget any more; it stays certified
@@ -98,8 +99,8 @@ test("one capability plan derives hooks without losing feature identity", () => 
   // Developer programs replace saved settings for one launch. Exercise both
   // opposite profiles so live evidence cannot accidentally depend on either.
   for (const selection of [
-    { nativeCursor: false },
-    { nativeCursor: true },
+    { nativeCursor: false, tools: false },
+    { nativeCursor: true, tools: false },
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
@@ -125,10 +126,11 @@ test("one capability plan derives hooks without losing feature identity", () => 
 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
-    [{ nativeCursor: true }, "none", "cursor"],
-    [{ nativeCursor: false }, "cursor-observer", "cursor"],
-    [{ nativeCursor: true }, "target-observer", "target"],
-    [{ nativeCursor: false }, "toolbox-foundation", "cursorToolbox"],
+    [{ nativeCursor: true, tools: false }, "none", "cursor"],
+    [{ nativeCursor: true, tools: true }, "none", "cursorTargetToolboxCommands"],
+    [{ nativeCursor: false, tools: false }, "cursor-observer", "cursor"],
+    [{ nativeCursor: true, tools: false }, "target-observer", "target"],
+    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "cursorToolbox"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
@@ -143,7 +145,7 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
   );
   assert.equal(
     enhancementCapabilityProfile(enhancementCapabilitiesFor(
-      { nativeCursor: false },
+      { nativeCursor: false, tools: false },
       "none",
     )),
     null,

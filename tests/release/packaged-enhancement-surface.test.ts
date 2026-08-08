@@ -255,17 +255,10 @@ test("Core is required and retired cursor preferences are dropped", async () => 
   assert.equal("nativeCursor" in DEFAULT_SETTINGS, false);
   assert.equal("nativeCursor" in parseSettings({ renderScale: 1 }), false);
   assert.equal("nativeCursor" in parseSettings({ nativeCursor: false }), false);
-  // The retired target readout stays retired: a legacy value is ignored and
-  // the shipped UI offers no checkbox for it.
-  assert.equal(
-    "targetReadout" in parseSettings({ targetReadout: true }),
-    false,
-  );
+  assert.equal(parseSettings({ targetReadout: true }).targetReadout, true);
 
   assert.doesNotMatch(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
   assert.match(shippedText("/build/renderer/index.html"), /GWonMac Core is always active/u);
-  assert.doesNotMatch(
-    shippedText("/build/renderer/index.html"),
-    /name="targetReadout"/u,
-  );
+  assert.match(shippedText("/build/renderer/index.html"), /name="gwonmacTools"/u);
+  assert.match(shippedText("/build/renderer/index.html"), /name="targetReadout"/u);
 });

@@ -74,6 +74,12 @@ const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   toolbox: true,
   commands: true,
 });
+const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: true,
+  toolbox: true,
+  commands: true,
+});
 const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
   0x1000_0039,
@@ -93,6 +99,7 @@ const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   cursorTarget: "0".repeat(64),
   cursorToolbox: "0".repeat(64),
   cursorToolboxCommands: "0".repeat(64),
+  cursorTargetToolboxCommands: "0".repeat(64),
 });
 
 function uleb(value: number): number[] {
@@ -808,7 +815,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
   // The command thunk is the entire write surface. These are the tests that
   // decide whether this app can send a packet, so they instantiate the
   // transformed module and drive the function rather than inspecting bytes.
-  it("emits the command thunk for exactly one profile", () => {
+  it("emits the command thunk for exactly the two certified command profiles", () => {
     const input = fixture();
     const build = manifest(input);
     for (const capabilities of [CURSOR_ONLY, TARGET_ONLY, CURSOR_TARGET, CURSOR_TOOLBOX]) {
@@ -820,12 +827,14 @@ describe("targeted Enhancement WebAssembly transform", () => {
         "a read profile must carry no way to reach a packet builder at all",
       );
     }
-    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
-    const exports = parseExports(sectionById(splitSections(output), 7));
-    assert.equal(
-      exports.filter((entry) => entry.name === build.commands.thunkExport).length,
-      1,
-    );
+    for (const capabilities of [CURSOR_TOOLBOX_COMMANDS, CURSOR_TARGET_TOOLBOX_COMMANDS]) {
+      const output = transformEnhancementWasm(input, build, capabilities);
+      const exports = parseExports(sectionById(splitSections(output), 7));
+      assert.equal(
+        exports.filter((entry) => entry.name === build.commands.thunkExport).length,
+        1,
+      );
+    }
   });
 
   it("dispatches the certified opcode and refuses every other", () => {
@@ -943,8 +952,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
 });
 
 describe("Enhancement client chain", () => {
-  it("has exactly five source-pinned executable capability profiles", () => {
-    // Five, and exactly one of them can write. Adding a profile costs an
+  it("has exactly six source-pinned executable capability profiles", () => {
+    // Adding a profile costs an
     // `outputSha256` entry and a review; this list is where that becomes
     // unavoidable rather than incidental.
     assert.deepEqual(Object.keys(ENHANCEMENT_CAPABILITY_PROFILES), [
@@ -953,12 +962,13 @@ describe("Enhancement client chain", () => {
       "cursorTarget",
       "cursorToolbox",
       "cursorToolboxCommands",
+      "cursorTargetToolboxCommands",
     ]);
     assert.deepEqual(
       Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
         .filter(([, capabilities]) => capabilities.commands)
         .map(([profile]) => profile),
-      ["cursorToolboxCommands"],
+      ["cursorToolboxCommands", "cursorTargetToolboxCommands"],
     );
     for (const [profile, capabilities] of Object.entries(
       ENHANCEMENT_CAPABILITY_PROFILES,
@@ -973,11 +983,8 @@ describe("Enhancement client chain", () => {
       NO_CAPABILITIES,
       UNSUPPORTED_ALL_CAPABILITIES,
       { nativeCursor: false, targetObservation: false, toolbox: true, commands: false },
-      // Commands without the Toolbox that would drive them, and commands on
-      // top of a combination nothing certifies: both are refused, so the write
-      // capability cannot arrive by being switched on beside anything.
+      // Commands without the Toolbox that would drive them are refused.
       { nativeCursor: false, targetObservation: false, toolbox: false, commands: true },
-      { nativeCursor: true, targetObservation: true, toolbox: true, commands: true },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);
     }

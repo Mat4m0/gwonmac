@@ -430,6 +430,11 @@ let applyAppearance:
   typeof import('./appearance.js').applyAppearance = () => {};
 let inputHost: GameInputController | null = null;
 let inputTrace: InputTrace | null = null;
+window.gwToolsSettings = () => Object.freeze({
+  enabled: appSettings?.gwonmacTools ?? false,
+  teamManagement: appSettings?.teamManagement ?? true,
+  targetReadout: appSettings?.targetReadout ?? false,
+});
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
@@ -439,6 +444,9 @@ window.gwApplySettings = (next) => {
   }
   window.gwDiagnostics?.setVisible(updated.showDiagnostics);
   applyAppearance(updated);
+  window.dispatchEvent(new CustomEvent('gw:tools-settings', {
+    detail: window.gwToolsSettings(),
+  }));
   if (inputHost) log('settings applied');
 };
 

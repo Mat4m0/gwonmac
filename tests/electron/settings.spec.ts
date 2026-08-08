@@ -375,13 +375,14 @@ test.describe("settings experience", () => {
       );
       await page.locator("#settings-tab-controls").click();
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
-      // The retired target readout offers no control at all.
-      await expect(page.locator('input[name="targetReadout"]')).toHaveCount(0);
 
       const controls = page.locator("#settings-pane-controls");
       await expect(controls).toContainText("GWonMac Core is always active");
       await expect(controls).toContainText("native Guild Wars cursor");
       await expect(controls).toContainText("has no opt-out");
+      await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
+      await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
+      await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();
       // Loading the Enhancement does not paint a cursor by itself: the game must
       // publish one first, and this launcher has no game.
       expect(
@@ -415,7 +416,87 @@ test.describe("settings experience", () => {
         ),
       ).toEqual([
         { name: "nativeCursor", settings: false, launcher: false },
+        { name: "tools", settings: false, launcher: false },
       ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("declining the first Tools enable saves nothing", async () => {
+    const fixture = await launchOffline("gw-tools-enable-cancel-e2e-");
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-controls").click();
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+      await page.locator('input[name="gwonmacTools"]').click();
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "GWonMac Tools Beta was not changed.",
+      );
+      await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
+      expect(await page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ gwonmacTools: false });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("the first Tools enable saves and restarts as one action", async () => {
+    const fixture = await launchOffline("gw-tools-enable-restart-e2e-");
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-controls").click();
+      await app.evaluate(({ app: electronApp, dialog }) => {
+        globalThis.__resetRestart = {
+          quit: false,
+          relaunch: false,
+          options: null,
+          originalQuit: electronApp.quit,
+          originalRelaunch: electronApp.relaunch,
+        };
+        const record = async (
+          _win: Electron.BaseWindow,
+          options: Electron.MessageBoxOptions,
+        ): Promise<Electron.MessageBoxReturnValue> => {
+          globalThis.__resetRestart.options = options;
+          return { response: 0, checkboxChecked: false };
+        };
+        dialog.showMessageBox = record as typeof dialog.showMessageBox;
+        electronApp.relaunch = () => {
+          globalThis.__resetRestart.relaunch = true;
+        };
+        electronApp.quit = () => {
+          globalThis.__resetRestart.quit = true;
+        };
+      });
+
+      await page.locator('input[name="gwonmacTools"]').click();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).gwonmacTools)).toBe(true);
+      expect(await app.evaluate(() => {
+        const { quit, relaunch, options } = globalThis.__resetRestart;
+        if (!options) throw new Error("no message box was shown");
+        return { quit, relaunch, buttons: options.buttons };
+      })).toEqual({
+        quit: true,
+        relaunch: true,
+        buttons: ["Enable and Restart", "Cancel"],
+      });
+      await app.evaluate(({ app: electronApp }) => {
+        electronApp.quit = globalThis.__resetRestart.originalQuit;
+        electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
+      });
     } finally {
       await closeOffline(fixture);
     }

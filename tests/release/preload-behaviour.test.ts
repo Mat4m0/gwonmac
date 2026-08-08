@@ -179,6 +179,12 @@ const INVOCATIONS: Invocation[] = [
   { path: "settings.get", args: [], channel: IPC.settingsGet },
   { path: "settings.set", args: [{ renderScale: 2 }], channel: IPC.settingsSet },
   { path: "settings.reset", args: [], channel: IPC.settingsReset },
+  { path: "buildLibrary.get", args: [], channel: IPC.buildLibraryGet },
+  {
+    path: "buildLibrary.set",
+    args: [{ version: 1, builds: [], teams: [], tags: [] }],
+    channel: IPC.buildLibrarySet,
+  },
   { path: "credentials.load", args: [], channel: IPC.credentialsLoad },
   {
     path: "credentials.save",
@@ -501,7 +507,7 @@ test("the launch configuration is read from argv, and defaults to production", (
   });
   assert.deepEqual(plainInit(load().api.init), {
     enhancementProgram: "none",
-    enhancementSelection: { nativeCursor: false },
+    enhancementSelection: { nativeCursor: false, tools: false },
     templateFsTrace: false,
   });
   assert.deepEqual(
@@ -519,7 +525,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     ),
     {
       enhancementProgram: "none",
-      enhancementSelection: { nativeCursor: true },
+      enhancementSelection: { nativeCursor: true, tools: false },
       templateFsTrace: true,
     },
   );
@@ -536,7 +542,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     ]).api.init),
     {
       enhancementProgram: "none",
-      enhancementSelection: { nativeCursor: false },
+      enhancementSelection: { nativeCursor: false, tools: false },
       templateFsTrace: false,
     },
   );
@@ -550,7 +556,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       plainInit(load([RENDERER_INIT_ARGUMENT + malformed]).api.init),
       {
         enhancementProgram: "none",
-        enhancementSelection: { nativeCursor: false },
+        enhancementSelection: { nativeCursor: false, tools: false },
         templateFsTrace: false,
       },
       malformed,

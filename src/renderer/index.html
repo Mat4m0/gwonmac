@@ -459,6 +459,22 @@
           <h3 id="settings-controls-title" class="sr-only">Controls</h3>
           <p class="settings-status">GWonMac Core is always active when this Guild Wars build is certified.</p>
           <p class="settings-note">Core provides the native Guild Wars cursor, native double-click, persistent files, and build-template saving. It uses only your installed client and has no opt-out because these are required compatibility features.</p>
+          <label class="settings-check">
+            <input type="checkbox" name="gwonmacTools">
+            <span>Enable GWonMac Tools Beta</span>
+          </label>
+          <p class="settings-note">The first enable restarts the app once. Disabling the master switch immediately turns off every optional tool; individual choices below change live after capability is loaded.</p>
+          <fieldset>
+            <legend>Optional tools</legend>
+            <label class="settings-check">
+              <input type="checkbox" name="teamManagement">
+              <span>Team management <small>Beta</small></span>
+            </label>
+            <label class="settings-check">
+              <input type="checkbox" name="targetReadout">
+              <span>Target distance and range <small>Test</small></span>
+            </label>
+          </fieldset>
           <p id="settings-compat-status" class="settings-status"
              role="status"></p>
           <p id="settings-compat-detail" class="settings-note"></p>

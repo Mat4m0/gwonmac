@@ -100,6 +100,8 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
+  /** Whether this process admitted optional executable capability at launch. */
+  toolsCapableAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -470,6 +472,20 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
   };
 };
 
+async function confirmToolsRestart(win: BrowserWindow): Promise<boolean> {
+  await resetGameInput(win);
+  const { response } = await dialog.showMessageBox(win, {
+    type: "warning",
+    buttons: ["Enable and Restart", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: "Enable GWonMac Tools Beta?",
+    detail:
+      "The optional Tools capability is prepared when the app starts, so the first enable needs one restart and closes any game in progress. After that, individual tools can be changed live.",
+  });
+  return response === 0;
+}
+
 async function chunkStoreInfo(
   store: ChunkStore | null,
   volumeDir: string,
@@ -619,11 +635,18 @@ export function registerIpcHandlers(ctx: IpcContext): {
     settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
       try {
         const previous = await ctx.getSettings();
+        const restartForTools = patch.gwonmacTools === true
+          && !ctx.toolsCapableAtLaunch;
+        if (restartForTools && !(await confirmToolsRestart(win))) return previous;
         const saved = await ctx.updateSettings(patch);
         if (previous.dataStrategy !== saved.dataStrategy) {
           logEvent({ k: "launcher.strategyChanged",
             strategy: saved.dataStrategy ?? "unselected",
           });
+        }
+        if (restartForTools) {
+          app.relaunch();
+          app.quit();
         }
         return saved;
       } catch (error) {

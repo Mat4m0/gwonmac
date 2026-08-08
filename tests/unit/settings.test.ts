@@ -23,6 +23,9 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       uiBorderWidth: 2,
       uiRadius: 8,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -62,6 +65,9 @@ describe("settings", () => {
       uiBorderWidth: 2,
       uiRadius: 8,
       renderScale: 1,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -152,7 +158,9 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ touchMode: "dbltap" }), AppError);
     // A renderer that still names a retired key is a bug, not a migration.
     assert.throws(() => parseSettingsPatch({ cursorTheme: "system" }), AppError);
-    assert.throws(() => parseSettingsPatch({ targetReadout: true }), AppError);
+    assert.deepEqual(parseSettingsPatch({ targetReadout: true }), {
+      targetReadout: true,
+    });
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -180,6 +188,9 @@ describe("settings", () => {
       ...DEFAULT_SETTINGS,
       showDiagnostics: true,
       renderScale: 1.5,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
     });
     assert.equal(saved.showDiagnostics, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
@@ -188,9 +199,12 @@ describe("settings", () => {
       "compatibilityNoticeSeenFor",
       "dataStrategy",
       "formatVersion",
+      "gwonmacTools",
       "lastUpdateCheckAt",
       "renderScale",
       "showDiagnostics",
+      "targetReadout",
+      "teamManagement",
       "uiBorderWidth",
       "uiDensity",
       "uiPanelOpacity",
@@ -207,6 +221,9 @@ describe("settings", () => {
     // cursor/input keys that build had and this one does not.
     const alpha = {
       renderScale: 1.5,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       nativeCursor: true,
       touchMode: "translate",
       showDiagnostics: true,
@@ -229,6 +246,9 @@ describe("settings", () => {
       uiBorderWidth: 2,
       uiRadius: 8,
       renderScale: 1.5,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately

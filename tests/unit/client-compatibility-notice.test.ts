@@ -29,9 +29,11 @@ const compatibility = (
 
 const NONE: EnhancementSelection = {
   nativeCursor: false,
+  tools: false,
 };
 const CURSOR: EnhancementSelection = {
   nativeCursor: true,
+  tools: false,
 };
 const SELECTIONS = [NONE, CURSOR];
 
