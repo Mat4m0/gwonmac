@@ -467,3 +467,119 @@ test("a completed client main loop closes the host application", async () => {
   assert.match(harness, /onExit\(code\)/);
   assert.match(harness, /code === 0[\s\S]*native\(\)\.app\.requestQuit\(\)/);
 });
+
+test("the memory warning measures time and keeps its one contract import", async () => {
+  const [harness, pressure, css, html] = await Promise.all([
+    readFile(path.join(root, "src/renderer/harness.ts"), "utf8"),
+    readFile(path.join(root, "src/renderer/heap-pressure.ts"), "utf8"),
+    readFile(path.join(root, "src/renderer/harness.css"), "utf8"),
+    readFile(path.join(root, "src/renderer/index.html"), "utf8"),
+  ]);
+
+  // The packaged Enhancement-runtime proof observes the runtime's own request
+  // for the canonical contract. A second importer, or this one moved to boot,
+  // resolves it from the module cache and the proof stops proving anything.
+  //
+  // Only a runtime import counts. `import('…').SomeType` is a type position,
+  // erased before anything is fetched, and harness.ts names several — the
+  // negative lookahead is what tells the two apart in source text.
+  assert.equal(
+    harness.match(/import\('\.\.\/shared\/contracts\.js'\)(?!\s*\.)/gu)?.length,
+    1,
+    "harness.ts must import the canonical contract exactly once at runtime",
+  );
+  assert.match(
+    harness,
+    /function requestHeapCap\(\)[\s\S]{0,400}import\('\.\.\/shared\/contracts\.js'\)/u,
+    "the contract import must stay inside requestHeapCap",
+  );
+  assert.doesNotMatch(
+    pressure,
+    /from ['"]\.\.\/shared\//u,
+    "heap-pressure.ts must take the cap as an argument, not import it",
+  );
+
+  // The estimator is what makes the warning mean the same thing in an outpost
+  // and in a mission; a byte-only watcher is the defect it replaced.
+  assert.match(harness, /heapWatch\.sample\(wasmHeapBytes\(\), performance\.now\(\)\)/u);
+
+  // A warning drawn over a live game has to survive the three preferences that
+  // change how it may be drawn at all.
+  for (const query of [
+    "prefers-reduced-motion",
+    "prefers-reduced-transparency",
+    "prefers-contrast",
+  ]) {
+    const block = css.slice(css.indexOf(`@media (${query}`));
+    assert.ok(
+      block.slice(0, 600).includes("#memory-notice"),
+      `${query} must cover the memory notice`,
+    );
+  }
+
+  // The explanation is modal and the notice is not: one dims the game and
+  // takes focus, the other runs beside play.
+  assert.match(html, /id="memory-why"[^>]*role="dialog"[^>]*aria-modal="true"/u);
+  assert.doesNotMatch(
+    html,
+    /id="memory-notice"[^>]*aria-modal/u,
+    "the notice must not block the game it is drawn over",
+  );
+  assert.match(
+    html,
+    /id="memory-notice-text"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"/u,
+    "only the warning text, not its interactive controls, may be a live region",
+  );
+  assert.doesNotMatch(
+    html,
+    /id="memory-notice"[^>]*role=/u,
+    "interactive warning controls must sit outside the status live region",
+  );
+  // `aria-modal` tells a screen reader the game behind it is not there. Half
+  // that contract — the attribute without a keyboard that agrees — describes
+  // an app the player is not using.
+  assert.match(
+    harness,
+    /heapWhyRoot\.hidden\) return;[\s\S]{0,400}'Tab'[\s\S]{0,200}focus\(\)/u,
+    "an aria-modal explanation must trap the keyboard inside itself",
+  );
+  assert.match(
+    harness,
+    /\[heapNoticeRoot, heapChip, heapScrim, heapWhyRoot\]/u,
+    "every warning surface must stop input before it reaches the game",
+  );
+});
+
+test("the memory warning measures a staircase step to step", async () => {
+  const pressure = await readFile(
+    path.join(root, "src/renderer/heap-pressure.ts"),
+    "utf8",
+  );
+
+  // `Module.HEAPU8.buffer` is *reserved* memory and WebAssembly reserves it in
+  // jumps — about one 96 MiB step every ten minutes at the measured open-world
+  // rate, and flat in between. A fixed-duration window over that shape holds
+  // either no step or one, and reads a steady 555 MiB/h session as alternating
+  // between 384 and 1,152. Both ends of a measurement belong on a step, which
+  // is why the module keeps the steps rather than the samples.
+  assert.match(
+    pressure,
+    /const steps: \{ atMs: number; bytes: number; grewBy: number \}\[\]/u,
+    "the estimator must measure growth steps, not raw samples",
+  );
+  assert.doesNotMatch(
+    pressure,
+    /windowsMs/u,
+    "a fixed-duration window cannot measure a staircase",
+  );
+
+  // The warm-up excludes the startup ramp, and where its clock starts is the
+  // whole of whether it works: the page stays open through the client
+  // download, so a slow first run boots after a page-load-anchored warm-up has
+  // already expired and the ramp is measured as ordinary play.
+  assert.match(
+    pressure,
+    /allocatingSinceMs === null && bytes > 0\) allocatingSinceMs = atMs/u,
+    "the warm-up must run from the first allocation, not from page load",
+  );
+});
