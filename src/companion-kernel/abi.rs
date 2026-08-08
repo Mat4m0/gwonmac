@@ -203,6 +203,10 @@ pub(crate) struct Layout {
     pub(crate) area_info_count: u32,
     pub(crate) area_info_stride: u32,
     pub(crate) area_info_flags: u32,
+    // Appended to preserve the positional meaning of every earlier config
+    // word. These are bytes on the player's AgentLiving record.
+    pub(crate) agent_primary: u32,
+    pub(crate) agent_secondary: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -283,6 +287,8 @@ impl Layout {
         area_info_count: 0,
         area_info_stride: 0,
         area_info_flags: 0,
+        agent_primary: 0,
+        agent_secondary: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -394,7 +400,7 @@ pub(crate) struct PartySnapshot {
     pub(crate) slots: [PartySlot; PARTY_SLOTS],
 }
 
-const _: [(); 340] = [(); size_of::<Layout>()];
+const _: [(); 348] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 832] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];

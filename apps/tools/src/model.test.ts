@@ -7,6 +7,8 @@ import {
   forkBuild,
   orderedBuilds,
   removeBuild,
+  exclusiveTeamBuildIds,
+  removeTeam,
   searchLibrary,
 } from "./model";
 
@@ -32,6 +34,19 @@ describe("Vue library projections", () => {
     expect(
       library.teams.flatMap((team) => team.slots).some((slot) => slot.build === "b-woh"),
     ).toBe(false);
+  });
+
+  it("deletes only builds exclusive to a removed team", () => {
+    expect(exclusiveTeamBuildIds(demoLibrary, "t-vanquish").sort()).toEqual([
+      "b-discord-rot",
+      "b-woh-aegis",
+    ]);
+    const library = removeTeam(cloneLibrary(demoLibrary), "t-vanquish", true);
+    expect(library.teams.some((team) => team.id === "t-vanquish")).toBe(false);
+    expect(buildById(library, "b-discord-rot")).toBeUndefined();
+    expect(buildById(library, "b-woh-aegis")).toBeUndefined();
+    expect(buildById(library, "b-barrage")).toBeDefined();
+    expect(buildById(library, "b-woh")).toBeDefined();
   });
 
   it("searches derived skill and hero names without storing them twice", () => {

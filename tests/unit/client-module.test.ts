@@ -301,6 +301,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       areaInfoCount: 73,
       areaInfoStride: 74,
       areaInfoFlags: 75,
+      agentPrimary: 76,
+      agentSecondary: 77,
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;

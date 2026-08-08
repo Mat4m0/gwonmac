@@ -10,6 +10,7 @@ import type { LibraryController } from "../use-library";
 import {
   buildById,
   buildId,
+  exclusiveTeamBuildIds,
   teamMemberLabel,
   type Team,
 } from "../model";
@@ -52,6 +53,11 @@ const configured = computed(() =>
   props.team.slots.filter(
     (slot, index) => slot.build !== null || (index > 0 && slot.hero !== null),
   ).length,
+);
+const exclusiveBuildCount = computed(() =>
+  props.controller.library.value
+    ? exclusiveTeamBuildIds(props.controller.library.value, props.team.id).length
+    : 0,
 );
 const currentApplyStatus = computed(() =>
   props.controller.applyStatus.value?.teamId === props.team.id
@@ -371,21 +377,26 @@ const apply = () => props.controller.applyTeam(props.team);
         />
       </section>
 
-      <section v-if="deleting" class="inline-action inline-action--danger">
-        <div>
-          <h2>Delete {{ team.name }}?</h2>
-          <p>The builds stay in the library. Only this composition is removed.</p>
-        </div>
-        <div class="action-row">
-          <button class="ui-button" @click="deleting = false">Keep team</button>
-          <button class="ui-button" data-variant="danger" @click="controller.deleteTeam(team.id)">
-            Delete team
-          </button>
-        </div>
-      </section>
     </div>
 
-    <footer class="detail-actions detail-actions--explain">
+    <footer v-if="deleting" class="detail-actions detail-actions--explain delete-confirmation">
+      <span>
+        Delete “{{ team.name }}”? Shared builds are always kept.
+      </span>
+      <button class="ui-button" @click="deleting = false">Cancel</button>
+      <button class="ui-button" data-variant="danger" @click="controller.deleteTeam(team.id)">
+        Team only
+      </button>
+      <button
+        v-if="exclusiveBuildCount > 0"
+        class="ui-button"
+        data-variant="danger"
+        @click="controller.deleteTeam(team.id, true)"
+      >
+        Team + {{ exclusiveBuildCount }} {{ exclusiveBuildCount === 1 ? "build" : "builds" }}
+      </button>
+    </footer>
+    <footer v-else class="detail-actions detail-actions--explain">
       <!--
         The reason replaces the description rather than joining it. Explaining
         what Apply would do, beside a control that cannot do it, is the sentence

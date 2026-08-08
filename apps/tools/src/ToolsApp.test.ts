@@ -127,6 +127,24 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
+  it("keeps build deletion confirmation in the visible action footer", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    const before = wrapper.findAll(".library-row").length;
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-tabs button")[1]!.trigger("click");
+    await wrapper.get('.details-danger-zone .ui-link[data-variant="danger"]')
+      .trigger("click");
+    expect(wrapper.get(".detail-actions.delete-confirmation").text()).toContain(
+      "variants are kept",
+    );
+    await wrapper.get('.detail-actions.delete-confirmation .ui-button[data-variant="danger"]')
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll(".library-row")).toHaveLength(before - 1);
+    wrapper.unmount();
+  });
+
   it("publishes through the host capability and explains the player-owned next step", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
@@ -369,9 +387,12 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     const before = wrapper.findAll(".library-row").length;
     await wrapper.get('.detail-actions .ui-link[data-variant="danger"]').trigger("click");
+    expect(wrapper.get(".detail-actions.delete-confirmation").text()).toContain(
+      "Shared builds are always kept",
+    );
     await wrapper
-      .findAll(".inline-action--danger .ui-button")
-      .find((button) => button.text().includes("Delete team"))!
+      .findAll(".detail-actions.delete-confirmation .ui-button")
+      .find((button) => button.text().includes("Team only"))!
       .trigger("click");
     await flushPromises();
     expect(wrapper.findAll(".library-row")).toHaveLength(before - 1);

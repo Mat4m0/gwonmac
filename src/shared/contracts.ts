@@ -404,8 +404,7 @@ export function enhancementCapabilityProfile(
 export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = 10;
 
 /**
- * Where the message words begin: 17 core + 12 cursor + 7 party + 25 party
- * detail address words come first.
+ * Where the message words begin: all certified layout words come first.
  *
  * The config ABI is positional — the kernel decodes these words by index — so
  * a field inserted mid-list silently changes what every later word means.
@@ -417,14 +416,14 @@ export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = 10;
  * three did not notice. Bound to the real list by
  * `tests/unit/enhancement-transform.test.ts`.
  */
-export const ENHANCEMENT_LAYOUT_WORD_COUNT = 72;
+export const ENHANCEMENT_LAYOUT_WORD_COUNT = 74;
 
 /** Layout words, then playerChat/hide/show, then the party-dirty tuple. */
 export const ENHANCEMENT_CONFIG_WORD_COUNT =
   ENHANCEMENT_LAYOUT_WORD_COUNT + 3 + ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT;
 
 /** One identity shared by the transformer, cache, manifest, and renderer. */
-export const ENHANCEMENT_TRANSFORM_ABI = 15;
+export const ENHANCEMENT_TRANSFORM_ABI = 16;
 
 /**
  * Whether one config word belongs to an active capability. Toolbox reuses only

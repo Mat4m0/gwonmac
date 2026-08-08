@@ -23,6 +23,7 @@ import {
   ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
   ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS,
   ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
+  ENHANCEMENT_PLAYER_LAYOUT_FIELDS,
 } from "../../src/main/certification/enhancement-builds.ts";
 
 // Every read returns a discriminated union: `reason` belongs to the members
@@ -319,9 +320,13 @@ const PARTY_DIRTY_MESSAGES = Object.freeze([
 const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT
   - ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS.length
   - ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS.length
-  - ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS.length;
+  - ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS.length
+  - ENHANCEMENT_PLAYER_LAYOUT_FIELDS.length;
 const POLICY_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT
-  - ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS.length;
+  - ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS.length
+  - ENHANCEMENT_PLAYER_LAYOUT_FIELDS.length;
+const PLAYER_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT
+  - ENHANCEMENT_PLAYER_LAYOUT_FIELDS.length;
 const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 const CONFIG_BYTES = CONFIG_WORDS * 4;
 const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
@@ -452,6 +457,7 @@ async function createKernel(
     ], DETAIL_CONFIG_START);
   }
   config.set([ADDRESSES.areaInfo, 883, 0x7c, 0x10], POLICY_CONFIG_START);
+  config.set([0x10a, 0x10b], PLAYER_CONFIG_START);
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, twenty-five words short of
@@ -552,6 +558,8 @@ function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.player + 0x9c, 0xdb, true);
   view.setUint16(ADDRESSES.player + 0xf4, 42, true);
   view.setUint16(ADDRESSES.player + 0xf6, 0x3000, true);
+  view.setUint8(ADDRESSES.player + 0x10a, 3);
+  view.setUint8(ADDRESSES.player + 0x10b, 5);
   view.setUint32(ADDRESSES.target + 0x2c, 9, true);
   view.setFloat32(ADDRESSES.target + 0x74, 110, true);
   view.setFloat32(ADDRESSES.target + 0x78, 20, true);
@@ -1071,6 +1079,7 @@ describe("Companion kernel", () => {
     assert.equal(hero?.hero, 1);
     assert.equal(hero?.agentId, 77);
 
+    assert.deepEqual(player?.professions, [3, 5], "direct player professions");
     // Uncertified groups were skipped whole rather than read as zero.
     assert.equal(hero?.professions, null, "professions");
     assert.equal(hero?.behaviour, null, "behaviour");

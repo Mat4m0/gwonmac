@@ -47,7 +47,7 @@ import type { EnhancementCommandThunk } from "./enhancement-team-commands.js";
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const COMPANION_ABI = 10;
+const COMPANION_ABI = 11;
 const COMPANION_RUNTIME_BYTES = 65_536;
 /**
  * The side module's `__memory_base` must be 16-byte aligned: the wasm linker

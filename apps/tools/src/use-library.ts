@@ -26,6 +26,7 @@ import {
   cloneLibrary,
   forkBuild,
   removeBuild,
+  removeTeam,
   searchLibrary,
   teamById,
   teamId,
@@ -411,11 +412,11 @@ export function useLibrary(host: ToolsHost) {
     selectedId.value = nextId;
   };
 
-  const deleteTeam = async (id: string) => {
-    await commit("Team deleted", (current) => ({
-      ...current,
-      teams: current.teams.filter((team) => team.id !== id),
-    }));
+  const deleteTeam = async (id: string, deleteExclusiveBuilds = false) => {
+    await commit(
+      deleteExclusiveBuilds ? "Team and unused builds deleted" : "Team deleted",
+      (current) => removeTeam(current, id, deleteExclusiveBuilds),
+    );
     selectedId.value = library.value?.teams[0]?.id ?? "";
   };
 

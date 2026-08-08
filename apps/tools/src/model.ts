@@ -119,6 +119,43 @@ export function removeBuild(
   };
 }
 
+/** Builds owned only by one team, and therefore safe to remove with it. */
+export function exclusiveTeamBuildIds(
+  library: BuildLibrary,
+  teamId: string,
+): BuildId[] {
+  const team = teamById(library, teamId);
+  if (!team) return [];
+  const referenced = new Set(
+    team.slots.flatMap((slot) => slot.build === null ? [] : [slot.build]),
+  );
+  for (const other of library.teams) {
+    if (other.id === team.id) continue;
+    for (const slot of other.slots) {
+      if (slot.build !== null) referenced.delete(slot.build);
+    }
+  }
+  return [...referenced];
+}
+
+export function removeTeam(
+  library: BuildLibrary,
+  removedId: string,
+  removeExclusiveBuilds = false,
+): BuildLibrary {
+  const buildIds = removeExclusiveBuilds
+    ? exclusiveTeamBuildIds(library, removedId)
+    : [];
+  const withoutTeam: BuildLibrary = {
+    ...library,
+    teams: library.teams.filter((team) => team.id !== removedId),
+  };
+  return buildIds.reduce<BuildLibrary>(
+    (current, id) => removeBuild(current, id),
+    withoutTeam,
+  );
+}
+
 export function teamMemberLabel(
   hero: Team["slots"][number]["hero"],
   slotIndex: number,

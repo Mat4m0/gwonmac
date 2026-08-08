@@ -24,7 +24,7 @@ use core::ptr::{read_volatile, write_volatile};
 
 use crate::abi::*;
 use crate::memory::*;
-use crate::{find_player_agent_id, resolve_game, GameState};
+use crate::{find_player_agent, resolve_game, GameState};
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
@@ -61,54 +61,6 @@ impl Hero {
         attributes: [0; ATTRIBUTE_SLOTS],
         flags: 0,
     };
-}
-
-fn primary_attribute(profession: u32) -> u32 {
-    match profession {
-        1 => 17, 2 => 23, 3 => 16, 4 => 6, 5 => 0,
-        6 => 12, 7 => 35, 8 => 36, 9 => 40, 10 => 44,
-        _ => u32::MAX,
-    }
-}
-
-fn attribute_profession(id: u32) -> u32 {
-    match id {
-        17..=21 => 1,
-        22..=25 => 2,
-        13..=16 => 3,
-        4..=7 => 4,
-        0..=3 => 5,
-        8..=12 => 6,
-        29..=31 | 35 => 7,
-        32..=34 | 36 => 8,
-        37..=40 => 9,
-        41..=44 => 10,
-        _ => 0,
-    }
-}
-
-/** Profession pair encoded by the attribute row's admitted ids. */
-fn professions_from_attributes(present: &[bool; 45]) -> Option<u32> {
-    let mut primary = 0_u32;
-    for profession in 1..=10 {
-        let id = primary_attribute(profession);
-        if present[id as usize] {
-            if primary != 0 { return None; }
-            primary = profession;
-        }
-    }
-    if primary == 0 { return None; }
-    let mut secondary = 0_u32;
-    for id in 0..=ATTRIBUTE_ID_MAX {
-        if !present[id as usize] { continue; }
-        let profession = attribute_profession(id);
-        if profession == 0 || profession == primary || id == primary_attribute(profession) {
-            continue;
-        }
-        if secondary != 0 && secondary != profession { return None; }
-        secondary = profession;
-    }
-    Some(primary | (secondary << 8))
 }
 
 /// A game array header: buffer, capacity, size, validated together.
@@ -321,8 +273,13 @@ unsafe fn collect(
     }?;
 
     let mut heroes = [Hero::EMPTY; PARTY_SLOTS];
-    heroes[0].agent_id = unsafe { find_player_agent_id(layout, player_number) }?;
+    let player = unsafe { find_player_agent(layout, player_number) }?;
+    heroes[0].agent_id = player.id;
     heroes[0].flags = SLOT_OCCUPIED;
+    if let Some(professions) = pack_professions(player.primary, player.secondary) {
+        heroes[0].professions = professions;
+        heroes[0].flags |= SLOT_PROFESSIONS;
+    }
     let mut count = 0_u32;
     for index in 0..size {
         let member = indexed(buffer, index, layout.hero_member_stride)?;
@@ -491,7 +448,6 @@ unsafe fn collect(
                     continue;
                 }
                 let mut written = 0_usize;
-                let mut present = [false; 45];
                 for id in 0..=ATTRIBUTE_ID_MAX {
                     let at = checked_add(
                         layout.attribute_entries,
@@ -505,7 +461,6 @@ unsafe fn collect(
                     if unsafe { field(entry, checked_add(at, layout.attribute_entry_id)?) }? != id {
                         continue;
                     }
-                    present[id as usize] = true;
                     let rank =
                         unsafe { field(entry, checked_add(at, layout.attribute_entry_rank)?) }?;
                     // 12 is what the client's own cost table can buy. Nothing
@@ -527,12 +482,6 @@ unsafe fn collect(
                     written += 1;
                 }
                 hero.flags |= SLOT_ATTRIBUTES;
-                if hero.hero_id == 0 {
-                    if let Some(professions) = professions_from_attributes(&present) {
-                        hero.professions = professions;
-                        hero.flags |= SLOT_PROFESSIONS;
-                    }
-                }
             }
         }
     }

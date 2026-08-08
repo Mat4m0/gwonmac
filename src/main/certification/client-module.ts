@@ -71,8 +71,8 @@ export interface PreparedClientModule {
   readonly failure: ClientModulePreparationFailure | null;
   /**
    * Whether the served module carries the client's own mouse double-click
-   * flag. False means the renderer must keep synthesising touch taps, so this
-   * is the renderer's switch and not a report.
+   * flag. False means native double-click is unavailable, so this is the
+   * renderer's switch and not merely a report.
    */
   readonly nativeDoubleClick: boolean;
 }

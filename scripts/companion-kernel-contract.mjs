@@ -35,8 +35,8 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
  * without one test or the other saying so.
  */
 export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
-  companion_abi: 10,
-  companion_config_bytes: 340,
+  companion_abi: 11,
+  companion_config_bytes: 348,
   companion_snapshot_bytes: 64,
   companion_cursor_bytes: 4_160,
   companion_toolbox_bytes: 64,
@@ -44,7 +44,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 1345 bytes (0xc1 0x0a as LEB128). Seven documented moves:
+  // Memory footprint 1277 bytes (0xfd 0x09 as LEB128). Eight documented moves:
   //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //                separates "you have no heroes" from "nobody read the party";
   //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
@@ -60,10 +60,12 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //                packing absorbs one byte elsewhere in the data segment.
   //   1349 -> 1345 the unused hero-panel state left production for the source
   //                archive, removing its one u32 static.
+  //   1345 -> 1277 two direct AgentLiving profession offsets replace the
+  //                larger attribute-to-profession inference tables.
   // This constant exists so a kernel whose footprint moves cannot ship without
-  // someone saying why. One page is still the ceiling, and 1222 is a long way
+  // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0xc1, 0x0a, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xfd, 0x09, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES

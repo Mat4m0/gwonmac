@@ -889,7 +889,7 @@ async function assertTargetReadoutLifecycle() {
       [
         {
           name: "enhancement.installed",
-          companionAbi: 10,
+          companionAbi: 11,
           capabilityProfile: "target",
           installation: 1,
         },
@@ -1014,6 +1014,8 @@ async function assertToolboxFoundationLifecycle() {
       view.setUint32(game.player + layout.agentType, 0xdb, true);
       view.setUint16(game.player + layout.agentPlayerNumber, 42, true);
       view.setUint16(game.player + layout.agentModelType, 0x3000, true);
+      view.setUint8(game.player + layout.agentPrimary, 3);
+      view.setUint8(game.player + layout.agentSecondary, 5);
       view.setUint32(game.game + layout.partyContext, game.party, true);
       view.setUint32(game.party + layout.playerParty, game.partyInfo, true);
       const heroArray = game.partyInfo + layout.partyHeroes;
@@ -1267,7 +1269,7 @@ async function assertToolboxFoundationLifecycle() {
     assert.ok(snapshotReads > 0);
     assert.deepEqual(scalar, {
       buildId: ENHANCEMENT_BUILD.buildId,
-      companionAbi: 10,
+      companionAbi: 11,
       hertz: 0,
       installation: 1,
       programId: ENHANCEMENT_BUILD.programId,

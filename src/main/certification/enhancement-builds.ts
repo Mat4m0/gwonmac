@@ -109,6 +109,8 @@ export interface EnhancementLayout {
   areaInfoCount: number;
   areaInfoStride: number;
   areaInfoFlags: number;
+  agentPrimary: number;
+  agentSecondary: number;
 }
 
 /**
@@ -246,6 +248,12 @@ export const ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS = [
   "areaInfoFlags",
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
+/** Direct profession bytes on the player's live AgentLiving record. */
+export const ENHANCEMENT_PLAYER_LAYOUT_FIELDS = [
+  "agentPrimary",
+  "agentSecondary",
+] as const satisfies readonly (keyof EnhancementLayout)[];
+
 export const ENHANCEMENT_LAYOUT_FIELDS = [
   ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
   ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
@@ -253,6 +261,7 @@ export const ENHANCEMENT_LAYOUT_FIELDS = [
   ...ENHANCEMENT_PARTY_DETAIL_LAYOUT_FIELDS,
   ...ENHANCEMENT_ATTRIBUTE_LAYOUT_FIELDS,
   ...ENHANCEMENT_MAP_POLICY_LAYOUT_FIELDS,
+  ...ENHANCEMENT_PLAYER_LAYOUT_FIELDS,
 ] as const satisfies readonly (keyof EnhancementLayout)[];
 
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
@@ -346,7 +355,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
     // Recomputed when the attribute layout landed, as they were for the party
-    // layout before it. All four move together whenever the manifest's bytes
+    // layout before it. All profiles move together whenever the manifest's bytes
     // do, and the manifest carries the transform ABI and every config word --
     // so growing the layout changes the output of profiles that do not use one
     // word of it.
@@ -358,14 +367,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "b61bd939c833183a5308eacb57729fcdbd48368c0c698aba6fc42fadf21c1168",
-      target: "c05af4e9228f321cd3578ca7df0b1213ecf52436b375ba68296469f8d3f321af",
-      cursorTarget: "69d2caaa2bc2cd7e1c4012bee544f9c474d9b25919da646fae3ef2841cbfa944",
-      cursorToolbox: "59c765a518c6fa3024e89a308c84db659a1bdb7a9ecec609c8223adea9c959bc",
+      cursor: "b31bb8f673a999ce54195e6473dc05427477dd5d3ddbb6a8e1f0dc7a81e543ae",
+      target: "db44c3985a4083a3ab3fa402b35f4764d23b48e72f724ac906c7891404ad52e9",
+      cursorTarget: "76c17e628f00f5200676727c61e77bd9c5982c72b2a5df9637b8f5a42bb0be52",
+      cursorToolbox: "b65ad5275d6e636cee7f8be7e6c36233018cf7b15b12110e53347e34fc465c22",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "a298f6b511fed0e7f6d8b973521521730e1528a1bf211bebe9f0ab0a877a2d3e",
-      cursorTargetToolboxCommands: "ed306c54e775a065476a823018a07234fe144c0322496a892ea25093fe9a9ec8",
+      cursorToolboxCommands: "615ac2a211ca4e3648052c972d22e5184d536fe39b10975d8b9a32b49ff7bb0e",
+      cursorTargetToolboxCommands: "69215661c370bc7a3a66aaedbe924f4fca2abe79ce36c1198e5a3a59d2905721",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -524,6 +533,8 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       agentType: 0x9c,
       agentPlayerNumber: 0xf4,
       agentModelType: 0xf6,
+      agentPrimary: 0x10a,
+      agentSecondary: 0x10b,
       cursorActiveArt: 0x5a16e0,
       cursorSoftwareModel: 0x5a16e4,
       cursorShowCount: 0x5a16e8,

@@ -226,8 +226,15 @@ unsafe fn read_agent(layout: Layout, agent_buffer: u32, size: u32, id: u32) -> O
     Some(AgentState { id, kind, x, y })
 }
 
-/** The current player's live agent id, proved by login number and model bits. */
-pub(crate) unsafe fn find_player_agent_id(layout: Layout, player_number: u32) -> Option<u32> {
+#[derive(Clone, Copy)]
+pub(crate) struct PlayerAgent {
+    pub(crate) id: u32,
+    pub(crate) primary: u32,
+    pub(crate) secondary: u32,
+}
+
+/** The current player's live agent, proved by login number and model bits. */
+pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Option<PlayerAgent> {
     if !contains(layout.agent_array, 16) {
         return None;
     }
@@ -241,8 +248,9 @@ pub(crate) unsafe fn find_player_agent_id(layout: Layout, player_number: u32) ->
     {
         return None;
     }
+    let required = checked_add(layout.agent_secondary, 1)?;
     for id in 1..size {
-        let address = indexed(buffer, id, 4).and_then(|at| unsafe { pointer(at, 0x100) });
+        let address = indexed(buffer, id, 4).and_then(|at| unsafe { pointer(at, required) });
         let Some(address) = address else { continue };
         if unsafe { read_u32(offset(address, layout.agent_id)?) } == Some(id)
             && unsafe { read_u16(offset(address, layout.agent_player_number)?) }
@@ -250,7 +258,11 @@ pub(crate) unsafe fn find_player_agent_id(layout: Layout, player_number: u32) ->
             && unsafe { read_u16(offset(address, layout.agent_model_type)?) }
                 .map(|value| value & 0xf000) == Some(0x3000)
         {
-            return Some(id);
+            return Some(PlayerAgent {
+                id,
+                primary: unsafe { read_u8(offset(address, layout.agent_primary)?)? } as u32,
+                secondary: unsafe { read_u8(offset(address, layout.agent_secondary)?)? } as u32,
+            });
         }
     }
     None
@@ -724,7 +736,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    10
+    11
 }
 
 #[no_mangle]

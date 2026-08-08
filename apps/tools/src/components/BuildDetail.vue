@@ -390,19 +390,6 @@ defineExpose({
         </div>
       </section>
 
-      <section v-if="deleting" class="inline-action inline-action--danger">
-        <div>
-          <h2>Delete {{ build.name }}?</h2>
-          <p>Linked team slots become empty. Variants are promoted, never deleted.</p>
-        </div>
-        <div class="action-row">
-          <button class="ui-button" @click="deleting = false">Keep build</button>
-          <button class="ui-button" data-variant="danger" @click="controller.deleteBuild(build.id)">
-            Delete build
-          </button>
-        </div>
-      </section>
-
       <div class="details-danger-zone">
         <button class="ui-button" @click="controller.createFork(build.id, [])">
           Fork independent variant
@@ -444,7 +431,18 @@ defineExpose({
       <span>In Guild Wars, open Skills and Attributes → Load Template.</span>
     </div>
 
-    <footer class="detail-actions authoring-actions">
+    <footer v-if="deleting" class="detail-actions authoring-actions delete-confirmation">
+      <span class="save-state">
+        Delete “{{ build.name }}”? {{ editor.usage.value.length }} linked
+        {{ editor.usage.value.length === 1 ? "team gets" : "teams get" }} an empty slot;
+        variants are kept.
+      </span>
+      <button class="ui-button" @click="deleting = false">Cancel</button>
+      <button class="ui-button" data-variant="danger" @click="controller.deleteBuild(build.id)">
+        Delete build
+      </button>
+    </footer>
+    <footer v-else class="detail-actions authoring-actions">
       <span class="save-state">
         {{ editor.dirty.value ? "Draft changes stay local until saved." : "Saved in your local build library." }}
       </span>
