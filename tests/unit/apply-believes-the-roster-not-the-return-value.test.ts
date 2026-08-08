@@ -23,6 +23,7 @@ import type {
   TeamApplyMember,
   TeamApplyPlan,
 } from "../../src/shared/builds/team-apply.ts";
+import { preflightTeamApply } from "../../src/shared/builds/team-apply.ts";
 
 type Slot = {
   hero: number;
@@ -39,7 +40,12 @@ function party(
   slots: readonly Slot[],
   inOutpost: boolean | null = true,
   hardMode = false,
-  player: Player | null = null,
+  player: Player | null = {
+    agentId: 1,
+    professions: [1, 2],
+    skills: [0, 0, 0, 0, 0, 0, 0, 0],
+    attributes: [],
+  },
 ): LiveParty {
   return liveParty({
     status: "ready",
@@ -50,6 +56,8 @@ function party(
     party: {
       status: "ready",
       rosterObserved: true,
+      unlockObserved: true,
+      unlocked: Array.from({ length: 39 }, (_, index) => index + 1),
       playRegion: "pve",
       hardMode,
       inOutpost,
@@ -92,33 +100,37 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
   let world = [...initial];
   let outpost = inOutpost;
   let hardMode = false;
-  let player: Player | null = null;
+  let player: Player | null = {
+    agentId: 1,
+    professions: [1, 2],
+    skills: [0, 0, 0, 0, 0, 0, 0, 0],
+    attributes: [],
+  };
+  const agentFor = (hero: number) => world.find((slot) => slot.hero === hero)?.agentId ?? 0;
   const commands: TeamApplyCommands = {
-    setHardMode: (enabled) => { sent.push(`hard:${enabled}`); return true; },
-    setPlayerSecondary: (agentId, profession) => {
-      sent.push(`player-secondary:${agentId}:${profession}`); return true;
+    setHardMode: (enabled) => { sent.push(`hard:${enabled}`); },
+    setPlayerSecondary: (profession) => {
+      sent.push(`player-secondary:${player?.agentId ?? 0}:${profession}`);
     },
-    setPlayerSkills: (agentId, skills) => {
-      sent.push(`player-skills:${agentId}:${skills.join(",")}`); return true;
+    setPlayerSkills: (skills) => {
+      sent.push(`player-skills:${player?.agentId ?? 0}:${skills.join(",")}`);
     },
-    setPlayerAttributes: (agentId, ranks) => {
-      sent.push(`player-attributes:${agentId}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
-      return true;
+    setPlayerAttributes: (ranks) => {
+      sent.push(`player-attributes:${player?.agentId ?? 0}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
     },
-    addHero: (heroId) => { sent.push(`add:${heroId}`); return true; },
-    kickHero: (heroId) => { sent.push(`kick:${heroId}`); return true; },
-    setHeroBehaviour: (agentId, behaviour) => {
-      sent.push(`behaviour:${agentId}:${behaviour}`); return true;
+    addHero: (heroId) => { sent.push(`add:${heroId}`); },
+    kickHero: (heroId) => { sent.push(`kick:${heroId}`); },
+    setHeroBehaviour: (heroId, behaviour) => {
+      sent.push(`behaviour:${agentFor(heroId)}:${behaviour}`);
     },
-    setHeroSecondary: (agentId, profession) => {
-      sent.push(`secondary:${agentId}:${profession}`); return true;
+    setHeroSecondary: (heroId, profession) => {
+      sent.push(`secondary:${agentFor(heroId)}:${profession}`);
     },
-    setHeroSkills: (agentId, skills) => {
-      sent.push(`skills:${agentId}:${skills.join(",")}`); return true;
+    setHeroSkills: (heroId, skills) => {
+      sent.push(`skills:${agentFor(heroId)}:${skills.join(",")}`);
     },
-    setHeroAttributes: (agentId, ranks) => {
-      sent.push(`attributes:${agentId}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
-      return true;
+    setHeroAttributes: (heroId, ranks) => {
+      sent.push(`attributes:${agentFor(heroId)}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
     },
   };
   const environment: TeamApplyEnvironment = {
@@ -140,13 +152,12 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
       // Wrapping every command rather than the one named: the runner is free
       // to reach the reacting state through a different call than the test
       // expects, and a wrapper on one method would then never fire.
-      const mutable = commands as unknown as Record<string, (...args: never[]) => boolean>;
+      const mutable = commands as unknown as Record<string, (...args: never[]) => void>;
       for (const key of Object.keys(original)) {
         const inner = mutable[key]!;
         mutable[key] = (...args: never[]) => {
-          const result = inner(...args);
+          inner(...args);
           react();
-          return result;
         };
       }
     },
@@ -177,9 +188,8 @@ test("Hard Mode is changed and confirmed before any team command", async () => {
   const game = harness([]);
   const original = game.environment.commands.setHardMode;
   game.environment.commands.setHardMode = (enabled) => {
-    const sent = original(enabled);
+    original(enabled);
     game.setHard(enabled);
-    return sent;
   };
   const result = await runTeamApply(
     { mode: "hard", members: [member()] },
@@ -199,29 +209,26 @@ test("the player's build is applied before hero work and confirmed field by fiel
     attributes: [],
   });
   const secondary = game.environment.commands.setPlayerSecondary;
-  game.environment.commands.setPlayerSecondary = (agentId, profession) => {
-    const sent = secondary(agentId, profession);
+  game.environment.commands.setPlayerSecondary = (profession) => {
+    secondary(profession);
     game.setPlayer({
       agentId: 7, professions: [1, 2], skills: null, attributes: [],
     });
-    return sent;
   };
   const skills = game.environment.commands.setPlayerSkills;
-  game.environment.commands.setPlayerSkills = (agentId, ids) => {
-    const sent = skills(agentId, ids);
+  game.environment.commands.setPlayerSkills = (ids) => {
+    skills(ids);
     game.setPlayer({
       agentId: 7, professions: [1, 2], skills: ids, attributes: [],
     });
-    return sent;
   };
   const attributes = game.environment.commands.setPlayerAttributes;
-  game.environment.commands.setPlayerAttributes = (agentId, ranks) => {
-    const sent = attributes(agentId, ranks);
+  game.environment.commands.setPlayerAttributes = (ranks) => {
+    attributes(ranks);
     game.setPlayer({
       agentId: 7, professions: [1, 2],
       skills: [1, 2, 3, 4, 5, 6, 7, 8], attributes: ranks,
     });
-    return sent;
   };
 
   const result = await runTeamApply(
@@ -251,9 +258,62 @@ test("a wrong player primary refuses before changing difficulty", async () => {
       game.environment,
       2,
     ),
-    /The player is R, but the assigned build is for W/,
+    /assigned build is for W, but the observed primary is R/,
   );
   assert.deepEqual(game.sent, []);
+});
+
+test("missing player, partial roster and known-locked hero all send zero commands", async () => {
+  for (const [observed, message] of [
+    [party([], true, false, null), /own character has not been observed/],
+    [{ ...party([]), partial: true }, /complete party roster/],
+    [{
+      ...party([]),
+      accountHeroes: new Map([[heroId(6), {
+        availability: "locked" as const,
+        professions: ["W", "R"] as const,
+      }]]),
+    }, /Koss is not unlocked/],
+  ] as const) {
+    const game = harness([]);
+    const environment = { ...game.environment, party: () => observed };
+    await assert.rejects(
+      runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), environment, 1),
+      message,
+    );
+    assert.deepEqual(game.sent, []);
+  }
+});
+
+test("an absent hero's known primary mismatch refuses before roster mutation", async () => {
+  const game = harness([]);
+  const observed = {
+    ...party([]),
+    accountHeroes: new Map([[heroId(6), {
+      availability: "unlocked" as const,
+      professions: ["R", "W"] as const,
+    }]]),
+  };
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+      { ...game.environment, party: () => observed },
+      1,
+    ),
+    /assigned build is for W, but the observed primary is R/,
+  );
+  assert.deepEqual(game.sent, []);
+});
+
+test("behavior-only work is part of the canonical preview", () => {
+  const result = preflightTeamApply(
+    plan([member({ hero: heroId(6), behaviour: "fight" })]),
+    party([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]),
+  );
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.ready ? result.changes : [], [
+    { kind: "behaviour", hero: heroId(6) },
+  ]);
 });
 
 test("a hero the game never adds is a refusal, however cheerful the command", async () => {
@@ -299,7 +359,7 @@ test("a full apply reports only the changes the roster confirmed", async () => {
   );
 
   assert.equal(result.commandId, 7);
-  assert.equal(result.skillsSkipped, false);
+  assert.equal(result.skippedSkills.length, 0);
   assert.deepEqual(game.sent, [
     "skills:11:1,2,3,4,5,6,7,8",
     "attributes:11:17=7,19=12",
@@ -337,15 +397,14 @@ test("an empty attribute plan clears the player's invested ranks", async () => {
     attributes: [[17, 7]],
   });
   const attributes = game.environment.commands.setPlayerAttributes;
-  game.environment.commands.setPlayerAttributes = (agentId, ranks) => {
-    const sent = attributes(agentId, ranks);
+  game.environment.commands.setPlayerAttributes = (ranks) => {
+    attributes(ranks);
     game.setPlayer({
       agentId: 7,
       professions: [1, 2],
       skills: [1, 2, 3, 4, 5, 6, 7, 8],
       attributes: ranks,
     });
-    return sent;
   };
   const empty = { ...build(), attributes: {} };
 
@@ -469,7 +528,7 @@ test("a wrong primary profession refuses before changing difficulty", async () =
       game.environment,
       1,
     ),
-    /Koss is R, but the assigned build is for W/,
+    /Koss's assigned build is for W, but the observed primary is R/,
   );
   assert.deepEqual(game.sent, []);
 });
@@ -500,7 +559,7 @@ test("a bar the game only partly equips is applied, and says what it dropped", a
     game.environment,
     1,
   );
-  assert.equal(result.skillsSkipped, true);
+  assert.ok(result.skippedSkills.length > 0);
   // Named, so the panel can say which ones rather than "one or more".
   assert.deepEqual(result.skippedSkills, [5, 6, 7, 8]);
   assert.equal(result.completedChanges, 2, "the bar and the attributes");
@@ -541,7 +600,7 @@ test("skipped skill names accumulate across the whole team", async () => {
     game.environment,
     1,
   );
-  assert.equal(result.skillsSkipped, true);
+  assert.ok(result.skippedSkills.length > 0);
   assert.deepEqual(result.skippedSkills, [5, 6, 7, 8, 3, 4]);
 });
 
@@ -573,7 +632,7 @@ test("a bar and ranks already in place send nothing at all", async () => {
   );
   assert.deepEqual(game.sent, []);
   assert.equal(result.completedChanges, 0);
-  assert.equal(result.skillsSkipped, false);
+  assert.equal(result.skippedSkills.length, 0);
 });
 
 test("a behaviour already set is not sent again", async () => {
@@ -602,6 +661,30 @@ test("heroes that are not in the team leave before the ones that are arrive", as
   assert.equal(result.completedChanges, 2);
 });
 
+test("a concurrent roster addition cannot turn into a false Apply success", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null,
+  }]);
+  const original = game.environment.commands.setHeroBehaviour;
+  game.environment.commands.setHeroBehaviour = (hero, behaviour) => {
+    original(hero, behaviour);
+    game.set([
+      { hero: 6, agentId: 11, behaviour: 0, skills: null },
+      { hero: 7, agentId: 12, behaviour: 1, skills: null },
+    ]);
+  };
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), behaviour: "fight" })]),
+      game.environment,
+      1,
+    ),
+    /final party roster did not match the team/,
+  );
+  assert.deepEqual(game.sent, ["behaviour:11:0"]);
+});
+
 test("Devona refuses the whole Apply before another hero is removed", async () => {
   // `KickAllHeroes` is `kick(0x26)` and 0x26 is 38. One of those two meanings
   // is wrong on a build that has her and nobody has established which, so the
@@ -612,7 +695,7 @@ test("Devona refuses the whole Apply before another hero is removed", async () =
   ]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /Devona shares her hero id/,
+    /Devona cannot be removed safely/,
   );
   assert.deepEqual(game.sent, [], "and no packet was sent at all");
 });
@@ -621,7 +704,7 @@ test("applying outside an outpost is refused before anything is sent", async () 
   const outside = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], false);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), outside.environment, 1),
-    /only be applied in an outpost/,
+    /Enter a PvE outpost/,
   );
   assert.deepEqual(outside.sent, []);
 
@@ -629,7 +712,7 @@ test("applying outside an outpost is refused before anything is sent", async () 
   const unknown = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], null);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), unknown.environment, 1),
-    /has not been observed/,
+    /Waiting to confirm that this is a PvE outpost/,
   );
   assert.deepEqual(unknown.sent, []);
 });

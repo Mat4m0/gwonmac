@@ -30,6 +30,7 @@ import { ATTRIBUTES, heroLabel, PROFESSIONS } from "./heroes.js";
 import {
   SKILL_SLOTS,
   type AttributeRanks,
+  type HeroId,
   type ProfessionPair,
 } from "./library.js";
 import type {
@@ -37,26 +38,29 @@ import type {
   TeamApplyPlan,
   TeamApplyResult,
 } from "./team-apply.js";
+import {
+  preflightTeamApply,
+  teamApplyProblemMessage,
+} from "./team-apply.js";
 import type { LiveParty } from "./live-party.js";
 
 /** The commands the enhancement exposes, as this module needs them. */
 export interface TeamApplyCommands {
-  setHardMode(enabled: boolean): boolean;
-  setPlayerSecondary(agentId: number, profession: number): boolean;
-  setPlayerSkills(agentId: number, skillIds: readonly number[]): boolean;
+  setHardMode(enabled: boolean): void;
+  setPlayerSecondary(profession: number): void;
+  setPlayerSkills(skillIds: readonly number[]): void;
   setPlayerAttributes(
-    agentId: number,
     ranks: readonly (readonly [attribute: number, rank: number])[],
-  ): boolean;
-  addHero(heroId: number): boolean;
-  kickHero(heroId: number): boolean;
-  setHeroBehaviour(agentId: number, behaviour: number): boolean;
-  setHeroSecondary(agentId: number, profession: number): boolean;
-  setHeroSkills(agentId: number, skillIds: readonly number[]): boolean;
+  ): void;
+  addHero(heroId: HeroId): void;
+  kickHero(heroId: HeroId): void;
+  setHeroBehaviour(heroId: HeroId, behaviour: number): void;
+  setHeroSecondary(heroId: HeroId, profession: number): void;
+  setHeroSkills(heroId: HeroId, skillIds: readonly number[]): void;
   setHeroAttributes(
-    agentId: number,
+    heroId: HeroId,
     ranks: readonly (readonly [attribute: number, rank: number])[],
-  ): boolean;
+  ): void;
 }
 
 export interface TeamApplyEnvironment {
@@ -253,22 +257,9 @@ export async function runTeamApply(
   commandId: number,
 ): Promise<TeamApplyResult> {
   const opening = environment.party();
-  if (opening.status !== "ready") {
-    throw new Error("No party has been observed yet.");
-  }
-  if (opening.inOutpost !== true) {
-    throw new Error(
-      opening.inOutpost === false
-        ? "A team can only be applied in an outpost."
-        : "Whether this is an outpost has not been observed yet.",
-    );
-  }
-  if (opening.playRegion !== "pve") {
-    throw new Error(
-      opening.playRegion === "pvp"
-        ? "GWonMac Tools are unavailable in PvP."
-        : "GWonMac Tools are unavailable while the region is unknown.",
-    );
+  const preflight = preflightTeamApply(plan, opening);
+  if (!preflight.ready) {
+    throw new Error(`${teamApplyProblemMessage(preflight.blockers[0])} 0 changes were made.`);
   }
 
   const wanted = plan.members
@@ -276,44 +267,7 @@ export async function runTeamApply(
       member.hero !== null);
   const wantedHeroes = new Set(wanted.map((member) => member.hero));
 
-  // Preflight the complete opening party before changing it. Devona's hero id
-  // is also the client's kick-all sentinel; discovering her after removing an
-  // earlier hero would turn a refusal into a half-applied team.
-  if (opening.heroes.some(
-    (present) => present.hero === 38 && !wantedHeroes.has(present.hero),
-  )) {
-    throw new Error(
-      "Devona shares her hero id with the client's kick-all sentinel, so this "
-      + "cannot remove her. Remove her in the party window first. 0 changes "
-      + "were made.",
-    );
-  }
   const playerMember = plan.members[0];
-  if (playerMember?.build !== null && playerMember?.build !== undefined) {
-    const player = opening.player;
-    if (player === null || player.agentId === 0) {
-      throw new Error("The player's own build has not been observed yet.");
-    }
-    const problem = buildProfessionProblem(
-      "The player",
-      playerMember,
-      player.professions,
-    );
-    if (problem !== null) throw new Error(`${problem}.`);
-  }
-  // Anything already in the party can be proved before the first write. A
-  // newly added hero is checked immediately after its agent appears below.
-  for (const member of wanted) {
-    const live = opening.heroes.find((hero) => hero.hero === member.hero);
-    if (live !== undefined) {
-      const problem = buildProfessionProblem(
-        heroLabel(member.hero),
-        member,
-        live.professions,
-      );
-      if (problem !== null) throw new Error(`${problem}.`);
-    }
-  }
   let completedChanges = 0;
   const skipped = new Set<number>();
 
@@ -344,7 +298,7 @@ export async function runTeamApply(
       const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
       if ((current.professions?.[1] ?? null) !== secondary) {
         writableParty(environment);
-        environment.commands.setPlayerSecondary(current.agentId, wantedSecondary);
+        environment.commands.setPlayerSecondary(wantedSecondary);
         await confirm(
           environment,
           "the player's secondary profession",
@@ -362,9 +316,10 @@ export async function runTeamApply(
         before,
         livePlayerBar,
         () => {
-          const player = writableParty(environment).player;
-          if (player === null) throw new ApplyRefused("the player was no longer observed");
-          environment.commands.setPlayerSkills(player.agentId, skills);
+          if (writableParty(environment).player === null) {
+            throw new ApplyRefused("the player was no longer observed");
+          }
+          environment.commands.setPlayerSkills(skills);
         },
         skipped,
       )) {
@@ -376,44 +331,51 @@ export async function runTeamApply(
       const settled = (party: LiveParty) =>
         sameAttributes(party.player?.attributes, wantedRanks);
       if (!settled(environment.party())) {
-        const player = writableParty(environment).player;
-        if (player === null) throw new ApplyRefused("the player was no longer observed");
-        environment.commands.setPlayerAttributes(player.agentId, ranks);
+        if (writableParty(environment).player === null) {
+          throw new ApplyRefused("the player was no longer observed");
+        }
+        environment.commands.setPlayerAttributes(ranks);
         await confirm(environment, "the player's attributes", settled);
         completedChanges += 1;
       }
     }
 
-    // Out first, so a full party has room for the heroes coming in.
-    for (const present of opening.heroes) {
-      if (wantedHeroes.has(present.hero)) continue;
-      writableParty(environment);
-      environment.commands.kickHero(present.hero);
+    let rosterActions = 0;
+    for (;;) {
+      const current = writableParty(environment);
+      const unwanted = current.heroes.find(({ hero }) => !wantedHeroes.has(hero));
+      if (unwanted) {
+        if (unwanted.hero === 38) {
+          throw new ApplyRefused("Devona cannot be removed safely; remove her manually");
+        }
+        if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
+        environment.commands.kickHero(unwanted.hero);
+        await confirm(
+          environment,
+          `removing ${heroLabel(unwanted.hero)}`,
+          (party) => !party.heroes.some((hero) => hero.hero === unwanted.hero),
+        );
+        completedChanges += 1;
+        continue;
+      }
+      const missing = wanted.find(
+        (member) => !current.heroes.some(({ hero }) => hero === member.hero),
+      );
+      if (!missing) break;
+      if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
+      environment.commands.addHero(missing.hero);
       await confirm(
         environment,
-        `removing ${heroLabel(present.hero)}`,
-        (party) => !party.heroes.some((hero) => hero.hero === present.hero),
+        `adding ${heroLabel(missing.hero)}`,
+        (party) => party.heroes.some(
+          (hero) => hero.hero === missing.hero && hero.agentId > 0),
       );
       completedChanges += 1;
     }
 
     for (const member of wanted) {
-      if (!environment.party().heroes.some((hero) => hero.hero === member.hero)) {
-        writableParty(environment);
-        environment.commands.addHero(member.hero);
-        await confirm(
-          environment,
-          `adding ${heroLabel(member.hero)}`,
-          // Both the identity and the agent id: the hero appears in the roster
-          // before it has one, and every command below is keyed by it.
-          (party) => party.heroes.some(
-            (hero) => hero.hero === member.hero && hero.agentId > 0),
-        );
-        completedChanges += 1;
-      }
-      const agentId = environment.party().heroes
-        .find((hero) => hero.hero === member.hero)?.agentId ?? 0;
-      if (agentId === 0) {
+      if ((environment.party().heroes
+        .find((hero) => hero.hero === member.hero)?.agentId ?? 0) === 0) {
         throw new ApplyRefused(
           `${heroLabel(member.hero)} has no agent to command`,
         );
@@ -448,7 +410,7 @@ export async function runTeamApply(
         const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
         if ((live?.professions?.[1] ?? null) !== secondary) {
           writableParty(environment);
-          environment.commands.setHeroSecondary(agentId, wantedSecondary);
+          environment.commands.setHeroSecondary(member.hero, wantedSecondary);
           await confirm(
             environment,
             `${heroLabel(member.hero)}'s secondary profession`,
@@ -469,7 +431,7 @@ export async function runTeamApply(
           (party) => liveBar(party, member.hero),
           () => {
             writableParty(environment);
-            environment.commands.setHeroSkills(agentId, skills);
+            environment.commands.setHeroSkills(member.hero, skills);
           },
           skipped,
         )) {
@@ -484,7 +446,7 @@ export async function runTeamApply(
         );
         if (!settled(environment.party())) {
           writableParty(environment);
-          environment.commands.setHeroAttributes(agentId, ranks);
+          environment.commands.setHeroAttributes(member.hero, ranks);
           await confirm(
             environment,
             `${heroLabel(member.hero)}'s attributes`,
@@ -500,7 +462,7 @@ export async function runTeamApply(
           .find((hero) => hero.hero === member.hero);
         if (live?.behaviour !== member.behaviour) {
           writableParty(environment);
-          environment.commands.setHeroBehaviour(agentId, behaviour);
+          environment.commands.setHeroBehaviour(member.hero, behaviour);
           await confirm(
             environment,
             `${heroLabel(member.hero)}'s behaviour`,
@@ -510,6 +472,11 @@ export async function runTeamApply(
           completedChanges += 1;
         }
       }
+    }
+    const finalHeroes = writableParty(environment).heroes.map(({ hero }) => hero);
+    if (finalHeroes.length !== wantedHeroes.size
+      || finalHeroes.some((hero) => !wantedHeroes.has(hero))) {
+      throw new ApplyRefused("the final party roster did not match the team");
     }
   } catch (cause) {
     if (cause instanceof ApplyRefused) {
@@ -526,7 +493,6 @@ export async function runTeamApply(
   return Object.freeze({
     commandId,
     completedChanges,
-    skillsSkipped: skipped.size > 0,
     // Named, not counted. "Guild Wars skipped a skill" is not actionable; the
     // skill it skipped tells the player it is one they have not unlocked.
     skippedSkills: Object.freeze([...skipped]),

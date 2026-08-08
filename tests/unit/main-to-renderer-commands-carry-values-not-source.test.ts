@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import * as contracts from "../../src/shared/contracts.ts";
+import * as enhancementContracts from "../../src/shared/enhancement-contracts.ts";
 import {
   RENDERER_INIT_ARGUMENT,
   type GwNativeApi,
@@ -23,7 +24,10 @@ import { preloadSource as generatePreload } from "../../scripts/generate-preload
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // The preload as it ships: generated from the canonical contracts, not read
 // from a checked-in copy of them.
-const preloadSource: string = generatePreload(contracts, root);
+const preloadSource: string = generatePreload({
+  ...contracts,
+  ...enhancementContracts,
+}, root);
 // The router is a classic script — index.html loads it with a `<script>` tag
 // and it exports nothing — so the only way to drive it is to run its text. It
 // is TypeScript from P3, so the text is transpiled here under the same target

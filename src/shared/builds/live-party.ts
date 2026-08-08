@@ -86,6 +86,20 @@ export type ToolboxObservation = Readonly<{
     readonly hardMode?: boolean | null;
     readonly slotCount?: number;
     readonly unlocked?: readonly number[] | null;
+    readonly accountProfessions?: readonly Readonly<{
+      readonly hero: number;
+      readonly professions: readonly number[];
+    }>[] | null;
+    /** Bounded source facts for diagnosing an unobserved player profession. */
+    readonly playerProfessionProbe?: Readonly<{
+      readonly statePrimary: number;
+      readonly stateSecondary: number;
+      readonly attributeIdsLow: number;
+      readonly attributeIdsHigh: number;
+      readonly stateRowObserved: boolean;
+      readonly stateAccepted: boolean;
+      readonly attributeRowObserved: boolean;
+    }>;
     readonly slots?: readonly {
       readonly index: number;
       readonly occupied: boolean;
@@ -139,6 +153,11 @@ export interface LivePartyPlayer {
   readonly attributes: AttributeRanks | null;
 }
 
+export type AccountHeroObservation = Readonly<{
+  availability: "unlocked" | "locked" | "unknown";
+  professions: ProfessionPair | null;
+}>;
+
 export interface LiveParty {
   readonly status: "unavailable" | "ready";
   readonly player: LivePartyPlayer | null;
@@ -155,13 +174,8 @@ export interface LiveParty {
    * in one place.
    */
   readonly partial: boolean;
-  /**
-   * Heroes this account has unlocked, or `null` while unknown. The distinction
-   * matters: "no mercenary is unlocked" and "we have not read the account's
-   * hero table" are different claims, and only one of them may be shown as a
-   * greyed-out hero.
-   */
-  readonly unlocked: ReadonlySet<HeroId> | null;
+  /** Account-scoped facts derived from HeroInfo. Never persisted or diagnosed. */
+  readonly accountHeroes: ReadonlyMap<HeroId, AccountHeroObservation> | null;
   readonly hardMode: boolean | null;
   readonly inOutpost: boolean | null;
   readonly playRegion: PlayRegion;
@@ -175,7 +189,7 @@ const UNAVAILABLE: LiveParty = Object.freeze({
   heroCount: 0,
   heroes: Object.freeze([]),
   partial: false,
-  unlocked: null,
+  accountHeroes: null,
   hardMode: null,
   inOutpost: null,
   playRegion: "unknown",
@@ -249,7 +263,7 @@ export function liveParty(observation: ToolboxObservation): LiveParty {
     heroCount,
     heroes: Object.freeze(heroes),
     partial: heroes.length < heroCount,
-    unlocked: null,
+    accountHeroes: null,
     hardMode: null,
     inOutpost: null,
     playRegion,
@@ -364,11 +378,22 @@ function fromRegion(
     heroCount: counted,
     heroes: Object.freeze(heroes),
     partial: heroes.length < counted,
-    unlocked: region.unlockObserved === true && region.unlocked
-      ? Object.freeze(new Set(
-          region.unlocked.filter((id) => HERO_BY_ID.has(id as HeroId))
-            .map((id) => id as HeroId),
-        ))
+    accountHeroes: region.unlockObserved === true && region.unlocked
+      ? Object.freeze(new Map([...HERO_BY_ID].map(([id, facts]) => {
+          const present = heroes.find((hero) => hero.hero === id);
+          const account = region.accountProfessions?.find((entry) => entry.hero === id);
+          return [id, Object.freeze({
+            availability: region.unlocked?.includes(id)
+              ? "unlocked"
+              : facts.kind === "mercenary" ? "unknown" : "locked",
+            professions: account
+              ? professionPair(
+                  account.professions[0] ?? 0,
+                  account.professions[1] ?? 0,
+                )
+              : present?.professions ?? null,
+          })] as const;
+        })))
       : null,
     hardMode: region.hardMode ?? null,
     inOutpost: region.inOutpost ?? null,
@@ -427,10 +452,9 @@ const EMPTY_SLOT: TeamSlot = Object.freeze({
  *    that genuinely invested nothing. There is no honest place to put that, so
  *    the hero keeps their slot and gets no build.
  *
- * Returns `null` when there is nothing to capture: no observation, or an
- * observed party with no hero in it. A team of one empty player slot is not a
- * team, and saving one would leave the library holding the moment the player
- * happened to press the button.
+ * Returns `null` when there is nothing identifiable to capture. A solo player
+ * is a useful team when their build was observed, so the player alone is
+ * sufficient; a count of unnamed heroes with no player or hero facts is not.
  */
 export function captureParty(
   live: LiveParty,
@@ -546,10 +570,7 @@ export function captureParty(
       id: teamId(mint("team")),
       name,
       tags: [],
-      // Not `"normal"`. Hard mode is unobserved, and `"none"` is the spelling
-      // for having never said — claiming normal would be a setting the player
-      // did not choose showing up as one they did.
-      mode: "none",
+      mode: live.hardMode === null ? "none" : live.hardMode ? "hard" : "normal",
       favourite: false,
       lastUsed: null,
       notes: ["Captured from the party you were in.", ...gaps.map((gap) => `• ${gap}`)]

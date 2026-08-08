@@ -111,9 +111,7 @@ test("every field the companion has not published reads as not observed", () => 
 test("account and instance facts stay unknown rather than defaulting to false", () => {
   const party = liveParty({ status: "ready", partyObserved: true, heroCount: 0 });
 
-  // `unlocked: null` and an empty set are different claims. Only one of them
-  // may grey a hero out in the picker.
-  assert.equal(party.unlocked, null, "unlocked heroes");
+  assert.equal(party.accountHeroes, null, "account hero facts");
   assert.equal(party.hardMode, null, "hard mode");
   assert.equal(party.inOutpost, null, "in an outpost");
 });
@@ -237,7 +235,9 @@ test("the full roster wins over the summary, and carries what was read", () => {
   assert.equal(althea?.behaviour, null);
   assert.equal(althea?.skills, null);
 
-  assert.deepEqual([...party.unlocked ?? []], [heroId(38), heroId(39)]);
+  assert.equal(party.accountHeroes?.get(heroId(38))?.availability, "unlocked");
+  assert.deepEqual(party.accountHeroes?.get(heroId(38))?.professions, ["W", "R"]);
+  assert.equal(party.accountHeroes?.get(heroId(39))?.availability, "unlocked");
 });
 
 test("a region whose walk was rejected is not an empty party", () => {

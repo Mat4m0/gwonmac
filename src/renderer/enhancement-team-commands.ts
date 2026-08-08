@@ -64,15 +64,25 @@ export function createTeamApplyCommands({
     words.set(values);
     return payloadPointer + offset * Uint32Array.BYTES_PER_ELEMENT;
   };
-  const playerAgent = (
-    agentId: number,
-    observed: ToolboxObservation,
-  ) => {
-    agent(agentId);
+  const playerAgent = (observed: ToolboxObservation) => {
     const player = observed.party?.slots?.[0];
-    if (!player?.occupied || player.agentId !== agentId) {
-      throw new Error("that agent is not the observed player");
+    if (!player?.occupied || !player.agentId) {
+      throw new Error("the observed player has no commandable agent");
     }
+    agent(player.agentId);
+    return player.agentId;
+  };
+  const heroAgent = (heroId: number, observed: ToolboxObservation) => {
+    hero(heroId);
+    const member = observed.party?.slots?.find(
+      (slot) => slot.occupied && slot.hero === heroId,
+    );
+    if (!member?.agentId) throw new Error(`hero ${heroId} is not in the observed party`);
+    agent(member.agentId);
+    return member.agentId;
+  };
+  const sent = (result: number) => {
+    if (result !== 1) throw new Error("Guild Wars refused the command packet");
   };
   const skills = (agentId: number, skillIds: readonly number[]) => {
     if (skillIds.length > SKILL_WORDS) {
@@ -82,7 +92,7 @@ export function createTeamApplyCommands({
       throw new Error("every skill must be a non-negative id");
     }
     const at = payload(0, skillIds);
-    return send(93, agentId, skillIds.length, at, 0) === 1;
+    sent(send(93, agentId, skillIds.length, at, 0));
   };
   const attributes = (
     agentId: number,
@@ -102,7 +112,7 @@ export function createTeamApplyCommands({
       SKILL_WORDS + ATTRIBUTE_WORDS,
       ranks.map(([, rank]) => rank),
     );
-    return send(16, agentId, ranks.length, ids, levels) === 1;
+    sent(send(16, agentId, ranks.length, ids, levels));
   };
 
   return Object.freeze({
@@ -111,63 +121,52 @@ export function createTeamApplyCommands({
       if (typeof enabled !== "boolean") {
         throw new Error("Hard Mode must be enabled or disabled");
       }
-      return send(155, enabled ? 1 : 0, 0, 0, 0) === 1;
+      sent(send(155, enabled ? 1 : 0, 0, 0, 0));
     },
-    setPlayerSecondary(agentId: number, profession: number) {
+    setPlayerSecondary(profession: number) {
       const observed = ready();
-      playerAgent(agentId, observed);
+      const agentId = playerAgent(observed);
       validProfession(profession);
-      return send(65, agentId, profession, 0, 0) === 1;
+      sent(send(65, agentId, profession, 0, 0));
     },
-    setPlayerSkills(agentId: number, skillIds: readonly number[]) {
-      const observed = ready();
-      playerAgent(agentId, observed);
-      return skills(agentId, skillIds);
+    setPlayerSkills(skillIds: readonly number[]) {
+      skills(playerAgent(ready()), skillIds);
     },
     setPlayerAttributes(
-      agentId: number,
       ranks: readonly (readonly [attribute: number, rank: number])[],
     ) {
-      const observed = ready();
-      playerAgent(agentId, observed);
-      return attributes(agentId, ranks);
+      attributes(playerAgent(ready()), ranks);
     },
     addHero(heroId: number) {
       ready();
       hero(heroId);
-      return send(30, heroId, 0, 0, 0) === 1;
+      sent(send(30, heroId, 0, 0, 0));
     },
     kickHero(heroId: number) {
       ready();
       hero(heroId);
-      return send(31, heroId, 0, 0, 0) === 1;
+      sent(send(31, heroId, 0, 0, 0));
     },
-    setHeroBehaviour(agentId: number, behaviour: number) {
-      ready();
-      agent(agentId);
+    setHeroBehaviour(heroId: number, behaviour: number) {
+      const agentId = heroAgent(heroId, ready());
       if (!Number.isInteger(behaviour) || behaviour < 0 || behaviour > 2) {
         throw new Error(`behaviour ${behaviour} is not one the client defines`);
       }
-      return send(21, agentId, behaviour, 0, 0) === 1;
+      sent(send(21, agentId, behaviour, 0, 0));
     },
-    setHeroSecondary(agentId: number, profession: number) {
-      ready();
-      agent(agentId);
+    setHeroSecondary(heroId: number, profession: number) {
+      const agentId = heroAgent(heroId, ready());
       validProfession(profession);
-      return send(65, agentId, profession, 0, 0) === 1;
+      sent(send(65, agentId, profession, 0, 0));
     },
-    setHeroSkills(agentId: number, skillIds: readonly number[]) {
-      ready();
-      agent(agentId);
-      return skills(agentId, skillIds);
+    setHeroSkills(heroId: number, skillIds: readonly number[]) {
+      skills(heroAgent(heroId, ready()), skillIds);
     },
     setHeroAttributes(
-      agentId: number,
+      heroId: number,
       ranks: readonly (readonly [attribute: number, rank: number])[],
     ) {
-      ready();
-      agent(agentId);
-      return attributes(agentId, ranks);
+      attributes(heroAgent(heroId, ready()), ranks);
     },
   });
 }

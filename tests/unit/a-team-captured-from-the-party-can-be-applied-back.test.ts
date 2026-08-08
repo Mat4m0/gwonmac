@@ -330,11 +330,20 @@ test("behaviour is carried, never defaulted to Guard", () => {
   );
 });
 
-test("the mode is never said, because nobody read it", () => {
-  const captured = captureParty(party([hero(1, 38)]), "Current party", counter());
-  // `"normal"` would be a setting the player did not choose showing up as one
-  // they did — and `"hard"` is refused by apply outright.
-  assert.equal(captured?.team.mode, "none");
+test("capture preserves unknown, Normal, and Hard Mode observations", () => {
+  const observed = party([hero(1, 38)]);
+  assert.equal(
+    captureParty(observed, "Current party", counter())?.team.mode,
+    "none",
+  );
+  assert.equal(
+    captureParty({ ...observed, hardMode: false }, "Current party", counter())?.team.mode,
+    "normal",
+  );
+  assert.equal(
+    captureParty({ ...observed, hardMode: true }, "Current party", counter())?.team.mode,
+    "hard",
+  );
 });
 
 test("there is nothing to capture without a party, and capture says no", () => {
