@@ -127,12 +127,14 @@ test("applies a fresh account team with one hero", async ({ page }) => {
   await hero.locator(".build-picker select").selectOption({ label: "Discord Necro" });
   await hero.getByRole("button", { name: /Hero controls for Koss/ }).click();
   await hero.getByRole("button", { name: /1 Discord/ }).click();
+  await hero.getByRole("button", { name: /1 Discord/ }).click();
+  await player.locator(".build-picker select").selectOption("");
 
   await page.getByRole("button", { name: "Apply team" }).click();
   await expect(page.getByText(/Team applied/)).toBeVisible();
   await expect(
     page.getByText(
-      /Applies the roster, difficulty, builds, behavior, and disabled skills/,
+      /Applies the hero roster, secondary professions, skill bars, attributes/,
     ),
   ).toBeVisible();
 });

@@ -26,6 +26,7 @@ import {
 import {
   LIBRARY_VERSION,
   PARTY_SIZE,
+  mapTeamSlots,
   type BuildLibrary,
 } from "../../src/shared/builds/library.ts";
 import { resolveTeamApplyPlan } from "../../src/shared/builds/team-apply.ts";
@@ -284,6 +285,42 @@ test("disabled slots survive when the build they point at does", () => {
   );
   assert.ok(captured);
   assert.deepEqual(captured.team.slots[1]?.disabled, [0, 2]);
+
+  const resolution = resolveTeamApplyPlan(
+    captured.team,
+    libraryOf(captured),
+    (build) => validateBuild(build, anySkill),
+  );
+  assert.equal(resolution.valid, false);
+  assert.ok(
+    !resolution.valid
+      && resolution.problems.some(({ rule }) => rule === "disabled-skills"),
+    "the value is refused until its setter is certified, not silently ignored",
+  );
+});
+
+test("a stored player build is refused until the player setter is certified", () => {
+  const captured = captureParty(party([hero(1, 38)]), "Current party", counter());
+  assert.ok(captured);
+  const playerBuild = captured.builds[0];
+  assert.ok(playerBuild);
+  const team = {
+    ...captured.team,
+    slots: mapTeamSlots(captured.team.slots, (slot, position) =>
+      position === 0 ? { ...slot, build: playerBuild.id } : slot),
+  };
+
+  const resolution = resolveTeamApplyPlan(
+    team,
+    libraryOf(captured),
+    (build) => validateBuild(build, anySkill),
+  );
+  assert.equal(resolution.valid, false);
+  assert.ok(
+    !resolution.valid
+      && resolution.problems.some(({ rule }) => rule === "player-build"),
+    "slot 0 cannot pass through a runner that does not apply it",
+  );
 });
 
 test("behaviour is carried, never defaulted to Guard", () => {

@@ -355,7 +355,11 @@ const apply = () => props.controller.applyTeam(props.team);
       <span v-if="controller.applyUnavailable" class="apply-unavailable">
         {{ controller.applyUnavailable }}
       </span>
-      <span v-else>Applies the roster, difficulty, builds, behavior, and disabled skills.</span>
+      <span v-else>
+        Applies the hero roster, secondary professions, skill bars, attributes,
+        and behavior. Player builds, difficulty, and disabled skills are not
+        applied yet.
+      </span>
       <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
       <button
         class="ui-button"

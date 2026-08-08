@@ -61,12 +61,14 @@ export interface TeamApplyResult {
 export type TeamApplyProblem =
   | { readonly rule: "hard-mode" }
   | { readonly rule: "player-slot" }
+  | { readonly rule: "player-build" }
   | { readonly rule: "missing-hero"; readonly slot: number }
   | { readonly rule: "missing-behaviour"; readonly slot: number }
   | { readonly rule: "unknown-hero"; readonly slot: number }
   | { readonly rule: "duplicate-hero"; readonly slot: number }
   | { readonly rule: "party-gap"; readonly slot: number }
   | { readonly rule: "disabled-without-build"; readonly slot: number }
+  | { readonly rule: "disabled-skills"; readonly slot: number }
   | { readonly rule: "invalid-build"; readonly slot: number };
 
 export type TeamApplyResolution =
@@ -130,6 +132,12 @@ export function resolveTeamApplyPlan(
       ) {
         problems.push({ rule: "invalid-build", slot: index });
       }
+      if (build !== null) {
+        // The player observer and certified setters land together. Until then,
+        // accepting this plan would silently count a stored player build that
+        // the runner never applies.
+        problems.push({ rule: "player-build" });
+      }
       members.push({
         hero: null,
         build,
@@ -161,6 +169,11 @@ export function resolveTeamApplyPlan(
     }
     if (build === null && slot.disabled.length !== 0) {
       problems.push({ rule: "disabled-without-build", slot: index });
+    }
+    if (build !== null && slot.disabled.length !== 0) {
+      // The setter is not certified yet. Refuse the value instead of carrying
+      // it through a plan whose runner would ignore it.
+      problems.push({ rule: "disabled-skills", slot: index });
     }
     if (slot.build !== null && build === null) {
       problems.push({ rule: "invalid-build", slot: index });

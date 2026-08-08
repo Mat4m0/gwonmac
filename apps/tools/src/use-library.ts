@@ -575,11 +575,19 @@ export function useLibrary(host: ToolsHost) {
         (build, context) => validateInContext(build, context),
       );
       if (!resolution.valid) {
-        showNotice(resolution.problems.some(({ rule }) => rule === "hard-mode")
-          ? "Hard-mode team application is not available yet."
-          : `${resolution.problems.length} team ${
-            resolution.problems.length === 1 ? "assignment needs" : "assignments need"
-          } attention before Apply.`, "warning");
+        const rules = new Set(resolution.problems.map(({ rule }) => rule));
+        showNotice(
+          rules.has("hard-mode")
+            ? "Hard-mode team application is not available yet."
+            : rules.has("player-build")
+              ? "Applying your own build is not available yet. Remove it from slot 1 first."
+              : rules.has("disabled-skills")
+                ? "Applying disabled hero skills is not available yet. Enable every slot first."
+                : `${resolution.problems.length} team ${
+                  resolution.problems.length === 1 ? "assignment needs" : "assignments need"
+                } attention before Apply.`,
+          "warning",
+        );
         return null;
       }
       const result = await host.applyTeam(resolution.plan);

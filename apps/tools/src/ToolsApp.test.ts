@@ -37,7 +37,9 @@ function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
                 ...team,
                 mode: "normal" as const,
                 slots: mapTeamSlots(team.slots, (slot, slotIndex) => slotIndex === 0
-                  ? slot
+                  ? { ...slot, build: null }
+                  : slotIndex === 1
+                    ? { ...slot, disabled: [] }
                   : {
                       ...slot,
                       hero: null,
@@ -265,6 +267,8 @@ describe("ToolsApp", () => {
 
   it("blocks Apply when a hero has a player-only skill", async () => {
     const wrapper = await workbench();
+    await wrapper.findAll<HTMLSelectElement>(".build-picker select")[0]!
+      .setValue("");
     await wrapper
       .findAll(".team-controls .ui-segment button")
       .find((button) => button.text() === "Normal")!
