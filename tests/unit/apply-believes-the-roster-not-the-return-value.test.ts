@@ -237,6 +237,25 @@ test("the player's build is applied before hero work and confirmed field by fiel
   assert.equal(result.completedChanges, 3);
 });
 
+test("a wrong player primary refuses before changing difficulty", async () => {
+  const game = harness([]);
+  game.setPlayer({
+    agentId: 7,
+    professions: [2, 1],
+    skills: null,
+    attributes: [],
+  });
+  await assert.rejects(
+    runTeamApply(
+      { mode: "hard", members: [member({ build: build() })] },
+      game.environment,
+      2,
+    ),
+    /The player is R, but the assigned build is for W/,
+  );
+  assert.deepEqual(game.sent, []);
+});
+
 test("a hero the game never adds is a refusal, however cheerful the command", async () => {
   const game = harness([]);
   await assert.rejects(
@@ -309,6 +328,58 @@ test("attributes the game never applies are a refusal too", async () => {
   assert.deepEqual(game.sent.at(-1), "attributes:11:17=7,19=12");
 });
 
+test("an empty attribute plan clears the player's invested ranks", async () => {
+  const game = harness([]);
+  game.setPlayer({
+    agentId: 7,
+    professions: [1, 2],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7]],
+  });
+  const attributes = game.environment.commands.setPlayerAttributes;
+  game.environment.commands.setPlayerAttributes = (agentId, ranks) => {
+    const sent = attributes(agentId, ranks);
+    game.setPlayer({
+      agentId: 7,
+      professions: [1, 2],
+      skills: [1, 2, 3, 4, 5, 6, 7, 8],
+      attributes: ranks,
+    });
+    return sent;
+  };
+  const empty = { ...build(), attributes: {} };
+
+  const result = await runTeamApply(
+    { mode: "none", members: [member({ build: empty })] },
+    game.environment,
+    1,
+  );
+  assert.deepEqual(game.sent, ["player-attributes:7:"]);
+  assert.equal(result.completedChanges, 1);
+});
+
+test("an empty attribute plan clears a hero's invested ranks", async () => {
+  const initial = {
+    hero: 6,
+    agentId: 11,
+    behaviour: 1,
+    professions: [1, 2],
+    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    attributes: [[17, 7]] as readonly (readonly number[])[],
+  };
+  const game = harness([initial]);
+  game.react("attributes:11:", [{ ...initial, attributes: [] }]);
+  const empty = { ...build(), attributes: {} };
+
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), build: empty, behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+  assert.deepEqual(game.sent, ["attributes:11:"]);
+  assert.equal(result.completedChanges, 1);
+});
+
 // Changing the secondary resets the bar and the attribute lines that belonged
 // to the old profession, so it has to happen before either of them. A run that
 // wrote skills first would apply them and then throw them away.
@@ -374,23 +445,33 @@ test("a secondary the game never changes is a refusal, not a bar written anyway"
   assert.deepEqual(game.sent, ["secondary:11:2"], "and the bar was never sent");
 });
 
-test("professions nobody read are not treated as a mismatch", async () => {
-  // Sending a change that was not asked for costs a reset of the bar we are
-  // about to write, so an unread secondary leaves it alone.
+test("unobserved professions refuse before the first command", async () => {
   const game = harness([{
     hero: 6, agentId: 11, behaviour: 1, skills: null, professions: null,
   }]);
-  game.react("skills:11:1,2,3,4,5,6,7,8", [{
-    hero: 6, agentId: 11, behaviour: 1, professions: null,
-    skills: [1, 2, 3, 4, 5, 6, 7, 8],
+  await assert.rejects(
+    runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
+    /Koss's professions have not been observed yet/,
+  );
+  assert.deepEqual(game.sent, []);
+});
+
+test("a wrong primary profession refuses before changing difficulty", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [2, 1],
   }]);
-  game.react("attributes:11:17=7,19=12", [{
-    hero: 6, agentId: 11, behaviour: 1, professions: null,
-    skills: [1, 2, 3, 4, 5, 6, 7, 8],
-    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
-  }]);
-  await runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1);
-  assert.equal(game.sent.some((one) => one.startsWith("secondary:")), false);
+  await assert.rejects(
+    runTeamApply(
+      { mode: "hard", members: [
+        member(),
+        member({ hero: heroId(6), build: build() }),
+      ] },
+      game.environment,
+      1,
+    ),
+    /Koss is R, but the assigned build is for W/,
+  );
+  assert.deepEqual(game.sent, []);
 });
 
 // The bug the panel showed: change a hero's secondary, send a bar with skills
@@ -423,6 +504,45 @@ test("a bar the game only partly equips is applied, and says what it dropped", a
   // Named, so the panel can say which ones rather than "one or more".
   assert.deepEqual(result.skippedSkills, [5, 6, 7, 8]);
   assert.equal(result.completedChanges, 2, "the bar and the attributes");
+});
+
+test("skipped skill names accumulate across the whole team", async () => {
+  const first = {
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [90, 91, 92, 93, 94, 95, 96, 97],
+  };
+  const second = {
+    hero: 7, agentId: 12, behaviour: 1, professions: [1, 2],
+    skills: [80, 81, 82, 83, 84, 85, 86, 87],
+  };
+  const game = harness([first, second]);
+  const firstPartial = { ...first, skills: [1, 2, 3, 4, 94, 95, 96, 97] };
+  game.react("skills:11:1,2,3,4,5,6,7,8", [firstPartial, second]);
+  game.react("attributes:11:17=7,19=12", [{
+    ...firstPartial,
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }, second]);
+  const firstDone = {
+    ...firstPartial,
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  };
+  const secondPartial = { ...second, skills: [1, 2, 82, 83, 5, 6, 7, 8] };
+  game.react("skills:12:1,2,3,4,5,6,7,8", [firstDone, secondPartial]);
+  game.react("attributes:12:17=7,19=12", [firstDone, {
+    ...secondPartial,
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  }]);
+
+  const result = await runTeamApply(
+    plan([
+      member({ hero: heroId(6), build: build() }),
+      member({ hero: heroId(7), build: build() }),
+    ]),
+    game.environment,
+    1,
+  );
+  assert.equal(result.skillsSkipped, true);
+  assert.deepEqual(result.skippedSkills, [5, 6, 7, 8, 3, 4]);
 });
 
 test("a bar that never moves is still a refusal", async () => {

@@ -27,7 +27,11 @@
  * that hero four kept yesterday's bar.
  */
 import { ATTRIBUTES, heroLabel, PROFESSIONS } from "./heroes.js";
-import { SKILL_SLOTS } from "./library.js";
+import {
+  SKILL_SLOTS,
+  type AttributeRanks,
+  type ProfessionPair,
+} from "./library.js";
 import type {
   TeamApplyMember,
   TeamApplyPlan,
@@ -169,6 +173,74 @@ function skillIds(member: TeamApplyMember): readonly number[] {
 }
 
 /**
+ * Applies one bar and accepts the stable partial bar Guild Wars publishes when
+ * the account cannot equip every requested skill. Every skipped id is added to
+ * the operation-wide set, so a later hero cannot erase an earlier refusal.
+ */
+async function applySkillBar(
+  environment: TeamApplyEnvironment,
+  what: string,
+  wanted: readonly number[],
+  before: readonly number[] | null,
+  read: (party: LiveParty) => readonly number[] | null,
+  send: () => void,
+  skipped: Set<number>,
+): Promise<boolean> {
+  if (before !== null && sameBar(before, wanted)) return false;
+  send();
+  let steady: readonly number[] | null = null;
+  await confirm(
+    environment,
+    what,
+    (party) => {
+      const bar = read(party);
+      if (bar === null) return false;
+      if (sameBar(bar, wanted)) return true;
+      if (before !== null && sameBar(bar, before)) return false;
+      if (steady === null || !sameBar(steady, bar)) {
+        steady = bar;
+        return false;
+      }
+      wanted.forEach((skill, slot) => {
+        if (skill !== 0 && bar[slot] !== skill) skipped.add(skill);
+      });
+      return true;
+    },
+    send,
+  );
+  return true;
+}
+
+function buildProfessionProblem(
+  subject: string,
+  member: TeamApplyMember,
+  professions: ProfessionPair | null,
+): string | null {
+  if (member.build === null) return null;
+  if (professions === null) {
+    return `${subject}'s professions have not been observed yet`;
+  }
+  if (professions[0] !== member.build.professions[0]) {
+    return `${subject} is ${professions[0]}, but the assigned build is for `
+      + member.build.professions[0];
+  }
+  return null;
+}
+
+function sameAttributes(
+  live: AttributeRanks | null | undefined,
+  wanted: AttributeRanks,
+): boolean {
+  if (live === null || live === undefined) return false;
+  const names = new Set([
+    ...Object.keys(live),
+    ...Object.keys(wanted),
+  ] as (keyof AttributeRanks)[]);
+  return [...names].every((name) =>
+    (live[name] ?? 0) === (wanted[name] ?? 0));
+}
+
+/**
  * Applies `plan`, or refuses.
  *
  * The order is GWToolbox++'s, for the reason it chose it: a hero has no agent
@@ -216,9 +288,34 @@ export async function runTeamApply(
       + "were made.",
     );
   }
+  const playerMember = plan.members[0];
+  if (playerMember?.build !== null && playerMember?.build !== undefined) {
+    const player = opening.player;
+    if (player === null || player.agentId === 0) {
+      throw new Error("The player's own build has not been observed yet.");
+    }
+    const problem = buildProfessionProblem(
+      "The player",
+      playerMember,
+      player.professions,
+    );
+    if (problem !== null) throw new Error(`${problem}.`);
+  }
+  // Anything already in the party can be proved before the first write. A
+  // newly added hero is checked immediately after its agent appears below.
+  for (const member of wanted) {
+    const live = opening.heroes.find((hero) => hero.hero === member.hero);
+    if (live !== undefined) {
+      const problem = buildProfessionProblem(
+        heroLabel(member.hero),
+        member,
+        live.professions,
+      );
+      if (problem !== null) throw new Error(`${problem}.`);
+    }
+  }
   let completedChanges = 0;
-  let skillsSkipped = false;
-  let skipped: readonly number[] = [];
+  const skipped = new Set<number>();
 
   try {
     if (plan.mode !== "none") {
@@ -238,21 +335,14 @@ export async function runTeamApply(
       }
     }
 
-    const playerMember = plan.members[0];
     if (playerMember?.build !== null && playerMember?.build !== undefined) {
       const current = writableParty(environment).player;
       if (current === null || current.agentId === 0) {
         throw new ApplyRefused("the player's own build was not observed");
       }
-      const [primary, secondary] = playerMember.build.professions;
-      if (current.professions !== null && current.professions[0] !== primary) {
-        throw new ApplyRefused(
-          `the player is ${current.professions[0]}, but this build is for ${primary}`,
-        );
-      }
+      const [, secondary] = playerMember.build.professions;
       const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
-      if (current.professions !== null
-        && (current.professions[1] ?? null) !== secondary) {
+      if ((current.professions?.[1] ?? null) !== secondary) {
         writableParty(environment);
         environment.commands.setPlayerSecondary(current.agentId, wantedSecondary);
         await confirm(
@@ -265,47 +355,27 @@ export async function runTeamApply(
 
       const skills = skillIds(playerMember);
       const before = livePlayerBar(environment.party());
-      if (before === null || !sameBar(before, skills)) {
-        const send = () => {
+      if (await applySkillBar(
+        environment,
+        "the player's skill bar",
+        skills,
+        before,
+        livePlayerBar,
+        () => {
           const player = writableParty(environment).player;
           if (player === null) throw new ApplyRefused("the player was no longer observed");
           environment.commands.setPlayerSkills(player.agentId, skills);
-        };
-        send();
-        let steady: readonly number[] | null = null;
-        await confirm(
-          environment,
-          "the player's skill bar",
-          (party) => {
-            const bar = livePlayerBar(party);
-            if (bar === null) return false;
-            if (sameBar(bar, skills)) return true;
-            if (before !== null && sameBar(bar, before)) return false;
-            if (steady === null || !sameBar(steady, bar)) {
-              steady = bar;
-              return false;
-            }
-            skipped = skills
-              .map((skill, slot) => (skill !== 0 && bar[slot] !== skill ? skill : 0))
-              .filter((skill) => skill !== 0);
-            skillsSkipped = skipped.length > 0;
-            return true;
-          },
-          send,
-        );
+        },
+        skipped,
+      )) {
         completedChanges += 1;
       }
 
       const ranks = attributePairs(playerMember);
       const wantedRanks = playerMember.build.attributes;
-      const settled = (party: LiveParty) => {
-        const live = party.player?.attributes;
-        return live !== null && live !== undefined
-          && Object.entries(wantedRanks).every(([name, rank]) =>
-            rank === undefined || rank === 0
-            || live[name as keyof typeof wantedRanks] === rank);
-      };
-      if (ranks.length > 0 && !settled(environment.party())) {
+      const settled = (party: LiveParty) =>
+        sameAttributes(party.player?.attributes, wantedRanks);
+      if (!settled(environment.party())) {
         const player = writableParty(environment).player;
         if (player === null) throw new ApplyRefused("the player was no longer observed");
         environment.commands.setPlayerAttributes(player.agentId, ranks);
@@ -350,6 +420,19 @@ export async function runTeamApply(
       }
 
       if (member.build !== null) {
+        const observed = writableParty(environment).heroes
+          .find((hero) => hero.hero === member.hero);
+        if (observed === undefined) {
+          throw new ApplyRefused(`${heroLabel(member.hero)} was no longer observed`);
+        }
+        const professionProblem = buildProfessionProblem(
+          heroLabel(member.hero),
+          member,
+          observed.professions,
+        );
+        if (professionProblem !== null) {
+          throw new ApplyRefused(professionProblem);
+        }
         // The secondary profession comes first, and it is not optional.
         //
         // Changing it resets the bar and the attribute lines that belonged to
@@ -357,19 +440,13 @@ export async function runTeamApply(
         // and then throw them away. GWCA's `LoadSkillTemplate` runs the same
         // three in this order for the same reason.
         //
-        // Only the secondary. A hero's *primary* is who they are and no
-        // message changes it — a build whose primary the hero does not have is
-        // a build for a different hero, and the client drops the skills it
-        // cannot use, which is what `skillsSkipped` reports.
+        // Only the secondary. A hero's primary is immutable; the preflight
+        // above refuses a build for a different primary before reaching here.
         const [, secondary] = member.build.professions;
         const live = environment.party().heroes
           .find((hero) => hero.hero === member.hero);
         const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
-        // Unread professions are not a mismatch. Sending a change nobody asked
-        // for costs a wasted reset of the bar we are about to write.
-        if (live?.professions !== null
-          && live?.professions !== undefined
-          && (live.professions[1] ?? null) !== secondary) {
+        if ((live?.professions?.[1] ?? null) !== secondary) {
           writableParty(environment);
           environment.commands.setHeroSecondary(agentId, wantedSecondary);
           await confirm(
@@ -384,61 +461,28 @@ export async function runTeamApply(
 
         const skills = skillIds(member);
         const before = liveBar(environment.party(), member.hero);
-        if (before === null || !sameBar(before, skills)) {
-          const send = () => {
+        if (await applySkillBar(
+          environment,
+          `${heroLabel(member.hero)}'s skill bar`,
+          skills,
+          before,
+          (party) => liveBar(party, member.hero),
+          () => {
             writableParty(environment);
             environment.commands.setHeroSkills(agentId, skills);
-          };
-          send();
-          // The client keeps a skill the hero may not use out of the bar, and
-          // leaves whatever was in that slot. So the answer is not "the bar
-          // matches" or "the bar is empty where it could not comply" — it is
-          // whatever the bar settles on, which may differ from the request in
-          // slots the request cared about. Waiting for an exact match is what
-          // reported a partly-applied bar as a failure.
-          let steady: readonly number[] | null = null;
-          await confirm(
-            environment,
-            `${heroLabel(member.hero)}'s skill bar`,
-            (party) => {
-              const bar = liveBar(party, member.hero);
-              if (bar === null) return false;
-              if (sameBar(bar, skills)) return true;
-              // A bar still showing what it showed before is a bar in flight,
-              // not the client's answer.
-              if (before !== null && sameBar(bar, before)) return false;
-              // And the same different bar twice, because the client can
-              // publish an intermediate state on its way to the final one.
-              if (steady === null || !sameBar(steady, bar)) {
-                steady = bar;
-                return false;
-              }
-              skipped = skills
-                .map((skill, slot) => (skill !== 0 && bar[slot] !== skill ? skill : 0))
-                .filter((skill) => skill !== 0);
-              skillsSkipped = skipped.length > 0;
-              return true;
-            },
-            send,
-          );
+          },
+          skipped,
+        )) {
           completedChanges += 1;
         }
 
         const ranks = attributePairs(member);
         const wanted = member.build.attributes;
-        const settled = (party: LiveParty) => {
-          const live = party.heroes
-            .find((hero) => hero.hero === member.hero)?.attributes;
-          if (!live) return false;
-          // Every rank asked for, at the value asked for. Not equality: the
-          // client keeps ranks the build says nothing about, and a build that
-          // mentions eight attributes is not a claim that the other
-          // thirty-four are zero.
-          return Object.entries(wanted).every(([name, rank]) =>
-            rank === undefined || rank === 0
-            || live[name as keyof typeof wanted] === rank);
-        };
-        if (ranks.length > 0 && !settled(environment.party())) {
+        const settled = (party: LiveParty) => sameAttributes(
+          party.heroes.find((hero) => hero.hero === member.hero)?.attributes,
+          wanted,
+        );
+        if (!settled(environment.party())) {
           writableParty(environment);
           environment.commands.setHeroAttributes(agentId, ranks);
           await confirm(
@@ -482,9 +526,9 @@ export async function runTeamApply(
   return Object.freeze({
     commandId,
     completedChanges,
-    skillsSkipped,
+    skillsSkipped: skipped.size > 0,
     // Named, not counted. "Guild Wars skipped a skill" is not actionable; the
     // skill it skipped tells the player it is one they have not unlocked.
-    skippedSkills: Object.freeze(skipped),
+    skippedSkills: Object.freeze([...skipped]),
   });
 }

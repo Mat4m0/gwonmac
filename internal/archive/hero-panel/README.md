@@ -17,4 +17,3 @@ To restore it, first define a player-facing requirement that needs panel
 visibility. Reintroduce the state as a new companion/toolbox ABI, restore the
 focused adversarial test from `observer.rs`, and re-certify both UI messages
 against the exact supported client before exposing the value.
-

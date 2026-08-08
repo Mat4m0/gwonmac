@@ -58,20 +58,28 @@ const currentApplyStatus = computed(() =>
     ? props.controller.applyStatus.value
     : null,
 );
+const preview = (message: string, blocked = false) => ({ message, blocked });
 const applyPreview = computed(() => {
   const party = props.controller.party.value;
-  if (party.status !== "ready") return "Waiting for a playable character and party observation.";
-  if (party.playRegion !== "pve") {
-    return party.playRegion === "pvp"
-      ? "Core only in PvP and guild halls — Team Apply is unavailable."
-      : "Core only until the current region is safely identified.";
+  if (party.status !== "ready") {
+    return preview("Waiting for a playable character and party observation.", true);
   }
-  if (party.inOutpost !== true) return "Enter a PvE outpost to apply this team.";
+  if (party.playRegion !== "pve") {
+    return preview(party.playRegion === "pvp"
+      ? "Core only in PvP and guild halls — Team Apply is unavailable."
+      : "Core only until the current region is safely identified.", true);
+  }
+  if (party.inOutpost !== true) {
+    return preview("Enter a PvE outpost to apply this team.", true);
+  }
 
   const changes: string[] = [];
   if (props.team.mode !== "none") {
+    if (party.hardMode === null) {
+      return preview("Waiting for the current Normal or Hard Mode observation.", true);
+    }
     const wantedHard = props.team.mode === "hard";
-    if (party.hardMode === null || party.hardMode !== wantedHard) {
+    if (party.hardMode !== wantedHard) {
       changes.push(`set ${wantedHard ? "Hard" : "Normal"} Mode`);
     }
   }
@@ -85,18 +93,30 @@ const applyPreview = computed(() => {
   if (joining.length) changes.push(`add ${joining.length} ${joining.length === 1 ? "hero" : "heroes"}`);
 
   let builds = 0;
-  props.team.slots.forEach((slot, index) => {
-    if (slot.build === null || !props.controller.library.value) return;
+  for (const [index, slot] of props.team.slots.entries()) {
+    if (slot.build === null || !props.controller.library.value) continue;
     const build = buildById(props.controller.library.value, slot.build);
     const live = index === 0
       ? props.controller.party.value.player
       : props.controller.party.value.heroes.find(({ hero }) => hero === slot.hero);
     if (!build || !live) {
       builds += 1;
-      return;
+      continue;
     }
-    const sameProfessions = live.professions !== null
-      && live.professions[0] === build.professions[0]
+    const owner = index === 0
+      ? "Your"
+      : `${teamMemberLabel(slot.hero, index)}'s`;
+    if (live.professions === null) {
+      return preview(`${owner} professions have not been observed yet.`, true);
+    }
+    if (live.professions[0] !== build.professions[0]) {
+      return preview(
+        `${owner} assigned build is for ${build.professions[0]}, but the `
+        + `observed primary is ${live.professions[0]}.`,
+        true,
+      );
+    }
+    const sameProfessions = live.professions[0] === build.professions[0]
       && live.professions[1] === build.professions[1];
     const sameSkills = live.skills !== null
       && live.skills.every((skill, skillIndex) => skill === build.skills[skillIndex]);
@@ -108,9 +128,13 @@ const applyPreview = computed(() => {
     const sameBehaviour = index === 0
       || ("behaviour" in live && slot.behaviour === live.behaviour);
     if (!sameProfessions || !sameSkills || !sameAttributes || !sameBehaviour) builds += 1;
-  });
+  }
   if (builds) changes.push(`update ${builds} ${builds === 1 ? "build" : "builds"}`);
-  return changes.length ? `Preview: ${changes.join(" · ")}.` : "Team already matches the observed party.";
+  return preview(
+    changes.length
+      ? `Preview: ${changes.join(" · ")}.`
+      : "Team already matches the observed party.",
+  );
 });
 
 const assignmentValid = (slot: TeamSlot, index: number): boolean => {
@@ -380,7 +404,7 @@ const apply = () => props.controller.applyTeam(props.team);
         {{ controller.applyUnavailable }}
       </span>
       <span v-else>
-        {{ applyPreview }}
+        {{ applyPreview.message }}
       </span>
       <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
       <button
@@ -388,7 +412,9 @@ const apply = () => props.controller.applyTeam(props.team);
         data-variant="primary"
         :disabled="
           controller.applyUnavailable !== null
+            || applyPreview.blocked
             || configured === 0
+            || team.slots.some((slot, index) => !assignmentValid(slot, index))
             || controller.saving.value
         "
         @click="apply"

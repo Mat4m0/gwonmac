@@ -25,7 +25,14 @@ import {
   PROFESSION_NONE_ID,
   heroLabel,
 } from "./heroes.js";
-import { PARTY_SIZE, buildId, skillId, teamId, teamSlotsOf } from "./library.js";
+import {
+  PARTY_SIZE,
+  buildId,
+  skillBarOf,
+  skillId,
+  teamId,
+  teamSlotsOf,
+} from "./library.js";
 import type {
   Attribute,
   AttributeRank,
@@ -317,9 +324,10 @@ function fromRegion(
         level: slot.level,
         skills: slot.skills === null
           ? null
-          : (Object.freeze(
-              slot.skills.map((id) => id === 0 ? null : skillId(id)),
-            ) as unknown as SkillBar),
+          : Object.freeze(skillBarOf((index) => {
+              const id = slot.skills?.[index] ?? 0;
+              return id === 0 ? null : skillId(id);
+            })),
         attributes: slot.attributes === null
           ? null
           : attributeRanks(slot.attributes),
@@ -340,9 +348,10 @@ function fromRegion(
       level: slot.level,
       skills: slot.skills === null
         ? null
-        : (Object.freeze(
-            slot.skills.map((id) => id === 0 ? null : skillId(id)),
-          ) as unknown as SkillBar),
+        : Object.freeze(skillBarOf((index) => {
+            const id = slot.skills?.[index] ?? 0;
+            return id === 0 ? null : skillId(id);
+          })),
       attributes: slot.attributes === null
         ? null
         : attributeRanks(slot.attributes),

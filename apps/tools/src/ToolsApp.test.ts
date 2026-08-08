@@ -24,6 +24,35 @@ async function workbench(host: ToolsHost = createDemoHost()) {
 
 function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
   const demo = createDemoHost();
+  demo.party.value = liveParty({
+    status: "ready",
+    partyObserved: true,
+    heroAvailable: true,
+    heroCount: 1,
+    firstHeroId: 21,
+    firstHeroAgentId: 11,
+    party: {
+      status: "ready",
+      rosterObserved: true,
+      playRegion: "pve",
+      hardMode: false,
+      inOutpost: true,
+      slotCount: 1,
+      slots: [
+        {
+          index: 0, occupied: false, hero: null, agentId: null, level: null,
+          professions: null, behaviour: null, skills: null, disabled: null,
+          attributes: null,
+        },
+        {
+          index: 1, occupied: true, hero: 21, agentId: 11, level: 20,
+          professions: [4, 8], behaviour: 1,
+          skills: [208, 209, 210, 211, 212, 213, 214, 215], disabled: 0,
+          attributes: [[5, 12], [6, 10]],
+        },
+      ],
+    },
+  });
   return {
     ...demo,
     async loadLibrary() {
@@ -261,13 +290,11 @@ describe("ToolsApp", () => {
       .find((button) => button.text() === "Normal")!
       .trigger("click");
     await flushPromises();
-    await wrapper
+    const apply = wrapper
       .findAll(".detail-actions .ui-button")
-      .find((button) => button.text().includes("Apply team"))!
-      .trigger("click");
-    await flushPromises();
+      .find((button) => button.text().includes("Apply team"))!;
 
-    expect(wrapper.text()).toContain("needs attention before Apply");
+    expect(apply.attributes("disabled")).toBeDefined();
     expect(wrapper.text()).toContain("skills this member cannot equip");
     expect(wrapper.find(".handoff-sheet").exists()).toBe(false);
     wrapper.unmount();
@@ -432,6 +459,21 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
+  it("disables Apply before a click when the region is not PvE", async () => {
+    const host = applicableHost(
+      async () => ({ commandId: 1, completedChanges: 0, skillsSkipped: false }),
+    );
+    host.party.value = { ...host.party.value, playRegion: "pvp" };
+    const wrapper = await workbench(host);
+    const apply = wrapper
+      .findAll(".detail-actions .ui-button")
+      .find((button) => button.text().includes("Apply team"))!;
+
+    expect(apply.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Core only in PvP");
+    wrapper.unmount();
+  });
+
   // The companion counts every hero the player owns and can currently name only
   // some of them. What the panel must never do is present the named ones as the
   // party — the difference between "your party is Koss" and "Koss, and two more
@@ -459,6 +501,11 @@ describe("ToolsApp", () => {
     // Nothing that would read as a count of zero heroes, which is a claim about
     // the party rather than about whether one was seen at all.
     expect(section.find(".ui-chip").exists()).toBe(false);
+    expect(
+      wrapper.findAll(".detail-actions .ui-button")
+        .find((button) => button.text().includes("Apply team"))!
+        .attributes("disabled"),
+    ).toBeDefined();
     wrapper.unmount();
   });
 
