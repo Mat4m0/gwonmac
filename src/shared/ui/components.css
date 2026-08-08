@@ -47,21 +47,29 @@
  * genuinely translucent panel with a gradient border that follows the radius. */
 .ui-frame {
   position: relative;
-  border-radius: var(--ui-radius);
+  isolation: isolate;
+  border-radius: var(--ui-radius-lg);
   background: var(--ui-panel-fill);
-  box-shadow: 0 0 0 1px var(--ui-outline), var(--ui-shadow);
+  box-shadow:
+    0 0 0 1px var(--ui-outline),
+    inset 0 1px 0 var(--ui-edge-inner),
+    var(--ui-frame-inset),
+    var(--ui-shadow);
   color: var(--ui-text);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   text-shadow: var(--ui-text-shadow);
 }
 
+.ui-frame::before,
 .ui-frame::after {
   content: "";
   position: absolute;
+  z-index: var(--ui-z-frame);
+  pointer-events: none;
+}
+
+.ui-frame::before {
   inset: 0;
-  /* Above the header and footer fills, so the edge stays unbroken where a
-   * panel's own bands run into the corner. */
-  z-index: 1;
   padding: var(--ui-border-width);
   border-radius: inherit;
   background: var(--ui-frame);
@@ -69,7 +77,21 @@
   -webkit-mask-composite: xor;
   mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
   mask-composite: exclude;
-  pointer-events: none;
+}
+
+/* The original client brightens the four caps of a panel more than its long
+ * metal runs. This separate ring creates that corner swell without putting an
+ * opaque material behind the translucent panel. */
+.ui-frame::after {
+  inset: -3px;
+  padding: 6px;
+  border-radius: var(--ui-radius-swell);
+  background: var(--ui-corner-swell);
+  -webkit-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  -webkit-mask-composite: xor;
+  mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  mask-composite: exclude;
+  filter: var(--ui-corner-shadow);
 }
 
 .ui-well {
@@ -79,9 +101,10 @@
 }
 
 .ui-raised {
+  border: var(--ui-border-width) solid transparent;
   border-radius: var(--ui-radius-sm);
-  background: var(--ui-raised-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge-strong), 0 0 0 1px var(--ui-edge);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-text);
 }
 
@@ -89,8 +112,8 @@
  * buttons. One rule, so "selected" cannot drift from widget to widget. */
 .ui-raised[aria-selected="true"],
 .ui-raised[aria-pressed="true"] {
-  background: var(--ui-accent-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge-strong), 0 0 0 1px var(--ui-outline);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-selected);
   color: var(--ui-accent-ink);
 }
 
@@ -133,17 +156,24 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  overflow: hidden;
+  padding: 9px 10px 11px;
+  overflow: visible;
 }
 
 .ui-panel-head {
+  position: relative;
+  z-index: var(--ui-z-title);
   display: flex;
   align-items: center;
   gap: var(--ui-gap);
-  padding: var(--ui-space-3) var(--ui-space-3) var(--ui-space-3)
-    var(--ui-space-4);
-  border-bottom: 1px solid var(--ui-line);
-  background: var(--ui-raised-fill);
+  min-height: 38px;
+  padding: 5px 8px 5px 11px;
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius);
+  background:
+    var(--ui-title-fill) padding-box,
+    var(--ui-frame) border-box;
+  box-shadow: var(--ui-title-shadow);
 }
 
 .ui-panel-title {
@@ -154,8 +184,8 @@
   color: var(--ui-text-bright);
   font-family: var(--ui-font-display);
   font-size: var(--ui-font-size-lg);
-  font-weight: 400;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: 0.045em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -175,6 +205,34 @@
   border-top: 1px solid var(--ui-line-soft);
 }
 
+/* A visible, keyboard-focusable resize corner for floating GWonMac windows.
+ * Pointer math belongs to the window owner; its affordance and hit target do
+ * not. Keeping this here gives Settings and Tools one resize language. */
+.ui-resize-grip {
+  position: absolute;
+  z-index: var(--ui-z-title);
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0 0 var(--ui-radius) 0;
+  background:
+    linear-gradient(135deg, transparent 45%, var(--ui-line) 46%, var(--ui-line) 52%, transparent 53%) 8px 8px / 8px 8px no-repeat,
+    linear-gradient(135deg, transparent 45%, var(--ui-accent) 46%, var(--ui-accent) 52%, transparent 53%) 13px 13px / 8px 8px no-repeat;
+  color: var(--ui-text);
+  cursor: nwse-resize;
+  pointer-events: auto;
+}
+
+.ui-resize-grip:hover,
+.ui-resize-grip:focus-visible {
+  filter: brightness(1.35);
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
 /* ============================================================ buttons === */
 
 .ui-button {
@@ -184,52 +242,52 @@
   justify-content: center;
   gap: var(--ui-space-2);
   padding: 0 var(--ui-space-3);
-  border: 0;
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-raised-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge-strong), 0 0 0 1px var(--ui-edge);
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-text);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   /* A cursor promising text selection on a game overlay is a lie. */
-  cursor: default;
-  transition: background var(--ui-duration) var(--ui-ease-out);
+  cursor: pointer;
+  transition: filter var(--ui-duration) var(--ui-ease-out), transform 60ms linear;
 }
 
 .ui-button:hover:not(:disabled) {
-  background: var(--ui-hover);
+  filter: brightness(1.18);
 }
 
 .ui-button:active:not(:disabled) {
-  background: var(--ui-well-fill);
-  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+  transform: translateY(1px);
+  filter: brightness(0.86);
 }
 
 .ui-button:disabled {
   cursor: default;
-  opacity: 0.45;
+  filter: grayscale(0.45) brightness(0.66);
 }
 
 .ui-button[data-variant="primary"] {
-  background: var(--ui-accent-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge-strong), 0 0 0 1px var(--ui-outline);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-accent-ink);
   font-weight: 600;
 }
 
 .ui-button[data-variant="primary"]:hover:not(:disabled) {
-  background: var(--ui-accent);
+  filter: brightness(1.2);
 }
 
 /* No box, no edge, until you go near it. For repeated row actions, where a
  * bordered button per row would out-shout the content it acts on. */
 .ui-button[data-variant="quiet"] {
-  background: transparent;
-  box-shadow: none;
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised-soft);
   color: var(--ui-text-muted);
 }
 
 .ui-button[data-variant="quiet"]:hover:not(:disabled) {
-  background: var(--ui-hover);
+  filter: brightness(1.18);
   color: var(--ui-text-bright);
 }
 
@@ -249,14 +307,15 @@
 .ui-button[data-icon] {
   width: var(--ui-control-height);
   padding: 0;
-  background: transparent;
-  box-shadow: none;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-selected);
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-lg);
 }
 
 .ui-button[data-icon]:hover:not(:disabled) {
-  background: var(--ui-hover);
+  filter: brightness(1.2);
   color: var(--ui-text-bright);
 }
 
@@ -268,16 +327,16 @@
   background: transparent;
   color: var(--ui-accent);
   font: inherit;
-  cursor: default;
-  text-decoration: underline;
-  text-decoration-color: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-accent) 30%, transparent);
   text-underline-offset: 3px;
   transition: color var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-link:hover:not(:disabled) {
-  color: var(--ui-text-bright);
-  text-decoration-color: currentColor;
+  color: var(--gw-gold-bright);
+  border-bottom-color: currentColor;
 }
 
 .ui-link:disabled {
@@ -306,10 +365,10 @@
 .ui-textarea {
   min-height: var(--ui-control-height);
   padding: 0 var(--ui-space-2);
-  border: 0;
+  border: 1px solid var(--ui-outline);
   border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
-  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+  box-shadow: inset 0 0 0 1px var(--ui-edge), var(--ui-shadow-inset);
   color: var(--ui-text);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
 }
@@ -323,8 +382,13 @@
 /* Room for the platform's own disclosure arrow. Without it a long option runs
  * underneath the chevron and reads as truncated at a width that had space. */
 .ui-select {
-  padding-right: calc(var(--ui-space-2) + 16px);
-  cursor: default;
+  appearance: none;
+  padding-right: 28px;
+  cursor: pointer;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--gw-bone) 50%) calc(100% - 15px) 52% / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--gw-bone) 50%, transparent 50%) calc(100% - 9px) 52% / 6px 6px no-repeat,
+    var(--ui-well-fill);
 }
 
 .ui-input::placeholder,
@@ -343,7 +407,8 @@
   padding: 0 var(--ui-space-2);
   border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
-  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+  border: 1px solid var(--ui-outline);
+  box-shadow: inset 0 0 0 1px var(--ui-edge), var(--ui-shadow-inset);
   color: var(--ui-text-faint);
 }
 
@@ -453,10 +518,12 @@
    * alone would be stretched to the column and leave a dead strip of well
    * after the last segment. */
   width: max-content;
-  border-radius: var(--ui-radius-sm);
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ui-radius);
   background: var(--ui-well-fill);
   box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .ui-segment label,
@@ -468,12 +535,12 @@
   justify-content: center;
   gap: var(--ui-space-1);
   padding: 0 var(--ui-space-3);
-  border: 0;
-  border-radius: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
   background: transparent;
   color: var(--ui-text-muted);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
-  cursor: default;
+  cursor: pointer;
   white-space: nowrap;
   transition:
     background var(--ui-duration) var(--ui-ease-out),
@@ -482,7 +549,7 @@
 
 .ui-segment label + label,
 .ui-segment button + button {
-  border-left: 1px solid var(--ui-edge);
+  border-left-color: transparent;
 }
 
 /* Segments size to their labels by default, because one long option should
@@ -517,8 +584,8 @@
 .ui-segment label:has(input:checked),
 .ui-segment button[aria-selected="true"],
 .ui-segment button[aria-pressed="true"] {
-  background: var(--ui-accent-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge-strong);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-selected);
   color: var(--ui-accent-ink);
 }
 
@@ -541,14 +608,14 @@
 
 .ui-tab {
   padding: var(--ui-space-2) var(--ui-space-3);
-  border: 0;
+  border: 1px solid transparent;
   /* Two flat corners is what makes a tab read as attached to its panel. */
   border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
-  background: var(--ui-raised-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge), 0 0 0 1px var(--ui-edge);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised-soft);
   color: var(--ui-text-muted);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
-  cursor: default;
+  cursor: pointer;
   transition:
     background var(--ui-duration) var(--ui-ease-out),
     color var(--ui-duration) var(--ui-ease-out);
@@ -559,8 +626,8 @@
 }
 
 .ui-tab[aria-selected="true"] {
-  background: var(--ui-accent-fill);
-  box-shadow: inset 0 1px 0 var(--ui-edge-strong), 0 0 0 1px var(--ui-outline);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-selected);
   color: var(--ui-accent-ink);
 }
 
@@ -627,22 +694,23 @@
   padding: var(--ui-space-1) var(--ui-space-2);
   border: 1px solid transparent;
   border-radius: var(--ui-radius-sm);
-  background: transparent;
+  background: var(--ui-row-fill) padding-box, var(--ui-ring-quiet) border-box;
   color: var(--ui-text);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
-  cursor: default;
+  cursor: pointer;
   text-align: left;
   transition: background var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-row:hover {
-  background: var(--ui-raised-fill);
+  filter: brightness(1.25);
 }
 
 .ui-row[aria-selected="true"],
 .ui-row[aria-current="page"] {
-  border-color: var(--ui-accent-strong);
-  background: var(--ui-selected);
+  border-color: transparent;
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-row-selected);
   color: var(--ui-text-bright);
 }
 
@@ -688,9 +756,9 @@
   align-items: center;
   gap: var(--ui-space-1);
   padding: 2px var(--ui-space-2);
-  border: 1px solid var(--ui-edge);
+  border: 1px solid transparent;
   border-radius: var(--ui-radius-pill);
-  background: var(--ui-raised-fill);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-quiet) border-box;
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-sm);
   white-space: nowrap;
@@ -709,9 +777,9 @@ button.ui-chip:hover {
 }
 
 .ui-chip[aria-pressed="true"] {
-  border-color: var(--ui-accent-strong);
-  background: var(--ui-selected);
-  color: var(--ui-text-bright);
+  border-color: transparent;
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  color: var(--ui-accent);
 }
 
 /* Status chips are tinted rather than filled, so a row of them does not turn
@@ -761,9 +829,11 @@ button.ui-chip:hover {
   aspect-ratio: 1;
   place-items: center;
   overflow: hidden;
+  border: var(--ui-border-width) solid transparent;
   border-radius: var(--ui-radius-sm);
-  background: var(--ui-profession, var(--ui-accent-strong));
-  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+  background: linear-gradient(var(--ui-profession, var(--ui-line)), var(--ui-profession, var(--ui-line))) padding-box,
+    var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-selected);
   color: var(--ui-profession-ink);
   font-size: var(--ui-font-size-sm);
   font-weight: 700;
@@ -792,8 +862,8 @@ button.ui-chip:hover {
 
 /* An empty slot is a real, saveable state — not an error, and not a gap. */
 .ui-slot[data-empty] {
-  background: var(--ui-well-fill);
-  box-shadow: inset 0 0 0 1px var(--ui-edge-inner);
+  background: var(--ui-well-fill) padding-box, var(--ui-ring-empty) border-box;
+  box-shadow: var(--ui-shadow-inset-deep);
   color: var(--ui-text-faint);
 }
 
@@ -837,9 +907,10 @@ button.ui-chip:hover {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--ui-edge-strong);
+  border: 1px solid transparent;
   border-radius: var(--ui-radius-sm);
-  background: var(--ui-profession, var(--ui-accent-strong));
+  background: linear-gradient(var(--ui-profession, var(--ui-line)), var(--ui-profession, var(--ui-line))) padding-box,
+    var(--ui-ring-mark) border-box;
   color: var(--ui-profession-ink);
   font-weight: 700;
   text-shadow: none;
@@ -852,16 +923,16 @@ button.ui-chip:hover {
 
 /* Data to token. The identity colours are declared in `tokens.css`; this is
  * the only place that maps a profession name onto one. */
-[data-profession="Warrior"] { --ui-profession: var(--ui-profession-warrior); }
-[data-profession="Ranger"] { --ui-profession: var(--ui-profession-ranger); }
-[data-profession="Monk"] { --ui-profession: var(--ui-profession-monk); }
-[data-profession="Necromancer"] { --ui-profession: var(--ui-profession-necromancer); }
-[data-profession="Mesmer"] { --ui-profession: var(--ui-profession-mesmer); }
-[data-profession="Elementalist"] { --ui-profession: var(--ui-profession-elementalist); }
-[data-profession="Assassin"] { --ui-profession: var(--ui-profession-assassin); }
-[data-profession="Ritualist"] { --ui-profession: var(--ui-profession-ritualist); }
-[data-profession="Paragon"] { --ui-profession: var(--ui-profession-paragon); }
-[data-profession="Dervish"] { --ui-profession: var(--ui-profession-dervish); }
+:is([data-profession="Warrior"], [data-profession="W"]) { --ui-profession: var(--ui-profession-warrior); }
+:is([data-profession="Ranger"], [data-profession="R"]) { --ui-profession: var(--ui-profession-ranger); }
+:is([data-profession="Monk"], [data-profession="Mo"]) { --ui-profession: var(--ui-profession-monk); }
+:is([data-profession="Necromancer"], [data-profession="N"]) { --ui-profession: var(--ui-profession-necromancer); }
+:is([data-profession="Mesmer"], [data-profession="Me"]) { --ui-profession: var(--ui-profession-mesmer); }
+:is([data-profession="Elementalist"], [data-profession="E"]) { --ui-profession: var(--ui-profession-elementalist); }
+:is([data-profession="Assassin"], [data-profession="A"]) { --ui-profession: var(--ui-profession-assassin); }
+:is([data-profession="Ritualist"], [data-profession="Rt"]) { --ui-profession: var(--ui-profession-ritualist); }
+:is([data-profession="Paragon"], [data-profession="P"]) { --ui-profession: var(--ui-profession-paragon); }
+:is([data-profession="Dervish"], [data-profession="D"]) { --ui-profession: var(--ui-profession-dervish); }
 
 /* ========================================================== scrollbars == */
 
@@ -870,21 +941,24 @@ button.ui-chip:hover {
  * is a raised surface like any other and only warms up under the pointer. */
 .ui-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--ui-line) transparent;
+  scrollbar-color: var(--ui-scroll-thumb-color) var(--ui-scroll-track-color);
 }
 
 .ui-scroll::-webkit-scrollbar {
-  width: var(--ui-space-2);
-  height: var(--ui-space-2);
+  width: 13px;
+  height: 13px;
 }
 
 .ui-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-scroll-track);
+  box-shadow: var(--ui-scroll-track-shadow);
 }
 
 .ui-scroll::-webkit-scrollbar-thumb {
   border-radius: var(--ui-radius-pill);
-  background: var(--ui-line);
+  background: var(--ui-scroll-thumb);
+  box-shadow: 0 0 0 1px var(--gw-gilt-fall);
 }
 
 .ui-scroll::-webkit-scrollbar-thumb:hover {
@@ -914,7 +988,6 @@ button.ui-chip:hover {
   width: 0;
   height: 100%;
   background: var(--ui-accent-fill);
-  transition: width var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-empty {
@@ -971,14 +1044,17 @@ button.ui-chip:hover {
   justify-content: space-between;
   gap: var(--ui-space-3);
   padding: var(--ui-space-2) var(--ui-space-4);
-  border-bottom: 1px solid var(--ui-line-soft);
-  background: color-mix(in srgb, var(--ui-info) 26%, var(--ui-panel-fill));
+  margin: var(--ui-space-2) 0;
+  border: 1px solid var(--ui-outline);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: inset 3px 0 var(--ui-info), var(--ui-shadow-inset);
   color: var(--ui-text-bright);
   font-size: var(--ui-font-size-sm);
 }
 
 .ui-banner[data-tone="warning"] {
-  background: color-mix(in srgb, var(--ui-warning) 26%, var(--ui-panel-fill));
+  box-shadow: inset 3px 0 var(--ui-warning), var(--ui-shadow-inset);
 }
 
 /* ========================================================= utilities === */

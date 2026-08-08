@@ -264,6 +264,16 @@ export default tseslint.config(
     },
   },
   {
+    // This one shared behavior is intentionally browser-only: both the native
+    // Settings surface and the Tools Vue app import it. The main-process
+    // project excludes it because that program has no DOM library, and these
+    // rules do not need type information.
+    files: ["src/shared/ui/resize.ts"],
+    languageOptions: {
+      parserOptions: { projectService: false },
+    },
+  },
+  {
     // The six page singletons index.html loads with a `<script>` tag, listed
     // rather than globbed because being a classic script is a property of these
     // files and not of a directory. A classic script is exactly a file with no

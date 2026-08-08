@@ -1,7 +1,5 @@
-// "You can retheme it" is the kind of claim that is true on the day it is
-// written and false three components later. One hardcoded `oklch(66% 0.11 76)`
-// in a hover state is invisible in review, survives every visual check, and
-// then a player picks Jade and one button stays brass.
+// The OG Guild Wars interface is one system. One hardcoded colour in a
+// component is invisible in review and becomes an accidental second style.
 //
 // So the claim is enforced rather than asserted. Neither `ui/components.css`
 // nor the two stylesheets that consume it may contain a colour or a corner —
@@ -139,39 +137,12 @@ test("no consumer invents a stacking order", () => {
   );
 });
 
-test("each theme defines the whole family, not just an accent", () => {
-  // A partial theme is worse than no theme: it inherits half a palette from
-  // the default and produces a combination nobody designed.
-  // Colour families only. `--ui-line-height` and `--ui-text-shadow` start with
-  // the same words but are type and elevation, which no theme redefines.
-  const themed = [...declaredTokens()].filter(
-    (name) =>
-      /^--ui-(base|raised|well|hover|selected|line|text|accent|frame|outline|focus)\b/
-        .test(name)
-      && !/^--ui-(line-height|text-shadow|accent-fill)$/.test(name),
-  );
-  assert.ok(themed.length >= 15, "a theme is more than one colour");
-
-  for (const theme of ["brass", "steel", "jade"]) {
-    const block = code(tokens).match(
-      new RegExp(`\\[data-ui-theme="${theme}"\\]\\s*\\{([^}]*)\\}`),
-    );
-    assert.ok(block, `${theme} is declared`);
-    const missing = themed.filter(
-      (name) =>
-        !new RegExp(`${name}\\s*:`).test(block[1]!)
-        // Derived from the theme's own values, so a theme must not restate it.
-        && !new RegExp(`${name}\\s*:`).test(derivedBlock()),
-    );
-    assert.deepEqual(missing, [], `${theme} must set: ${missing.join(", ")}`);
+test("the shared system has no alternate theme or density selector", () => {
+  assert.doesNotMatch(code(tokens), /\[data-ui-(?:theme|density)=/u);
+  for (const [, css] of consumers) {
+    assert.doesNotMatch(code(css), /\[data-ui-(?:theme|density)=/u);
   }
 });
-
-/** The second `:root` block: values composed from the theme's own tokens. */
-function derivedBlock(): string {
-  const blocks = [...code(tokens).matchAll(/:root\s*\{([^}]*)\}/g)];
-  return blocks.slice(1).map((match) => match[1]!).join("\n");
-}
 
 test("every token a stylesheet uses is actually declared", () => {
   const declared = declaredTokens();
@@ -213,16 +184,12 @@ test("no token reference carries a leftover alpha suffix", () => {
   assert.deepEqual(offenders, [], offenders.join("\n"));
 });
 
-test("the derived radii really derive, so a theme cannot half-round", () => {
+test("the measured Guild Wars radii are fixed in the token source", () => {
   const body = code(tokens);
-  for (const name of ["--ui-radius-sm", "--ui-radius-lg"]) {
+  for (const name of ["--ui-radius", "--ui-radius-sm", "--ui-radius-lg", "--ui-radius-swell"]) {
     const line = body.match(new RegExp(`${name}\\s*:([^;]*);`));
     assert.ok(line, `${name} is declared`);
-    assert.match(
-      line[1]!,
-      /var\(--ui-radius\)/,
-      `${name} must be computed from --ui-radius, not restated`,
-    );
+    assert.match(line[1]!, /\d+px/u, `${name} is a measured fixed length`);
   }
 });
 
