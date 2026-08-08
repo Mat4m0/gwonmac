@@ -92,11 +92,9 @@ async function publishTemplate(
 /**
  * Why applying a team cannot reach the running game, or `null` once it can.
  *
- * Applying means commanding the running game, and no command gateway is
- * certified for this client. Saying so as a refusal is deliberate: the
- * alternative an earlier version shipped was a resolved promise reporting zero
- * completed changes, which is indistinguishable in the interface from a team
- * that applied and did nothing.
+ * Applying means commanding the running game. A Core-only or developer module
+ * has no command thunk at all, so the panel must present that absence as a
+ * refusal rather than as a successful Apply that made zero changes.
  *
  * It is a value rather than only a thrown message because the interface has to
  * say it *before* the click, not after. A button that looks ready and then
@@ -105,8 +103,8 @@ async function publishTemplate(
  * One constant, so the disabled reason and the refusal cannot drift apart.
  */
 const APPLY_UNAVAILABLE =
-  "Applying a team to the running game is not available yet. Publish the "
-  + "builds as templates and load them in Guild Wars.";
+  "Team Apply is unavailable in this session. Your saved teams are safe; "
+  + "you can keep playing and publish individual builds as templates.";
 
 /**
  * Loads the Tools bundle and hands the overlay a handle to it.
@@ -124,9 +122,8 @@ export function mountToolsInto(
   onVisibilityChange: (visible: boolean) => void,
   /**
    * The certified commands, or `null` for a module derived without them.
-   * `null` is the ordinary case: only the commands profile carries a call to a
-   * packet builder at all, so this is an absence in the bytes rather than a
-   * switch.
+   * Only the complete Tools profile carries a call to a packet builder, so
+   * `null` is an absence in the bytes rather than a disabled JavaScript switch.
    *
    * Handed straight through. This module is a courier and does not learn what
    * a hero is — the sequence that turns a plan into commands lives beside the

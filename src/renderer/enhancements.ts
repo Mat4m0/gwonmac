@@ -42,6 +42,11 @@ import type {
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import {
+  createTeamApplyCommands,
+  TEAM_COMMAND_PAYLOAD_BYTES,
+  type EnhancementCommandThunk,
+} from "./enhancement-team-commands.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
@@ -61,19 +66,6 @@ const COMPANION_RUNTIME_BYTES = 65_536;
  */
 const COMPANION_RUNTIME_ALIGN = 16;
 
-/**
- * The scratch the two payload-carrying commands copy out of, as word counts.
- *
- * Eight is a skill bar. Sixteen is what the attribute buffer inside the client
- * actually holds — its own clamp is 64, into a 144-byte frame with room for
- * sixteen ids and sixteen ranks, so a count between 17 and 64 passes the
- * client's check and writes past the arrays. The bound has to be ours. Nine is
- * the most any character can have invested, so sixteen is already generous.
- */
-const COMMAND_SKILL_WORDS = 8;
-const COMMAND_ATTRIBUTE_WORDS = 16;
-const COMMAND_PAYLOAD_WORDS =
-  COMMAND_SKILL_WORDS + COMMAND_ATTRIBUTE_WORDS * 2;
 let companionInstallations = 0;
 
 /**
@@ -224,9 +216,7 @@ export async function installEnhancements(
   // than a disabled feature.
   const commandThunk = capabilities.commands
     ? (typeof exports.enhancement_command === "function"
-        ? exports.enhancement_command as (
-            opcode: number, a0: number, a1: number, a2: number, a3: number,
-          ) => number
+        ? exports.enhancement_command as EnhancementCommandThunk
         : null)
     : null;
   if (capabilities.commands && commandThunk === null) {
@@ -331,7 +321,7 @@ export async function installEnhancements(
     }
     if (capabilities.commands) {
       payloadPointer = Number(
-        exports.malloc(COMMAND_PAYLOAD_WORDS * Uint32Array.BYTES_PER_ELEMENT),
+        exports.malloc(TEAM_COMMAND_PAYLOAD_BYTES),
       );
     }
     if (
@@ -364,6 +354,14 @@ export async function installEnhancements(
             { name: "toolbox", pointer: toolboxPointer, size: COMPANION_TOOLBOX_BYTES, align: 4 },
             { name: "party", pointer: partyPointer, size: COMPANION_PARTY_BYTES, align: 4 },
           ]
+        : []),
+      ...(capabilities.commands
+        ? [{
+            name: "command payload",
+            pointer: payloadPointer,
+            size: TEAM_COMMAND_PAYLOAD_BYTES,
+            align: 4,
+          }]
         : []),
     ];
     for (const region of ownedRegions) {
@@ -588,18 +586,8 @@ export async function installEnhancements(
       readout = null;
     };
 
-    /**
-     * The five commands, one named function each.
-     *
-     * Deliberately not `command(opcode, ...)`. The opcode is not a parameter
-     * anywhere outside the certified table, so nothing here — and nothing in a
-     * console — can choose a message that was not reviewed. Each wrapper takes
-     * the domain values and nothing that looks like an address.
-     *
-     * Preconditions are checked against what the companion already observes
-     * rather than asserted. The client refuses most of this anyway; refusing
-     * first means the refusal is ours and says which rule it was.
-     */
+    // The command module owns values and reviewed opcodes; the installer owns
+    // the live permission gate and hands it the freshest observed party.
     let toolbox: ReturnType<typeof createToolboxFoundation> | null = null;
     let toolboxObservation: ToolboxObservation | null = null;
     const teamEnabled = () =>
@@ -613,9 +601,11 @@ export async function installEnhancements(
         | (teamEnabled() ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
       kernelDispatch(3, active, 0, 0, 0, 0);
     };
-    const commands = commandThunk === null ? null : (() => {
-      const send = commandThunk;
-      const ready = () => {
+    const commands = commandThunk === null ? null : createTeamApplyCommands({
+      memory,
+      payloadPointer,
+      send: commandThunk,
+      ready: () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
         if (!teamEnabled()) throw new Error("Team management is disabled");
         if (playRegion !== "pve") {
@@ -629,139 +619,9 @@ export async function installEnhancements(
         if (observed === null || observed.status !== "ready") {
           throw new Error("no party has been observed yet");
         }
-      };
-      const hero = (heroId: number) => {
-        if (!Number.isInteger(heroId) || heroId < 1 || heroId > 39) {
-          throw new Error(`hero id ${heroId} is not a hero`);
-        }
-      };
-      const agent = (agentId: number) => {
-        if (!Number.isInteger(agentId) || agentId < 1) {
-          throw new Error(`agent id ${agentId} is not an agent`);
-        }
-      };
-      // A fresh view every call: `memory.buffer` detaches when the heap grows,
-      // and a cached view would write into a buffer nothing reads.
-      const payload = (offset: number, values: readonly number[]) => {
-        const words = new Uint32Array(
-          memory.buffer,
-          payloadPointer + offset * Uint32Array.BYTES_PER_ELEMENT,
-          values.length,
-        );
-        words.set(values);
-        return payloadPointer + offset * Uint32Array.BYTES_PER_ELEMENT;
-      };
-      const playerAgent = (agentId: number) => {
-        agent(agentId);
-        const observed = toolboxObservation?.party?.slots?.[0];
-        if (!observed?.occupied || observed.agentId !== agentId) {
-          throw new Error("that agent is not the observed player");
-        }
-      };
-      const validProfession = (value: number) => {
-        if (!Number.isInteger(value) || value < 0 || value > 10) {
-          throw new Error(`profession ${value} is not one the client defines`);
-        }
-      };
-      const skills = (agentId: number, skillIds: readonly number[]) => {
-        if (skillIds.length > COMMAND_SKILL_WORDS) {
-          throw new Error(`a skill bar holds ${COMMAND_SKILL_WORDS} skills`);
-        }
-        if (skillIds.some((id) => !Number.isInteger(id) || id < 0)) {
-          throw new Error("every skill must be a non-negative id");
-        }
-        const at = payload(0, skillIds);
-        return send(93, agentId, skillIds.length, at, 0) === 1;
-      };
-      const attributes = (
-        agentId: number,
-        ranks: readonly (readonly [attribute: number, rank: number])[],
-      ) => {
-        if (ranks.length > COMMAND_ATTRIBUTE_WORDS) {
-          throw new Error(`at most ${COMMAND_ATTRIBUTE_WORDS} attributes`);
-        }
-        if (ranks.some(([id, rank]) =>
-          !Number.isInteger(id) || id < 0 || id > 44
-          || !Number.isInteger(rank) || rank < 0 || rank > 12
-        )) {
-          throw new Error("every attribute must be a known id at a rank of 0-12");
-        }
-        const ids = payload(COMMAND_SKILL_WORDS, ranks.map(([id]) => id));
-        const levels = payload(
-          COMMAND_SKILL_WORDS + COMMAND_ATTRIBUTE_WORDS,
-          ranks.map(([, rank]) => rank),
-        );
-        return send(16, agentId, ranks.length, ids, levels) === 1;
-      };
-      return {
-        setHardMode(enabled: boolean) {
-          ready();
-          if (typeof enabled !== "boolean") {
-            throw new Error("Hard Mode must be enabled or disabled");
-          }
-          return send(155, enabled ? 1 : 0, 0, 0, 0) === 1;
-        },
-        setPlayerSecondary(agentId: number, value: number) {
-          ready();
-          playerAgent(agentId);
-          validProfession(value);
-          return send(65, agentId, value, 0, 0) === 1;
-        },
-        setPlayerSkills(agentId: number, skillIds: readonly number[]) {
-          ready();
-          playerAgent(agentId);
-          return skills(agentId, skillIds);
-        },
-        setPlayerAttributes(
-          agentId: number,
-          ranks: readonly (readonly [attribute: number, rank: number])[],
-        ) {
-          ready();
-          playerAgent(agentId);
-          return attributes(agentId, ranks);
-        },
-        addHero(heroId: number) {
-          ready();
-          hero(heroId);
-          return send(30, heroId, 0, 0, 0) === 1;
-        },
-        kickHero(heroId: number) {
-          ready();
-          hero(heroId);
-          return send(31, heroId, 0, 0, 0) === 1;
-        },
-        setHeroBehaviour(agentId: number, behaviour: number) {
-          ready();
-          agent(agentId);
-          // Fight, Guard, Avoid. The client's own enum stops there.
-          if (!Number.isInteger(behaviour) || behaviour < 0 || behaviour > 2) {
-            throw new Error(`behaviour ${behaviour} is not one the client defines`);
-          }
-          return send(21, agentId, behaviour, 0, 0) === 1;
-        },
-        setHeroSecondary(agentId: number, profession: number) {
-          ready();
-          agent(agentId);
-          // The ten the client defines. Zero is `Profession::None`, which is a
-          // real secondary — a monoclass hero — and so is allowed.
-          validProfession(profession);
-          return send(65, agentId, profession, 0, 0) === 1;
-        },
-        setHeroSkills(agentId: number, skillIds: readonly number[]) {
-          ready();
-          agent(agentId);
-          return skills(agentId, skillIds);
-        },
-        setHeroAttributes(
-          agentId: number,
-          ranks: readonly (readonly [attribute: number, rank: number])[],
-        ) {
-          ready();
-          agent(agentId);
-          return attributes(agentId, ranks);
-        },
-      };
-    })();
+        return observed;
+      },
+    });
     const setTeamEnabled = () => {
       if (!foundation) return;
       if (teamEnabled()) {

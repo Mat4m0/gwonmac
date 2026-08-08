@@ -41,6 +41,7 @@ import {
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../src/renderer/companion-snapshot.ts";
+import { TEAM_COMMAND_PAYLOAD_BYTES } from "../src/renderer/enhancement-team-commands.ts";
 import { root } from "./electron/fixtures.mts";
 import {
   DISTRIBUTION_CHANNEL_CONFIG,
@@ -1252,7 +1253,7 @@ async function assertToolboxFoundationLifecycle() {
       { pointer: TOOLBOX_PARTY_POINTER, size: COMPANION_PARTY_BYTES },
       {
         pointer: TOOLBOX_PARTY_POINTER + COMPANION_PARTY_BYTES,
-        size: 160,
+        size: TEAM_COMMAND_PAYLOAD_BYTES,
       },
     ]);
     assert.equal(result.before.companionStatePublished, false);
