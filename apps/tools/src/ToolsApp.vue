@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
@@ -9,19 +10,24 @@ import {
 } from "vue";
 import type { ToolsHost } from "./host";
 import type { Build, Team } from "./model";
+import {
+  buildById,
+  buildId,
+  teamId,
+} from "../../../src/shared/builds/library";
 import type { AuthoringContext } from "./use-build-draft";
 import {
   buildDifference,
-  buildById,
-  buildId,
+  countLabel,
   teamMemberLabel,
-  teamId,
 } from "./model";
 import { useLibrary } from "./use-library";
 import BuildDetail from "./components/BuildDetail.vue";
 import LiveParty from "./components/LiveParty.vue";
 import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
+import ModalDialog from "./components/ModalDialog.vue";
+import { navigateRows, navigateTabs } from "./tab-keyboard";
 
 const props = defineProps<{
   host: ToolsHost;
@@ -38,15 +44,35 @@ const panel = ref<HTMLElement | null>(null);
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
 const position = ref({ left: 28, top: 42 });
-const composer = ref<"build" | "team" | null>(null);
+const composer = ref<"build" | "team" | "import-team" | null>(null);
 const draftCode = ref("");
 const draftName = ref("");
+const clipboardProblem = ref("");
 const buildContext = ref<AuthoringContext>("standalone");
 const buildDetail = ref<InstanceType<typeof BuildDetail> | null>(null);
+const teamDetail = ref<InstanceType<typeof TeamDetail> | null>(null);
 const buildDirty = ref(false);
 const pendingNavigation = shallowRef<null | (() => void)>(null);
 
-const count = computed(() => controller.items.value.length);
+const activeTotal = computed(() => {
+  const library = controller.library.value;
+  if (!library) return 0;
+  return controller.kind.value === "team" ? library.teams.length : library.builds.length;
+});
+const filtersActive = computed(() =>
+  controller.query.value.trim().length > 0 || controller.tag.value !== null
+);
+const summary = computed(() => {
+  const noun = controller.kind.value === "team" ? "team" : "build";
+  const visible = controller.items.value.length;
+  return filtersActive.value
+    ? `${visible} of ${countLabel(activeTotal.value, noun)}`
+    : countLabel(activeTotal.value, noun);
+});
+const hasObservedParty = computed(() =>
+  props.host.party.value.status === "ready"
+  && (props.host.party.value.player !== null || props.host.party.value.heroes.length > 0)
+);
 watch(
   () => props.visible,
   (visible) => {
@@ -118,11 +144,21 @@ const saveAndNavigate = async () => {
 
 const requestClose = () => navigate(() => emit("close"));
 
+const captureCurrentParty = async () => {
+  const captured = await controller.captureCurrentParty();
+  if (!captured) return;
+  mobileView.value = "detail";
+  await nextTick();
+  teamDetail.value?.focusName();
+};
+
 const finishCreate = async () => {
   if (composer.value === "build") {
     if (!(await controller.importBuild(draftCode.value, draftName.value))) return;
+  } else if (composer.value === "import-team") {
+    if (!(await controller.importTeamCode(draftCode.value))) return;
   } else if (composer.value === "team") {
-    await controller.createTeam(draftName.value);
+    if (!(await controller.createTeam(draftName.value))) return;
   }
   composer.value = null;
   draftCode.value = "";
@@ -130,8 +166,17 @@ const finishCreate = async () => {
   mobileView.value = "detail";
 };
 
+const pasteTeamCode = async () => {
+  clipboardProblem.value = "";
+  try {
+    draftCode.value = await controller.readClipboard();
+  } catch {
+    clipboardProblem.value = "Clipboard access was refused. Paste the code into the field instead.";
+  }
+};
+
 const startBlankBuild = async () => {
-  await controller.createBlankBuild(draftName.value);
+  if (!(await controller.createBlankBuild(draftName.value))) return;
   composer.value = null;
   draftCode.value = "";
   draftName.value = "";
@@ -226,6 +271,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         </button>
       </header>
 
+      <div
+        v-if="controller.skillProblem.value"
+        class="ui-banner skill-recovery"
+        data-tone="warning"
+        role="status"
+      >
+        <span><strong>Skill details are unavailable.</strong> Saved teams and builds still work.</span>
+        <button class="ui-button" @click="controller.retrySkills">Retry skill data</button>
+      </div>
+
       <div v-if="controller.loading.value" class="loading-layout" aria-label="Loading build library">
         <div class="skeleton skeleton--rail" />
         <div class="skeleton skeleton--detail" />
@@ -240,18 +295,30 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       <div v-else-if="controller.library.value" class="workspace">
         <aside class="library-pane" aria-label="Library">
           <div class="library-toolbar">
-            <div class="ui-segment" data-fill role="tablist" aria-label="Library type">
+            <div
+              class="ui-segment"
+              data-fill
+              role="tablist"
+              aria-label="Library type"
+              @keydown="navigateTabs"
+            >
               <button
+                id="teams-library-tab"
                 role="tab"
+                aria-controls="library-items"
                 :aria-selected="controller.kind.value === 'team'"
+                :tabindex="controller.kind.value === 'team' ? 0 : -1"
                 @click="selectKind('team')"
               >
                 Teams
                 <small>{{ controller.library.value.teams.length }}</small>
               </button>
               <button
+                id="builds-library-tab"
                 role="tab"
+                aria-controls="library-items"
                 :aria-selected="controller.kind.value === 'build'"
+                :tabindex="controller.kind.value === 'build' ? 0 : -1"
                 @click="selectKind('build')"
               >
                 Builds
@@ -259,11 +326,32 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               </button>
             </div>
 
-            <div class="create-actions">
+            <LiveParty
+              v-if="controller.kind.value === 'team'"
+              :party="host.party.value"
+              :saving="controller.saving.value"
+              @capture="captureCurrentParty"
+            />
+
+            <div v-if="controller.kind.value === 'team'" class="create-actions">
+              <button
+                class="ui-button"
+                :data-variant="hasObservedParty ? undefined : 'primary'"
+                @click="composer = 'team'"
+              >New team</button>
+              <button class="ui-button" @click="composer = 'import-team'">Import team</button>
+            </div>
+            <details v-if="controller.kind.value === 'team'" class="library-help">
+              <summary>How teams work</summary>
+              <p>
+                A team links each member to a saved build. Editing a shared build updates every
+                team that uses it; create a related copy when only one team should differ.
+              </p>
+            </details>
+            <div v-else class="create-actions create-actions--single">
               <button class="ui-button" data-variant="primary" @click="composer = 'build'">
                 Import build
               </button>
-              <button class="ui-button" @click="composer = 'team'">New team</button>
             </div>
 
             <label class="ui-input-group">
@@ -299,7 +387,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </div>
 
           <div class="library-summary">
-            <span>{{ count }} {{ controller.kind.value === "build" ? "builds" : "teams" }}</span>
+            <span>{{ summary }}</span>
             <button
               class="ui-link"
               :disabled="!controller.canUndo.value"
@@ -309,14 +397,18 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </button>
           </div>
 
-          <div class="library-list" role="listbox" :aria-label="`${controller.kind.value} library`">
+          <nav
+            id="library-items"
+            class="library-list"
+            :aria-labelledby="controller.kind.value === 'team' ? 'teams-library-tab' : 'builds-library-tab'"
+            @keydown="navigateRows"
+          >
             <button
               v-for="value in controller.items.value"
               :key="value.id"
               class="ui-row library-row"
-            :data-child="'parent' in value && value.parent ? '' : undefined"
-              role="option"
-              :aria-selected="controller.selectedId.value === value.id"
+              :data-child="'parent' in value && value.parent ? '' : undefined"
+              :aria-current="controller.selectedId.value === value.id ? 'page' : undefined"
               @click="select(value)"
             >
               <span class="row-title">
@@ -325,7 +417,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                   {{ value.name }}
                 </span>
                 <em v-if="'mode' in value">{{ value.mode === "hard" ? "Hard" : value.mode === "normal" ? "Normal" : "Unspecified" }}</em>
-                <em v-else>{{ value.professions[0] }}</em>
+                <em v-else>{{ value.professions.join("/") }}</em>
               </span>
 
               <template v-if="'skills' in value">
@@ -333,12 +425,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 <span v-if="value.parent" class="row-meta">
                   {{
                     buildById(controller.library.value, value.parent)
-                      ? `${buildDifference(buildById(controller.library.value, value.parent)!, value)} changes`
-                      : "independent"
+                      ? `Based on ${buildById(controller.library.value, value.parent)!.name} · ${countLabel(buildDifference(buildById(controller.library.value, value.parent)!, value), "change")}`
+                      : "Related build"
                   }}
                 </span>
                 <span v-else class="row-meta">
-                  {{ controller.usage(value.id).length }} linked teams
+                  Used by {{ countLabel(controller.usage(value.id).length, "team") }}
                 </span>
               </template>
 
@@ -362,35 +454,35 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </button>
 
             <div v-if="!controller.items.value.length" class="ui-empty">
-              <strong>{{ controller.library.value.builds.length || controller.library.value.teams.length ? "No matches" : "Your library is ready" }}</strong>
-              <p v-if="controller.library.value.builds.length || controller.library.value.teams.length">
-                Try another skill, hero, build name, or clear the selected tag.
+              <strong>
+                {{ activeTotal === 0
+                  ? controller.kind.value === "team" ? "No saved teams yet" : "No saved builds yet"
+                  : "No matches" }}
+              </strong>
+              <p v-if="activeTotal > 0">
+                No {{ controller.kind.value === "team" ? "teams" : "builds" }} match this search or tag.
               </p>
-              <p v-else>Import a skill template, then compose it into one or more teams.</p>
+              <p v-else-if="controller.kind.value === 'team' && hasObservedParty">
+                Save the party in Guild Wars above, or create or import a team.
+              </p>
+              <p v-else-if="controller.kind.value === 'team'">
+                Create a team or import a GWonMac team code above.
+              </p>
+              <p v-else>Use Import build above to add a Guild Wars skill template.</p>
               <button
-                v-if="controller.library.value.builds.length || controller.library.value.teams.length"
+                v-if="activeTotal > 0 && filtersActive"
                 class="ui-button"
                 @click="controller.query.value = ''; controller.tag.value = null"
               >
                 Clear filters
               </button>
-              <button v-else class="ui-button" data-variant="primary" @click="composer = 'build'">
-                Import first build
-              </button>
             </div>
-          </div>
+          </nav>
 
-          <LiveParty
-            :party="host.party.value"
-            :saving="controller.saving.value"
-            @capture="controller.captureCurrentParty"
-          />
-
-          <footer class="library-footer">
-            <button v-if="host.reset" class="ui-link" @click="controller.reset">
+          <footer v-if="host.reset" class="library-footer">
+            <button class="ui-link" @click="controller.reset">
               Reset demo
             </button>
-            <span>Local build library</span>
           </footer>
         </aside>
 
@@ -409,13 +501,27 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           />
           <TeamDetail
             v-else-if="controller.selectedTeam.value"
+            ref="teamDetail"
             :team="controller.selectedTeam.value"
             :controller="controller"
             @edit-build="openBuild"
           />
           <div v-else class="ui-empty empty-state--detail">
-            <strong>Select something to inspect</strong>
-            <p>The library and detail view stay connected without duplicating state.</p>
+            <strong>
+              {{ activeTotal === 0
+                ? controller.kind.value === "team" ? "No saved teams yet" : "No saved builds yet"
+                : `Choose a ${controller.kind.value}` }}
+            </strong>
+            <p v-if="activeTotal === 0 && controller.kind.value === 'team' && hasObservedParty">
+              Your party in Guild Wars is ready to save from the Library.
+            </p>
+            <p v-else-if="activeTotal === 0 && controller.kind.value === 'team'">
+              Create a team or import a team code from the Library.
+            </p>
+            <p v-else-if="activeTotal === 0">
+              Import a Guild Wars skill template from the Library.
+            </p>
+            <p v-else>Choose a {{ controller.kind.value }} in the Library to see and edit it.</p>
           </div>
         </main>
       </div>
@@ -425,7 +531,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           v-if="controller.notice.value"
           class="ui-toast notice"
           :data-tone="controller.notice.value.tone"
-          role="status"
+          :role="controller.notice.value.tone === 'error' ? 'alert' : 'status'"
         >
           <span>{{ controller.notice.value.message }}</span>
           <button
@@ -435,38 +541,68 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           >
             Undo
           </button>
+          <button
+            class="ui-button notice-dismiss"
+            data-icon
+            aria-label="Dismiss message"
+            @click="controller.dismissNotice"
+          >×</button>
         </div>
       </Transition>
 
-      <section v-if="pendingNavigation" class="leave-sheet" aria-labelledby="leave-title">
+      <ModalDialog
+        :open="pendingNavigation !== null"
+        class="leave-dialog"
+        labelledby="leave-title"
+        describedby="leave-description"
+        initial-focus="[data-initial-focus]"
+        @close="pendingNavigation = null"
+      >
+        <section
+        class="leave-sheet"
+      >
         <div>
           <h2 id="leave-title">Save this draft?</h2>
-          <p>Your changes have not been added to the local build library yet.</p>
+          <p id="leave-description">Your changes have not been added to the local build library yet.</p>
         </div>
         <div class="action-row">
-          <button class="ui-button" @click="pendingNavigation = null">Continue editing</button>
+          <button class="ui-button" data-initial-focus @click="pendingNavigation = null">Continue editing</button>
           <button class="ui-button" @click="finishNavigation(true)">Discard changes</button>
           <button class="ui-button" data-variant="primary" @click="saveAndNavigate">
             Save changes
           </button>
         </div>
-      </section>
+        </section>
+      </ModalDialog>
 
-      <div v-if="composer" class="composer-backdrop" @click.self="composer = null">
-        <form class="ui-frame composer-dialog" @submit.prevent="finishCreate">
+      <ModalDialog
+        :open="composer !== null"
+        labelledby="composer-title"
+        :initial-focus="composer === 'import-team' ? '.template-code' : '.ui-input'"
+        @close="composer = null; clipboardProblem = ''"
+      >
+        <form
+          class="ui-frame composer-dialog"
+          @submit.prevent="finishCreate"
+        >
           <header>
             <div>
-              <h2>{{ composer === "build" ? "Import a build" : "Create a team" }}</h2>
+                <h2 id="composer-title">{{ composer === "build"
+                  ? "Import a build"
+                  : composer === "import-team" ? "Import a team" : "Create a team" }}</h2>
               <p v-if="composer === 'build'">
                 Paste the template code Guild Wars already understands.
+              </p>
+              <p v-else-if="composer === 'import-team'">
+                Paste a full-fidelity GWonMac team code.
               </p>
               <p v-else>Start empty, then assign library builds to its eight slots.</p>
             </div>
             <button type="button" class="ui-button" data-icon aria-label="Close" @click="composer = null">×</button>
           </header>
-          <label>
+          <label v-if="composer !== 'import-team'">
             <span>Name <small>optional</small></span>
-            <input v-model="draftName" class="ui-input" autofocus placeholder="e.g. Story missions">
+            <input v-model="draftName" class="ui-input" placeholder="e.g. Story missions">
           </label>
           <label v-if="composer === 'build'">
             <span>Skill template code</span>
@@ -479,6 +615,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               placeholder="OwAU0Kn8Q4FgMjrUgtEA3TnA"
             />
           </label>
+          <label v-else-if="composer === 'import-team'">
+            <span>GWonMac team code</span>
+            <textarea
+              v-model="draftCode"
+              class="ui-textarea template-code"
+              rows="5"
+              required
+              spellcheck="false"
+              placeholder="gwonmac-team:…"
+            />
+            <small v-if="clipboardProblem" class="ui-field-error" role="alert">
+              {{ clipboardProblem }}
+            </small>
+          </label>
           <footer>
             <button
               v-if="composer === 'build'"
@@ -488,13 +638,23 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             >
               Start blank
             </button>
+            <button
+              v-if="composer === 'import-team'"
+              type="button"
+              class="ui-button"
+              @click="pasteTeamCode"
+            >
+              Paste from Clipboard
+            </button>
             <button type="button" class="ui-button" @click="composer = null">Cancel</button>
             <button class="ui-button" data-variant="primary">
-              {{ composer === "build" ? "Import build" : "Create team" }}
+              {{ composer === "build"
+                ? "Import build"
+                : composer === "import-team" ? "Import team" : "Create team" }}
             </button>
           </footer>
         </form>
-      </div>
+      </ModalDialog>
     </section>
   </div>
 </template>

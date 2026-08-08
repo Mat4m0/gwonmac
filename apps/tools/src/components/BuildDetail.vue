@@ -18,6 +18,7 @@ import AttributeEditor from "./AttributeEditor.vue";
 import SkillBar from "./SkillBar.vue";
 import SkillCatalogue from "./SkillCatalogue.vue";
 import TagEditor from "./TagEditor.vue";
+import { navigateTabs } from "../tab-keyboard";
 
 const props = withDefaults(defineProps<{
   build: Build;
@@ -175,7 +176,7 @@ defineExpose({
 </script>
 
 <template>
-  <article class="detail-view build-authoring" aria-labelledby="build-title">
+  <article class="detail-view build-authoring" aria-label="Build editor">
     <header class="detail-header authoring-header">
       <div class="detail-title-line">
         <div
@@ -207,18 +208,29 @@ defineExpose({
           :aria-label="build.favourite ? 'Remove from favourites' : 'Add to favourites'"
           :aria-pressed="build.favourite"
           @click="controller.toggleBuildFavourite(build.id)"
-        >★</button>
+        >{{ build.favourite ? "★" : "☆" }}</button>
       </div>
 
-      <div class="authoring-tabs" role="tablist" aria-label="Build view">
+      <div
+        class="authoring-tabs"
+        role="tablist"
+        aria-label="Build view"
+        @keydown="navigateTabs"
+      >
         <button
+          id="build-view-tab"
           role="tab"
+          aria-controls="build-view-panel"
           :aria-selected="view === 'build'"
+          :tabindex="view === 'build' ? 0 : -1"
           @click="view = 'build'"
         >Build</button>
         <button
+          id="build-details-tab"
           role="tab"
+          aria-controls="build-details-panel"
           :aria-selected="view === 'details'"
+          :tabindex="view === 'details' ? 0 : -1"
           @click="view = 'details'"
         >Details</button>
         <span v-if="editor.usage.value.length" class="ui-chip" data-level="info">
@@ -229,7 +241,12 @@ defineExpose({
     </header>
 
     <template v-if="view === 'build'">
-      <div class="authoring-scroll">
+      <div
+        id="build-view-panel"
+        class="authoring-scroll"
+        role="tabpanel"
+        aria-labelledby="build-view-tab"
+      >
         <section class="authoring-bar-section">
           <div class="workspace-heading">
             <div>
@@ -274,28 +291,54 @@ defineExpose({
           <button class="ui-link" @click="reviewFirstProblem">Review first issue</button>
         </div>
 
-        <div class="workspace-switcher ui-segment" role="tablist" aria-label="Authoring workspace">
+        <div
+          class="workspace-switcher ui-segment"
+          role="tablist"
+          aria-label="Authoring workspace"
+          @keydown="navigateTabs"
+        >
           <button
+            id="attributes-tab"
             role="tab"
+            aria-controls="attributes-panel"
             :aria-selected="workspace === 'attributes'"
+            :tabindex="workspace === 'attributes' ? 0 : -1"
             @click="workspace = 'attributes'; editor.activeSlot.value = null"
           >Attributes</button>
           <button
+            id="skills-tab"
             role="tab"
+            aria-controls="skills-panel"
             :aria-selected="workspace === 'skills'"
+            :tabindex="workspace === 'skills' ? 0 : -1"
             @click="workspace = 'skills'"
-          >Skills</button>
+          >Skill catalogue</button>
         </div>
 
-        <AttributeEditor v-if="workspace === 'attributes'" :editor="editor" />
+        <AttributeEditor
+          v-if="workspace === 'attributes'"
+          id="attributes-panel"
+          role="tabpanel"
+          aria-labelledby="attributes-tab"
+          :editor="editor"
+        />
         <SkillCatalogue
           v-else-if="editor.activeSlot.value !== null"
+          id="skills-panel"
+          role="tabpanel"
+          aria-labelledby="skills-tab"
           :editor="editor"
           :catalogue="controller.skills"
           :allow-player-only="allowPlayerOnly"
           @close="closeCatalogue"
         />
-        <section v-else class="catalogue-prompt ui-empty">
+        <section
+          v-else
+          id="skills-panel"
+          class="catalogue-prompt ui-empty"
+          role="tabpanel"
+          aria-labelledby="skills-tab"
+        >
           <strong>Choose a skill slot</strong>
           <p>The catalogue opens here without covering the rest of the build.</p>
           <button class="ui-button" @click="selectSlot(0)">Choose slot 1</button>
@@ -303,12 +346,18 @@ defineExpose({
       </div>
     </template>
 
-    <div v-else class="detail-scroll build-details">
+    <div
+      v-else
+      id="build-details-panel"
+      class="detail-scroll build-details"
+      role="tabpanel"
+      aria-labelledby="build-details-tab"
+    >
       <section v-if="parent" class="comparison-section">
         <div class="workspace-heading">
           <div>
             <h2>Variant of {{ parent.name }}</h2>
-            <p>The relationship stays one level deep.</p>
+            <p>This variant keeps its own changes while remembering the original.</p>
           </div>
           <div class="lineage-actions">
             <button class="ui-link" @click="merging = true">Merge into original</button>

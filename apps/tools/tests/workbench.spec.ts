@@ -1,13 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function openBuild(page: Page, name = /Word of Healing Mo/) {
+async function openBuild(page: Page, name = /Word of Healing/) {
   await page.getByRole("tab", { name: /Builds/ }).click();
-  await page.getByRole("option", { name }).first().click();
+  await page.locator(".library-row").filter({ hasText: name }).first().click();
   await expect(page.locator("#build-name")).toBeVisible();
 }
 
 async function chooseSkill(page: Page, slot: number, name: string) {
-  await page.getByRole("tab", { name: "Skills", exact: true }).click();
+  await page.getByRole("tab", { name: "Skill catalogue", exact: true }).click();
   await page.locator(".authoring-bar .skill").nth(slot).click();
   await page.getByRole("searchbox", { name: "Search skills" }).fill(name);
   await page.locator(".skill-result").filter({ hasText: name }).first().click();
@@ -26,8 +26,8 @@ test("manages teams and finds builds without Electron or the game", async ({ pag
 
   await page.getByRole("tab", { name: /Builds/ }).click();
   await page.getByRole("searchbox", { name: "Search library" }).fill("Barrage");
-  await expect(page.getByRole("option", { name: /Splinter Barrage/ })).toHaveCount(1);
-  await page.getByRole("option", { name: /Splinter Barrage/ }).click();
+  await expect(page.locator(".library-row").filter({ hasText: /Splinter Barrage/ })).toHaveCount(1);
+  await page.locator(".library-row").filter({ hasText: /Splinter Barrage/ }).click();
   await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
 });
 
@@ -63,6 +63,7 @@ test("forks a shared edit, rebinds selected teams, and keeps one undo", async ({
 });
 
 test("allocates the nonlinear 200-point budget and excludes the secondary primary attribute", async ({ page }) => {
+  await page.getByRole("tab", { name: /Builds/ }).click();
   await page.getByRole("button", { name: "Import build" }).click();
   await page.getByLabel("Name optional").fill("Sword and bow");
   await page.getByRole("button", { name: "Start blank" }).click();
@@ -84,7 +85,7 @@ test("allocates the nonlinear 200-point budget and excludes the secondary primar
 
 test("uses the inline catalogue for filters, mechanics, elite replacement, and keyboard return", async ({ page }) => {
   await openBuild(page);
-  await page.getByRole("tab", { name: "Skills", exact: true }).click();
+  await page.getByRole("tab", { name: "Skill catalogue", exact: true }).click();
   const origin = page.locator(".authoring-bar .skill").nth(0);
   await origin.focus();
   await origin.press("Enter");
@@ -115,35 +116,35 @@ test("keeps imported conflicts visible and repairs a profession change", async (
   await expect(page.getByRole("heading", { name: /Choose skill/ })).toBeVisible();
 });
 
-test("applies a fresh account team with one hero", async ({ page }) => {
-  await page.getByRole("button", { name: "New team" }).click();
+test("configures a fresh team and explains why Apply is waiting", async ({ page }) => {
+  await page.getByRole("button", { name: "New team", exact: true }).click();
   await page.getByLabel("Name optional").fill("Me and Koss");
   await page.getByRole("button", { name: "Create team" }).click();
 
   const player = page.locator(".team-slots > li").nth(0);
   const hero = page.locator(".team-slots > li").nth(1);
-  await player.locator(".build-picker select").selectOption({ label: "Splinter Barrage" });
-  await hero.locator(".hero-picker select").selectOption({ label: "Koss" });
-  await hero.locator(".build-picker select").selectOption({ label: "Discord Necro" });
-  await hero.getByRole("button", { name: /Hero controls for Koss/ }).click();
-  await hero.getByRole("button", { name: /1 Discord/ }).click();
-  await hero.getByRole("button", { name: /1 Discord/ }).click();
-  await player.locator(".build-picker select").selectOption("");
+  await expect(page.locator(".team-slots > li")).toHaveCount(8);
+  await expect(page.locator(".team-slot--compact")).toHaveCount(7);
+  await expect(hero.getByText("Available slot")).toBeVisible();
+  await player.locator(".build-picker select").selectOption("b-barrage");
+  await hero.locator(".hero-picker select").selectOption("6");
+  await expect(page.locator(".team-slot--compact")).toHaveCount(6);
+  await hero.locator(".build-picker select").selectOption("b-discord");
+  await hero.locator(".behavior-picker select").selectOption("guard");
 
-  await page.getByRole("button", { name: "Apply team" }).click();
-  await expect(page.getByText(/Team applied/)).toBeVisible();
-  await expect(
-    page.getByText(
-      /Applies the hero roster, secondary professions, skill bars, attributes/,
-    ),
-  ).toBeVisible();
+  await expect(player.locator(".build-picker select")).toHaveValue("b-barrage");
+  await expect(hero.locator(".hero-picker select")).toHaveValue("6");
+  await expect(hero.locator(".build-picker select")).toHaveValue("b-discord");
+  await expect(page.getByRole("button", { name: "Apply team" })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Before you can apply" })).toBeVisible();
+  await expect(page.getByText(/complete party roster/i)).toBeVisible();
 });
 
 for (const width of [320, 360, 640]) {
   test(`keeps authoring reachable at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 700 });
     await page.getByRole("tab", { name: /Builds/ }).click();
-    await page.getByRole("option", { name: /Word of Healing Mo/ }).first().click();
+    await page.locator(".library-row").filter({ hasText: /Word of Healing/ }).first().click();
     await expect(page.getByRole("button", { name: "Library" })).toBeVisible();
     await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
     await expect(page.locator("body")).toHaveJSProperty("scrollWidth", width);
@@ -157,6 +158,111 @@ test("keeps bar and commit actions reachable at short height", async ({ page }) 
   await expect(page.locator(".authoring-bar")).toBeVisible();
   await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Write skill template" })).toBeVisible();
+});
+
+for (const [width, height] of [
+  [320, 800], [360, 800], [640, 900], [1024, 420], [1180, 760],
+] as const) {
+  test(`keeps team composition and Apply trustworthy at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    if (width <= 640) await page.locator(".library-row").first().click();
+
+    await expect(page.locator(".team-slots > li")).toHaveCount(8);
+    await expect(page.locator("#apply-feedback")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Apply team" })).toBeVisible();
+    const geometry = await page.locator(".team-scroll").evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+    if (height === 420) expect(await page.locator(".team-scroll").evaluate(
+      (element) => element.clientHeight,
+    )).toBeGreaterThanOrEqual(100);
+
+    const invalid = page.locator(".team-slots > li[data-invalid]").first();
+    await invalid.scrollIntoViewIfNeeded();
+    await expect(invalid.locator(".assignment-error")).toBeVisible();
+  });
+}
+
+test("keeps critical team text and focus treatment legible", async ({ page }) => {
+  const contrast = async (selector: string) => page.locator(selector).first().evaluate((element) => {
+    type Colour = [number, number, number, number];
+    const parse = (value: string): Colour => {
+      const values = value.match(/[\d.]+/gu)?.map(Number) ?? [];
+      if (value.startsWith("oklch")) {
+        const lightness = value.includes("%") ? (values[0] ?? 0) / 100 : values[0] ?? 0;
+        const chroma = values[1] ?? 0;
+        const hue = ((values[2] ?? 0) * Math.PI) / 180;
+        const a = chroma * Math.cos(hue);
+        const b = chroma * Math.sin(hue);
+        const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+        const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+        const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
+        const gamma = (channel: number) => {
+          const linear = Math.max(0, Math.min(1, channel));
+          return 255 * (linear <= 0.0031308
+            ? 12.92 * linear
+            : 1.055 * linear ** (1 / 2.4) - 0.055);
+        };
+        return [
+          gamma(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+          gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+          gamma(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+          values[3] ?? 1,
+        ];
+      }
+      if (value.startsWith("color(srgb")) {
+        return [
+          (values[0] ?? 0) * 255,
+          (values[1] ?? 0) * 255,
+          (values[2] ?? 0) * 255,
+          values[3] ?? 1,
+        ];
+      }
+      return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 1];
+    };
+    const over = (front: Colour, back: Colour): Colour => {
+      const alpha = front[3] + back[3] * (1 - front[3]);
+      if (alpha === 0) return [0, 0, 0, 0];
+      return [
+        (front[0] * front[3] + back[0] * back[3] * (1 - front[3])) / alpha,
+        (front[1] * front[3] + back[1] * back[3] * (1 - front[3])) / alpha,
+        (front[2] * front[3] + back[2] * back[3] * (1 - front[3])) / alpha,
+        alpha,
+      ];
+    };
+    let background: Colour = [0, 0, 0, 1];
+    const layers: Colour[] = [];
+    for (let node: Element | null = element; node; node = node.parentElement) {
+      const layer = parse(getComputedStyle(node).backgroundColor);
+      if (layer[3] > 0) layers.push(layer);
+    }
+    for (const layer of layers.reverse()) background = over(layer, background);
+    const foreground = over(parse(getComputedStyle(element).color), background);
+    const luminance = (colour: Colour) => {
+      const channel = (value: number) => {
+        const normalized = value / 255;
+        return normalized <= 0.03928
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(colour[0])
+        + 0.7152 * channel(colour[1])
+        + 0.0722 * channel(colour[2]);
+    };
+    const light = luminance(foreground);
+    const dark = luminance(background);
+    return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
+  });
+
+  expect(await contrast(".apply-readiness strong")).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(".apply-readiness p")).toBeGreaterThanOrEqual(4.5);
+  expect(await contrast(".assignment-error")).toBeGreaterThanOrEqual(4.5);
+
+  const apply = page.getByRole("button", { name: "Apply team" });
+  await apply.focus();
+  expect(await apply.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
 });
 
 test("preserves native text undo and protects dirty navigation", async ({ page }) => {

@@ -22,12 +22,20 @@ const BEHAVIOUR_LABELS = {
 const unnamed = computed(() =>
   Math.max(0, props.party.heroCount - props.party.heroes.length),
 );
+const shownHeroes = computed(() => props.party.heroes.slice(0, 3));
+const remaining = computed(() =>
+  Math.max(0, props.party.heroCount - shownHeroes.value.length),
+);
+const canCapture = computed(() =>
+  props.party.status === "ready"
+  && (props.party.player !== null || props.party.heroes.length > 0)
+);
 </script>
 
 <template>
-  <section class="live-party" aria-label="Current party in game">
+  <section class="live-party" aria-label="Party in Guild Wars">
     <header class="live-party-head">
-      <h2>In game now</h2>
+      <h2>Party in Guild Wars</h2>
       <span
         v-if="party.status === 'ready'"
         class="ui-chip"
@@ -41,7 +49,7 @@ const unnamed = computed(() =>
 
     <template v-else>
       <ul v-if="party.heroes.length" class="live-party-list">
-        <li v-for="hero in party.heroes" :key="hero.hero" class="live-party-row">
+        <li v-for="hero in shownHeroes" :key="hero.hero" class="live-party-row">
           <span class="ui-mark" aria-hidden="true">{{ heroLabel(hero.hero)[0] }}</span>
           <span class="live-party-name">{{ heroLabel(hero.hero) }}</span>
           <!--
@@ -65,9 +73,11 @@ const unnamed = computed(() =>
         of what the companion currently publishes, and the difference matters to
         anyone deciding whether to trust the list.
       -->
-      <p v-if="unnamed" class="live-party-note">
-        {{ unnamed }} more {{ unnamed === 1 ? "hero is" : "heroes are" }} in your
-        party. Naming them needs the party observer.
+      <p v-if="remaining" class="live-party-note">
+        {{ remaining }} more {{ remaining === 1 ? "hero is" : "heroes are" }} in your party.
+        <template v-if="unnamed">
+          GWonMac cannot identify {{ unnamed === 1 ? "one" : unnamed }} yet.
+        </template>
       </p>
       <p v-else-if="!party.heroes.length" class="live-party-note">
         No heroes in your party.
@@ -80,12 +90,13 @@ const unnamed = computed(() =>
         plainly.
       -->
       <button
-        v-if="party.heroes.length"
+        v-if="canCapture"
         class="ui-button"
+        data-variant="primary"
         :disabled="saving"
         @click="$emit('capture')"
       >
-        Save as team
+        Save as new team
       </button>
     </template>
   </section>
@@ -94,9 +105,8 @@ const unnamed = computed(() =>
 <style scoped>
 .live-party {
   display: grid;
-  padding: var(--ui-space-2) var(--ui-space-3);
+  padding: var(--ui-space-2) 0;
   gap: var(--ui-space-2);
-  border-top: 1px solid var(--ui-line-soft);
 }
 
 .live-party-head {
@@ -108,11 +118,9 @@ const unnamed = computed(() =>
 
 .live-party-head h2 {
   margin: 0;
-  color: var(--ui-text-faint);
-  font-size: var(--ui-font-size-sm);
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .live-party-list {
