@@ -68,3 +68,4 @@ coverage/
 
 plans/*
 !plans/research-tool-architecture.md
+!plans/memory-bug.md

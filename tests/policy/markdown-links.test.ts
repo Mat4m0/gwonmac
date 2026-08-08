@@ -220,11 +220,15 @@ test("the file list covers tracked docs and excludes gitignored scratch", () => 
   assert.ok(files.includes("PRODUCT.md"));
   assert.ok(files.includes("docs/process-model.md"));
   assert.ok(files.includes("plans/research-tool-architecture.md"));
+  assert.ok(files.includes("plans/memory-bug.md"));
   assert.ok(
     files.every((file) =>
       (
         !file.startsWith("plans/")
-        || file === "plans/research-tool-architecture.md"
+        || [
+          "plans/research-tool-architecture.md",
+          "plans/memory-bug.md",
+        ].includes(file)
       )
       && !file.startsWith("node_modules/")),
     "gitignored paths must not be scanned",

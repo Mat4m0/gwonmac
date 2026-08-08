@@ -179,5 +179,45 @@ if (!input) {
     // wasm.abort is memory exhaustion, whatever the abort's reason kind says.
     console.log(`  wasm heap peak   ${((Number(summary.latest["renderer.peakWasmHeapBytes"]) || 0) / 1048576).toFixed(0)} MiB of ${(WASM_HEAP_CAP_BYTES / 1048576).toFixed(0)} MiB`);
     console.log(`  GPU RSS peak     ${((Number(summary.latest["process.gpu.peakRssBytes"]) || 0) / 1048576).toFixed(0)} MB`);
+    const memoryProbe = summary.latest["wasm.memoryProbe.status"];
+    if (memoryProbe) console.log(`  memory probe     ${String(memoryProbe)}`);
+    const mebibytes = (value: unknown) =>
+      `${(Number(value) / 1_048_576).toFixed(1)} MiB`;
+    const growthRequests = c["wasm.growthRequests"] ?? 0;
+    if (growthRequests) {
+      console.log("");
+      console.log("WASM memory attribution");
+      console.log(
+        `  growth requests ${growthRequests} `
+          + `(grown ${c["wasm.growthRequests.grown"] ?? 0}, `
+          + `unchanged ${c["wasm.growthRequests.unchanged"] ?? 0}, `
+          + `refused ${c["wasm.growthRequests.refused"] ?? 0}, `
+          + `threw ${c["wasm.growthRequests.threw"] ?? 0})`,
+      );
+      console.log(
+        `  last request    ${mebibytes(summary.latest["wasm.growth.requestedBytes"])} `
+          + `${String(summary.latest["wasm.growth.outcome"])}; heap `
+          + `${mebibytes(summary.latest["wasm.growth.beforeBytes"])} -> `
+          + mebibytes(summary.latest["wasm.growth.afterBytes"]),
+      );
+      console.log(
+        `  growth trigger  ${String(summary.latest["wasm.growth.stackFingerprint"])} `
+          + `fn ${Number(summary.latest["wasm.growth.frame0Function"])} `
+          + `@ 0x${Number(summary.latest["wasm.growth.frame0Offset"]).toString(16)}, `
+          + `fn ${Number(summary.latest["wasm.growth.frame1Function"])} `
+          + `@ 0x${Number(summary.latest["wasm.growth.frame1Offset"]).toString(16)}`,
+      );
+      console.log(
+        `  textures live  ${summary.latest["wasm.textures.live"]} `
+          + `(peak ${summary.latest["wasm.textures.peakLive"]}), estimated `
+          + `${mebibytes(summary.latest["wasm.textures.knownBytes"])} `
+          + `(peak ${mebibytes(summary.latest["wasm.textures.peakKnownBytes"])})`,
+      );
+      console.log(
+        `  uploads        ${mebibytes(summary.latest["wasm.textures.uploadBytes"])}; `
+          + `unknown allocations ${summary.latest["wasm.textures.unknownAllocations"]}; `
+          + `tracker ${summary.latest["wasm.textures.trackingSaturated"] ? "SATURATED" : "complete"}`,
+      );
+    }
   });
 }

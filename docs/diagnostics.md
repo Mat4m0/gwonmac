@@ -222,6 +222,49 @@ process when its event loop actually blocked, and otherwise to the renderer.
 Captures recorded before window-state tracking say so rather than claiming the
 window was steady.
 
+### Attributing WASM memory exhaustion
+
+The renderer wraps the official client's imported `emscripten_resize_heap`
+function before instantiation. It does not change the requested size or the
+result. A `wasm.memoryProbe` event first records whether that import was
+available, so silence cannot be mistaken for an active probe. Every call then
+records `wasm.growthRequested` with the requested, before, and after heap
+sizes; whether the request grew, stayed unchanged, was refused, or threw; and
+the first four numeric WASM function indices and code offsets. The event
+therefore includes failed growth attempts that the two-second `wasm.heapGrew`
+capacity staircase cannot see. Stack prose never crosses IPC. An eight-hex
+fingerprint groups identical numeric call chains.
+
+At the same boundary the recorder snapshots bounded WebGL texture aggregates:
+generated, deleted, live, and tracked texture counts; estimated bytes for
+known sized formats; estimated cumulative upload bytes; unknown allocations;
+and whether the 4,096-texture tracking bound was reached. No texture contents,
+WebGL object, pointer, or per-texture history is retained. When
+`unknownTextureAllocations` is non-zero or `textureTrackingSaturated` is true,
+the known byte figure is a lower bound, not total GPU memory.
+
+Run `pnpm diagnostics:summarize <capture.gwdiag>` first. Its **WASM memory
+attribution** section reports the outcome counts, last request, growth trigger,
+and texture state at that request. The growth trigger is the allocation path
+that crossed the current heap capacity; it is not presented as the owner of
+the whole growth step.
+
+| Evidence | What it establishes | What it does not establish |
+| --- | --- | --- |
+| `refused`, unchanged heap, request at or above the compiled cap | The official WASM asked its Emscripten host to exceed the memory available to this build | Which client subsystem retained the earlier allocations |
+| One repeated stack fingerprint while texture counts and estimated bytes stay flat | One stable WASM allocation path is triggering growth, with no measured texture-lifetime correlation | The source symbol without exact-build symbolication |
+| Texture live/known bytes rise with successive requests | Texture allocation or staging is correlated with heap pressure | That GPU storage itself occupies WASM linear memory, or that the host leaked it |
+| Many upload bytes but stable live/known bytes | Texture data is being streamed, while measured retained texture storage is stable | Whether temporary client-side upload buffers are retained elsewhere |
+| Probe `installed`, but no `wasm.growthRequested` before an abort | No call crossed the imported resize boundary before the abort | That the failure was not memory-related; check the abort kind |
+| Probe `resizeImportMissing` | The client build no longer exposes this observation boundary | Anything about growth ownership |
+
+Function indices and offsets are meaningful only for the exact official client
+build recorded in the capture. Run
+`python3 tools/gensyms.py "<path>/Gw.jspi.wasm" build/` against that exact
+artifact before assigning a source symbol. A capture can conclusively show a
+client request being refused at its compiled limit; assigning ownership still
+requires controlled runs of the same client build.
+
 ## Verification boundaries
 
 ### Claims and the tests that prove them

@@ -18,6 +18,7 @@ import {
   type RendererMetrics,
   type RendererMilestone,
   type RendererMilestoneFields,
+  type WasmMemoryProbeStatus,
 } from "../../shared/diagnostics.js";
 import { activeCaptureLevel } from "./capture.js";
 import { logEvent, recordEvent, recorder } from "./recorder.js";
@@ -287,6 +288,58 @@ export function recordRendererMilestone(
         clockSynchronized: rendererClockSynchronized,
         code: fields.code,
         heapBytes: fields.heapBytes,
+      },
+      { timestampUs },
+    );
+    return;
+  }
+  if (name === "wasm.memoryProbe") {
+    if (!fields || !("status" in fields)) return;
+    recorder.setLatest("wasm.memoryProbe.status", fields.status);
+    recordEvent(
+      {
+        k: "wasm.memoryProbe",
+        clockSynchronized: rendererClockSynchronized,
+        status: fields.status as WasmMemoryProbeStatus,
+      },
+      { timestampUs },
+    );
+    return;
+  }
+  if (name === "wasm.growthRequested") {
+    if (!fields || !("requestedBytes" in fields)) return;
+    recorder.count("wasm.growthRequests");
+    recorder.count(`wasm.growthRequests.${fields.outcome}`);
+    recorder.setLatest("wasm.growth.outcome", fields.outcome);
+    recorder.setLatest("wasm.growth.stackFingerprint", fields.stackFingerprint);
+    recorder.setLatest("wasm.growth.requestedBytes", fields.requestedBytes);
+    recorder.setLatest("wasm.growth.beforeBytes", fields.beforeBytes);
+    recorder.setLatest("wasm.growth.afterBytes", fields.afterBytes);
+    recorder.setLatest("wasm.growth.stackDepth", fields.stackDepth);
+    recorder.setLatest("wasm.growth.frame0Function", fields.frame0Function);
+    recorder.setLatest("wasm.growth.frame0Offset", fields.frame0Offset);
+    recorder.setLatest("wasm.growth.frame1Function", fields.frame1Function);
+    recorder.setLatest("wasm.growth.frame1Offset", fields.frame1Offset);
+    recorder.setLatest("wasm.textures.live", fields.liveTextures);
+    recorder.setLatest("wasm.textures.tracked", fields.trackedTextures);
+    recorder.setLatest("wasm.textures.knownBytes", fields.knownTextureBytes);
+    recorder.setLatest("wasm.textures.uploadBytes", fields.textureUploadBytes);
+    recorder.setLatest(
+      "wasm.textures.unknownAllocations",
+      fields.unknownTextureAllocations,
+    );
+    recorder.setLatest(
+      "wasm.textures.trackingSaturated",
+      fields.textureTrackingSaturated,
+    );
+    recorder.setPeak("wasm.textures.peakLive", fields.liveTextures);
+    recorder.setPeak("wasm.textures.peakKnownBytes", fields.knownTextureBytes);
+    recordEvent(
+      {
+        k: "wasm.growthRequested",
+        clockSynchronized: rendererClockSynchronized,
+        ...fields,
+        stackFingerprint: asRendererFingerprint(fields.stackFingerprint),
       },
       { timestampUs },
     );

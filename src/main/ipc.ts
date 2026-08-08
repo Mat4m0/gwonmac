@@ -45,6 +45,8 @@ import {
   isRendererMetrics,
   RENDERER_MILESTONES,
   WASM_ABORT_REASON_KINDS,
+  WASM_GROWTH_OUTCOMES,
+  WASM_MEMORY_PROBE_STATUSES,
 } from "../shared/diagnostics.js";
 import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
@@ -427,6 +429,60 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
     milestoneFields = {
       code: record.code as number,
       heapBytes: record.heapBytes as number,
+    };
+  } else if (name === "wasm.memoryProbe") {
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === 1
+      && typeof record.status === "string"
+      && (WASM_MEMORY_PROBE_STATUSES as readonly string[]).includes(record.status);
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      status: record.status as (typeof WASM_MEMORY_PROBE_STATUSES)[number],
+    };
+  } else if (name === "wasm.growthRequested") {
+    const numericFields = [
+      "requestedBytes", "beforeBytes", "afterBytes", "stackDepth",
+      "frame0Function", "frame0Offset", "frame1Function", "frame1Offset",
+      "frame2Function", "frame2Offset", "frame3Function", "frame3Offset",
+      "generatedTextures", "deletedTextures", "liveTextures",
+      "trackedTextures", "knownTextureBytes", "textureUploadBytes",
+      "unknownTextureAllocations",
+    ] as const;
+    const valid =
+      recordIsObject
+      && Object.keys(record).length === numericFields.length + 3
+      && numericFields.every((field) => isByteCount(record[field]))
+      && (record.stackDepth as number) <= 4
+      && (record.trackedTextures as number) <= 4_096
+      && typeof record.outcome === "string"
+      && (WASM_GROWTH_OUTCOMES as readonly string[]).includes(record.outcome)
+      && isRendererFingerprint(record.stackFingerprint)
+      && typeof record.textureTrackingSaturated === "boolean";
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      requestedBytes: record.requestedBytes as number,
+      beforeBytes: record.beforeBytes as number,
+      afterBytes: record.afterBytes as number,
+      outcome: record.outcome as (typeof WASM_GROWTH_OUTCOMES)[number],
+      stackFingerprint: record.stackFingerprint as string,
+      stackDepth: record.stackDepth as number,
+      frame0Function: record.frame0Function as number,
+      frame0Offset: record.frame0Offset as number,
+      frame1Function: record.frame1Function as number,
+      frame1Offset: record.frame1Offset as number,
+      frame2Function: record.frame2Function as number,
+      frame2Offset: record.frame2Offset as number,
+      frame3Function: record.frame3Function as number,
+      frame3Offset: record.frame3Offset as number,
+      generatedTextures: record.generatedTextures as number,
+      deletedTextures: record.deletedTextures as number,
+      liveTextures: record.liveTextures as number,
+      trackedTextures: record.trackedTextures as number,
+      knownTextureBytes: record.knownTextureBytes as number,
+      textureUploadBytes: record.textureUploadBytes as number,
+      unknownTextureAllocations: record.unknownTextureAllocations as number,
+      textureTrackingSaturated: record.textureTrackingSaturated as boolean,
     };
   } else if (name === "enhancement.installed") {
     const valid =
