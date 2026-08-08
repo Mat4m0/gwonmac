@@ -62,7 +62,6 @@ function emptyTeamSlots(): Team["slots"] {
     build: null,
     hero: null,
     behaviour: position === 0 ? null : "guard",
-    panel: false,
     disabled: [],
   }));
 }

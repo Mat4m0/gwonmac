@@ -49,8 +49,8 @@
  * ## What a party loadout carries, and what it silently drops
  *
  * Per member: a hero id and a skill bar (professions, invested attributes,
- * eight skill ids). That is all (§1.4). Behaviour, the pinned skill panel, the
- * disabled-skill mask, every name, the team's tags and its mode are **not in
+ * eight skill ids). That is all (§1.4). Behaviour, the disabled-skill mask,
+ * every name, the team's tags and its mode are **not in
  * the format** — the encoder touches two fields of its input and the decoder
  * sets two (`TeamBuildEncoder.cpp:646-650`, `:726-730`). Toolbox scrapes
  * behaviour and the disabled mask from the live game and persists them to its

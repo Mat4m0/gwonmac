@@ -64,7 +64,6 @@ const storedSlot = (build: string | null) => ({
   build,
   hero: null,
   behaviour: null,
-  panel: false,
   disabled: [],
 });
 

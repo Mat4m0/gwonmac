@@ -180,7 +180,6 @@ const slot = (
   build: build === null ? null : buildId(build),
   hero: hero === null ? null : heroId(hero),
   behaviour: null,
-  panel: false,
   disabled: [],
   ...extra,
 });
@@ -213,15 +212,15 @@ const library = (teams: readonly Team[]): BuildLibrary => ({
 /** A full party: the player in slot 0, seven heroes behind them. */
 const FULL_TEAM = makeTeam([
   slot("b-player", null),
-  slot("b-monk", 1, { behaviour: "guard", panel: true, disabled: [0, 3] }),
-  slot("b-ele", 2, { behaviour: "avoid", panel: false, disabled: [7] }),
-  slot("b-empty-bar", 3, { behaviour: "fight", panel: true, disabled: [] }),
-  slot("b-wide", 22, { behaviour: "guard", panel: false, disabled: [1, 2] }),
+  slot("b-monk", 1, { behaviour: "guard", disabled: [0, 3] }),
+  slot("b-ele", 2, { behaviour: "avoid", disabled: [7] }),
+  slot("b-empty-bar", 3, { behaviour: "fight", disabled: [] }),
+  slot("b-wide", 22, { behaviour: "guard", disabled: [1, 2] }),
   // 39 is `GhostOfAlthea`, the highest id `heroes.ts` holds, so the widest hero
   // byte a party can legally carry is in the fixture.
-  slot("b-monk", 39, { behaviour: "fight", panel: true, disabled: [] }),
-  slot("b-ele", 15, { behaviour: "avoid", panel: false, disabled: [4, 5, 6] }),
-  slot("b-player", 8, { behaviour: "guard", panel: true, disabled: [] }),
+  slot("b-monk", 39, { behaviour: "fight", disabled: [] }),
+  slot("b-ele", 15, { behaviour: "avoid", disabled: [4, 5, 6] }),
+  slot("b-player", 8, { behaviour: "guard", disabled: [] }),
 ]);
 
 const membersOf = (team: Team): readonly PartyLoadoutMember[] => {
@@ -264,7 +263,7 @@ test("the player's slot survives as NoHero rather than as a hero id", () => {
   assert.equal(decoded[5]?.hero, 39);
 });
 
-test("behaviour, the panel flag, the disabled mask and every name stay out of the code", () => {
+test("behaviour, the disabled mask and every name stay out of the code", () => {
   // §1.4: the encoder touches the code and the hero id and nothing else. If a
   // later change smuggles behaviour into the stream, these two codes diverge.
   const flipped = makeTeam(
@@ -274,7 +273,6 @@ test("behaviour, the panel flag, the disabled mask and every name stay out of th
         : {
             ...position,
             behaviour: "fight",
-            panel: !position.panel,
             disabled: [1, 2, 3],
           },
     ),
@@ -306,10 +304,10 @@ test("an empty party position is dropped, and the member count says so", () => {
   const sparse = makeTeam([
     slot("b-player", null),
     slot(null, null),
-    slot("b-monk", 4, { behaviour: "guard", panel: true }),
+    slot("b-monk", 4, { behaviour: "guard" }),
     slot(null, null),
     slot(null, null),
-    slot("b-ele", 9, { behaviour: "avoid", panel: false }),
+    slot("b-ele", 9, { behaviour: "avoid" }),
     slot(null, null),
     slot(null, null),
   ]);

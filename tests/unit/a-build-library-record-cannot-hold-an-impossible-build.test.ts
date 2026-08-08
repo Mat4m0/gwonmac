@@ -89,7 +89,6 @@ const player = (ref: string | null): TeamSlot => ({
   build: ref === null ? null : buildId(ref),
   hero: null,
   behaviour: null,
-  panel: false,
   disabled: [],
 });
 
@@ -101,7 +100,6 @@ const hero = (
   build: ref === null ? null : buildId(ref),
   hero: heroId(id),
   behaviour,
-  panel: false,
   disabled: [],
 });
 
@@ -109,7 +107,6 @@ const vacant: TeamSlot = {
   build: null,
   hero: null,
   behaviour: "guard",
-  panel: false,
   disabled: [],
 };
 

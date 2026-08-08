@@ -222,7 +222,6 @@ function parseSlot(value: unknown, field: string, known: ReadonlySet<string>): T
         : BEHAVIOURS.has(raw.behaviour as HeroBehaviour)
           ? (raw.behaviour as HeroBehaviour)
           : fail(`${field}.behaviour`, "names no hero behaviour"),
-    panel: asBoolean(raw.panel, `${field}.panel`),
     disabled: asDisabled(raw.disabled, `${field}.disabled`),
   };
 }

@@ -354,7 +354,6 @@ const EMPTY_SLOT: TeamSlot = Object.freeze({
   build: null,
   hero: null,
   behaviour: null,
-  panel: false,
   disabled: Object.freeze([]),
 });
 
@@ -454,7 +453,6 @@ export function captureParty(
       build,
       hero: hero.hero,
       behaviour: hero.behaviour,
-      panel: false,
       // Disabled positions name places on a bar. With no build there is no bar,
       // and `resolveTeamApplyPlan` rejects the pair outright — the professions
       // can be unread while the bar was read, so this is reachable.

@@ -257,8 +257,6 @@ export interface TeamSlot {
   readonly build: BuildId | null;
   readonly hero: HeroId | null;
   readonly behaviour: HeroBehaviour | null;
-  /** Whether this hero's skill panel is pinned open. */
-  readonly panel: boolean;
   /** Positions on this slot's bar the hero must not use of its own accord. */
   readonly disabled: readonly SkillSlotIndex[];
 }
@@ -337,7 +335,7 @@ export interface Team {
 }
 
 /** The stored file's version. A literal, so an older file fails to type-check. */
-export const LIBRARY_VERSION = 2;
+export const LIBRARY_VERSION = 3;
 
 export interface BuildLibrary {
   readonly version: typeof LIBRARY_VERSION;

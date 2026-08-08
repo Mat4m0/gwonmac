@@ -43,7 +43,6 @@ function applicableHost(applyTeam: ToolsHost["applyTeam"]): ToolsHost {
                       hero: null,
                       build: null,
                       behaviour: null,
-                      panel: false,
                       disabled: [],
                     }),
               }

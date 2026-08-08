@@ -13,6 +13,7 @@ import {
   PROFESSIONS,
 } from "../../../src/shared/builds/heroes";
 import {
+  LIBRARY_VERSION,
   skillId,
   type Attribute,
   type Profession,
@@ -97,7 +98,11 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     if (!saved) return cloneLibrary(memory);
     try {
       const value = JSON.parse(saved) as BuildLibrary;
-      if (value.version === 2 && Array.isArray(value.builds) && Array.isArray(value.teams)) {
+      if (
+        value.version === LIBRARY_VERSION
+        && Array.isArray(value.builds)
+        && Array.isArray(value.teams)
+      ) {
         return cloneLibrary(value);
       }
     } catch {
