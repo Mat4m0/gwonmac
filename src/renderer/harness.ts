@@ -269,42 +269,66 @@ window.gwLog = (on = true) => {
 };
 
 /**
- * The heap watermark. The client's WASM memory is capped by its own build
- * (`WASM_HEAP_CAP_BYTES` in the shared contracts), memory only ever grows
- * within one run, and a session that reaches the cap dies on whatever
- * allocation comes next — historically hours in and mid-mission. The watcher
- * moves that death to a moment the player picks: warn while there is headroom
- * to travel somewhere safe, escalate when the next growth step would hit the
- * cap. Reloading is a quick relog; from a town or outpost it loses nothing.
+ * The memory warning. The client's WASM memory is capped by its own build
+ * (`WASM_HEAP_CAP_BYTES` in the shared contracts), it only ever grows within a
+ * run, and a session that reaches the cap dies on whatever allocation comes
+ * next — historically hours in and mid-mission. The watcher moves that death
+ * to a moment the player picks.
+ *
+ * It counts in time, not bytes remaining. `heap-pressure.ts` owns that
+ * arithmetic and the reason for it; what matters here is that the number the
+ * player is shown is measured, and that when it cannot be measured no number
+ * is shown at all.
  *
  * A classic script cannot static-import, so the cap arrives via a dynamic
  * import — on the first watcher tick, not at boot. Boot would work here, but
  * it would also put the canonical contract into the module cache before the
  * Enhancement runtime imports it, and the packaged proof that the runtime
- * resolves the canonical module observes that import as a request. Until the
- * import lands the thresholds are Infinity and the watcher is silent, which
- * costs one 15-second tick and nothing else: no heap reaches a watermark
- * that fast.
+ * resolves the canonical module observes that import as a request. Until it
+ * lands there is no watch and the watcher is silent, which costs one
+ * 15-second tick and nothing else: no heap fills that fast.
  */
 const MIB = 1_048_576;
 let heapCapBytes = 0;
-let heapWarnBytes = Infinity; // cap − 256 MiB — time to finish up.
-let heapCriticalBytes = Infinity; // cap − 128 MiB — go now.
+let heapWatch: import('./heap-pressure.js').HeapPressureWatch | null = null;
 let heapCapRequested = false;
 function requestHeapCap() {
   if (heapCapRequested) return;
   heapCapRequested = true;
-  void import('../shared/contracts.js')
-    .then(({ WASM_HEAP_CAP_BYTES }) => {
+  void Promise.all([
+    import('../shared/contracts.js'),
+    import('./heap-pressure.js'),
+  ])
+    .then(([{ WASM_HEAP_CAP_BYTES }, { createHeapPressureWatch }]) => {
       heapCapBytes = WASM_HEAP_CAP_BYTES;
-      heapWarnBytes = WASM_HEAP_CAP_BYTES - 256 * MIB;
-      heapCriticalBytes = WASM_HEAP_CAP_BYTES - 128 * MIB;
+      heapWatch = createHeapPressureWatch({ capBytes: WASM_HEAP_CAP_BYTES });
     })
     // A failed load retries on the next tick rather than silencing the
-    // watermark for the whole session.
+    // warning for the whole session.
     .catch(() => { heapCapRequested = false; });
 }
 let heapNoticeLevel: 'none' | 'low' | 'critical' = 'none';
+/** What is on screen, so a dismissal can be a deferral rather than silence. */
+let heapSurface: 'hidden' | 'notice' | 'chip' = 'hidden';
+let heapLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+let heapWhyLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+const prefersReducedMotion = () =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/**
+ * How long to leave an element in the DOM while it animates out, read from the
+ * element itself rather than restated here. A number copied out of the
+ * stylesheet is a second source of truth that drifts silently — and this one
+ * also inherits the shorter durations the reduced-motion block sets, which a
+ * constant could not.
+ */
+const exitMs = (element: HTMLElement) =>
+  Math.max(
+    0,
+    ...getComputedStyle(element)
+      .transitionDuration.split(',')
+      .map((value) => Number.parseFloat(value) * 1_000)
+      .filter(Number.isFinite),
+  );
 
 const wasmHeapBytes = () => Module.HEAPU8?.buffer.byteLength ?? 0;
 window.gwWasmHeapBytes = wasmHeapBytes;
@@ -329,18 +353,92 @@ const crashTechnicalDetail = (reason: unknown, heapBytes: number): string => {
 // Static markup, and this script loads at the end of <body>, so the elements
 // exist here; a missing id degrades to a watcher that never presents.
 const heapNoticeRoot = document.getElementById('memory-notice');
+const heapNoticeText = document.getElementById('memory-notice-text');
 const heapNoticeLabel = document.getElementById('memory-notice-label');
 const heapNoticeDetail = document.getElementById('memory-notice-detail');
 const heapNoticeReload = document.getElementById('memory-notice-reload');
 const heapNoticeLater = document.getElementById('memory-notice-later');
+const heapNoticeWhy = document.getElementById('memory-notice-why');
+const heapChip = document.getElementById('memory-chip');
+const heapChipText = document.getElementById('memory-chip-text');
+const heapScrim = document.getElementById('memory-scrim');
+const heapWhyRoot = document.getElementById('memory-why');
+const heapWhyTitle = document.getElementById('memory-why-title');
+const heapWhyBlocks = document.getElementById('memory-why-blocks');
+const heapWhyClose = document.getElementById('memory-why-close');
+
+/**
+ * The client listens on the window for the events these surfaces generate, so
+ * a click on Later used to reach the game as well. Stopping them at the
+ * overlay root is the same boundary `toolbox-foundation.ts` draws.
+ */
+for (const root of [heapNoticeRoot, heapChip, heapScrim, heapWhyRoot]) {
+  for (const name of [
+    'keydown', 'keyup', 'pointerdown', 'pointerup', 'pointermove',
+    'mousedown', 'mouseup', 'mousemove', 'click', 'wheel', 'contextmenu',
+  ]) {
+    root?.addEventListener(name, (event) => event.stopPropagation());
+  }
+}
+
 heapNoticeReload?.addEventListener('click', () => {
-  hideHeapNotice();
+  hideHeapNotice({ instant: true });
   reloadClientSafely();
 });
-heapNoticeLater?.addEventListener('click', hideHeapNotice);
+heapNoticeLater?.addEventListener('click', () => {
+  // Later is a deferral, not a dismissal: the watcher keeps measuring, the
+  // chip remains visible, and a rise to critical raises the banner again.
+  hideHeapNotice({ after: showHeapChip });
+});
+heapNoticeWhy?.addEventListener('click', () => void openHeapWhy());
+heapChip?.addEventListener('click', () => {
+  hideHeapChip();
+  void presentHeapNotice(heapNoticeLevel === 'critical' ? 'critical' : 'low');
+});
+heapWhyClose?.addEventListener('click', () => closeHeapWhy());
+heapScrim?.addEventListener('click', () => closeHeapWhy());
+/**
+ * The explanation claims `aria-modal`, which tells a screen reader everything
+ * behind it is inert — so the keyboard has to agree. It holds exactly one
+ * control, which makes the trap the whole of it: Tab has nowhere else to go.
+ * Listening on the document rather than on the panel is what makes Escape
+ * work from a click that landed on the panel's own prose.
+ */
+document.addEventListener('keydown', (event) => {
+  if (!heapWhyRoot || heapWhyRoot.hidden) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeHeapWhy();
+  } else if (event.key === 'Tab') {
+    event.preventDefault();
+    heapWhyClose?.focus();
+  }
+}, true);
 
-function hideHeapNotice() {
-  if (heapNoticeRoot) heapNoticeRoot.hidden = true;
+function hideHeapNotice(options?: { instant?: boolean; after?: () => void }) {
+  if (!heapNoticeRoot || heapNoticeRoot.hidden) return;
+  if (heapLeaveTimer !== null) clearTimeout(heapLeaveTimer);
+  if (heapSurface === 'notice') heapSurface = 'hidden';
+  if (options?.instant || prefersReducedMotion()) {
+    heapNoticeRoot.hidden = true;
+    heapNoticeRoot.classList.remove('leaving', 'entering');
+    options?.after?.();
+    return;
+  }
+  // It leaves the way it came, back up past the edge it lives on.
+  heapNoticeRoot.classList.add('leaving');
+  heapLeaveTimer = setTimeout(() => {
+    heapLeaveTimer = null;
+    if (!heapNoticeRoot.classList.contains('leaving')) return;
+    heapNoticeRoot.hidden = true;
+    heapNoticeRoot.classList.remove('leaving');
+    options?.after?.();
+  }, exitMs(heapNoticeRoot));
+}
+
+function hideHeapChip() {
+  if (heapChip) heapChip.hidden = true;
+  if (heapSurface === 'chip') heapSurface = 'hidden';
 }
 
 /**
@@ -365,32 +463,150 @@ function reloadClientSafely() {
 
 async function presentHeapNotice(level: 'low' | 'critical') {
   if (
-    !heapNoticeRoot || !heapNoticeLabel || !heapNoticeDetail
-    || !heapNoticeReload || !heapNoticeLater
+    !heapNoticeRoot || !heapNoticeText || !heapNoticeLabel || !heapNoticeDetail
+    || !heapNoticeReload || !heapNoticeLater || !heapNoticeWhy
   ) return;
+  // The explanation owns the screen until it closes. A level may escalate
+  // while the player is reading it; closeHeapWhy restores the latest level.
+  if (heapWhyRoot && !heapWhyRoot.hidden) return;
   const { memoryPressurePresentation } = await import('./failure-messages.js');
+  // The import can yield on its first call, so repeat the ownership check to
+  // keep a notice from appearing over a modal opened in the meantime.
+  if (heapWhyRoot && !heapWhyRoot.hidden) return;
   const copy = memoryPressurePresentation(level);
   heapNoticeLabel.textContent = copy.label;
   heapNoticeDetail.textContent = copy.detail;
   heapNoticeReload.textContent = copy.reloadButton;
   heapNoticeLater.textContent = copy.dismissButton;
+  heapNoticeWhy.textContent = copy.whyLink;
   heapNoticeRoot.classList.toggle('critical', level === 'critical');
+  // A surface already on screen changing state does not leave and re-enter;
+  // the colour transition and the re-announcement carry the escalation.
+  const wasShowing = heapSurface === 'notice' && !heapNoticeRoot.hidden;
+  heapNoticeText.setAttribute('role', level === 'critical' ? 'alert' : 'status');
+  heapNoticeText.setAttribute(
+    'aria-live', level === 'critical' ? 'assertive' : 'polite',
+  );
+  heapSurface = 'notice';
+  hideHeapChip();
+  if (heapLeaveTimer !== null) {
+    clearTimeout(heapLeaveTimer);
+    heapLeaveTimer = null;
+  }
+  heapNoticeRoot.classList.remove('leaving');
+  if (wasShowing || prefersReducedMotion()) {
+    heapNoticeRoot.classList.remove('entering');
+    heapNoticeRoot.hidden = false;
+    return;
+  }
+  heapNoticeRoot.classList.add('entering');
   heapNoticeRoot.hidden = false;
+  void heapNoticeRoot.offsetWidth;
+  requestAnimationFrame(() => heapNoticeRoot.classList.remove('entering'));
+}
+
+function showHeapChip() {
+  if (!heapChip || !heapChipText || heapNoticeLevel === 'none') return;
+  void (async () => {
+    const { memoryPressureChip } = await import('./failure-messages.js');
+    if (heapSurface !== 'hidden') return;
+    const chip = memoryPressureChip(heapNoticeLevel as 'low' | 'critical');
+    // Only touch the DOM when the rendered string actually changes: this runs
+    // on every tick, over a game drawing at sixty frames a second.
+    if (heapChipText.textContent !== chip.text) heapChipText.textContent = chip.text;
+    heapChip.setAttribute('aria-label', chip.label);
+    heapChip.hidden = false;
+    heapSurface = 'chip';
+  })().catch(() => {});
+}
+
+/**
+ * The explanation is the one modal task here, so it dims the game and takes
+ * focus — and it opens in the notice's place rather than over it, because two
+ * translucent surfaces stacked stop being readable.
+ */
+async function openHeapWhy() {
+  if (!heapWhyRoot || !heapWhyBlocks || !heapWhyClose || !heapWhyTitle) return;
+  const { memoryExplanation } = await import('./failure-messages.js');
+  const copy = memoryExplanation();
+  heapWhyTitle.textContent = copy.title;
+  heapWhyClose.textContent = copy.closeButton;
+  heapWhyBlocks.replaceChildren(
+    ...copy.blocks.flatMap((block) => {
+      const heading = document.createElement('h3');
+      heading.textContent = block.title;
+      const body = document.createElement('p');
+      body.textContent = block.body;
+      return [heading, body];
+    }),
+  );
+  // The game may hold the pointer; without this the panel cannot be reached.
+  document.exitPointerLock?.();
+  if (heapWhyLeaveTimer !== null) {
+    clearTimeout(heapWhyLeaveTimer);
+    heapWhyLeaveTimer = null;
+  }
+  hideHeapNotice({ instant: true });
+  hideHeapChip();
+  if (heapScrim) heapScrim.hidden = false;
+  heapWhyRoot.classList.remove('leaving');
+  if (!prefersReducedMotion()) {
+    heapWhyRoot.classList.add('entering');
+    heapWhyRoot.hidden = false;
+    void heapWhyRoot.offsetWidth;
+    requestAnimationFrame(() => heapWhyRoot.classList.remove('entering'));
+  } else {
+    heapWhyRoot.hidden = false;
+  }
+  heapWhyClose.focus();
+}
+
+function closeHeapWhy(options?: { instant?: boolean }) {
+  if (!heapWhyRoot || heapWhyRoot.hidden) return;
+  const restoreWarning = () => {
+    if (options?.instant) return;
+    if (heapNoticeLevel !== 'none') {
+      void presentHeapNotice(heapNoticeLevel as 'low' | 'critical').then(() => {
+        heapNoticeWhy?.focus();
+      });
+    } else {
+      document.getElementById('canvas')?.focus();
+    }
+  };
+  const finish = () => {
+    heapWhyLeaveTimer = null;
+    heapWhyRoot.hidden = true;
+    heapWhyRoot.classList.remove('leaving');
+    if (heapScrim) heapScrim.hidden = true;
+    restoreWarning();
+  };
+  if (options?.instant || prefersReducedMotion()) finish();
+  else {
+    heapWhyRoot.classList.add('leaving');
+    heapWhyLeaveTimer = setTimeout(finish, exitMs(heapWhyRoot));
+  }
 }
 
 setInterval(() => {
   if (crashRecorded) return;
   requestHeapCap();
-  const bytes = wasmHeapBytes();
-  const level = bytes >= heapCriticalBytes
-    ? 'critical'
-    : bytes >= heapWarnBytes ? 'low' : 'none';
-  // Escalation is one-way and each level presents once: the heap cannot
-  // shrink within a client run, and a reload resets this whole script.
-  if (level === 'none' || level === heapNoticeLevel) return;
-  heapNoticeLevel = level;
-  log(`[memory] wasm heap at ${Math.round(bytes / MIB)} MiB — ${level} notice`);
-  presentHeapNotice(level).catch(() => {});
+  if (!heapWatch) return;
+  const reading = heapWatch.sample(wasmHeapBytes(), performance.now());
+  if (reading.level === 'none') return;
+  if (reading.level !== heapNoticeLevel) {
+    heapNoticeLevel = reading.level;
+    log(
+      `[memory] wasm heap at ${Math.round(reading.bytes / MIB)} MiB`
+      + ` — ${reading.minutes ?? '?'} min left`
+      + ` at ${Math.round((reading.bytesPerMinute ?? 0) / MIB)} MiB/min`
+      + ` — ${reading.level} notice (${reading.raisedBy ?? 'held'})`,
+    );
+    // A rise always shows the banner, including out of a dismissal: Later
+    // means later, and the level only ever rises when time is running out.
+    void presentHeapNotice(reading.level);
+    return;
+  }
+  if (heapSurface === 'chip') showHeapChip();
 }, 15_000);
 
 const STARTUP_LABELS = {
@@ -796,7 +1012,11 @@ Module = {
     // fingerprint, and stays readable on the overlay's disclosure.
     if (crashRecorded) return;
     crashRecorded = true;
-    hideHeapNotice();
+    // The crash overlay is taking the screen; nothing animates out from under
+    // it.
+    hideHeapNotice({ instant: true });
+    hideHeapChip();
+    closeHeapWhy({ instant: true });
     const heapBytes = wasmHeapBytes();
     // The overlay first, with the first-crash presentation; the recorded
     // count upgrades it below once main has counted this crash.
@@ -831,7 +1051,9 @@ Module = {
       // first-crash and count the same death twice.
       if (crashRecorded) return;
       crashRecorded = true;
-      hideHeapNotice();
+      hideHeapNotice({ instant: true });
+      hideHeapChip();
+      closeHeapWhy({ instant: true });
       // `code` is declared unknown at the Module boundary; anything the
       // glue passes that is not a plain integer records as the -1 the
       // schema can still account for.
@@ -1014,7 +1236,8 @@ function loadGlue() {
     const target = event.relatedTarget;
     if (
       oskInputs.has(target) ||
-      (target instanceof Element && target.closest('#toolbox-foundation'))
+      (target instanceof Element
+        && target.closest('#toolbox-foundation, #memory-notice, #memory-chip, #memory-why'))
     ) {
       event.stopImmediatePropagation();
     }
