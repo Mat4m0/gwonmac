@@ -295,13 +295,18 @@ Enhancement development uses the layered, cached-safe workflow in
 WASM unchanged, and a live Enhancement run cannot update the client unless update
 permission is explicit.
 
-The dependency audit has one explicit exception for
-`GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
-reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and
+The dependency audit has three explicit packaging-only exceptions. For
+`GHSA-mh99-v99m-4gvg`, the latest Electron Forge and Nuxt toolchains still
+reach `brace-expansion` 1.x and 2.x through development glob libraries, while
 upstream published the memory-bound fix only for the API-incompatible 5.x
-line. The compatible 5.x edge is pinned to 5.0.8. No game, renderer, preload,
-main-process runtime, or packaged dependency accepts these development glob
-patterns. A release invariant forbids production dependencies in either
-workspace package while the exception exists, preventing it from masking a
-shipped vulnerable edge. Remove the exception as soon as the upstream parents
-adopt patched compatible dependencies.
+line. For `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq`, Electron Forge's
+latest DMG maker reaches `image-size` 0.7 through `appdmg`, whose callback API
+is incompatible with the patched 2.x line. That code measures only the
+repository-owned PNG DMG background; it never parses the affected ICNS, JXL,
+or HEIF formats, and copies the repository-owned ICNS icon without passing it
+to `image-size`. No game, renderer, preload, main-process runtime, or packaged
+dependency contains these development-only parsers. A release invariant
+forbids production dependencies in either workspace package and pins the exact
+exception set, preventing an exception from silently widening or masking a
+shipped vulnerable edge. Remove each exception as soon as its upstream parent
+adopts a compatible patched dependency.
