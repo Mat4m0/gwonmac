@@ -18,6 +18,9 @@ type GwClientImports = Parameters<
   typeof import('./client-exit.js').installClientExit
 >[0]['imports'] &
   Parameters<
+    typeof import('./wasm-memory-attribution.js').installWasmMemoryAttribution
+  >[0]['imports'] &
+  Parameters<
   typeof import('./gl-program-cache.js').installGlProgramCache
 >[0]['imports'] &
   Parameters<
@@ -665,6 +668,7 @@ let gamepadImportsAvailable = false;
 // TypeError, not a silently skipped installation.
 let host: typeof import('./graphics.js') &
   typeof import('./client-exit.js') &
+  typeof import('./wasm-memory-attribution.js') &
   typeof import('./gl-program-cache.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
@@ -733,6 +737,15 @@ Module = {
 
   // Take over instantiation so the EGL imports can be patched first.
   instantiateWasm(imports, success) {
+    const memoryAttribution = host.installWasmMemoryAttribution({
+      imports,
+      module: Module,
+      recordGrowth: (fields) => milestone('wasm.growthRequested', fields),
+      log,
+    });
+    milestone('wasm.memoryProbe', {
+      status: memoryAttribution ? 'installed' : 'resizeImportMissing',
+    });
     host.installClientExit({
       imports,
       instance: () => gameWasmInstance,
@@ -1275,6 +1288,7 @@ function loadGlue() {
       { unavailablePlatformCapabilities },
       { createSocketHost },
       clientExit,
+      memoryAttribution,
       graphics,
       glProgramCache,
       filesystem,
@@ -1289,6 +1303,7 @@ function loadGlue() {
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
       import('./client-exit.js'),
+      import('./wasm-memory-attribution.js'),
       import('./graphics.js'),
       import('./gl-program-cache.js'),
       import('./filesystem.js'),
@@ -1302,6 +1317,7 @@ function loadGlue() {
     ]);
     host = {
       ...clientExit,
+      ...memoryAttribution,
       ...graphics,
       ...glProgramCache,
       ...filesystem,
