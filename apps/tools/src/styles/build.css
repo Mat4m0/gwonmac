@@ -8,13 +8,13 @@
 
 .skill-bar--compact {
   display: flex;
-  gap: 2px;
+  gap: 3px;
 }
 
 .skill-bar--compact .skill {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   font-size: 0;
 }
 
@@ -38,8 +38,8 @@
 }
 
 .team-professions .ui-mark {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   font-size: 8px;
   font-style: normal;
 }
@@ -53,7 +53,9 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--ui-panel-fill);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
 }
 
 .detail-view {
@@ -80,8 +82,8 @@
 }
 
 .profession-mark {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--ui-radius);
 }
 

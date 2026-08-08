@@ -2,8 +2,10 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
-  border-right: 1px solid var(--ui-line-soft);
+  overflow: hidden;
+  border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
 }
 
 .library-toolbar {
@@ -11,6 +13,7 @@
   gap: var(--ui-space-2);
   padding: var(--ui-space-3);
   border-bottom: 1px solid var(--ui-line-soft);
+  background: color-mix(in srgb, var(--ui-well-fill) 72%, transparent);
 }
 
 .create-actions {
@@ -116,6 +119,7 @@
   padding: 0 var(--ui-space-3);
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
+  background: color-mix(in srgb, var(--ui-well-fill) 68%, transparent);
 }
 
 .library-summary { border-bottom: 1px solid var(--ui-line-soft); }
@@ -141,7 +145,7 @@
 .library-list {
   min-height: 0;
   flex: 1;
-  padding: var(--ui-space-1);
+  padding: var(--ui-space-2);
   overflow: auto;
 }
 
@@ -188,3 +192,13 @@
   align-self: center;
   justify-self: end;
 }
+
+/* A 24px Guild Wars skill strip is intentionally readable. In the narrow
+ * library it owns a full line; forcing its usage sentence beside it would
+ * either shrink the icons back into noise or make the pane scroll sideways. */
+.library-row .skill-bar--compact,
+.library-row:has(.skill-bar--compact) .row-meta {
+  grid-column: 1 / -1;
+}
+
+.library-row:has(.skill-bar--compact) .row-meta { justify-self: start; }

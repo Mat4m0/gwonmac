@@ -28,6 +28,7 @@ import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
 import ModalDialog from "./components/ModalDialog.vue";
 import { navigateRows, navigateTabs } from "./tab-keyboard";
+import { installResizeGrip } from "../../../src/shared/ui/resize";
 
 const props = defineProps<{
   host: ToolsHost;
@@ -41,9 +42,11 @@ const emit = defineEmits<{
 
 const controller = useLibrary(props.host);
 const panel = ref<HTMLElement | null>(null);
+const resizeGrip = ref<HTMLButtonElement | null>(null);
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
 const position = ref({ left: 28, top: 42 });
+const size = ref<{ width: number; height: number } | null>(null);
 const composer = ref<"build" | "team" | "import-team" | null>(null);
 const draftCode = ref("");
 const draftName = ref("");
@@ -73,11 +76,37 @@ const hasObservedParty = computed(() =>
   props.host.party.value.status === "ready"
   && (props.host.party.value.player !== null || props.host.party.value.heroes.length > 0)
 );
+const panelStyle = computed(() => {
+  if (props.mode !== "embedded") return undefined;
+  return {
+    left: `${position.value.left}px`,
+    top: `${position.value.top}px`,
+    ...(size.value
+      ? { width: `${size.value.width}px`, height: `${size.value.height}px` }
+      : {}),
+  };
+});
+
+const fitPanelToViewport = () => {
+  if (props.mode !== "embedded" || !panel.value) return;
+  const width = Math.min(panel.value.offsetWidth, window.innerWidth);
+  const height = Math.min(panel.value.offsetHeight, window.innerHeight);
+  if (width !== panel.value.offsetWidth || height !== panel.value.offsetHeight) {
+    size.value = { width, height };
+  }
+  position.value = {
+    left: Math.max(0, Math.min(window.innerWidth - width, position.value.left)),
+    top: Math.max(0, Math.min(window.innerHeight - height, position.value.top)),
+  };
+};
 watch(
   () => props.visible,
   (visible) => {
     if (visible) {
-      requestAnimationFrame(() => search.value?.focus());
+      requestAnimationFrame(() => {
+        fitPanelToViewport();
+        search.value?.focus();
+      });
     }
   },
 );
@@ -185,12 +214,13 @@ const startBlankBuild = async () => {
 
 const startDrag = (event: PointerEvent) => {
   if (props.mode !== "embedded" || !panel.value) return;
-  if ((event.target as Element).closest("button, input, select")) return;
+  if ((event.target as Element).closest("button, input, select, textarea, a, summary, label")) return;
   const element = panel.value;
+  const handle = event.currentTarget as HTMLElement;
   const box = element.getBoundingClientRect();
   const offsetX = event.clientX - box.left;
   const offsetY = event.clientY - box.top;
-  element.setPointerCapture(event.pointerId);
+  handle.setPointerCapture(event.pointerId);
   element.dataset.dragging = "";
   const move = (next: PointerEvent) => {
     const left = Math.max(
@@ -205,11 +235,14 @@ const startDrag = (event: PointerEvent) => {
   };
   const finish = () => {
     delete element.dataset.dragging;
-    element.removeEventListener("pointermove", move);
-    element.removeEventListener("pointerup", finish);
+    for (const name of ["pointermove", "pointerup", "pointercancel", "lostpointercapture"] as const) {
+      handle.removeEventListener(name, name === "pointermove" ? move : finish);
+    }
   };
-  element.addEventListener("pointermove", move);
-  element.addEventListener("pointerup", finish);
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", finish);
+  handle.addEventListener("pointercancel", finish);
+  handle.addEventListener("lostpointercapture", finish);
 };
 
 const onKeydown = (event: KeyboardEvent) => {
@@ -236,8 +269,38 @@ const onKeydown = (event: KeyboardEvent) => {
   if (event.key === "Escape" && props.mode === "embedded") requestClose();
 };
 
-onMounted(() => window.addEventListener("keydown", onKeydown));
-onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
+let disposeResize: (() => void) | null = null;
+
+onMounted(() => {
+  window.addEventListener("keydown", onKeydown);
+  window.addEventListener("resize", fitPanelToViewport);
+  requestAnimationFrame(fitPanelToViewport);
+  if (props.mode === "embedded" && panel.value && resizeGrip.value) {
+    disposeResize = installResizeGrip(resizeGrip.value, {
+      size: () => {
+        const box = panel.value!.getBoundingClientRect();
+        return { width: box.width, height: box.height };
+      },
+      limits: () => ({
+        minWidth: Math.min(320, window.innerWidth - position.value.left),
+        minHeight: Math.min(360, window.innerHeight - position.value.top),
+        maxWidth: window.innerWidth - position.value.left,
+        maxHeight: window.innerHeight - position.value.top,
+      }),
+      resize: (width, height) => { size.value = { width, height }; },
+      setActive: (active) => {
+        if (!panel.value) return;
+        if (active) panel.value.dataset.resizing = "";
+        else delete panel.value.dataset.resizing;
+      },
+    });
+  }
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("resize", fitPanelToViewport);
+  disposeResize?.();
+});
 </script>
 
 <template>
@@ -250,7 +313,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <section
       ref="panel"
       class="ui-frame ui-panel tools-window"
-      :style="mode === 'embedded' ? { left: `${position.left}px`, top: `${position.top}px` } : undefined"
+      :style="panelStyle"
       aria-label="GWonMac Tools"
     >
       <header class="ui-panel-head window-bar" @pointerdown="startDrag">
@@ -655,6 +718,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </footer>
         </form>
       </ModalDialog>
+      <button
+        v-if="mode === 'embedded'"
+        type="button"
+        class="ui-resize-grip"
+        aria-label="Resize GWonMac Tools"
+        ref="resizeGrip"
+      />
     </section>
   </div>
 </template>

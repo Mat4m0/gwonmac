@@ -17,15 +17,16 @@
   grid-template-columns: 18px 160px minmax(190px, 1fr) minmax(150px, 1fr) 96px;
   align-items: center;
   gap: var(--ui-space-2);
-  border: 1px solid var(--ui-line-soft);
-  border-radius: var(--ui-radius);
-  background: var(--ui-raised-fill);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-row-fill) padding-box, var(--ui-ring-quiet) border-box;
 }
 
-.team-slots > li:hover { border-color: var(--ui-line); }
+.team-slots > li:hover { filter: brightness(1.12); }
 .team-slots > li[data-invalid] {
-  border-color: var(--ui-danger);
-  background: color-mix(in srgb, var(--ui-danger) 8%, var(--ui-raised-fill));
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ui-danger) 10%, transparent) padding-box,
+    linear-gradient(var(--ui-danger), var(--ui-outline)) border-box;
 }
 .team-slot--empty { opacity: 0.72; }
 
@@ -61,8 +62,8 @@
 }
 
 .hero-avatar {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .hero-cell > span:last-child { min-width: 0; }
