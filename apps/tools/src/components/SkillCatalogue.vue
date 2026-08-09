@@ -24,6 +24,7 @@ const emit = defineEmits<{
 
 const search = ref("");
 const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
+const availableOnly = ref(false);
 const inspected = ref<SkillPresentation | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
@@ -64,6 +65,7 @@ const results = computed(() => {
       if (filter.value === "primary" && skill.profession !== primary) return false;
       if (filter.value === "secondary" && skill.profession !== secondary) return false;
       if (filter.value === "elite" && !skill.elite) return false;
+      if (availableOnly.value && placement(skill)?.blocked) return false;
       return needle.length === 0
         || skill.name.toLocaleLowerCase().includes(needle)
         || skill.attribute?.toLocaleLowerCase().includes(needle);
@@ -93,7 +95,9 @@ watch(
 );
 watch(results, (values) => {
   if (inspected.value && !values.some((skill) => skill.id === inspected.value?.id)) {
+    const inspectorHadFocus = document.activeElement?.closest(".skill-inspector") != null;
     inspected.value = values[0] ?? null;
+    if (inspectorHadFocus) void nextTick(() => searchInput.value?.focus());
   }
   if (!values.length) focusedResult.value = null;
   else if (focusedResult.value !== null) {
@@ -172,6 +176,14 @@ function clear(): void {
   if (slot !== null) props.editor.setSkill(slot, null);
 }
 
+function recoverEmptyResults(): void {
+  if (availableOnly.value) availableOnly.value = false;
+  else {
+    search.value = "";
+    filter.value = "all";
+  }
+}
+
 function hideBrokenIcon(event: Event): void {
   const image = event.currentTarget;
   if (!(image instanceof HTMLImageElement)) return;
@@ -199,7 +211,16 @@ function hideBrokenIcon(event: Event): void {
           · PvE skills for this {{ editor.context.value === "hero" ? "hero" : "build" }}
         </p>
       </div>
-      <button class="ui-button" @click="emit('close')">Done</button>
+      <div class="catalogue-heading-actions">
+        <button
+          class="ui-chip catalogue-availability"
+          :aria-pressed="availableOnly"
+          @click="availableOnly = !availableOnly"
+        >
+          Available only
+        </button>
+        <button class="ui-button" @click="emit('close')">Done</button>
+      </div>
     </header>
 
     <div class="catalogue-tools">
@@ -235,7 +256,9 @@ function hideBrokenIcon(event: Event): void {
           Player-only
         </button>
       </div>
-      <span class="catalogue-count">{{ results.length }} skills</span>
+      <span class="catalogue-count">
+        {{ results.length }} {{ results.length === 1 ? "skill" : "skills" }}
+      </span>
     </div>
 
     <div class="catalogue-layout">
@@ -302,10 +325,13 @@ function hideBrokenIcon(event: Event): void {
           </span>
         </button>
         <div v-if="!results.length" class="ui-empty">
-          <strong>No eligible skills</strong>
-          <p>Clear the search or choose another profession filter.</p>
-          <button class="ui-button" @click="search = ''; filter = 'all'">
-            Clear filters
+          <strong>{{ availableOnly ? "No available skills" : "No eligible skills" }}</strong>
+          <p v-if="availableOnly">
+            No matching skill can be placed in this slot. Show all skills to inspect why.
+          </p>
+          <p v-else>Clear the search or choose another profession filter.</p>
+          <button class="ui-button" @click="recoverEmptyResults">
+            {{ availableOnly ? "Show all skills" : "Clear filters" }}
           </button>
         </div>
       </div>

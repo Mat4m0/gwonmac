@@ -79,6 +79,26 @@ describe("ToolsApp build authoring", () => {
     wrapper.unmount();
   });
 
+  it("hides blocked skills and restores the full catalogue", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Aegis");
+    await flushPromises();
+    expect(wrapper.find(".skill-result").exists()).toBe(true);
+
+    await wrapper.get(".catalogue-availability").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".skill-result").exists()).toBe(false);
+    expect(wrapper.get(".ui-empty").text()).toContain("No available skills");
+
+    await wrapper.get(".ui-empty .ui-button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".skill-result").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("asks before changing a shared bar and keeps an edited fork related", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");

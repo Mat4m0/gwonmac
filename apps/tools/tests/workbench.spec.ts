@@ -229,6 +229,11 @@ test("uses the inline catalogue for filters, mechanics, elite replacement, and k
   await origin.press("Enter");
   await expect(page.getByRole("heading", { name: "Choose skill 1" })).toBeVisible();
   await page.getByRole("button", { name: "Elite", exact: true }).click();
+  await page.getByRole("button", { name: "Available only" }).click();
+  await expect(page.getByRole("button", { name: "Available only" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(page.locator(".skill-result")).not.toHaveCount(0);
   await expect(page.locator(".skill-result .ui-chip").filter({ hasText: "Elite" }).first()).toBeVisible();
   await page.getByRole("searchbox", { name: "Search skills" }).fill("Cry of Frustration");

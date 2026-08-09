@@ -117,6 +117,13 @@
   gap: var(--ui-space-2);
 }
 
+.catalogue-heading-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
 .catalogue-count {
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
