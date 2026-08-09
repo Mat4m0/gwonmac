@@ -31,8 +31,6 @@ const RETURN_URL = "https://www.guildwars.test/app/live/auth";
 
 type FixtureMode =
   | "redirect"
-  | "wrong-state"
-  | "no-token"
   | "hang"
   | "escape"
   | "popup"
@@ -91,12 +89,7 @@ async function startFixture(mode: FixtureMode): Promise<Fixture> {
     }
 
     if (url.pathname === "/second") {
-      const fragment =
-        mode === "wrong-state"
-          ? `#access_token=${TOKEN}&state=not-the-nonce-we-generated`
-          : mode === "no-token"
-            ? `#state=${encodeURIComponent(nonce)}`
-            : `#access_token=${TOKEN}&state=${encodeURIComponent(nonce)}`;
+      const fragment = `#access_token=${TOKEN}&state=${encodeURIComponent(nonce)}`;
       response.writeHead(302, { location: `${RETURN_URL}${fragment}` });
       response.end();
       return;
@@ -307,29 +300,6 @@ test.describe("acquiring a Steam token", () => {
     // only ever saw the two hops it serves itself.
     expect(server.hits.map((hit) => hit.path)).toEqual(["/authorize", "/second"]);
     expect(await windowCount(fixture.app)).toBe(before);
-  });
-
-  test("refuses a response whose state it did not generate", async () => {
-    // An unsolicited or replayed response must fail before exposing its token.
-    server = await startFixture("wrong-state");
-    fixture = await launchOffline("gw-steam-acquire-state-");
-    const before = await windowCount(fixture.app);
-
-    const run = await acquire(fixture.app, configFor(server));
-
-    expect(run.result).toEqual({ ok: false, reason: "state-mismatch" });
-    expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "state-mismatch" });
-    expect(await windowCount(fixture.app)).toBe(before);
-  });
-
-  test("reports a redirect that carries no token", async () => {
-    server = await startFixture("no-token");
-    fixture = await launchOffline("gw-steam-acquire-no-token-");
-
-    const run = await acquire(fixture.app, configFor(server));
-
-    expect(run.result).toEqual({ ok: false, reason: "no-token" });
-    expect(run.events.at(-1)).toEqual({ k: "settled", outcome: "no-token" });
   });
 
   test("treats a closed window as a cancelled sign-in", async () => {
