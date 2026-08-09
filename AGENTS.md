@@ -303,22 +303,26 @@ pnpm test:integration
 pnpm test:electron
 pnpm test:policy
 pnpm test:release
-pnpm package
-pnpm test:packaged
+pnpm tools:test:e2e
 ```
 
 `pnpm test:policy` holds the repository invariants that need no build: import
 boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
 artifacts, and documentation links.
 
-`pnpm test:unit` also writes `coverage/lcov.info`, and CI keeps it as a build
-artifact. It is a report: there is no threshold and no commit fails on it. What
-it is for is the question a passing suite cannot answer — which failure paths
-nothing exercises.
+`pnpm test:unit` is deterministic: it neither reads an installed Guild Wars
+client nor produces a non-gating coverage artifact. Real client bytes belong to
+`GW_CLIENT_WASM=/absolute/path/Gw.jspi.wasm pnpm test:client-artifact`, which is
+run deliberately during client certification rather than opportunistically on
+one developer's machine and skipped in CI.
 
-`pnpm verify` runs that gate end to end, and CI runs it on every pull request.
-The website is not part of it: `apps/website` has its own path-filtered
-workflow, and `pnpm test:website` runs that suite locally.
+`pnpm verify:runtime` builds once and runs the source, browser, native and
+Electron gates against that output. `pnpm verify` packages that exact build and
+runs the packaged smoke; it never recompiles between runtime and artifact
+proof. Pull requests run the complete form. A release runs the runtime form and
+lets its signed candidate own the one package smoke. The website is not part of
+either: `apps/website` has its own path-filtered workflow, and
+`pnpm test:website` runs that suite locally.
 
 Electron and integration tests need permission to launch a local app and bind
 loopback fixtures. Test launches set `GW_BACKGROUND_LAUNCH=1` so the window

@@ -186,6 +186,15 @@ jobs:
             echo "build=$(jq -r '.sha256' "$EVIDENCE/template-save.json")"
           } >> "$GITHUB_OUTPUT"
 
+      # Run in a new process after `--write`: importing the edited table and
+      # reproducing the record from the original bytes proves the serialized
+      # certificate, not only the in-memory derivation that produced it.
+      - name: Verify the recorded client artifact
+        if: steps.derive.outputs.outcome == 'ready'
+        env:
+          GW_CLIENT_WASM: ${{ steps.official.outputs.wasm }}
+        run: pnpm test:client-artifact 2>&1 | tee "$EVIDENCE/client-artifact.txt"
+
       - name: Record the derived generation and regenerate the candidate feed
         if: steps.derive.outputs.outcome == 'ready'
         env:

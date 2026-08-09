@@ -1,11 +1,11 @@
 # Canopy API bilingual consumer
 
-Standalone English/German release-boundary fixture for the published
+Workspace-owned English/German release-boundary fixture for the published
 `@lupinum/ginko-content` and `@lupinum/ginko-docs` packages.
 
 ```bash
-vp install
-vp run certify
+pnpm install --frozen-lockfile
+pnpm test:website
 ```
 
 The exact registry versions in `package.json` are intentional. Candidate
