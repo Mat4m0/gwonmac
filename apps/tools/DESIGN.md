@@ -72,6 +72,12 @@ parsing ignores them, and the next ordinary save writes only current fields.
   `min-height: 0` where required.
 - Panels respond to their own container width. At narrow widths the library and
   detail become separate views, and team rows stack without horizontal scroll.
+- The editable skill bar is one sortable surface with animated pointer/touch
+  feedback, empty-slot targets, cancellation-safe updates, and equivalent
+  Command/Control + Arrow keyboard moves. Read-only bars never advertise drag.
+- Build and team export stay inline. Copy success or denial never removes the
+  selected manual code, and writing a build into Guild Wars remains a separate
+  explicit action.
 - Reduced motion removes nonessential transitions.
 
 ## Seeing and verifying it

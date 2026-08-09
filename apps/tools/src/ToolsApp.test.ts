@@ -266,17 +266,64 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
-  it("publishes through the host capability and explains the player-owned next step", async () => {
-    const wrapper = await workbench();
+  it("exports a build code and writes it through the host capability", async () => {
+    let copied = "";
+    const demo = createDemoHost();
+    const wrapper = await workbench({
+      ...demo,
+      writeClipboard: async (text) => { copied = text; },
+    });
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
     await wrapper
       .findAll(".authoring-actions .ui-button")
-      .find((button) => button.text().includes("Write skill template"))!
+      .find((button) => button.text().includes("Export build"))!
+      .trigger("click");
+    await flushPromises();
+    const code = wrapper.get<HTMLTextAreaElement>(".build-export textarea").element.value;
+    expect(code).toMatch(/^O/u);
+    expect(document.activeElement).toBe(wrapper.get(".build-export textarea").element);
+    await wrapper
+      .findAll(".build-export .ui-button")
+      .find((button) => button.text().includes("Copy code"))!
+      .trigger("click");
+    await flushPromises();
+    expect(copied).toBe(code);
+    expect(wrapper.text()).toContain("Build code copied.");
+    await wrapper
+      .findAll(".build-export .ui-button")
+      .find((button) => button.text().includes("Save to Guild Wars"))!
       .trigger("click");
     await new Promise((resolve) => setTimeout(resolve, 220));
     expect(wrapper.text()).toContain("Template written:");
     expect(wrapper.text()).toContain("Load Template");
+    wrapper.unmount();
+  });
+
+  it("keeps build export selectable when clipboard access is refused", async () => {
+    const demo = createDemoHost();
+    const wrapper = await workbench({
+      ...demo,
+      writeClipboard: async () => { throw new Error("clipboard denied"); },
+    });
+    await wrapper.get("#builds-library-tab").trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper
+      .findAll(".authoring-actions .ui-button")
+      .find((button) => button.text() === "Export build")!
+      .trigger("click");
+    await flushPromises();
+    const textarea = wrapper.get<HTMLTextAreaElement>(".build-export textarea");
+    const code = textarea.element.value;
+    await wrapper
+      .findAll(".build-export .ui-button")
+      .find((button) => button.text() === "Copy code")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".build-export [role=alert]").text()).toContain("Select and copy");
+    expect(textarea.element.value).toBe(code);
+    expect(document.activeElement).toBe(textarea.element);
     wrapper.unmount();
   });
 
@@ -981,10 +1028,12 @@ describe("ToolsApp", () => {
     });
     await wrapper
       .findAll(".detail-actions .ui-button")
-      .find((button) => button.text().includes("Share team"))!
+      .find((button) => button.text().includes("Export team"))!
       .trigger("click");
+    await flushPromises();
     const code = wrapper.get<HTMLTextAreaElement>(".share-team textarea").element.value;
     expect(code).toMatch(/^gwonmac-team:/u);
+    expect(document.activeElement).toBe(wrapper.get(".share-team textarea").element);
     await wrapper
       .findAll(".share-team .ui-button")
       .find((button) => button.text().includes("Copy code"))!

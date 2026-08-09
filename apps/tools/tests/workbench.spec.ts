@@ -48,6 +48,46 @@ test("authors, commits, reloads, discards, and undoes one atomic draft", async (
   await expect(page.locator("#build-name")).toHaveValue("Field test monk");
 });
 
+test("reorders skill slots by drag and keyboard with persistent feedback", async ({ page }) => {
+  await openBuild(page);
+  const slots = page.locator(".authoring-bar .skill");
+  const firstTitle = await slots.nth(0).getAttribute("title");
+  const secondTitle = await slots.nth(1).getAttribute("title");
+
+  await slots.nth(0).dragTo(slots.nth(2));
+  await expect(slots.nth(0)).toHaveAttribute("title", secondTitle!);
+  await expect(slots.nth(2)).toHaveAttribute("title", firstTitle!);
+  await expect(page.getByText("Skill moved from slot 1 to slot 3.")).toBeAttached();
+
+  await slots.nth(2).focus();
+  await page.keyboard.press("Meta+ArrowLeft");
+  await expect(slots.nth(1)).toHaveAttribute("title", firstTitle!);
+  await expect(page.getByText("Skill moved from slot 3 to slot 2.")).toBeAttached();
+
+  await slots.nth(7).focus();
+  await page.keyboard.press("Delete");
+  await expect(slots.nth(7)).toHaveAttribute("title", "Empty skill slot");
+  await slots.nth(1).dragTo(slots.nth(7));
+  await expect(slots.nth(7)).toHaveAttribute("title", firstTitle!);
+  await expect(page.getByText("Skill moved from slot 2 to slot 8.")).toBeAttached();
+});
+
+test("exports build and team codes without hiding the manual fallback", async ({ page }) => {
+  await openBuild(page);
+  await page.getByRole("button", { name: "Export build" }).click();
+  const buildCode = page.locator(".build-export textarea");
+  await expect(buildCode).toHaveValue(/^O/u);
+  await expect(page.getByRole("button", { name: "Copy code" })).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await page.getByRole("tab", { name: /Teams/ }).click();
+  await page.locator(".library-row").first().click();
+  await page.getByRole("button", { name: "Export team" }).click();
+  const teamCode = page.locator(".share-team textarea");
+  await expect(teamCode).toHaveValue(/^gwonmac-team:/u);
+  await expect(page.getByRole("button", { name: "Copy code" })).toBeVisible();
+});
+
 test("forks a shared edit, rebinds selected teams, and keeps one undo", async ({ page }) => {
   await openBuild(page);
   await chooseSkill(page, 0, "Infuse Health");
@@ -148,7 +188,7 @@ for (const width of [320, 360, 640]) {
     await expect(page.getByRole("button", { name: "Library" })).toBeVisible();
     await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
     await expect(page.locator("body")).toHaveJSProperty("scrollWidth", width);
-    await expect(page.getByRole("button", { name: "Write skill template" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export build" })).toBeVisible();
   });
 }
 
@@ -157,7 +197,7 @@ test("keeps bar and commit actions reachable at short height", async ({ page }) 
   await openBuild(page);
   await expect(page.locator(".authoring-bar")).toBeVisible();
   await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Write skill template" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export build" })).toBeVisible();
 });
 
 for (const [width, height] of [
