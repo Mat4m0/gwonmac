@@ -133,7 +133,8 @@ function teamApplyProbe(
         slot: index + 1,
         heroId: member.hero === null ? null : Number(member.hero),
         agentId: live?.agentId ?? null,
-        professions: member.build?.professions ?? null,
+        wantedProfessions: member.build?.professions ?? null,
+        observedProfessions: live?.professions ?? null,
         wantedSkills: wanted,
         observedSkills: live?.skills?.map((skill) => skill === null ? null : Number(skill))
           ?? null,

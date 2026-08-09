@@ -446,6 +446,80 @@ test("a live secondary transition may exceed the ordinary command deadline", asy
   );
 });
 
+test("a profession first published on the deadline receives its stability grace", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const observedParty = game.environment.party;
+  let requested = false;
+  let skillsApplied = false;
+  let attributesApplied = false;
+  game.environment.commands.setHeroSecondary = () => { requested = true; };
+  game.environment.party = () => {
+    const now = game.environment.confirmationTime!.now();
+    if (attributesApplied) game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+    else if (skillsApplied) game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+    }]);
+    else if (requested && now >= 15_000) game.set([changed]);
+    return observedParty();
+  };
+  game.environment.commands.setHeroSkills = (_hero, skills) => {
+    assert.ok(game.environment.confirmationTime!.now() >= 16_000);
+    skillsApplied = true;
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    attributesApplied = true;
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+});
+
+test("a deadline candidate that disappears is refused without extending the operation", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const observedParty = game.environment.party;
+  game.environment.commands.setHeroSecondary = () => {};
+  game.environment.party = () => {
+    const now = game.environment.confirmationTime!.now();
+    game.set(now >= 15_000 && now < 15_500 ? [changed] : [initial]);
+    return observedParty();
+  };
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+      game.environment,
+      1,
+    ),
+    /Koss's secondary profession did not take effect/,
+  );
+  assert.equal(
+    game.sent.some((command) => command.startsWith("skills:")),
+    false,
+  );
+});
+
 test("a profession must remain observed for a full stable interval", async () => {
   const initial = {
     hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],

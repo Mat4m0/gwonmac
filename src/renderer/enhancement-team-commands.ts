@@ -91,7 +91,7 @@ export function createTeamApplyCommands({
     fields: Readonly<Record<string, number | boolean>> = {},
   ) => {
     if (development) {
-      console.debug(`[tools:dev] command ${JSON.stringify({
+      console.info(`[tools:dev] command ${JSON.stringify({
         operation,
         opcode,
         accepted: result === 1,

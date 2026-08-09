@@ -195,41 +195,48 @@ async function confirmObserved<T>(
   const deadline = started + (policy.timeoutMs ?? CONFIRM_MS);
   let candidateKey: string | null = null;
   let candidateSince = 0;
+  let candidateMaySettle = false;
   let resent = false;
   emit(environment, "waiting", `Waiting for ${what}…`);
   for (;;) {
     cancelled(environment);
     const party = writableParty(environment);
     const observation = observe(party);
+    const observedAt = now();
     if (observation.state === "confirmed") {
-      emit(environment, "confirmed", `${what} confirmed.`, now() - started);
+      emit(environment, "confirmed", `${what} confirmed.`, observedAt - started);
       return observation.value;
-    }
-    if (now() >= deadline) {
-      throw new ApplyRefused(`${what} did not take effect`, now() - started);
     }
     if (observation.state === "candidate") {
       if (candidateKey !== observation.key) {
         candidateKey = observation.key;
-        candidateSince = now();
+        candidateSince = observedAt;
+        // A publication delivered on the timer's final poll is still an
+        // on-time observation. Give that value only its required stability
+        // window; if it disappears, the next poll fails immediately.
+        candidateMaySettle = observedAt <= deadline + POLL_MS;
       }
-      if (now() - candidateSince >= (policy.stableMs ?? 0)) {
-        emit(environment, "stable", `${what} settled.`, now() - started);
+      if (observedAt - candidateSince >= (policy.stableMs ?? 0)) {
+        emit(environment, "stable", `${what} settled.`, observedAt - started);
         return observation.value;
       }
     } else {
       candidateKey = null;
       candidateSince = 0;
+      candidateMaySettle = false;
+    }
+    if (observedAt >= deadline && !candidateMaySettle) {
+      throw new ApplyRefused(`${what} did not take effect`, observedAt - started);
     }
     if (
       retry
       && !resent
       && policy.retryAfterMs !== undefined
-      && now() - started >= policy.retryAfterMs
+      && observedAt - started >= policy.retryAfterMs
     ) {
       resent = true;
       cancelled(environment);
-      emit(environment, "retrying", `Retrying ${what}…`, now() - started);
+      emit(environment, "retrying", `Retrying ${what}…`, observedAt - started);
       retry();
     }
     await sleep(POLL_MS);
