@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -48,25 +49,39 @@ function rendererSources(): readonly string[] {
   return walk(directory);
 }
 
-/**
- * Every `from "../shared/…"` in `source`, paired with whether the statement is
- * type-only.
- *
- * A statement counts as type-only when it opens `import type` or `export type`.
- * `import { type A }` with every specifier inline-typed is also erased, and is
- * reported here as a value import anyway — the fix is to hoist the `type` to
- * the statement, which is what the rest of this repository already does and is
- * clearer at a glance than counting specifiers.
- */
+/** Every static, side-effect, or dynamic import from `src/shared`. */
 function sharedImports(source: string): readonly {
   module: string;
   typeOnly: boolean;
 }[] {
   const found: { module: string; typeOnly: boolean }[] = [];
-  const pattern = /(^|\n)\s*(import|export)(\s+type)?\b[^;]*?from\s*"(\.\.\/)+shared\/([^"]+)"/gu;
-  for (const match of source.matchAll(pattern)) {
-    found.push({ module: match[5]!, typeOnly: match[3] !== undefined });
-  }
+  const file = ts.createSourceFile(
+    "renderer.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const add = (specifier: ts.Expression, typeOnly: boolean) => {
+    if (!ts.isStringLiteralLike(specifier)) return;
+    const match = /^(?:\.\.\/)+shared\/(.+)$/u.exec(specifier.text);
+    if (match) found.push({ module: match[1]!, typeOnly });
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node)) {
+      add(node.moduleSpecifier, node.importClause?.isTypeOnly === true);
+    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
+      add(node.moduleSpecifier, node.isTypeOnly);
+    } else if (
+      ts.isCallExpression(node)
+      && node.expression.kind === ts.SyntaxKind.ImportKeyword
+      && node.arguments.length === 1
+    ) {
+      add(node.arguments[0]!, false);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
   return found;
 }
 
@@ -126,6 +141,12 @@ test("the guard is looking at something, and can tell the two apart", () => {
   );
   assert.deepEqual(broke, [{ module: "builds/live-party.js", typeOnly: false }]);
   assert.equal(servedModules().has("builds/live-party.js"), false);
+
+  const dynamic = sharedImports(
+    "void import('../shared/ui/resize.js');\n",
+  );
+  assert.deepEqual(dynamic, [{ module: "ui/resize.js", typeOnly: false }]);
+  assert.equal(servedModules().has("ui/resize.js"), true);
 
   // And the sweep reaches real files rather than an empty directory.
   assert.ok(rendererSources().length > 20);
