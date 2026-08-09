@@ -7,14 +7,19 @@ import {
 } from "vue";
 import {
   skillBarOf,
+  SKILL_SLOTS,
   type Attribute,
   type AttributeRank,
   type Profession,
   type SkillId,
 } from "../../../src/shared/builds/library";
-import { withAttributeRank } from "../../../src/shared/builds/authoring";
+import {
+  withAttributeRank,
+  withPlacedSkill,
+} from "../../../src/shared/builds/authoring";
 import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import type { Build } from "./model";
+import type { SkillCatalogue } from "./skill-catalog";
 import type { LibraryController } from "./use-library";
 
 export type AuthoringContext = "standalone" | "player" | "hero";
@@ -114,6 +119,31 @@ export function useBuildDraft(
     });
   }
 
+  /**
+   * Put one catalogue skill into a specific slot without ever creating the two
+   * invalid bar states the picker can prevent itself: a duplicate skill or a
+   * second elite. Click, double-click, and drag all come through this function
+   * so their behavior cannot drift.
+   */
+  function placeSkill(
+    slot: number,
+    skill: SkillId,
+    catalogue: SkillCatalogue,
+  ): boolean {
+    const target = SKILL_SLOTS[slot];
+    if (target === undefined) return false;
+    const skills = withPlacedSkill(
+      draft.value.skills,
+      target,
+      skill,
+      (id) => catalogue.has(id) ? catalogue.get(id) : null,
+    );
+    if (skills === null) return false;
+    replace({ skills });
+    activeSlot.value = target;
+    return true;
+  }
+
   function moveSkill(from: number, to: number): void {
     if (from === to || from < 0 || from >= 8 || to < 0 || to >= 8) return;
     // Reordering changes the length twice, so it happens on a plain array and
@@ -197,6 +227,7 @@ export function useBuildDraft(
     setSecondary,
     setRank,
     setSkill,
+    placeSkill,
     moveSkill,
     reorderSkills,
     finishSkillMove,

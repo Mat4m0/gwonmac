@@ -6,7 +6,9 @@ import {
   availableAttributes,
   canSetAttributeRank,
   withAttributeRank,
+  withPlacedSkill,
 } from "../../src/shared/builds/authoring.js";
+import { skillBarOf, skillId } from "../../src/shared/builds/library.js";
 
 describe("build authoring rules", () => {
   it("uses the exact nonlinear 200-point Guild Wars budget", () => {
@@ -29,5 +31,25 @@ describe("build authoring rules", () => {
 
   it("stores rank zero as no investment", () => {
     assert.deepEqual(withAttributeRank({ Strength: 8 }, "Strength", 0), {});
+  });
+
+  it("places a catalogue skill without creating duplicate or second-elite bars", () => {
+    const first = skillId(1);
+    const oldElite = skillId(2);
+    const newElite = skillId(3);
+    const unknown = skillId(4);
+    const skills = skillBarOf((slot) => slot === 0 ? first : slot === 7 ? oldElite : null);
+    const catalogue = (skill: typeof first) => {
+      if (skill === first) return { elite: false };
+      if (skill === oldElite || skill === newElite) return { elite: true };
+      return null;
+    };
+
+    assert.equal(withPlacedSkill(skills, 3, first, catalogue), null);
+    assert.equal(withPlacedSkill(skills, 3, unknown, catalogue), null);
+    assert.deepEqual(
+      withPlacedSkill(skills, 3, newElite, catalogue),
+      skillBarOf((slot) => slot === 0 ? first : slot === 3 ? newElite : null),
+    );
   });
 });

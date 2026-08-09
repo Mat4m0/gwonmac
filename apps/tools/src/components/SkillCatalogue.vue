@@ -9,7 +9,13 @@ const props = defineProps<{
   catalogue: SkillCatalogue;
   allowPlayerOnly: boolean;
 }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{
+  close: [];
+  dragStart: [skill: SkillId];
+  dragOver: [slot: number | null];
+  dragEnd: [];
+  place: [slot: number, skill: SkillId];
+}>();
 
 const search = ref("");
 const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
@@ -104,11 +110,83 @@ function eliteSlot(skill: SkillPresentation): number | null {
 
 function useSkill(skill: SkillPresentation): void {
   const slot = props.editor.activeSlot.value;
-  if (slot === null || duplicateSlot(skill) !== null) return;
-  const previousElite = eliteSlot(skill);
-  if (previousElite !== null) props.editor.setSkill(previousElite, null);
-  props.editor.setSkill(slot, skill.id);
+  if (slot === null || !props.editor.placeSkill(slot, skill.id, props.catalogue)) return;
   inspected.value = skill;
+}
+
+type PointerSkillDrag = {
+  pointerId: number;
+  skill: SkillPresentation;
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  started: boolean;
+  target: number | null;
+};
+
+const pointerDrag = ref<PointerSkillDrag | null>(null);
+
+function slotAt(x: number, y: number): number | null {
+  const element = document.elementFromPoint(x, y)?.closest<HTMLElement>(
+    "[data-skill-bar] [data-skill-slot]",
+  );
+  const slot = Number(element?.dataset.skillSlot);
+  return Number.isInteger(slot) && slot >= 0 && slot < 8 ? slot : null;
+}
+
+function beginPointerDrag(event: PointerEvent, skill: SkillPresentation): void {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  pointerDrag.value = {
+    pointerId: event.pointerId,
+    skill,
+    startX: event.clientX,
+    startY: event.clientY,
+    x: event.clientX,
+    y: event.clientY,
+    started: false,
+    target: null,
+  };
+}
+
+function movePointerDrag(event: PointerEvent): void {
+  const drag = pointerDrag.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (
+    !drag.started
+    && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5
+  ) return;
+  event.preventDefault();
+  if (!drag.started) {
+    drag.started = true;
+    emit("dragStart", drag.skill.id);
+  }
+  drag.x = event.clientX;
+  drag.y = event.clientY;
+  const target = slotAt(event.clientX, event.clientY);
+  if (target !== drag.target) {
+    drag.target = target;
+    emit("dragOver", target);
+  }
+}
+
+function finishPointerDrag(event: PointerEvent, place: boolean): void {
+  const drag = pointerDrag.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const target = event.currentTarget as HTMLElement;
+  const started = drag.started;
+  if (place && started && drag.target !== null) {
+    emit("place", drag.target, drag.skill.id);
+  }
+  pointerDrag.value = null;
+  if (started) {
+    emit("dragOver", null);
+    emit("dragEnd");
+  }
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId);
+  }
 }
 
 function focusResult(index: number): void {
@@ -236,11 +314,18 @@ function clear(): void {
           @click="inspected = skill"
           @dblclick="useSkill(skill)"
           @keydown="onResultKeydown(index, skill, $event)"
+          @pointerdown="beginPointerDrag($event, skill)"
+          @pointermove="movePointerDrag"
+          @pointerup="finishPointerDrag($event, true)"
+          @pointercancel="finishPointerDrag($event, false)"
+          @lostpointercapture="finishPointerDrag($event, false)"
         >
           <span
-            class="ui-slot skill"
+            class="ui-slot skill catalogue-drag-handle"
             :data-elite="skill.elite ? '' : undefined"
             :data-profession="skill.profession"
+            :data-pointer-dragging="pointerDrag?.skill.id === skill.id ? '' : undefined"
+            :title="`Drag ${skill.name} to a skill slot`"
           >
             <img v-if="skill.iconUrl" :src="skill.iconUrl" alt="" loading="lazy">
           </span>
@@ -333,5 +418,24 @@ function clear(): void {
         </div>
       </aside>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="pointerDrag?.started"
+        class="catalogue-pointer-preview"
+        :style="{
+          transform: `translate3d(${pointerDrag.x + 14}px, ${pointerDrag.y + 14}px, 0)`,
+        }"
+        aria-hidden="true"
+      >
+        <span
+          class="ui-slot skill"
+          :data-elite="pointerDrag.skill.elite ? '' : undefined"
+          :data-profession="pointerDrag.skill.profession"
+        >
+          <img v-if="pointerDrag.skill.iconUrl" :src="pointerDrag.skill.iconUrl" alt="">
+        </span>
+        <strong>{{ pointerDrag.skill.name }}</strong>
+      </div>
+    </Teleport>
   </section>
 </template>

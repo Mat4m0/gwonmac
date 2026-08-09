@@ -143,6 +143,45 @@
 
 .skill-result:disabled { opacity: 0.5; }
 
+.catalogue-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.catalogue-drag-handle[data-pointer-dragging] {
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px var(--ui-focus), var(--ui-shadow-inset);
+}
+
+.catalogue-pointer-preview {
+  position: fixed;
+  z-index: var(--ui-z-toast);
+  top: 0;
+  left: 0;
+  display: flex;
+  max-width: 220px;
+  padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-1) var(--ui-space-1);
+  align-items: center;
+  gap: var(--ui-space-2);
+  pointer-events: none;
+  border-radius: var(--ui-radius);
+  background: var(--ui-raised-fill);
+  box-shadow: 0 0 0 2px var(--ui-focus), var(--ui-shadow-raised);
+  color: var(--ui-text-bright);
+}
+
+.catalogue-pointer-preview .skill {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+}
+
+.catalogue-pointer-preview strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .result-copy {
   display: grid;
   min-width: 0;

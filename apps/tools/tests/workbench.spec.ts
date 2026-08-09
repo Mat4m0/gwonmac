@@ -14,6 +14,29 @@ async function chooseSkill(page: Page, slot: number, name: string) {
   await page.getByRole("button", { name: new RegExp(`Use in slot ${slot + 1}`) }).click();
 }
 
+async function pointerDrag(
+  page: Page,
+  source: ReturnType<Page["locator"]>,
+  target: ReturnType<Page["locator"]>,
+  targetX = 0.5,
+  during?: () => Promise<void>,
+) {
+  await source.scrollIntoViewIfNeeded();
+  const from = await source.boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) throw new Error("Drag endpoints must be visible");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 8, from.y + from.height / 2, {
+    steps: 2,
+  });
+  await page.waitForTimeout(40);
+  await during?.();
+  await page.mouse.move(to.x + to.width * targetX, to.y + to.height / 2, { steps: 12 });
+  await page.waitForTimeout(40);
+  await page.mouse.up();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#app[data-ready=true]")).toBeAttached();
@@ -48,13 +71,13 @@ test("authors, commits, reloads, discards, and undoes one atomic draft", async (
   await expect(page.locator("#build-name")).toHaveValue("Field test monk");
 });
 
-test("reorders skill slots by drag and keyboard with persistent feedback", async ({ page }) => {
+test("places catalogue skills and reorders slots by pointer and keyboard", async ({ page }) => {
   await openBuild(page);
   const slots = page.locator(".authoring-bar .skill");
   const firstTitle = await slots.nth(0).getAttribute("title");
   const secondTitle = await slots.nth(1).getAttribute("title");
 
-  await slots.nth(0).dragTo(slots.nth(2));
+  await pointerDrag(page, slots.nth(0), slots.nth(2), 0.75);
   await expect(slots.nth(0)).toHaveAttribute("title", secondTitle!);
   await expect(slots.nth(2)).toHaveAttribute("title", firstTitle!);
   await expect(page.getByText("Skill moved from slot 1 to slot 3.")).toBeAttached();
@@ -67,9 +90,29 @@ test("reorders skill slots by drag and keyboard with persistent feedback", async
   await slots.nth(7).focus();
   await page.keyboard.press("Delete");
   await expect(slots.nth(7)).toHaveAttribute("title", "Empty skill slot");
-  await slots.nth(1).dragTo(slots.nth(7));
+  await pointerDrag(page, slots.nth(1), slots.nth(7), 0.9);
   await expect(slots.nth(7)).toHaveAttribute("title", firstTitle!);
   await expect(page.getByText("Skill moved from slot 2 to slot 8.")).toBeAttached();
+
+  await slots.nth(7).click();
+  await page.getByRole("searchbox", { name: "Search skills" }).fill("Infuse Health");
+  const result = page.locator(".skill-result").filter({ hasText: "Infuse Health" }).first();
+  await expect(result).toBeEnabled();
+  await pointerDrag(
+    page,
+    result.locator(".catalogue-drag-handle"),
+    slots.nth(7),
+    0.25,
+    async () => {
+      await expect(result.locator(".catalogue-drag-handle")).toHaveAttribute(
+        "data-pointer-dragging",
+        "",
+      );
+      await expect(page.locator(".authoring-bar")).toHaveClass(/skill-bar--receiving/);
+    },
+  );
+  await expect(slots.nth(7)).toHaveAttribute("title", "Infuse Health");
+  await expect(page.getByText("Infuse Health placed in slot 8.")).toBeAttached();
 });
 
 test("exports build and team codes without hiding the manual fallback", async ({ page }) => {

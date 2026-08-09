@@ -17,7 +17,11 @@ import type {
   AttributeRank,
   AttributeRanks,
   Profession,
+  SkillBar,
+  SkillId,
+  SkillSlotIndex,
 } from "./library.js";
+import { skillBarOf } from "./library.js";
 import { ATTRIBUTE_POINT_COST, ATTRIBUTES } from "./heroes.js";
 import {
   LEVEL_20_ATTRIBUTE_BUDGET,
@@ -78,4 +82,35 @@ export function withAttributeRank(
   if (rank === 0) delete next[attribute];
   else next[attribute] = rank;
   return next;
+}
+
+/** The one catalogue fact needed while placing a skill in an editable bar. */
+export type SkillEliteLookup = (
+  skill: SkillId,
+) => { readonly elite: boolean } | null;
+
+/**
+ * Replace one bar slot while preventing the invalid states the picker can
+ * resolve before save: unknown skills, duplicates, and two elites. A new elite
+ * replaces the previous one because that is the same behavior the Guild Wars
+ * template UI teaches players to expect.
+ */
+export function withPlacedSkill(
+  skills: SkillBar,
+  target: SkillSlotIndex,
+  skill: SkillId,
+  catalogue: SkillEliteLookup,
+): SkillBar | null {
+  const incoming = catalogue(skill);
+  if (incoming === null) return null;
+  const duplicate = skills.findIndex((id, index) => id === skill && index !== target);
+  if (duplicate >= 0) return null;
+  return skillBarOf((slot) => {
+    if (slot === target) return skill;
+    const equipped = skills[slot];
+    if (incoming.elite && equipped !== null && catalogue(equipped)?.elite === true) {
+      return null;
+    }
+    return equipped;
+  });
 }

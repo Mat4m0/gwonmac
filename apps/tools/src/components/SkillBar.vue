@@ -12,6 +12,8 @@ const props = defineProps<{
   invalidSlots?: readonly number[];
   activeSlot?: number | null;
   editable?: boolean;
+  incomingSkill?: SkillId | null;
+  dropTarget?: number | null;
 }>();
 const emit = defineEmits<{
   select: [slot: number];
@@ -72,13 +74,18 @@ function dragEnded(event: DraggableEvent<SkillId | null>): void {
   <VueDraggable
     v-model="sortableSkills"
     class="skill-bar"
-    :class="{ 'skill-bar--compact': compact }"
+    :class="{
+      'skill-bar--compact': compact,
+      'skill-bar--receiving': editable && incomingSkill !== null && incomingSkill !== undefined,
+    }"
     aria-label="Skill bar"
+    :data-skill-bar="editable ? '' : undefined"
     :disabled="!editable"
     draggable=".skill--editable"
     filter="[data-empty]"
     :prevent-on-filter="false"
     :animation="dragAnimation"
+    :force-fallback="true"
     easing="cubic-bezier(0.22, 1, 0.36, 1)"
     chosen-class="skill--chosen"
     ghost-class="skill--ghost"
@@ -108,6 +115,8 @@ function dragEnded(event: DraggableEvent<SkillId | null>): void {
       :data-elite="skill !== null && catalogue.get(skill).elite ? '' : undefined"
       :data-profession="skill === null ? undefined : catalogue.get(skill).profession"
       :data-empty="skill === null ? '' : undefined"
+      :data-skill-slot="editable ? index : undefined"
+      :data-drop-target="dropTarget === index ? '' : undefined"
       :title="skill === null ? 'Empty skill slot' : catalogue.get(skill).name"
       :aria-label="[
         `${index + 1}. ${skill === null ? 'Empty skill slot' : catalogue.get(skill).name}`,

@@ -8,7 +8,7 @@ import {
 } from "vue";
 import { PROFESSIONS } from "../../../../src/shared/builds/heroes";
 import { encodeSkillTemplate } from "../../../../src/shared/builds/skill-template";
-import type { Profession } from "../../../../src/shared/builds/library";
+import type { Profession, SkillId } from "../../../../src/shared/builds/library";
 import type { BuildProblem } from "../../../../src/shared/builds/validate";
 import type { LibraryController } from "../use-library";
 import {
@@ -47,6 +47,12 @@ const exporting = ref(false);
 const exportProblem = ref("");
 const exportStatus = ref("");
 const exportCodeInput = ref<HTMLTextAreaElement | null>(null);
+const draggedSkill = ref<SkillId | null>(null);
+const dragTarget = ref<number | null>(null);
+const placementStatus = ref<{
+  text: string;
+  tone: "success" | "warning";
+} | null>(null);
 
 watch(editor.dirty, (dirty) => emit("dirtyChange", dirty), { immediate: true });
 watch(
@@ -62,6 +68,9 @@ watch(
     exporting.value = false;
     exportProblem.value = "";
     exportStatus.value = "";
+    draggedSkill.value = null;
+    dragTarget.value = null;
+    placementStatus.value = null;
   },
 );
 
@@ -136,6 +145,30 @@ function closeCatalogue(): void {
       `.authoring-bar .skill:nth-child(${(slot ?? 0) + 1})`,
     )?.focus();
   });
+}
+
+function placeDraggedSkill(slot: number, skill: SkillId): void {
+  if (editor.placeSkill(slot, skill, props.controller.skills)) {
+    placementStatus.value = {
+      text: `${props.controller.skills.get(skill).name} placed in slot ${slot + 1}.`,
+      tone: "success",
+    };
+  } else {
+    placementStatus.value = {
+      text: `${props.controller.skills.get(skill).name} is already used in this bar.`,
+      tone: "warning",
+    };
+  }
+}
+
+function startSkillDrag(skill: SkillId): void {
+  placementStatus.value = null;
+  draggedSkill.value = skill;
+}
+
+function finishSkillDrag(): void {
+  draggedSkill.value = null;
+  dragTarget.value = null;
 }
 
 function problemText(problem: BuildProblem): string {
@@ -300,6 +333,8 @@ defineExpose({
             :active-slot="editor.activeSlot.value"
             :invalid-slots="invalidSlots"
             :changed-slots="changedSlots"
+            :incoming-skill="draggedSkill"
+            :drop-target="dragTarget"
             editable
             @select="selectSlot"
             @clear="editor.setSkill($event, null)"
@@ -308,7 +343,15 @@ defineExpose({
             @moved="editor.finishSkillMove"
           />
           <p class="bar-keyboard-hint">
-            Drag to reorder · Enter edits · Delete clears · ⌘← / ⌘→ moves
+            Drag skills onto slots; drag slots to reorder · Enter edits · Delete clears · ⌘← / ⌘→ moves
+          </p>
+          <p
+            v-if="placementStatus"
+            class="bar-drag-status"
+            :data-tone="placementStatus.tone"
+            role="status"
+          >
+            {{ placementStatus.text }}
           </p>
         </section>
 
@@ -368,6 +411,10 @@ defineExpose({
           :catalogue="controller.skills"
           :allow-player-only="allowPlayerOnly"
           @close="closeCatalogue"
+          @drag-start="startSkillDrag"
+          @drag-over="dragTarget = $event"
+          @drag-end="finishSkillDrag"
+          @place="placeDraggedSkill"
         />
         <section
           v-else
