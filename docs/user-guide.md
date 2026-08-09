@@ -98,6 +98,11 @@ memory use matters more than sharpness.
 Settings shows the backing resolution for the current window beside every
 scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
 four times as many pixels.
+**Interface style** changes every GWonMac surface immediately. **Guild Wars**
+is the ornamental default; **Obsidian** is a borderless charcoal treatment with
+quieter gilt accents. Both use the same controls and keep profession colours.
+**Panel visibility** changes how much of the live game remains visible behind
+either style and does not alter Guild Wars itself.
 Right-drag always locks the pointer while steering the camera and restores it
 on release. Mouse, trackpad, and Magic Mouse clicks and drags pass through to
 Guild Wars unchanged. A macOS double-click reaches Guild Wars as a

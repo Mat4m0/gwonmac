@@ -436,6 +436,41 @@ test("aligns team header controls and configured row controls", async ({ page })
   expect(Math.max(...controlTops) - Math.min(...controlTops)).toBeLessThanOrEqual(1);
 });
 
+test("projects Obsidian through the shared system without layout drift", async ({ page }) => {
+  await page.evaluate(() => {
+    document.documentElement.dataset.uiStyle = "obsidian";
+    document.documentElement.style.setProperty("--ui-panel-opacity", "0.65");
+  });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await openBuild(page);
+
+  const appearance = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    const frame = document.querySelector<HTMLElement>(".tools-window");
+    const primary = document.querySelector<HTMLElement>(
+      '.ui-button[data-variant="primary"]',
+    );
+    if (!frame || !primary || !document.scrollingElement) {
+      throw new Error("Obsidian fixture is incomplete");
+    }
+    return {
+      borderWidth: root.getPropertyValue("--ui-border-width").trim(),
+      textShadow: root.getPropertyValue("--ui-text-shadow").trim(),
+      font: getComputedStyle(frame).fontFamily,
+      primaryFill: getComputedStyle(primary).backgroundImage,
+      overflow:
+        document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth,
+    };
+  });
+
+  expect(appearance.borderWidth).toBe("0px");
+  expect(appearance.textShadow).toBe("none");
+  expect(appearance.font).toContain("ui-sans-serif");
+  expect(appearance.primaryFill).not.toBe("none");
+  expect(appearance.overflow).toBeLessThanOrEqual(1);
+  await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
+});
+
 test("keeps critical team and skill feedback legible", async ({ page }) => {
   const contrast = async (selector: string) => page.locator(selector).first().evaluate((element) => {
     type Colour = [number, number, number, number];

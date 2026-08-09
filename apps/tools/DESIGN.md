@@ -1,12 +1,13 @@
 # GWonMac interface system
 
-GWonMac uses one interface inspired by the original Guild Wars client. It is a
-product surface, not a selectable theme. Settings, Tools, dialogs, lists, skill
-bars, and feedback all consume the same shipped tokens and components.
+GWonMac uses one component system with two visual styles. **Guild Wars** is the
+default: an interface inspired by the original client. **Obsidian** is its
+borderless, minimal projection. Settings, Tools, dialogs, lists, skill bars,
+and feedback always consume the same shipped tokens and components.
 
 ## Direction
 
-The visual grammar comes from Guild Wars itself:
+The default visual grammar comes from Guild Wars itself:
 
 - ivory metal rings with brighter corner caps;
 - engraved parchment text in a Palatino-style serif;
@@ -20,6 +21,11 @@ The visual grammar comes from Guild Wars itself:
 The UI remains a dense utility. Ornament belongs to the frame and control
 materials; content remains compact, aligned, and scannable.
 
+Obsidian keeps that information hierarchy and density while replacing the
+ornament with warm-black tonal layers, system sans type, muted gilt selection,
+and restrained shadow. Profession colours retain their game meaning in both
+styles.
+
 ## One runtime source
 
 | File | Owns |
@@ -32,8 +38,8 @@ inherits those links and does not bundle a second copy. The standalone Tools
 fixture imports them because it has no renderer around it.
 
 Consumer stylesheets own layout only. The invariant test rejects component
-colour literals, literal corners, unnamed stacking values, and any alternate
-theme or density selector.
+colour literals, literal corners, unnamed stacking values, and style selectors
+outside the single Obsidian token projection.
 
 ## Materials and primitives
 
@@ -52,11 +58,13 @@ Every interactive component provides visible hover, focus, active, selected,
 and disabled states. Focus uses its own bright gilt token so it remains visible
 over live game art.
 
-## The only visual preference
+## Visual preferences
 
-Panel opacity is persisted at 65–100%. It controls how much of the game remains
-visible behind GWonMac without creating another palette, geometry, or density.
-Theme, density, border, and radius selectors do not exist.
+Interface style is persisted as the closed choice `guild-wars | obsidian`.
+Panel opacity is persisted at 65–100% and controls how much of the game remains
+visible behind either style. Neither preference changes component markup,
+layout density, or behaviour. Free-form theme, density, border, and radius
+selectors do not exist.
 
 Older settings files may still contain those retired fields. Full settings
 parsing ignores them, and the next ordinary save writes only current fields.
@@ -83,8 +91,9 @@ parsing ignores them, and the next ordinary save writes only current fields.
 ## Seeing and verifying it
 
 [`docs/ui-gallery.html`](../../docs/ui-gallery.html) directly links the shipped
-stylesheets. Its only control is the same panel-opacity value Settings writes.
-The deliberately bright backing makes transparency failures visible.
+stylesheets. Its controls are the same interface-style and panel-opacity values
+Settings writes. The deliberately bright backing makes transparency failures
+visible.
 
 `node scripts/ui-visual-sweep.mjs` captures the gallery and Tools at minimum,
 default, and opaque panel values and audits overflow, clipping, hit targets,

@@ -26,7 +26,7 @@
   .controls {
     padding: 18px;
     overflow: auto;
-    background: var(--ui-base);
+    background: var(--ui-well);
     border-right: 1px solid var(--ui-line-soft);
   }
   .controls h1 { margin: 0 0 4px; font-size: 15px; color: var(--ui-text-bright); }
@@ -80,9 +80,17 @@
 <div class="controls">
   <h1>UI system</h1>
   <p class="sub">
-    The one OG Guild Wars interface shipped by GWonMac. This gallery links the
-    production tokens and components directly; only panel opacity is variable.
+    The shipped Guild Wars and Obsidian styles. This gallery links production
+    tokens and components directly.
   </p>
+
+  <label class="ctl ui-field">
+    <span class="ui-field-label">Interface style</span>
+    <select class="ui-select" id="style">
+      <option value="guild-wars">Guild Wars · Default</option>
+      <option value="obsidian">Obsidian</option>
+    </select>
+  </label>
 
   <div class="ctl ui-range-field">
     <span>Panel opacity <output id="v-opacity">94%</output></span>
@@ -304,6 +312,9 @@ const KNOBS = [
 ];
 
 function apply() {
+  const style = document.getElementById("style").value;
+  if (style === "obsidian") root.dataset.uiStyle = "obsidian";
+  else delete root.dataset.uiStyle;
   for (const knob of KNOBS) {
     const raw = Number(document.getElementById(knob.id).value);
     const value = knob.unit === "%" ? String(raw * knob.scale) : `${raw}px`;
@@ -314,12 +325,15 @@ function apply() {
 for (const knob of KNOBS) {
   document.getElementById(knob.id).addEventListener("input", apply);
 }
+document.getElementById("style").addEventListener("change", apply);
 
 /* Pull the controls back into line with whatever is actually on `:root`.
  * `scripts/ui-visual-sweep.mjs` drives the tokens directly, the same way
  * Settings does, and a sidebar still claiming the defaults would put a wrong
  * caption on every screenshot it takes. */
 window.gwSyncGalleryControls = () => {
+  document.getElementById("style").value =
+    root.dataset.uiStyle === "obsidian" ? "obsidian" : "guild-wars";
   for (const knob of KNOBS) {
     const current = parseFloat(root.style.getPropertyValue(knob.token));
     if (Number.isNaN(current)) continue;

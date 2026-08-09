@@ -276,8 +276,13 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
+export const UI_STYLES = ["guild-wars", "obsidian"] as const;
+export type UiStyle = (typeof UI_STYLES)[number];
+
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
+  /** The visual treatment applied to every GWonMac panel. */
+  uiStyle: UiStyle;
   /**
    * The application's Guild Wars panels stay translucent enough to see the
    * game behind them. This is presentation only and never reaches the game.
@@ -324,6 +329,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
+  uiStyle: "guild-wars",
   uiPanelOpacity: 94,
   gwonmacTools: false,
   teamManagement: true,

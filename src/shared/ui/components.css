@@ -269,9 +269,9 @@
 }
 
 .ui-button[data-variant="primary"] {
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  background: var(--ui-primary-fill) padding-box, var(--ui-ring-gold) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
-  color: var(--ui-accent-ink);
+  color: var(--ui-primary-ink);
   font-weight: 600;
 }
 
@@ -336,7 +336,7 @@
 }
 
 .ui-link:hover:not(:disabled) {
-  color: var(--gw-gold-bright);
+  color: var(--ui-accent-hover);
   border-bottom-color: currentColor;
 }
 
@@ -387,8 +387,8 @@
   padding-right: 28px;
   cursor: pointer;
   background:
-    linear-gradient(45deg, transparent 50%, var(--gw-bone) 50%) calc(100% - 15px) 52% / 6px 6px no-repeat,
-    linear-gradient(135deg, var(--gw-bone) 50%, transparent 50%) calc(100% - 9px) 52% / 6px 6px no-repeat,
+    linear-gradient(45deg, transparent 50%, var(--ui-control-mark) 50%) calc(100% - 15px) 52% / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--ui-control-mark) 50%, transparent 50%) calc(100% - 9px) 52% / 6px 6px no-repeat,
     var(--ui-well-fill);
 }
 

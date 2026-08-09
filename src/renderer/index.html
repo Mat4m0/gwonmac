@@ -400,7 +400,7 @@
         <section class="settings-pane" id="settings-pane-display" role="tabpanel"
                  aria-labelledby="settings-tab-display">
           <h3 id="settings-display-title" class="settings-pane-title">Display</h3>
-          <p class="settings-pane-intro">Balance image quality, performance, and how much of the game remains visible behind GWonMac.</p>
+          <p class="settings-pane-intro">Balance image quality, interface style, performance, and how much of the game remains visible behind GWonMac.</p>
           <fieldset>
             <legend>Graphics quality</legend>
             <div class="settings-seg settings-quality-seg ui-segment" data-fill role="presentation">
@@ -430,7 +430,27 @@
           <p class="settings-note">Retina is the clearest default. Choose Balanced or Performance if Guild Wars feels slow or uses too much GPU memory.</p>
 
           <fieldset>
-            <legend>Interface</legend>
+            <legend>Interface style</legend>
+            <div class="settings-seg settings-style-seg ui-segment" data-fill role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="uiStyle" value="guild-wars">
+                <span class="settings-style-option">
+                  <span>Guild Wars <small>Default</small></span>
+                  <small>Ornamental metal and engraved type</small>
+                </span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiStyle" value="obsidian">
+                <span class="settings-style-option">
+                  <span>Obsidian</span>
+                  <small>Borderless charcoal and muted gilt</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Panel visibility</legend>
             <label class="ui-range-field settings-opacity-field">
               <span>Panel opacity <output name="uiPanelOpacityValue">94%</output></span>
               <input type="range" class="ui-range" name="uiPanelOpacity"

@@ -2,8 +2,9 @@
 //
 // The unit test proves no component owns a colour. It cannot prove the result
 // looks like one interface. This drives the gallery and the Tools workbench
-// through the whole preference range a player can actually reach — the
-// extremes and default of panel opacity — screenshots each, and reports any
+// through the whole preference range a player can actually reach — both
+// interface styles and the extremes/default of panel opacity — screenshots
+// each, and reports any
 // layout fault a machine can see: a surface
 // that scrolls sideways, content clipped by its own container, a control
 // shorter than the touch target, a panel corner the frame does not reach.
@@ -34,16 +35,21 @@ const OPACITIES = [
   { name: "default", value: 0.94 },
   { name: "opaque", value: 1 },
 ];
+/** @type {Array<"guild-wars" | "obsidian">} */
+const STYLES = ["guild-wars", "obsidian"];
 
 /**
  * Apply exactly what `src/renderer/appearance.ts` applies.
  * @param {import("@playwright/test").Page} page
+ * @param {"guild-wars" | "obsidian"} style
  * @param {number} opacity
  */
-async function applyAppearance(page, opacity) {
+async function applyAppearance(page, style, opacity) {
   await page.evaluate(
-    (opacity) => {
+    ({ style, opacity }) => {
       const root = document.documentElement;
+      if (style === "obsidian") root.dataset.uiStyle = "obsidian";
+      else delete root.dataset.uiStyle;
       root.style.setProperty("--ui-panel-opacity", String(opacity));
       // The gallery draws its own controls; keep them honest so a screenshot
       // never captions itself with the values it is not showing.
@@ -51,7 +57,7 @@ async function applyAppearance(page, opacity) {
         /** @type {unknown} */ (window)
       ).gwSyncGalleryControls?.();
     },
-    opacity,
+    { style, opacity },
   );
   await page.waitForTimeout(60);
 }
@@ -181,14 +187,16 @@ async function sweep(pageUrl, tag, prepare) {
   await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (prepare) await prepare(page);
 
-  for (const opacity of OPACITIES) {
-    await applyAppearance(page, opacity.value);
-    const label = `${tag}/${opacity.name}`;
-    findings.push(...(await audit(page, label)));
-    await page.screenshot({
-      path: path.join(outDir, `${label.replaceAll("/", "__")}.png`),
-      fullPage: false,
-    });
+  for (const style of STYLES) {
+    for (const opacity of OPACITIES) {
+      await applyAppearance(page, style, opacity.value);
+      const label = `${tag}/${style}/${opacity.name}`;
+      findings.push(...(await audit(page, label)));
+      await page.screenshot({
+        path: path.join(outDir, `${label.replaceAll("/", "__")}.png`),
+        fullPage: false,
+      });
+    }
   }
   await page.close();
 }

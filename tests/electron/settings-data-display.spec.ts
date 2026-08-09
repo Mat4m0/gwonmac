@@ -5,7 +5,7 @@ import { closeOffline, launchOffline } from "./fixtures.mjs";
 import "./settings-test-fixture.mjs";
 
 test.describe("data and display settings", () => {
-  test("panel opacity changes the one interface and survives", async () => {
+  test("interface style and panel opacity apply live and survive", async () => {
     const fixture = await launchOffline("gw-settings-appearance-e2e-");
     try {
       const { page } = fixture;
@@ -17,6 +17,10 @@ test.describe("data and display settings", () => {
       await page.locator("#settings-tab-display").click();
 
       await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("94");
+      await expect(
+        page.locator('input[name="uiStyle"][value="guild-wars"]'),
+      ).toBeChecked();
+      await expect(root).not.toHaveAttribute("data-ui-style");
       await expect(page.locator('select[name="uiTheme"]')).toHaveCount(0);
       await expect(page.locator('select[name="uiDensity"]')).toHaveCount(0);
       // Polled, not read once: the save is a round trip through main and the
@@ -43,6 +47,10 @@ test.describe("data and display settings", () => {
         "data-tone",
         "success",
       );
+
+      await page.locator('input[name="uiStyle"][value="obsidian"]').click();
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(page.locator("#settings-feedback")).toHaveText("Saved.");
       expect(
         await page.locator("#settings-dialog").evaluate((element) =>
           globalThis.getComputedStyle(element)
@@ -63,6 +71,10 @@ test.describe("data and display settings", () => {
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
       await page.locator("#settings-tab-display").click();
+      await expect(
+        page.locator('input[name="uiStyle"][value="obsidian"]'),
+      ).toBeChecked();
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
       await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("65");
       await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("65%");
     } finally {
@@ -376,7 +388,7 @@ test.describe("data and display settings", () => {
       await page.evaluate(() =>
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
-      await page.locator("#settings-tab-advanced").click();
+      await page.locator("#settings-tab-display").click();
       await app.evaluate(({ ipcMain }) => {
         ipcMain.removeHandler("gw:settings:set");
         ipcMain.handle("gw:settings:set", () => {
@@ -384,7 +396,9 @@ test.describe("data and display settings", () => {
         });
       });
 
-      await page.locator('input[name="showDiagnostics"]').click();
+      // The rejected save restores the canonical radio immediately, so this
+      // click must not wait for the transient checked state to persist.
+      await page.locator('input[name="uiStyle"][value="obsidian"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
         "Settings could not be saved. Your previous setting is still active; try again.",
       );
@@ -392,10 +406,13 @@ test.describe("data and display settings", () => {
         "data-tone",
         "error",
       );
-      await expect(page.locator('input[name="showDiagnostics"]')).not.toBeChecked();
+      await expect(
+        page.locator('input[name="uiStyle"][value="guild-wars"]'),
+      ).toBeChecked();
+      await expect(page.locator("html")).not.toHaveAttribute("data-ui-style");
       expect(
         await page.evaluate(() => window.gwNative.settings.get()),
-      ).toMatchObject({ showDiagnostics: false });
+      ).toMatchObject({ uiStyle: "guild-wars" });
     } finally {
       await closeOffline(fixture);
     }

@@ -16,6 +16,7 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
+      uiStyle: "guild-wars",
       uiPanelOpacity: 94,
       gwonmacTools: false,
       teamManagement: true,
@@ -54,6 +55,7 @@ describe("settings", () => {
     assert.deepEqual(got, {
       uiPanelOpacity: 94,
       renderScale: 1,
+      uiStyle: "guild-wars",
       gwonmacTools: false,
       teamManagement: true,
       targetReadout: false,
@@ -82,6 +84,13 @@ describe("settings", () => {
     assert.equal(parseSettings({ renderScale: 1 }).renderScale, 1);
     assert.equal(parseSettings({ renderScale: 1.5 }).renderScale, 1.5);
     assert.equal(parseSettings({ renderScale: 2 }).renderScale, 2);
+  });
+
+  it("accepts only the two supported interface styles", () => {
+    assert.equal(parseSettings({ uiStyle: "guild-wars" }).uiStyle, "guild-wars");
+    assert.equal(parseSettings({ uiStyle: "obsidian" }).uiStyle, "obsidian");
+    assert.throws(() => parseSettings({ uiStyle: "jade" }), AppError);
+    assert.throws(() => parseSettings({ uiStyle: true }), AppError);
   });
 
   it("rejects unknown types", () => {
@@ -154,6 +163,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ extendedMemoryEnabled: true }), {
       extendedMemoryEnabled: true,
     });
+    assert.deepEqual(parseSettingsPatch({ uiStyle: "obsidian" }), {
+      uiStyle: "obsidian",
+    });
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -200,6 +212,7 @@ describe("settings", () => {
       "targetReadout",
       "teamManagement",
       "uiPanelOpacity",
+      "uiStyle",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -230,6 +243,7 @@ describe("settings", () => {
     assert.deepEqual(loaded, {
       uiPanelOpacity: 94,
       renderScale: 1.5,
+      uiStyle: "guild-wars",
       gwonmacTools: false,
       teamManagement: true,
       targetReadout: false,

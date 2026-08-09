@@ -1,4 +1,4 @@
-// The OG Guild Wars interface is one system. One hardcoded colour in a
+// Both interface styles are one system. One hardcoded colour in a
 // component is invisible in review and becomes an accidental second style.
 //
 // So the claim is enforced rather than asserted. Neither `ui/components.css`
@@ -137,10 +137,12 @@ test("no consumer invents a stacking order", () => {
   );
 });
 
-test("the shared system has no alternate theme or density selector", () => {
-  assert.doesNotMatch(code(tokens), /\[data-ui-(?:theme|density)=/u);
+test("Obsidian is the only style projection and consumers do not branch", () => {
+  const selectors = [...code(tokens).matchAll(/:root\[data-ui-style="([^"]+)"\]/gu)]
+    .map((match) => match[1]);
+  assert.deepEqual(selectors, ["obsidian"]);
   for (const [, css] of consumers) {
-    assert.doesNotMatch(code(css), /\[data-ui-(?:theme|density)=/u);
+    assert.doesNotMatch(code(css), /\[data-ui-(?:style|theme|density)=/u);
   }
 });
 

@@ -28,7 +28,8 @@
   const feedback = byId('settings-feedback');
   const renderScale = form.elements.namedItem(
     'renderScale',
-  ) as HTMLSelectElement;
+  ) as RadioNodeList;
+  const uiStyle = form.elements.namedItem('uiStyle') as RadioNodeList;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -372,6 +373,10 @@
           ? { renderScale: value }
           : null;
       }
+      case 'uiStyle':
+        return control.value === 'guild-wars' || control.value === 'obsidian'
+          ? { uiStyle: control.value }
+          : null;
       case 'uiPanelOpacity':
       {
         // The slider's own min/max/step are the bounds; a value outside them
@@ -412,6 +417,7 @@
 
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
+    uiStyle.value = settings.uiStyle;
     for (const { name } of appearanceRanges) {
       const range = appearanceRange(name);
       if (range) range.value = String(settings[name]);
