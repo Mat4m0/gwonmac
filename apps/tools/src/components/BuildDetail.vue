@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import {
   computed,
+  nextTick,
   ref,
   toRef,
   watch,
 } from "vue";
 import { PROFESSIONS } from "../../../../src/shared/builds/heroes";
+import { encodeSkillTemplate } from "../../../../src/shared/builds/skill-template";
 import type { Profession } from "../../../../src/shared/builds/library";
 import type { BuildProblem } from "../../../../src/shared/builds/validate";
 import type { LibraryController } from "../use-library";
@@ -41,6 +43,10 @@ const adaptError = ref(false);
 const deleting = ref(false);
 const merging = ref(false);
 const publication = ref<{ fileName: string; location: string } | null>(null);
+const exporting = ref(false);
+const exportProblem = ref("");
+const exportStatus = ref("");
+const exportCodeInput = ref<HTMLTextAreaElement | null>(null);
 
 watch(editor.dirty, (dirty) => emit("dirtyChange", dirty), { immediate: true });
 watch(
@@ -53,8 +59,37 @@ watch(
     deleting.value = false;
     merging.value = false;
     publication.value = null;
+    exporting.value = false;
+    exportProblem.value = "";
+    exportStatus.value = "";
   },
 );
+
+const exportCode = computed(() => encodeSkillTemplate(editor.draft.value) ?? "");
+
+async function startExporting(): Promise<void> {
+  if (!exportCode.value || !editor.valid.value) return;
+  exportProblem.value = "";
+  exportStatus.value = "";
+  exporting.value = true;
+  await nextTick();
+  exportCodeInput.value?.focus();
+  exportCodeInput.value?.select();
+}
+
+async function copyBuildCode(): Promise<void> {
+  exportProblem.value = "";
+  exportStatus.value = "";
+  try {
+    await props.controller.writeClipboard(exportCode.value);
+    exportStatus.value = "Build code copied.";
+  } catch {
+    exportProblem.value = "Clipboard access was refused. Select and copy the code instead.";
+    await nextTick();
+    exportCodeInput.value?.focus();
+    exportCodeInput.value?.select();
+  }
+}
 
 const parent = computed(() =>
   props.build.parent
@@ -493,6 +528,33 @@ defineExpose({
         Delete build
       </button>
     </footer>
+    <footer v-else-if="exporting" class="detail-actions authoring-actions build-export">
+      <label>
+        <span>Guild Wars skill template code</span>
+        <textarea
+          ref="exportCodeInput"
+          class="ui-textarea template-code"
+          rows="3"
+          readonly
+          spellcheck="false"
+          :value="exportCode"
+          @focus="($event.target as HTMLTextAreaElement).select()"
+        />
+        <small v-if="exportProblem" class="ui-field-error" role="alert">{{ exportProblem }}</small>
+        <small v-else-if="exportStatus" class="share-success" role="status">{{ exportStatus }}</small>
+        <small v-else-if="editor.dirty.value" class="ui-field-hint">
+          This code includes the unsaved draft shown above.
+        </small>
+      </label>
+      <button class="ui-button" @click="exporting = false">Done</button>
+      <button
+        class="ui-button"
+        :title="editor.dirty.value ? 'Save changes before writing this template into Guild Wars' : undefined"
+        :disabled="editor.dirty.value || controller.saving.value"
+        @click="writeTemplate"
+      >Save to Guild Wars</button>
+      <button class="ui-button" data-variant="primary" @click="copyBuildCode">Copy code</button>
+    </footer>
     <footer v-else class="detail-actions authoring-actions">
       <span class="save-state">
         {{ editor.dirty.value ? "Draft changes stay local until saved." : "Saved in your local build library." }}
@@ -510,10 +572,10 @@ defineExpose({
       >Save changes</button>
       <button
         class="ui-button"
-        :title="editor.dirty.value ? 'Save your changes first' : undefined"
-        :disabled="editor.dirty.value || !controller.validate(build, context).valid || controller.saving.value"
-        @click="writeTemplate"
-      >Write skill template</button>
+        :title="!editor.valid.value ? 'Repair this build before exporting it' : undefined"
+        :disabled="!editor.valid.value"
+        @click="startExporting"
+      >Export build</button>
     </footer>
   </article>
 </template>

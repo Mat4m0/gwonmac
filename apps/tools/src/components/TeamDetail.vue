@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   HEROES_IN_PANEL_ORDER,
   PROFESSIONS,
@@ -43,6 +43,7 @@ const showLockedHeroes = ref(false);
 const shareCode = ref("");
 const shareProblem = ref("");
 const shareStatus = ref("");
+const shareCodeInput = ref<HTMLTextAreaElement | null>(null);
 watch(
   () => props.team.id,
   () => {
@@ -51,12 +52,15 @@ watch(
   },
 );
 
-const startSharing = () => {
+const startSharing = async () => {
   shareProblem.value = "";
   shareStatus.value = "";
   try {
     shareCode.value = props.controller.teamCode(props.team);
     sharing.value = true;
+    await nextTick();
+    shareCodeInput.value?.focus();
+    shareCodeInput.value?.select();
   } catch (cause) {
     shareProblem.value = cause instanceof Error ? cause.message : "This team could not be shared.";
   }
@@ -855,8 +859,9 @@ defineExpose({
     </footer>
     <footer v-else-if="sharing" class="detail-actions detail-actions--explain share-team">
       <label>
-        <span>GWonMac team code</span>
+        <span>GWonMac team export code</span>
         <textarea
+          ref="shareCodeInput"
           class="ui-textarea template-code"
           rows="4"
           readonly
@@ -903,7 +908,7 @@ defineExpose({
       </div>
       <div class="team-action-buttons">
         <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
-        <button class="ui-button" @click="startSharing">Share team</button>
+        <button class="ui-button" @click="startSharing">Export team</button>
         <button
           class="ui-button"
           data-variant="primary"

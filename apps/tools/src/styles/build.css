@@ -78,7 +78,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
   box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
@@ -355,6 +355,29 @@
   margin-right: auto;
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
+}
+
+.build-export,
+.share-team {
+  min-height: 104px;
+  flex-wrap: wrap;
+}
+
+.build-export > label,
+.share-team > label {
+  display: grid;
+  min-width: min(320px, 100%);
+  flex: 1;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.build-export .template-code,
+.share-team .template-code {
+  width: 100%;
+  min-height: 50px;
+  resize: none;
 }
 
 .build-details > section {

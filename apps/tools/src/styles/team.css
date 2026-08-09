@@ -472,6 +472,8 @@
   .catalogue-workspace { padding: var(--ui-space-3); }
   .authoring-actions { flex-wrap: wrap; }
   .save-state { width: 100%; margin-right: 0; }
+  .build-export > label,
+  .share-team > label { flex-basis: 100%; }
 }
 
 @container (max-width: 390px) {
