@@ -269,6 +269,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       partyPlayers: 43,
       partyHenchmen: 44,
       partyFlag: 45,
+      accountContext: 78,
+      accountUnlockedSkills: 79,
       worldContext: 46,
       worldHeroFlags: 47,
       heroFlagStride: 48,
@@ -303,6 +305,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       areaInfoFlags: 75,
       worldProfessionStates: 76,
       professionStateStride: 77,
+      worldCharacterSkills: 80,
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;

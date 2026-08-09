@@ -196,8 +196,7 @@ unsafe fn classify_play_region(layout: Layout, map_id: u32) -> u32 {
             return PLAY_REGION_UNKNOWN;
         }
     }
-    let Some(flags) = offset(record, layout.area_info_flags)
-        .and_then(|at| unsafe { read_u32(at) })
+    let Some(flags) = offset(record, layout.area_info_flags).and_then(|at| unsafe { read_u32(at) })
     else {
         return PLAY_REGION_UNKNOWN;
     };
@@ -234,10 +233,7 @@ pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Op
     let buffer = unsafe { read_u32(layout.agent_array) }?;
     let capacity = unsafe { read_u32(offset(layout.agent_array, 4)?) }?;
     let size = unsafe { read_u32(offset(layout.agent_array, 8)?) }?;
-    if size == 0
-        || size > capacity
-        || capacity > 4_096
-        || !contains(buffer, checked_mul(size, 4)?)
+    if size == 0 || size > capacity || capacity > 4_096 || !contains(buffer, checked_mul(size, 4)?)
     {
         return None;
     }
@@ -249,7 +245,8 @@ pub(crate) unsafe fn find_player_agent(layout: Layout, player_number: u32) -> Op
             && unsafe { read_u16(offset(address, layout.agent_player_number)?) }
                 == Some(player_number as u16)
             && unsafe { read_u16(offset(address, layout.agent_model_type)?) }
-                .map(|value| value & 0xf000) == Some(0x3000)
+                .map(|value| value & 0xf000)
+                == Some(0x3000)
         {
             return Some(id);
         }
@@ -319,7 +316,8 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
 
 unsafe fn collect(layout: Layout, observe_target: bool) -> State {
     let mut state = State::empty();
-    let (map_id, instance_type, player_number, play_region) = match unsafe { resolve_game(layout) } {
+    let (map_id, instance_type, player_number, play_region) = match unsafe { resolve_game(layout) }
+    {
         GameState::Unavailable => return state,
         GameState::Loading => {
             state.flags = FLAG_LOADING;
@@ -703,16 +701,13 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
                 return;
             }
             let available = unsafe { FEATURES };
-            if a & !available != 0
-                || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
+            if a & !available != 0 || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
             {
                 return;
             }
             let previous = unsafe { ACTIVE_FEATURES };
             unsafe { ACTIVE_FEATURES = a };
-            if previous & FEATURE_TOOLBOX_FOUNDATION == 0
-                && a & FEATURE_TOOLBOX_FOUNDATION != 0
-            {
+            if previous & FEATURE_TOOLBOX_FOUNDATION == 0 && a & FEATURE_TOOLBOX_FOUNDATION != 0 {
                 unsafe {
                     toolbox::mark_dirty();
                     party::mark_dirty();
@@ -725,7 +720,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    12
+    13
 }
 
 #[no_mangle]

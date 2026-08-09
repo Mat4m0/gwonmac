@@ -472,6 +472,12 @@ const PARTY_HEADER_BYTES = PARTY_FIXED_HEADER_BYTES + ACCOUNT_HERO_SLOTS * 4;
 const PARTY_SKILL_SLOTS = 8;
 /** Five attributes from a primary profession plus four from a secondary. */
 const PARTY_ATTRIBUTE_SLOTS = 9;
+const SKILL_UNLOCK_WORDS = 70;
+const SKILL_UNLOCK_HEADER = PARTY_HEADER_BYTES + PARTY_SLOT_COUNT * PARTY_SLOT_BYTES;
+const ACCOUNT_SKILL_WORDS_AT = SKILL_UNLOCK_HEADER;
+const CHARACTER_SKILL_WORDS_AT = ACCOUNT_SKILL_WORDS_AT + 4;
+const ACCOUNT_SKILLS_AT = CHARACTER_SKILL_WORDS_AT + 4;
+const CHARACTER_SKILLS_AT = ACCOUNT_SKILLS_AT + SKILL_UNLOCK_WORDS * 4;
 /** The highest attribute id the client defines. */
 const ATTRIBUTE_ID_MAX = 44;
 /** The highest rank the client's own cumulative cost table can buy. */
@@ -482,10 +488,13 @@ const PARTY_FLAGS = Object.freeze({
   unlock: 1 << 1,
   outpost: 1 << 2,
   hardMode: 1 << 3,
+  accountSkills: 1 << 4,
+  characterSkills: 1 << 5,
 });
 const KNOWN_PARTY_FLAGS =
   PARTY_FLAGS.roster | PARTY_FLAGS.unlock | PARTY_FLAGS.outpost
-  | PARTY_FLAGS.hardMode;
+  | PARTY_FLAGS.hardMode | PARTY_FLAGS.accountSkills
+  | PARTY_FLAGS.characterSkills;
 const SLOT_FLAGS = Object.freeze({
   occupied: 1 << 0,
   professions: 1 << 1,
@@ -505,6 +514,32 @@ function unlockedHeroes(known: bigint, unlocked: bigint): number[] {
     if ((known & bit) !== 0n && (unlocked & bit) !== 0n) heroes.push(id);
   }
   return heroes;
+}
+
+function unlockedSkills(
+  view: DataView,
+  at: number,
+  words: number,
+): number[] {
+  const skills: number[] = [];
+  for (let word = 0; word < words; word += 1) {
+    const value = view.getUint32(at + word * 4, true);
+    for (let bit = 0; bit < 32; bit += 1) {
+      if (((value >>> bit) & 1) !== 0) skills.push(word * 32 + bit);
+    }
+  }
+  return skills;
+}
+
+function hasOnlyZeroWords(
+  view: DataView,
+  at: number,
+  from: number,
+): boolean {
+  for (let word = from; word < SKILL_UNLOCK_WORDS; word += 1) {
+    if (view.getUint32(at + word * 4, true) !== 0) return false;
+  }
+  return true;
 }
 
 export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
@@ -536,6 +571,10 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
   const attributeIdsLow = view.getUint32(52, true);
   const attributeIdsHigh = view.getUint32(56, true);
   const professionSources = view.getUint32(60, true);
+  const accountSkillWords = view.getUint32(ACCOUNT_SKILL_WORDS_AT, true);
+  const characterSkillWords = view.getUint32(CHARACTER_SKILL_WORDS_AT, true);
+  const accountSkillsObserved = (flags & PARTY_FLAGS.accountSkills) !== 0;
+  const characterSkillsObserved = (flags & PARTY_FLAGS.characterSkills) !== 0;
   let malformed = false;
   const playerProfessionProbe = Object.freeze({
     statePrimary: directProfessions & 0xff,
@@ -684,6 +723,8 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     || (directProfessions >>> 16) !== 0
     || (attributeIdsHigh >>> 13) !== 0
     || (professionSources & ~7) !== 0
+    || accountSkillWords > SKILL_UNLOCK_WORDS
+    || characterSkillWords > SKILL_UNLOCK_WORDS
     || malformed
     || slotCount !== Math.max(0, occupied - (slots[0]?.occupied ? 1 : 0))
     || (rosterObserved && !slots[0]?.occupied)
@@ -697,8 +738,13 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     // A blocked or unknown region publishes policy only. No optional party
     // graph is walked there.
     || (playRegionValue !== 1 && (rosterObserved || unlockObserved))
+    || (playRegionValue !== 1 && (accountSkillsObserved || characterSkillsObserved))
     || (!unlockObserved && (knownLow !== 0 || knownHigh !== 0))
     || (!unlockObserved && accountProfessions.length !== 0)
+    || (!accountSkillsObserved && accountSkillWords !== 0)
+    || (!characterSkillsObserved && characterSkillWords !== 0)
+    || !hasOnlyZeroWords(view, ACCOUNT_SKILLS_AT, accountSkillWords)
+    || !hasOnlyZeroWords(view, CHARACTER_SKILLS_AT, characterSkillWords)
     // A hero cannot be unlocked without that having been decided.
     || (unlockedLow & ~knownLow) !== 0
     || (unlockedHigh & ~knownHigh) !== 0
@@ -729,6 +775,26 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
       : null,
     accountProfessions: unlockObserved
       ? Object.freeze(accountProfessions)
+      : null,
+    accountSkills: accountSkillsObserved
+      ? Object.freeze({
+          knownThrough: accountSkillWords * 32,
+          unlocked: Object.freeze(unlockedSkills(
+            view,
+            ACCOUNT_SKILLS_AT,
+            accountSkillWords,
+          )),
+        })
+      : null,
+    characterSkills: characterSkillsObserved
+      ? Object.freeze({
+          knownThrough: characterSkillWords * 32,
+          unlocked: Object.freeze(unlockedSkills(
+            view,
+            CHARACTER_SKILLS_AT,
+            characterSkillWords,
+          )),
+        })
       : null,
     playerProfessionProbe,
   });

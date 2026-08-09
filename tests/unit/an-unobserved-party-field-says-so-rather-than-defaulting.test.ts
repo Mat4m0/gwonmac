@@ -23,7 +23,7 @@ import {
   professionPair,
   unavailableParty,
 } from "../../src/shared/builds/live-party.ts";
-import { heroId } from "../../src/shared/builds/library.ts";
+import { heroId, skillId } from "../../src/shared/builds/library.ts";
 
 test("an observation that is not ready is a party nobody can draw", () => {
   for (const status of ["waiting", "unsupported", "", "READY"]) {
@@ -193,6 +193,8 @@ test("the full roster wins over the summary, and carries what was read", () => {
       status: "ready",
       rosterObserved: true,
       unlockObserved: true,
+      accountSkills: { knownThrough: 2_240, unlocked: [202, 216, 249] },
+      characterSkills: { knownThrough: 2_240, unlocked: [202, 216] },
       slotCount: 2,
       unlocked: [38, 39],
       slots: [
@@ -238,6 +240,10 @@ test("the full roster wins over the summary, and carries what was read", () => {
   assert.equal(party.accountHeroes?.get(heroId(38))?.availability, "unlocked");
   assert.deepEqual(party.accountHeroes?.get(heroId(38))?.professions, ["W", "R"]);
   assert.equal(party.accountHeroes?.get(heroId(39))?.availability, "unlocked");
+  assert.equal(party.accountSkills?.knownThrough, 2_240);
+  assert.equal(party.accountSkills?.unlocked.has(skillId(249)), true);
+  assert.equal(party.characterSkills?.unlocked.has(skillId(249)), false);
+  assert.equal(party.characterSkills?.unlocked.has(skillId(216)), true);
 });
 
 test("a region whose walk was rejected is not an empty party", () => {

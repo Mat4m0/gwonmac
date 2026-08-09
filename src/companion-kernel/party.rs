@@ -63,6 +63,23 @@ impl Hero {
     };
 }
 
+#[derive(Clone, Copy)]
+struct SkillUnlocks {
+    account_words: u32,
+    character_words: u32,
+    account: [u32; SKILL_UNLOCK_WORDS],
+    character: [u32; SKILL_UNLOCK_WORDS],
+}
+
+impl SkillUnlocks {
+    const EMPTY: Self = Self {
+        account_words: 0,
+        character_words: 0,
+        account: [0; SKILL_UNLOCK_WORDS],
+        character: [0; SKILL_UNLOCK_WORDS],
+    };
+}
+
 /// A game array header: buffer, capacity, size, validated together.
 ///
 /// `size > capacity` is the cheapest sign that the address is not an array at
@@ -85,6 +102,23 @@ unsafe fn read_array(address: u32, stride: u32, limit: u32) -> Option<(u32, u32)
         return None;
     }
     Some((buffer, size))
+}
+
+/// Reads one client-owned bitset into the fixed wire bound.
+///
+/// `capacity` is allowed some allocator headroom, but `size` may never exceed
+/// what the ABI can publish. A future client growing the table is therefore
+/// unknown until recertified, rather than silently truncating new skill ids.
+unsafe fn read_skill_unlocks(address: u32) -> Option<([u32; SKILL_UNLOCK_WORDS], u32)> {
+    let (buffer, size) = unsafe { read_array(address, 4, 128) }?;
+    if size as usize > SKILL_UNLOCK_WORDS {
+        return None;
+    }
+    let mut words = [0_u32; SKILL_UNLOCK_WORDS];
+    for index in 0..size {
+        words[index as usize] = unsafe { read_u32(indexed(buffer, index, 4)?) }?;
+    }
+    Some((words, size))
 }
 
 unsafe fn field(base: u32, at: u32) -> Option<u32> {
@@ -116,6 +150,7 @@ unsafe fn matches_published(
     flags: u32,
     unlock: [u32; 4],
     account_professions: &[u32; ACCOUNT_HERO_SLOTS],
+    skill_unlocks: &SkillUnlocks,
     player_profession_probe: [u32; 4],
     play_region: u32,
     hard_mode: u32,
@@ -171,6 +206,19 @@ unsafe fn matches_published(
                 return false;
             }
         }
+        if read_volatile(&(*region).account_skill_words) != skill_unlocks.account_words
+            || read_volatile(&(*region).character_skill_words) != skill_unlocks.character_words
+        {
+            return false;
+        }
+        for index in 0..SKILL_UNLOCK_WORDS {
+            if read_volatile(&(*region).account_skills[index]) != skill_unlocks.account[index]
+                || read_volatile(&(*region).character_skills[index])
+                    != skill_unlocks.character[index]
+            {
+                return false;
+            }
+        }
     }
     true
 }
@@ -181,6 +229,7 @@ unsafe fn publish(
     flags: u32,
     unlock: [u32; 4],
     account_professions: &[u32; ACCOUNT_HERO_SLOTS],
+    skill_unlocks: &SkillUnlocks,
     player_profession_probe: [u32; 4],
     play_region: u32,
     hard_mode: u32,
@@ -210,7 +259,10 @@ unsafe fn publish(
             );
         }
         for id in 0..ACCOUNT_HERO_SLOTS {
-            write_volatile(&mut (*region).account_professions[id], account_professions[id]);
+            write_volatile(
+                &mut (*region).account_professions[id],
+                account_professions[id],
+            );
         }
         for index in 0..PARTY_SLOTS {
             let slot = &mut (*region).slots[index];
@@ -228,6 +280,24 @@ unsafe fn publish(
             for entry in 0..ATTRIBUTE_SLOTS {
                 write_volatile(&mut slot.attributes[entry], hero.attributes[entry]);
             }
+        }
+        write_volatile(
+            &mut (*region).account_skill_words,
+            skill_unlocks.account_words,
+        );
+        write_volatile(
+            &mut (*region).character_skill_words,
+            skill_unlocks.character_words,
+        );
+        for index in 0..SKILL_UNLOCK_WORDS {
+            write_volatile(
+                &mut (*region).account_skills[index],
+                skill_unlocks.account[index],
+            );
+            write_volatile(
+                &mut (*region).character_skills[index],
+                skill_unlocks.character[index],
+            );
         }
         write_volatile(&mut (*region).sequence, next);
         SEQUENCE = next;
@@ -253,6 +323,7 @@ pub(crate) unsafe fn initialize(pointer: u32) {
             0,
             [0; 4],
             &[0; ACCOUNT_HERO_SLOTS],
+            &SkillUnlocks::EMPTY,
             [0; 4],
             PLAY_REGION_UNKNOWN,
             0,
@@ -268,7 +339,15 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 unsafe fn collect(
     layout: Layout,
 ) -> Option<(
-    [Hero; PARTY_SLOTS], u32, u32, [u32; 4], [u32; ACCOUNT_HERO_SLOTS], [u32; 4], u32, u32,
+    [Hero; PARTY_SLOTS],
+    u32,
+    u32,
+    [u32; 4],
+    [u32; ACCOUNT_HERO_SLOTS],
+    SkillUnlocks,
+    [u32; 4],
+    u32,
+    u32,
 )> {
     let (game, player_number, instance_type, play_region) = match unsafe { resolve_game(layout) } {
         GameState::Ready {
@@ -282,8 +361,15 @@ unsafe fn collect(
     };
     if play_region != PLAY_REGION_PVE {
         return Some((
-            [Hero::EMPTY; PARTY_SLOTS], 0, 0, [0; 4],
-            [0; ACCOUNT_HERO_SLOTS], [0; 4], play_region, 0,
+            [Hero::EMPTY; PARTY_SLOTS],
+            0,
+            0,
+            [0; 4],
+            [0; ACCOUNT_HERO_SLOTS],
+            SkillUnlocks::EMPTY,
+            [0; 4],
+            play_region,
+            0,
         ));
     }
 
@@ -335,10 +421,16 @@ unsafe fn collect(
         count += 1;
     }
 
-    let mut flags = FLAG_ROSTER_OBSERVED | FLAG_HARD_MODE_OBSERVED
-        | if instance_type == 0 { FLAG_IN_OUTPOST } else { 0 };
+    let mut flags = FLAG_ROSTER_OBSERVED
+        | FLAG_HARD_MODE_OBSERVED
+        | if instance_type == 0 {
+            FLAG_IN_OUTPOST
+        } else {
+            0
+        };
     let mut unlock = [0_u32; 4];
     let mut account_professions = [0_u32; ACCOUNT_HERO_SLOTS];
+    let mut skill_unlocks = SkillUnlocks::EMPTY;
 
     // -- everything below hangs off WorldContext, and is skipped whole when
     //    the layout does not carry it -------------------------------------
@@ -349,10 +441,42 @@ unsafe fn collect(
     };
     let Some(world) = world else {
         return Some((
-            heroes, count, flags, unlock, account_professions,
-            player_profession_probe, play_region, u32::from(hard_mode != 0),
+            heroes,
+            count,
+            flags,
+            unlock,
+            account_professions,
+            skill_unlocks,
+            player_profession_probe,
+            play_region,
+            u32::from(hard_mode != 0),
         ));
     };
+
+    // AccountContext carries account-wide unlocks (the skills heroes may use),
+    // while WorldContext carries what this character has learned. They are
+    // independent observations: losing one pointer must not erase the other or
+    // make an otherwise valid party unreadable.
+    if layout.account_context != 0 && layout.account_unlocked_skills != 0 {
+        let observed = offset(game, layout.account_context)
+            .and_then(|at| unsafe { pointer(at, 4) })
+            .and_then(|account| offset(account, layout.account_unlocked_skills))
+            .and_then(|at| unsafe { read_skill_unlocks(at) });
+        if let Some((words, count)) = observed {
+            skill_unlocks.account = words;
+            skill_unlocks.account_words = count;
+            flags |= FLAG_ACCOUNT_SKILLS_OBSERVED;
+        }
+    }
+    if layout.world_character_skills != 0 {
+        let observed = offset(world, layout.world_character_skills)
+            .and_then(|at| unsafe { read_skill_unlocks(at) });
+        if let Some((words, count)) = observed {
+            skill_unlocks.character = words;
+            skill_unlocks.character_words = count;
+            flags |= FLAG_CHARACTER_SKILLS_OBSERVED;
+        }
+    }
 
     // The client's canonical current profession state, used by its own skill
     // template loader. Unlike AgentLiving bytes or attribute-family shape,
@@ -425,10 +549,10 @@ unsafe fn collect(
             // Professions reach the roster by hero id: the party member does
             // not carry them, and this record does.
             if layout.info_primary != 0 {
-                let packed = pack_professions(
-                    unsafe { field(entry, layout.info_primary) }?,
-                    unsafe { field(entry, layout.info_secondary) }?,
-                );
+                let packed =
+                    pack_professions(unsafe { field(entry, layout.info_primary) }?, unsafe {
+                        field(entry, layout.info_secondary)
+                    }?);
                 if let Some(packed) = packed {
                     if (hero_id as usize) < ACCOUNT_HERO_SLOTS {
                         account_professions[hero_id as usize] = packed;
@@ -581,8 +705,15 @@ unsafe fn collect(
     }
 
     Some((
-        heroes, count, flags, unlock, account_professions,
-        player_profession_probe, play_region, u32::from(hard_mode != 0),
+        heroes,
+        count,
+        flags,
+        unlock,
+        account_professions,
+        skill_unlocks,
+        player_profession_probe,
+        play_region,
+        u32::from(hard_mode != 0),
     ))
 }
 
@@ -613,27 +744,54 @@ pub(crate) unsafe fn tick_if_dirty(layout: Layout, tick_count: u32) {
     }
     unsafe { DIRTY = false };
     let observation = unsafe { collect(layout) };
-    let (heroes, count, flags, unlock, account_professions, player_profession_probe, play_region, hard_mode) = observation.unwrap_or((
+    let (
+        heroes,
+        count,
+        flags,
+        unlock,
+        account_professions,
+        skill_unlocks,
+        player_profession_probe,
+        play_region,
+        hard_mode,
+    ) = observation.unwrap_or((
         [Hero::EMPTY; PARTY_SLOTS],
         0,
         0,
         [0; 4],
         [0; ACCOUNT_HERO_SLOTS],
+        SkillUnlocks::EMPTY,
         [0; 4],
         PLAY_REGION_UNKNOWN,
         0,
     ));
-    if unsafe { matches_published(
-        &heroes, count, flags, unlock, &account_professions, player_profession_probe,
-        play_region, hard_mode,
-    ) } {
+    if unsafe {
+        matches_published(
+            &heroes,
+            count,
+            flags,
+            unlock,
+            &account_professions,
+            &skill_unlocks,
+            player_profession_probe,
+            play_region,
+            hard_mode,
+        )
+    } {
         return;
     }
     unsafe {
         GENERATION = GENERATION.wrapping_add(1);
         publish(
-            &heroes, count, flags, unlock, &account_professions, player_profession_probe,
-            play_region, hard_mode,
+            &heroes,
+            count,
+            flags,
+            unlock,
+            &account_professions,
+            &skill_unlocks,
+            player_profession_probe,
+            play_region,
+            hard_mode,
         );
     }
 }

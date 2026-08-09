@@ -43,6 +43,7 @@ import type {
   HeroId,
   ProfessionPair,
   SkillBar,
+  SkillId,
   Team,
   TeamSlot,
   TeamSlotIndex,
@@ -86,6 +87,8 @@ export type ToolboxObservation = Readonly<{
     readonly hardMode?: boolean | null;
     readonly slotCount?: number;
     readonly unlocked?: readonly number[] | null;
+    readonly accountSkills?: SkillUnlockWire | null;
+    readonly characterSkills?: SkillUnlockWire | null;
     readonly accountProfessions?: readonly Readonly<{
       readonly hero: number;
       readonly professions: readonly number[];
@@ -114,6 +117,12 @@ export type ToolboxObservation = Readonly<{
       readonly attributes: readonly (readonly number[])[] | null;
     }[];
   };
+}>;
+
+type SkillUnlockWire = Readonly<{
+  /** Skill ids below this bound were observed; larger ids remain unknown. */
+  knownThrough: number;
+  unlocked: readonly number[];
 }>;
 
 /** One hero the companion can currently identify in the player's own party. */
@@ -158,6 +167,12 @@ export type AccountHeroObservation = Readonly<{
   professions: ProfessionPair | null;
 }>;
 
+export type SkillUnlockObservation = Readonly<{
+  /** Skill ids below this bound are known; larger ids remain unknown. */
+  knownThrough: number;
+  unlocked: ReadonlySet<SkillId>;
+}>;
+
 export interface LiveParty {
   readonly status: "unavailable" | "ready";
   readonly player: LivePartyPlayer | null;
@@ -176,6 +191,10 @@ export interface LiveParty {
   readonly partial: boolean;
   /** Account-scoped facts derived from HeroInfo. Never persisted or diagnosed. */
   readonly accountHeroes: ReadonlyMap<HeroId, AccountHeroObservation> | null;
+  /** Account-wide unlocks usable by heroes. Never persisted or diagnosed. */
+  readonly accountSkills: SkillUnlockObservation | null;
+  /** Skills learned by the current character. Never persisted or diagnosed. */
+  readonly characterSkills: SkillUnlockObservation | null;
   readonly hardMode: boolean | null;
   readonly inOutpost: boolean | null;
   readonly playRegion: PlayRegion;
@@ -190,6 +209,8 @@ const UNAVAILABLE: LiveParty = Object.freeze({
   heroes: Object.freeze([]),
   partial: false,
   accountHeroes: null,
+  accountSkills: null,
+  characterSkills: null,
   hardMode: null,
   inOutpost: null,
   playRegion: "unknown",
@@ -264,6 +285,8 @@ export function liveParty(observation: ToolboxObservation): LiveParty {
     heroes: Object.freeze(heroes),
     partial: heroes.length < heroCount,
     accountHeroes: null,
+    accountSkills: skillUnlockObservation(region?.accountSkills),
+    characterSkills: skillUnlockObservation(region?.characterSkills),
     hardMode: null,
     inOutpost: null,
     playRegion,
@@ -306,6 +329,16 @@ function attributeRanks(pairs: readonly (readonly number[])[]): AttributeRanks {
     ranks[name] = rank as AttributeRank;
   }
   return Object.freeze(ranks);
+}
+
+function skillUnlockObservation(
+  value: SkillUnlockWire | null | undefined,
+): SkillUnlockObservation | null {
+  if (!value) return null;
+  return Object.freeze({
+    knownThrough: value.knownThrough,
+    unlocked: Object.freeze(new Set(value.unlocked.map(skillId))),
+  });
 }
 
 const BEHAVIOURS: readonly HeroBehaviour[] = ["fight", "guard", "avoid"];
@@ -395,6 +428,8 @@ function fromRegion(
           })] as const;
         })))
       : null,
+    accountSkills: skillUnlockObservation(region.accountSkills),
+    characterSkills: skillUnlockObservation(region.characterSkills),
     hardMode: region.hardMode ?? null,
     inOutpost: region.inOutpost ?? null,
     playRegion: region.playRegion ?? "unknown",

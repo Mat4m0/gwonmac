@@ -360,6 +360,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       // client's skill-template loader uses for player and hero professions.
       worldProfessionStates: 0x6bc,
       professionStateStride: 0x14,
+      // WorldContext::unlocked_character_skills, the current character's
+      // learned-skill bitset used by the in-game skill window.
+      worldCharacterSkills: 0x710,
       cursorActiveArt: 0x5a16e0,
       cursorSoftwareModel: 0x5a16e4,
       cursorShowCount: 0x5a16e8,
@@ -388,6 +391,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       partyPlayers: 0x04,
       partyHenchmen: 0x14,
       partyFlag: 0x14,
+      // GameContext::account and AccountContext::unlocked_account_skills.
+      // GWCA exposes this exact array through GetIsSkillUnlocked: one bit per
+      // skill id, account-wide and therefore usable by heroes.
+      accountContext: 0x28,
+      accountUnlockedSkills: 0x124,
       worldContext: 0x2c,
       // Its hero ids *and* agent ids matched the party array exactly.
       worldHeroFlags: 0x584,

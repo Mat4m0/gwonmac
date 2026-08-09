@@ -258,6 +258,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       // fixture padded with zeros would let a mis-ordered field pass.
       heroLevel: 42,
       partyPlayers: 43, partyHenchmen: 44, partyFlag: 45,
+      accountContext: 78, accountUnlockedSkills: 79,
       worldContext: 46, worldHeroFlags: 47, heroFlagStride: 48,
       flagHeroId: 49, flagAgentId: 50, flagBehavior: 51,
       worldHeroInfo: 52, heroInfoStride: 53, infoHeroId: 54,
@@ -279,6 +280,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       areaInfoFlags: 75,
       worldProfessionStates: 76,
       professionStateStride: 77,
+      worldCharacterSkills: 80,
     },
   };
 }

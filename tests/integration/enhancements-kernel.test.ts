@@ -294,6 +294,8 @@ describe("Companion kernel", () => {
     assert.equal(hero?.disabled, null, "disabled mask");
     assert.equal(party.unlockObserved, false);
     assert.equal(party.unlocked, null, "unlock table");
+    assert.equal(party.accountSkills, null, "account skills");
+    assert.equal(party.characterSkills, null, "character skills");
   });
 
   it("retracts the roster when the party cannot be read", async () => {
@@ -353,6 +355,14 @@ describe("Companion kernel", () => {
     assert.deepEqual(hero?.attributes, [[17, 7], [19, 12], [24, 3]]);
     assert.equal(party.unlockObserved, true);
     assert.deepEqual(party.unlocked, [1, 2], "hero_info is account-scoped");
+    assert.deepEqual(party.accountSkills, {
+      knownThrough: 2_240,
+      unlocked: [202, 216, 249],
+    });
+    assert.deepEqual(party.characterSkills, {
+      knownThrough: 2_240,
+      unlocked: [202, 216],
+    });
     // The fixture's character context says outpost, and applying a team is an
     // outpost-only operation — so the flag has to survive the walk rather than
     // being something the interface assumes.
@@ -379,6 +389,27 @@ describe("Companion kernel", () => {
       stateAccepted: true,
       attributeRowObserved: true,
     });
+  });
+
+  it("keeps character unlocks when the account table fails closed", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+    kernel.view.setUint32(
+      ADDRESSES.account + DETAIL.accountUnlockedSkills + 4,
+      129,
+      true,
+    );
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const party = readyParty(kernel.party());
+    assert.equal(party.accountSkills, null);
+    assert.deepEqual(party.characterSkills, {
+      knownThrough: 2_240,
+      unlocked: [202, 216],
+    });
+    assert.equal(party.rosterObserved, true);
   });
 
   // A party nobody walked cannot say where it is standing, and the difference

@@ -52,7 +52,7 @@ pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
 pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;
 pub(crate) const PARTY_MAGIC: u32 = 0x5054_5747;
-pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 6;
+pub(crate) const PARTY_ABI_AND_SIZE: u32 = (PARTY_BYTES << 16) | 7;
 
 /// The walk completed on a live game. Same meaning, and the same reason, as
 /// `FLAG_PARTY_OBSERVED` on the toolbox region: an empty roster and an unread
@@ -69,6 +69,12 @@ pub(crate) const FLAG_UNLOCK_OBSERVED: u32 = 1 << 1;
 pub(crate) const FLAG_IN_OUTPOST: u32 = 1 << 2;
 /// The party context's difficulty bit was read.
 pub(crate) const FLAG_HARD_MODE_OBSERVED: u32 = 1 << 3;
+/// The account-wide unlock bitset was read from AccountContext. These skills
+/// are available to heroes and count as account unlocks, but are not proof
+/// that the current character has learned them.
+pub(crate) const FLAG_ACCOUNT_SKILLS_OBSERVED: u32 = 1 << 4;
+/// The current character's learned-skill bitset was read from WorldContext.
+pub(crate) const FLAG_CHARACTER_SKILLS_OBSERVED: u32 = 1 << 5;
 
 pub(crate) const PLAY_REGION_UNKNOWN: u32 = 0;
 pub(crate) const PLAY_REGION_PVE: u32 = 1;
@@ -89,6 +95,9 @@ pub(crate) const SLOT_ATTRIBUTES: u32 = 1 << 4;
 pub(crate) const PARTY_SLOTS: usize = 8;
 pub(crate) const ACCOUNT_HERO_SLOTS: usize = 40;
 pub(crate) const SKILL_SLOTS: usize = 8;
+/// The official client currently publishes 70 words, covering skill ids
+/// 0..2239. A fixed bound keeps account data finite and the wire shape closed.
+pub(crate) const SKILL_UNLOCK_WORDS: usize = 70;
 
 /// The highest attribute id the client defines. The array is walked to here
 /// and no further: the reference struct pads to 54 entries and indices 51-53
@@ -167,6 +176,9 @@ pub(crate) struct Layout {
     pub(crate) party_players: u32,
     pub(crate) party_henchmen: u32,
     pub(crate) party_flag: u32,
+    // GameContext -> AccountContext -> account-wide unlocked-skill bitset.
+    pub(crate) account_context: u32,
+    pub(crate) account_unlocked_skills: u32,
     // GameContext -> WorldContext, and the three arrays hanging off it that
     // describe heroes rather than party membership.
     pub(crate) world_context: u32,
@@ -208,6 +220,7 @@ pub(crate) struct Layout {
     // word. This is WorldContext::party_profession_states and its row stride.
     pub(crate) world_profession_states: u32,
     pub(crate) profession_state_stride: u32,
+    pub(crate) world_character_skills: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -256,6 +269,8 @@ impl Layout {
         party_players: 0,
         party_henchmen: 0,
         party_flag: 0,
+        account_context: 0,
+        account_unlocked_skills: 0,
         world_context: 0,
         world_hero_flags: 0,
         hero_flag_stride: 0,
@@ -290,6 +305,7 @@ impl Layout {
         area_info_flags: 0,
         world_profession_states: 0,
         profession_state_stride: 0,
+        world_character_skills: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -405,11 +421,17 @@ pub(crate) struct PartySnapshot {
     /// `primary | secondary << 8`, indexed by HeroId. Zero means unread.
     pub(crate) account_professions: [u32; ACCOUNT_HERO_SLOTS],
     pub(crate) slots: [PartySlot; PARTY_SLOTS],
+    /// Valid words in each bitset. Bits outside the corresponding count are
+    /// unknown, never locked.
+    pub(crate) account_skill_words: u32,
+    pub(crate) character_skill_words: u32,
+    pub(crate) account_skills: [u32; SKILL_UNLOCK_WORDS],
+    pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 348] = [(); size_of::<Layout>()];
+const _: [(); 360] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
-const _: [(); 992] = [(); size_of::<PartySnapshot>()];
+const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
