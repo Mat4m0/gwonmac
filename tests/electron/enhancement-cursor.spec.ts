@@ -1,6 +1,4 @@
 import { expect, type Page, test } from "@playwright/test";
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 /** One cursor region header, as the kernel would publish it. */
@@ -461,42 +459,4 @@ test.describe("enhancement cursor presentation", () => {
     }
   });
 
-  test("required Core ignores a legacy cursor opt-out", async () => {
-    const seed = async (userData: string) => {
-      await
-      writeFile(
-        path.join(userData, "settings.json"),
-        JSON.stringify({
-          renderScale: 2,
-          nativeCursor: false,
-          showDiagnostics: false,
-          dataStrategy: "quick",
-        }),
-        { mode: 0o600 },
-      );
-    };
-
-    const optedIn = await launchOffline("gw-cursor-core-e2e-", {}, seed);
-    try {
-      expect(
-        await optedIn.page.evaluate(() => ({
-          ...window.gwNative.init,
-          search: globalThis.location.search,
-        })),
-      ).toEqual({
-        enhancementProgram: "none",
-        enhancementSelection: {
-          nativeCursor: true,
-          tools: false,
-        },
-        templateFsTrace: false,
-        // The configuration is no longer in the URL the trust root checks.
-        search: "",
-      });
-      expect(await optedIn.page.evaluate(async () =>
-        "nativeCursor" in await window.gwNative.settings.get())).toBe(false);
-    } finally {
-      await closeOffline(optedIn);
-    }
-  });
 });

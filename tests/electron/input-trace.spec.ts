@@ -42,8 +42,8 @@ const announceLock = (page: import("@playwright/test").Page, locked: boolean) =>
   }, locked);
 
 test.describe("input trace", () => {
-  test("stays silent until it is switched on", async () => {
-    const fixture = await launchOffline("gw-input-trace-off-");
+  test("stays dormant, names double-click decisions, and copies no coordinates", async () => {
+    const fixture = await launchOffline("gw-input-trace-on-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -53,23 +53,13 @@ test.describe("input trace", () => {
       await page.mouse.up();
       await expect(page.locator("#input-trace")).toBeHidden();
       expect(await traceText(page)).toBe("");
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
 
-  test("names the press the client's double-click flag rode on", async () => {
-    const fixture = await launchOffline("gw-input-trace-on-");
-    try {
-      const { page } = fixture;
-      await startGameInput(page);
       await page.evaluate(() => {
         globalThis.document.getElementById("loading")?.classList.add("gone");
       });
       await toggleTrace(page);
       await expect(page.locator("#input-trace")).toBeVisible();
 
-      const box = await boxOf(page.locator("#canvas"));
       await page.mouse.move(box.x + 120, box.y + 120);
       await page.mouse.dblclick(box.x + 120, box.y + 120);
 
@@ -102,6 +92,23 @@ test.describe("input trace", () => {
       await expectTrace(page).toContain("run=3");
       const burst = await traceText(page);
       expect(burst.match(/DOUBLE-CLICK/gu)?.length ?? 0).toBe(1);
+
+      await page.evaluate(() => {
+        globalThis.document
+          .querySelector<HTMLButtonElement>('#input-trace [data-role="clear"]')
+          ?.click();
+      });
+      await page.mouse.move(box.x + 40, box.y + 40);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 640, box.y + 440);
+      await page.mouse.up();
+
+      await expectTrace(page).toContain("release");
+      const rowsAfterDrag = await traceText(page);
+      for (const coordinate of [40, 640, 440, box.x, box.y]) {
+        expect(rowsAfterDrag).not.toContain(`=${Math.round(coordinate)},`);
+      }
+      expect(rowsAfterDrag).not.toMatch(/x=|y=|client|screen/i);
     } finally {
       await closeOffline(fixture);
     }
@@ -133,29 +140,4 @@ test.describe("input trace", () => {
     }
   });
 
-  test("carries no coordinate into the text it copies", async () => {
-    const fixture = await launchOffline("gw-input-trace-privacy-");
-    try {
-      const { page } = fixture;
-      await startGameInput(page);
-      await toggleTrace(page);
-      const box = await boxOf(page.locator("#canvas"));
-      // Press and release far apart, so a leaked coordinate would be a large
-      // number no other field could produce.
-      await page.mouse.move(box.x + 40, box.y + 40);
-      await page.mouse.down();
-      await page.mouse.move(box.x + 640, box.y + 440);
-      await page.mouse.up();
-
-      await expectTrace(page).toContain("release");
-      const rows = await traceText(page);
-      // Travel is a distance and is allowed; the endpoints are not present.
-      for (const coordinate of [40, 640, 440, box.x, box.y]) {
-        expect(rows).not.toContain(`=${Math.round(coordinate)},`);
-      }
-      expect(rows).not.toMatch(/x=|y=|client|screen/i);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
 });

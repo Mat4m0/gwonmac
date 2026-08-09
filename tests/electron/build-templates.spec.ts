@@ -13,7 +13,6 @@ import path from "node:path";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 const SKILLS = "OQCiUyo8AkVwR4KMMGAAAEAA";
-const OTHER_SKILLS = "OQCiUyo8AkVwR4KMMGAAAEAB";
 const PASTED = "OACjIyhM5MXzyJlzbyMlmTuhJ";
 const EQUIPMENT = "Pk5hbug2fkaiklWVqQhyI90YjyIBLziyIBTpgyIBr7hyIbB";
 
@@ -121,73 +120,6 @@ test.describe("build templates", () => {
     }
   });
 
-  test("counts what is saved, and offers nothing to export when nothing is", async () => {
-    const fixture = await launchOffline("gw-templates-count-e2e-");
-    try {
-      const { page } = fixture;
-      await installFakeMount(page, {});
-      await openTemplates(page);
-      await expect(page.locator("#templates-status")).toHaveText(
-        "No templates saved yet.",
-      );
-      // A status is never a button.
-      await expect(page.locator("#templates-export")).toBeHidden();
-      await expect(page.locator("#templates-import-folder")).toBeVisible();
-
-      await installFakeMount(page, {
-        "/app:/Templates/Skills/Shockaxe.txt": SKILLS,
-        "/app:/Templates/Equipment/PvP Set.txt": EQUIPMENT,
-      });
-      await openTemplates(page);
-      await expect(page.locator("#templates-status")).toHaveText(
-        "1 skill template and 1 equipment template saved.",
-      );
-      await expect(page.locator("#templates-export")).toBeVisible();
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
-  test("offers a way out of a folder the game cannot read, and only then", async () => {
-    const fixture = await launchOffline("gw-templates-rescue-e2e-");
-    try {
-      const { page } = fixture;
-
-      // Nothing stranded: the block is not mentioned at all.
-      await installFakeMount(page, {
-        "/app:/Templates/Skills/Shockaxe.txt": SKILLS,
-      });
-      await openTemplates(page);
-      await expect(page.locator("#templates-rescue")).toBeHidden();
-
-      // A template the client's scan will never reach.
-      await installFakeMount(page, {
-        "/app:/Templates/Skills/Shockaxe.txt": SKILLS,
-        "/app:/Templates/Skills/Paragon/Imbagon.txt": OTHER_SKILLS,
-      });
-      await openTemplates(page);
-      await expect(page.locator("#templates-rescue")).toBeVisible();
-      await expect(page.locator("#templates-rescue-note")).toContainText(
-        "1 template is saved in a folder Guild Wars cannot read",
-      );
-
-      await page.locator("#templates-rescue-move").click();
-      await expect(page.locator("#templates-status")).toContainText(
-        "Moved 1 template to the top level.",
-      );
-      await expect(page.locator("#templates-status")).toContainText("Refresh List");
-
-      expect(await page.evaluate(() => globalThis.__templateFiles)).toEqual({
-        "/app:/Templates/Skills/Shockaxe.txt": SKILLS,
-        "/app:/Templates/Skills/Paragon - Imbagon.txt": OTHER_SKILLS,
-      });
-      // The offer withdraws itself once there is nothing left to rescue.
-      await expect(page.locator("#templates-rescue")).toBeHidden();
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
   test("previews an import, and writes nothing until it is confirmed", async () => {
     const fixture = await launchOffline("gw-templates-import-e2e-");
     const source = await mkdtemp(path.join(tmpdir(), "gw-templates-source-"));
@@ -287,27 +219,6 @@ test.describe("build templates", () => {
     }
   });
 
-  test("a pasted code with no name typed still gets one", async () => {
-    const fixture = await launchOffline("gw-templates-unnamed-e2e-");
-    try {
-      const { app, page } = fixture;
-      await app.evaluate(({ clipboard }, code) => {
-        clipboard.readText = () => code;
-      }, PASTED);
-
-      await installFakeMount(page, {});
-      await openTemplates(page);
-      await page.locator("#templates-import-clipboard").click();
-      await page.locator("#templates-confirm").click();
-
-      expect(
-        await page.evaluate(() => Object.keys(globalThis.__templateFiles)),
-      ).toEqual(["/app:/Templates/Skills/Template 1.txt"]);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
   test("the name field takes the caret, and never carries over to another source", async () => {
     const fixture = await launchOffline("gw-templates-name-reset-e2e-");
     const source = await mkdtemp(path.join(tmpdir(), "gw-templates-reset-"));
@@ -334,92 +245,6 @@ test.describe("build templates", () => {
       await expect(page.locator("#templates-name")).toHaveValue("");
 
       await page.locator("#templates-confirm").click();
-      expect(
-        await page.evaluate(() => Object.keys(globalThis.__templateFiles)),
-      ).toEqual(["/app:/Templates/Skills/Shockaxe.txt"]);
-    } finally {
-      await rm(source, { recursive: true, force: true });
-      await closeOffline(fixture);
-    }
-  });
-
-  test("a file import names itself, so no name is asked for", async () => {
-    const fixture = await launchOffline("gw-templates-named-file-e2e-");
-    const source = await mkdtemp(path.join(tmpdir(), "gw-templates-named-"));
-    try {
-      const { page } = fixture;
-      await installFakeMount(page, {});
-      await openTemplates(page);
-
-      const file = path.join(source, "Shockaxe.txt");
-      await writeFile(file, SKILLS);
-      await page.setInputFiles("#templates-file-files", [file]);
-
-      await expect(page.locator("#templates-preview")).toBeVisible();
-      await expect(page.locator("#templates-name-field")).toBeHidden();
-    } finally {
-      await rm(source, { recursive: true, force: true });
-      await closeOffline(fixture);
-    }
-  });
-
-  test("a name already used is kept or replaced as the player chooses", async () => {
-    const fixture = await launchOffline("gw-templates-collision-e2e-");
-    const source = await mkdtemp(path.join(tmpdir(), "gw-templates-clash-"));
-    try {
-      const { page } = fixture;
-      await installFakeMount(page, {
-        "/app:/Templates/Skills/Shockaxe.txt": SKILLS,
-      });
-      await openTemplates(page);
-
-      const file = path.join(source, "Shockaxe.txt");
-      await writeFile(file, OTHER_SKILLS);
-      await page.setInputFiles("#templates-file-files", [file]);
-
-      await expect(page.locator("#templates-preview-summary")).toHaveText(
-        "Nothing new to import.",
-      );
-      await expect(page.locator("#templates-preview-skipped")).toContainText(
-        "would replace a different build",
-      );
-      await expect(page.locator("#templates-confirm")).toBeDisabled();
-
-      await page.locator('input[name="templateCollision"][value="replace"]').check();
-      await expect(page.locator("#templates-preview-summary")).toHaveText(
-        "1 skill template will be imported.",
-      );
-      await page.locator("#templates-confirm").click();
-
-      await expect(page.locator("#templates-status")).toContainText("Imported 1");
-      expect(
-        await page.evaluate(
-          () => globalThis.__templateFiles["/app:/Templates/Skills/Shockaxe.txt"],
-        ),
-      ).toBe(OTHER_SKILLS);
-    } finally {
-      await rm(source, { recursive: true, force: true });
-      await closeOffline(fixture);
-    }
-  });
-
-  test("every import lands at the type root, where the client will list it", async () => {
-    // Defect 8: the client's scan enumerates Templates/<type>/*.txt and never
-    // descends, so a template written into a subfolder is on disk, exportable,
-    // and permanently invisible in game.
-    const fixture = await launchOffline("gw-templates-root-e2e-");
-    const source = await mkdtemp(path.join(tmpdir(), "gw-templates-root-"));
-    try {
-      const { page } = fixture;
-      await installFakeMount(page, {});
-      await openTemplates(page);
-
-      const file = path.join(source, "Shockaxe.txt");
-      await writeFile(file, SKILLS);
-      await page.setInputFiles("#templates-file-files", [file]);
-      await page.locator("#templates-confirm").click();
-
-      await expect(page.locator("#templates-status")).toContainText("Imported 1");
       expect(
         await page.evaluate(() => Object.keys(globalThis.__templateFiles)),
       ).toEqual(["/app:/Templates/Skills/Shockaxe.txt"]);

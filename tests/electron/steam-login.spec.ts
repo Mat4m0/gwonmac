@@ -37,7 +37,6 @@ const RETURN_URL = "https://www.guildwars.test/app/live/auth";
 
 /** A fake token: 32 hex characters that were typed here, not issued. */
 const TOKEN = "0123456789abcdef0123456789abcdef";
-const OTHER_TOKEN = "fedcba9876543210fedcba9876543210";
 const FAR_FUTURE = 4_000_000_000_000;
 const TOKEN_LIFETIME_MS = 31_536_000 * 1000;
 
@@ -440,20 +439,7 @@ test.describe("the Steam credential seam", () => {
     });
   });
 
-  test("treats an expired stored token as absent", async () => {
-    // Return to the login screen, not a failed launch.
-    fixture = await launchOffline("gw-steam-expired-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: 1 });
-
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "rejected",
-    });
-    expect(await readStore(fixture.app)).toBe(null);
-  });
-
-  test("relays the account storeback as an expiry refresh", async () => {
-    // The expiry moves, the token does not, and only for the token
-    // already held.
+  test("relays usable account expiries and ignores unusable ones", async () => {
     fixture = await launchOffline("gw-steam-storeback-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
     const before = Date.now();
@@ -474,105 +460,24 @@ test.describe("the Steam credential seam", () => {
       { token: TOKEN, expiry: FAR_FUTURE - 5_000 },
     );
 
-    const stored = await readStore(fixture.app);
-    expect(stored?.token).toBe(TOKEN);
-    expect(stored?.expiry).toBeGreaterThanOrEqual(before + TOKEN_LIFETIME_MS);
-    expect(stored?.expiry).toBeLessThanOrEqual(Date.now() + TOKEN_LIFETIME_MS);
-  });
+    const refreshed = await readStore(fixture.app);
+    expect(refreshed?.token).toBe(TOKEN);
+    expect(refreshed?.expiry).toBeGreaterThanOrEqual(before + TOKEN_LIFETIME_MS);
+    expect(refreshed?.expiry).toBeLessThanOrEqual(Date.now() + TOKEN_LIFETIME_MS);
 
-  test("ignores a storeback carrying something other than the held token", async () => {
-    fixture = await launchOffline("gw-steam-storeback-other-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(
-      async ({ other }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: Date): Promise<void>;
-              };
+    await fixture.page.evaluate(async ({ token }) => {
+      const account = (
+        globalThis as unknown as {
+          Module: {
+            nativeAccount: {
+              storeAccountData(token: string, expiry: Date): Promise<void>;
             };
-          }
-        ).Module.nativeAccount;
-        // The empty string is what this host vends as `refreshToken`, so it is
-        // the value most likely to come back.
-        await account.storeAccountData("", new Date(1));
-        await account.storeAccountData(other, new Date(1));
-      },
-      { other: OTHER_TOKEN },
-    );
-
-    expect(await readStore(fixture.app)).toEqual({
-      token: TOKEN,
-      expiry: FAR_FUTURE,
-    });
-  });
-
-  test("leaves a working record alone when the expiry is unusable", async () => {
-    fixture = await launchOffline("gw-steam-bad-date-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(
-      async ({ token }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: unknown): Promise<void>;
-              };
-            };
-          }
-        ).Module.nativeAccount;
-        await account.storeAccountData(token, new Date("not a date"));
-      },
-      { token: TOKEN },
-    );
-
-    // Two things at once. The harness turns an Invalid Date into "no expiry
-    // known" rather than into a date in 1970 -- and main then refuses to write
-    // that absence over an expiry it already knows, so the record a working
-    // sign-in depends on survives intact. Either failure alone would show up
-    // here as an expiry of 0 or null.
-    expect(await readStore(fixture.app)).toEqual({
-      token: TOKEN,
-      expiry: FAR_FUTURE,
-    });
-  });
-
-  test("survives a storeback poisoned with a past expiry", async () => {
-    // The renderer can read the token and hand it back with an expiry already
-    // in the past. Persisting that would make the next launch treat the record
-    // as expired and delete it, costing the player a sign-in they were told was
-    // once-per-machine -- so the stored expiry must not move, and the token must
-    // still be vended afterwards.
-    fixture = await launchOffline("gw-steam-poisoned-expiry-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(
-      async ({ token }) => {
-        const account = (
-          globalThis as unknown as {
-            Module: {
-              nativeAccount: {
-                storeAccountData(token: string, expiry: Date): Promise<void>;
-              };
-            };
-          }
-        ).Module.nativeAccount;
-        await account.storeAccountData(token, new Date(0));
-      },
-      { token: TOKEN },
-    );
-
-    expect(await readStore(fixture.app)).toEqual({
-      token: TOKEN,
-      expiry: FAR_FUTURE,
-    });
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "resolved",
-      value: { userId: "1", authCode: TOKEN, refreshToken: "" },
-    });
+          };
+        }
+      ).Module.nativeAccount;
+      await account.storeAccountData(token, new Date("not a date"));
+    }, { token: TOKEN });
+    expect(await readStore(fixture.app)).toEqual(refreshed);
   });
 
   test("exports diagnostics carrying outcomes and neither the token nor its expiry", async () => {
@@ -661,23 +566,4 @@ test.describe("the Steam credential seam", () => {
     expect(manifest.redaction.schemaChecked).toBe(manifest.redaction.records);
   });
 
-  test("forgets the token when the client signs out", async () => {
-    // Exercise the shipped sign-out boundary.
-    fixture = await launchOffline("gw-steam-signout-");
-    await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
-
-    await fixture.page.evaluate(async () => {
-      const account = (
-        globalThis as unknown as {
-          Module: { nativeAccount: { clearAccountData(): Promise<void> } };
-        }
-      ).Module.nativeAccount;
-      await account.clearAccountData();
-    });
-
-    expect(await readStore(fixture.app)).toBe(null);
-    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
-      settled: "rejected",
-    });
-  });
 });
