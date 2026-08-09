@@ -588,12 +588,14 @@ test("packaging cleans its output first, and builds the renderer program", () =>
 });
 
 test("the default gate is deterministic and certifies every shipped test layer", () => {
+  const verification = read(".github/workflows/macos-verify.yml");
   assert.doesNotMatch(script("test:unit"), /coverage|GW_CLIENT_WASM/);
   assert.match(script("test:client-artifact"), /tests\/client-artifact\/\*\.ts/);
   assert.match(script("verify:runtime"), /tools:test:e2e/);
   assert.match(script("verify:runtime"), /test:electron/);
   assert.match(script("verify"), /package:built && pnpm test:packaged/);
-  assert.doesNotMatch(read(".github/workflows/macos-verify.yml"), /unit-coverage/);
+  assert.match(verification, /pnpm exec playwright install chromium/);
+  assert.doesNotMatch(verification, /unit-coverage/);
 });
 
 test("release verification tells the player to check, never to disable a check", () => {

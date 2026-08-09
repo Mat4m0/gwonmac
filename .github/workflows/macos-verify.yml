@@ -60,6 +60,7 @@ jobs:
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
       - run: pnpm audit --audit-level=high
       - run: pnpm verify:runtime
       - name: Package and test the verified build
