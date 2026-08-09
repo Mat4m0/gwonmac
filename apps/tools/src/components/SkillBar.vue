@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { VueDraggable, type DraggableEvent } from "vue-draggable-plus";
+import { VueDraggable, type DraggableEvent, type MoveEvent } from "vue-draggable-plus";
 import type { SkillId } from "../model";
 import type { SkillCatalogue } from "../skill-catalog";
+import type { SkillDropPreview } from "../skill-drop";
 
 const props = defineProps<{
   skills: readonly (SkillId | null)[];
@@ -12,8 +13,7 @@ const props = defineProps<{
   invalidSlots?: readonly number[];
   activeSlot?: number | null;
   editable?: boolean;
-  incomingSkill?: SkillId | null;
-  dropTarget?: number | null;
+  dropPreview?: SkillDropPreview | null;
 }>();
 const emit = defineEmits<{
   select: [slot: number];
@@ -24,6 +24,7 @@ const emit = defineEmits<{
 }>();
 
 const announcement = ref("");
+const moveTarget = ref<number | null>(null);
 const sortableSkills = computed({
   get: () => [...props.skills],
   set: (skills: (SkillId | null)[]) => {
@@ -62,12 +63,23 @@ const keydown = (event: KeyboardEvent, index: number) => {
 };
 
 function dragEnded(event: DraggableEvent<SkillId | null>): void {
+  moveTarget.value = null;
   const from = event.oldIndex;
   const to = event.newIndex;
   if (from === undefined || to === undefined || from === to) return;
   announceMove(from, to);
   emit("moved", from, to);
 }
+
+function dragMoved(event: MoveEvent): void {
+  const related = Number(event.related.dataset.skillSlot);
+  moveTarget.value = Number.isInteger(related) ? related : null;
+}
+
+const dropAnnouncement = computed(() =>
+  props.dropPreview?.label
+  ?? (moveTarget.value === null ? "" : `Move to ${moveTarget.value + 1}`)
+);
 </script>
 
 <template>
@@ -76,7 +88,7 @@ function dragEnded(event: DraggableEvent<SkillId | null>): void {
     class="skill-bar"
     :class="{
       'skill-bar--compact': compact,
-      'skill-bar--receiving': editable && incomingSkill !== null && incomingSkill !== undefined,
+      'skill-bar--receiving': editable && (dropPreview != null || moveTarget !== null),
     }"
     aria-label="Skill bar"
     :data-skill-bar="editable ? '' : undefined"
@@ -96,6 +108,7 @@ function dragEnded(event: DraggableEvent<SkillId | null>): void {
     :delay="120"
     :delay-on-touch-only="true"
     :touch-start-threshold="4"
+    :on-move="dragMoved"
     @end="dragEnded"
   >
     <component
@@ -114,9 +127,12 @@ function dragEnded(event: DraggableEvent<SkillId | null>): void {
       :data-active="activeSlot === index ? '' : undefined"
       :data-elite="skill !== null && catalogue.get(skill).elite ? '' : undefined"
       :data-profession="skill === null ? undefined : catalogue.get(skill).profession"
+      :data-icon-missing="skill !== null && !catalogue.get(skill).iconUrl ? '' : undefined"
       :data-empty="skill === null ? '' : undefined"
       :data-skill-slot="editable ? index : undefined"
-      :data-drop-target="dropTarget === index ? '' : undefined"
+      :data-drop-target="dropPreview?.target === index || moveTarget === index ? '' : undefined"
+      :data-drop-outcome="dropPreview?.target === index ? dropPreview.outcome : moveTarget === index ? 'move' : undefined"
+      :data-drop-affected="dropPreview?.affectedSlots.includes(index) ? '' : undefined"
       :title="skill === null ? 'Empty skill slot' : catalogue.get(skill).name"
       :aria-label="[
         `${index + 1}. ${skill === null ? 'Empty skill slot' : catalogue.get(skill).name}`,
@@ -133,11 +149,16 @@ function dragEnded(event: DraggableEvent<SkillId | null>): void {
         :src="catalogue.get(skill).iconUrl!"
         alt=""
       >
-      <span v-else-if="skill !== null">
-        {{ catalogue.get(skill).name.split(" ").map((part) => part[0]).join("").slice(0, 2) }}
+      <span v-else-if="skill !== null" class="skill-fallback" aria-hidden="true">
+        {{ catalogue.get(skill).name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
       </span>
+      <span
+        v-if="dropPreview?.target === index || moveTarget === index"
+        class="skill-drop-label"
+        aria-hidden="true"
+      >{{ dropPreview?.target === index ? dropPreview.label : `Move to ${index + 1}` }}</span>
       <span v-if="editable" class="skill-slot-number" aria-hidden="true">{{ index + 1 }}</span>
     </component>
-    <span class="ui-sr-only" aria-live="polite">{{ announcement }}</span>
+    <span class="ui-sr-only" aria-live="polite">{{ dropAnnouncement || announcement }}</span>
   </VueDraggable>
 </template>

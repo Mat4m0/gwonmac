@@ -14,8 +14,9 @@ import {
   type SkillId,
 } from "../../../src/shared/builds/library";
 import {
+  resolveSkillPlacement,
   withAttributeRank,
-  withPlacedSkill,
+  type SkillPlacementResolution,
 } from "../../../src/shared/builds/authoring";
 import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import type { Build } from "./model";
@@ -125,23 +126,34 @@ export function useBuildDraft(
    * second elite. Click, double-click, and drag all come through this function
    * so their behavior cannot drift.
    */
-  function placeSkill(
+  function previewSkillPlacement(
     slot: number,
     skill: SkillId,
     catalogue: SkillCatalogue,
-  ): boolean {
+  ): SkillPlacementResolution {
     const target = SKILL_SLOTS[slot];
-    if (target === undefined) return false;
-    const skills = withPlacedSkill(
+    if (target === undefined) {
+      throw new RangeError(`Skill slot ${slot} is outside the eight-slot bar.`);
+    }
+    return resolveSkillPlacement(
       draft.value.skills,
       target,
       skill,
       (id) => catalogue.has(id) ? catalogue.get(id) : null,
     );
-    if (skills === null) return false;
-    replace({ skills });
-    activeSlot.value = target;
-    return true;
+  }
+
+  function placeSkill(
+    slot: number,
+    skill: SkillId,
+    catalogue: SkillCatalogue,
+  ): SkillPlacementResolution {
+    const resolution = previewSkillPlacement(slot, skill, catalogue);
+    if (resolution.outcome === "place" || resolution.outcome === "replace-elite") {
+      replace({ skills: resolution.skills });
+      activeSlot.value = resolution.target;
+    }
+    return resolution;
   }
 
   function moveSkill(from: number, to: number): void {
@@ -227,6 +239,7 @@ export function useBuildDraft(
     setSecondary,
     setRank,
     setSkill,
+    previewSkillPlacement,
     placeSkill,
     moveSkill,
     reorderSkills,

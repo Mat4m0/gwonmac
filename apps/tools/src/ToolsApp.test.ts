@@ -409,6 +409,25 @@ describe("ToolsApp", () => {
     wrapper.unmount();
   });
 
+  it("keeps an already-used catalogue skill focusable and explains the blocked action", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Aegis");
+    await flushPromises();
+    const result = wrapper.get<HTMLButtonElement>(".skill-result");
+    expect(result.attributes("aria-disabled")).toBe("true");
+    expect(result.element.disabled).toBe(false);
+    await result.trigger("focus");
+    expect(wrapper.get(".inspector-warning").text()).toContain("Already used in slot 3");
+    await result.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    expect(wrapper.get(".bar-drag-status").text()).toContain("already used in slot 3");
+    expect(wrapper.findAll(".authoring-bar .skill")[2]!.attributes("title")).toBe("Aegis");
+    wrapper.unmount();
+  });
+
   it("asks before changing a shared bar and keeps an edited fork related", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");

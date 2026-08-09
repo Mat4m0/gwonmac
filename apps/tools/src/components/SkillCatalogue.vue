@@ -3,11 +3,13 @@ import { computed, nextTick, onBeforeUpdate, ref, watch } from "vue";
 import type { SkillId } from "../model";
 import type { SkillCatalogue, SkillPresentation } from "../skill-catalog";
 import type { BuildDraftController } from "../use-build-draft";
+import type { SkillDropPreview } from "../skill-drop";
 
 const props = defineProps<{
   editor: BuildDraftController;
   catalogue: SkillCatalogue;
   allowPlayerOnly: boolean;
+  dropPreview?: SkillDropPreview | null;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -90,12 +92,13 @@ watch(results, (values) => {
   if (inspected.value && !values.some((skill) => skill.id === inspected.value?.id)) {
     inspected.value = values[0] ?? null;
   }
+  if (!values.length) focusedResult.value = null;
+  else if (focusedResult.value !== null) {
+    focusedResult.value = Math.min(focusedResult.value, values.length - 1);
+  }
 });
 function duplicateSlot(skill: SkillPresentation): number | null {
-  const active = props.editor.activeSlot.value;
-  const slot = props.editor.draft.value.skills.findIndex(
-    (id, index) => id === skill.id && index !== active,
-  );
+  const slot = props.editor.draft.value.skills.findIndex((id) => id === skill.id);
   return slot < 0 ? null : slot;
 }
 
@@ -110,7 +113,8 @@ function eliteSlot(skill: SkillPresentation): number | null {
 
 function useSkill(skill: SkillPresentation): void {
   const slot = props.editor.activeSlot.value;
-  if (slot === null || !props.editor.placeSkill(slot, skill.id, props.catalogue)) return;
+  if (slot === null) return;
+  emit("place", slot, skill.id);
   inspected.value = skill;
 }
 
@@ -123,6 +127,7 @@ type PointerSkillDrag = {
   y: number;
   started: boolean;
   target: number | null;
+  source: HTMLElement;
 };
 
 const pointerDrag = ref<PointerSkillDrag | null>(null);
@@ -147,6 +152,7 @@ function beginPointerDrag(event: PointerEvent, skill: SkillPresentation): void {
     y: event.clientY,
     started: false,
     target: null,
+    source: event.currentTarget as HTMLElement,
   };
 }
 
@@ -189,6 +195,24 @@ function finishPointerDrag(event: PointerEvent, place: boolean): void {
   }
 }
 
+function cancelPointerDrag(): boolean {
+  const drag = pointerDrag.value;
+  if (!drag?.started) return false;
+  pointerDrag.value = null;
+  emit("dragOver", null);
+  emit("dragEnd");
+  if (drag.source.hasPointerCapture(drag.pointerId)) {
+    drag.source.releasePointerCapture(drag.pointerId);
+  }
+  return true;
+}
+
+function closeOrCancel(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!cancelPointerDrag()) emit("close");
+}
+
 function focusResult(index: number): void {
   const buttons = resultButtons.value;
   if (!buttons.length) return;
@@ -203,8 +227,7 @@ function onResultKeydown(
   event: KeyboardEvent,
 ): void {
   if (event.key === "Escape") {
-    event.preventDefault();
-    emit("close");
+    closeOrCancel(event);
     return;
   }
   if (event.key === "Enter" || event.key === " ") {
@@ -228,8 +251,7 @@ function onSearchKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     focusResult(0);
   } else if (event.key === "Escape") {
-    event.preventDefault();
-    emit("close");
+    closeOrCancel(event);
   }
 }
 
@@ -243,7 +265,7 @@ function clear(): void {
   <section
     class="catalogue-workspace"
     aria-labelledby="catalogue-title"
-    @keydown.esc.stop.prevent="emit('close')"
+    @keydown.esc="closeOrCancel"
   >
     <header class="workspace-heading">
       <div>
@@ -309,25 +331,30 @@ function clear(): void {
           role="option"
           :aria-selected="inspected?.id === skill.id"
           :tabindex="focusedResult === index || (focusedResult === null && index === 0) ? 0 : -1"
-          :disabled="duplicateSlot(skill) !== null"
+          :aria-disabled="duplicateSlot(skill) !== null"
+          :data-unavailable="duplicateSlot(skill) !== null ? '' : undefined"
           @focus="focusedResult = index; inspected = skill"
           @click="inspected = skill"
           @dblclick="useSkill(skill)"
           @keydown="onResultKeydown(index, skill, $event)"
-          @pointerdown="beginPointerDrag($event, skill)"
-          @pointermove="movePointerDrag"
-          @pointerup="finishPointerDrag($event, true)"
-          @pointercancel="finishPointerDrag($event, false)"
-          @lostpointercapture="finishPointerDrag($event, false)"
         >
           <span
             class="ui-slot skill catalogue-drag-handle"
             :data-elite="skill.elite ? '' : undefined"
             :data-profession="skill.profession"
+            :data-icon-missing="skill.iconUrl ? undefined : ''"
             :data-pointer-dragging="pointerDrag?.skill.id === skill.id ? '' : undefined"
             :title="`Drag ${skill.name} to a skill slot`"
+            @pointerdown="beginPointerDrag($event, skill)"
+            @pointermove="movePointerDrag"
+            @pointerup="finishPointerDrag($event, true)"
+            @pointercancel="finishPointerDrag($event, false)"
+            @lostpointercapture="finishPointerDrag($event, false)"
           >
             <img v-if="skill.iconUrl" :src="skill.iconUrl" alt="" loading="lazy">
+            <span v-else class="skill-fallback" aria-hidden="true">
+              {{ skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
+            </span>
           </span>
           <span class="result-copy">
             <strong>{{ skill.name }}</strong>
@@ -364,8 +391,12 @@ function clear(): void {
               class="ui-slot skill"
               :data-elite="inspected.elite ? '' : undefined"
               :data-profession="inspected.profession"
+              :data-icon-missing="inspected.iconUrl ? undefined : ''"
             >
               <img v-if="inspected.iconUrl" :src="inspected.iconUrl" alt="">
+              <span v-else class="skill-fallback" aria-hidden="true">
+                {{ inspected.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
+              </span>
             </span>
             <span>
               <strong>{{ inspected.name }}</strong>
@@ -431,10 +462,17 @@ function clear(): void {
           class="ui-slot skill"
           :data-elite="pointerDrag.skill.elite ? '' : undefined"
           :data-profession="pointerDrag.skill.profession"
+          :data-icon-missing="pointerDrag.skill.iconUrl ? undefined : ''"
         >
           <img v-if="pointerDrag.skill.iconUrl" :src="pointerDrag.skill.iconUrl" alt="">
+          <span v-else class="skill-fallback" aria-hidden="true">
+            {{ pointerDrag.skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
+          </span>
         </span>
-        <strong>{{ pointerDrag.skill.name }}</strong>
+        <span class="catalogue-pointer-copy">
+          <strong>{{ pointerDrag.skill.name }}</strong>
+          <small v-if="dropPreview">{{ dropPreview.label }}</small>
+        </span>
       </div>
     </Teleport>
   </section>

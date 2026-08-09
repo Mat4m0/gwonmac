@@ -5,8 +5,8 @@ import {
   attributePointsSpent,
   availableAttributes,
   canSetAttributeRank,
+  resolveSkillPlacement,
   withAttributeRank,
-  withPlacedSkill,
 } from "../../src/shared/builds/authoring.js";
 import { skillBarOf, skillId } from "../../src/shared/builds/library.js";
 
@@ -33,7 +33,7 @@ describe("build authoring rules", () => {
     assert.deepEqual(withAttributeRank({ Strength: 8 }, "Strength", 0), {});
   });
 
-  it("places a catalogue skill without creating duplicate or second-elite bars", () => {
+  it("resolves every catalogue placement without creating an invalid bar", () => {
     const first = skillId(1);
     const oldElite = skillId(2);
     const newElite = skillId(3);
@@ -45,11 +45,33 @@ describe("build authoring rules", () => {
       return null;
     };
 
-    assert.equal(withPlacedSkill(skills, 3, first, catalogue), null);
-    assert.equal(withPlacedSkill(skills, 3, unknown, catalogue), null);
-    assert.deepEqual(
-      withPlacedSkill(skills, 3, newElite, catalogue),
-      skillBarOf((slot) => slot === 0 ? first : slot === 3 ? newElite : null),
-    );
+    assert.deepEqual(resolveSkillPlacement(skills, 0, first, catalogue), {
+      outcome: "already-used",
+      target: 0,
+      existingSlot: 0,
+    });
+    assert.deepEqual(resolveSkillPlacement(skills, 3, first, catalogue), {
+      outcome: "already-used",
+      target: 3,
+      existingSlot: 0,
+    });
+    assert.deepEqual(resolveSkillPlacement(skills, 3, unknown, catalogue), {
+      outcome: "unavailable",
+      target: 3,
+    });
+    assert.deepEqual(resolveSkillPlacement(skills, 2, skillId(5), (skill) =>
+      skill === skillId(5) ? { elite: false } : catalogue(skill)), {
+      outcome: "place",
+      target: 2,
+      skills: skillBarOf((slot) =>
+        slot === 0 ? first : slot === 2 ? skillId(5) : slot === 7 ? oldElite : null
+      ),
+    });
+    assert.deepEqual(resolveSkillPlacement(skills, 3, newElite, catalogue), {
+      outcome: "replace-elite",
+      target: 3,
+      replaced: [{ slot: 7, skill: oldElite }],
+      skills: skillBarOf((slot) => slot === 0 ? first : slot === 3 ? newElite : null),
+    });
   });
 });

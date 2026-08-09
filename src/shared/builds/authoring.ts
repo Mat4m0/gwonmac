@@ -89,23 +89,53 @@ export type SkillEliteLookup = (
   skill: SkillId,
 ) => { readonly elite: boolean } | null;
 
+export type SkillPlacementResolution =
+  | Readonly<{
+      outcome: "place";
+      target: SkillSlotIndex;
+      skills: SkillBar;
+    }>
+  | Readonly<{
+      outcome: "replace-elite";
+      target: SkillSlotIndex;
+      replaced: readonly Readonly<{ slot: SkillSlotIndex; skill: SkillId }>[];
+      skills: SkillBar;
+    }>
+  | Readonly<{
+      outcome: "already-used";
+      target: SkillSlotIndex;
+      existingSlot: SkillSlotIndex;
+    }>
+  | Readonly<{
+      outcome: "unavailable";
+      target: SkillSlotIndex;
+    }>;
+
 /**
  * Replace one bar slot while preventing the invalid states the picker can
  * resolve before save: unknown skills, duplicates, and two elites. A new elite
  * replaces the previous one because that is the same behavior the Guild Wars
  * template UI teaches players to expect.
  */
-export function withPlacedSkill(
+export function resolveSkillPlacement(
   skills: SkillBar,
   target: SkillSlotIndex,
   skill: SkillId,
   catalogue: SkillEliteLookup,
-): SkillBar | null {
+): SkillPlacementResolution {
   const incoming = catalogue(skill);
-  if (incoming === null) return null;
-  const duplicate = skills.findIndex((id, index) => id === skill && index !== target);
-  if (duplicate >= 0) return null;
-  return skillBarOf((slot) => {
+  if (incoming === null) return { outcome: "unavailable", target };
+  const existingSlot = skills.findIndex((id) => id === skill);
+  if (existingSlot >= 0) {
+    return { outcome: "already-used", target, existingSlot: existingSlot as SkillSlotIndex };
+  }
+  const replaced = incoming.elite
+    ? skills.flatMap((equipped, slot) =>
+        equipped !== null && catalogue(equipped)?.elite === true
+          ? [{ slot: slot as SkillSlotIndex, skill: equipped }]
+          : [])
+    : [];
+  const next = skillBarOf((slot) => {
     if (slot === target) return skill;
     const equipped = skills[slot];
     if (incoming.elite && equipped !== null && catalogue(equipped)?.elite === true) {
@@ -113,4 +143,7 @@ export function withPlacedSkill(
     }
     return equipped;
   });
+  return replaced.length
+    ? { outcome: "replace-elite", target, replaced, skills: next }
+    : { outcome: "place", target, skills: next };
 }
