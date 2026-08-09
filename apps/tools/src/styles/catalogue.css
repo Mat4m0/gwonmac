@@ -155,9 +155,17 @@
   contain-intrinsic-size: auto 54px;
 }
 
-.skill-result:hover,
-.skill-result[aria-selected="true"] {
+.skill-result:hover {
   background: var(--ui-hover);
+}
+
+.skill-result[aria-selected="true"] {
+  background: var(--ui-selected);
+  box-shadow: inset 0 0 0 1px var(--ui-edge-strong);
+}
+
+.skill-result:active:not([aria-disabled="true"]) {
+  filter: brightness(0.86);
 }
 
 .skill-result:focus-visible {
@@ -309,8 +317,7 @@
   font-size: var(--ui-font-size-sm);
 }
 
-.inspector-warning,
-.field-error { color: var(--ui-danger) !important; }
+.inspector-warning { color: var(--ui-danger) !important; }
 .skill-inspector .ui-link { align-self: flex-start; }
 
 .catalogue-prompt { min-height: 260px; }

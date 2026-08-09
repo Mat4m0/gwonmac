@@ -484,7 +484,7 @@ defineExpose({
           spellcheck="false"
           placeholder="Paste a revised Guild Wars skill template code"
         />
-        <p v-if="adaptError" class="field-error" role="alert">That is not a valid skill template code.</p>
+        <p v-if="adaptError" class="ui-field-error" role="alert">That is not a valid skill template code.</p>
         <button class="ui-button" :disabled="!adaptCode.trim()" @click="importDraft">
           Load into draft
         </button>

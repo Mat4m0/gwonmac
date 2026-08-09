@@ -69,6 +69,9 @@ describe("ToolsApp build authoring", () => {
     expect(result.element.disabled).toBe(false);
     await result.trigger("focus");
     expect(wrapper.get(".inspector-warning").text()).toContain("Already used in slot 3");
+    const action = wrapper.get<HTMLButtonElement>(".skill-inspector .ui-button");
+    expect(action.attributes("aria-disabled")).toBe("true");
+    expect(action.element.disabled).toBe(false);
     await result.trigger("keydown", { key: "Enter" });
     await flushPromises();
     expect(wrapper.get(".bar-drag-status").text()).toContain("already used in slot 3");
@@ -167,4 +170,3 @@ describe("ToolsApp build authoring", () => {
   // rather than as a capability that does not exist yet — this is the one
   // failure mode a real session actually hit.
 });
-

@@ -132,7 +132,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
   border: var(--ui-border-width) solid transparent;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
-  box-shadow: var(--ui-shadow-selected);
+  box-shadow: var(--ui-shadow-raised);
   color: var(--ui-accent);
   font-family: var(--ui-font-display);
   font-size: var(--ui-font-size-sm);

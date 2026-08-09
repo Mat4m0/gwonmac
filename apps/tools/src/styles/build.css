@@ -296,6 +296,13 @@
   color: var(--ui-text-bright);
 }
 
+.authoring-tabs > button:hover { background: var(--ui-hover); }
+.authoring-tabs > button:active { filter: brightness(0.86); }
+.authoring-tabs > button:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
 .authoring-tabs .ui-chip { margin: 0 0 var(--ui-space-2) auto; }
 
 .authoring-scroll {

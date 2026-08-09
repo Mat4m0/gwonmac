@@ -213,7 +213,7 @@
   --ui-line: oklch(0.48 0.025 78);
   --ui-line-soft: oklch(0.78 0.018 82 / 0.13);
   --ui-outline: transparent;
-  --ui-edge: oklch(0.78 0.018 82 / 0.18);
+  --ui-edge: transparent;
   --ui-edge-strong: oklch(0.83 0.02 84 / 0.34);
   --ui-edge-inner: oklch(1 0 0 / 0.035);
   --ui-shadow: 0 18px 48px oklch(0 0 0 / 0.52);
@@ -222,8 +222,8 @@
   --ui-shadow-inset-deep: inset 0 1px 4px oklch(0 0 0 / 0.58);
   --ui-shadow-raised: 0 1px 2px oklch(0 0 0 / 0.36);
   --ui-shadow-raised-soft: 0 0 transparent;
-  --ui-shadow-selected: inset 0 -2px 0 var(--ui-accent);
-  --ui-shadow-row-selected: inset 3px 0 0 var(--ui-accent);
+  --ui-shadow-selected: 0 1px 2px oklch(0 0 0 / 0.36);
+  --ui-shadow-row-selected: 0 1px 2px oklch(0 0 0 / 0.28);
   --ui-text-shadow: none;
   --ui-frame: transparent;
   --ui-frame-top: transparent;
