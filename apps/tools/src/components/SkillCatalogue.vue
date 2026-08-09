@@ -464,15 +464,15 @@ function clear(): void {
         </div>
       </aside>
     </div>
-    <Teleport to="body">
-      <div
-        v-if="pointerDrag?.started"
-        class="catalogue-pointer-preview"
-        :style="{
-          transform: `translate3d(${pointerDrag.x + 14}px, ${pointerDrag.y + 14}px, 0)`,
-        }"
-        aria-hidden="true"
-      >
+    <div
+      v-if="pointerDrag?.started"
+      class="catalogue-pointer-preview"
+      :style="{
+        left: `${pointerDrag.x + 14}px`,
+        top: `${pointerDrag.y + 14}px`,
+      }"
+      aria-hidden="true"
+    >
         <span
           class="ui-slot skill"
           :data-elite="pointerDrag.skill.elite ? '' : undefined"
@@ -488,7 +488,6 @@ function clear(): void {
           <strong>{{ pointerDrag.skill.name }}</strong>
           <small v-if="dropPreview">{{ dropPreview.label }}</small>
         </span>
-      </div>
-    </Teleport>
+    </div>
   </section>
 </template>

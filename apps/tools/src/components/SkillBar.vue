@@ -103,7 +103,6 @@ const dropAnnouncement = computed(() =>
     ghost-class="skill--ghost"
     drag-class="skill--dragging"
     fallback-class="skill--fallback"
-    :fallback-on-body="true"
     :fallback-tolerance="4"
     :delay="120"
     :delay-on-touch-only="true"

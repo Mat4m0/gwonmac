@@ -169,13 +169,14 @@
 .catalogue-pointer-preview {
   position: fixed;
   z-index: var(--ui-z-toast);
-  top: 0;
-  left: 0;
   display: flex;
-  max-width: 220px;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 28px));
+  height: 52px;
   padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-1) var(--ui-space-1);
   align-items: center;
   gap: var(--ui-space-2);
+  contain: layout paint;
   pointer-events: none;
   border-radius: var(--ui-radius);
   background: var(--ui-raised-fill);
@@ -187,6 +188,7 @@
   width: 42px;
   height: 42px;
   flex: 0 0 42px;
+  aspect-ratio: 1;
 }
 
 .catalogue-pointer-preview strong {

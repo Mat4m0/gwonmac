@@ -56,6 +56,18 @@ test("manages teams and finds builds without Electron or the game", async ({ pag
   await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
 });
 
+test("collapses party capture without hiding library navigation", async ({ page }) => {
+  const party = page.locator(".live-party");
+  await expect(party).toHaveAttribute("open", "");
+  await expect(page.getByRole("button", { name: "Save as new team" })).toBeVisible();
+
+  await party.locator("summary").click();
+  await expect(party).not.toHaveAttribute("open", "");
+  await expect(page.getByRole("button", { name: "Save as new team" })).toBeHidden();
+  await expect(page.getByRole("tab", { name: /Teams/ })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search library" })).toBeVisible();
+});
+
 test("authors, commits, reloads, discards, and undoes one atomic draft", async ({ page }) => {
   await openBuild(page);
   await chooseSkill(page, 0, "Infuse Health");
@@ -111,6 +123,10 @@ test("places catalogue skills and reorders slots by pointer and keyboard", async
         "",
       );
       await expect(page.locator(".authoring-bar")).toHaveClass(/skill-bar--receiving/);
+      const preview = await page.locator(".catalogue-pointer-preview").boundingBox();
+      expect(preview).not.toBeNull();
+      expect(preview?.width).toBeLessThanOrEqual(220);
+      expect(preview?.height).toBe(52);
     },
     async () => {
       await expect(slots.nth(7).locator(".skill-drop-label")).toHaveText("Place in 8");
@@ -375,6 +391,24 @@ for (const [width, height] of [
     await expect(invalid.locator(".assignment-error")).toBeVisible();
   });
 }
+
+test("aligns team header controls and configured row controls", async ({ page }) => {
+  const top = async (selector: string) => page.locator(selector).first().evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  const bottom = async (selector: string) => page.locator(selector).first().evaluate(
+    (element) => element.getBoundingClientRect().bottom,
+  );
+  const closeTo = (left: number, right: number) => expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+
+  closeTo(await top("#team-name"), await top(".detail-header-actions .ui-button"));
+  closeTo(await bottom(".team-mode .ui-segment"), await bottom(".team-controls .tag-entry input"));
+
+  const hero = page.locator(".team-slots > li").nth(1);
+  const controlTops = await hero.locator(".hero-picker select, .build-picker select, .behavior-picker select")
+    .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
+  expect(Math.max(...controlTops) - Math.min(...controlTops)).toBeLessThanOrEqual(1);
+});
 
 test("keeps critical team and skill feedback legible", async ({ page }) => {
   const contrast = async (selector: string) => page.locator(selector).first().evaluate((element) => {

@@ -105,6 +105,9 @@
 }
 
 .skill--fallback {
+  max-width: 96px;
+  max-height: 96px;
+  contain: layout paint;
   opacity: 0.95;
   transform: scale(1.04);
 }
