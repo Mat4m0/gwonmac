@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import {
   HEROES_IN_PANEL_ORDER,
   PROFESSIONS,
+  heroLabel,
 } from "../../../../src/shared/builds/heroes";
 import {
   buildById,
@@ -203,8 +204,18 @@ const runtimeProblemGuidance = (problem: TeamApplyRuntimeProblem): string | null
     case "primary-mismatch": return "Choose a build with the observed primary profession.";
     case "hero-locked": return "Choose an unlocked hero or unlock this hero in Guild Wars.";
     case "hero-availability-unknown": return "Add this hero in the Guild Wars party window first.";
+    case "skill-locked": return "Choose an unlocked skill, or unlock it in Guild Wars before applying.";
     case "devona-removal": return "Remove Devona in the Guild Wars party window, then apply again.";
   }
+};
+
+const runtimeProblemMessage = (problem: TeamApplyRuntimeProblem): string => {
+  if (problem.rule !== "skill-locked") return teamApplyProblemMessage(problem);
+  const owner = problem.hero === null
+    ? "Your assigned build"
+    : `${heroLabel(problem.hero)}'s assigned build`;
+  const names = problem.skills.map((skill) => props.controller.skills.get(skill).name);
+  return `${owner} uses ${names.join(", ")}, which ${names.length === 1 ? "is" : "are"} not unlocked.`;
 };
 
 const storedProblemGuidance = (problem: TeamApplyProblem): string | null => {
@@ -287,7 +298,7 @@ const applyAssessment = computed(() => {
   if (!result.ready) {
     result.blockers.forEach((problem, index) => issues.push({
       id: `runtime-${problem.rule}-${"hero" in problem ? problem.hero ?? "player" : index}`,
-      message: teamApplyProblemMessage(problem),
+      message: runtimeProblemMessage(problem),
       guidance: runtimeProblemGuidance(problem),
       slots: runtimeProblemSlots(problem),
       control: runtimeProblemControl(problem),

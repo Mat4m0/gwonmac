@@ -313,6 +313,31 @@ test("an absent hero's known primary mismatch refuses before roster mutation", a
   assert.deepEqual(game.sent, []);
 });
 
+test("a known-locked assigned skill refuses before the first command", async () => {
+  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
+  const assigned = {
+    ...build(),
+    skills: [skillId(350), skillId(351), null, null, null, null, null, null],
+  } as NonNullable<TeamApplyMember["build"]>;
+  const observed = {
+    ...party([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]),
+    accountSkills: {
+      knownThrough: 500,
+      unlocked: new Set([skillId(349)]),
+    },
+  };
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: assigned, behaviour: "guard" })]),
+      { ...game.environment, party: () => observed },
+      1,
+    ),
+    /Koss's assigned build uses skills 350, 351, which are not unlocked/,
+  );
+  assert.deepEqual(game.sent, []);
+});
+
 test("behavior-only work is part of the canonical preview", () => {
   const result = preflightTeamApply(
     plan([member({ hero: heroId(6), behaviour: "fight" })]),

@@ -21,6 +21,7 @@ import {
   type BuildLibrary,
   type HeroBehaviour,
   type HeroId,
+  type SkillId,
   type Team,
   type TeamMode,
 } from "./library.js";
@@ -74,6 +75,11 @@ export type TeamApplyRuntimeProblem =
     }
   | { readonly rule: "hero-locked"; readonly hero: HeroId }
   | { readonly rule: "hero-availability-unknown"; readonly hero: HeroId }
+  | {
+      readonly rule: "skill-locked";
+      readonly hero: HeroId | null;
+      readonly skills: readonly [SkillId, ...SkillId[]];
+    }
   | { readonly rule: "devona-removal" };
 
 export type TeamApplyChange = Readonly<{
@@ -230,6 +236,18 @@ function memberBuildDiffers(
     || !sameAttributes(live.attributes, member.build.attributes);
 }
 
+function lockedSkills(
+  member: TeamApplyMember,
+  unlocks: LiveParty["accountSkills"],
+): readonly SkillId[] {
+  if (member.build === null || unlocks === null) return [];
+  return member.build.skills.filter((skill): skill is SkillId =>
+    skill !== null
+    && skill < unlocks.knownThrough
+    && !unlocks.unlocked.has(skill)
+  );
+}
+
 export function preflightTeamApply(
   plan: TeamApplyPlan,
   party: LiveParty,
@@ -252,6 +270,10 @@ export function preflightTeamApply(
 
   const player = plan.members[0];
   if (player?.build) {
+    const skills = lockedSkills(player, party.characterSkills);
+    if (skills[0] !== undefined) {
+      blockers.push({ rule: "skill-locked", hero: null, skills: [skills[0], ...skills.slice(1)] });
+    }
     const observedPlayer = party.player;
     if (!observedPlayer || observedPlayer.agentId === 0) {
       // The unconditional blocker above owns the message; do not add a second.
@@ -292,6 +314,14 @@ export function preflightTeamApply(
     }
     const professions = live?.professions ?? facts?.professions ?? null;
     if (member.build) {
+      const skills = lockedSkills(member, party.accountSkills);
+      if (skills[0] !== undefined) {
+        blockers.push({
+          rule: "skill-locked",
+          hero: member.hero,
+          skills: [skills[0], ...skills.slice(1)],
+        });
+      }
       if (professions === null) {
         blockers.push({ rule: "professions-unobserved", hero: member.hero });
       } else if (professions[0] !== member.build.professions[0]) {
@@ -332,6 +362,15 @@ export function teamApplyProblemMessage(problem: TeamApplyRuntimeProblem): strin
       + `assigned build is for ${problem.wanted}, but the observed primary is ${problem.observed}.`;
     case "hero-locked": return `${heroLabel(problem.hero)} is not unlocked on this account.`;
     case "hero-availability-unknown": return `${heroLabel(problem.hero)} could not be verified on this account. Add the hero manually first.`;
+    case "skill-locked": {
+      const owner = problem.hero === null
+        ? "Your assigned build"
+        : `${heroLabel(problem.hero)}'s assigned build`;
+      const skills = problem.skills.length === 1
+        ? `skill ${problem.skills[0]}`
+        : `skills ${problem.skills.join(", ")}`;
+      return `${owner} uses ${skills}, which ${problem.skills.length === 1 ? "is" : "are"} not unlocked.`;
+    }
     case "devona-removal": return "Devona cannot be removed safely. Remove her in the party window first.";
   }
 }
