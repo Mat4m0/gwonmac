@@ -67,7 +67,7 @@ Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 
 ## Development
 
-**Requirements:** macOS on Apple Silicon · Node.js 22.12+ · pnpm 11 ·
+**Requirements:** macOS on Apple Silicon · Node.js 22.19+ · pnpm 11 ·
 [Rust](https://rustup.rs) (via rustup)
 
 ```bash

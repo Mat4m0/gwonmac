@@ -16,7 +16,7 @@
   },
   "main": "build/main/main.js",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.19"
   },
   "scripts": {
     "postinstall": "install-electron",
