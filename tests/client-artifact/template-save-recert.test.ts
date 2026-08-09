@@ -7,6 +7,7 @@
  * the recertification workflow runs it against the artifact it downloaded.
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
@@ -29,7 +30,22 @@ import {
   splitSections,
   WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
-import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
+import {
+  ENHANCEMENT_BUILDS,
+  findEnhancementBuild,
+  enhancementOutputSha256,
+} from "../../src/main/certification/enhancement-builds.js";
+import { transformEnhancementWasm } from "../../src/main/certification/enhancement-transform.js";
+import { rewriteNativeDoubleClickWasm } from "../../src/main/certification/native-double-click.js";
+import { rewriteExtendedMemoryWasm } from "../../src/main/certification/extended-memory.js";
+import {
+  findTemplateSaveBuild,
+  rewriteTemplateSaveWasm,
+} from "../../src/main/certification/template-save-compat.js";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/enhancement-contracts.js";
+
+const sha256 = (bytes: Uint8Array): string =>
+  createHash("sha256").update(bytes).digest("hex");
 
 function rewriteCode(
   input: Uint8Array,
@@ -107,4 +123,36 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.ok(addressDecision.templateSaveBuild);
   assert.equal(addressDecision.enhancementBuild, null);
   assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
+});
+
+test("every certified runtime profile reproduces the real client chain", async () => {
+  const artifact = process.env.GW_CLIENT_WASM;
+  assert.ok(
+    artifact,
+    "GW_CLIENT_WASM must explicitly name the real Gw.jspi.wasm artifact",
+  );
+  const official = new Uint8Array(await readFile(artifact));
+  const templateBuild = findTemplateSaveBuild(sha256(official));
+  assert.ok(templateBuild, "the real client must be template-save certified");
+  const template = rewriteTemplateSaveWasm(official, templateBuild);
+  const enhancementBuild = findEnhancementBuild(sha256(template));
+  assert.ok(enhancementBuild, "the template output must be Enhancement certified");
+
+  // The off profile and every optional capability profile feed the same two
+  // downstream exact-hash transforms. Reproducing the complete chain here is
+  // what catches an ABI/config edit whose source tests pass but whose authored
+  // certificate hashes were not regenerated.
+  rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(template));
+  for (const capabilities of Object.values(ENHANCEMENT_CAPABILITY_PROFILES)) {
+    const enhanced = transformEnhancementWasm(
+      template,
+      enhancementBuild,
+      capabilities,
+    );
+    assert.equal(
+      sha256(enhanced),
+      enhancementOutputSha256(enhancementBuild, capabilities),
+    );
+    rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(enhanced));
+  }
 });
