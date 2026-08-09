@@ -6,7 +6,24 @@
   background: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
 }
 
-.authoring-scroll--catalogue .catalogue-workspace {
+[data-catalogue-open] .authoring-scroll {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+[data-catalogue-open] .authoring-bar-section {
+  position: relative;
+  top: auto;
+  flex: 0 0 auto;
+}
+
+[data-catalogue-open] .build-validation { flex: 0 0 auto; }
+[data-catalogue-open] .workspace-switcher,
+[data-catalogue-open] .authoring-bar-section .workspace-heading,
+[data-catalogue-open] .bar-keyboard-hint { display: none; }
+
+[data-catalogue-open] .catalogue-workspace {
   display: flex;
   overflow: hidden;
   flex: 1;
@@ -158,7 +175,7 @@
   min-width: 44px;
   min-height: 44px;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .catalogue-drag-handle[data-pointer-dragging] {
@@ -298,14 +315,14 @@
 
 .catalogue-prompt { min-height: 260px; }
 
-.authoring-scroll--catalogue .catalogue-layout {
+[data-catalogue-open] .catalogue-layout {
   min-height: 0;
   overflow: hidden;
   flex: 1;
 }
 
-.authoring-scroll--catalogue .skill-results { max-height: none; }
-.authoring-scroll--catalogue .skill-inspector { overflow: auto; }
+[data-catalogue-open] .skill-results { max-height: none; }
+[data-catalogue-open] .skill-inspector { overflow: auto; }
 
 @container detail-pane (max-width: 860px) {
   .catalogue-layout {
@@ -349,12 +366,39 @@
 }
 
 @media (max-height: 520px) {
-  .detail-view--catalogue-open .catalogue-tools,
-  .detail-view--catalogue-open .catalogue-layout { margin-top: var(--ui-space-2); }
-  .detail-view--catalogue-open .skill-inspector { max-height: 132px; }
-  .detail-view--catalogue-open .catalogue-count { display: none; }
-  .detail-view--catalogue-open .authoring-bar {
+  [data-catalogue-open] { height: 100% !important; }
+  [data-catalogue-open] > .authoring-header,
+  [data-catalogue-open] > .authoring-actions,
+  [data-catalogue-open] > .shared-commit-sheet,
+  [data-catalogue-open] > .publication-result,
+  [data-catalogue-open] .build-validation,
+  [data-catalogue-open] .workspace-switcher,
+  [data-catalogue-open] .authoring-bar-section .workspace-heading,
+  [data-catalogue-open] .bar-keyboard-hint { display: none; }
+  [data-catalogue-open] .authoring-scroll { padding: var(--ui-space-2); }
+  [data-catalogue-open] .authoring-bar-section {
+    margin: calc(var(--ui-space-2) * -1) calc(var(--ui-space-2) * -1) 0;
+    padding: var(--ui-space-2);
+  }
+  [data-catalogue-open] .catalogue-workspace {
+    padding: var(--ui-space-2);
+    border-width: 0;
+  }
+  [data-catalogue-open] .catalogue-workspace .workspace-heading p { display: none; }
+  [data-catalogue-open] .catalogue-tools,
+  [data-catalogue-open] .catalogue-layout { margin-top: var(--ui-space-2); }
+  [data-catalogue-open] .skill-inspector { max-height: 132px; }
+  [data-catalogue-open] .catalogue-count { display: none; }
+  [data-catalogue-open] .authoring-bar {
     max-width: 366px;
     grid-template-columns: repeat(8, minmax(0, 44px));
+  }
+}
+
+@media (pointer: coarse) {
+  .catalogue-drag-handle,
+  .authoring-bar .skill {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

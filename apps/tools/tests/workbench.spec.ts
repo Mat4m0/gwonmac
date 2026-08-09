@@ -237,7 +237,7 @@ test("uses the inline catalogue for filters, mechanics, elite replacement, and k
     "Cry of Frustration demonstrates the client-owned skill description",
   );
   await expect(page.getByText(/This replaces .* in slot/)).toBeVisible();
-  await page.getByRole("button", { name: "Replace current elite" }).click();
+  await page.getByRole("button", { name: "Replace elite in slot 1" }).click();
   await expect(page.locator(".authoring-bar .skill").nth(0)).toHaveAttribute("title", "Cry of Frustration");
   await page.keyboard.press("Escape");
   await expect(origin).toBeFocused();

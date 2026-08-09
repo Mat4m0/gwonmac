@@ -306,23 +306,6 @@
   background: color-mix(in srgb, var(--ui-panel-fill) 94%, var(--ui-outline));
 }
 
-.authoring-scroll--catalogue {
-  display: flex;
-  overflow: hidden;
-  flex-direction: column;
-}
-
-.authoring-scroll--catalogue .authoring-bar-section {
-  position: relative;
-  top: auto;
-  flex: 0 0 auto;
-}
-
-.authoring-scroll--catalogue .build-validation { flex: 0 0 auto; }
-.authoring-scroll--catalogue .workspace-switcher,
-.authoring-scroll--catalogue .authoring-bar-section .workspace-heading,
-.authoring-scroll--catalogue .bar-keyboard-hint { display: none; }
-
 .authoring-bar-section {
   position: sticky;
   z-index: var(--ui-z-status);
@@ -690,34 +673,4 @@
   .rank-cost { grid-column: 1 / -1; text-align: right; }
   .skill-filters { flex-wrap: wrap; }
   .authoring-actions .ui-button { flex: 1; }
-}
-
-@media (max-height: 520px) {
-  .detail-view--catalogue-open { height: 100% !important; }
-  .detail-view--catalogue-open > .authoring-header,
-  .detail-view--catalogue-open > .authoring-actions,
-  .detail-view--catalogue-open > .shared-commit-sheet,
-  .detail-view--catalogue-open > .publication-result,
-  .detail-view--catalogue-open .build-validation,
-  .detail-view--catalogue-open .workspace-switcher,
-  .detail-view--catalogue-open .authoring-bar-section .workspace-heading,
-  .detail-view--catalogue-open .bar-keyboard-hint { display: none; }
-  .detail-view--catalogue-open .authoring-scroll { padding: var(--ui-space-2); }
-  .detail-view--catalogue-open .authoring-bar-section {
-    margin: calc(var(--ui-space-2) * -1) calc(var(--ui-space-2) * -1) 0;
-    padding: var(--ui-space-2);
-  }
-  .detail-view--catalogue-open .catalogue-workspace {
-    padding: var(--ui-space-2);
-    border-width: 0;
-  }
-  .detail-view--catalogue-open .catalogue-workspace .workspace-heading p { display: none; }
-}
-
-@media (pointer: coarse) {
-  .catalogue-drag-handle,
-  .authoring-bar .skill {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }

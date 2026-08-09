@@ -7,7 +7,6 @@ import {
   watch,
 } from "vue";
 import { PROFESSIONS } from "../../../../src/shared/builds/heroes";
-import type { SkillPlacementResolution } from "../../../../src/shared/builds/authoring";
 import { encodeSkillTemplate } from "../../../../src/shared/builds/skill-template";
 import type { Profession, SkillId } from "../../../../src/shared/builds/library";
 import type { BuildProblem } from "../../../../src/shared/builds/validate";
@@ -22,7 +21,8 @@ import SkillBar from "./SkillBar.vue";
 import SkillCatalogue from "./SkillCatalogue.vue";
 import TagEditor from "./TagEditor.vue";
 import { navigateTabs } from "../tab-keyboard";
-import type { SkillDropPreview } from "../skill-drop";
+import { presentSkillPlacement } from "../skill-drop";
+import { useSkillDragSession } from "../use-skill-drag-session";
 
 const props = withDefaults(defineProps<{
   build: Build;
@@ -49,11 +49,21 @@ const exporting = ref(false);
 const exportProblem = ref("");
 const exportStatus = ref("");
 const exportCodeInput = ref<HTMLTextAreaElement | null>(null);
-const dropPreview = ref<SkillDropPreview | null>(null);
 const placementStatus = ref<{
   text: string;
   tone: "success" | "warning" | "error";
 } | null>(null);
+const dragSession = useSkillDragSession({
+  name: (skill) => props.controller.skills.get(skill).name,
+  previewPlacement: (skill, target) => presentSkillPlacement(
+    skill,
+    editor.previewSkillPlacement(target, skill, props.controller.skills),
+    props.controller.skills,
+  ).preview,
+  place: (skill, target) => placeSkill(target, skill),
+  reorder: editor.moveSkill,
+  clearFeedback: () => { placementStatus.value = null; },
+});
 const catalogueOpen = computed(() =>
   view.value === "build"
   && workspace.value === "skills"
@@ -74,7 +84,7 @@ watch(
     exporting.value = false;
     exportProblem.value = "";
     exportStatus.value = "";
-    dropPreview.value = null;
+    dragSession.cancel();
     placementStatus.value = null;
   },
 );
@@ -152,117 +162,13 @@ function closeCatalogue(): void {
   });
 }
 
-function dropPreviewFor(
-  skill: SkillId,
-  resolution: SkillPlacementResolution,
-): SkillDropPreview {
-  switch (resolution.outcome) {
-    case "place":
-      return {
-        skill,
-        target: resolution.target,
-        outcome: resolution.outcome,
-        affectedSlots: [],
-        label: `Place in ${resolution.target + 1}`,
-      };
-    case "replace-elite":
-      return {
-        skill,
-        target: resolution.target,
-        outcome: resolution.outcome,
-        affectedSlots: resolution.replaced.map(({ slot }) => slot),
-        label: `Replace elite in ${resolution.target + 1}`,
-      };
-    case "already-used":
-      return {
-        skill,
-        target: resolution.target,
-        outcome: resolution.outcome,
-        affectedSlots: [resolution.existingSlot],
-        label: `Already used in ${resolution.existingSlot + 1}`,
-      };
-    case "unavailable":
-      return {
-        skill,
-        target: resolution.target,
-        outcome: resolution.outcome,
-        affectedSlots: [],
-        label: "Skill data unavailable",
-      };
-  }
-}
-
-function placementMessage(resolution: SkillPlacementResolution, skill: SkillId): void {
-  const name = props.controller.skills.get(skill).name;
-  switch (resolution.outcome) {
-    case "place":
-      placementStatus.value = {
-        text: `${name} placed in slot ${resolution.target + 1}.`,
-        tone: "success",
-      };
-      break;
-    case "replace-elite": {
-      const replaced = resolution.replaced
-        .map(({ skill: replacedSkill, slot }) =>
-          `${props.controller.skills.get(replacedSkill).name} in slot ${slot + 1}`)
-        .join(" and ");
-      placementStatus.value = {
-        text: `${name} placed in slot ${resolution.target + 1}, replacing ${replaced}.`,
-        tone: "success",
-      };
-      break;
-    }
-    case "already-used":
-      placementStatus.value = {
-        text: `${name} is already used in slot ${resolution.existingSlot + 1}.`,
-        tone: "warning",
-      };
-      break;
-    case "unavailable":
-      placementStatus.value = {
-        text: `${name} cannot be placed because its skill data is unavailable.`,
-        tone: "error",
-      };
-      break;
-  }
-}
-
-function placeDraggedSkill(slot: number, skill: SkillId): void {
-  placementMessage(editor.placeSkill(slot, skill, props.controller.skills), skill);
-}
-
-function startSkillDrag(skill: SkillId): void {
-  placementStatus.value = null;
-  dropPreview.value = {
+function placeSkill(slot: number, skill: SkillId): void {
+  const resolution = editor.placeSkill(slot, skill, props.controller.skills);
+  placementStatus.value = presentSkillPlacement(
     skill,
-    target: null,
-    outcome: "pending",
-    affectedSlots: [],
-    label: "Choose a skill slot",
-  };
-}
-
-function previewSkillDrop(slot: number | null): void {
-  const skill = dropPreview.value?.skill;
-  if (skill === undefined) return;
-  if (slot === null) {
-    dropPreview.value = {
-      skill,
-      target: null,
-      outcome: "pending",
-      affectedSlots: [],
-      label: "Choose a skill slot",
-    };
-    return;
-  }
-  dropPreview.value = dropPreviewFor(
-    skill,
-    editor.previewSkillPlacement(slot, skill, props.controller.skills),
-  );
-}
-
-function finishSkillDrag(): void {
-  dropPreview.value = null;
+    resolution,
+    props.controller.skills,
+  ).completion;
 }
 
 function problemText(problem: BuildProblem): string {
@@ -340,7 +246,7 @@ defineExpose({
 <template>
   <article
     class="detail-view build-authoring"
-    :class="{ 'detail-view--catalogue-open': catalogueOpen }"
+    :data-catalogue-open="catalogueOpen ? '' : undefined"
     aria-label="Build editor"
   >
     <header class="detail-header authoring-header">
@@ -410,7 +316,6 @@ defineExpose({
       <div
         id="build-view-panel"
         class="authoring-scroll"
-        :class="{ 'authoring-scroll--catalogue': catalogueOpen }"
         role="tabpanel"
         aria-labelledby="build-view-tab"
       >
@@ -432,7 +337,7 @@ defineExpose({
             :active-slot="editor.activeSlot.value"
             :invalid-slots="invalidSlots"
             :changed-slots="changedSlots"
-            :drop-preview="dropPreview"
+            :drag-session="dragSession"
             editable
             @select="selectSlot"
             @clear="editor.setSkill($event, null)"
@@ -506,12 +411,9 @@ defineExpose({
           :editor="editor"
           :catalogue="controller.skills"
           :allow-player-only="allowPlayerOnly"
-          :drop-preview="dropPreview"
+          :drag-session="dragSession"
           @close="closeCatalogue"
-          @drag-start="startSkillDrag"
-          @drag-over="previewSkillDrop"
-          @drag-end="finishSkillDrag"
-          @place="placeDraggedSkill"
+          @place="placeSkill"
         />
         <section
           v-else

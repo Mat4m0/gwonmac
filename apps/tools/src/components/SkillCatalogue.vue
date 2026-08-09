@@ -2,29 +2,24 @@
 import {
   computed,
   nextTick,
-  onBeforeUnmount,
   onBeforeUpdate,
-  onMounted,
   ref,
   watch,
 } from "vue";
-import type { SkillId } from "../model";
 import type { SkillCatalogue, SkillPresentation } from "../skill-catalog";
 import type { BuildDraftController } from "../use-build-draft";
-import type { SkillDropPreview } from "../skill-drop";
+import { presentSkillPlacement, type SkillPlacementPresentation } from "../skill-drop";
+import type { SkillDragSession } from "../use-skill-drag-session";
 
 const props = defineProps<{
   editor: BuildDraftController;
   catalogue: SkillCatalogue;
   allowPlayerOnly: boolean;
-  dropPreview?: SkillDropPreview | null;
+  dragSession: SkillDragSession;
 }>();
 const emit = defineEmits<{
   close: [];
-  dragStart: [skill: SkillId];
-  dragOver: [slot: number | null];
-  dragEnd: [];
-  place: [slot: number, skill: SkillId];
+  place: [slot: number, skill: SkillPresentation["id"]];
 }>();
 
 const search = ref("");
@@ -105,128 +100,30 @@ watch(results, (values) => {
     focusedResult.value = Math.min(focusedResult.value, values.length - 1);
   }
 });
-function duplicateSlot(skill: SkillPresentation): number | null {
-  const slot = props.editor.draft.value.skills.findIndex((id) => id === skill.id);
-  return slot < 0 ? null : slot;
-}
-
-function eliteSlot(skill: SkillPresentation): number | null {
-  if (!skill.elite) return null;
+function placement(skill: SkillPresentation): SkillPlacementPresentation | null {
   const active = props.editor.activeSlot.value;
-  const slot = props.editor.draft.value.skills.findIndex((id, index) =>
-    index !== active && id !== null && props.catalogue.get(id).elite
+  return active === null ? null : presentSkillPlacement(
+    skill.id,
+    props.editor.previewSkillPlacement(active, skill.id, props.catalogue),
+    props.catalogue,
   );
-  return slot < 0 ? null : slot;
 }
 
 function useSkill(skill: SkillPresentation): void {
   const slot = props.editor.activeSlot.value;
   if (slot === null) return;
+  if (placement(skill)?.blocked) {
+    inspected.value = skill;
+  }
   emit("place", slot, skill.id);
   inspected.value = skill;
-}
-
-type PointerSkillDrag = {
-  pointerId: number;
-  skill: SkillPresentation;
-  startX: number;
-  startY: number;
-  x: number;
-  y: number;
-  started: boolean;
-  target: number | null;
-  source: HTMLElement;
-};
-
-const pointerDrag = ref<PointerSkillDrag | null>(null);
-
-function slotAt(x: number, y: number): number | null {
-  const element = document.elementFromPoint(x, y)?.closest<HTMLElement>(
-    "[data-skill-bar] [data-skill-slot]",
-  );
-  const slot = Number(element?.dataset.skillSlot);
-  return Number.isInteger(slot) && slot >= 0 && slot < 8 ? slot : null;
-}
-
-function beginPointerDrag(event: PointerEvent, skill: SkillPresentation): void {
-  if (event.pointerType === "mouse" && event.button !== 0) return;
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  pointerDrag.value = {
-    pointerId: event.pointerId,
-    skill,
-    startX: event.clientX,
-    startY: event.clientY,
-    x: event.clientX,
-    y: event.clientY,
-    started: false,
-    target: null,
-    source: event.currentTarget as HTMLElement,
-  };
-}
-
-function movePointerDrag(event: PointerEvent): void {
-  const drag = pointerDrag.value;
-  if (!drag || drag.pointerId !== event.pointerId) return;
-  if (
-    !drag.started
-    && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5
-  ) return;
-  event.preventDefault();
-  if (!drag.started) {
-    drag.started = true;
-    emit("dragStart", drag.skill.id);
-  }
-  drag.x = event.clientX;
-  drag.y = event.clientY;
-  const target = slotAt(event.clientX, event.clientY);
-  if (target !== drag.target) {
-    drag.target = target;
-    emit("dragOver", target);
-  }
-}
-
-function finishPointerDrag(event: PointerEvent, place: boolean): void {
-  const drag = pointerDrag.value;
-  if (!drag || drag.pointerId !== event.pointerId) return;
-  const target = event.currentTarget as HTMLElement;
-  const started = drag.started;
-  if (place && started && drag.target !== null) {
-    emit("place", drag.target, drag.skill.id);
-  }
-  pointerDrag.value = null;
-  if (started) {
-    emit("dragOver", null);
-    emit("dragEnd");
-  }
-  if (target.hasPointerCapture(event.pointerId)) {
-    target.releasePointerCapture(event.pointerId);
-  }
-}
-
-function cancelPointerDrag(): boolean {
-  const drag = pointerDrag.value;
-  if (!drag?.started) return false;
-  pointerDrag.value = null;
-  emit("dragOver", null);
-  emit("dragEnd");
-  if (drag.source.hasPointerCapture(drag.pointerId)) {
-    drag.source.releasePointerCapture(drag.pointerId);
-  }
-  return true;
 }
 
 function closeOrCancel(event: KeyboardEvent): void {
   event.preventDefault();
   event.stopPropagation();
-  if (!cancelPointerDrag()) emit("close");
+  if (!props.dragSession.cancel()) emit("close");
 }
-
-function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape") closeOrCancel(event);
-}
-
-onMounted(() => window.addEventListener("keydown", onWindowKeydown));
-onBeforeUnmount(() => window.removeEventListener("keydown", onWindowKeydown));
 
 function focusResult(index: number): void {
   const buttons = resultButtons.value;
@@ -353,8 +250,8 @@ function hideBrokenIcon(event: Event): void {
           role="option"
           :aria-selected="inspected?.id === skill.id"
           :tabindex="focusedResult === index || (focusedResult === null && index === 0) ? 0 : -1"
-          :aria-disabled="duplicateSlot(skill) !== null"
-          :data-unavailable="duplicateSlot(skill) !== null ? '' : undefined"
+          :aria-disabled="placement(skill)?.blocked || undefined"
+          :data-unavailable="placement(skill)?.blocked ? '' : undefined"
           @focus="focusedResult = index; inspected = skill"
           @click="inspected = skill"
           @dblclick="useSkill(skill)"
@@ -365,13 +262,13 @@ function hideBrokenIcon(event: Event): void {
             :data-elite="skill.elite ? '' : undefined"
             :data-profession="skill.profession"
             :data-icon-missing="skill.iconUrl ? undefined : ''"
-            :data-pointer-dragging="pointerDrag?.skill.id === skill.id ? '' : undefined"
+            :data-pointer-dragging="dragSession.active.value?.source.mode === 'catalogue' && dragSession.active.value.source.skill === skill.id && dragSession.active.value.started ? '' : undefined"
             :title="`Drag ${skill.name} to a skill slot`"
-            @pointerdown="beginPointerDrag($event, skill)"
-            @pointermove="movePointerDrag"
-            @pointerup="finishPointerDrag($event, true)"
-            @pointercancel="finishPointerDrag($event, false)"
-            @lostpointercapture="finishPointerDrag($event, false)"
+            @pointerdown="dragSession.begin($event, { mode: 'catalogue', skill: skill.id })"
+            @pointermove="dragSession.move($event)"
+            @pointerup="dragSession.finish($event, true)"
+            @pointercancel="dragSession.finish($event, false)"
+            @lostpointercapture="dragSession.finish($event, false)"
           >
             <img
               v-if="skill.iconUrl"
@@ -399,8 +296,8 @@ function hideBrokenIcon(event: Event): void {
             <small v-else-if="skill.adrenalineCost">{{ skill.adrenalineCost }}a</small>
             <small v-if="skill.activationSeconds">{{ skill.activationSeconds }}s cast</small>
             <small v-if="skill.rechargeSeconds">{{ skill.rechargeSeconds }}s recharge</small>
-            <small v-if="duplicateSlot(skill) !== null">
-              Slot {{ (duplicateSlot(skill) ?? 0) + 1 }}
+            <small v-if="placement(skill)?.blocked">
+              {{ placement(skill)?.actionLabel }}
             </small>
           </span>
         </button>
@@ -461,20 +358,16 @@ function hideBrokenIcon(event: Event): void {
           <p v-else class="description-unavailable">
             Description is unavailable from this installed client.
           </p>
-          <p v-if="duplicateSlot(inspected) !== null" class="inspector-warning">
-            Already used in slot {{ (duplicateSlot(inspected) ?? 0) + 1 }}.
-          </p>
-          <p v-else-if="eliteSlot(inspected) !== null" class="inspector-warning">
-            This replaces {{ catalogue.get(editor.draft.value.skills[eliteSlot(inspected)!] as SkillId).name }}
-            in slot {{ (eliteSlot(inspected) ?? 0) + 1 }}.
+          <p v-if="placement(inspected)?.explanation" class="inspector-warning">
+            {{ placement(inspected)?.explanation }}
           </p>
           <button
             class="ui-button"
             data-variant="primary"
-            :disabled="duplicateSlot(inspected) !== null"
+            :aria-disabled="placement(inspected)?.blocked || undefined"
             @click="useSkill(inspected)"
           >
-            {{ eliteSlot(inspected) !== null ? "Replace current elite" : `Use in slot ${(editor.activeSlot.value ?? 0) + 1}` }}
+            {{ placement(inspected)?.actionLabel }}
           </button>
           <button class="ui-link" @click="clear">Clear slot</button>
         </template>
@@ -485,34 +378,34 @@ function hideBrokenIcon(event: Event): void {
       </aside>
     </div>
     <div
-      v-if="pointerDrag?.started"
+      v-if="dragSession.active.value?.started && dragSession.active.value.source.mode === 'catalogue'"
       class="catalogue-pointer-preview"
       :style="{
-        left: `${pointerDrag.x + 14}px`,
-        top: `${pointerDrag.y + 14}px`,
+        left: `${dragSession.active.value.x + 14}px`,
+        top: `${dragSession.active.value.y + 14}px`,
       }"
       aria-hidden="true"
     >
         <span
           class="ui-slot skill"
-          :data-elite="pointerDrag.skill.elite ? '' : undefined"
-          :data-profession="pointerDrag.skill.profession"
-          :data-icon-missing="pointerDrag.skill.iconUrl ? undefined : ''"
+          :data-elite="catalogue.get(dragSession.active.value.source.skill).elite ? '' : undefined"
+          :data-profession="catalogue.get(dragSession.active.value.source.skill).profession"
+          :data-icon-missing="catalogue.get(dragSession.active.value.source.skill).iconUrl ? undefined : ''"
         >
           <img
-            v-if="pointerDrag.skill.iconUrl"
-            :src="pointerDrag.skill.iconUrl"
+            v-if="catalogue.get(dragSession.active.value.source.skill).iconUrl"
+            :src="catalogue.get(dragSession.active.value.source.skill).iconUrl!"
             alt=""
             draggable="false"
             @error="hideBrokenIcon"
           >
           <span class="skill-fallback" aria-hidden="true">
-            {{ pointerDrag.skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
+            {{ catalogue.get(dragSession.active.value.source.skill).name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
           </span>
         </span>
         <span class="catalogue-pointer-copy">
-          <strong>{{ pointerDrag.skill.name }}</strong>
-          <small v-if="dropPreview">{{ dropPreview.label }}</small>
+          <strong>{{ catalogue.get(dragSession.active.value.source.skill).name }}</strong>
+          <small>{{ dragSession.preview.value?.label ?? "Choose a skill slot" }}</small>
         </span>
     </div>
   </section>
