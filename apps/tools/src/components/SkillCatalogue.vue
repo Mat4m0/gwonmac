@@ -274,6 +274,13 @@ function clear(): void {
   const slot = props.editor.activeSlot.value;
   if (slot !== null) props.editor.setSkill(slot, null);
 }
+
+function hideBrokenIcon(event: Event): void {
+  const image = event.currentTarget;
+  if (!(image instanceof HTMLImageElement)) return;
+  image.closest(".skill")?.setAttribute("data-icon-missing", "");
+  image.remove();
+}
 </script>
 
 <template>
@@ -366,8 +373,15 @@ function clear(): void {
             @pointercancel="finishPointerDrag($event, false)"
             @lostpointercapture="finishPointerDrag($event, false)"
           >
-            <img v-if="skill.iconUrl" :src="skill.iconUrl" alt="" loading="lazy">
-            <span v-else class="skill-fallback" aria-hidden="true">
+            <img
+              v-if="skill.iconUrl"
+              :src="skill.iconUrl"
+              alt=""
+              draggable="false"
+              loading="lazy"
+              @error="hideBrokenIcon"
+            >
+            <span class="skill-fallback" aria-hidden="true">
               {{ skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
             </span>
           </span>
@@ -408,8 +422,14 @@ function clear(): void {
               :data-profession="inspected.profession"
               :data-icon-missing="inspected.iconUrl ? undefined : ''"
             >
-              <img v-if="inspected.iconUrl" :src="inspected.iconUrl" alt="">
-              <span v-else class="skill-fallback" aria-hidden="true">
+              <img
+                v-if="inspected.iconUrl"
+                :src="inspected.iconUrl"
+                alt=""
+                draggable="false"
+                @error="hideBrokenIcon"
+              >
+              <span class="skill-fallback" aria-hidden="true">
                 {{ inspected.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
               </span>
             </span>
@@ -479,8 +499,14 @@ function clear(): void {
           :data-profession="pointerDrag.skill.profession"
           :data-icon-missing="pointerDrag.skill.iconUrl ? undefined : ''"
         >
-          <img v-if="pointerDrag.skill.iconUrl" :src="pointerDrag.skill.iconUrl" alt="">
-          <span v-else class="skill-fallback" aria-hidden="true">
+          <img
+            v-if="pointerDrag.skill.iconUrl"
+            :src="pointerDrag.skill.iconUrl"
+            alt=""
+            draggable="false"
+            @error="hideBrokenIcon"
+          >
+          <span class="skill-fallback" aria-hidden="true">
             {{ pointerDrag.skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
           </span>
         </span>

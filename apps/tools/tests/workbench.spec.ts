@@ -86,12 +86,21 @@ test("authors, commits, reloads, discards, and undoes one atomic draft", async (
 });
 
 test("places catalogue skills and reorders slots by pointer and keyboard", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await openBuild(page);
   const slots = page.locator(".authoring-bar .skill");
   const firstTitle = await slots.nth(0).getAttribute("title");
   const secondTitle = await slots.nth(1).getAttribute("title");
+  const dragged = await slots.nth(0).elementHandle();
+  if (!dragged) throw new Error("The first skill slot must exist");
 
-  await pointerDrag(page, slots.nth(0), slots.nth(2), 0.75);
+  await pointerDrag(page, slots.nth(0), slots.nth(2), 0.75, undefined, async () => {
+    expect(await dragged.evaluate((element) => ({
+      connected: element.isConnected,
+      parent: element.parentElement?.classList.contains("skill-bar") ?? false,
+    }))).toEqual({ connected: true, parent: true });
+  });
   await expect(slots.nth(0)).toHaveAttribute("title", secondTitle!);
   await expect(slots.nth(2)).toHaveAttribute("title", firstTitle!);
   await expect(page.getByText("Skill moved from slot 1 to slot 3.")).toBeAttached();
@@ -157,6 +166,7 @@ test("places catalogue skills and reorders slots by pointer and keyboard", async
   await expect(slots.nth(6)).toHaveAttribute("title", "Cry of Frustration");
   await expect(slots.nth(0)).toHaveAttribute("title", "Empty skill slot");
   await expect(page.getByText(/replacing Word of Healing in slot 1/)).toBeVisible();
+  expect(pageErrors).toEqual([]);
 });
 
 test("exports build and team codes without hiding the manual fallback", async ({ page }) => {
@@ -287,8 +297,23 @@ test("keeps bar and commit actions reachable at short height", async ({ page }) 
   await expect(page.getByRole("button", { name: "Export build" })).toBeVisible();
 });
 
-test("Escape cancels a drag before it closes the catalogue", async ({ page }) => {
+test("Escape cancels skill movement before it closes the catalogue", async ({ page }) => {
   await openBuild(page);
+  const first = page.locator(".authoring-bar .skill").first();
+  const firstTitle = await first.getAttribute("title");
+  const firstBox = await first.boundingBox();
+  if (!firstBox) throw new Error("Skill slot must be visible");
+  await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(firstBox.x + firstBox.width + 12, firstBox.y + firstBox.height / 2, {
+    steps: 3,
+  });
+  await expect(page.locator(".skill-reorder-preview")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".skill-reorder-preview")).not.toBeAttached();
+  await expect(first).toHaveAttribute("title", firstTitle!);
+  await page.mouse.up();
+
   const origin = page.locator(".authoring-bar .skill").nth(7);
   await origin.click();
   await page.getByRole("searchbox", { name: "Search skills" }).fill("Infuse Health");

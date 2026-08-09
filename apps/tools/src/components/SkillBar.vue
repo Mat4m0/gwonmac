@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { VueDraggable, type DraggableEvent, type MoveEvent } from "vue-draggable-plus";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { SkillId } from "../model";
 import type { SkillCatalogue } from "../skill-catalog";
 import type { SkillDropPreview } from "../skill-drop";
@@ -19,22 +18,28 @@ const emit = defineEmits<{
   select: [slot: number];
   clear: [slot: number];
   move: [from: number, to: number];
-  reorder: [skills: readonly (SkillId | null)[]];
-  moved: [from: number, to: number];
 }>();
 
 const announcement = ref("");
 const moveTarget = ref<number | null>(null);
-const sortableSkills = computed({
-  get: () => [...props.skills],
-  set: (skills: (SkillId | null)[]) => {
-    if (skills.length === 8) emit("reorder", skills);
-  },
-});
-const dragAnimation = typeof window !== "undefined"
-  && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-  ? 0
-  : 180;
+const suppressClick = ref(false);
+
+type SkillDrag = {
+  pointerId: number;
+  pointerType: string;
+  from: number;
+  skill: SkillId;
+  source: HTMLElement;
+  startX: number;
+  startY: number;
+  startedAt: number;
+  x: number;
+  y: number;
+  started: boolean;
+  target: number | null;
+};
+
+const pointerDrag = ref<SkillDrag | null>(null);
 
 function announceMove(from: number, to: number): void {
   announcement.value = `Skill moved from slot ${from + 1} to slot ${to + 1}.`;
@@ -62,29 +67,129 @@ const keydown = (event: KeyboardEvent, index: number) => {
   }
 };
 
-function dragEnded(event: DraggableEvent<SkillId | null>): void {
-  moveTarget.value = null;
-  const from = event.oldIndex;
-  const to = event.newIndex;
-  if (from === undefined || to === undefined || from === to) return;
-  announceMove(from, to);
-  emit("moved", from, to);
+function slotAt(drag: SkillDrag, x: number, y: number): number | null {
+  const bar = drag.source.closest<HTMLElement>("[data-skill-bar]");
+  const element = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-skill-slot]");
+  if (!bar || !element || !bar.contains(element)) return null;
+  const slot = Number(element.dataset.skillSlot);
+  return Number.isInteger(slot) && slot >= 0 && slot < 8 ? slot : null;
 }
 
-function dragMoved(event: MoveEvent): void {
-  const related = Number(event.related.dataset.skillSlot);
-  moveTarget.value = Number.isInteger(related) ? related : null;
+function beginSkillDrag(event: PointerEvent, from: number, skill: SkillId | null): void {
+  if (!props.editable || skill === null) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  const source = event.currentTarget as HTMLElement;
+  source.setPointerCapture(event.pointerId);
+  pointerDrag.value = {
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    from,
+    skill,
+    source,
+    startX: event.clientX,
+    startY: event.clientY,
+    startedAt: performance.now(),
+    x: event.clientX,
+    y: event.clientY,
+    started: false,
+    target: null,
+  };
 }
+
+function moveSkillDrag(event: PointerEvent): void {
+  const drag = pointerDrag.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (!drag.started) {
+    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
+    if (drag.pointerType === "touch" && performance.now() - drag.startedAt < 120) return;
+    drag.started = true;
+    announcement.value = `Moving ${props.catalogue.get(drag.skill).name}. Choose a skill slot.`;
+  }
+  event.preventDefault();
+  drag.x = event.clientX;
+  drag.y = event.clientY;
+  const target = slotAt(drag, event.clientX, event.clientY);
+  if (target !== drag.target) {
+    drag.target = target;
+    moveTarget.value = target;
+  }
+}
+
+function finishSkillDrag(event: PointerEvent, place: boolean): void {
+  const drag = pointerDrag.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const started = drag.started;
+  if (place && started && drag.target !== null && drag.target !== drag.from) {
+    emit("move", drag.from, drag.target);
+    announceMove(drag.from, drag.target);
+  }
+  pointerDrag.value = null;
+  moveTarget.value = null;
+  if (started) {
+    suppressClick.value = true;
+    setTimeout(() => { suppressClick.value = false; }, 0);
+  }
+  if (drag.source.hasPointerCapture(event.pointerId)) {
+    drag.source.releasePointerCapture(event.pointerId);
+  }
+}
+
+function cancelSkillDrag(): boolean {
+  const drag = pointerDrag.value;
+  if (!drag?.started) return false;
+  pointerDrag.value = null;
+  moveTarget.value = null;
+  announcement.value = "Skill move cancelled.";
+  suppressClick.value = true;
+  setTimeout(() => { suppressClick.value = false; }, 0);
+  if (drag.source.hasPointerCapture(drag.pointerId)) {
+    drag.source.releasePointerCapture(drag.pointerId);
+  }
+  return true;
+}
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Escape" || !cancelSkillDrag()) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function selectSlot(event: MouseEvent, index: number): void {
+  if (suppressClick.value) {
+    event.preventDefault();
+    return;
+  }
+  emit("select", index);
+}
+
+onMounted(() => window.addEventListener("keydown", onWindowKeydown, true));
+onBeforeUnmount(() => window.removeEventListener("keydown", onWindowKeydown, true));
 
 const dropAnnouncement = computed(() =>
   props.dropPreview?.label
   ?? (moveTarget.value === null ? "" : `Move to ${moveTarget.value + 1}`)
 );
+
+function skillKey(skills: readonly (SkillId | null)[], index: number): string {
+  const skill = skills[index];
+  if (skill === null) return `empty-${index}`;
+  let occurrence = 0;
+  for (let before = 0; before < index; before += 1) {
+    if (skills[before] === skill) occurrence += 1;
+  }
+  return `skill-${skill}-${occurrence}`;
+}
+
+function hideBrokenIcon(event: Event): void {
+  const image = event.currentTarget;
+  if (!(image instanceof HTMLImageElement)) return;
+  image.closest(".skill")?.setAttribute("data-icon-missing", "");
+  image.remove();
+}
 </script>
 
 <template>
-  <VueDraggable
-    v-model="sortableSkills"
+  <div
     class="skill-bar"
     :class="{
       'skill-bar--compact': compact,
@@ -92,28 +197,11 @@ const dropAnnouncement = computed(() =>
     }"
     aria-label="Skill bar"
     :data-skill-bar="editable ? '' : undefined"
-    :disabled="!editable"
-    draggable=".skill--editable"
-    filter="[data-empty]"
-    :prevent-on-filter="false"
-    :animation="dragAnimation"
-    :force-fallback="true"
-    easing="cubic-bezier(0.22, 1, 0.36, 1)"
-    chosen-class="skill--chosen"
-    ghost-class="skill--ghost"
-    drag-class="skill--dragging"
-    fallback-class="skill--fallback"
-    :fallback-tolerance="4"
-    :delay="120"
-    :delay-on-touch-only="true"
-    :touch-start-threshold="4"
-    :on-move="dragMoved"
-    @end="dragEnded"
   >
     <component
       :is="editable ? 'button' : 'span'"
       v-for="(skill, index) in skills"
-      :key="`${skill ?? 'empty'}-${index}`"
+      :key="skillKey(skills, index)"
       class="ui-slot skill"
       :class="{
         'skill--editable': editable,
@@ -129,6 +217,7 @@ const dropAnnouncement = computed(() =>
       :data-icon-missing="skill !== null && !catalogue.get(skill).iconUrl ? '' : undefined"
       :data-empty="skill === null ? '' : undefined"
       :data-skill-slot="editable ? index : undefined"
+      :data-pointer-dragging="pointerDrag?.from === index && pointerDrag.started ? '' : undefined"
       :data-drop-target="dropPreview?.target === index || moveTarget === index ? '' : undefined"
       :data-drop-outcome="dropPreview?.target === index ? dropPreview.outcome : moveTarget === index ? 'move' : undefined"
       :data-drop-affected="dropPreview?.affectedSlots.includes(index) ? '' : undefined"
@@ -140,15 +229,22 @@ const dropAnnouncement = computed(() =>
         invalidSlots?.includes(index) ? 'Invalid' : null,
       ].filter(Boolean).join('. ')"
       :aria-pressed="editable ? activeSlot === index : undefined"
-      @click="editable && emit('select', index)"
+      @click="editable && selectSlot($event, index)"
       @keydown="editable && keydown($event, index)"
+      @pointerdown="beginSkillDrag($event, index, skill)"
+      @pointermove="moveSkillDrag"
+      @pointerup="finishSkillDrag($event, true)"
+      @pointercancel="finishSkillDrag($event, false)"
+      @lostpointercapture="finishSkillDrag($event, false)"
     >
       <img
         v-if="skill !== null && catalogue.get(skill).iconUrl"
         :src="catalogue.get(skill).iconUrl!"
         alt=""
+        draggable="false"
+        @error="hideBrokenIcon"
       >
-      <span v-else-if="skill !== null" class="skill-fallback" aria-hidden="true">
+      <span v-if="skill !== null" class="skill-fallback" aria-hidden="true">
         {{ catalogue.get(skill).name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
       </span>
       <span
@@ -159,5 +255,30 @@ const dropAnnouncement = computed(() =>
       <span v-if="editable" class="skill-slot-number" aria-hidden="true">{{ index + 1 }}</span>
     </component>
     <span class="ui-sr-only" aria-live="polite">{{ dropAnnouncement || announcement }}</span>
-  </VueDraggable>
+    <div
+      v-if="pointerDrag?.started"
+      class="skill-reorder-preview"
+      :style="{ left: `${pointerDrag.x + 12}px`, top: `${pointerDrag.y + 12}px` }"
+      aria-hidden="true"
+    >
+      <span
+        class="ui-slot skill"
+        :data-elite="catalogue.get(pointerDrag.skill).elite ? '' : undefined"
+        :data-profession="catalogue.get(pointerDrag.skill).profession"
+        :data-icon-missing="catalogue.get(pointerDrag.skill).iconUrl ? undefined : ''"
+      >
+        <img
+          v-if="catalogue.get(pointerDrag.skill).iconUrl"
+          :src="catalogue.get(pointerDrag.skill).iconUrl!"
+          alt=""
+          draggable="false"
+          @error="hideBrokenIcon"
+        >
+        <span class="skill-fallback">
+          {{ catalogue.get(pointerDrag.skill).name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
+        </span>
+      </span>
+      <small>{{ moveTarget === null ? "Choose a slot" : `Move to ${moveTarget + 1}` }}</small>
+    </div>
+  </div>
 </template>

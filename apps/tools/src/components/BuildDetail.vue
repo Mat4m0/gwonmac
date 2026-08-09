@@ -437,8 +437,6 @@ defineExpose({
             @select="selectSlot"
             @clear="editor.setSkill($event, null)"
             @move="editor.moveSkill"
-            @reorder="editor.reorderSkills"
-            @moved="editor.finishSkillMove"
           />
           <p class="bar-keyboard-hint">
             Drag skills onto slots; drag slots to reorder · Enter edits · Delete clears · ⌘← / ⌘→ moves
