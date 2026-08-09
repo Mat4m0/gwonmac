@@ -400,6 +400,9 @@ test.describe("renderer Tools input", () => {
       await page.keyboard.press("Escape");
       await expect(panel).toBeVisible();
       await expect(page.locator("#canvas")).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeVisible();
+      await expect(page.locator("#canvas")).toBeFocused();
     } finally {
       await closeOffline(fixture);
     }
