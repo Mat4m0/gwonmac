@@ -1,9 +1,9 @@
 /**
- * The Tools overlay: the HUD chip, and the layer a tool draws on above the game
- * canvas.
+ * The Tools overlay: the layer a tool draws on above the game canvas.
  *
- * The overlay owns the boundary and nothing else — the toggle chord, the event
- * stops, pointer-lock release, the cursor mirror, focus transfer and teardown.
+ * The overlay owns the boundary and nothing else — the toggle commands, the
+ * event stops, pointer-lock release, the cursor mirror, focus transfer and
+ * teardown.
  * It draws no panel of its own. It used to: three rows of companion state, with
  * their own titlebar, drag and placement, kept beside the mounted tool and
  * permanently hidden whenever one was mounted. Two panels arguing over one
@@ -31,68 +31,18 @@ type ToolboxState = ToolboxObservation;
 
 /**
  * Non-modal palette styling. The overlay root never intercepts the pointer;
- * only the HUD chip and whatever the tool draws are interactive surfaces, so
- * the game keeps owning every click that is not on Tools chrome. Hover/focus
- * states need real selectors, hence a stylesheet instead of per-element cssText.
+ * only what the tool draws is interactive, so the game keeps owning every
+ * click that is not on Tools chrome.
  */
 const OVERLAY_CSS = `
 #toolbox-foundation {
   position: fixed;
   inset: 0;
   z-index: 4;
-  display: grid;
-  align-content: end;
-  justify-items: end;
-  padding: 18px;
   box-sizing: border-box;
   pointer-events: none;
   color: #e8e4d8;
   font: 12px/1.45 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
-}
-/*
- * Scoped to the chip, not to the root. A bare "#toolbox-foundation button" is
- * specificity (1,0,1) and the tool mounts in light DOM inside this root, so it
- * outranked ".ui-button" (0,1,0) and dressed every button in the Tools window
- * in the overlay's chip skin -- including "cursor: inherit", over a design
- * system that deliberately says otherwise. The overlay draws one button; it
- * should style one button.
- */
-#toolbox-foundation [data-role="hud"] button {
-  pointer-events: auto;
-  padding: 4px 10px;
-  border: 1px solid #524e44;
-  border-radius: 2px;
-  background: #1d1c19;
-  color: inherit;
-  font: inherit;
-  cursor: inherit;
-  transition: background-color 80ms linear, border-color 80ms linear;
-}
-#toolbox-foundation [data-role="hud"] button:hover {
-  background: #2a2823;
-  border-color: #6b6557;
-}
-#toolbox-foundation [data-role="hud"] button:active { background: #161512; }
-#toolbox-foundation [data-role="hud"] button:focus-visible {
-  outline: 1px solid #c8aa6e;
-  outline-offset: 1px;
-}
-#toolbox-foundation [data-role="hud"] {
-  display: flex;
-  align-items: center;
-  padding: 6px 8px;
-  pointer-events: auto;
-  /* On the chip only: inherited from the root it would forbid selecting a
-     build name or a template code inside the tool, which owns that decision. */
-  user-select: none;
-  -webkit-user-select: none;
-  background: rgba(10, 10, 12, 0.82);
-  border: 1px solid #3c3a34;
-  border-radius: 3px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
-}
-@media (prefers-reduced-motion: reduce) {
-  #toolbox-foundation [data-role="hud"] button { transition: none; }
 }
 `;
 
@@ -128,9 +78,8 @@ export function createToolboxFoundation(
      * every test would then be free to certify.
      *
      * `onVisibilityChange` is how a tool that hides itself — its own close
-     * control — says so. Without it the overlay goes on believing it is open,
-     * which keeps the HUD chip hidden and spends the next toggle restoring the
-     * chip rather than reopening the tool.
+     * control — says so. Without it the overlay goes on believing it is open
+     * and the next toggle closes an already-hidden tool instead of reopening it.
      */
     mountTool: (
       host: HTMLElement,
@@ -152,17 +101,6 @@ export function createToolboxFoundation(
   root.id = "toolbox-foundation";
   root.setAttribute("aria-label", "Tools");
 
-  const hud = document.createElement("div");
-  hud.dataset.role = "hud";
-  const open = document.createElement("button");
-  open.type = "button";
-  open.textContent = "Tools";
-  open.title = "Open Tools (Command+B)";
-  open.setAttribute("aria-label", "Open Tools");
-  open.setAttribute("aria-controls", "toolbox-tool");
-  open.setAttribute("aria-expanded", "false");
-  hud.append(open);
-
   // Where the tool draws: a full-bleed layer inside the overlay root. A tool
   // brings its own window and positions it against the viewport, so it is given
   // the viewport rather than a box to escape from. Being inside the root is
@@ -171,13 +109,12 @@ export function createToolboxFoundation(
   const toolHost = document.createElement("div");
   toolHost.id = "toolbox-tool";
   toolHost.dataset.role = "tool";
-  root.append(hud, toolHost);
+  root.append(toolHost);
   parent.append(style, root);
 
-  // Everything the overlay draws is non-activating: the HUD chip and whatever
-  // the tool mounts inside it. Clicking any of it operates the control without
-  // taking the keyboard, so the game keeps receiving keys until the player
-  // clicks into something they can actually type in.
+  // Everything the tool draws is non-activating. Clicking it operates the
+  // control without taking the keyboard, so the game keeps receiving keys
+  // until the player clicks into something they can actually type in.
   const surface = createNonActivatingSurface(root, () => canvas);
 
   let tool: MountedTool | null = null;
@@ -217,17 +154,13 @@ export function createToolboxFoundation(
     overlayOpen = next;
     if (next) ensureTool();
     tool?.setVisible(next);
-    hud.hidden = next;
-    hud.style.display = next ? "none" : "flex";
-    open.setAttribute("aria-expanded", String(next));
     root.dataset.open = String(next);
     // Pointer lock still has to go: the tool is unreachable by a captured
     // cursor. The keyboard, though, stays with the game — opening Tools is not
     // a statement that you have stopped playing.
     if (next && document.pointerLockElement !== null) document.exitPointerLock();
-    // Opening hides the HUD chip, so the button that was just pressed leaves
-    // the document and takes focus with it. Say where the keyboard goes rather
-    // than assuming it stayed.
+    // A menu command can arrive while another renderer-owned control has focus.
+    // Say where the keyboard goes rather than assuming it stayed.
     surface.releaseKeyboard();
   };
 
@@ -304,7 +237,6 @@ export function createToolboxFoundation(
   };
   window.addEventListener("gw:tools-toggle", onCommand);
   window.addEventListener("keydown", onToggleChord, true);
-  open.addEventListener("click", () => setOpen(true));
 
   return {
     /**
