@@ -126,6 +126,19 @@ export function useBuildDraft(
     activeSlot.value = to;
   }
 
+  function reorderSkills(skills: readonly (SkillId | null)[]): void {
+    if (skills.length !== 8) return;
+    replace({ skills: skillBarOf((position) => skills[position] ?? null) });
+  }
+
+  function finishSkillMove(from: number, to: number): void {
+    const active = activeSlot.value;
+    if (active === null) return;
+    if (active === from) activeSlot.value = to;
+    else if (from < to && active > from && active <= to) activeSlot.value = active - 1;
+    else if (from > to && active >= to && active < from) activeSlot.value = active + 1;
+  }
+
   function adaptFromCode(code: string): boolean {
     const decoded = decodeSkillTemplate(code.trim());
     if (!decoded) return false;
@@ -185,6 +198,8 @@ export function useBuildDraft(
     setRank,
     setSkill,
     moveSkill,
+    reorderSkills,
+    finishSkillMove,
     adaptFromCode,
     requestSave,
     commit,

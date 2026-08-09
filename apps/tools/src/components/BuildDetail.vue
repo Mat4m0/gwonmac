@@ -269,9 +269,11 @@ defineExpose({
             @select="selectSlot"
             @clear="editor.setSkill($event, null)"
             @move="editor.moveSkill"
+            @reorder="editor.reorderSkills"
+            @moved="editor.finishSkillMove"
           />
           <p class="bar-keyboard-hint">
-            Enter edits · Delete clears · ⌘← / ⌘→ moves
+            Drag to reorder · Enter edits · Delete clears · ⌘← / ⌘→ moves
           </p>
         </section>
 
