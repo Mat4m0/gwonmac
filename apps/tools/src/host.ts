@@ -7,6 +7,7 @@ import {
 import {
   unavailableParty,
   type LiveParty,
+  type SkillUnlockObservation,
 } from "../../../src/shared/builds/live-party";
 import {
   ATTRIBUTES,
@@ -83,6 +84,59 @@ export interface ToolsHost {
 }
 
 const STORAGE_KEY = "gwonmac.tools.demo.library.v2";
+
+function teamApplyProbe(
+  plan: TeamApplyPlan,
+  party: LiveParty,
+  commandId: number,
+  cause: unknown,
+) {
+  const availability = (
+    skill: number | null,
+    unlocks: SkillUnlockObservation | null,
+  ) => {
+    if (skill === null) return "empty";
+    if (unlocks === null) return "unobserved";
+    if (skill >= unlocks.knownThrough) return "unknown";
+    return unlocks.unlocked.has(skillId(skill)) ? "unlocked" : "locked";
+  };
+  return Object.freeze({
+    schema: 1,
+    commandId,
+    error: cause instanceof Error ? cause.message : String(cause),
+    party: Object.freeze({
+      status: party.status,
+      playRegion: party.playRegion,
+      inOutpost: party.inOutpost,
+      partial: party.partial,
+      accountSkillsObserved: party.accountSkills !== null,
+      characterSkillsObserved: party.characterSkills !== null,
+    }),
+    members: Object.freeze(plan.members.map((member, index) => {
+      const live = member.hero === null
+        ? (index === 0 ? party.player : null)
+        : party.heroes.find((candidate) => candidate.hero === member.hero) ?? null;
+      const unlocks = member.hero === null
+        ? (index === 0 ? party.characterSkills : null)
+        : party.accountSkills;
+      const wanted = member.build?.skills.map((skill) => skill === null ? null : Number(skill))
+        ?? null;
+      return Object.freeze({
+        slot: index + 1,
+        heroId: member.hero === null ? null : Number(member.hero),
+        agentId: live?.agentId ?? null,
+        professions: member.build?.professions ?? null,
+        wantedSkills: wanted,
+        observedSkills: live?.skills?.map((skill) => skill === null ? null : Number(skill))
+          ?? null,
+        availability: wanted?.map((skill) => Object.freeze({
+          skillId: skill,
+          status: availability(skill, unlocks),
+        })) ?? null,
+      });
+    })),
+  });
+}
 
 function safeFileName(value: string): string {
   const cleaned = value
@@ -280,20 +334,29 @@ export function createNativeHost(
       }
       return publishTemplate({ name: build.name, code });
     },
-    applyTeam(plan) {
+    async applyTeam(plan) {
       if (commands === null) {
         throw new Error(applyUnavailable ?? "Applying a team is unavailable.");
       }
-      return runTeamApply(plan, {
-        commands,
-        // Read through the ref rather than captured: the overlay rewrites it on
-        // every published change, and a captured value would let the sequence
-        // confirm each step against the party as it was before it started.
-        party: () => party.value,
-        settle: () => new Promise<void>((resolve) => {
-          requestAnimationFrame(() => resolve());
-        }),
-      }, ++commandId);
+      Reflect.deleteProperty(window, "gwTeamApplyProbe");
+      const currentCommandId = ++commandId;
+      try {
+        return await runTeamApply(plan, {
+          commands,
+          // Read through the ref rather than captured: the overlay rewrites it on
+          // every published change, and a captured value would let the sequence
+          // confirm each step against the party as it was before it started.
+          party: () => party.value,
+          settle: () => new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          }),
+        }, currentCommandId);
+      } catch (cause) {
+        const probe = teamApplyProbe(plan, party.value, currentCommandId, cause);
+        Reflect.set(window, "gwTeamApplyProbe", probe);
+        console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
+        throw cause;
+      }
     },
   };
 }
