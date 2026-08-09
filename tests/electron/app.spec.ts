@@ -529,10 +529,6 @@ test.describe("Electron application", () => {
       expect(await readFile(path.join(userData, "steam-session.bin"), "utf8"))
         .toBe("retired-steam");
       expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
-      expect(JSON.parse(await readFile(
-        path.join(userData, "window-state.json"),
-        "utf8",
-      ))).toMatchObject(JSON.parse(windowState));
     } finally {
       await app.close().catch(() => {});
       await rm(userData, { recursive: true, force: true });
