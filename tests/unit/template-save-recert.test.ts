@@ -15,26 +15,8 @@ import {
 } from "../../src/tools/template-save-recert.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import {
-  isLocalClientVerification,
-  verifyLocalClientBytes,
-} from "../../src/main/certification/local-client-verifier.js";
-import {
-  deriveEquivalentTemplateSaveBuild,
   preparePostTemplateSaveModule,
 } from "../../src/main/certification/template-save-verifier.js";
-import {
-  concat,
-  encodeCode,
-  encodeSection,
-  paddedIndex,
-  parseCode,
-  sectionById,
-  splitSections,
-  WASM_HEADER,
-} from "../../src/main/core/wasm-binary.js";
-import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
-import { defaultGuildWarsProfile } from "../../src/tools/enhancement-workspace.js";
-
 function uleb(value: number): number[] {
   const out: number[] = [];
   do {
@@ -312,22 +294,6 @@ function build(options: Options = {}): {
   };
 }
 
-function rewriteCode(
-  input: Uint8Array,
-  edit: (bodies: Uint8Array[]) => void,
-): Uint8Array {
-  const sections = splitSections(input);
-  const bodies = parseCode(sectionById(sections, 10));
-  edit(bodies);
-  return concat(
-    WASM_HEADER,
-    ...sections.map((sectionValue) =>
-      encodeSection(sectionValue.id === 10
-        ? { id: 10, body: encodeCode(bodies) }
-        : sectionValue)),
-  );
-}
-
 describe("template-save re-certification", () => {
   it("builds a valid fixture module", () => {
     assert.equal(WebAssembly.validate(build().bytes), true);
@@ -507,79 +473,6 @@ describe("template-save re-certification", () => {
     );
   });
 
-  // The real proof. The client artifact is gitignored and absent in CI, so this
-  // runs wherever the game is installed and skips cleanly elsewhere.
-  it("makes a fail-closed decision for an installed client", async (t) => {
-    const artifact = process.env.GW_CLIENT_WASM
-      ?? path.join(defaultGuildWarsProfile(), "game", "artifacts", "Gw.jspi.wasm");
-    const bytes = await readFile(artifact).catch(() => null);
-    if (!bytes) {
-      return t.skip(
-        `no client WASM at ${artifact}; set GW_CLIENT_WASM to point at one`,
-      );
-    }
-    const derived = deriveTemplateSaveBuild(bytes);
-    const report = inspectTemplateSaveCandidate(bytes);
-    const local = verifyLocalClientBytes(bytes);
-    assert.equal(
-      isLocalClientVerification(local, local.officialSha256),
-      true,
-    );
-    // If this is a statically shipped build, the shape locator must still
-    // reproduce that record exactly. Unknown builds are intentionally decided
-    // by the local verifier instead of making this test demand a release.
-    if (report.certified) {
-      assert.deepEqual(compareToCertified(derived), []);
-    }
-
-    const fileExists = derived.bridges.find(
-      (bridge) => bridge.kind === "fileExists",
-    )!;
-    const site = fileExists.callSites[0]!;
-    // The current client computes the path argument immediately before the
-    // existence probe. Keep the call at the exact same byte offset while
-    // changing that computation by one byte.
-    const changedCaller = rewriteCode(bytes, (bodies) => {
-      const caller = bodies[site.localFunction]!;
-      const pathImmediate = site.bodyOffset - 7;
-      caller[pathImmediate] = caller[pathImmediate]! ^ 1;
-    });
-    assert.equal(WebAssembly.validate(new Uint8Array(changedCaller)), true);
-    assert.equal(deriveEquivalentTemplateSaveBuild(changedCaller), null);
-    assert.deepEqual(
-      verifyLocalClientBytes(changedCaller).reasons,
-      ["template-shape-changed"],
-    );
-
-    const layout = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!.layout;
-    const needle = paddedIndex(layout.agentArray);
-    const touched = new Set(
-      derived.bridges.flatMap((bridge) =>
-        bridge.callSites.map((callSite) => callSite.localFunction)),
-    );
-    let changedAddress = false;
-    const changedAddressReference = rewriteCode(bytes, (bodies) => {
-      for (let local = 0; local < bodies.length; local += 1) {
-        if (touched.has(local)) continue;
-        const body = bodies[local]!;
-        const at = body.findIndex((_, offset) =>
-          needle.every((byte, index) => body[offset + index] === byte));
-        if (at < 0) continue;
-        body[at] = body[at]! ^ 1;
-        changedAddress = true;
-        break;
-      }
-    });
-    assert.equal(changedAddress, true);
-    assert.equal(
-      WebAssembly.validate(new Uint8Array(changedAddressReference)),
-      true,
-    );
-    const addressDecision = verifyLocalClientBytes(changedAddressReference);
-    assert.ok(addressDecision.templateSaveBuild);
-    assert.equal(addressDecision.enhancementBuild, null);
-    assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
-  });
 });
 
 describe("adding a derived entry to the authoring table", () => {

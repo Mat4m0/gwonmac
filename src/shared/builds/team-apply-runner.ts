@@ -69,6 +69,14 @@ export interface TeamApplyEnvironment {
   party(): LiveParty;
   /** Resolves after roughly one published update, or a little longer. */
   settle(): Promise<void>;
+  /**
+   * Confirmation time. Production uses the real clock when this is absent;
+   * deterministic runners can advance it without waiting one wall-clock second.
+   */
+  readonly confirmationTime?: {
+    now(): number;
+    sleep(milliseconds: number): Promise<void>;
+  };
 }
 
 /** Matches GWToolbox++'s per-hero budget; a roster change is a server round trip. */
@@ -119,21 +127,26 @@ async function confirm(
   check: (party: LiveParty) => boolean,
   retry?: () => void,
 ): Promise<void> {
-  const started = Date.now();
+  const now = environment.confirmationTime?.now ?? Date.now;
+  const sleep = environment.confirmationTime?.sleep
+    ?? ((milliseconds: number) => new Promise<void>((resolve) => {
+      setTimeout(resolve, milliseconds);
+    }));
+  const started = now();
   const deadline = started + CONFIRM_MS;
   let resent = false;
   for (;;) {
     const party = writableParty(environment);
     if (check(party)) return;
-    if (Date.now() >= deadline) {
+    if (now() >= deadline) {
       throw new ApplyRefused(`${what} did not take effect`);
     }
-    if (retry && !resent && Date.now() - started >= RETRY_MS) {
+    if (retry && !resent && now() - started >= RETRY_MS) {
       resent = true;
       retry();
     }
     await environment.settle();
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    await sleep(POLL_MS);
   }
 }
 
