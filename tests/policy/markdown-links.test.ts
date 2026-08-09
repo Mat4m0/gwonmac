@@ -213,6 +213,18 @@ test("code blocks, code spans, URLs and bare anchors are not treated as links", 
   assert.deepEqual(targets, ["yes.md"]);
 });
 
+/**
+ * `plans/` is scratch by default: .gitignore ignores it and allowlists the few
+ * documents promoted into the repository. The two lists are one invariant, so
+ * a plan added to one and not the other fails here rather than shipping as an
+ * unscanned document whose links nothing checks.
+ */
+const PROMOTED_PLANS = [
+  "plans/research-tool-architecture.md",
+  "plans/build-team-plan.md",
+  "plans/memory-bug.md",
+];
+
 test("the file list covers tracked docs and excludes gitignored scratch", () => {
   const files = listMarkdownFiles(root);
 
@@ -220,16 +232,11 @@ test("the file list covers tracked docs and excludes gitignored scratch", () => 
   assert.ok(files.includes("PRODUCT.md"));
   assert.ok(files.includes("docs/process-model.md"));
   assert.ok(files.includes("plans/research-tool-architecture.md"));
+  assert.ok(files.includes("plans/build-team-plan.md"));
   assert.ok(files.includes("plans/memory-bug.md"));
   assert.ok(
     files.every((file) =>
-      (
-        !file.startsWith("plans/")
-        || [
-          "plans/research-tool-architecture.md",
-          "plans/memory-bug.md",
-        ].includes(file)
-      )
+      (!file.startsWith("plans/") || PROMOTED_PLANS.includes(file))
       && !file.startsWith("node_modules/")),
     "gitignored paths must not be scanned",
   );

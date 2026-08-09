@@ -20,7 +20,7 @@
  * decision made by verifier code it no longer contains.
  */
 import { createHash } from "node:crypto";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/contracts.js";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/enhancement-contracts.js";
 import {
   ENHANCEMENT_BUILDS,
   findEnhancementBuild,

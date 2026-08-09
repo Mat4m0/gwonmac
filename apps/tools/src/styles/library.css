@@ -1,0 +1,204 @@
+.library-pane {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
+}
+
+.library-toolbar {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-line-soft);
+  background: color-mix(in srgb, var(--ui-well-fill) 72%, transparent);
+}
+
+.create-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-space-2);
+}
+
+.create-actions--single { grid-template-columns: 1fr; }
+
+.composer-dialog {
+  display: grid;
+  width: min(460px, 100%);
+  padding: var(--ui-space-4);
+  gap: var(--ui-space-4);
+  box-shadow: var(--ui-shadow);
+}
+
+.composer-dialog header,
+.composer-dialog footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+
+.composer-dialog h2,
+.composer-dialog p {
+  margin: 0;
+}
+
+.composer-dialog p {
+  margin-top: var(--ui-space-1);
+  color: var(--ui-text-muted);
+}
+
+.composer-dialog label {
+  display: grid;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.composer-dialog label small {
+  color: var(--ui-text-faint);
+}
+
+.composer-dialog footer {
+  justify-content: flex-end;
+}
+
+.template-code {
+  font-family: var(--ui-font-mono);
+  resize: vertical;
+}
+
+.tag-filters,
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1);
+}
+
+.tag-editor {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+
+.tag-editor .ui-chip span { color: var(--ui-text-faint); }
+
+.tag-entry input {
+  width: 76px;
+  min-height: 26px;
+  padding: 3px 7px;
+}
+
+/* A filter strip that grows without limit pushes the list it filters off the
+   screen, so it is bounded — but bounded by a scroll rather than by
+   `overflow: hidden`, which cut the last row of tags in half and made a
+   reachable filter look like a rendering fault.
+
+   The height is exactly two chip rows, derived from the same tokens the chip
+   is: a round number of pixels would show a sliver of the third row, which is
+   the same "is that clipped or is that a scroll?" question in a smaller
+   font. */
+.tag-filters {
+  --tag-row: calc(var(--ui-control-height) * 0.74);
+  max-height: calc(var(--tag-row) * 2 + var(--ui-space-1));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-line) transparent;
+}
+
+.library-summary,
+.library-footer {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--ui-space-3);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+  background: color-mix(in srgb, var(--ui-well-fill) 68%, transparent);
+}
+
+.library-summary { border-bottom: 1px solid var(--ui-line-soft); }
+.library-footer { border-top: 1px solid var(--ui-line-soft); }
+
+.library-help {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.library-help summary {
+  width: max-content;
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.library-help p {
+  margin: var(--ui-space-1) 0 0;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.library-list {
+  min-height: 0;
+  flex: 1;
+  padding: var(--ui-space-2);
+  overflow: auto;
+}
+
+/* A library row carries more than a title, so it is a two-column grid rather
+   than the component's single flex line. No `width`: a variant row takes its
+   indent out of the row's own width, and pinning it to 100% made the list
+   scroll sideways. */
+.library-row {
+  display: grid;
+  min-height: 66px;
+  margin-bottom: 3px;
+  padding: var(--ui-space-2);
+  grid-template-columns: 1fr auto;
+  gap: 7px;
+}
+
+.row-title {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  gap: var(--ui-space-2);
+}
+
+.row-title i {
+  margin-right: 3px;
+  color: var(--ui-accent);
+  font-style: normal;
+}
+
+.row-title em,
+.row-meta {
+  color: var(--ui-text-faint);
+  font: var(--ui-font-size-sm) / 1.2 var(--ui-font-mono);
+  white-space: nowrap;
+}
+
+.library-row[aria-current="page"] .row-meta,
+.library-row[aria-current="page"] .row-title em {
+  color: var(--ui-text-muted);
+}
+
+.row-meta {
+  align-self: center;
+  justify-self: end;
+}
+
+/* A 24px Guild Wars skill strip is intentionally readable. In the narrow
+ * library it owns a full line; forcing its usage sentence beside it would
+ * either shrink the icons back into noise or make the pane scroll sideways. */
+.library-row .skill-bar--compact,
+.library-row:has(.skill-bar--compact) .row-meta {
+  grid-column: 1 / -1;
+}
+
+.library-row:has(.skill-bar--compact) .row-meta { justify-self: start; }

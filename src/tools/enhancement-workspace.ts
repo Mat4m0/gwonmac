@@ -24,12 +24,11 @@ import { certifyClientBuild } from "../main/certification/client-certification.j
 import { inspectEnhancementCache } from "../main/certification/client-module.js";
 import { parseSettings } from "../main/core/settings.js";
 import {
-  DEFAULT_SETTINGS,
   ENHANCEMENT_PROGRAMS,
   enhancementCapabilitiesFor,
   enhancementCapabilitiesRequested,
   type EnhancementProgram,
-} from "../shared/contracts.js";
+} from "../shared/enhancement-contracts.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
@@ -43,6 +42,7 @@ export interface EnhancementDoctorReport {
    * mutate or depend on it.
    */
   nativeCursor: boolean;
+  gwonmacTools: boolean;
   artifacts: {
     ready: boolean;
     missing: string[];
@@ -81,19 +81,19 @@ async function isFile(filename: string): Promise<boolean> {
 }
 
 /**
- * Read-only on purpose. `loadSettings` moves a corrupt file aside and writes a
- * backup; a doctor must not change the profile it is inspecting, and both of
- * its failure paths end at the defaults anyway.
+ * Core is required and therefore independent of the profile's settings file.
  */
 async function readEnhancementSettings(
   profile: string,
-): Promise<Pick<EnhancementDoctorReport, "nativeCursor">> {
+): Promise<Pick<EnhancementDoctorReport, "nativeCursor" | "gwonmacTools">> {
   try {
     const text = await readFile(path.join(profile, "settings.json"), "utf8");
-    const settings = parseSettings(JSON.parse(text));
-    return { nativeCursor: settings.nativeCursor };
+    return {
+      nativeCursor: true,
+      gwonmacTools: parseSettings(JSON.parse(text)).gwonmacTools,
+    };
   } catch {
-    return { nativeCursor: DEFAULT_SETTINGS.nativeCursor };
+    return { nativeCursor: true, gwonmacTools: false };
   }
 }
 
@@ -150,9 +150,9 @@ export async function inspectEnhancementWorkspace(
     .map((entry) => entry.name);
   const profileReady = (await isFile(path.join(profile, "settings.json")))
     || missing.length < required.length;
-  const { nativeCursor } = await readEnhancementSettings(profile);
+  const { nativeCursor, gwonmacTools } = await readEnhancementSettings(profile);
   const enhancementCapabilities = enhancementCapabilitiesFor(
-    { nativeCursor },
+    { nativeCursor, tools: gwonmacTools },
     program,
   );
   let manifest: PublishedClientManifest | null = null;
@@ -201,6 +201,7 @@ export async function inspectEnhancementWorkspace(
   return {
     profile: profileReady ? "ready" : "missing",
     nativeCursor,
+    gwonmacTools,
     artifacts: {
       ready: artifactsReady,
       missing,

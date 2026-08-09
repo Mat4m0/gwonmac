@@ -17,7 +17,6 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
-  ENHANCEMENTS,
   type AppSettings,
   type AppSettingsPatch,
 } from "../../shared/contracts.js";
@@ -26,6 +25,34 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
+
+/**
+ * A whole number inside a closed range.
+ *
+ * The bounds are the setting's meaning, not a guard: a panel below 65% opacity
+ * stops being readable over moving art, and a border above 4px stops being a
+ * border. Refusing out-of-range here keeps the renderer from having to decide
+ * what a nonsense value should look like.
+ */
+function asBoundedInteger(
+  value: unknown,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (
+    typeof value !== "number"
+    || !Number.isSafeInteger(value)
+    || value < minimum
+    || value > maximum
+  ) {
+    throw new AppError(
+      "bad_settings",
+      `settings.${field} must be an integer from ${minimum} to ${maximum}`,
+    );
+  }
+  return value;
+}
 const SETTINGS_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 const SETTINGS_FORMAT = 1;
 const CORRUPT_BACKUPS_KEPT = 3;
@@ -65,10 +92,16 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
-  for (const tool of ENHANCEMENTS) {
-    if (tool in src) {
-      out[tool] = asBool(src[tool], tool);
-    }
+  if ("uiPanelOpacity" in src) {
+    out.uiPanelOpacity = asBoundedInteger(
+      src.uiPanelOpacity,
+      "uiPanelOpacity",
+      65,
+      100,
+    );
+  }
+  for (const setting of ["gwonmacTools", "teamManagement", "targetReadout"] as const) {
+    if (setting in src) out[setting] = asBool(src[setting], setting);
   }
   if ("showDiagnostics" in src) {
     out.showDiagnostics = asBool(src.showDiagnostics, "showDiagnostics");

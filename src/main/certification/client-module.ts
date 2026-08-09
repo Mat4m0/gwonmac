@@ -12,11 +12,11 @@
  * it downstream.
  */
 import {
-  type ClientCompatibilityState,
   enhancementCapabilitiesRequested,
   ENHANCEMENT_TRANSFORM_ABI,
   type EnhancementCapabilities,
-} from "../../shared/contracts.js";
+} from "../../shared/enhancement-contracts.js";
+import type { ClientCompatibilityState } from "../../shared/contracts.js";
 import {
   buildFingerprint,
   type DerivedWasmCache,
@@ -80,8 +80,8 @@ interface PreparedWasmClientModule {
   readonly failure: ClientModulePreparationFailure | null;
   /**
    * Whether the served module carries the client's own mouse double-click
-   * flag. False means the renderer must keep synthesising touch taps, so this
-   * is the renderer's switch and not a report.
+   * flag. False means native double-click is unavailable, so this is the
+   * renderer's switch and not merely a report.
    */
   readonly nativeDoubleClick: boolean;
 }

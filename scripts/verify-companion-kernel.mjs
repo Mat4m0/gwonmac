@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { companionKernelRustcArgs } from "./build.mjs";
 import {
+  COMPANION_KERNEL_EXPORT_VALUES,
   validateCompanionKernelContract,
 } from "./companion-kernel-contract.mjs";
 import {
@@ -76,11 +77,14 @@ function exportedFunction(name) {
   if (typeof value !== "function") throw new Error(`missing function ${name}`);
   return value;
 }
-assert.equal(exportedFunction("companion_abi")(), 6);
-assert.equal(exportedFunction("companion_config_bytes")(), 196);
-assert.equal(exportedFunction("companion_snapshot_bytes")(), 64);
-assert.equal(exportedFunction("companion_cursor_bytes")(), 4_160);
-assert.equal(exportedFunction("companion_toolbox_bytes")(), 64);
+// From the contract module rather than written out here. This script needs a
+// built artifact, so it is not part of `pnpm check` and nothing ran it — which
+// is how it came to assert ABI 6 and a 196-byte config block for a kernel that
+// had moved to 7 and 296. Numbers that only one uncalled script knows are
+// numbers that go stale.
+for (const [name, expected] of Object.entries(COMPANION_KERNEL_EXPORT_VALUES)) {
+  assert.equal(exportedFunction(name)(), expected, name);
+}
 assert.equal(exportedFunction("companion_cursor_event_count")(), 0);
 assert.equal(
   exportedFunction("companion_dispatch")(0xffff_ffff, 0, 0, 0, 0, 0),

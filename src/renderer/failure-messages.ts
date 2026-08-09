@@ -98,6 +98,23 @@ export function describeSnapshotReadFailure(code: string | null): string {
 }
 
 /**
+ * A build template export that reached a folder and could not finish writing
+ * into it. Nothing was taken away from the game, so every sentence here ends at
+ * trying again rather than at recovering anything.
+ */
+const TEMPLATE_EXPORT_FAILURE: Partial<Record<ErrorCode, string>> = {
+  disk_full:
+    'There is not enough free disk space to write the build templates. Free some space, then choose Export Templates again.',
+};
+
+const TEMPLATE_EXPORT_DEFAULT =
+  'The build templates could not be written to that folder. Your saved templates are unchanged — try a different folder.';
+
+export function describeTemplateExportFailure(code: ErrorCode): string {
+  return TEMPLATE_EXPORT_FAILURE[code] ?? TEMPLATE_EXPORT_DEFAULT;
+}
+
+/**
  * The launch succeeded through a fallback the player may want to know about.
  * A `Record`, not a `Partial`: a notice code without a sentence is a compile
  * error, because a silent notice is a notice that never happened.

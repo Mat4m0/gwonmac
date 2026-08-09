@@ -59,7 +59,10 @@ const releaseNotarization = packageMode.intent === "release"
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: { unpack: "**/build/native/keychain.node" },
+    // Both are executable code that cannot run from inside the archive: a
+    // `.node` addon cannot be dlopen'd from it, and a helper cannot be spawned
+    // from it.
+    asar: { unpack: "**/build/native/{keychain.node,gw-dat-decode}" },
     name: channelConfig.productName,
     executableName: channelConfig.productName,
     appVersion: macOSVersion.appVersion,
@@ -73,6 +76,8 @@ const config: ForgeConfig = {
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
       "src/renderer/fonts/COPYING-QUALITYPE",
+      "src/native/gw-dat/vendor/COPYING-GWTOOLBOX",
+      "src/native/gw-dat/vendor/COPYING-GUILDWARSMAPBROWSER",
       // The certificate feed's pinned key. It ships inside the bundle so the
       // code signature seals it: the one decision about whom a fetched feed
       // may come from must not be editable without breaking the signature.
@@ -99,8 +104,13 @@ const config: ForgeConfig = {
       if (p.startsWith("/build/renderer/")) return p.endsWith(".d.ts");
       if (p === "/build/preload" || p === "/build/preload/preload.cjs")
         return false;
-      if (p === "/build/native" || p === "/build/native/keychain.node")
+      if (
+        p === "/build/native"
+        || p === "/build/native/keychain.node"
+        || p === "/build/native/gw-dat-decode"
+      ) {
         return false;
+      }
       return true;
     },
   },

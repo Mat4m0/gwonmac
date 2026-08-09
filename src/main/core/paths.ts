@@ -18,6 +18,7 @@ import { clientGenerationPaths } from "./client-compatibility.js";
 export interface GamePaths {
   userData: string;
   settings: string;
+  buildLibrary: string;
   windowState: string;
   diagnostics: string;
   game: string;
@@ -32,6 +33,7 @@ export interface GamePaths {
   extendedMemory: string;
   chunks: string;
   bootChunks: string;
+  skillAssets: string;
   cacheClearRequest: string;
   gameStorageClearRequest: string;
 }
@@ -42,6 +44,7 @@ export function gamePaths(userData: string): GamePaths {
   return {
     userData,
     settings: path.join(userData, "settings.json"),
+    buildLibrary: path.join(userData, "build-library.json"),
     windowState: path.join(userData, "window-state.json"),
     diagnostics: path.join(userData, "diagnostics"),
     game,
@@ -59,6 +62,10 @@ export function gamePaths(userData: string): GamePaths {
     extendedMemory: path.join(game, "extended-memory"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
+    // Icons and text decoded out of the player's own archive, under a
+    // per-client-build directory so a new build starts a new cache rather than
+    // serving last build's art. Discardable: deleting it costs a re-decode.
+    skillAssets: path.join(game, "skill-assets"),
     cacheClearRequest: path.join(userData, "clear-cache-on-start"),
     gameStorageClearRequest: path.join(userData, "clear-game-storage-on-start"),
   };
@@ -137,4 +144,31 @@ export function diagnosticFramesPath(
   sessionId: string,
 ): string {
   return path.join(diagnosticsDir, `frames-${sessionId}.bin`);
+}
+
+/**
+ * Where the application bundle keeps things, as plain values.
+ *
+ * Taken as an argument rather than read from `app` so the rule below can be
+ * executed by a test — which is the whole point of it existing once.
+ */
+export interface BundleLayout {
+  readonly packaged: boolean;
+  readonly appPath: string;
+  readonly resourcesPath: string;
+}
+
+/**
+ * A file that must live outside `app.asar`.
+ *
+ * Executable code cannot be run from inside the archive: a `.node` addon cannot
+ * be loaded from it and a helper cannot be spawned from it. Both are unpacked
+ * by the `asar.unpack` pattern in `forge.config.ts`, and both resolve here, so
+ * the packaging rule is stated once and a change that breaks it fails a test
+ * rather than only a packaged build.
+ */
+export function unpackedPath(layout: BundleLayout, relative: string): string {
+  return layout.packaged
+    ? path.join(layout.resourcesPath, "app.asar.unpacked", relative)
+    : path.join(layout.appPath, relative);
 }

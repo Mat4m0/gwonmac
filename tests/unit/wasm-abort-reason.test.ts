@@ -11,10 +11,8 @@ import {
   wasmAbortFingerprint,
 } from "../../src/renderer/wasm-abort-reason.ts";
 import { WASM_ABORT_REASON_KINDS } from "../../src/shared/diagnostics.ts";
-import {
-  asRendererFingerprint,
-  diagnosticEventRecord,
-} from "../../src/main/diagnostics/schema.ts";
+import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.ts";
+import { asRendererFingerprint } from "../../src/main/diagnostics/schema-fields.ts";
 
 describe("wasm abort reasons collapse into the closed vocabulary", () => {
   it("names the failure class of each known Emscripten abort shape", () => {

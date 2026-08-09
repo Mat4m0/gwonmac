@@ -32,6 +32,8 @@ export const EXTENDED_MEMORY_PROFILES = [
   "target",
   "cursorTarget",
   "cursorToolbox",
+  "cursorToolboxCommands",
+  "cursorTargetToolboxCommands",
 ] as const;
 export type ExtendedMemoryProfile = (typeof EXTENDED_MEMORY_PROFILES)[number];
 
@@ -54,26 +56,38 @@ export const EXTENDED_MEMORY_WASM_BUILDS: readonly ExtendedMemoryWasmBuild[] =
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursor" as const,
-      inputSha256: "2c03fb7ac535508d99bc96212d2e087d4322ef7d11cf3e0049f4019035326d50",
-      outputSha256: "c65ba2c246e45a1c013f32e51451537775bb2ae6d5a5ae3a9f3240b2594efb91",
+      inputSha256: "7b5af185fc2a6cb11ba5833f65b259ddd3069c3cdf14634f9efa14bf4b4bc8ba",
+      outputSha256: "4df4d655f9815c252e4b1b61c69c2fef38eb15df6e9e2e5453104312a3bf6f39",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "target" as const,
-      inputSha256: "e69c026e942496b2fbd6bef056fb1eeb0b6ff5e51fed02846fb37a27c53a49f7",
-      outputSha256: "da872c47a3846427a5c00685d99064a02b7ce809aca6ea2073c92d84f891d8cc",
+      inputSha256: "bb185bb54a0959517c69cc303b5a678bdbb59062d76bd4187c49f67d1d82f54d",
+      outputSha256: "6554c91398e7afe914fccddc3b9a66d441008387df258691ba36ff36843a24c4",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursorTarget" as const,
-      inputSha256: "ee642435a41221dd8d2db1dd326d650c1a86e00cd823743d867505a4246bfdc9",
-      outputSha256: "d5f4b161124cc1829c7a1f23859da2a1f9290c668c8fad1d9d316428034c1190",
+      inputSha256: "f5a72a7d6ddd55d4ff836543ccd89b5a65aacb1c1ee49968bdca8ee56a1e1cfd",
+      outputSha256: "6f0b59e1b8bfc99131ebc78a6f934cd5f45de9cd10e4336c33e81d72504ba7d6",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursorToolbox" as const,
-      inputSha256: "35d258f8373ccf3eb0321a48b98c0ace61a304683d3295b1712a5a71102d1da6",
-      outputSha256: "a0bd482dda0476f36feed1104033041057e10062775424088c4961a142fac8e1",
+      inputSha256: "045b1e3d985552f00d1ab21fe3007552df91ffbc0807d4b5dddcc54ce78dbc2a",
+      outputSha256: "be6cef0eb228023816ca85ea3a6c7ba37d69424b067325f59138548a6ac516be",
+    }),
+    Object.freeze({
+      buildId: 38_797 as const,
+      profile: "cursorToolboxCommands" as const,
+      inputSha256: "5656ee7775aa70f30b6d6d2e62cb924a2be088ffb4e359a24832056f8ab71c1c",
+      outputSha256: "72796b63dc20353701f716caca510726728178541410946e4af38567efb693e0",
+    }),
+    Object.freeze({
+      buildId: 38_797 as const,
+      profile: "cursorTargetToolboxCommands" as const,
+      inputSha256: "f968fe035db695300394fbc3600ac17fc103c94f13dde27f603cd23ecbe22b4b",
+      outputSha256: "633711c7bde61d11190f137a97f889483ca8239ec39a19c4e328cf5ab67d877b",
     }),
   ]);
 

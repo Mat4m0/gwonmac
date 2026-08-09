@@ -645,8 +645,17 @@ let clientHealthConfirmation:
   | null = null;
 let createClientHealthConfirmation:
   typeof import('./client-health.js').createClientHealthConfirmation;
+// A no-op until boot() loads the module: settings can be applied before the
+// dynamic imports resolve, and appearance is the one effect that can wait.
+let applyAppearance:
+  typeof import('./appearance.js').applyAppearance = () => {};
 let inputHost: GameInputController | null = null;
 let inputTrace: InputTrace | null = null;
+window.gwToolsSettings = () => Object.freeze({
+  enabled: appSettings?.gwonmacTools ?? false,
+  teamManagement: appSettings?.teamManagement ?? true,
+  targetReadout: appSettings?.targetReadout ?? false,
+});
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;
   const updated = { ...next };
@@ -655,6 +664,10 @@ window.gwApplySettings = (next) => {
     scheduleClientResize();
   }
   window.gwDiagnostics?.setVisible(updated.showDiagnostics);
+  applyAppearance(updated);
+  window.dispatchEvent(new CustomEvent('gw:tools-settings', {
+    detail: window.gwToolsSettings(),
+  }));
   if (inputHost) log('settings applied');
 };
 
@@ -1301,6 +1314,7 @@ function loadGlue() {
       templateSaveCompatibility,
       templateFilesystemTrace,
       clientHealth,
+      appearance,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -1316,6 +1330,7 @@ function loadGlue() {
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
+      import('./appearance.js'),
     ]);
     host = {
       ...clientExit,
@@ -1332,6 +1347,7 @@ function loadGlue() {
     };
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
+    applyAppearance = appearance.applyAppearance;
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
       native: native().sockets,
@@ -1369,6 +1385,7 @@ function loadGlue() {
       native().client.session(),
     ]);
     appSettings = settings;
+    applyAppearance(settings);
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,
       confirm: (token) => native().client.healthy(token),

@@ -48,11 +48,18 @@ import {
   WASM_GROWTH_OUTCOMES,
   WASM_MEMORY_PROBE_STATUSES,
 } from "../shared/diagnostics.js";
-import { DEFAULT_SETTINGS, EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
+import {
+  loadBuildLibrary,
+  saveBuildLibrary,
+} from "./core/build-library.js";
+import { parseBuildLibrary } from "../shared/builds/parse-library.js";
+import { isGraphicsDiagnostics, toWireSocketEvent } from "./ipc-values.js";
 import { resolveDns } from "./core/dns.js";
+import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
   MAX_TOKEN_LENGTH,
   SteamSessionCoordinator,
@@ -79,10 +86,9 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { isRendererFingerprint } from "./diagnostics/schema.js";
+import { isRendererFingerprint } from "./diagnostics/schema-fields.js";
 import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { enhancementSelectionChanged } from "./certification/enhancement-policy.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { getMainWindow, resetWindowState } from "./window.js";
@@ -97,6 +103,8 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
+  /** Whether this process admitted optional executable capability at launch. */
+  toolsCapableAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -126,16 +134,6 @@ function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
     throw new AllowlistError("invalid ipc origin");
   }
   return win;
-}
-
-function toWireSocketEvent(event: SocketEvent): SocketEvent {
-  if (event.type !== "data") return event;
-  // Structured clone requires a plain ArrayBuffer-backed view.
-  return {
-    type: "data",
-    socketId: event.socketId,
-    data: Uint8Array.from(event.data),
-  };
 }
 
 function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolean {
@@ -521,22 +519,16 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
   };
 };
 
-/**
- * Ask before restarting to change which enhancements this launch serves. The
- * module is chosen once, before the renderer exists, so a relaunch is the only
- * way a tool change can reach the session — and a relaunch closes any game in
- * progress, which is why it is gated exactly like the other two restarts here.
- */
-async function confirmEnhancementRestart(win: BrowserWindow): Promise<boolean> {
+async function confirmToolsRestart(win: BrowserWindow): Promise<boolean> {
   await resetGameInput(win);
   const { response } = await dialog.showMessageBox(win, {
     type: "warning",
-    buttons: ["Restart Now", "Cancel"],
+    buttons: ["Enable and Restart", "Cancel"],
     defaultId: 1,
     cancelId: 1,
-    message: "Restart to apply this setting?",
+    message: "Enable GWonMac Tools Beta?",
     detail:
-      "This setting is chosen once when the app starts, so it takes effect after a restart. Any game in progress closes. Downloaded game data and your saved login stay untouched.",
+      "The optional Tools capability is prepared when the app starts, so the first enable needs one restart and closes any game in progress. After that, individual tools can be changed live.",
   });
   return response === 0;
 }
@@ -666,6 +658,18 @@ export function registerIpcHandlers(ctx: IpcContext): {
       await ctx.sockets.close(socketId, win.webContents.id);
     }),
 
+    buildLibraryGet: channel(nothing, async () => {
+      let recovered = false;
+      const library = await loadBuildLibrary(paths.buildLibrary, () => {
+        recovered = true;
+      });
+      return { library, recovered };
+    }),
+
+    buildLibrarySet: channel(one(parseBuildLibrary), async (_win, library) => {
+      return saveBuildLibrary(paths.buildLibrary, library);
+    }),
+
     settingsGet: channel(nothing, async () => {
       try {
         return await ctx.getSettings();
@@ -678,19 +682,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
     settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
       try {
         const previous = await ctx.getSettings();
-        // Changing an enhancement and restarting are one action, so the two
-        // surfaces that offer the tools cannot leave a checkbox claiming
-        // something the running session is not doing. Cancelling saves
-        // nothing: the answer the player sees is the answer on disk.
-        const restart = enhancementSelectionChanged(previous, patch);
-        if (restart && !(await confirmEnhancementRestart(win))) return previous;
+        const restartForTools = patch.gwonmacTools === true
+          && !ctx.toolsCapableAtLaunch;
+        if (restartForTools && !(await confirmToolsRestart(win))) return previous;
         const saved = await ctx.updateSettings(patch);
         if (previous.dataStrategy !== saved.dataStrategy) {
           logEvent({ k: "launcher.strategyChanged",
             strategy: saved.dataStrategy ?? "unselected",
           });
         }
-        if (restart) {
+        if (restartForTools) {
           app.relaunch();
           app.quit();
         }
@@ -704,20 +705,13 @@ export function registerIpcHandlers(ctx: IpcContext): {
     settingsReset: channel(nothing, async (win) => {
       await resetGameInput(win);
       try {
-        const previous = await ctx.getSettings();
-        const restart = enhancementSelectionChanged(previous, DEFAULT_SETTINGS);
         const { response } = await dialog.showMessageBox(win, {
           type: "warning",
-          buttons: [
-            restart ? "Reset and Restart" : "Reset Launcher Settings",
-            "Cancel",
-          ],
+          buttons: ["Reset Launcher Settings", "Cancel"],
           defaultId: 1,
           cancelId: 1,
           message: "Reset launcher settings?",
-          detail: restart
-            ? "Display, controls, window size and position, and advanced settings return to their defaults, then the app restarts to apply the GWonMac Tools settings. Downloaded game data and your saved login stay untouched."
-            : "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
+          detail: "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
         });
         if (response !== 0) return null;
         const settings = await ctx.resetSettings();
@@ -730,10 +724,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
           logEvent({ k: "window.stateResetFailed" });
         }
         logEvent({ k: "settings.reset" });
-        if (restart) {
-          app.relaunch();
-          app.quit();
-        }
         return settings;
       } catch (error) {
         logEvent({ k: "settings.resetFailed", code: errorCode(error) });
@@ -889,6 +879,23 @@ export function registerIpcHandlers(ctx: IpcContext): {
       clipboard.writeText(text);
     }),
 
+    // Truncated rather than refused: a player who copied something large before
+    // reaching for Import from Clipboard should see "no build templates in
+    // that", not a failure about a size they never chose.
+    clipboardReadText: channel(nothing, () =>
+      clipboard.readText().slice(0, CLIPBOARD_TEXT_CEILING),
+    ),
+
+    templatesExport: channel(one(parseExportEntries), async (win, entries) => {
+      const result = await exportTemplates(win, entries);
+      if (result.status === "written") {
+        logEvent({ k: "templates.exported", count: result.count });
+      } else if (result.status === "failed") {
+        logEvent({ k: "templates.exportFailed", code: result.errorCode });
+      }
+      return result;
+    }),
+
     clientRetry: channel(nothing, () => ctx.retryClient()),
 
     clientHealthy: channel(asClientHealthToken, (_win, token) =>
@@ -1029,57 +1036,6 @@ export function registerSteamIpcHandlers(
 
   registerChannelDefinitions(handlers);
   return () => steam.settled();
-}
-
-function isGraphicsDiagnostics(value: unknown): value is GraphicsDiagnostics {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.userAgent === "string" &&
-    typeof record.jspi === "boolean" &&
-    typeof record.webglVersion === "string" &&
-    typeof record.renderer === "string" &&
-    typeof record.vendor === "string" &&
-    typeof record.hardwareAcceleration === "boolean" &&
-    [
-      "canvasWidth",
-      "canvasHeight",
-      "offscreenWidth",
-      "offscreenHeight",
-      "drawingBufferWidth",
-      "drawingBufferHeight",
-      "devicePixelRatio",
-      "renderScale",
-      "samples",
-    ].every(
-      (key) => typeof record[key] === "number" && Number.isFinite(record[key]),
-    ) &&
-    typeof record.antialias === "boolean" &&
-    record.userAgent.length <= 2_048 &&
-    record.webglVersion.length <= 1_024 &&
-    record.renderer.length <= 1_024 &&
-    record.vendor.length <= 1_024 &&
-    (record.canvasWidth as number) >= 0 &&
-    (record.canvasWidth as number) <= 32_768 &&
-    (record.canvasHeight as number) >= 0 &&
-    (record.canvasHeight as number) <= 32_768 &&
-    (record.offscreenWidth as number) >= 0 &&
-    (record.offscreenWidth as number) <= 32_768 &&
-    (record.offscreenHeight as number) >= 0 &&
-    (record.offscreenHeight as number) <= 32_768 &&
-    (record.drawingBufferWidth as number) >= 0 &&
-    (record.drawingBufferWidth as number) <= 32_768 &&
-    (record.drawingBufferHeight as number) >= 0 &&
-    (record.drawingBufferHeight as number) <= 32_768 &&
-    Number.isInteger(record.samples) &&
-    (record.samples as number) >= 0 &&
-    (record.samples as number) <= 64 &&
-    (record.devicePixelRatio as number) > 0 &&
-    (record.devicePixelRatio as number) <= 16 &&
-    (record.renderScale === 1 ||
-      record.renderScale === 1.5 ||
-      record.renderScale === 2)
-  );
 }
 
 export function emitSocketEvent(ownerId: number, event: SocketEvent): void {

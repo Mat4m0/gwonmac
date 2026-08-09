@@ -11,8 +11,8 @@ import type {
   ClientCompatibility,
   ClientCompatibilityState,
   ClientSession,
-  EnhancementSelection,
 } from '../shared/contracts.js';
+import type { EnhancementSelection } from '../shared/enhancement-contracts.js';
 
 /**
  * The compatibility transform repairs three call-site families, not one.
@@ -56,6 +56,7 @@ export type CompatibilityReport = {
 function selectedToolNames(selection: EnhancementSelection): string[] {
   return [
     selection.nativeCursor ? 'game cursor' : '',
+    selection.tools ? 'GWonMac Tools Beta' : '',
   ].filter(Boolean);
 }
 
@@ -79,9 +80,10 @@ export function compatibilityReport(
       state,
       degraded: true,
       enhancementDegraded,
-      summary: 'ArenaNet released a new game build — you can play it now.',
+      summary:
+        'ArenaNet updated Guild Wars. Some GWonMac features were disabled for your safety.',
       details: [
-        GAMEPLAY,
+        'You can keep playing. ' + GAMEPLAY,
         'Extras added by this app are limited until an app update confirms '
           + `this build: ${FEATURES} may not work correctly, and the game `
           + 'tools stay off.',
@@ -115,8 +117,7 @@ export function compatibilityReport(
           ]
         : [
             `${capitalise(FEATURES)} work normally.`,
-            'The game cursor and target readout are not confirmed for this '
-              + 'build, so switching either on would have no effect yet.',
+            'The Core game cursor is not confirmed for this build.',
             RECOVERY,
           ],
     };
@@ -152,7 +153,7 @@ export function compatibilityReport(
         ? `Your ${requestedTools} ${
             selectedTools.length === 1 ? 'is' : 'are'
           } available.`
-        : 'The game cursor and target readout are available under Controls.',
+        : 'The Core game cursor is available.',
     ],
   };
 }

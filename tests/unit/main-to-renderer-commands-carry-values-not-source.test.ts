@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import * as contracts from "../../src/shared/contracts.ts";
+import * as enhancementContracts from "../../src/shared/enhancement-contracts.ts";
 import {
   RENDERER_INIT_ARGUMENT,
   type GwNativeApi,
@@ -23,7 +24,10 @@ import { preloadSource as generatePreload } from "../../scripts/generate-preload
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // The preload as it ships: generated from the canonical contracts, not read
 // from a checked-in copy of them.
-const preloadSource: string = generatePreload(contracts, root);
+const preloadSource: string = generatePreload({
+  ...contracts,
+  ...enhancementContracts,
+}, root);
 // The router is a classic script — index.html loads it with a `<script>` tag
 // and it exports nothing — so the only way to drive it is to run its text. It
 // is TypeScript from P3, so the text is transpiled here under the same target
@@ -87,6 +91,11 @@ function harness(argv: string[]) {
   const flushed = new Promise<void>((resolve) => {
     releaseFlush = resolve;
   });
+  // The Toolbox overlay, present or not. It claims the toggle by cancelling
+  // the event, exactly as the real overlay does, and `tools.toggle` is refused
+  // when nothing claims it — the ordinary case on a launch without the
+  // capability.
+  let toolboxListening = false;
   const window = {
     gwNative: api,
     gwDiagnostics: {
@@ -105,14 +114,31 @@ function harness(argv: string[]) {
         return flushed;
       },
     },
+    // Enough of the real contract to be able to fail: an event that can be
+    // cancelled, and a dispatch that reports whether it was. A fake that
+    // always returns nothing would make every command look handled.
     CustomEvent: class {
       readonly type: string;
-      constructor(type: string) {
+      readonly cancelable: boolean;
+      defaultPrevented = false;
+      constructor(type: string, init?: { cancelable?: boolean }) {
         this.type = type;
+        this.cancelable = Boolean(init?.cancelable);
+      }
+      preventDefault() {
+        if (this.cancelable) this.defaultPrevented = true;
       }
     },
-    dispatchEvent(event: { type: string }) {
+    dispatchEvent(event: {
+      type: string;
+      preventDefault(): void;
+      defaultPrevented: boolean;
+    }) {
       dispatched.push(event.type);
+      if (toolboxListening && event.type === "gw:tools-toggle") {
+        event.preventDefault();
+      }
+      return !event.defaultPrevented;
     },
   };
   const context: Record<string, unknown> = { console, window };
@@ -137,6 +163,9 @@ function harness(argv: string[]) {
     acknowledgements,
     releaseFlush,
     window,
+    installToolbox: () => {
+      toolboxListening = true;
+    },
   };
 }
 
@@ -144,6 +173,7 @@ const INIT: RendererInit = {
   enhancementProgram: "toolbox-foundation",
   enhancementSelection: {
     nativeCursor: false,
+    tools: false,
   },
   templateFsTrace: true,
 };
@@ -162,6 +192,7 @@ test("a renderer with no readable init argument gets the production posture", ()
     enhancementProgram: "none",
     enhancementSelection: {
       nativeCursor: false,
+      tools: false,
     },
     templateFsTrace: false,
   };
@@ -190,17 +221,35 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
   fixture.deliver(1, { type: "input.reset" });
   fixture.deliver(2, { type: "settings.open" });
   fixture.deliver(3, { type: "diagnostics.toggle" });
+  fixture.installToolbox();
+  fixture.deliver(4, { type: "tools.toggle" });
   await new Promise(setImmediate);
   assert.deepEqual(fixture.dispatched, [
     "gw:input-reset",
     "gw:settings",
     "gw:diagnostics-toggle",
+    "gw:tools-toggle",
   ]);
   assert.deepEqual(fixture.acknowledgements(), [
     [1, "completed"],
     [2, "completed"],
     [3, "completed"],
+    [4, "completed"],
   ]);
+});
+
+test("the Tools shortcut is refused when there is no Toolbox to toggle", async () => {
+  // The capability is off on an ordinary launch, and an event nobody listens
+  // for is indistinguishable from one that worked. The command has to fail so
+  // the menu can say so rather than appear to have done something.
+  //
+  // The event is still dispatched: asking is how the router finds out. Nothing
+  // cancels it, and that uncancelled dispatch is the refusal.
+  const fixture = harness(ARGV);
+  fixture.deliver(1, { type: "tools.toggle" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.dispatched, ["gw:tools-toggle"]);
+  assert.deepEqual(fixture.acknowledgements(), [[1, "failed"]]);
 });
 
 test("a capture level crosses as a number, not as interpolated source", async () => {

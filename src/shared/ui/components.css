@@ -1,0 +1,1072 @@
+/* The component set. Every value here resolves through `tokens.css` — there is
+ * not one literal colour or corner below, and a unit test enforces it.
+ *
+ * ## Three primitives, and everything else composes them
+ *
+ * The useful finding about the client's interface was not a palette. It was
+ * that the whole thing is three surfaces, repeated:
+ *
+ *   .ui-frame   a metal-edged panel that floats over the world
+ *   .ui-well    a recess things sit *in* — lists, inputs, tracks, skill slots
+ *   .ui-raised  a control that sits *on* the panel and can be pressed
+ *
+ * Get those three right and a tab is a raised thing with two flat corners, a
+ * skill slot is a well, and a scrollbar is a well with a raised thumb in it.
+ * So most of what follows is layout: the surfaces are already decided, and no
+ * component below re-decides what "recessed" or "selected" looks like.
+ *
+ * ## Naming
+ *
+ * `ui-` prefixed and flat, matching the `--ui-` token namespace. No
+ * nesting-dependent selectors except where a component genuinely owns its
+ * children (`.ui-tabs > .ui-tab`), because a component that only works inside
+ * another component is not one.
+ *
+ * ## Consumers
+ *
+ * `src/renderer/harness.css` (the Settings dialog) and
+ * `apps/tools/src/styles.css` (the Tools workbench). Both compose these
+ * classes and add layout; neither defines a colour.
+ */
+
+/* ========================================================== primitives == */
+
+/* The metal edge.
+ *
+ * The obvious construction — `border: Npx solid transparent` with a
+ * padding-box fill over a border-box gradient — is wrong for this product, and
+ * wrong in a way that is invisible until someone drags the opacity slider. A
+ * `border-box` background layer covers the *whole* element, not just the
+ * border, so the opaque metal sits behind the panel fill as a backdrop.
+ * `--ui-panel-opacity` then changes nothing: every panel stays solid no matter
+ * what the player picks, and the one preference that exists to let them see
+ * the fight through the interface silently does nothing.
+ *
+ * So the ring is a masked pseudo-element: a gradient inset to the border
+ * width, with its own middle cut out. Costs one pseudo-element and buys a
+ * genuinely translucent panel with a gradient border that follows the radius. */
+.ui-frame {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-panel-fill);
+  box-shadow:
+    0 0 0 1px var(--ui-outline),
+    inset 0 1px 0 var(--ui-edge-inner),
+    var(--ui-frame-inset),
+    var(--ui-shadow);
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  text-shadow: var(--ui-text-shadow);
+}
+
+.ui-frame::before,
+.ui-frame::after {
+  content: "";
+  position: absolute;
+  z-index: var(--ui-z-frame);
+  pointer-events: none;
+}
+
+.ui-frame::before {
+  inset: 0;
+  padding: var(--ui-border-width);
+  border-radius: inherit;
+  background: var(--ui-frame);
+  -webkit-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  -webkit-mask-composite: xor;
+  mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  mask-composite: exclude;
+}
+
+/* The original client brightens the four caps of a panel more than its long
+ * metal runs. This separate ring creates that corner swell without putting an
+ * opaque material behind the translucent panel. */
+.ui-frame::after {
+  inset: -3px;
+  padding: 6px;
+  border-radius: var(--ui-radius-swell);
+  background: var(--ui-corner-swell);
+  -webkit-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  -webkit-mask-composite: xor;
+  mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  mask-composite: exclude;
+  filter: var(--ui-corner-shadow);
+}
+
+.ui-well {
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+}
+
+.ui-raised {
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
+  color: var(--ui-text);
+}
+
+/* The accent variant of anything raised: selected tabs, checked boxes, primary
+ * buttons. One rule, so "selected" cannot drift from widget to widget. */
+.ui-raised[aria-selected="true"],
+.ui-raised[aria-pressed="true"] {
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-accent-ink);
+}
+
+/* ============================================================== focus === */
+
+/* One rule for every control. A keyboard user on a translucent overlay needs a
+ * ring that survives whatever is moving behind it, which is why focus has its
+ * own token rather than borrowing the accent. */
+.ui-button:focus-visible,
+.ui-link:focus-visible,
+.ui-input:focus-visible,
+.ui-select:focus-visible,
+.ui-textarea:focus-visible,
+.ui-range:focus-visible,
+.ui-tab:focus-visible,
+.ui-row:focus-visible,
+.ui-rail button:focus-visible,
+.ui-slot:focus-visible,
+.ui-check input:focus-visible,
+.ui-segment label:has(input:focus-visible),
+.ui-segment button:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* Inside a segment the ring has to sit within the shared border, or it paints
+ * over the neighbouring segment. */
+.ui-segment label:has(input:focus-visible),
+.ui-segment button:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ============================================================== panel === */
+
+/* `overflow: hidden` is load-bearing, not tidiness: the head and foot paint
+ * their own fills edge to edge, and without the clip they square off the
+ * corners the frame just rounded. */
+.ui-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 9px 10px 11px;
+  overflow: visible;
+}
+
+.ui-panel-head {
+  position: relative;
+  z-index: var(--ui-z-title);
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap);
+  min-height: 38px;
+  padding: 5px 8px 5px 11px;
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius);
+  background:
+    var(--ui-title-fill) padding-box,
+    var(--ui-frame) border-box;
+  box-shadow: var(--ui-title-shadow);
+}
+
+.ui-panel-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-display);
+  font-size: var(--ui-font-size-lg);
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--ui-space-4);
+  overflow: auto;
+}
+
+.ui-panel-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  border-top: 1px solid var(--ui-line-soft);
+}
+
+/* A visible, keyboard-focusable resize corner for floating GWonMac windows.
+ * Pointer math belongs to the window owner; its affordance and hit target do
+ * not. Keeping this here gives Settings and Tools one resize language. */
+.ui-resize-grip {
+  position: absolute;
+  z-index: var(--ui-z-title);
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0 0 var(--ui-radius) 0;
+  background:
+    linear-gradient(135deg, transparent 45%, var(--ui-line) 46%, var(--ui-line) 52%, transparent 53%) 8px 8px / 8px 8px no-repeat,
+    linear-gradient(135deg, transparent 45%, var(--ui-accent) 46%, var(--ui-accent) 52%, transparent 53%) 13px 13px / 8px 8px no-repeat;
+  color: var(--ui-text);
+  cursor: nwse-resize;
+  pointer-events: auto;
+}
+
+.ui-resize-grip:hover,
+.ui-resize-grip:focus-visible {
+  filter: brightness(1.35);
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+/* ============================================================ buttons === */
+
+.ui-button {
+  display: inline-flex;
+  min-height: var(--ui-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-3);
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  /* A cursor promising text selection on a game overlay is a lie. */
+  cursor: pointer;
+  transition: filter var(--ui-duration) var(--ui-ease-out), transform 60ms linear;
+}
+
+.ui-button:hover:not(:disabled) {
+  filter: brightness(1.18);
+}
+
+.ui-button:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.86);
+}
+
+.ui-button:disabled {
+  cursor: default;
+  filter: grayscale(0.45) brightness(0.66);
+}
+
+.ui-button[data-variant="primary"] {
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
+  color: var(--ui-accent-ink);
+  font-weight: 600;
+}
+
+.ui-button[data-variant="primary"]:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+
+/* No box, no edge, until you go near it. For repeated row actions, where a
+ * bordered button per row would out-shout the content it acts on. */
+.ui-button[data-variant="quiet"] {
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised-soft);
+  color: var(--ui-text-muted);
+}
+
+.ui-button[data-variant="quiet"]:hover:not(:disabled) {
+  filter: brightness(1.18);
+  color: var(--ui-text-bright);
+}
+
+/* Destructive, and deliberately not loud: an outline rather than a fill, so a
+ * delete never competes with the primary action for the eye. */
+.ui-button[data-variant="danger"] {
+  background: transparent;
+  box-shadow: 0 0 0 1px var(--ui-danger);
+  color: var(--ui-danger);
+}
+
+.ui-button[data-variant="danger"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ui-danger) 18%, transparent);
+}
+
+/* A square button carrying only a glyph — a window close, a row overflow. */
+.ui-button[data-icon] {
+  width: var(--ui-control-height);
+  padding: 0;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-lg);
+}
+
+.ui-button[data-icon]:hover:not(:disabled) {
+  filter: brightness(1.2);
+  color: var(--ui-text-bright);
+}
+
+/* Text that acts. Underlined only on approach, so a column of these does not
+ * read as a paragraph of links. */
+.ui-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-accent) 30%, transparent);
+  text-underline-offset: 3px;
+  transition: color var(--ui-duration) var(--ui-ease-out);
+}
+
+.ui-link:hover:not(:disabled) {
+  color: var(--gw-gold-bright);
+  border-bottom-color: currentColor;
+}
+
+.ui-link:disabled {
+  color: var(--ui-text-faint);
+  cursor: default;
+  opacity: 0.55;
+  text-decoration: none;
+}
+
+/* The quiet destructive action. A "Clear Game Data…" that looked like the
+ * primary button would be the loudest thing in a pane whose actual job is to
+ * report status, so it is a line of text that happens to be red. */
+.ui-link[data-variant="danger"] {
+  color: var(--ui-danger);
+  text-decoration-color: currentColor;
+}
+
+.ui-link[data-variant="danger"]:hover:not(:disabled) {
+  color: var(--ui-danger);
+}
+
+/* ================================================= inputs and selects === */
+
+.ui-input,
+.ui-select,
+.ui-textarea {
+  min-height: var(--ui-control-height);
+  padding: 0 var(--ui-space-2);
+  border: 1px solid var(--ui-outline);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: inset 0 0 0 1px var(--ui-edge), var(--ui-shadow-inset);
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+}
+
+.ui-textarea {
+  width: 100%;
+  padding: var(--ui-space-2);
+  resize: vertical;
+}
+
+/* Room for the platform's own disclosure arrow. Without it a long option runs
+ * underneath the chevron and reads as truncated at a width that had space. */
+.ui-select {
+  appearance: none;
+  padding-right: 28px;
+  cursor: pointer;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--gw-bone) 50%) calc(100% - 15px) 52% / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--gw-bone) 50%, transparent 50%) calc(100% - 9px) 52% / 6px 6px no-repeat,
+    var(--ui-well-fill);
+}
+
+.ui-input::placeholder,
+.ui-textarea::placeholder {
+  color: var(--ui-text-faint);
+  opacity: 1;
+}
+
+/* An input that carries an adornment — a search glyph, a shortcut hint — is a
+ * well with the real input stripped bare inside it. */
+.ui-input-group {
+  display: flex;
+  min-height: var(--ui-control-height);
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-2);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  border: 1px solid var(--ui-outline);
+  box-shadow: inset 0 0 0 1px var(--ui-edge), var(--ui-shadow-inset);
+  color: var(--ui-text-faint);
+}
+
+.ui-input-group:focus-within {
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-accent-strong);
+}
+
+.ui-input-group input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+}
+
+.ui-input-group input::placeholder {
+  color: var(--ui-text-faint);
+  opacity: 1;
+}
+
+/* Label above, control below, hint under that. The hint is the reason this is
+ * a component: an explanation styled like body text competes with its label. */
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  color: var(--ui-text);
+}
+
+.ui-field-label {
+  color: var(--ui-text);
+  font-size: var(--ui-font-size);
+}
+
+.ui-field-hint {
+  max-width: 62ch;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  text-wrap: pretty;
+}
+
+/* A range is the one native control worth keeping native: the platform thumb
+ * is already the right size for a pointer and already handles keyboard. */
+.ui-range {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--ui-accent-strong);
+}
+
+.ui-range-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.ui-range-field > span {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-2);
+}
+
+.ui-range-field output {
+  color: var(--ui-text-bright);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================================================ checks and segments === */
+
+/* The box stays the platform's own. A hand-drawn checkbox here would be a
+ * hidden input plus a painted span plus a focus rule plus an indeterminate
+ * state — four things to keep right, in exchange for a tick mark two pixels
+ * different from the one macOS already draws correctly. `accent-color` is the
+ * whole customisation, and it themes. */
+.ui-check {
+  display: inline-flex;
+  min-height: var(--ui-control-height);
+  align-items: center;
+  gap: var(--ui-space-2);
+  color: var(--ui-text);
+  cursor: default;
+}
+
+.ui-check input {
+  width: calc(var(--ui-font-size) + 3px);
+  height: calc(var(--ui-font-size) + 3px);
+  flex: none;
+  margin: 0;
+  accent-color: var(--ui-accent-strong);
+}
+
+.ui-check:has(input:disabled) {
+  opacity: 0.45;
+}
+
+/* Segmented control: one choice from a short set, reading as a single object.
+ * Accepts either labelled radios or buttons, because the Settings dialog
+ * submits a form and the Tools workbench does not — the surface is the same
+ * either way, and that is the point of putting it here. */
+.ui-segment {
+  display: inline-flex;
+  /* Shrink-wraps its options even as a flex or grid child, where `inline-flex`
+   * alone would be stretched to the column and leave a dead strip of well
+   * after the last segment. */
+  width: max-content;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+  overflow: visible;
+}
+
+.ui-segment label,
+.ui-segment button {
+  position: relative;
+  display: inline-flex;
+  min-height: var(--ui-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-1);
+  padding: 0 var(--ui-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-muted);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--ui-duration) var(--ui-ease-out),
+    color var(--ui-duration) var(--ui-ease-out);
+}
+
+.ui-segment label + label,
+.ui-segment button + button {
+  border-left-color: transparent;
+}
+
+/* Segments size to their labels by default, because one long option should
+ * not stretch the short ones. `data-fill` is for a segment that owns a fixed
+ * column and wants its options to divide it evenly. */
+.ui-segment[data-fill] {
+  width: 100%;
+}
+
+.ui-segment[data-fill] label,
+.ui-segment[data-fill] button {
+  flex: 1;
+}
+
+.ui-segment label:hover,
+.ui-segment button:hover {
+  color: var(--ui-text-bright);
+  background: var(--ui-hover);
+}
+
+/* The real radio stays full size and invisible, covering its label, so a
+ * pointer, the keyboard, and a form submit all keep working. */
+.ui-segment label input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+
+.ui-segment label:has(input:checked),
+.ui-segment button[aria-selected="true"],
+.ui-segment button[aria-pressed="true"] {
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-accent-ink);
+}
+
+/* An inline count or unit inside a segment, which must dim against both the
+ * unselected and the accent-filled background. */
+.ui-segment small {
+  color: currentColor;
+  font-size: var(--ui-font-size-sm);
+  opacity: 0.72;
+}
+
+/* ================================================================ tabs == */
+
+.ui-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-edge);
+}
+
+.ui-tab {
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid transparent;
+  /* Two flat corners is what makes a tab read as attached to its panel. */
+  border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised-soft);
+  color: var(--ui-text-muted);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  cursor: pointer;
+  transition:
+    background var(--ui-duration) var(--ui-ease-out),
+    color var(--ui-duration) var(--ui-ease-out);
+}
+
+.ui-tab:hover {
+  color: var(--ui-text-bright);
+}
+
+.ui-tab[aria-selected="true"] {
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-accent-ink);
+}
+
+/* A vertical rail, for a dialog with more sections than a tab strip can hold.
+ * The selected marker is an edge rather than a fill, because a rail is
+ * navigation: it should not look like the primary action on the screen. */
+.ui-rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  padding: var(--ui-space-2) 0;
+  border-right: 1px solid var(--ui-line-soft);
+  background: var(--ui-well-fill);
+}
+
+/* A fixed 2px marker, deliberately not `--ui-border-width`: that preference is
+ * about the panel's physical edge, and a player who sets it to 0 wants a
+ * frameless panel, not a settings rail that stops showing which section they
+ * are in. */
+.ui-rail button {
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text-muted);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  cursor: default;
+  text-align: left;
+  transition:
+    background var(--ui-duration) var(--ui-ease-out),
+    color var(--ui-duration) var(--ui-ease-out);
+}
+
+.ui-rail button:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text-bright);
+}
+
+.ui-rail button[aria-selected="true"] {
+  border-left-color: var(--ui-accent);
+  background: var(--ui-selected);
+  color: var(--ui-text-bright);
+}
+
+/* =============================================================== lists == */
+
+.ui-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: var(--ui-space-2);
+  list-style: none;
+  overflow: auto;
+}
+
+.ui-row {
+  display: flex;
+  min-height: var(--ui-control-height);
+  align-items: center;
+  gap: var(--ui-gap);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-row-fill) padding-box, var(--ui-ring-quiet) border-box;
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--ui-duration) var(--ui-ease-out);
+}
+
+.ui-row:hover {
+  filter: brightness(1.25);
+}
+
+.ui-row[aria-selected="true"],
+.ui-row[aria-current="page"] {
+  border-color: transparent;
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-row-selected);
+  color: var(--ui-text-bright);
+}
+
+.ui-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-display);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An indented child row with a stem, for a variant under the build it forked
+ * from. The stem is what makes a family read as one entry with children
+ * rather than as two unrelated rows that happen to be adjacent. */
+/* `width` is deliberately not set: the row is a stretched flex or grid item,
+ * so the margin already takes the width out of it. Setting both made every
+ * list with a variant in it scroll sideways by exactly the indent. */
+.ui-row[data-child] {
+  position: relative;
+  width: auto;
+  margin-left: var(--ui-space-4);
+}
+
+.ui-row[data-child]::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--ui-space-1) * -1);
+  bottom: 50%;
+  left: calc(var(--ui-space-3) * -1);
+  width: var(--ui-space-2);
+  border-bottom: 1px solid var(--ui-line);
+  border-left: 1px solid var(--ui-line);
+  border-bottom-left-radius: var(--ui-radius-sm);
+}
+
+/* ====================================================== chips and tags == */
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  padding: 2px var(--ui-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-quiet) border-box;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  white-space: nowrap;
+}
+
+/* A chip that only reports something can be as small as its text. A chip you
+ * click is a control, and needs a hit target even at compact density — where
+ * the bare text height lands around 17px. */
+button.ui-chip {
+  min-height: calc(var(--ui-control-height) * 0.74);
+  cursor: default;
+}
+
+button.ui-chip:hover {
+  color: var(--ui-text-bright);
+}
+
+.ui-chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  color: var(--ui-accent);
+}
+
+/* Status chips are tinted rather than filled, so a row of them does not turn
+ * a list into a traffic light. */
+.ui-chip[data-level="good"] {
+  border-color: color-mix(in srgb, var(--ui-success) 45%, transparent);
+  background: color-mix(in srgb, var(--ui-success) 10%, transparent);
+  color: var(--ui-success);
+}
+
+.ui-chip[data-level="warn"] {
+  border-color: color-mix(in srgb, var(--ui-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--ui-warning) 10%, transparent);
+  color: var(--ui-warning);
+}
+
+.ui-chip[data-level="bad"] {
+  border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent);
+  background: color-mix(in srgb, var(--ui-danger) 10%, transparent);
+  color: var(--ui-danger);
+}
+
+.ui-chip[data-level="info"] {
+  border-color: color-mix(in srgb, var(--ui-info) 45%, transparent);
+  background: color-mix(in srgb, var(--ui-info) 10%, transparent);
+  color: var(--ui-info);
+}
+
+/* A key the player is meant to press. Monospace, because it is a literal. */
+.ui-kbd {
+  padding: 1px var(--ui-space-1);
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  color: var(--ui-text-faint);
+  font: var(--ui-font-size-sm) / 1.4 var(--ui-font-mono);
+}
+
+/* ========================================================= skill slots == */
+
+/* Eight of these are a build. A slot is a well, which is the whole reason the
+ * primitives exist — nothing here re-decides what recessed looks like. */
+.ui-slot {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: linear-gradient(var(--ui-profession, var(--ui-line)), var(--ui-profession, var(--ui-line))) padding-box,
+    var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-profession-ink);
+  font-size: var(--ui-font-size-sm);
+  font-weight: 700;
+  /* The icon carries the meaning; a shadow on a two-letter stand-in blurs it. */
+  text-shadow: none;
+}
+
+/* One gloss pass, rather than the client's stacked highlight and shadow. */
+.ui-slot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    var(--ui-edge-strong),
+    transparent 48%,
+    color-mix(in srgb, var(--ui-outline) 22%, transparent)
+  );
+}
+
+.ui-slot > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* An empty slot is a real, saveable state — not an error, and not a gap. */
+.ui-slot[data-empty] {
+  background: var(--ui-well-fill) padding-box, var(--ui-ring-empty) border-box;
+  box-shadow: var(--ui-shadow-inset-deep);
+  color: var(--ui-text-faint);
+}
+
+/* Guild Wars keeps the elite indicator out of the icon artwork and composes a
+ * separate golden frame around it. Two inset strokes reproduce that frame at
+ * every size without bundling a second raster asset. */
+.ui-slot[data-elite]::after {
+  z-index: var(--ui-z-readout);
+  background:
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top left / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top left / 3px 45% no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top right / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) top right / 3px 45% no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom left / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom left / 3px 45% no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom right / 45% 3px no-repeat,
+    linear-gradient(var(--ui-warning), var(--ui-warning)) bottom right / 3px 45% no-repeat;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--ui-warning) 54%, var(--ui-outline)),
+    inset 0 0 0 4px color-mix(in srgb, var(--ui-warning) 32%, transparent);
+}
+
+/* A changed slot is supporting information, not the current selection. Keep
+ * the full perimeter available for elite, active, invalid and keyboard-focus
+ * states; a corner marker is enough to make the saved-build diff scannable. */
+.ui-slot[data-changed]::before {
+  content: "";
+  position: absolute;
+  z-index: var(--ui-z-status);
+  bottom: 4px;
+  left: 4px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--ui-outline);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-warning);
+}
+
+/* A filled identity mark: a profession, a team, a hero portrait stand-in. */
+.ui-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: linear-gradient(var(--ui-profession, var(--ui-line)), var(--ui-profession, var(--ui-line))) padding-box,
+    var(--ui-ring-mark) border-box;
+  color: var(--ui-profession-ink);
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.ui-mark[data-empty] {
+  background: var(--ui-hover);
+  color: var(--ui-text-faint);
+}
+
+/* Data to token. The identity colours are declared in `tokens.css`; this is
+ * the only place that maps a profession name onto one. */
+:is([data-profession="Warrior"], [data-profession="W"]) { --ui-profession: var(--ui-profession-warrior); }
+:is([data-profession="Ranger"], [data-profession="R"]) { --ui-profession: var(--ui-profession-ranger); }
+:is([data-profession="Monk"], [data-profession="Mo"]) { --ui-profession: var(--ui-profession-monk); }
+:is([data-profession="Necromancer"], [data-profession="N"]) { --ui-profession: var(--ui-profession-necromancer); }
+:is([data-profession="Mesmer"], [data-profession="Me"]) { --ui-profession: var(--ui-profession-mesmer); }
+:is([data-profession="Elementalist"], [data-profession="E"]) { --ui-profession: var(--ui-profession-elementalist); }
+:is([data-profession="Assassin"], [data-profession="A"]) { --ui-profession: var(--ui-profession-assassin); }
+:is([data-profession="Ritualist"], [data-profession="Rt"]) { --ui-profession: var(--ui-profession-ritualist); }
+:is([data-profession="Paragon"], [data-profession="P"]) { --ui-profession: var(--ui-profession-paragon); }
+:is([data-profession="Dervish"], [data-profession="D"]) { --ui-profession: var(--ui-profession-dervish); }
+
+/* ========================================================== scrollbars == */
+
+/* A scrollbar reports position; it is not an action. An accent-filled thumb
+ * made the loudest thing on the panel a bar nobody is looking at, so the thumb
+ * is a raised surface like any other and only warms up under the pointer. */
+.ui-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scroll-thumb-color) var(--ui-scroll-track-color);
+}
+
+.ui-scroll::-webkit-scrollbar {
+  width: 13px;
+  height: 13px;
+}
+
+.ui-scroll::-webkit-scrollbar-track {
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-scroll-track);
+  box-shadow: var(--ui-scroll-track-shadow);
+}
+
+.ui-scroll::-webkit-scrollbar-thumb {
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-scroll-thumb);
+  box-shadow: 0 0 0 1px var(--gw-gilt-fall);
+}
+
+.ui-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-accent-strong);
+}
+
+/* ============================================================ feedback == */
+
+.ui-divider {
+  height: 1px;
+  margin: var(--ui-space-4) 0 var(--ui-space-3);
+  border: 0;
+  background: var(--ui-line-soft);
+}
+
+/* A determinate bar. Indeterminate progress over a game is a distraction with
+ * no information in it, so there is no indeterminate variant. */
+.ui-progress {
+  height: var(--ui-space-2);
+  overflow: hidden;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+}
+
+.ui-progress-fill {
+  width: 0;
+  height: 100%;
+  background: var(--ui-accent-fill);
+}
+
+.ui-empty {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-5) var(--ui-space-4);
+  place-items: center;
+  color: var(--ui-text-muted);
+  text-align: center;
+}
+
+.ui-empty strong {
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-lg);
+  font-weight: 600;
+}
+
+.ui-empty p {
+  max-width: 48ch;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* Feedback for a thing that already happened. Tinted by tone rather than
+ * filled, for the same reason as the chips. */
+.ui-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-success);
+  border-radius: var(--ui-radius-sm);
+  background: color-mix(in srgb, var(--ui-success) 16%, var(--ui-panel-fill));
+  box-shadow: 0 0 0 1px var(--ui-outline), var(--ui-shadow);
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size);
+}
+
+.ui-toast[data-tone="warning"] {
+  border-color: var(--ui-warning);
+  background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-panel-fill));
+}
+
+.ui-toast[data-tone="error"] {
+  border-color: var(--ui-danger);
+  background: color-mix(in srgb, var(--ui-danger) 16%, var(--ui-panel-fill));
+}
+
+/* An inline band that explains the state of the surface below it — not a
+ * toast, because it does not go away and did not follow an action. */
+.ui-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  margin: var(--ui-space-2) 0;
+  border: 1px solid var(--ui-outline);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: inset 3px 0 var(--ui-info), var(--ui-shadow-inset);
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-sm);
+}
+
+.ui-banner[data-tone="warning"] {
+  box-shadow: inset 3px 0 var(--ui-warning), var(--ui-shadow-inset);
+}
+
+/* ========================================================= utilities === */
+
+.ui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}

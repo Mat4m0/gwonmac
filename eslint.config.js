@@ -84,7 +84,7 @@ const NO_UPWARD =
   "src/main/core/** must not import upward out of src/main/core. Invert the dependency.";
 const NO_MAIN_FROM_RENDERER =
   "src/renderer/** must not import from src/main/**. Cross the boundary through the preload bridge or src/shared/**.";
-const WEBSITE_SHARED_ONLY = "apps/website/** may only reach into src/shared/**.";
+const APP_SHARED_ONLY = "apps/** may only reach into src/shared/**.";
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -214,13 +214,13 @@ export default tseslint.config(
   },
   {
     // P0.2 — the website may read canonical contracts, never main-process code.
-    files: ["apps/website/**/*.{js,mjs,ts,vue}"],
+    files: ["apps/{website,tools}/**/*.{js,mjs,ts,vue}"],
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [{ regex: INTO_APP, message: WEBSITE_SHARED_ONLY }] },
+        { patterns: [{ regex: INTO_APP, message: APP_SHARED_ONLY }] },
       ],
-      "no-restricted-syntax": ["error", ...crossings(INTO_APP, WEBSITE_SHARED_ONLY)],
+      "no-restricted-syntax": ["error", ...crossings(INTO_APP, APP_SHARED_ONLY)],
     },
   },
   {
@@ -261,6 +261,16 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/consistent-type-imports": "error",
+    },
+  },
+  {
+    // This one shared behavior is intentionally browser-only: both the native
+    // Settings surface and the Tools Vue app import it. The main-process
+    // project excludes it because that program has no DOM library, and these
+    // rules do not need type information.
+    files: ["src/shared/ui/resize.ts"],
+    languageOptions: {
+      parserOptions: { projectService: false },
     },
   },
   {
@@ -317,7 +327,11 @@ export default tseslint.config(
         Buffer: "readonly",
         URL: "readonly",
         TextEncoder: "readonly",
+        // Browser globals: these files write `page.evaluate` bodies, whose
+        // source lives here but whose execution is in the page.
         window: "readonly",
+        document: "readonly",
+        getComputedStyle: "readonly",
         performance: "readonly",
         WebAssembly: "readonly",
         setTimeout: "readonly",

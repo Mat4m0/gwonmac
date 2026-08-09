@@ -1,0 +1,181 @@
+/* GWonMac's single visual source of truth.
+ *
+ * The vocabulary is taken from the original Guild Wars client: an ivory metal
+ * ring, engraved parchment text, blue-black selected faces, graphite controls,
+ * and recessed black wells. There are deliberately no theme selectors. A
+ * component either belongs to this system or it does not.
+ *
+ * `--ui-panel-opacity` is the only player preference. It controls visibility
+ * of the game behind a panel without changing the identity or geometry of the
+ * interface. The `--ui-*` names remain the public component vocabulary; the
+ * measured Guild Wars materials below are their one implementation.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Measured materials. */
+  --gw-bone-hi: #f4efe2;
+  --gw-bone: #d9d2c0;
+  --gw-bone-mid: #a79e8b;
+  --gw-bone-lo: #6f6959;
+  --gw-gilt-cap: #e7e5d4;
+  --gw-gilt-fall: #949482;
+  --gw-gilt-run: #4b4b45;
+  --gw-gold: #e6c882;
+  --gw-gold-bright: #f6e3a8;
+  --gw-panel-rgb: 8 8 7;
+  --gw-sunk: rgb(0 0 0 / 46%);
+  --gw-sunk-deep: rgb(0 0 0 / 66%);
+  --gw-face-navy: linear-gradient(
+    180deg,
+    #1d1f22 0%,
+    #121a23 6%,
+    #152337 14%,
+    #1a2c41 22%,
+    #26374a 42%,
+    #182a3e 58%,
+    #152131 82%,
+    #1e2124 100%
+  );
+  --gw-face-graphite: linear-gradient(
+    180deg,
+    #232324 0%,
+    #191b1c 8%,
+    #353739 38%,
+    #2b2d30 55%,
+    #1f2224 90%,
+    #242427 100%
+  );
+  --gw-ring-gilt: linear-gradient(
+    90deg,
+    #e7e5d4 0%,
+    #cfcaae 5%,
+    #949482 10%,
+    #6b6c61 19%,
+    #4b4b45 32%,
+    #4b4b45 76%,
+    #5c5e56 87%,
+    #9c9b98 95%,
+    #e7e5d4 100%
+  );
+  --gw-ring-bone: linear-gradient(180deg, #f4efe2, #a79e8b 50%, #6f6959);
+  --gw-ring-gold: linear-gradient(
+    90deg,
+    #f6e3a8 0%,
+    #dcc267 8%,
+    #8a7433 30%,
+    #8a7433 70%,
+    #dcc267 92%,
+    #f6e3a8 100%
+  );
+
+  /* Fixed geometry: one coherent client-like scale. */
+  --ui-radius: 8px;
+  --ui-radius-sm: 5px;
+  --ui-radius-lg: 11px;
+  --ui-radius-swell: 14px;
+  --ui-radius-pill: 999px;
+  --ui-border-width: 2px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 24px;
+  --ui-control-height: 30px;
+  --ui-gap: 9px;
+
+  /* Dense utility typography, matching the supplied Guild Wars reference. */
+  --ui-font-size: 14px;
+  --ui-font-size-sm: 12px;
+  --ui-font-size-lg: 17px;
+  --ui-line-height: 1.4;
+  --ui-font: "Palatino Linotype", "Book Antiqua", Palatino,
+    "URW Palladio L", Georgia, serif;
+  --ui-font-display: var(--ui-font);
+  --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Ink and state. */
+  --ui-text: #ebe5d3;
+  --ui-text-bright: #f5f0e2;
+  --ui-text-muted: #b2ac9d;
+  --ui-text-faint: #948e7e;
+  --ui-accent: #e6c882;
+  --ui-accent-strong: #8a7433;
+  --ui-accent-ink: #f5f0e2;
+  --ui-focus: #f6e3a8;
+  --ui-info: #8cb6df;
+  --ui-warning: #e3a94a;
+  --ui-danger: #e0574e;
+  --ui-success: #4ad84a;
+
+  /* Surfaces. */
+  --ui-panel-opacity: 0.94;
+  --ui-panel-fill: rgb(var(--gw-panel-rgb) / var(--ui-panel-opacity));
+  --ui-raised-fill: var(--gw-face-graphite);
+  --ui-well: #090907;
+  --ui-well-fill: var(--gw-sunk);
+  --ui-hover: rgb(230 200 130 / 9%);
+  --ui-selected: #26374a;
+  --ui-line: #6f6959;
+  --ui-line-soft: rgb(217 210 192 / 18%);
+  --ui-outline: rgb(0 0 0 / 78%);
+  --ui-edge: rgb(217 210 192 / 24%);
+  --ui-edge-strong: rgb(244 239 226 / 46%);
+  --ui-edge-inner: rgb(244 239 226 / 10%);
+  --ui-shadow: 0 14px 34px rgb(0 0 0 / 62%);
+  --ui-frame-inset: inset 0 -46px 52px -44px rgb(0 0 0 / 85%);
+  --ui-shadow-inset: inset 0 2px 8px rgb(0 0 0 / 80%);
+  --ui-shadow-inset-deep: inset 0 2px 8px rgb(0 0 0 / 85%);
+  --ui-shadow-raised: 0 2px 5px rgb(0 0 0 / 70%);
+  --ui-shadow-raised-soft: 0 2px 5px rgb(0 0 0 / 60%);
+  --ui-shadow-selected: 0 1px 3px rgb(0 0 0 / 70%);
+  --ui-shadow-row-selected: 0 1px 4px rgb(0 0 0 / 70%);
+  --ui-text-shadow: 1px 1px 0 #000, -1px 1px 0 #000,
+    1px -1px 0 #000, -1px -1px 0 #000, 0 2px 4px rgb(0 0 0 / 90%);
+  --ui-frame: var(--gw-ring-bone);
+  --ui-frame-top: var(--gw-bone-hi);
+  --ui-ring-gilt: var(--gw-ring-gilt);
+  --ui-ring-gold: var(--gw-ring-gold);
+  --ui-ring-quiet: linear-gradient(180deg, rgb(217 210 192 / 34%), rgb(0 0 0 / 50%));
+  --ui-ring-empty: linear-gradient(180deg, rgb(217 210 192 / 24%), rgb(0 0 0 / 50%));
+  --ui-ring-mark: linear-gradient(180deg, rgb(255 255 255 / 50%), rgb(0 0 0 / 60%));
+  --ui-row-fill: linear-gradient(180deg, rgb(255 255 255 / 4%), rgb(0 0 0 / 20%));
+  --ui-title-fill: linear-gradient(180deg, #5d5b54 0%, #434139 26%, #2b2a24 62%, #201f1a 88%, #403e37 100%);
+  --ui-title-shadow: 0 2px 6px rgb(0 0 0 / 72%), inset 0 0 0 1px rgb(0 0 0 / 45%);
+  --ui-corner-swell: radial-gradient(58px 58px at 0 0, #fffdf6 22%, rgb(255 253 246 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 100% 0, #fffdf6 22%, rgb(255 253 246 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 0 100%, #f2ece0 22%, rgb(242 236 224 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 100% 100%, #f2ece0 22%, rgb(242 236 224 / 55%) 50%, transparent 78%);
+  --ui-corner-shadow: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
+  --ui-scroll-track-color: #090907;
+  --ui-scroll-thumb-color: #5a6d92;
+  --ui-scroll-track: linear-gradient(90deg, #000, #0d0d0b 40%, #000);
+  --ui-scroll-track-shadow: inset 0 0 0 1px rgb(159 150 128 / 35%);
+  --ui-scroll-thumb: linear-gradient(90deg, #e8eef8 0, #9fb0cd 16%, #5a6d92 40%, #2e3d5c 68%, #1b2740 86%, #46567a 100%);
+  --ui-mask-paint: linear-gradient(#000 0 0);
+  --ui-accent-fill: var(--gw-face-navy);
+
+  /* Profession identity is game data, not decoration. */
+  --ui-profession-warrior: #d99a3c;
+  --ui-profession-ranger: #7fbf4f;
+  --ui-profession-monk: #7fc9e8;
+  --ui-profession-necromancer: #4a9c68;
+  --ui-profession-mesmer: #a86fc4;
+  --ui-profession-elementalist: #d9564e;
+  --ui-profession-assassin: #9c3b4c;
+  --ui-profession-ritualist: #3fa08a;
+  --ui-profession-paragon: #dcc267;
+  --ui-profession-dervish: #5b86c4;
+  --ui-profession-ink: #100f0b;
+
+  --ui-duration: 120ms;
+  --ui-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ui-z-readout: 3;
+  --ui-z-frame: 4;
+  --ui-z-title: 5;
+  --ui-z-status: 9;
+  --ui-z-tools: 30;
+  --ui-z-toast: 40;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --ui-duration: 0ms; }
+}

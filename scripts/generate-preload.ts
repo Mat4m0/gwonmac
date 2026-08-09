@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 // preload — with the test that proves this generator asserting against the
 // source the build does not use.
 import * as contracts from "../src/shared/contracts.js";
+import * as enhancementContracts from "../src/shared/enhancement-contracts.js";
 
 export const BODY = "src/preload/preload.body.cjs";
 export const OUTPUT = "build/preload/preload.cjs";
@@ -68,7 +69,10 @@ export function preloadSource(
 
 function generate(root: string = process.cwd()) {
   mkdirSync(path.join(root, path.dirname(OUTPUT)), { recursive: true });
-  writeFileSync(path.join(root, OUTPUT), preloadSource({ ...contracts }, root));
+  writeFileSync(
+    path.join(root, OUTPUT),
+    preloadSource({ ...contracts, ...enhancementContracts }, root),
+  );
   console.log(`generated preload -> ${OUTPUT}`);
 }
 

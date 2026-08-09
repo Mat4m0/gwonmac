@@ -22,6 +22,7 @@
     return element;
   };
   const dialog = byId('settings-dialog') as HTMLDialogElement;
+  const settingsResize = byId('settings-resize') as HTMLButtonElement;
   const form = byId('settings-form') as HTMLFormElement;
   const settingsDownload = byId('settings-download-full') as HTMLButtonElement;
   const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
@@ -53,6 +54,23 @@
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
+  const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
+  const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
+  const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
+  /**
+   * The appearance slider beside the `output` that reads it back.
+   *
+   * `main` rejects an out-of-range value rather than clamping it, so the
+   * bounds live on the `input` elements in `index.html` and this table only
+   * says which setting each one writes and how it reads to a player.
+   */
+  const appearanceRanges = [
+    { name: 'uiPanelOpacity', suffix: '%' },
+  ] as const;
+  const appearanceRange = (name: string) =>
+    form.elements.namedItem(name) as HTMLInputElement | null;
+  const appearanceOutput = (name: string) =>
+    form.elements.namedItem(`${name}Value`) as HTMLOutputElement | null;
   const choiceAutoUpdates = byId('data-choice-auto-updates') as HTMLInputElement;
   let updateAction: UpdateAction | null = null;
 
@@ -83,6 +101,29 @@
   const downloadActive = () =>
     downloadPhase === 'running' || downloadPhase === 'stopping';
 
+  void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
+    installResizeGrip(settingsResize, {
+      size: () => {
+        const box = dialog.getBoundingClientRect();
+        return { width: box.width, height: box.height };
+      },
+      limits: () => ({
+        minWidth: Math.min(480, window.innerWidth - 32),
+        minHeight: Math.min(380, window.innerHeight - 32),
+        maxWidth: Math.max(280, window.innerWidth - 32),
+        maxHeight: Math.max(280, window.innerHeight - 32),
+      }),
+      resize: (width, height) => {
+        dialog.style.width = `${width}px`;
+        dialog.style.height = `${height}px`;
+      },
+      setActive: (active) => {
+        if (active) dialog.dataset.resizing = '';
+        else delete dialog.dataset.resizing;
+      },
+    });
+  });
+
   // Auto-save proof: a brief "Saved" note in the header when a change lands.
   function flashSaved() {
     if (!settingsSaved) return;
@@ -105,6 +146,22 @@
   for (const tab of railTabs) {
     tab.addEventListener('click', () => {
       if (tab.dataset.pane) selectPane(tab.dataset.pane);
+    });
+    tab.addEventListener('keydown', (event) => {
+      const vertical = window.innerWidth > 560;
+      const previous = vertical ? 'ArrowUp' : 'ArrowLeft';
+      const next = vertical ? 'ArrowDown' : 'ArrowRight';
+      if (![previous, next, 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = railTabs.indexOf(tab);
+      const target = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? railTabs.length - 1
+          : (current + (event.key === previous ? -1 : 1) + railTabs.length) % railTabs.length;
+      const destination = railTabs[target];
+      if (destination?.dataset.pane) selectPane(destination.dataset.pane);
+      destination?.focus();
     });
   }
 
@@ -193,7 +250,7 @@
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
-      toolSettings.render(saved);
+      fillForm(saved);
       window.gwApplySettings?.(saved);
       return saved;
     });
@@ -201,17 +258,29 @@
     return operation;
   }
 
-  // The tool surface is rendered from the settings main returned, never from
-  // requested state. Declining the required restart therefore restores what
-  // is actually running.
-  const toolSettings = window.gwEnhancementSettings.create({
-    form,
-    selection: window.gwNative.init.enhancementSelection,
-  });
-
   function requestUpdateCheck() {
     void updateAction?.check();
   }
+
+  // The pane reads the game's mounted template directories, so it is refreshed
+  // every time the sheet opens rather than subscribed: the mount appears when
+  // the client boots and vanishes when it dies, and neither is an event this
+  // renderer is told about.
+  let templatePane: import('./template-pane.js').TemplatePane | null = null;
+  void import('./template-pane.js')
+    .then((module) => {
+      templatePane = module.bindTemplatePane(document, {
+        exportToDisk: (entries) => window.gwNative.templates.export(entries),
+        readClipboard: () => window.gwNative.clipboard.readText(),
+      });
+      templatePane.refresh();
+    })
+    .catch(() => {
+      byId('templates-status').textContent =
+        'Build template import and export are unavailable in this build.';
+      byId('templates-actions').hidden = true;
+      byId('templates-help').hidden = true;
+    });
 
   void import('./update-action.js')
     .then((module) => {
@@ -326,8 +395,6 @@
   function patchForControl(
     control: HTMLInputElement | HTMLSelectElement,
   ): AppSettingsPatch | null {
-    const toolPatch = toolSettings.patchFor(control);
-    if (toolPatch) return toolPatch;
     switch (control.name) {
       case 'renderScale': {
         const value = Number(control.value);
@@ -335,9 +402,22 @@
           ? { renderScale: value }
           : null;
       }
+      case 'uiPanelOpacity':
+      {
+        // The slider's own min/max/step are the bounds; a value outside them
+        // is a broken control, not a choice, and `main` would refuse it.
+        const value = Number(control.value);
+        return Number.isSafeInteger(value) ? { [control.name]: value } : null;
+      }
       case 'showDiagnostics':
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
+          : null;
+      case 'gwonmacTools':
+      case 'teamManagement':
+      case 'targetReadout':
+        return control instanceof globalThis.HTMLInputElement
+          ? { [control.name]: control.checked }
           : null;
       case 'autoCheckUpdates':
         return control instanceof globalThis.HTMLInputElement
@@ -350,10 +430,27 @@
     }
   }
 
+  /** Each slider's `output`, so the number a player is dragging is readable. */
+  function showAppearanceValues(settings: AppSettings) {
+    for (const { name, suffix } of appearanceRanges) {
+      const output = appearanceOutput(name);
+      if (output) output.value = `${settings[name]}${suffix}`;
+    }
+  }
+
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
-    toolSettings.render(settings);
+    for (const { name } of appearanceRanges) {
+      const range = appearanceRange(name);
+      if (range) range.value = String(settings[name]);
+    }
+    showAppearanceValues(settings);
     showDiagnostics.checked = settings.showDiagnostics;
+    gwonmacTools.checked = settings.gwonmacTools;
+    teamManagement.checked = settings.teamManagement;
+    targetReadout.checked = settings.targetReadout;
+    teamManagement.disabled = !settings.gwonmacTools;
+    targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     for (const radio of form.querySelectorAll<HTMLInputElement>(
       'input[name="dataStrategy"]',
@@ -733,6 +830,7 @@
     feedback.textContent = '';
     selectPane(activeSettingsPane);
     settingsCache.textContent = 'Checking downloaded game data…';
+    templatePane?.refresh();
     try {
       await settingsWrite;
       currentSettings = await window.gwNative.settings.get();
@@ -760,6 +858,18 @@
     });
   });
 
+  // A slider's readout follows the thumb; the save waits for `change`, which
+  // is the drag ending. Writing on every `input` would put one settings write
+  // per pixel of travel through the IPC seam.
+  form.addEventListener('input', (event) => {
+    const control = event.target;
+    if (!(control instanceof globalThis.HTMLInputElement)) return;
+    const range = appearanceRanges.find(({ name }) => name === control.name);
+    if (!range) return;
+    const output = appearanceOutput(range.name);
+    if (output) output.value = `${control.value}${range.suffix}`;
+  });
+
   form.addEventListener('change', (event) => {
     const control = event.target;
     if (
@@ -773,14 +883,11 @@
     const nextStrategy = selectedStrategy();
     void persistSettings(patch)
       .then(async (saved) => {
-        // A tool selects which client module this launch serves, and that
-        // choice is made before the renderer exists, so saving it restarts the
-        // app. A player who declined the restart saved nothing, and the box has
-        // already gone back to what is true; the sentence explains why.
-        const toolResult = toolSettings.resultFor(control, patch, saved);
-        if (toolResult) {
-          if (toolResult.applied) flashSaved();
-          feedback.textContent = toolResult.text;
+        if (
+          patch.gwonmacTools !== undefined
+          && saved.gwonmacTools !== patch.gwonmacTools
+        ) {
+          feedback.textContent = 'GWonMac Tools Beta was not changed.';
           return;
         }
         flashSaved();

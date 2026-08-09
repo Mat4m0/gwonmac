@@ -93,6 +93,20 @@ is meant to inherit the dead ends rather than walk back into them.
 - Renderer `preRun` owns the single `app:` IDBFS mount. Restore it, create both
   template directories, and change into it before releasing the run dependency;
   relative game files must never fall back to ephemeral MEMFS.
+- That `chdir(MOUNT)` is why anything reaching the mount *after* startup
+  addresses it absolutely. `src/renderer/filesystem.ts` spells the template
+  directories mount-relative because it runs before the chdir;
+  `src/renderer/template-store.ts` spells the same two `/app:/Templates/…`
+  because it runs after, and the relative form would resolve to
+  `/app:/app:/Templates/…`. Every read finds nothing, the pane concludes the
+  game is not running, and no fake filesystem catches it — a fake treats a path
+  as an opaque key. Two tests hold this: the directories must agree across the
+  two modules, and the store's must be absolute.
+- Build templates import to the type root only. The client's scan enumerates
+  `Templates/<type>/*.txt` and never descends, so a template written into a
+  subfolder is saved, appears in an export, and is never listed in game —
+  defect 8 in `internal/upstream/upstream-defects.md`. A folder name survives
+  as part of the template name instead.
 - `dataStrategy` is the only launcher-intent state. The renderer resolves it
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.
@@ -321,7 +335,7 @@ hashes use the shipped tables. An unknown hash is checked by the bounded
 isolated process in `src/main/certification/local-client-verifier-host.ts`; only an exact
 structural proof may supply locally derived records. The template proof hashes
 the complete affected caller bodies after normalising only the selected call
-indices; the Enhancement proof requires all eight static addresses in the same
+indices; the Enhancement proof requires every certified static address in the same
 complete code-reference contexts. Any other change serves the untouched
 official module. The
 `client.buildCertification` gauge in a `.gwdiag` names it —
@@ -363,6 +377,15 @@ For enhancement work, begin with `pnpm certification doctor`, use the offline la
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
 scenario. Live enhancement runs are cached-only unless `--allow-update` is
 explicit; do not bypass that guard or use a temporary Electron profile.
+
+Certified Core (native cursor and template support) remains active whenever its
+exact build proof passes. GWonMac Tools Beta is optional and off by default; its
+first enable may restart to select the commands derivative, but individual tool
+toggles are live afterward. Optional observers and commands must be inactive in
+PvP, guild halls, and unknown regions. Team Apply is an explicit PvE-outpost
+configuration action: include the player, confirm every step from observed
+state, and expose no generic opcode command. Unsupported team fields are
+deleted from the released model rather than stored and ignored.
 
 Before finishing, check for a second source of truth, retained old paths,
 unnecessary structure, harder debugging, broken architecture decisions, and

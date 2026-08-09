@@ -16,9 +16,10 @@ describe("settings", () => {
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
-      // On since P3.34: the game's own cursor is what a Guild Wars player
-      // expects to see, so the setting is how it is switched off.
-      nativeCursor: true,
+      uiPanelOpacity: 94,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -31,7 +32,7 @@ describe("settings", () => {
     });
   });
 
-  it("gives an alpha profile the game cursor and drops retired fields", () => {
+  it("drops retired cursor fields from an alpha profile", () => {
     // A profile written before the cursor became a boolean carries
     // `cursorTheme` and a selectable input mode. They are unknown fields now,
     // so they are ignored rather than rejected: nothing else the player chose
@@ -48,10 +49,13 @@ describe("settings", () => {
       dataStrategy: "full",
     });
     assert.equal("cursorTheme" in got, false);
-    assert.equal(got.nativeCursor, true);
+    assert.equal("nativeCursor" in got, false);
     assert.deepEqual(got, {
+      uiPanelOpacity: 94,
       renderScale: 1,
-      nativeCursor: true,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -80,7 +84,15 @@ describe("settings", () => {
 
   it("rejects unknown types", () => {
     assert.throws(() => parseSettings({ renderScale: 3 }), AppError);
-    assert.throws(() => parseSettings({ nativeCursor: "yes" }), AppError);
+    // The bounds are the setting's meaning: below 65% a panel stops being
+    // readable over moving art.
+    assert.throws(() => parseSettings({ uiPanelOpacity: 64 }), AppError);
+    assert.throws(() => parseSettings({ uiPanelOpacity: 94.5 }), AppError);
+    assert.equal("uiTheme" in parseSettings({ uiTheme: "jade" }), false);
+    assert.equal("uiDensity" in parseSettings({ uiDensity: "compact" }), false);
+    assert.equal("uiBorderWidth" in parseSettings({ uiBorderWidth: 4 }), false);
+    assert.equal("uiRadius" in parseSettings({ uiRadius: 16 }), false);
+    assert.equal("nativeCursor" in parseSettings({ nativeCursor: "yes" }), false);
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
@@ -126,9 +138,7 @@ describe("settings", () => {
   });
 
   it("validates patches without filling fields from defaults", () => {
-    assert.deepEqual(parseSettingsPatch({ nativeCursor: true }), {
-      nativeCursor: true,
-    });
+    assert.throws(() => parseSettingsPatch({ nativeCursor: true }), AppError);
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
       lastUpdateCheckAt: 1_000,
     });
@@ -136,7 +146,9 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ touchMode: "dbltap" }), AppError);
     // A renderer that still names a retired key is a bug, not a migration.
     assert.throws(() => parseSettingsPatch({ cursorTheme: "system" }), AppError);
-    assert.throws(() => parseSettingsPatch({ targetReadout: true }), AppError);
+    assert.deepEqual(parseSettingsPatch({ targetReadout: true }), {
+      targetReadout: true,
+    });
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -164,6 +176,9 @@ describe("settings", () => {
       ...DEFAULT_SETTINGS,
       showDiagnostics: true,
       renderScale: 1.5,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
     });
     assert.equal(saved.showDiagnostics, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
@@ -172,10 +187,13 @@ describe("settings", () => {
       "compatibilityNoticeSeenFor",
       "dataStrategy",
       "formatVersion",
+      "gwonmacTools",
       "lastUpdateCheckAt",
-      "nativeCursor",
       "renderScale",
       "showDiagnostics",
+      "targetReadout",
+      "teamManagement",
+      "uiPanelOpacity",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -187,6 +205,9 @@ describe("settings", () => {
     // cursor/input keys that build had and this one does not.
     const alpha = {
       renderScale: 1.5,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       nativeCursor: true,
       touchMode: "translate",
       showDiagnostics: true,
@@ -201,8 +222,11 @@ describe("settings", () => {
     });
     assert.equal(recovered, "", "an alpha profile must not be treated as corrupt");
     assert.deepEqual(loaded, {
+      uiPanelOpacity: 94,
       renderScale: 1.5,
-      nativeCursor: true,
+      gwonmacTools: false,
+      teamManagement: true,
+      targetReadout: false,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately

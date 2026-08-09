@@ -16,6 +16,7 @@ import {
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import { logEvent } from "./diagnostics.js";
 
 interface Pending {
   webContentsId: number;
@@ -125,4 +126,28 @@ export function sendRendererCommand(
  */
 export async function resetGameInput(win: BrowserWindow): Promise<void> {
   await sendRendererCommand(win, { type: "input.reset" });
+}
+
+/**
+ * Show or hide the Tools overlay.
+ *
+ * One function for the two ways a player asks. The menu item and the keyboard
+ * shortcut are different routes to the same intent, and a second copy of "send
+ * the command, notice if it was refused" is how the two quietly stop agreeing.
+ *
+ * Deliberately no `resetGameInput`, unlike every sheet and dialog above. Those
+ * take focus; this overlay does not. Opening Tools is not a statement that you
+ * have stopped playing, so a held movement key keeps acting -- which is what
+ * the overlay itself implements (`setOpen` releases nothing; only teardown
+ * does) and what the chip and the chord already do. Clearing input here made
+ * `Cmd+B` the one route that stopped your character, and on a launch without
+ * the Toolbox capability it stopped them for a refusal that only reached a log.
+ */
+export async function toggleTools(win: BrowserWindow): Promise<void> {
+  const outcome = await sendRendererCommand(win, { type: "tools.toggle" });
+  // The renderer refuses outright when the Toolbox capability is not
+  // installed, which is the ordinary case on a launch that did not ask for it.
+  if (outcome !== "completed") {
+    logEvent({ k: "tools.toggleRefused", outcome });
+  }
 }

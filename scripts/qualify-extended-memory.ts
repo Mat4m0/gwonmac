@@ -25,7 +25,7 @@ import {
 import { findEnhancementBuild } from "../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../src/main/certification/enhancement-transform.js";
 import { rewriteNativeDoubleClickWasm } from "../src/main/certification/native-double-click.js";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../src/shared/contracts.js";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../src/shared/enhancement-contracts.js";
 import { certifyClientBuild } from "../src/main/certification/client-certification.js";
 import { prepareClientModule } from "../src/main/certification/client-module.js";
 
@@ -146,6 +146,7 @@ try {
       nativeCursor: false,
       targetObservation: false,
       toolbox: false,
+      commands: false,
     },
     compatibilityCacheRoot: join(selectionScratch, "compatibility"),
     enhancementCacheRoot: join(selectionScratch, "enhancements"),

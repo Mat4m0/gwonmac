@@ -16,7 +16,7 @@ import {
   ENHANCEMENT_TRANSFORM_ABI,
   type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
-} from "../../src/shared/contracts.js";
+} from "../../src/shared/enhancement-contracts.js";
 import {
   inspectEnhancementCache,
   prepareClientModule,
@@ -41,21 +41,25 @@ const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: true,
+  commands: false,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   toolbox: false,
+  commands: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   toolbox: false,
+  commands: false,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   toolbox: false,
+  commands: false,
 });
 
 const scratchDirs: string[] = [];
@@ -183,6 +187,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       target: "0".repeat(64),
       cursorTarget: "0".repeat(64),
       cursorToolbox: "0".repeat(64),
+      cursorToolboxCommands: "0".repeat(64),
+      cursorTargetToolboxCommands: "0".repeat(64),
     }),
     programId: 1,
     buildId: 1,
@@ -190,6 +196,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 4,
+    commands: { thunkExport: "enhancement_command", entries: [] },
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],
@@ -258,6 +265,44 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       heroAgentId: 0,
       heroOwnerPlayerId: 4,
       heroId: 8,
+      heroLevel: 42,
+      partyPlayers: 43,
+      partyHenchmen: 44,
+      partyFlag: 45,
+      worldContext: 46,
+      worldHeroFlags: 47,
+      heroFlagStride: 48,
+      flagHeroId: 49,
+      flagAgentId: 50,
+      flagBehavior: 51,
+      worldHeroInfo: 52,
+      heroInfoStride: 53,
+      infoHeroId: 54,
+      infoAgentId: 40,
+      infoLevel: 41,
+      infoPrimary: 55,
+      infoSecondary: 56,
+      infoAppearanceBitmap: 57,
+      worldSkillbars: 58,
+      skillbarStride: 59,
+      skillbarAgentId: 60,
+      skillbarSkills: 61,
+      skillSlotStride: 62,
+      skillSlotId: 63,
+      skillbarDisabled: 64,
+      worldAttributes: 65,
+      attributeStride: 66,
+      attributeAgentId: 67,
+      attributeEntries: 68,
+      attributeEntryStride: 69,
+      attributeEntryId: 70,
+      attributeEntryRank: 71,
+      areaInfo: 72,
+      areaInfoCount: 73,
+      areaInfoStride: 74,
+      areaInfoFlags: 75,
+      worldProfessionStates: 76,
+      professionStateStride: 77,
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;

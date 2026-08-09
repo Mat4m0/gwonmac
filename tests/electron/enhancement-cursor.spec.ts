@@ -461,17 +461,14 @@ test.describe("enhancement cursor presentation", () => {
     }
   });
 
-  // The choice is real only if a saved `nativeCursor` survives the whole chain:
-  // settings file -> canonical hook derivation -> renderer init payload. Without it,
-  // harness.js never imports enhancements.js and no cursor appears.
-  test("a saved opt-in reaches the renderer init payload", async () => {
-    const seed = (value: boolean) => async (userData: string) => {
+  test("required Core ignores a legacy cursor opt-out", async () => {
+    const seed = async (userData: string) => {
       await
       writeFile(
         path.join(userData, "settings.json"),
         JSON.stringify({
           renderScale: 2,
-          nativeCursor: value,
+          nativeCursor: false,
           showDiagnostics: false,
           dataStrategy: "quick",
         }),
@@ -479,7 +476,7 @@ test.describe("enhancement cursor presentation", () => {
       );
     };
 
-    const optedIn = await launchOffline("gw-cursor-opt-in-e2e-", {}, seed(true));
+    const optedIn = await launchOffline("gw-cursor-core-e2e-", {}, seed);
     try {
       expect(
         await optedIn.page.evaluate(() => ({
@@ -490,31 +487,16 @@ test.describe("enhancement cursor presentation", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
+          tools: false,
         },
         templateFsTrace: false,
         // The configuration is no longer in the URL the trust root checks.
         search: "",
       });
-      expect(
-        await optedIn.page.evaluate(() => window.gwNative.settings.get()),
-      ).toMatchObject({ nativeCursor: true });
+      expect(await optedIn.page.evaluate(async () =>
+        "nativeCursor" in await window.gwNative.settings.get())).toBe(false);
     } finally {
       await closeOffline(optedIn);
-    }
-
-    const optedOut = await launchOffline(
-      "gw-cursor-opt-out-e2e-",
-      {},
-      seed(false),
-    );
-    try {
-      expect(
-        await optedOut.page.evaluate(
-          () => window.gwNative.init.enhancementSelection.nativeCursor,
-        ),
-      ).toBe(false);
-    } finally {
-      await closeOffline(optedOut);
     }
   });
 });

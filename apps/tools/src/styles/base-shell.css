@@ -1,0 +1,178 @@
+/* The Tools workbench's own layout.
+ *
+ * Everything visual comes from `src/shared/ui/tokens.css` and
+ * `src/shared/ui/components.css`: buttons, chips, rows, wells, inputs, the
+ * metal frame, the skill slots. This file positions them. It does not decide
+ * what any of them look like, and
+ * `tests/unit/the-ui-system-has-one-place-to-change-a-colour.test.ts` keeps it
+ * that way.
+ *
+ * Embedded in the renderer, `src/renderer/index.html` links the two shared
+ * stylesheets directly, so they are not imported here — the app must not ship
+ * a second copy of the design system inside `tools-app.css`. The standalone
+ * dev page loads them from `standalone.ts` instead.
+ */
+
+.tools-stage,
+.tools-stage *,
+.tools-stage *::before,
+.tools-stage *::after {
+  box-sizing: border-box;
+}
+
+/* Standalone only. The workbench normally sits over the game, and this stands
+   in for it. It is deliberately bright and varied rather than a tasteful dark
+   wash: panel opacity is a real preference, and against a near-black backdrop
+   every value from 65% to 100% looks identical, so the one control whose whole
+   job is translucency would appear to do nothing. */
+body:has(.tools-stage[data-mode="standalone"]) {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(60% 50% at 22% 18%, var(--ui-frame-top), transparent 70%),
+    radial-gradient(50% 45% at 82% 78%, var(--ui-success), transparent 70%),
+    radial-gradient(45% 40% at 70% 15%, var(--ui-warning), transparent 70%),
+    linear-gradient(165deg, var(--ui-line), var(--ui-well) 70%);
+}
+
+.tools-stage button,
+.tools-stage input,
+.tools-stage select,
+.tools-stage textarea {
+  font: inherit;
+}
+
+.tools-stage button {
+  color: inherit;
+}
+
+.tools-stage {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ui-z-tools);
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+  /* The stage is a full-screen positioning context over a live game; only the
+     window inside it may take a click. */
+  pointer-events: none;
+}
+
+.tools-stage,
+.tools-window,
+.workspace,
+.library-pane,
+.detail-pane,
+.detail-view {
+  min-width: 0;
+  min-height: 0;
+}
+
+.tools-stage[data-mode="standalone"] {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  padding: var(--ui-space-5);
+  place-items: center;
+  pointer-events: auto;
+}
+
+.tools-window {
+  container-type: inline-size;
+  position: absolute;
+  width: min(1120px, calc(100vw - 56px));
+  height: min(720px, calc(100vh - 84px));
+  min-width: 320px;
+  min-height: 360px;
+  overflow: visible;
+  border-radius: var(--ui-radius-lg);
+  pointer-events: auto;
+}
+
+.tools-stage[data-mode="standalone"] .tools-window {
+  position: relative;
+  inset: auto;
+  width: min(1180px, calc(100vw - 64px));
+  height: min(760px, calc(100vh - 64px));
+}
+
+@media (max-width: 640px) {
+  .tools-stage[data-mode="standalone"] {
+    padding: var(--ui-space-2);
+  }
+
+  .tools-stage[data-mode="standalone"] .tools-window {
+    width: calc(100vw - 2 * var(--ui-space-2));
+    height: calc(100vh - 2 * var(--ui-space-2));
+    min-width: 0;
+  }
+}
+
+.tools-window[data-dragging],
+.tools-window[data-resizing] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* ------------------------------------------------------------ window bar */
+
+.window-bar { cursor: grab; }
+.window-identity { flex: 1; min-width: 0; }
+.window-identity .ui-panel-title { font-size: var(--ui-font-size-lg); }
+.window-identity .ui-field-hint { margin: 0; }
+
+.window-brand {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: var(--ui-border-width) solid transparent;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-accent);
+  font-family: var(--ui-font-display);
+  font-size: var(--ui-font-size-sm);
+  font-weight: 600;
+}
+
+.window-close { font-size: var(--ui-font-size-lg); }
+
+.ui-modal {
+  width: min(520px, calc(100vw - 2 * var(--ui-space-4)));
+  max-width: none;
+  max-height: calc(100vh - 2 * var(--ui-space-4));
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  pointer-events: auto;
+}
+
+.ui-modal::backdrop {
+  background: color-mix(in srgb, var(--ui-outline) 76%, transparent);
+}
+
+.skill-recovery {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.skill-recovery strong { color: var(--ui-warning); }
+
+/* -------------------------------------------------------------- library */
+
+.workspace {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  gap: var(--ui-gap);
+  padding-top: var(--ui-gap);
+  overflow: hidden;
+  grid-template-columns: 310px minmax(0, 1fr);
+}

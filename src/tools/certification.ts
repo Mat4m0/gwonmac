@@ -42,7 +42,7 @@ import {
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_TRANSFORM_ABI,
-} from "../shared/contracts.js";
+} from "../shared/enhancement-contracts.js";
 import {
   currentMessageAnchors,
   recertifyEnhancementBytes,

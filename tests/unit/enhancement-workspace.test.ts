@@ -88,23 +88,20 @@ describe("Enhancement workspace doctor", () => {
     assert.equal(report.readyForCachedLive, false);
   });
 
-  it("reports the profile's own Enhancement settings without writing to them", async () => {
-    // P4.7 — an observation-tier live run enables nothing, so this setting is
-    // the only thing that installs the Enhancement for it.
+  it("reports required Core without writing to the profile", async () => {
     const profile = await mkdtemp(path.join(tmpdir(), "gw-doctor-cursor-"));
     const settings = path.join(profile, "settings.json");
 
     const initial = await inspectEnhancementWorkspace(profile);
     assert.equal(initial.nativeCursor, true);
 
-    // The retired targetReadout field in a legacy profile is ignored, not an
-    // error, and the values beside it are still read.
+    // Both retired fields are ignored. Core is not profile preference state.
     await writeFile(
       settings,
       JSON.stringify({ nativeCursor: false, targetReadout: true }),
     );
     const selected = await inspectEnhancementWorkspace(profile);
-    assert.equal(selected.nativeCursor, false);
+    assert.equal(selected.nativeCursor, true);
 
     // loadSettings() renames a corrupt file aside and writes a backup. A doctor
     // reads the profile it is asked about and leaves it exactly as it found it.

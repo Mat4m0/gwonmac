@@ -13,8 +13,8 @@ import type {
   ClientCompatibility,
   ClientCompatibilityState,
   ClientSession,
-  EnhancementSelection,
 } from "../../src/shared/contracts.js";
+import type { EnhancementSelection } from "../../src/shared/enhancement-contracts.js";
 
 const compatibility = (
   state: ClientCompatibilityState,
@@ -29,9 +29,11 @@ const compatibility = (
 
 const NONE: EnhancementSelection = {
   nativeCursor: false,
+  tools: false,
 };
 const CURSOR: EnhancementSelection = {
   nativeCursor: true,
+  tools: false,
 };
 const SELECTIONS = [NONE, CURSOR];
 
@@ -140,19 +142,19 @@ describe("client compatibility notice", () => {
         ).summary,
       ].join(" "),
     ]) {
-      assert.doesNotMatch(said, /GWonMac/);
       assert.doesNotMatch(said, /\bEnhancement\b/);
       assert.doesNotMatch(said, /certif/i);
     }
   });
 
-  it("leads an uncertified build with the reassurance, not the warning", () => {
+  it("leads an ArenaNet update with the safety action and keeps play available", () => {
     for (const selection of SELECTIONS) {
       const report = compatibilityReport(
         compatibility("uncertified", selection),
         selection,
       );
-      assert.match(report.summary, /you can play it now/);
+      assert.match(report.summary, /disabled for your safety/);
+      assert.match(report.details[0]!, /You can keep playing/);
     }
   });
 

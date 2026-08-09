@@ -23,6 +23,11 @@ import type {
   RendererMetrics,
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
+import type { BuildLibrary } from "./builds/library.js";
+import type {
+  EnhancementProgram,
+  EnhancementSelection,
+} from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
@@ -54,6 +59,51 @@ export const ARENANET_REQUEST_CEILING = 8;
  * one-line change here rather than a hunt for stale "2048 MiB" literals.
  */
 export const WASM_HEAP_CAP_BYTES = 2_147_483_648;
+
+/**
+ * The bounds a build template transfer is held to, in both directions.
+ *
+ * One declaration because two processes enforce them and must not disagree:
+ * `src/renderer/template-format.ts` applies them while parsing what a player
+ * picked, and `src/main/template-export.ts` re-applies them to the payload that
+ * arrives over IPC, which is the only version of these numbers that is a trust
+ * boundary rather than a format rule.
+ *
+ * `entries` sits well past the game's own 550-per-root ceiling, so a real
+ * collection is never refused; it is here to bound one gesture. `nameLength`
+ * is the client's `WCHAR name[260]` record minus `.txt` and its terminator —
+ * `matchingEntries` in `src/renderer/template-save-compatibility.ts` drops
+ * anything at or past that, so a longer name would import successfully and
+ * then be invisible in game.
+ */
+export const TEMPLATE_CEILINGS = {
+  entries: 4_000,
+  codeLength: 512,
+  nameLength: 255,
+} as const;
+
+/**
+ * One build template on its way out to a folder the player chose. `path` is
+ * relative to that folder, `/`-separated, and already sanitised by the renderer
+ * that read it out of the mount; `src/main/template-export.ts` re-checks it
+ * before writing, because a path is the one field that decides where a write
+ * lands. `contents` is the code alone — the game writes no trailing newline and
+ * a file that gains one stops being the same file.
+ */
+export interface TemplateExportEntry {
+  path: string;
+  contents: string;
+}
+
+/**
+ * How an export ended. A value rather than a rejection for the same reason
+ * `FullDownloadOutcome` is one: Electron flattens a rejection to its message,
+ * and the sentence belongs to `src/renderer/failure-messages.ts`.
+ */
+export type TemplateExportResult =
+  | { status: "cancelled" }
+  | { status: "written"; count: number }
+  | { status: "failed"; errorCode: ErrorCode };
 
 /**
  * Why a ready client is not simply "ready": the launch took a fallback the
@@ -226,178 +276,19 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
-/**
- * The complete set of independently selectable Enhancement features.
- *
- * Canonical here because settings, main-process policy, and the generated
- * preload transport all need the same names. A new tool is declared once;
- * its implementation still has to decide what enabling it does.
- */
-export const ENHANCEMENTS = [
-  "nativeCursor",
-] as const;
-
-export type Enhancement = (typeof ENHANCEMENTS)[number];
-export type EnhancementSelection = Record<Enhancement, boolean>;
-
-/**
- * Developer-only programs are launch intent, not persisted tools and not an
- * automation permission. Keeping the states explicit prevents a test
- * harness flag from silently installing the Toolbox overlay or extra hooks.
- */
-export const ENHANCEMENT_PROGRAMS = [
-  "none",
-  "cursor-observer",
-  "target-observer",
-  "toolbox-foundation",
-] as const;
-
-export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
-
-/**
- * The exact behavior the companion may perform for this launch. This is the
- * transform/cache/manifest identity; hooks are only its derived mechanism.
- */
-export type EnhancementCapabilities = Readonly<{
-  nativeCursor: boolean;
-  targetObservation: boolean;
-  toolbox: boolean;
-}>;
-
-/** The complete set of capability combinations allowed to become executable. */
-export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
-  cursor: Object.freeze({
-    nativeCursor: true,
-    targetObservation: false,
-    toolbox: false,
-  }),
-  target: Object.freeze({
-    nativeCursor: false,
-    targetObservation: true,
-    toolbox: false,
-  }),
-  cursorTarget: Object.freeze({
-    nativeCursor: true,
-    targetObservation: true,
-    toolbox: false,
-  }),
-  cursorToolbox: Object.freeze({
-    nativeCursor: true,
-    targetObservation: false,
-    toolbox: true,
-  }),
-} as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
-
-export type EnhancementCapabilityProfile =
-  keyof typeof ENHANCEMENT_CAPABILITY_PROFILES;
-
-const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
-  nativeCursor: false,
-  targetObservation: false,
-  toolbox: false,
-});
-
-export function enhancementCapabilityProfile(
-  capabilities: EnhancementCapabilities,
-): EnhancementCapabilityProfile | null {
-  for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
-    EnhancementCapabilityProfile[]) {
-    const candidate = ENHANCEMENT_CAPABILITY_PROFILES[profile];
-    if (
-      candidate.nativeCursor === capabilities.nativeCursor
-      && candidate.targetObservation === capabilities.targetObservation
-      && candidate.toolbox === capabilities.toolbox
-    ) {
-      return profile;
-    }
-  }
-  return null;
-}
-
-/** Exact-build UI messages that can invalidate the Toolbox party projection. */
-export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = 10;
-
-/** Fixed companion layout: 17 core, 12 cursor, 7 party, 13 message words. */
-export const ENHANCEMENT_CONFIG_WORD_COUNT = 49;
-
-/** One identity shared by the transformer, cache, manifest, and renderer. */
-export const ENHANCEMENT_TRANSFORM_ABI = 11;
-
-/**
- * Whether one config word belongs to an active capability. Toolbox reuses only
- * the game/character-context portion of core: word 0 and words 4 through 10.
- * Agent-array, target, agent identity, position, and type fields remain zero
- * unless target observation itself is enabled.
- */
-export function enhancementConfigWordActive(
-  capabilities: EnhancementCapabilities,
-  index: number,
-): boolean {
-  if (!Number.isInteger(index) || index < 0 || index >= ENHANCEMENT_CONFIG_WORD_COUNT) {
-    return false;
-  }
-  if (index < 17) {
-    return capabilities.targetObservation
-      || (capabilities.toolbox && (index === 0 || (index >= 4 && index <= 10)));
-  }
-  if (index < 29) return capabilities.nativeCursor;
-  return capabilities.toolbox;
-}
-
-/** The exact game entry points derived from the capability plan. */
-export type EnhancementHooks = Readonly<{
-  tick: boolean;
-  cursor: boolean;
-  ui: boolean;
-}>;
-
-/**
- * Resolve product settings or one fixed developer program once. A developer
- * program replaces the saved selection for that launch, so its derivative and
- * live evidence cannot depend on the profile that happened to run it.
- */
-export function enhancementCapabilitiesFor(
-  selection: EnhancementSelection,
-  program: EnhancementProgram,
-): EnhancementCapabilities {
-  switch (program) {
-    case "none":
-      // The target readout retired from user settings, so a launch without a
-      // developer program can select nothing but the cursor. The other
-      // profiles stay certified as developer-side capability vocabulary.
-      return selection.nativeCursor
-        ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
-        : NO_ENHANCEMENT_CAPABILITIES;
-    case "cursor-observer":
-      return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
-    case "target-observer":
-      return ENHANCEMENT_CAPABILITY_PROFILES.target;
-    case "toolbox-foundation":
-      return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
-  }
-}
-
-/** Cursor and Toolbox share the tick reconciliation entry point. */
-export function enhancementHooksFor(
-  capabilities: EnhancementCapabilities,
-): EnhancementHooks {
-  return Object.freeze({
-    tick: enhancementCapabilitiesRequested(capabilities),
-    cursor: capabilities.nativeCursor,
-    ui: capabilities.toolbox,
-  });
-}
-
-export function enhancementCapabilitiesRequested(
-  capabilities: EnhancementCapabilities,
-): boolean {
-  return capabilities.nativeCursor
-    || capabilities.targetObservation
-    || capabilities.toolbox;
-}
-
-export interface AppSettings extends EnhancementSelection {
+export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
+  /**
+   * The application's Guild Wars panels stay translucent enough to see the
+   * game behind them. This is presentation only and never reaches the game.
+   */
+  uiPanelOpacity: number;
+  /** Master opt-in for the optional executable Tools Beta capability. */
+  gwonmacTools: boolean;
+  /** Live selection restored whenever optional tools are allowed. */
+  teamManagement: boolean;
+  /** Experimental live target distance/range readout. */
+  targetReadout: boolean;
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
@@ -431,7 +322,10 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
-  nativeCursor: true,
+  uiPanelOpacity: 94,
+  gwonmacTools: false,
+  teamManagement: true,
+  targetReadout: false,
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
@@ -554,6 +448,7 @@ export type AppUpdateState =
 
 export type SettingsPane =
   | "data"
+  | "templates"
   | "display"
   | "controls"
   | "updates"
@@ -615,8 +510,8 @@ export interface ClientSession {
 /**
  * Everything the renderer must know before its first script runs. It used to
  * ride on the renderer URL as query parameters, which forced the trust root to
- * allow-list them — including `nativeCursor`, which is user product state and
- * has no business in a navigation check. It travels as a preload argument
+ * allow-list them — including the Core cursor capability, which is launch
+ * state and has no business in a navigation check. It travels as a preload argument
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {
@@ -665,6 +560,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
+  | { type: "tools.toggle" }
   | {
       type: "settings.open";
       pane?: SettingsPane;
@@ -687,6 +583,20 @@ export type RendererCommandOutcome =
   | RendererCommandCompletion
   | "timed-out";
 
+/**
+ * The two `gw://` routes the build editor fetches.
+ *
+ * Named here for the same reason `IPC` is: both sides of a process boundary
+ * spell them, and a rename that only lands on one side compiles, lints, and
+ * fails at runtime as an empty skill picker. `src/main/protocol.ts` serves
+ * them and `apps/tools/src/host.ts` asks for them.
+ */
+export const SKILL_CATALOGUE_ROUTE = "skill-catalog.json";
+export const SKILL_ICON_ROUTE = (skillId: number): string =>
+  `skill-icons/${skillId}.bmp`;
+/** What `SKILL_ICON_ROUTE` produces, as the server's matcher. */
+export const SKILL_ICON_PATTERN = /^skill-icons\/([0-9]{1,7})\.bmp$/u;
+
 export const IPC = {
   progressCurrent: "gw:progress:current",
   progressEvent: "gw:progress:event",
@@ -700,6 +610,8 @@ export const IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
+  buildLibraryGet: "gw:buildLibrary:get",
+  buildLibrarySet: "gw:buildLibrary:set",
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
@@ -723,6 +635,8 @@ export const IPC = {
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
   clipboardWriteText: "gw:clipboard:writeText",
+  clipboardReadText: "gw:clipboard:readText",
+  templatesExport: "gw:templates:export",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
@@ -802,6 +716,10 @@ export interface GwNativeApi {
     set(value: AppSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
   };
+  buildLibrary: {
+    get(): Promise<{ library: BuildLibrary; recovered: boolean }>;
+    set(value: BuildLibrary): Promise<BuildLibrary>;
+  };
   credentials: {
     load(): Promise<StoredCredentials | null>;
     save(value: StoredCredentials): Promise<void>;
@@ -878,6 +796,29 @@ export interface GwNativeApi {
      * never arrives here.
      */
     writeText(text: string): Promise<void>;
+    /**
+     * Read the OS pasteboard so a player can import build codes they copied
+     * from a guild page or a forum post.
+     *
+     * This is the one capability here that widens what the renderer can reach:
+     * whatever was last copied — plausibly a password — becomes readable by a
+     * process that persists files. It is bounded by the same ceiling as the
+     * write direction, it is only ever called from an explicit "Import from
+     * Clipboard" click, and nothing it returns is written until the player has
+     * seen the parsed result and confirmed it.
+     */
+    readText(): Promise<string>;
+  };
+  templates: {
+    /**
+     * Write the game's saved build templates into a folder the player chooses.
+     * The renderer supplies the tree because only it can see the mount; main
+     * owns the dialog, the destination, and the refusal of any path that would
+     * not stay inside it.
+     */
+    export(
+      entries: readonly TemplateExportEntry[],
+    ): Promise<TemplateExportResult>;
   };
   client: {
     retry(): Promise<void>;

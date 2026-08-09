@@ -12,7 +12,7 @@ import {
   rewriteExtendedMemoryWasm,
 } from "../../src/main/certification/extended-memory.js";
 import { NATIVE_DOUBLE_CLICK_BUILDS } from "../../src/main/certification/native-double-click.js";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/contracts.js";
+import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/enhancement-contracts.js";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.js";
 
 describe("research-only extended memory transform", () => {

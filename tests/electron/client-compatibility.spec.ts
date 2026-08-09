@@ -223,7 +223,7 @@ test.describe("client compatibility", () => {
             enhancementActive: false,
             clientSha256: "a".repeat(64),
           },
-          { nativeCursor: true },
+          { nativeCursor: true, tools: false },
         );
         const byId = (id: string) => {
           const element = globalThis.document.getElementById(id);

@@ -103,6 +103,12 @@ export const BUILD_STEPS = [
   ],
   // The main program, and the owner of build/shared.
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // The Tools application, bundled once for the renderer. It is an independent
+  // Vue workspace with its own tests, so this step only packages what already
+  // passed them. Vite writes build/renderer/tools/ and empties only that
+  // directory, so it cannot disturb the emits above and its position here is
+  // for readability rather than correctness.
+  ["pnpm", ["--filter", "@gwonmac/tools-ui", "build:embedded"]],
   // The only native addon. It uses raw Node-API version 8, whose ABI remains
   // stable across the Node and Electron upgrades this project takes. The
   // framework APIs resolve at runtime from the Electron host, so the bundle
@@ -136,6 +142,40 @@ export const BUILD_STEPS = [
       "Security",
       "-o",
       "build/native/keychain.node",
+    ],
+  ],
+  // The Guild Wars archive decoder. A separate executable rather than a second
+  // addon: it is hand-transcribed x86 (see src/native/gw-dat/vendor/README.md)
+  // parsing the player's own game files, and a malformed record should fail one
+  // decode rather than take the application down with it. It is spawned once
+  // per asset and the result is cached on disk, so the process boundary costs
+  // about four milliseconds, once, per icon that is ever looked at.
+  //
+  // -Wall/-Wextra/-Werror are deliberately not applied: this is vendored source
+  // carried unmodified, and the -D/-Wno flags stand in for MSVC builtins clang
+  // lacks rather than patching it. The third silences a warning about an `&&`
+  // that reads like a typo and is not one — src/native/gw-dat/vendor/README.md
+  // records why changing it would break the decode.
+  [
+    "xcrun",
+    [
+      "clang++",
+      "-std=c++20",
+      "-mmacosx-version-min=12.0",
+      "-arch",
+      nativeArchitecture,
+      "-O2",
+      '-D__int64=long long',
+      "-Wno-multichar",
+      "-Wno-constant-logical-operand",
+      "-Isrc/native/gw-dat",
+      "src/native/gw-dat/decoder-main.cpp",
+      "src/native/gw-dat/vendor/gwdat/xentax.cpp",
+      "src/native/gw-dat/vendor/gwdat/AtexReader.cpp",
+      "src/native/gw-dat/vendor/gwdat/AtexDecompress.cpp",
+      "src/native/gw-dat/vendor/gwdat/AtexAsm.cpp",
+      "-o",
+      "build/native/gw-dat-decode",
     ],
   ],
   // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes

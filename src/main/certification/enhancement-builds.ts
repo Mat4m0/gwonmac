@@ -18,7 +18,16 @@ import {
   enhancementConfigWordActive,
   type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
-} from "../../shared/contracts.js";
+} from "../../shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_CONFIG_FIELDS,
+  ENHANCEMENT_LAYOUT_FIELDS,
+  type EnhancementLayout,
+} from "../../shared/enhancement-config.js";
+export {
+  ENHANCEMENT_LAYOUT_FIELDS,
+  type EnhancementLayout,
+} from "../../shared/enhancement-config.js";
 
 export type EnhancementOutputHashes = Readonly<
   Record<EnhancementCapabilityProfile, string>
@@ -34,45 +43,6 @@ export function enhancementOutputSha256(
   return typeof output === "string" && /^[0-9a-f]{64}$/.test(output)
     ? output
     : null;
-}
-
-export interface EnhancementLayout {
-  contextRoot: number;
-  agentArray: number;
-  manualTargetAgentId: number;
-  automaticTargetAgentId: number;
-  gameContextSlot: number;
-  characterContext: number;
-  mapId: number;
-  isExplorable: number;
-  currentMapId: number;
-  currentInstanceType: number;
-  playerNumber: number;
-  agentId: number;
-  agentX: number;
-  agentY: number;
-  agentType: number;
-  agentPlayerNumber: number;
-  agentModelType: number;
-  cursorActiveArt: number;
-  cursorSoftwareModel: number;
-  cursorShowCount: number;
-  cursorColorBuffer: number;
-  cursorArtHotspot: number;
-  cursorArtTexture: number;
-  cursorHandleKey: number;
-  cursorHandleObject: number;
-  cursorViewTexture: number;
-  cursorTextureType: number;
-  cursorTextureWidth: number;
-  cursorTextureHeight: number;
-  partyContext: number;
-  playerParty: number;
-  partyHeroes: number;
-  heroMemberStride: number;
-  heroAgentId: number;
-  heroOwnerPlayerId: number;
-  heroId: number;
 }
 
 /**
@@ -93,57 +63,32 @@ export type EnhancementPartyDirtyMessages = readonly [
   partyRemovePlayer: number,
 ];
 
-export const ENHANCEMENT_CORE_LAYOUT_FIELDS = [
-  "contextRoot",
-  "agentArray",
-  "manualTargetAgentId",
-  "automaticTargetAgentId",
-  "gameContextSlot",
-  "characterContext",
-  "mapId",
-  "isExplorable",
-  "currentMapId",
-  "currentInstanceType",
-  "playerNumber",
-  "agentId",
-  "agentX",
-  "agentY",
-  "agentType",
-  "agentPlayerNumber",
-  "agentModelType",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-export const ENHANCEMENT_CURSOR_LAYOUT_FIELDS = [
-  "cursorActiveArt",
-  "cursorSoftwareModel",
-  "cursorShowCount",
-  "cursorColorBuffer",
-  "cursorArtHotspot",
-  "cursorArtTexture",
-  "cursorHandleKey",
-  "cursorHandleObject",
-  "cursorViewTexture",
-  "cursorTextureType",
-  "cursorTextureWidth",
-  "cursorTextureHeight",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-export const ENHANCEMENT_PARTY_LAYOUT_FIELDS = [
-  "partyContext",
-  "playerParty",
-  "partyHeroes",
-  "heroMemberStride",
-  "heroAgentId",
-  "heroOwnerPlayerId",
-  "heroId",
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
-export const ENHANCEMENT_LAYOUT_FIELDS = [
-  ...ENHANCEMENT_CORE_LAYOUT_FIELDS,
-  ...ENHANCEMENT_CURSOR_LAYOUT_FIELDS,
-  ...ENHANCEMENT_PARTY_LAYOUT_FIELDS,
-] as const satisfies readonly (keyof EnhancementLayout)[];
-
+/**
+ * Everything the full party projection needs beyond the first owned hero.
+ *
+ * A separate group because it was a separate certification round. Appended
+ * rather than interleaved so the words the kernel already decodes keep their
+ * positions — the config ABI is positional, and a field inserted mid-list
+ * changes what every later word means.
+ *
+ * Professions are absent by measurement, not oversight: `HeroPartyMember`
+ * carries zero at the two offsets the reference names, for a Warrior, so they
+ * are read from `HeroInfo` instead. A field whose value the client does not
+ * populate is worse than a missing one — it reads as Profession::None.
+ */
+/**
+ * The attribute table, which is what makes a captured build publishable.
+ *
+ * Its own group, appended for the same positional reason as the one above: a
+ * word inserted anywhere earlier changes what every later word means.
+ *
+ * There is no entry-count word. The array is sparse and indexed by attribute
+ * id — every real entry satisfies `index == id` — so the walk runs the 45 ids
+ * the client defines and takes that equality as the admission rule. The
+ * reference struct pads to 54 entries, and indices 51-53 hold values that
+ * decode as plausible ranks; a count word would have walked straight into
+ * them. See the evidence file, C5.
+ */
 export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
   return ENHANCEMENT_LAYOUT_FIELDS.map((field) => layout[field]);
 }
@@ -152,13 +97,11 @@ export function enhancementConfigWords(
   build: KnownEnhancementBuild,
   capabilities: EnhancementCapabilities,
 ): number[] {
-  const words = [
-    ...ENHANCEMENT_LAYOUT_FIELDS.map((field) => build.layout[field]),
-    build.uiDispatcher.playerChatMessage,
-    build.uiDispatcher.hideHeroPanelMessage,
-    build.uiDispatcher.showHeroPanelMessage,
-    ...build.uiDispatcher.partyDirtyMessages,
-  ];
+  const words = ENHANCEMENT_CONFIG_FIELDS.map((field) => {
+    if (field.source === "layout") return build.layout[field.key];
+    if (field.source === "dispatcher") return build.uiDispatcher[field.key];
+    return build.uiDispatcher.partyDirtyMessages[field.index] ?? 0;
+  });
   return words.map((word, index) =>
     enhancementConfigWordActive(capabilities, index) ? word : 0);
 }
@@ -178,6 +121,32 @@ export interface KnownEnhancementBuild {
     results: readonly [];
     tableSlot: number;
     producerFunctions: readonly [number, number];
+  }>;
+  /**
+   * The commands the client may be given the ability to send, and nothing
+   * else. Emitted into the module as one thunk when — and only when — the
+   * `commands` capability is on.
+   *
+   * Certified on the **opcode**, which is the wire protocol and is identical in
+   * every build because the server is on the other end of it. `functionIndex`
+   * is a per-build recovery, not a certificate: the eight indices this work
+   * originally carried were off by exactly three, and a bare index has no way
+   * to notice. `bodySha256` is what makes it fail closed — the transform hashes
+   * the body at that index and refuses unless it is byte-for-byte the function
+   * that was certified. Recover a new build's indices with
+   * `tools/packet_builders.py`.
+   */
+  commands: Readonly<{
+    thunkExport: string;
+    entries: readonly Readonly<{
+      opcode: number;
+      functionIndex: number;
+      params: readonly "i32"[];
+      results: readonly [];
+      bodySha256: string;
+      /** What this sends, for the reader. Never used to decide anything. */
+      label: string;
+    }>[];
   }>;
   uiDispatcher: Readonly<{
     functionIndex: number;
@@ -208,11 +177,27 @@ export interface KnownEnhancementBuild {
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
   Object.freeze({
     sha256: "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094",
+    // Recomputed when the attribute layout landed, as they were for the party
+    // layout before it. All profiles move together whenever the manifest's bytes
+    // do, and the manifest carries the transform ABI and every config word --
+    // so growing the layout changes the output of profiles that do not use one
+    // word of it.
+    //
+    // `pnpm check` cannot catch a stale value here. The transform input is a
+    // derived game binary this repository does not contain, so nothing in the
+    // suite can run the transform; the first thing that notices is a launch
+    // that installs no enhancement at all. Recompute by running
+    // `transformEnhancementWasm` against the real derived module whenever
+    // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "a29b20f64cffff774b554787bf595a6aa8a6d56ff25e66ee73bf944cff5a1da3",
-      target: "d2b6970f61026b48f01defd4fbb59032544c27c89684abffed77987b06292f11",
-      cursorTarget: "63a330bc7b922ce2432298e8b6f30eb2e4940a218acc999c243c1b0653b28997",
-      cursorToolbox: "8ba7836b7d27d9a9e31cd85359b2964d5c88b4f577ea3648fb874155fec6da70",
+      cursor: "b31bb8f673a999ce54195e6473dc05427477dd5d3ddbb6a8e1f0dc7a81e543ae",
+      target: "db44c3985a4083a3ab3fa402b35f4764d23b48e72f724ac906c7891404ad52e9",
+      cursorTarget: "76c17e628f00f5200676727c61e77bd9c5982c72b2a5df9637b8f5a42bb0be52",
+      cursorToolbox: "556b13c558dd0abe239c71b4bcd273a114fe18a6ea5630cc62a57fe256e7f995",
+      // The only derived module that can send anything. Every other profile
+      // above is byte-identical to one that carries no command thunk at all.
+      cursorToolboxCommands: "b449db30b989d3625a6622de7e5ac646582230dd1147b16373cb451739223e03",
+      cursorTargetToolboxCommands: "8c746483f39f0fcf41e700ec5a07b0fb098dbe87cdffe7b81d2d28070e6ca363",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -234,6 +219,85 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       results: Object.freeze([] as const),
       tableSlot: 922,
       producerFunctions: Object.freeze([2828, 2834] as const),
+    }),
+    // Everything a team apply needs, and nothing else. Kick was sent first,
+    // alone, against a live game; the rest joined it once that had worked.
+    //
+    // `KickAllHeroes` is `kick` with hero id 0x26 and is deliberately *not*
+    // here: 0x26 is 38, and Devona is hero 38. GWCAjs verified the sentinel
+    // live on build 38,615, which predates her. Kicking heroes one at a time
+    // covers every case and never touches the ambiguous value.
+    //
+    commands: Object.freeze({
+      thunkExport: "enhancement_command",
+      entries: Object.freeze([
+        Object.freeze({
+          opcode: 31,
+          functionIndex: 6887,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "ad54846e78e293ba4c2a6cef392bb3f3cb62fdd5209d8aadf0e99c75a4914e59",
+          label: "CharMsgSendHeroDeactivate(heroId)",
+        }),
+        Object.freeze({
+          opcode: 30,
+          functionIndex: 6886,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "709ce8b36ecd5bb269d211d38a7d504a7577e40312be7c74c125f02bbb3be697",
+          label: "CharMsgSendHeroActivate(heroId)",
+        }),
+        Object.freeze({
+          opcode: 21,
+          functionIndex: 6878,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "e8c9b33da97ad99f4fabcca08fabf29ecb8a08fb400d8e161bba659775234157",
+          label: "CharMsgSendCommandAiMode(agentId, behavior)",
+        }),
+        // The two that carry a payload. Their third and fourth arguments are
+        // addresses of buffers the renderer owns and fills; the client copies
+        // out of them and sends. See `COMMAND_PAYLOAD_WORDS`.
+        Object.freeze({
+          opcode: 93,
+          functionIndex: 6943,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "37f53da3c4edecbf9438f093b90e3aff5e65eeac018835da016c472c5fa15a23",
+          label: "skillbar set (agentId, count, skills[])",
+        }),
+        Object.freeze({
+          opcode: 65,
+          functionIndex: 6917,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "7ea3e38a9cb5dd4bd6edc4d86a89f1e98c531d005b4f3e08a8142b50146f688c",
+          label: "CharMsgSendOrderSetProfessionSecondary(agentId, profession)",
+        }),
+        Object.freeze({
+          opcode: 16,
+          functionIndex: 6873,
+          params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "c2b8c55c9cddf538e61911cb6d542196a35700c1d6e5a5e693ab627ca4e53041",
+          label: "attributes set (agentId, count, ids[], ranks[])",
+        }),
+        Object.freeze({
+          opcode: 155,
+          functionIndex: 10650,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "99cb42fb99f1503f80beb589f43c7f9bb841352bd95344a7d96f243f0f639287",
+          label: "CharMsgSendSetHardMode(enabled)",
+        }),
+      ] as const),
     }),
     uiDispatcher: Object.freeze({
       functionIndex: 6842,
@@ -292,6 +356,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       agentType: 0x9c,
       agentPlayerNumber: 0xf4,
       agentModelType: 0xf6,
+      // WorldContext::party_profession_states, the same canonical table the
+      // client's skill-template loader uses for player and hero professions.
+      worldProfessionStates: 0x6bc,
+      professionStateStride: 0x14,
       cursorActiveArt: 0x5a16e0,
       cursorSoftwareModel: 0x5a16e4,
       cursorShowCount: 0x5a16e8,
@@ -313,6 +381,65 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       heroAgentId: 0x00,
       heroOwnerPlayerId: 0x04,
       heroId: 0x08,
+      // Certified live against this build in an outpost, by cross-match
+      // against the eight offsets above rather than by plausibility. See
+      // plans/tools/hero-builds/evidence/party-memory-layout.md.
+      heroLevel: 0x14,
+      partyPlayers: 0x04,
+      partyHenchmen: 0x14,
+      partyFlag: 0x14,
+      worldContext: 0x2c,
+      // Its hero ids *and* agent ids matched the party array exactly.
+      worldHeroFlags: 0x584,
+      heroFlagStride: 0x24,
+      flagHeroId: 0x00,
+      flagAgentId: 0x04,
+      flagBehavior: 0x0c,
+      // The account's unlock table, not the party: its row count held at two
+      // across kicking both heroes and re-adding one. `infoAgentId` is zero
+      // while a hero is unlocked but out of the party and the live agent id
+      // while it is in, so one array answers ownership and membership both.
+      worldHeroInfo: 0x594,
+      heroInfoStride: 0x9c,
+      infoHeroId: 0x00,
+      infoAgentId: 0x04,
+      infoLevel: 0x08,
+      infoPrimary: 0x0c,
+      infoSecondary: 0x10,
+      // Zero for every non-mercenary observed, as the reference describes. The
+      // mercenary rule itself is untestable on an account that owns none, so
+      // the kernel publishes mercenaries as *unknown* rather than guessing.
+      infoAppearanceBitmap: 0x48,
+      worldSkillbars: 0x6f0,
+      skillbarStride: 0xbc,
+      skillbarAgentId: 0x00,
+      skillbarSkills: 0x04,
+      skillSlotStride: 0x14,
+      skillSlotId: 0x0c,
+      skillbarDisabled: 0xa4,
+      // Certified live in the same outpost. The stride is proved outright: the
+      // words at +0x43c from each row are the next row's agent id. Every real
+      // entry satisfies `index == id`, and the set of entries present is each
+      // character's primary profession's attributes plus all but one of its
+      // secondary's — the one missing is always that secondary's own primary
+      // attribute, which no character may invest in. Three rows, three
+      // professions pairs, no exception.
+      worldAttributes: 0xac,
+      attributeStride: 0x43c,
+      attributeAgentId: 0x00,
+      attributeEntries: 0x04,
+      attributeEntryStride: 0x14,
+      attributeEntryId: 0x00,
+      // `level_base`. `level` at 0x08 adds runes, and a stored build holds the
+      // invested rank — Devona reads Strength 7 there and 8 with her rune.
+      attributeEntryRank: 0x04,
+      // Exact-build initialised `AreaInfo[mapId]`. Cross-checked against
+      // GWToolbox++'s flags: Lion's Arch (55) is PvE, Random Arenas (188)
+      // carries the PvP bit, and Isle of Wurms (529) the guild-hall bit.
+      areaInfo: 0x1cc630,
+      areaInfoCount: 883,
+      areaInfoStride: 0x7c,
+      areaInfoFlags: 0x10,
     }),
   }),
 ]);

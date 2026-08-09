@@ -22,21 +22,21 @@
  */
 import { net } from "electron";
 import { readFile } from "node:fs/promises";
-import type {
-  ClientCompatibility,
-  ClientHealthToken,
-  DownloadProgress,
-  EnhancementCapabilities,
-  FullDownloadOutcome,
-  NoticeCode,
-  PrefetchProgress,
-  SnapshotMetadata,
+import {
+  WASM_HEAP_CAP_BYTES,
+  type ClientCompatibility,
+  type ClientHealthToken,
+  type DownloadProgress,
+  type FullDownloadOutcome,
+  type NoticeCode,
+  type PrefetchProgress,
+  type SnapshotMetadata,
 } from "../shared/contracts.js";
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_TRANSFORM_ABI,
-  WASM_HEAP_CAP_BYTES,
-} from "../shared/contracts.js";
+  type EnhancementCapabilities,
+} from "../shared/enhancement-contracts.js";
 import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";

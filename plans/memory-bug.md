@@ -1,7 +1,7 @@
 # Guild Wars WASM memory exhaustion: investigation, ArenaNet handoff, and interim mitigation
 
-Last updated: 2026-08-08  
-ArenaNet client target: build `38797`  
+Last updated: 2026-08-08
+ArenaNet client target: build `38797`
 
 ## Executive summary
 

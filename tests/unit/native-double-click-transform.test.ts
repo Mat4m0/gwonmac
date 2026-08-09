@@ -17,6 +17,7 @@ import {
   rewriteWithBuild,
   type NativeDoubleClickBuild,
 } from "../../src/main/certification/native-double-click.ts";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.ts";
 import { indexOfBytes, parseExports, sectionById, splitSections }
   from "../../src/main/core/wasm-binary.ts";
 
@@ -162,7 +163,15 @@ test("the shipped entry describes one build and states its own offsets", () => {
     // Enhancement is off. A missing entry is a launch that silently keeps the
     // synthetic taps; a stray one is a module nothing produces.
     const pairs = Object.entries(build.derivations);
-    assert.equal(pairs.length, 5);
+    const expectedInputs = new Set([
+      ...ENHANCEMENT_BUILDS.map((entry) => entry.sha256),
+      ...ENHANCEMENT_BUILDS.flatMap((entry) => Object.values(entry.outputSha256)),
+    ]);
+    assert.deepEqual(
+      new Set(pairs.map(([input]) => input)),
+      expectedInputs,
+      "every module the preparation chain can produce needs a derivation",
+    );
     for (const [input, output] of pairs) {
       assert.match(input, /^[0-9a-f]{64}$/);
       assert.match(output, /^[0-9a-f]{64}$/);

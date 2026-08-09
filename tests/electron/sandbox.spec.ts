@@ -30,6 +30,7 @@ test.describe("sandbox boundary", () => {
           enhancementProgram: "none",
           enhancementSelection: {
             nativeCursor: true,
+            tools: false,
           },
           templateFsTrace: false,
         },
@@ -44,6 +45,7 @@ test.describe("sandbox boundary", () => {
         keys: [
           "app",
           "appUpdates",
+          "buildLibrary",
           "cache",
           "client",
           "clipboard",
@@ -58,6 +60,7 @@ test.describe("sandbox boundary", () => {
           "snapshot",
           "sockets",
           "steam",
+          "templates",
           "wasmBridgeMarkers",
         ],
         nativeFrozen: true,
@@ -217,6 +220,7 @@ test.describe("sandbox boundary", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
+          tools: false,
         },
         templateFsTrace: false,
       });
@@ -238,6 +242,7 @@ test.describe("sandbox boundary", () => {
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
+          tools: false,
         },
         templateFsTrace: true,
       });

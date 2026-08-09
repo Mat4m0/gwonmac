@@ -13,15 +13,16 @@
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
   ENHANCEMENT_TRANSFORM_ABI,
   enhancementConfigWordActive,
   enhancementHooksFor,
   type EnhancementCapabilities,
   type EnhancementHooks,
-} from "../shared/contracts.js";
+} from "../shared/enhancement-contracts.js";
 
-const MESSAGE_CONFIG_START = 36;
+const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
 const PARTY_DIRTY_CONFIG_START = MESSAGE_CONFIG_START + 3;
 
 /** The validated subset of the derived module's fixed evidence. */
@@ -91,7 +92,8 @@ function sameCapabilities(
 ): boolean {
   return left.nativeCursor === right.nativeCursor
     && left.targetObservation === right.targetObservation
-    && left.toolbox === right.toolbox;
+    && left.toolbox === right.toolbox
+    && left.commands === right.commands;
 }
 
 export function decodeEnhancementManifest(
@@ -119,6 +121,7 @@ export function decodeEnhancementManifest(
       "nativeCursor",
       "targetObservation",
       "toolbox",
+      "commands",
     ]);
     const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
     if (
@@ -127,6 +130,7 @@ export function decodeEnhancementManifest(
       || typeof capabilityRecord.nativeCursor !== "boolean"
       || typeof capabilityRecord.targetObservation !== "boolean"
       || typeof capabilityRecord.toolbox !== "boolean"
+      || typeof capabilityRecord.commands !== "boolean"
     ) {
       return null;
     }
@@ -135,6 +139,7 @@ export function decodeEnhancementManifest(
       nativeCursor: capabilityRecord.nativeCursor,
       targetObservation: capabilityRecord.targetObservation,
       toolbox: capabilityRecord.toolbox,
+      commands: capabilityRecord.commands,
     });
     const selectedHooks: EnhancementHooks = Object.freeze({
       tick: hooks.tick !== null,

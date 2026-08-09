@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { COMPANION_ABI } from "../src/shared/companion-abi.ts";
 
 export const COMPANION_KERNEL_IMPORTS = Object.freeze([
   "env.__indirect_function_table:table",
@@ -20,10 +21,59 @@ export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
   { name: "companion_snapshot_bytes", typeIndex: 2 },
   { name: "companion_cursor_bytes", typeIndex: 2 },
   { name: "companion_toolbox_bytes", typeIndex: 2 },
+  { name: "companion_party_bytes", typeIndex: 2 },
 ]);
 
+/**
+ * What each nullary export must answer, restated where a human changes it.
+ *
+ * These lived inline in `verify-companion-kernel.mjs` and went stale: the party
+ * work moved the ABI to 7 and the config block to 296 bytes while that script
+ * still asserted 6 and 196, because it needs a built artifact and so is not
+ * part of `pnpm check`. Here they are inside a module the unit suite already
+ * imports, and the seal test ties every byte count back to the decoder that
+ * reads the region — so the two halves of each number cannot drift apart again
+ * without one test or the other saying so.
+ */
+export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
+  companion_abi: COMPANION_ABI.kernel,
+  companion_config_bytes: COMPANION_ABI.config.bytes,
+  companion_snapshot_bytes: COMPANION_ABI.snapshot.bytes,
+  companion_cursor_bytes: COMPANION_ABI.cursor.bytes,
+  companion_toolbox_bytes: COMPANION_ABI.toolbox.bytes,
+  companion_party_bytes: COMPANION_ABI.party.bytes,
+});
+
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  0x01, 0x05, 0xb5, 0x02, 0x02, 0x00, 0x00,
+  // Memory footprint 1437 bytes (0x9d 0x0b as LEB128). Eleven documented moves:
+  //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
+  //                separates "you have no heroes" from "nobody read the party";
+  //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
+  //                each, so the config block the host copies in got 100 larger;
+  //   410 ->  908  party.rs, whose zeroed `[Hero; PARTY_SLOTS]` const is 8 x 60
+  //                bytes of data on its own;
+  //   908 -> 1222  attribute ranks: `Hero` grew a `[u32; 9]`, so that same
+  //                const went from 8 x 60 to 8 x 96 (+288), and Layout took
+  //                seven more address words (+28).
+  //   1222 -> 1346 map policy, player observation and difficulty add four
+  //                layout words plus their closed kernel logic.
+  //   1346 -> 1349 the live optional-observer mask adds one u32 static; linker
+  //                packing absorbs one byte elsewhere in the data segment.
+  //   1349 -> 1345 the unused hero-panel state left production for the source
+  //                archive, removing its one u32 static.
+  //   1345 -> 1277 two direct AgentLiving profession offsets replace the
+  //                larger attribute-to-profession inference tables.
+  //   1277 -> 1437 the bounded 40-word account hero profession table lets
+  //                Apply reject an incompatible build before roster mutation.
+  //   1437 -> 1513 the certified attribute-family fallback keeps player build
+  //                capture working when AgentLiving profession bytes are not
+  //                populated by the official-client representation.
+  //   1513 -> 1437 the client's canonical party profession-state table
+  //                replaces both untrustworthy guesses and their lookup data.
+  // This constant exists so a kernel whose footprint moves cannot ship without
+  // someone saying why. One page is still the ceiling, and this remains far
+  // under it.
+  0x01, 0x05, 0x9d, 0x0b, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES
@@ -69,7 +119,10 @@ function encodeSection(id, payload) {
 
 function makeCompanionSignatureModule() {
   const types = [
-    i32FunctionType(9, true),
+    // companion_init: snapshot, config, cursor, toolbox and party regions as
+    // pointer/size pairs, plus the feature word. Eleven, not nine, since the
+    // party region joined.
+    i32FunctionType(11, true),
     i32FunctionType(6, false),
     i32FunctionType(0, true),
   ];

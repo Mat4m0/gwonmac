@@ -10,14 +10,13 @@
  */
 import type {
   AppSettings,
-  AppSettingsPatch,
   GwNativeApi,
-  EnhancementSelection,
 } from "../shared/contracts.js";
 import type {
   RendererEventName,
   RendererMetrics,
 } from "../shared/diagnostics.js";
+import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
 /**
  * Negative type test, run by every `tsc -p tsconfig.renderer.json`.
@@ -177,16 +176,7 @@ declare global {
       cssLength: number;
     }> | null;
     readonly readout: Readonly<{ visible: boolean; line: string }> | null;
-    readonly toolbox: Readonly<{
-      status: string;
-      playerChatCount?: number;
-      cursorEventCount?: number;
-      heroAvailable?: boolean;
-      heroCount?: number;
-      firstHeroId?: number;
-      firstHeroAgentId?: number;
-      panelState?: number;
-    }> | null;
+    readonly toolbox: ToolboxObservation | null;
   }
 
   interface CompanionObserverRuntime extends CompanionDeveloperRuntime {
@@ -208,16 +198,6 @@ declare global {
     }>;
   }
 
-  interface EnhancementSettingsController {
-    patchFor(control: HTMLInputElement | HTMLSelectElement): AppSettingsPatch | null;
-    render(settings: AppSettings): void;
-    resultFor(
-      control: HTMLInputElement | HTMLSelectElement,
-      patch: AppSettingsPatch,
-      saved: AppSettings,
-    ): Readonly<{ applied: boolean; text: string }> | null;
-  }
-
   interface Window {
     readonly gwNative: GwNativeApi;
     Module?: {
@@ -232,6 +212,11 @@ declare global {
       };
     };
     gwApplySettings?(settings: AppSettings): void;
+    gwToolsSettings(): Readonly<{
+      enabled: boolean;
+      teamManagement: boolean;
+      targetReadout: boolean;
+    }>;
     gwLoading: LoadingController;
     gwDiagnostics: RendererDiagnostics;
     gwSnapshotState?(): Partial<RendererMetrics>;
@@ -255,12 +240,6 @@ declare global {
       valid: boolean;
       cssLength: number;
     }> | null;
-    readonly gwEnhancementSettings: Readonly<{
-      create(options: {
-        form: HTMLFormElement;
-        selection: EnhancementSelection;
-      }): EnhancementSettingsController;
-    }>;
     gwAutomation: EnhancementAutomation;
     gwGlRecon?(): Readonly<{
       livePrograms: number;

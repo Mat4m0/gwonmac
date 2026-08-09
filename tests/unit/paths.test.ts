@@ -10,6 +10,7 @@ import {
   gamePaths,
   obsoleteEnhancementCachePath,
   snapshotMetadataPath,
+  unpackedPath,
 } from "../../src/main/core/paths.ts";
 
 // Every value below is a literal on purpose. A refactor may move where a path
@@ -25,6 +26,7 @@ describe("resolved profile paths", () => {
     assert.deepEqual(gamePaths(root), {
       userData: root,
       settings: `${root}/settings.json`,
+      buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,
       diagnostics: `${root}/diagnostics`,
       game: `${root}/game`,
@@ -39,6 +41,7 @@ describe("resolved profile paths", () => {
       extendedMemory: `${root}/game/extended-memory`,
       chunks: `${root}/game/chunks`,
       bootChunks: `${root}/game/boot-chunks.json`,
+      skillAssets: `${root}/game/skill-assets`,
       cacheClearRequest: `${root}/clear-cache-on-start`,
       gameStorageClearRequest: `${root}/clear-game-storage-on-start`,
     });
@@ -59,6 +62,10 @@ describe("resolved profile paths", () => {
       `${root}/game/artifacts.previous`,
       `${root}/game/compatibility`,
       `${root}/game/enhancements`,
+      // `game/skill-assets` is deliberately absent. Its writes land in a
+      // per-archive subdirectory that this non-recursive sweep would not reach,
+      // so `SkillAssets.prepare` collects its own orphans instead — the same
+      // owner-recovery exemption the hashed derived-WASM entries take.
     ]);
   });
 
@@ -117,6 +124,36 @@ describe("resolved profile paths", () => {
       clientArtifactPath(generation, "version.json"),
       `${generation}/version.json`,
     );
+  });
+
+  // Both files that resolve through this must run as code, and neither can run
+  // from inside app.asar. Stating the rule once means a change to it fails here
+  // rather than only in a packaged build, which is the failure mode the
+  // keychain path was deliberately shaped to prevent.
+  it("resolves an unpacked executable in development and when packaged", () => {
+    for (const relative of [
+      "build/native/keychain.node",
+      "build/native/gw-dat-decode",
+    ]) {
+      assert.equal(
+        unpackedPath(
+          { packaged: false, appPath: "/checkout", resourcesPath: "/ignored" },
+          relative,
+        ),
+        `/checkout/${relative}`,
+      );
+      assert.equal(
+        unpackedPath(
+          {
+            packaged: true,
+            appPath: "/ignored",
+            resourcesPath: "/App/Contents/Resources",
+          },
+          relative,
+        ),
+        `/App/Contents/Resources/app.asar.unpacked/${relative}`,
+      );
+    }
   });
 
   it("pins the diagnostics frame log name", () => {

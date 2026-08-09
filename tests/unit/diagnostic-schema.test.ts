@@ -4,10 +4,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AppError } from "../../src/shared/errors.ts";
-import {
-  asAppVersion,
-  diagnosticEventRecord,
-} from "../../src/main/diagnostics/schema.ts";
+import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.ts";
+import { asAppVersion } from "../../src/main/diagnostics/schema-fields.ts";
 import {
   asDigest,
   isDigest,

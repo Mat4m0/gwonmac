@@ -182,7 +182,62 @@ test.describe("settings experience", () => {
     }
   });
 
-  test("explains render cost and will not change the cursor without a restart", async () => {
+  test("panel opacity changes the one interface and survives", async () => {
+    const fixture = await launchOffline("gw-settings-appearance-e2e-");
+    try {
+      const { page } = fixture;
+      const root = page.locator("html");
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await page.locator("#settings-tab-display").click();
+
+      await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("94");
+      await expect(page.locator('select[name="uiTheme"]')).toHaveCount(0);
+      await expect(page.locator('select[name="uiDensity"]')).toHaveCount(0);
+      // Polled, not read once: the save is a round trip through main and the
+      // token is written when it returns. The slider's own readout updates on
+      // the drag and so proves nothing about the setting having landed.
+      const expectToken = async (property: string, value: string) => {
+        await expect
+          .poll(() =>
+            root.evaluate(
+              (html, name) => html.style.getPropertyValue(name),
+              property,
+            ),
+          )
+          .toBe(value);
+      };
+
+      await page.locator('input[name="uiPanelOpacity"]').fill("65");
+      await page.locator('input[name="uiPanelOpacity"]').dispatchEvent("change");
+      await expect(page.locator('output[name="uiPanelOpacityValue"]'))
+        .toHaveText("65%");
+      await expectToken("--ui-panel-opacity", "0.65");
+
+      // Nothing here may reach the game. The canvas is the game's surface, and
+      // a presentation setting that resized or restyled it would be exactly the
+      // leak `contracts.ts` promises does not exist.
+      await expect(page.locator("#settings-feedback")).not.toContainText(
+        "could not be saved",
+      );
+
+      // Closing and reopening reads the form back from main rather than from
+      // whatever the controls happen to still hold.
+      await page.locator("#settings-done").click();
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-display").click();
+      await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("65");
+      await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("65%");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("explains render cost and keeps required Core visible", async () => {
     const fixture = await launchOffline("gw-settings-e2e-");
     try {
       const { page } = fixture;
@@ -248,28 +303,13 @@ test.describe("settings experience", () => {
         )
         .toBe(true);
       await page.locator("#settings-tab-controls").click();
-      // The cursor ships on, so the change a player makes here is turning it
-      // off. It picks the WASM main at launch, so main asks to restart before
-      // it saves anything (P7.6); this drives the declined answer, where the
-      // rule is that nothing is written and nothing on screen claims it was.
-      await fixture.app.evaluate(({ dialog }) => {
-        dialog.showMessageBox = async () => ({
-          response: 1,
-          checkboxChecked: false,
-        });
-      });
-      // Not uncheck(): the box is re-rendered from the settings main returned,
-      // which uncheck() would read as a failed click.
-      await page.locator('input[name="nativeCursor"]').click();
-      await expect(page.locator("#settings-feedback")).toHaveText(
-        "The cursor was not changed.",
+      await expect(page.locator("#settings-pane-controls")).toContainText(
+        "GWonMac Core is always active",
       );
-      await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
       await expect
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
           renderScale: 1.5,
-          nativeCursor: true,
           showDiagnostics: true,
         });
       // Nothing about the running session's cursor may change.
@@ -292,32 +332,27 @@ test.describe("settings experience", () => {
     }
   });
 
-  test("labels the game cursor honestly and ships it on", async () => {
+  test("labels required Core honestly and ships the cursor on", async () => {
     const fixture = await launchOffline("gw-cursor-default-e2e-");
     try {
       const { page } = fixture;
-      expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
-        nativeCursor: true,
-      });
+      expect(
+        await page.evaluate(async () =>
+          "nativeCursor" in await window.gwNative.settings.get()),
+      ).toBe(false);
       await page.evaluate(() =>
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
       await page.locator("#settings-tab-controls").click();
-      // A fresh profile arrives with the box already ticked, so the control is
-      // how a player turns the cursor off rather than how they find it.
-      await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
-      // The retired target readout offers no control at all.
-      await expect(page.locator('input[name="targetReadout"]')).toHaveCount(0);
+      await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
 
-      // Each tool has its own label and default; the cursor note has to say
-      // where its artwork comes from and what changing it costs.
       const controls = page.locator("#settings-pane-controls");
-      await expect(controls).toContainText("your own installed Guild Wars");
-      await expect(controls).toContainText("no artwork ships with this app");
-      // The write and the restart are one action (P7.6), so the note must not
-      // say the change waits quietly for the next launch.
-      await expect(controls).toContainText("restarts the app");
-      await expect(controls).not.toContainText("next time you open this app");
+      await expect(controls).toContainText("GWonMac Core is always active");
+      await expect(controls).toContainText("native Guild Wars cursor");
+      await expect(controls).toContainText("has no opt-out");
+      await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
+      await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
+      await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();
       // Loading the Enhancement does not paint a cursor by itself: the game must
       // publish one first, and this launcher has no game.
       expect(
@@ -332,10 +367,7 @@ test.describe("settings experience", () => {
           () => window.gwNative.init.enhancementSelection.nativeCursor,
         ),
       ).toBe(true);
-      // The generated launch selection carries the canonical Enhancement registry
-      // into the renderer. Every member must bind the Settings pane — and only
-      // the Settings pane: the first-run gate asks one question, so a tool
-      // checkbox appearing there again is a regression, not a feature.
+      // Launch capability and persisted product preferences are separate.
       expect(
         await page.evaluate(() =>
           Object.keys(window.gwNative.init.enhancementSelection).map((name) => {
@@ -353,14 +385,94 @@ test.describe("settings experience", () => {
           }),
         ),
       ).toEqual([
-        { name: "nativeCursor", settings: true, launcher: false },
+        { name: "nativeCursor", settings: false, launcher: false },
+        { name: "tools", settings: false, launcher: false },
       ]);
     } finally {
       await closeOffline(fixture);
     }
   });
 
-  test("reset and a changed Enhancement posture restart as one action", async () => {
+  test("declining the first Tools enable saves nothing", async () => {
+    const fixture = await launchOffline("gw-tools-enable-cancel-e2e-");
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-controls").click();
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+      await page.locator('input[name="gwonmacTools"]').click();
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "GWonMac Tools Beta was not changed.",
+      );
+      await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
+      expect(await page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ gwonmacTools: false });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("the first Tools enable saves and restarts as one action", async () => {
+    const fixture = await launchOffline("gw-tools-enable-restart-e2e-");
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-controls").click();
+      await app.evaluate(({ app: electronApp, dialog }) => {
+        globalThis.__resetRestart = {
+          quit: false,
+          relaunch: false,
+          options: null,
+          originalQuit: electronApp.quit,
+          originalRelaunch: electronApp.relaunch,
+        };
+        const record = async (
+          _win: Electron.BaseWindow,
+          options: Electron.MessageBoxOptions,
+        ): Promise<Electron.MessageBoxReturnValue> => {
+          globalThis.__resetRestart.options = options;
+          return { response: 0, checkboxChecked: false };
+        };
+        dialog.showMessageBox = record as typeof dialog.showMessageBox;
+        electronApp.relaunch = () => {
+          globalThis.__resetRestart.relaunch = true;
+        };
+        electronApp.quit = () => {
+          globalThis.__resetRestart.quit = true;
+        };
+      });
+
+      await page.locator('input[name="gwonmacTools"]').click();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).gwonmacTools)).toBe(true);
+      expect(await app.evaluate(() => {
+        const { quit, relaunch, options } = globalThis.__resetRestart;
+        if (!options) throw new Error("no message box was shown");
+        return { quit, relaunch, buttons: options.buttons };
+      })).toEqual({
+        quit: true,
+        relaunch: true,
+        buttons: ["Enable and Restart", "Cancel"],
+      });
+      await app.evaluate(({ app: electronApp }) => {
+        electronApp.quit = globalThis.__resetRestart.originalQuit;
+        electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("reset ignores the retired cursor preference and does not restart", async () => {
     const fixture = await launchOffline(
       "gw-settings-reset-restart-e2e-",
       {},
@@ -372,9 +484,8 @@ test.describe("settings experience", () => {
     );
     try {
       const { app, page } = fixture;
-      expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
-        nativeCursor: false,
-      });
+      expect(await page.evaluate(async () =>
+        "nativeCursor" in await window.gwNative.settings.get())).toBe(false);
       await app.evaluate(({ app: electronApp, dialog }) => {
         globalThis.__resetRestart = {
           quit: false,
@@ -403,10 +514,7 @@ test.describe("settings experience", () => {
       });
 
       const reset = await page.evaluate(() => window.gwNative.settings.reset());
-      expect(reset).toMatchObject({
-        renderScale: 2,
-        nativeCursor: true,
-      });
+      expect(reset).toMatchObject({ renderScale: 2 });
       expect(
         await app.evaluate(() => {
           const { quit, relaunch, options } = globalThis.__resetRestart;
@@ -414,14 +522,12 @@ test.describe("settings experience", () => {
           return { quit, relaunch, buttons: options.buttons };
         }),
       ).toEqual({
-        quit: true,
-        relaunch: true,
-        buttons: ["Reset and Restart", "Cancel"],
+        quit: false,
+        relaunch: false,
+        buttons: ["Reset Launcher Settings", "Cancel"],
       });
-      expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
-        renderScale: 2,
-        nativeCursor: true,
-      });
+      expect(await page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ renderScale: 2 });
       await app.evaluate(({ app: electronApp }) => {
         electronApp.quit = globalThis.__resetRestart.originalQuit;
         electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
@@ -454,12 +560,10 @@ test.describe("settings experience", () => {
       expect(reset).toMatchObject({
         renderScale: 2,
         showDiagnostics: false,
-        nativeCursor: true,
       });
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
         renderScale: 2,
         showDiagnostics: false,
-        nativeCursor: true,
       });
     } finally {
       await closeOffline(fixture);
@@ -478,14 +582,22 @@ test.describe("settings experience", () => {
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
 
-      const dataTab = page.locator("#settings-tab-data");
-      const displayTab = page.locator("#settings-tab-display");
+      // Whichever tab follows the first one: the claim is that ArrowRight moves
+      // focus and selection together, not that any two panes are neighbours.
+      const panes = await page
+        .locator(".settings-rail .settings-rtab")
+        .evaluateAll((tabs) => tabs.map((tab) => (tab as HTMLElement).dataset.pane));
+      const [first, second] = panes;
+      expect(second).toBeTruthy();
+
+      const dataTab = page.locator(`#settings-tab-${first}`);
+      const nextTab = page.locator(`#settings-tab-${second}`);
       await dataTab.focus();
       await dataTab.press("ArrowRight");
-      await expect(displayTab).toBeFocused();
-      await expect(displayTab).toHaveAttribute("aria-selected", "true");
-      await expect(page.locator("#settings-pane-display")).toBeVisible();
-      await expect(page.locator("#settings-pane-data")).toBeHidden();
+      await expect(nextTab).toBeFocused();
+      await expect(nextTab).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator(`#settings-pane-${second}`)).toBeVisible();
+      await expect(page.locator(`#settings-pane-${first}`)).toBeHidden();
 
       expect(
         await page.locator("#settings-saved").evaluate(
@@ -509,7 +621,7 @@ test.describe("settings experience", () => {
       await page.evaluate(() =>
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
-      await page.locator("#settings-tab-controls").click();
+      await page.locator("#settings-tab-advanced").click();
       await app.evaluate(({ ipcMain }) => {
         ipcMain.removeHandler("gw:settings:set");
         ipcMain.handle("gw:settings:set", () => {
@@ -517,19 +629,14 @@ test.describe("settings experience", () => {
         });
       });
 
-      // Not uncheck(): the box ships ticked and the rollback re-ticks it,
-      // which uncheck() reads as a failed click. Clicking is what a player
-      // does, and the change is undone.
-      await page.locator('input[name="nativeCursor"]').click();
+      await page.locator('input[name="showDiagnostics"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
         "Settings could not be saved.",
       );
-      // A failed write must not leave the box showing a state the main process
-      // never accepted — here, a cursor the player still has.
-      await expect(page.locator('input[name="nativeCursor"]')).toBeChecked();
+      await expect(page.locator('input[name="showDiagnostics"]')).not.toBeChecked();
       expect(
         await page.evaluate(() => window.gwNative.settings.get()),
-      ).toMatchObject({ nativeCursor: true });
+      ).toMatchObject({ showDiagnostics: false });
     } finally {
       await closeOffline(fixture);
     }

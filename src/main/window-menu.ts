@@ -18,7 +18,11 @@ import {
 import { EXTERNAL_URLS } from "../shared/contracts.js";
 import { logEvent } from "./diagnostics.js";
 import { reportProblem } from "./problem-report.js";
-import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
+import {
+  resetGameInput,
+  sendRendererCommand,
+  toggleTools,
+} from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
 import type { WindowHost } from "./window.js";
 
@@ -100,6 +104,20 @@ export function installApplicationMenu({
           },
         },
         { type: "separator" },
+        {
+          id: "toggle-tools",
+          label: "Toggle Tools",
+          // Displayed, not bound. Electron dispatches a key to the page before
+          // it considers menu shortcuts, and Guild Wars claims most single
+          // letters whatever modifier is held -- it handles `b` and its
+          // preventDefault cancels the accelerator with it. The key is owned by
+          // `before-input-event` in window.ts instead, which runs before the
+          // page; `registerAccelerator: false` keeps the shortcut visible here
+          // without binding it a second time and firing twice.
+          accelerator: "CmdOrCtrl+B",
+          registerAccelerator: false,
+          click: () => toggleTools(win),
+        },
         {
           label: "Toggle Diagnostics",
           click: async () => {

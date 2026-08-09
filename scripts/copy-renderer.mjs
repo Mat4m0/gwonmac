@@ -24,11 +24,33 @@ const ASSETS = [
   "loading.css",
 ];
 
+// The design system lives in src/shared because the Tools application consumes
+// it too, and apps/** may only reach into src/shared (see eslint.config.js).
+// The renderer loads it as `ui/…`, so it lands beside the renderer's own assets
+// rather than under a shared/ subtree nothing else would read. Listed here for
+// the same reason as everything above: a package input is explicit.
+/** @type {ReadonlyArray<readonly [source: string, destination: string]>} */
+const SHARED_ASSETS = [
+  ["src/shared/ui/tokens.css", "ui/tokens.css"],
+  ["src/shared/ui/components.css", "ui/components.css"],
+];
+
 const dest = path.resolve("build/renderer");
-for (const relative of ASSETS) {
+/**
+ * @param {string} from absolute source path
+ * @param {string} relative destination, under build/renderer
+ */
+const copy = (from, relative) => {
   const target = path.join(dest, relative);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.copyFileSync(path.resolve("src/renderer", relative), target);
+  fs.copyFileSync(from, target);
+};
+
+for (const relative of ASSETS) {
+  copy(path.resolve("src/renderer", relative), relative);
+}
+for (const [from, relative] of SHARED_ASSETS) {
+  copy(path.resolve(from), relative);
 }
 
 console.log(`copied renderer -> ${dest}`);

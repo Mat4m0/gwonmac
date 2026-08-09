@@ -43,6 +43,24 @@ over the game view for the duration of that session. That artwork is never
 copied into this repository, the packaged application, or any release
 artifact.
 
+## GWToolbox++ and GuildWarsMapBrowser
+
+`src/native/gw-dat/vendor/` is a source port from
+[GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), which distributes it
+under the MIT License and identifies it as derived from
+[GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser) by
+Jonathan Bjørn Greve. It decompresses an archive stream and decodes a texture.
+
+Both grants are included as `COPYING-GWTOOLBOX` and
+`COPYING-GUILDWARSMAPBROWSER` beside the source and in the packaged
+application's Resources directory.
+
+This is decoding machinery, not game content. Every fact the build editor shows
+— each skill's name, description, icon, profession, attribute and costs — is
+read at runtime out of the Guild Wars installation on the player's own machine
+and cached there. As with the game cursor described above, none of it is copied
+into this repository, the packaged application, or any release artifact.
+
 ## QT Friz Quad
 
 QT Friz Quad is © 1992 QualiType and is distributed under the SIL Open Font

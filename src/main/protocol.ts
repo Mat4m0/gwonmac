@@ -18,7 +18,11 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import type { SnapshotMetadata } from "../shared/contracts.js";
+import {
+  SKILL_CATALOGUE_ROUTE,
+  SKILL_ICON_PATTERN,
+  type SnapshotMetadata,
+} from "../shared/contracts.js";
 import { CLIENT_ARTIFACTS } from "./core/access-key.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 import {
@@ -30,6 +34,7 @@ import {
   rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
 import { clientArtifactPath } from "./core/paths.js";
+import { SkillAssets } from "./core/skill-catalogue.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { snapshotMetadataWire } from "./core/snapshot.js";
 import { errorCode } from "../shared/errors.js";
@@ -39,7 +44,7 @@ import {
   startProxyRequestSpan,
   startSnapshotReadSpan,
 } from "./diagnostics.js";
-import { gamePaths, rendererRoot } from "./paths.js";
+import { gamePaths, gwDatDecoderPath, rendererRoot } from "./paths.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -62,7 +67,10 @@ const CSP =
   "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 const RENDERER_SHARED_MODULES = new Set([
+  "companion-abi.js",
   "contracts.js",
+  "enhancement-config.js",
+  "enhancement-contracts.js",
   "project-identity.js",
 ]);
 
@@ -79,6 +87,35 @@ export interface ProtocolDeps {
 let deps: ProtocolDeps = {
   getActiveClient: () => null,
 };
+
+/**
+ * One `SkillAssets` per active client. It owns its own memoisation and its own
+ * on-disk cache, so this only has to notice when the client underneath changes.
+ */
+let skillAssets: {
+  readonly store: ChunkStore;
+  readonly wasmPath: string;
+  readonly value: SkillAssets;
+} | null = null;
+
+function assetsFor(
+  active: NonNullable<ReturnType<ProtocolDeps["getActiveClient"]>>,
+): SkillAssets {
+  if (
+    skillAssets?.store === active.store
+    && skillAssets.wasmPath === active.wasmPath
+  ) {
+    return skillAssets.value;
+  }
+  const value = new SkillAssets({
+    store: active.store,
+    wasmPath: active.wasmPath,
+    decoderPath: gwDatDecoderPath(),
+    cacheRoot: gamePaths().skillAssets,
+  });
+  skillAssets = { store: active.store, wasmPath: active.wasmPath, value };
+  return value;
+}
 
 export function setProtocolDeps(next: ProtocolDeps): void {
   deps = next;
@@ -426,6 +463,57 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     });
   }
 
+  if (base === SKILL_CATALOGUE_ROUTE) {
+    const empty = () =>
+      new Response("[]", {
+        status: 503,
+        headers: headers({
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        }),
+      });
+    const active = deps.getActiveClient();
+    if (!active || request.method !== "GET") return empty();
+    const read = await assetsFor(active).catalogue();
+    if (!read.ok) {
+      logEvent({ k: "protocol.skillCatalogueRefused", reason: read.reason });
+      return empty();
+    }
+    const body = JSON.stringify(read.skills);
+    return new Response(body, {
+      status: 200,
+      headers: headers({
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(body)),
+        "Cache-Control": "no-store",
+      }),
+    });
+  }
+
+  // Bounded by the pattern, not by a check afterwards: only decimal digits
+  // reach `icon`, so no request can name a path.
+  const iconMatch = SKILL_ICON_PATTERN.exec(base);
+  if (iconMatch) {
+    const active = deps.getActiveClient();
+    const missing = () =>
+      new Response("not found", {
+        status: 404,
+        headers: headers({ "Cache-Control": "no-store" }),
+      });
+    if (!active || request.method !== "GET") return missing();
+    const icon = await assetsFor(active).icon(Number(iconMatch[1]));
+    return icon
+      ? new Response(icon, {
+          status: 200,
+          headers: headers({
+            "Content-Type": "image/bmp",
+            "Content-Length": String(icon.byteLength),
+            "Cache-Control": "no-store",
+          }),
+        })
+      : missing();
+  }
+
   const artifactName = CLIENT_ARTIFACTS.includes(
     base as (typeof CLIENT_ARTIFACTS)[number],
   )
@@ -450,7 +538,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
 
   // The dynamically loaded Enhancement installer imports the canonical
   // capability contract. TypeScript emits that contract beside main rather
-  // than copying it into renderer/, so expose only its exact two-module graph.
+  // than copying it into renderer/, so expose only its exact closed graph.
   // This is deliberately not a generic build/shared route.
   if (first === "shared") {
     const moduleName = base.slice("shared/".length);

@@ -13,6 +13,7 @@ import {
   describeNotice,
   describeSnapshotReadFailure as snapshotRead,
   describeSteamRefusal,
+  describeTemplateExportFailure as templateExport,
   failureDetail,
   memoryExplanation,
   memoryPressureChip,
@@ -29,6 +30,7 @@ describe("renderer failure messages", () => {
         ["launch", launch],
         ["download", download],
         ["snapshot", snapshotRead],
+        ["templateExport", templateExport],
       ] as const) {
         const text = describe_(code);
         assert.equal(typeof text, "string", `${surface} ${code}`);

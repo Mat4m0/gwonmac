@@ -9,7 +9,7 @@
  */
 import { app } from "electron";
 import path from "node:path";
-import { gamePaths as resolveGamePaths } from "./core/paths.js";
+import { gamePaths as resolveGamePaths, unpackedPath } from "./core/paths.js";
 import type { GamePaths } from "./core/paths.js";
 
 export type { GamePaths } from "./core/paths.js";
@@ -27,4 +27,21 @@ export function rendererRoot(): string {
 export function preloadPath(): string {
   // Sandboxed preload must be CommonJS (.cjs); ESM graphs are not executed.
   return path.join(app.getAppPath(), "build", "preload", "preload.cjs");
+}
+
+/**
+ * The Guild Wars archive decoder, which is spawned rather than linked.
+ *
+ * The packaging rule itself lives in `./core/paths.ts` beside the keychain
+ * addon's, because it is the same rule and a test can execute it there.
+ */
+export function gwDatDecoderPath(): string {
+  return unpackedPath(
+    {
+      packaged: app.isPackaged,
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+    },
+    "build/native/gw-dat-decode",
+  );
 }
