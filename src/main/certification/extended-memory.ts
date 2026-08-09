@@ -22,8 +22,6 @@ import {
 declare const WebAssembly: { validate(bytes: Uint8Array): boolean };
 
 export const EXTENDED_MEMORY_TRANSFORM_ABI = 1;
-export const EXTENDED_MEMORY_RESEARCH_ENABLED =
-  process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1";
 export const EXTENDED_MEMORY_MAX_PAGES = 65_535;
 export const EXTENDED_MEMORY_MAX_BYTES = EXTENDED_MEMORY_MAX_PAGES * 65_536;
 export const EXTENDED_MEMORY_PROFILES = [

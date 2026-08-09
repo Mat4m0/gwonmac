@@ -20,6 +20,7 @@ describe("settings", () => {
       gwonmacTools: false,
       teamManagement: true,
       targetReadout: false,
+      extendedMemoryEnabled: false,
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -56,6 +57,7 @@ describe("settings", () => {
       gwonmacTools: false,
       teamManagement: true,
       targetReadout: false,
+      extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -149,6 +151,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ targetReadout: true }), {
       targetReadout: true,
     });
+    assert.deepEqual(parseSettingsPatch({ extendedMemoryEnabled: true }), {
+      extendedMemoryEnabled: true,
+    });
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -186,6 +191,7 @@ describe("settings", () => {
       "autoCheckUpdates",
       "compatibilityNoticeSeenFor",
       "dataStrategy",
+      "extendedMemoryEnabled",
       "formatVersion",
       "gwonmacTools",
       "lastUpdateCheckAt",
@@ -227,6 +233,7 @@ describe("settings", () => {
       gwonmacTools: false,
       teamManagement: true,
       targetReadout: false,
+      extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately

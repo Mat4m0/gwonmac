@@ -149,6 +149,15 @@ The local performance overlay stays under **Advanced**, outside the normal
 setup path. Settings reopens to the pane most recently used during the current
 session.
 
+**Advanced → Experimental 4 GB memory limit** asks the next Guild Wars launch
+to use the certified 4 GB client module. It is off by default, and changing it
+requires restarting GWonMac because the module is selected before the game
+starts. Settings always shows what the current session is actually using. If a
+Guild Wars update has not passed 4 GB certification yet, GWonMac starts the
+ordinary 2 GB client instead and leaves gameplay available. The larger limit
+provides more headroom during long sessions; it does not stop memory that keeps
+growing.
+
 The official WebAssembly client currently requests a WebGL context without
 multisampling, so its in-game antialiasing list may contain only **None**. The
 host does not display options the client cannot provide; the 1.5× and 2×
@@ -356,11 +365,12 @@ public, so review the bug form’s privacy notice as well.
 
 ## If the game warns that memory is running out
 
-ArenaNet's current game client is capped at 2 GB of WebAssembly memory. During
-long sessions that visit new content, its memory can keep growing instead of
-settling. At the cap, the next large allocation stops the client. This app
-cannot safely discard objects owned by the game, but it can measure the heap
-and warn before the client reaches its cap.
+Each Guild Wars session has a certified WebAssembly memory limit: 2 GB by
+default, or 4 GB when the experimental option is active. During long sessions
+that visit new content, memory can keep growing instead of settling. At the
+limit, the next large allocation stops the client. This app cannot safely
+discard objects owned by the game, but it can measure the heap and warn before
+the client reaches its effective limit.
 
 A notice appears over the game at two points: once with roughly twenty minutes
 of play left, and again with about five. Those points are worked out from how
@@ -374,13 +384,14 @@ against a real crash it was wrong by enough to matter in both directions, and
 a number on a banner is a promise. What is worth acting on is that the warning
 appeared.
 
-**Reload Now** restarts the client with fresh memory. It takes under a minute,
+**Reload Guild Wars** restarts the client with fresh memory. It takes under a minute,
 and Guild Wars puts you back where you were — the same way it handles a
 dropped connection. That was tested from inside an instance on every way this
 app can reload the game, and progress survived each time; a town or outpost is
-still the one place with nothing at all to lose. **Later** leaves a small
-reminder in the corner rather than going quiet; the full notice returns if time
-runs short. **Why is this happening?** explains it in the game.
+still the one place with nothing at all to lose. **Later** dismisses the current
+level for this session; escalation from Low to Critical shows the same notice
+again. **Details** expands the effective 2 GB or 4 GB limit inline without
+opening a modal over the game.
 
 ## If the game crashes
 

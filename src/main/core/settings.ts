@@ -100,7 +100,12 @@ export function parseSettings(raw: unknown): AppSettings {
       100,
     );
   }
-  for (const setting of ["gwonmacTools", "teamManagement", "targetReadout"] as const) {
+  for (const setting of [
+    "gwonmacTools",
+    "teamManagement",
+    "targetReadout",
+    "extendedMemoryEnabled",
+  ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
   }
   if ("showDiagnostics" in src) {

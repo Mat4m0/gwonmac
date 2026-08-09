@@ -15,9 +15,7 @@ import {
   describeSteamRefusal,
   describeTemplateExportFailure as templateExport,
   failureDetail,
-  memoryExplanation,
-  memoryPressureChip,
-  memoryPressurePresentation,
+  memoryWarningCopy,
   suggestReport,
 } from "../../src/renderer/failure-messages.js";
 import { NOTICE_CODES } from "../../src/shared/contracts.ts";
@@ -186,133 +184,43 @@ describe("renderer failure messages", () => {
     assert.deepEqual(clientCrashPresentation(0), first);
   });
 
-  it("escalates the memory watermark words, not its actions", () => {
-    const low = memoryPressurePresentation("low");
-    const critical = memoryPressurePresentation("critical");
+  it("escalates memory wording while keeping one action model", () => {
+    const low = memoryWarningCopy("low", 2_147_483_648);
+    const critical = memoryWarningCopy("critical", 2_147_483_648);
     for (const notice of [low, critical]) {
       for (const text of [
         notice.label,
         notice.detail,
         notice.reloadButton,
         notice.dismissButton,
-        notice.whyLink,
+        notice.explanation,
       ]) {
         assert.ok(text.length > 0, "memory notice has empty prose");
       }
-      // The outpost belongs to the explanation now, not to the notice. It is
-      // still the one place that risks nothing, but the reconnect is measured,
-      // and repeating a caveat against a measured fact is what made the
-      // shipped sentence easy to ignore from inside a dungeon.
       assert.doesNotMatch(notice.detail, /town or outpost/);
-      assert.match(memoryExplanation().blocks[3]!.body, /town or outpost/);
-      // The detail opens with the action. Derived from the button so it
-      // survives a rename, and it pins the ordering the redesign is about:
-      // what to do first, why it is happening behind a link.
-      assert.ok(
-        notice.detail.startsWith(notice.reloadButton.split(" ")[0]!),
-        `detail does not open with the action: ${notice.detail}`,
-      );
     }
-    // Escalation lives in the urgency of the instruction, not in a fear
-    // sentence: the deadline shrinks and "when it suits you" becomes "soon".
-    assert.match(low.detail, /^Reload when it suits you/);
+    assert.match(low.detail, /^Reload when convenient/);
     assert.match(critical.detail, /^Reload soon/);
     assert.match(critical.label, /out of memory/);
-    // Buttons are identical across levels: escalation changes the words,
-    // not the actions.
     assert.equal(low.reloadButton, critical.reloadButton);
     assert.equal(low.dismissButton, critical.dismissButton);
   });
 
-  it("names no figure the player could check against a clock", () => {
-    // The thresholds count in time; the sentences do not print the time. That
-    // split was decided by the Eye of the North crash bundle of 2026-08-04:
-    // replayed against the client run that reached the cap, the levels landed
-    // where they should — `low` with 31 real minutes left where the shipped
-    // byte rule gave 11 — and the figure read 10 → 15 → 20 → 75 → 40 → 20 →
-    // 15 → 10 → 3, offering "about 75 minutes" to a player with 18 left. A
-    // quiet stretch had drifted into the measurement window just before they
-    // went back into heavy loading, and no rate can see that coming.
-    //
-    // The estimate still exists and still sets the level. The log records it
-    // as a diagnostic, but a diagnostic on a banner is a promise, so nothing
-    // here may carry one.
+  it("prints the effective cap but no unreliable countdown", () => {
     for (const level of ["low", "critical"] as const) {
-      const notice = memoryPressurePresentation(level);
-      for (const text of [notice.label, notice.detail, notice.whyLink]) {
+      const notice = memoryWarningCopy(level, 2_147_483_648);
+      for (const text of [notice.label, notice.detail]) {
         assert.doesNotMatch(text, /\d/, text);
       }
-      assert.doesNotMatch(memoryPressureChip(level).text, /\d/);
-      assert.doesNotMatch(memoryPressureChip(level).label, /\d/);
+      assert.match(notice.explanation, /2 GB/);
     }
-    // Low reads as headroom, critical as imminent — the escalation the figure
-    // used to carry has to live in the words instead.
-    assert.match(memoryPressurePresentation("low").label, /running low/);
-    assert.match(memoryPressurePresentation("critical").label, /almost out of/);
-    assert.notEqual(
-      memoryPressureChip("low").text,
-      memoryPressureChip("critical").text,
-      "the chip says the same thing at both levels",
-    );
+    assert.match(memoryWarningCopy("low", 4_294_901_760).explanation, /4 GB/);
   });
 
-  it("states the reconnect that was measured, and claims nothing past it", () => {
-    // This test used to require the hedge — "should be able to rejoin" — and
-    // fail if anyone firmed the wording before the experiment had been run.
-    // It has been run: 2026-08-05, all five reload paths, from inside an
-    // instance, progress intact every time and back inside thirty seconds.
-    // The uncertainty was never whether Guild Wars restores an instance after
-    // a dropped connection; it was whether our reload looks like one to the
-    // server. That is answered, so the assertion turns around and guards the
-    // opposite failure: a promise wider than the evidence.
-    const strings = [
-      memoryPressurePresentation("low"),
-      memoryPressurePresentation("critical"),
-    ].flatMap((notice) => [notice.label, notice.detail]);
-    const explanation = memoryExplanation();
-    strings.push(...explanation.blocks.map((block) => block.body));
-
-    assert.ok(
-      strings.some((text) => /puts you back where you were/.test(text)),
-      "the measured reconnect stopped being stated",
-    );
-    assert.ok(
-      strings.every((text) => !/should be able to/.test(text)),
-      "a hedge the experiment retired came back",
-    );
-    // What was tested is one tester, one account, five paths. It says the
-    // reconnect works and how long it took; it must not promise that nothing
-    // can ever go wrong, which no session count would earn.
-    for (const text of strings) {
-      assert.doesNotMatch(text, /\b(guarantee\w*|never lose|always works?)\b/i, text);
-    }
-  });
-
-  it("explains the memory limit without claiming ArenaNet has been contacted", () => {
-    const explanation = memoryExplanation();
-    assert.equal(explanation.blocks.length, 4);
-    for (const block of explanation.blocks) {
-      assert.ok(block.title.length > 0, "block has no title");
-      assert.ok(block.body.length > 40, `${block.title} is not an explanation`);
-    }
-    const stands = explanation.blocks[2]!;
-    for (const claim of [/measured/, /documented/, /published/]) {
-      assert.match(stands.body, claim);
-    }
-    // What is true today is that the findings are published. Saying more than
-    // that in the app would be a claim nobody could back.
-    const joined = explanation.blocks.map((block) => block.body).join(" ");
-    assert.doesNotMatch(joined, /in contact with|reported to ArenaNet/i);
-  });
-
-  it("leaves something behind when a warning is dismissed", () => {
-    // `Later` used to mean silence until the crash. The chip is what stops
-    // that, and its accessible name has to say what it will do when clicked.
-    for (const level of ["low", "critical"] as const) {
-      const chip = memoryPressureChip(level);
-      assert.ok(chip.text.length > 0 && chip.text.length < 24, chip.text);
-      assert.match(chip.label, /memory/i);
-      assert.match(chip.label, /again/);
-    }
+  it("states measured recovery without overpromising", () => {
+    const explanation = memoryWarningCopy("critical", 4_294_901_760).explanation;
+    assert.match(explanation, /puts you back where you were/);
+    assert.match(explanation, /cannot stop continued memory growth/);
+    assert.doesNotMatch(explanation, /\b(guarantee\w*|never lose|always works?)\b/i);
   });
 });

@@ -215,32 +215,21 @@
      crashing at one they did not. harness.ts owns when and how many minutes;
      failure-messages.ts owns every word. -->
 <div id="memory-notice" hidden>
-  <div id="memory-notice-text" role="status" aria-live="polite"
-       aria-atomic="true">
-    <strong id="memory-notice-label"></strong>
-    <span id="memory-notice-detail"></span>
-    <button type="button" id="memory-notice-why"></button>
+  <div class="memory-notice-copy">
+    <div id="memory-notice-text" role="status" aria-live="polite"
+         aria-atomic="true">
+      <strong id="memory-notice-label"></strong>
+      <span id="memory-notice-detail"></span>
+    </div>
+    <details id="memory-notice-details">
+      <summary>Details</summary>
+      <p id="memory-notice-explanation"></p>
+    </details>
   </div>
   <div id="memory-notice-actions">
     <button type="button" id="memory-notice-later"></button>
     <button type="button" id="memory-notice-reload" class="primary"></button>
   </div>
-</div>
-<!-- What Later leaves behind. The banner's figure is frozen when it is shown,
-     so this is the surface that keeps counting — a dismissal is a deferral,
-     not the silence that preceded the crashes this warning exists for. -->
-<button type="button" id="memory-chip" hidden>
-  <span class="memory-chip-dot" aria-hidden="true"></span>
-  <span id="memory-chip-text"></span>
-</button>
-<!-- The explanation is a modal task, so unlike the notice it dims the game.
-     It opens in the notice's place: two translucent surfaces never stack. -->
-<div id="memory-scrim" hidden></div>
-<div id="memory-why" role="dialog" aria-modal="true"
-     aria-labelledby="memory-why-title" hidden>
-  <h2 id="memory-why-title"></h2>
-  <div id="memory-why-blocks"></div>
-  <button type="button" id="memory-why-close"></button>
 </div>
 <output id="capture-status" hidden aria-live="off">
   <span class="capture-dot" aria-hidden="true"></span>
@@ -517,6 +506,25 @@
                  aria-labelledby="settings-tab-advanced">
           <h3 id="settings-advanced-title" class="settings-pane-title">Advanced</h3>
           <p class="settings-pane-intro">Diagnostics and recovery options for troubleshooting GWonMac.</p>
+          <section class="settings-task settings-memory-task"
+                   aria-labelledby="settings-memory-title">
+            <div class="settings-setting-head">
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="extendedMemoryEnabled"
+                       aria-describedby="settings-memory-description settings-memory-status">
+                <span id="settings-memory-title">Experimental 4 GB memory limit</span>
+              </label>
+              <span id="settings-memory-badge" class="ui-chip" data-level="neutral">
+                Using 2 GB
+              </span>
+            </div>
+            <p id="settings-memory-description" class="settings-note">
+              Gives Guild Wars more memory for long sessions and may delay memory-related crashes. It does not stop memory that keeps growing. Restart GWonMac after changing this option.
+            </p>
+            <p id="settings-memory-status" class="settings-memory-status"
+               role="status" aria-live="polite"></p>
+          </section>
+          <div class="settings-divider" aria-hidden="true"></div>
           <label class="settings-check ui-check">
             <input type="checkbox" name="showDiagnostics">
             <span>Show performance overlay</span>

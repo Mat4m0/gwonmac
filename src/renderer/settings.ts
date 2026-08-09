@@ -9,9 +9,7 @@
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;
   type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
-  type CacheInfo = import('../shared/contracts.js').CacheInfo;
   type ClientSession = import('../shared/contracts.js').ClientSession;
-  type DownloadActivity = import('../shared/contracts.js').DownloadActivity;
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
   type UpdateAction = import('./update-action.js').UpdateAction;
@@ -24,31 +22,18 @@
   const dialog = byId('settings-dialog') as HTMLDialogElement;
   const settingsResize = byId('settings-resize') as HTMLButtonElement;
   const form = byId('settings-form') as HTMLFormElement;
-  const settingsDownload = byId('settings-download-full') as HTMLButtonElement;
   const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
   const settingsCache = byId('settings-cache');
-  const settingsDataNote = byId('settings-data-note');
-  const settingsProgress = byId('settings-progress');
-  const settingsProgressFill = byId('settings-progress-fill');
   const settingsPanes = form.querySelector('.settings-panes') as HTMLElement;
   const feedback = byId('settings-feedback');
-  const dataChoice = byId('data-choice');
-  const dataChoiceQuick = byId('data-choice-quick') as HTMLButtonElement;
-  const dataChoiceFull = byId('data-choice-full') as HTMLButtonElement;
-  const dataChoiceFullSize = byId('data-choice-full-size');
-  const dataChoiceError = byId('data-choice-error');
-  const dataDownload = byId('data-download');
-  const dataDownloadStatus = byId('data-download-status');
-  const dataDownloadDetail = byId('data-download-detail');
-  const dataDownloadFill = byId('data-download-fill');
-  const dataDownloadToggle = byId('data-download-toggle') as HTMLButtonElement;
-  const dataDownloadPlay = byId('data-download-play') as HTMLButtonElement;
-  const dataDownloadQuick = byId('data-download-quick') as HTMLButtonElement;
   const renderScale = form.elements.namedItem(
     'renderScale',
   ) as HTMLSelectElement;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
+  ) as HTMLInputElement;
+  const extendedMemoryEnabled = form.elements.namedItem(
+    'extendedMemoryEnabled',
   ) as HTMLInputElement;
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
@@ -70,7 +55,6 @@
     form.elements.namedItem(name) as HTMLInputElement | null;
   const appearanceOutput = (name: string) =>
     form.elements.namedItem(`${name}Value`) as HTMLOutputElement | null;
-  const choiceAutoUpdates = byId('data-choice-auto-updates') as HTMLInputElement;
   let updateAction: UpdateAction | null = null;
 
   let currentSession: ClientSession | null = null;
@@ -78,29 +62,10 @@
   let currentSettings: AppSettings | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
   let settingsWrite: Promise<unknown> = Promise.resolve();
-  let currentCache: CacheInfo | null = null;
-  let fullDownloadPromise: Promise<boolean> | null = null;
-  let downloadPhase: 'idle' | 'running' | 'stopping' = 'idle';
-  // Only ever the "image" phase: the dock renders a running download, and a
-  // failure arrives as the download's own outcome, not as a progress event.
-  let currentDownloadProgress: DownloadActivity | null = null;
-  // The stable "about N min left" readout, fed by the progress subscription
-  // below. The module resolves at startup, long before a download can
-  // produce its first estimate.
-  let etaMinutes: import('./progress-display.js').EtaDisplay | null = null;
-  void import('./progress-display.js').then((m) => {
-    etaMinutes = new m.EtaDisplay();
-  });
-  let shownEtaMinutes: number | null = null;
-  let downloadError = '';
-  let launcherResolve: (() => void) | null = null;
-  let launcherTotalBytes = 0;
   type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
   const idleFeedback = 'Changes save automatically.';
   let feedbackTimer: number | null = null;
   let activeSettingsPane = 'data';
-  const downloadActive = () =>
-    downloadPhase === 'running' || downloadPhase === 'stopping';
 
   void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
     installResizeGrip(settingsResize, {
@@ -204,10 +169,6 @@
       if (target.dataset.pane) selectPane(target.dataset.pane);
   });
 
-  const size = (bytes: number) => bytes >= 1_073_741_824
-    ? `${(bytes / 1_073_741_824).toFixed(2)} GB`
-    : `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`;
-
   const launcherMilestone = (name: RendererMilestone) => {
     void window.gwNative.diagnostics
       .recordRendererMilestone(name, performance.now() * 1000)
@@ -272,6 +233,17 @@
     settingsWrite = operation.catch(() => undefined);
     return operation;
   }
+
+  const extendedMemorySetting = import('./extended-memory-setting.js')
+    .then((module) => module.bindExtendedMemorySetting(document));
+  const dataStrategy = import('./settings-data-strategy.js')
+    .then((module) => module.bindSettingsDataStrategy(document, {
+      loadSettings,
+      persistSettings,
+      feedback: setFeedback,
+      milestone: launcherMilestone,
+      dialogOpen: () => dialog.open,
+    }));
 
   function requestUpdateCheck() {
     void updateAction?.check();
@@ -349,6 +321,10 @@
       session,
       window.gwNative.init.enhancementSelection,
     );
+    if (currentSettings) {
+      const setting = await extendedMemorySetting;
+      setting.render(currentSettings.extendedMemoryEnabled, session.extendedMemory);
+    }
     return session;
   }
 
@@ -386,27 +362,6 @@
     );
   }
 
-  function cacheComplete(cache = currentCache) {
-    return !!cache?.totalBytes && cache.bytes >= cache.totalBytes;
-  }
-
-  function cacheStatus(cache: CacheInfo | null) {
-    if (!cache?.totalBytes) return 'Game data is still preparing…';
-    if (cacheComplete(cache)) {
-      return `Full game ready · ${size(cache.bytes)} downloaded`;
-    }
-    return `${size(cache.bytes)} of ${size(cache.totalBytes)} downloaded`;
-  }
-
-  function selectedStrategy() {
-    const selected = form.querySelector<HTMLInputElement>(
-      'input[name="dataStrategy"]:checked',
-    );
-    return selected?.value === 'quick' || selected?.value === 'full'
-      ? selected.value
-      : null;
-  }
-
   function patchForControl(
     control: HTMLInputElement | HTMLSelectElement,
   ): AppSettingsPatch | null {
@@ -428,6 +383,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
           : null;
+      case 'extendedMemoryEnabled':
+        return control instanceof globalThis.HTMLInputElement
+          ? { extendedMemoryEnabled: control.checked }
+          : null;
       case 'gwonmacTools':
       case 'teamManagement':
       case 'targetReadout':
@@ -438,8 +397,6 @@
         return control instanceof globalThis.HTMLInputElement
           ? { autoCheckUpdates: control.checked }
           : null;
-      case 'dataStrategy':
-        return { dataStrategy: selectedStrategy() };
       default:
         return null;
     }
@@ -461,382 +418,24 @@
     }
     showAppearanceValues(settings);
     showDiagnostics.checked = settings.showDiagnostics;
+    extendedMemoryEnabled.checked = settings.extendedMemoryEnabled;
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;
     targetReadout.checked = settings.targetReadout;
     teamManagement.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
-    for (const radio of form.querySelectorAll<HTMLInputElement>(
-      'input[name="dataStrategy"]',
-    )) {
-      radio.checked = radio.value === settings.dataStrategy;
-    }
+    void extendedMemorySetting.then((setting) => {
+      setting.render(settings.extendedMemoryEnabled, currentSession?.extendedMemory ?? null);
+    });
+    void dataStrategy.then((controller) => controller.renderSettings(settings));
     updateRenderScaleDimensions();
   }
 
-  function renderSettingsData(cache = currentCache) {
-    currentCache = cache;
-    settingsCache.textContent = cacheStatus(cache);
-    const strategy = currentSettings?.dataStrategy ?? selectedStrategy();
-    settingsDownload.hidden = strategy !== 'full';
-
-    // The panel reuses the dock's progress language while data is incomplete.
-    if (settingsProgress && settingsProgressFill) {
-      const showBar =
-        strategy === 'full' && !!cache?.totalBytes && !cacheComplete(cache);
-      settingsProgress.hidden = !showBar;
-      if (showBar) {
-        const fraction = Math.min(1, (cache.bytes || 0) / cache.totalBytes);
-        settingsProgressFill.style.width = `${fraction * 100}%`;
-      }
-    }
-
-    if (strategy === null) {
-      settingsDataNote.textContent =
-        'Choose a mode here, or use the launcher choice on the next start.';
-    } else if (strategy === 'quick') {
-      settingsDataNote.textContent =
-        'Guild Wars will start normally and download areas when needed.';
-    } else if (cacheComplete(cache)) {
-      settingsDataNote.textContent =
-        'The full game is available locally. Future launches start normally.';
-    } else {
-      settingsDataNote.textContent =
-        'The remaining data will download before Guild Wars starts next time.';
-    }
-
-    if (strategy !== 'full') return;
-    // A status is never a button: once the download is complete, the status
-    // line already says "Full game ready" and the action disappears.
-    if (cacheComplete(cache)) {
-      settingsDownload.hidden = true;
-    } else if (downloadPhase === 'stopping') {
-      settingsDownload.textContent = 'Stopping Download…';
-      settingsDownload.disabled = true;
-    } else if (downloadPhase === 'running') {
-      settingsDownload.textContent = 'Pause Download';
-      settingsDownload.disabled = false;
-    } else if (!cache?.totalBytes) {
-      settingsDownload.textContent = 'Start Downloading Now';
-      settingsDownload.disabled = true;
-    } else {
-      settingsDownload.textContent = 'Start Downloading Now';
-      settingsDownload.disabled = false;
-    }
-  }
-
-  function renderLauncherDownload(cache = currentCache, error = downloadError) {
-    currentCache = cache;
-    const total = cache?.totalBytes || launcherTotalBytes;
-    const received = cache?.bytes || 0;
-    const complete = total > 0 && received >= total;
-    const ready = complete && !error;
-    const fraction = total > 0 ? Math.min(1, received / total) : 0;
-    dataDownloadFill.style.width = `${fraction * 100}%`;
-
-    if (error) {
-      dataDownloadStatus.textContent = error;
-      dataDownloadDetail.textContent =
-        'Verified data is safe. Choose Resume Download to try again.';
-    } else if (complete) {
-      dataDownloadStatus.textContent = `Full game ready · ${size(received)} downloaded`;
-      dataDownloadDetail.textContent =
-        'Guild Wars will not start until you choose Play Guild Wars.';
-    } else if (downloadPhase === 'stopping') {
-      dataDownloadStatus.textContent = `Pausing · ${cacheStatus(cache)}`;
-      dataDownloadDetail.textContent = 'Verified data is being preserved.';
-    } else if (downloadPhase === 'running') {
-      const progress = currentDownloadProgress;
-      const rate = progress && progress.bytesPerSecond > 0
-        ? ` · ${size(progress.bytesPerSecond)}/s avg`
-        : '';
-      const eta = progress && shownEtaMinutes !== null
-        ? ` · about ${shownEtaMinutes} min left`
-        : '';
-      dataDownloadStatus.textContent = progress?.total
-        ? `Downloading · ${size(received)} of ${size(total)}${rate}${eta}`
-        : `Starting download · ${cacheStatus(cache)}`;
-      dataDownloadDetail.textContent =
-        'Guild Wars has not started. You can pause or close the launcher and continue later.';
-    } else if (!downloadActive()) {
-      dataDownloadStatus.textContent = `Download paused · ${cacheStatus(cache)}`;
-      dataDownloadDetail.textContent =
-        'You can resume now or close the launcher and continue later.';
-    }
-
-    dataDownloadToggle.hidden = ready;
-    dataDownloadToggle.disabled = downloadPhase === 'stopping';
-    dataDownloadToggle.textContent = downloadPhase === 'stopping'
-      ? 'Pausing…'
-      : downloadPhase === 'running'
-        ? 'Pause Download'
-        : 'Resume Download';
-    dataDownloadPlay.textContent = ready
-      ? 'Play Guild Wars'
-      : 'Play While Downloading';
-    dataDownloadQuick.hidden = ready;
-  }
-
-  async function refreshCache() {
-    const cache = await window.gwNative.cache.info();
-    currentCache = cache;
-    renderSettingsData(cache);
-    if (!dataDownload.hidden) renderLauncherDownload(cache);
-    return cache;
-  }
-
-  function startFullDownload() {
-    if (fullDownloadPromise) return fullDownloadPromise;
-    downloadError = '';
-    downloadPhase = 'running';
-    currentDownloadProgress = null;
-    renderSettingsData();
-    if (!dataDownload.hidden) renderLauncherDownload();
-
-    fullDownloadPromise = window.gwNative.cache.downloadAll()
-      .then(async (outcome) => {
-        // The download reports why it stopped, and the sentence for that
-        // reason is written here rather than in the main process. The cache
-        // is re-read first so a disk-full sentence can carry the shortfall.
-        downloadError = '';
-        const cache = await window.gwNative.cache.info();
-        if (outcome.status === 'failed') {
-          const { describeDownloadFailure } =
-            await import('./failure-messages.js');
-          downloadError = describeDownloadFailure(
-            outcome.errorCode,
-            cache.fullDownloadShortfall > 0
-              ? { shortfall: size(cache.fullDownloadShortfall) }
-              : undefined,
-          );
-        }
-        currentCache = cache;
-        renderSettingsData(cache);
-        if (!dataDownload.hidden) renderLauncherDownload(cache);
-        if (downloadError) {
-          if (dialog.open) setFeedback(downloadError, 'error');
-          return false;
-        }
-        if (outcome.status === 'stopped' && dialog.open) {
-          settingsCache.textContent = `Download paused · ${cacheStatus(cache)}`;
-        }
-        return outcome.status === 'complete';
-      })
-      .catch(() => {
-        // Only a broken bridge reaches here: the outcome above covers every
-        // way the download itself can end.
-        downloadError = 'The full game download could not continue.';
-        if (dialog.open) setFeedback(downloadError, 'error');
-        if (!dataDownload.hidden) {
-          renderLauncherDownload(currentCache, downloadError);
-        }
-        return false;
-      })
-      .finally(async () => {
-        downloadPhase = 'idle';
-        currentDownloadProgress = null;
-        fullDownloadPromise = null;
-        await refreshCache().catch(() => {
-          renderSettingsData(null);
-          if (!dataDownload.hidden) {
-            renderLauncherDownload(null, 'The download status is unavailable.');
-          }
-        });
-      });
-    return fullDownloadPromise;
-  }
-
-  async function stopFullDownload() {
-    if (downloadPhase !== 'running') return;
-    downloadPhase = 'stopping';
-    renderSettingsData();
-    if (!dataDownload.hidden) renderLauncherDownload();
-    try {
-      await window.gwNative.cache.stopDownload();
-    } catch {
-      downloadPhase = 'running';
-      setFeedback('The download could not be paused. Check your connection and try again.', 'error');
-      renderSettingsData();
-      if (!dataDownload.hidden) {
-        renderLauncherDownload(currentCache, 'The download could not be paused.');
-      }
-    }
-  }
-
-  function releaseGameBoot(reason: RendererMilestone) {
-    if (!launcherResolve) return;
-    dataChoice.hidden = true;
-    dataDownload.hidden = true;
-    launcherMilestone(reason);
-    launcherMilestone('launcher.bootReleased');
-    const resolve = launcherResolve;
-    launcherResolve = null;
-    resolve();
-  }
-
-  function showChoice(cache: CacheInfo, total: number) {
-    currentCache = cache;
-    launcherTotalBytes = total;
-    const remaining = Math.max(0, total - (cache.bytes || 0));
-    // `?? true` mirrors DEFAULT_SETTINGS, which the renderer cannot import at
-    // runtime; the gate runs after the settings load, so this only decides
-    // the frame before that load lands.
-    choiceAutoUpdates.checked = currentSettings?.autoCheckUpdates ?? true;
-    // Disk reality at the moment of decision: a download that cannot fit is
-    // refused with the shortfall, not discovered mid-transfer.
-    const shortfall = cache.fullDownloadShortfall || 0;
-    dataChoiceFull.disabled = shortfall > 0;
-    if (remaining <= 0) {
-      dataChoiceFullSize.textContent = 'The full game is already downloaded.';
-    } else if (shortfall > 0) {
-      dataChoiceFullSize.textContent =
-        `Needs ${size(remaining)} — this disk has ${size(Math.max(0, cache.freeBytes))} free. ` +
-        `Free at least ${size(shortfall)} more.`;
-    } else {
-      const free = cache.freeBytes >= 0
-        ? ` · ${size(cache.freeBytes)} free on this Mac`
-        : '';
-      dataChoiceFullSize.textContent =
-        `Download ${size(remaining)} first${free}. You can play while it downloads.`;
-    }
-    dataChoiceError.hidden = true;
-    dataDownload.hidden = true;
-    dataChoice.hidden = false;
-    launcherMilestone('launcher.choiceShown');
-  }
-
-  function showFullDownload(cache: CacheInfo, total: number) {
-    currentCache = cache;
-    launcherTotalBytes = total;
-    dataChoice.hidden = true;
-    dataDownload.hidden = false;
-    renderLauncherDownload(cache);
-    if (!cacheComplete({ ...cache, totalBytes: total })) {
-      void startFullDownload();
-    }
-  }
-
-  async function resolveDataChoice(snapshotBytes: number): Promise<void> {
-    try {
-      const [settings, cache] = await Promise.all([
-        loadSettings(),
-        window.gwNative.cache.info(),
-      ]);
-      const total = cache.totalBytes || snapshotBytes;
-      const resolvedCache = { ...cache, totalBytes: total };
-      currentCache = resolvedCache;
-      launcherTotalBytes = total;
-
-      // The offline acceptance shell has no snapshot. There is no real choice
-      // to make, so let it continue without persisting fabricated intent.
-      if (!Number.isFinite(total) || total <= 0) return;
-      if (settings.dataStrategy === 'quick') return;
-      if (settings.dataStrategy === 'full' && cache.bytes >= total) {
-        // Filenames prove residency, not integrity. Full Game startup always
-        // runs the existing bounded verification pass before releasing boot.
-        if (await startFullDownload()) return;
-      }
-
-      return new Promise((resolve) => {
-        launcherResolve = resolve;
-        if (settings.dataStrategy === 'full') {
-          showFullDownload(resolvedCache, total);
-        } else {
-          showChoice(resolvedCache, total);
-        }
-      });
-    } catch {
-      // A fixed sentence: a raw error message is the one string on this
-      // surface nobody reviewed.
-      window.gwLoading?.fail('Launcher settings could not be loaded.');
-      return new Promise(() => {});
-    }
-  }
-
-  // The dock shows one thing at a time: the data question is answered first,
-  // then the client build gets its say, then the game starts.
   window.gwResolveDataStrategy = async (snapshotBytes) => {
-    await resolveDataChoice(snapshotBytes);
+    await (await dataStrategy).resolve(snapshotBytes);
     await resolveClientCompatibility();
   };
-
-  /**
-   * The first-run gate answers two questions with one click. Both are written
-   * together so a saved data choice can never leave the update answer behind.
-   */
-  const answeredChoice = (
-    dataStrategy: 'quick' | 'full',
-  ): AppSettingsPatch => ({
-    dataStrategy,
-    autoCheckUpdates: choiceAutoUpdates.checked,
-  });
-
-  // A failed save gets its own status line: overwriting the size label would
-  // trade the information the player is deciding with for the error.
-  function showChoiceError() {
-    dataChoiceError.textContent =
-      'Your choice could not be saved. Please try again.';
-    dataChoiceError.hidden = false;
-  }
-
-  dataChoiceQuick.addEventListener('click', async () => {
-    dataChoiceQuick.disabled = true;
-    dataChoiceFull.disabled = true;
-    dataChoiceError.hidden = true;
-    try {
-      await persistSettings(answeredChoice('quick'));
-      releaseGameBoot('launcher.quickSelected');
-    } catch {
-      showChoiceError();
-    } finally {
-      dataChoiceQuick.disabled = false;
-      dataChoiceFull.disabled = false;
-    }
-  });
-
-  dataChoiceFull.addEventListener('click', async () => {
-    dataChoiceQuick.disabled = true;
-    dataChoiceFull.disabled = true;
-    dataChoiceError.hidden = true;
-    try {
-      await persistSettings(answeredChoice('full'));
-      if (!currentCache) {
-        throw new Error("download status is not ready");
-      }
-      launcherMilestone('launcher.fullSelected');
-      showFullDownload(currentCache, launcherTotalBytes);
-    } catch {
-      showChoiceError();
-    } finally {
-      dataChoiceQuick.disabled = false;
-      dataChoiceFull.disabled = false;
-    }
-  });
-
-  dataDownloadToggle.addEventListener('click', () => {
-    if (downloadActive()) void stopFullDownload();
-    else void startFullDownload();
-  });
-
-  dataDownloadPlay.addEventListener('click', () => {
-    if (!cacheComplete()) void startFullDownload();
-    releaseGameBoot('launcher.playNowSelected');
-  });
-
-  dataDownloadQuick.addEventListener('click', async () => {
-    dataDownloadQuick.disabled = true;
-    try {
-      if (downloadActive()) await stopFullDownload();
-      await persistSettings({ dataStrategy: 'quick' });
-      releaseGameBoot('launcher.quickSelected');
-    } catch {
-      renderLauncherDownload(currentCache, 'Quick Start could not be saved.');
-    } finally {
-      dataDownloadQuick.disabled = false;
-    }
-  });
-
   async function openSettings() {
     if (!dialog.open) {
       if (typeof dialog.showModal === 'function') dialog.showModal();
@@ -854,7 +453,7 @@
       // The client build's status is the answer to "why is my cursor plain?",
       // so it is in Settings whether or not the launcher notice was ever seen.
       await readSession().catch(() => undefined);
-      await refreshCache();
+      await (await dataStrategy).refresh();
     } catch {
       setFeedback('Settings could not be loaded. Close Settings and try again.', 'error');
     }
@@ -891,13 +490,15 @@
       !(control instanceof globalThis.HTMLInputElement) &&
       !(control instanceof globalThis.HTMLSelectElement)
     ) return;
+    if (control.name === 'dataStrategy') {
+      void dataStrategy.then((controller) => controller.saveSelectedStrategy());
+      return;
+    }
     const patch = patchForControl(control);
     if (!patch) return;
     setFeedback('Saving…', 'progress');
-    const strategyChanged = control.name === 'dataStrategy';
-    const nextStrategy = selectedStrategy();
     void persistSettings(patch)
-      .then(async (saved) => {
+      .then((saved) => {
         if (
           patch.gwonmacTools !== undefined
           && saved.gwonmacTools !== patch.gwonmacTools
@@ -905,21 +506,11 @@
           setFeedback('Optional Tools were not changed. Your current setup is still active.', 'warning');
           return;
         }
-        if (!strategyChanged) {
-          setFeedback('Saved.', 'success', 2200);
+        if (patch.extendedMemoryEnabled !== undefined) {
+          setFeedback('Saved. Restart GWonMac to apply the memory limit.', 'success', 4500);
           return;
         }
-        if (nextStrategy === 'quick' && downloadActive()) {
-          await stopFullDownload();
-        }
-        renderSettingsData();
-        setFeedback(
-          nextStrategy === 'full'
-            ? 'Saved. Full Game will download before Guild Wars starts next time.'
-            : 'Saved. Quick Start will be used next time; downloaded data is kept.',
-          'success',
-          4500,
-        );
+        setFeedback('Saved.', 'success', 2200);
       })
       .catch(() => {
         if (currentSettings) {
@@ -928,12 +519,6 @@
         }
         setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
       });
-  });
-
-  settingsDownload.addEventListener('click', () => {
-    setFeedback();
-    if (downloadActive()) void stopFullDownload();
-    else void startFullDownload();
   });
 
   byId('settings-reveal-data')?.addEventListener('click', () => {
@@ -956,7 +541,6 @@
       if (!reset) return;
       currentSettings = reset;
       fillForm(reset);
-      renderSettingsData();
       window.gwApplySettings?.(reset);
       setFeedback(
         'GWonMac settings were reset. Choose a download mode next launch.',
@@ -966,50 +550,6 @@
     } catch {
       setFeedback('GWonMac settings could not be reset. Nothing changed; try again.', 'error');
     }
-  });
-
-  window.gwNative.progress.onChange((progress) => {
-    if (progress.phase === 'ready' && !downloadActive()) {
-      void refreshCache().catch(() => {});
-      return;
-    }
-    if (progress.phase !== 'image') return;
-    // Start/stop/finally exclusively own the operation phase. A queued native
-    // progress event must not resurrect a paused or already-settled download.
-    if (!fullDownloadPromise || downloadPhase !== 'running') return;
-    currentDownloadProgress = progress;
-    shownEtaMinutes = etaMinutes?.update(progress.secondsRemaining) ?? null;
-    const next = {
-      chunks: currentCache?.chunks ?? 0,
-      totalChunks: currentCache?.totalChunks ?? 0,
-      bytes: Number.isFinite(progress.received)
-        ? Math.max(progress.received, currentCache?.bytes || 0)
-        : currentCache?.bytes || 0,
-      totalBytes:
-        progress.total || currentCache?.totalBytes || launcherTotalBytes || 0,
-      // Carried forward, not recomputed: only main can measure the volume.
-      freeBytes: currentCache?.freeBytes ?? -1,
-      fullDownloadShortfall: currentCache?.fullDownloadShortfall ?? 0,
-    };
-    currentCache = next;
-    renderSettingsData(next);
-    renderLauncherDownload(next);
-
-    if (dialog.open) {
-      settingsCache.textContent = progress.total
-        ? dataDownloadStatus.textContent
-        : 'Preparing full game download…';
-    }
-  });
-
-  window.gwNative.progress.onPrefetch((progress) => {
-    if (
-      !dialog.open ||
-      downloadActive() ||
-      !progress?.totalChunks ||
-      progress.completedChunks >= progress.totalChunks
-    ) return;
-    settingsCache.textContent = 'Caching recently used areas in the background…';
   });
 
   window.addEventListener('resize', updateRenderScaleDimensions);

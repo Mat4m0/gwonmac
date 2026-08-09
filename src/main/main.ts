@@ -514,6 +514,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementCapabilities,
+    // The environment variable is a developer/qualification shortcut only.
+    // Saved settings remain the sole durable request made by the product UI.
+    extendedMemoryEnabled:
+      settings.extendedMemoryEnabled
+      || process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1",
     certificateFeed: () => certificateFeedDelivery!.feed,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
@@ -622,6 +627,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getClientSession: () => ({
       appVersion: HOST_VERSION,
       compatibility: clientRuntime.compatibility,
+      extendedMemory: clientRuntime.extendedMemory,
       healthToken: clientRuntime.healthToken,
     }),
     exportProblemReport: (win) =>

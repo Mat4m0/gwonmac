@@ -363,6 +363,7 @@ function options(
     enhancementCacheRoot: value.enhancementCacheRoot,
     nativeDoubleClickCacheRoot: value.nativeDoubleClickCacheRoot,
     extendedMemoryCacheRoot: value.extendedMemoryCacheRoot,
+    extendedMemoryEnabled: false,
   };
 }
 
@@ -483,6 +484,43 @@ describe("client module preparation", () => {
       assertMissing(value.compatibilityCacheRoot),
       assertMissing(value.enhancementCacheRoot),
     ]);
+  });
+
+  it("falls back to the ordinary module when a requested 4 GB pair is unknown", async () => {
+    const value = await fixture();
+    const request = options(value, { state: "uncertified" }, CURSOR_TOOLBOX);
+    request.extendedMemoryEnabled = true;
+
+    const prepared = await prepareClientModule(request);
+
+    assert.deepEqual(prepared.extendedMemory, {
+      status: "unavailable",
+      reason: "unsupported-client",
+    });
+    assert.equal(prepared.jsPath, value.officialJsPath);
+    assert.equal(prepared.wasmPath, value.officialWasmPath);
+    assert.equal(prepared.failure, null);
+  });
+
+  it("keeps an earlier transform failure separate from 4 GB preparation failure", async () => {
+    const value = await fixture();
+    const request = options(value, {
+      state: "template-only",
+      templateSaveBuild: {
+        ...value.templateSaveBuild,
+        sha256: "0".repeat(64),
+      },
+    }, CURSOR_TOOLBOX);
+    request.extendedMemoryEnabled = true;
+    request.officialJsPath = join(value.root, "missing.js");
+
+    const prepared = await prepareClientModule(request);
+
+    assert.equal(prepared.failure?.stage, "template-save");
+    assert.equal(prepared.extendedMemory.status, "unavailable");
+    if (prepared.extendedMemory.status !== "unavailable") return;
+    assert.equal(prepared.extendedMemory.reason, "preparation-failed");
+    assert.ok("error" in prepared.extendedMemory);
   });
 
   it("drops the Enhancement cache when the certified tool is disabled", async () => {

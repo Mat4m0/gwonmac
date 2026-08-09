@@ -242,6 +242,7 @@ describe("client compatibility notice", () => {
     const beforeClient: ClientSession = {
       appVersion: "2026.7.0",
       compatibility: null,
+      extendedMemory: null,
       healthToken: null,
     };
     assert.equal(
@@ -262,6 +263,7 @@ describe("client compatibility notice", () => {
     const session: ClientSession = {
       appVersion: "2026.7.0",
       compatibility: compatibility("uncertified", CURSOR),
+      extendedMemory: null,
       healthToken: null,
     };
     const report = renderClientCompatibility(dom.root, session, CURSOR);
