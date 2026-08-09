@@ -60,22 +60,12 @@ jobs:
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
       - run: pnpm audit --audit-level=high
-      - run: pnpm verify
-
-      # Written by the unit suite inside `pnpm verify`, so this costs a run of
-      # nothing. It is a report and not a gate: there is no threshold, and a
-      # verified commit stays verified whatever the number says. Uploaded even
-      # when the run failed, because a drop in what the tests reach is often
-      # what explains the failure.
-      - name: Upload unit coverage
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: unit-coverage-${{ github.run_id }}-${{ github.run_attempt }}
-          path: coverage/lcov.info
-          if-no-files-found: ignore
-          retention-days: 7
+      - run: pnpm verify:runtime
+      - name: Package and test the verified build
+        if: inputs.artifact-name != ''
+        run: pnpm package:built && pnpm test:packaged
 
       - name: Upload Electron failure evidence
         if: failure()

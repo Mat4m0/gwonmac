@@ -100,6 +100,7 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
   let world = [...initial];
   let outpost = inOutpost;
   let hardMode = false;
+  let confirmationNow = 0;
   let player: Player | null = {
     agentId: 1,
     professions: [1, 2],
@@ -137,6 +138,13 @@ function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
     commands,
     party: () => party(world, outpost, hardMode, player),
     settle: () => Promise.resolve(),
+    confirmationTime: {
+      now: () => confirmationNow,
+      sleep: (milliseconds) => {
+        confirmationNow += milliseconds;
+        return Promise.resolve();
+      },
+    },
   };
   return {
     sent,
@@ -615,6 +623,10 @@ test("a bar that never moves is still a refusal", async () => {
     runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
     /Koss's skill bar did not take effect/,
   );
+  assert.deepEqual(game.sent, [
+    "skills:11:1,2,3,4,5,6,7,8",
+    "skills:11:1,2,3,4,5,6,7,8",
+  ], "the safe skill-bar retry is sent exactly once");
 });
 
 test("a bar and ranks already in place send nothing at all", async () => {

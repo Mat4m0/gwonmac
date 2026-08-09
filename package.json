@@ -16,7 +16,7 @@
   },
   "main": "build/main/main.js",
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.19"
   },
   "scripts": {
     "postinstall": "install-electron",
@@ -31,7 +31,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.tests.json && pnpm --filter @gwonmac/tools-ui typecheck",
     "lint": "eslint .",
     "check:links": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/check-markdown-links.ts",
-    "test:unit": "mkdir -p coverage && node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 --experimental-test-coverage --test-coverage-include='src/**' --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info tests/unit/*.ts",
+    "test:unit": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/unit/*.ts",
+    "test:client-artifact": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/client-artifact/*.ts",
     "test:integration": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/integration/*.ts",
     "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",
@@ -45,10 +46,11 @@
     "enhancements:visual": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-visual.ts",
     "enhancements:kernel:verify": "pnpm build && node scripts/verify-companion-kernel.mjs",
     "snapshot:prune": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/snapshot-retention.ts",
-    "test:website": "pnpm --filter gw-website typecheck && pnpm --filter gw-website build && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/website-smoke.ts",
+    "test:website": "pnpm --filter gw-website certify && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/website-smoke.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test:unit && pnpm test:policy && pnpm tools:test",
-    "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:electron",
-    "package": "pnpm build && node scripts/clean-output.mjs && electron-forge package",
+    "test": "pnpm verify:runtime",
+    "package": "pnpm build && pnpm package:built",
+    "package:built": "node scripts/verify-companion-kernel.mjs && node scripts/clean-output.mjs && electron-forge package",
     "make": "pnpm build && node scripts/clean-output.mjs && electron-forge make",
     "diagnostics:validate": "tsc && node build/tools/diagnostics/validate.js",
     "diagnostics:summarize": "tsc && node build/tools/diagnostics/summarize.js",
@@ -56,7 +58,8 @@
     "diagnostics:attribute-stalls": "tsc && node build/tools/diagnostics/attribute-stalls.js",
     "diagnostics:attribute-frames": "tsc && node build/tools/diagnostics/attribute-frames.js",
     "memory:qualify:4gb": "GWONMAC_EXTENDED_MEMORY_RESEARCH=1 node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/qualify-extended-memory.ts",
-    "verify": "pnpm check && pnpm build && node scripts/verify-companion-kernel.mjs && pnpm test:integration && pnpm test:release && pnpm test:electron && pnpm package && pnpm test:packaged"
+    "verify:runtime": "pnpm check && pnpm build && node scripts/verify-companion-kernel.mjs && pnpm test:integration && pnpm test:release && pnpm tools:test:e2e && pnpm test:electron",
+    "verify": "pnpm verify:runtime && pnpm package:built && pnpm test:packaged"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",

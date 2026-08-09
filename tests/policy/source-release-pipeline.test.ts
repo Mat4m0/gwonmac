@@ -13,7 +13,7 @@
 // a real window in tests/electron/sandbox.spec.ts), and the three assertions
 // that still need the compiled build (tests/release/).
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -388,7 +388,11 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     verification,
     /contents: write|attestations: write|id-token: write/,
   );
-  assert.match(verification, /run: pnpm verify/);
+  assert.match(verification, /run: pnpm verify:runtime/);
+  assert.match(
+    verification,
+    /if: inputs\.artifact-name != ''\n {8}run: pnpm package:built && pnpm test:packaged/,
+  );
   assert.match(verification, /codesign --verify --deep --strict/);
   assert.match(verification, /Signature=adhoc/);
   assert.match(verification, /ditto -c -k --sequesterRsrc --keepParent/);
@@ -480,6 +484,11 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   );
   assert.match(signer, /GW_SIGNED_REPLACEMENT_APP_PATH/);
   assert.match(signer, /GW_SIGNED_CHANNEL: preview/);
+  assert.equal(
+    signer.match(/pnpm test:signed-keychain/gu)?.length,
+    1,
+    "one continuity run already covers relaunch, move, replacement and cleanup",
+  );
   assert.match(signer, /APPLE_PREVIEW_DEVELOPER_ID_PROFILE/);
   assert.match(signer, /xcrun notarytool submit/);
   assert.match(signer, /xcrun stapler staple/);
@@ -572,8 +581,21 @@ test("the application ships with no runtime dependency to audit", () => {
 
 test("packaging cleans its output first, and builds the renderer program", () => {
   assert.match(script("make"), /scripts\/clean-output\.mjs/);
-  assert.match(script("package"), /scripts\/clean-output\.mjs/);
+  assert.match(script("package"), /pnpm build && pnpm package:built/);
+  assert.match(script("package:built"), /scripts\/clean-output\.mjs/);
+  assert.match(script("verify"), /verify:runtime && pnpm package:built/);
   assert.match(read("scripts/build.mjs"), /tsconfig\.renderer\.json/);
+});
+
+test("the default gate is deterministic and certifies every shipped test layer", () => {
+  const verification = read(".github/workflows/macos-verify.yml");
+  assert.doesNotMatch(script("test:unit"), /coverage|GW_CLIENT_WASM/);
+  assert.match(script("test:client-artifact"), /tests\/client-artifact\/\*\.ts/);
+  assert.match(script("verify:runtime"), /tools:test:e2e/);
+  assert.match(script("verify:runtime"), /test:electron/);
+  assert.match(script("verify"), /package:built && pnpm test:packaged/);
+  assert.match(verification, /pnpm exec playwright install chromium/);
+  assert.doesNotMatch(verification, /unit-coverage/);
 });
 
 test("release verification tells the player to check, never to disable a check", () => {
@@ -585,6 +607,7 @@ test("release verification tells the player to check, never to disable a check",
 
 test("the website suite runs on its own path-filtered workflow", () => {
   const workflow = read(".github/workflows/website.yml");
+  const website = json("apps/website/package.json");
   assert.match(workflow, /runs-on: ubuntu-latest/);
   assert.match(workflow, /run: pnpm test:website/);
   assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
@@ -596,6 +619,13 @@ test("the website suite runs on its own path-filtered workflow", () => {
     /contents: write|id-token: write|issues: write/,
   );
   assert.doesNotMatch(script("verify"), /test:website/);
+  assert.match(script("test:website"), /gw-website certify/);
+  assert.match(website.scripts?.certify ?? "", /assert-release-output\.mjs/);
+  assert.equal(
+    existsSync(path.join(root, "apps/website/pnpm-lock.yaml")),
+    false,
+    "the workspace root lockfile is the website's dependency truth",
+  );
 });
 
 test("the patch detector is cheap, secretless, and only ever proposes", () => {
@@ -665,6 +695,10 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   assert.match(derive, /pnpm client:official --download "\$RUNNER_TEMP\/official"/);
   assert.match(derive, /certification\.js template "\$WASM" --emit-ts --write/);
   assert.match(derive, /certification\.js recertify "\$WASM"/);
+  assert.match(
+    derive,
+    /name: Verify the recorded client artifact[\s\S]*GW_CLIENT_WASM: \$\{\{ steps\.official\.outputs\.wasm \}\}[\s\S]*pnpm test:client-artifact/,
+  );
   // The report is printed before `--write` edits the table, so the exit code is
   // the only thing that separates a written entry from one that threw on the
   // way to disk. Dropping it lets the branch claim a certificate it lacks.

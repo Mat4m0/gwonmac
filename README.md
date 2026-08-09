@@ -67,7 +67,7 @@ Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 
 ## Development
 
-**Requirements:** macOS on Apple Silicon · Node.js 22.6+ · pnpm 11 ·
+**Requirements:** macOS on Apple Silicon · Node.js 22.19+ · pnpm 11 ·
 [Rust](https://rustup.rs) (via rustup)
 
 ```bash
@@ -116,7 +116,8 @@ overwrite an existing Dev login.
 | `pnpm make`                                                              | Build a local ad-hoc `.zip`                  |
 | `pnpm typecheck` / `pnpm lint`                                           | Static checks                               |
 | `pnpm check`                                                             | Fast inner loop: static checks and policy   |
-| `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Test suites (run `pnpm build` first)        |
+| `pnpm test:unit` / `test:integration` / `test:electron` / `test:release` | Deterministic test suites                  |
+| `GW_CLIENT_WASM=/path pnpm test:client-artifact`                        | Certify one real installed client artifact |
 | `pnpm test:website`                                                      | The `apps/website` suite                    |
 | `pnpm verify`                                                            | The complete local gate                     |
 

@@ -12,13 +12,11 @@ import { startGameInput } from "./input-helpers.js";
  * interface. Mounting the real Vue application would test Vue and make this
  * suite fail for reasons that have nothing to do with input.
  *
- * Be clear about what that leaves uncovered rather than implying a sibling
- * suite has it: apps/tools/tests/workbench.spec.ts drives the application in
- * `standalone` mode, where the dragged position, the window close control and
- * Escape-to-close are all switched off, and it runs under `tools:test:e2e`,
- * which is in neither `pnpm check`, `pnpm test` nor `pnpm verify`. So the
- * embedded window furniture the overlay used to own and now delegates is at
- * present tested by nothing, here or there.
+ * Be clear about what the stub does and does not prove. The focused smoke below
+ * mounts the shipped Vue bundle through `tools-host.ts` and owns its embedded
+ * window furniture and native-library seam. This test stays a stub because it
+ * exhausts the renderer input boundary without duplicating the Tools workbench
+ * flows or making each input assertion depend on Vue rendering.
  *
  * What the stub is not allowed to be is a *different* configuration. It draws
  * its own window with its own controls, including a text field, because that is
@@ -325,6 +323,86 @@ test.describe("renderer Tools input", () => {
       });
       expect(cursors.mirrored).toBe("crosshair");
       expect(cursors.cleared).toBe("");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("mounts the shipped embedded Tools window and persists one library change", async () => {
+    const fixture = await launchOffline("gw-toolbox-embedded-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(async () => {
+        globalThis.document.getElementById("loading")?.classList.add("gone");
+        const foundationSpecifier = "./toolbox-foundation.js";
+        const hostSpecifier = "./tools-host.js";
+        const [foundation, toolsHost] = await Promise.all([
+          import(foundationSpecifier) as Promise<
+            typeof import("../../src/renderer/toolbox-foundation.js")
+          >,
+          import(hostSpecifier) as Promise<
+            typeof import("../../src/renderer/tools-host.js")
+          >,
+        ]);
+        foundation.createToolboxFoundation(document.body, {
+          mountTool: (host, onVisibilityChange) =>
+            toolsHost.mountToolsInto(host, onVisibilityChange, null),
+        });
+      });
+
+      const root = page.locator("#toolbox-foundation");
+      const panel = page.locator(".tools-window");
+      await page.getByRole("button", { name: "Open Tools" }).click();
+      await expect(root).toHaveAttribute("data-open", "true");
+      await expect(page.locator("#toolbox-tool")).toHaveAttribute("data-ready", "true");
+      await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
+      await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
+      await expect(page.getByText("Saved on this Mac")).toBeVisible();
+
+      await page.getByRole("button", { name: "New team", exact: true }).click();
+      await page.getByLabel("Name optional").fill("Embedded smoke team");
+      await page.getByRole("button", { name: "Create team" }).click();
+      await expect(page.locator(".library-row").filter({ hasText: "Embedded smoke team" }))
+        .toHaveCount(1);
+      const storedTeams = await page.evaluate(async () =>
+        (await window.gwNative.buildLibrary.get()).library.teams.map((team) => team.name),
+      );
+      expect(storedTeams).toContain("Embedded smoke team");
+
+      const before = await panel.boundingBox();
+      expect(before).not.toBeNull();
+      if (!before) throw new Error("The embedded Tools window has no bounds");
+      await page.mouse.move(before.x + 80, before.y + 20);
+      await page.mouse.down();
+      await page.mouse.move(before.x + 60, before.y, { steps: 4 });
+      await page.mouse.up();
+      const after = await panel.boundingBox();
+      expect(after).not.toBeNull();
+      if (!after) throw new Error("The dragged Tools window has no bounds");
+      expect(after.x).toBeLessThan(before.x - 10);
+      expect(after.y).toBeLessThan(before.y - 10);
+
+      await page.getByRole("button", { name: "Close GWonMac Tools" }).click();
+      await expect(root).toHaveAttribute("data-open", "false");
+      await expect(panel).toBeHidden();
+      await page.getByRole("button", { name: "Open Tools" }).click();
+      await expect(panel).toBeVisible();
+      await expect(page.locator(".library-row").filter({ hasText: "Embedded smoke team" }))
+        .toHaveCount(1);
+
+      // Establish the boundary explicitly: Escape from a Tools field returns
+      // the keyboard to Guild Wars without spending the in-game Escape or
+      // closing the window. Reopening intentionally leaves focus on the game.
+      const search = page.getByPlaceholder("Search names, tags, heroes, skills");
+      await search.focus();
+      await expect(search).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeVisible();
+      await expect(page.locator("#canvas")).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeVisible();
+      await expect(page.locator("#canvas")).toBeFocused();
     } finally {
       await closeOffline(fixture);
     }

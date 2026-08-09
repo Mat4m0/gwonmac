@@ -135,6 +135,11 @@ const nodeFloor = /^>=(\d+)\.(\d+)$/u.exec(
 
 test("the Node floor is declared once and enforced before anything is built", () => {
   assert.ok(nodeFloor, "package.json declares no >=<major>.<minor> Node engine floor");
+  assert.equal(
+    (JSON.parse(read("apps/tools/package.json")) as Manifest).engines?.node,
+    (JSON.parse(read("package.json")) as Manifest).engines?.node,
+    "the root build invokes Tools, so both packages must accept the same Node floor",
+  );
 
   // scripts/build.mjs is the one file every entry point runs before the
   // compiler, and it reads the floor rather than restating it.

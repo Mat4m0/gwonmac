@@ -28,7 +28,7 @@ test.describe("settings experience", () => {
   // It now sends a typed command, and this is the only caller of `settings.open`
   // — every other spec dispatches the renderer event directly, which would keep
   // passing if the main-process half were removed entirely.
-  test("the Settings menu item opens the dialog through the command channel", async () => {
+  test("the application menu opens Settings and the dedicated Updates pane", async () => {
     const fixture = await launchOffline("gw-settings-menu-e2e-");
     try {
       const { app, page } = fixture;
@@ -47,15 +47,7 @@ test.describe("settings experience", () => {
         }),
       ).toBe("CmdOrCtrl+,");
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
-  test("the update menu opens the dedicated pane and starts one check", async () => {
-    const fixture = await launchOffline("gw-updates-menu-e2e-");
-    try {
-      const { app, page } = fixture;
+      await page.locator("#settings-done").click();
       await app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()
           ?.items[0]?.submenu?.items.find(
@@ -393,8 +385,8 @@ test.describe("settings experience", () => {
     }
   });
 
-  test("declining the first Tools enable saves nothing", async () => {
-    const fixture = await launchOffline("gw-tools-enable-cancel-e2e-");
+  test("the first Tools enable can be declined, then saves and restarts atomically", async () => {
+    const fixture = await launchOffline("gw-tools-enable-restart-e2e-");
     try {
       const { app, page } = fixture;
       await page.evaluate(() =>
@@ -414,19 +406,7 @@ test.describe("settings experience", () => {
       await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
       expect(await page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ gwonmacTools: false });
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
 
-  test("the first Tools enable saves and restarts as one action", async () => {
-    const fixture = await launchOffline("gw-tools-enable-restart-e2e-");
-    try {
-      const { app, page } = fixture;
-      await page.evaluate(() =>
-        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
-      );
-      await page.locator("#settings-tab-controls").click();
       await app.evaluate(({ app: electronApp, dialog }) => {
         globalThis.__resetRestart = {
           quit: false,

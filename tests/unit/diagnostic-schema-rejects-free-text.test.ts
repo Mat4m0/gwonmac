@@ -40,7 +40,7 @@ function compilerOptions(): ts.CompilerOptions {
 
 const options = compilerOptions();
 
-function compile(source: string): string[] {
+function compile(source: string): readonly ts.Diagnostic[] {
   const host = ts.createCompilerHost(options, true);
   const readFile = host.readFile.bind(host);
   const getSourceFile = host.getSourceFile.bind(host);
@@ -50,79 +50,87 @@ function compile(source: string): string[] {
       ? ts.createSourceFile(name, source, languageVersion, true)
       : getSourceFile(name, languageVersion, onError, shouldCreate);
   const program = ts.createProgram([schemaPath], options, host);
-  return ts
-    .getPreEmitDiagnostics(program)
-    .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
+  return ts.getPreEmitDiagnostics(program);
 }
 
-function withField(field: string): string {
+type Probe = {
+  readonly name: string;
+  readonly field: string;
+  readonly guard: "free-text" | "scalar";
+};
+
+const FORBIDDEN_PROBES: readonly Probe[] = [
+  { name: "direct", field: "message: string", guard: "free-text" },
+  { name: "reason", field: "reason: string", guard: "free-text" },
+  { name: "label", field: "label: string", guard: "free-text" },
+  { name: "notice", field: "notice: string", guard: "free-text" },
+  { name: "detail_path", field: "detailPath: string", guard: "free-text" },
+  { name: "optional", field: "message?: string", guard: "free-text" },
+  { name: "widened", field: 'reason: "timeout" | string', guard: "free-text" },
+  { name: "nested", field: "detail: { message: string }", guard: "scalar" },
+  { name: "array", field: "names: string[]", guard: "scalar" },
+];
+
+function withProbes(probes: readonly Probe[]): string {
   assert.ok(schemaSource.includes(ANCHOR), "the schema guards moved; update this probe");
-  return schemaSource
-    .replace(
-      ANCHOR,
-      `type ProbeDiagnosticEvent = DiagnosticEvent | { k: "probe"; ${field} };\n\n${ANCHOR}`,
-    )
-    .replace(
-      "FreeTextKeys<DiagnosticEvent>",
-      "FreeTextKeys<ProbeDiagnosticEvent>",
-    )
-    .replace(
-      "const _scalarsOnly: DiagnosticEvent extends",
-      "const _scalarsOnly: ProbeDiagnosticEvent extends",
-    );
+  const declarations = probes.map(({ name, field, guard }) => {
+    const type = `Probe_${name}`;
+    const condition = guard === "free-text"
+      ? `[FreeTextKeys<${type}>] extends [never]`
+      : `${type} extends Record<string, DiagnosticScalar | undefined>`;
+    return `type ${type} = DiagnosticEvent | { k: "probe_${name}"; ${field} };\n`
+      + `const _reject_${name}: ${condition} ? true : never = true;`;
+  }).join("\n");
+  return schemaSource.replace(ANCHOR, `${declarations}\n\n${ANCHOR}`);
 }
 
-function assertRejected(field: string): void {
-  const errors = compile(withField(field));
-  assert.ok(
-    errors.some((message) => message.includes(GUARD_FIRED)),
-    `\`${field}\` did not trip the schema guard. Compiler said: ${
-      errors.length ? errors.join(" | ") : "nothing at all"
-    }`,
-  );
+function messages(diagnostics: readonly ts.Diagnostic[]): string {
+  return diagnostics.map((diagnostic) =>
+    ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")).join(" | ");
+}
+
+function evidenceMarkers(
+  source: string,
+  diagnostics: readonly ts.Diagnostic[],
+): string[] {
+  return diagnostics.flatMap((diagnostic) => {
+    if (diagnostic.file === undefined || diagnostic.start === undefined) return [];
+    const line = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line;
+    return source.split("\n")[line]?.match(/_reject_[a-z_]+/gu) ?? [];
+  });
 }
 
 describe("the closed diagnostics schema", () => {
-  it("stops compiling once an event has an open string field", () => {
-    assertRejected("message: string");
-  });
-
-  it("rejects a string field under any other name", () => {
-    // The guard is a property of the type, not of the field being called
-    // `message`. `reason`, `label`, `notice` are all prose.
-    for (const name of ["reason", "label", "notice", "detailPath"]) {
-      assertRejected(`${name}: string`);
-    }
-  });
-
-  it("rejects an optional string field", () => {
-    assertRejected("message?: string");
-  });
-
-  it("rejects a string widened by a union with a literal", () => {
-    // `"timeout" | string` collapses to `string`, which is how an open field
-    // reaches a schema by accident rather than on purpose.
-    assertRejected('reason: "timeout" | string');
-  });
-
-  it("rejects text nested inside an object field", () => {
-    assertRejected("detail: { message: string }");
-  });
-
-  it("rejects an array of strings", () => {
-    assertRejected("names: string[]");
+  it("reports every prohibited field shape in one compiler program", () => {
+    const source = withProbes(FORBIDDEN_PROBES);
+    const diagnostics = compile(source);
+    assert.ok(
+      diagnostics.every((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, " ").includes(GUARD_FIRED)),
+      `an unrelated compiler error hid the guard evidence: ${messages(diagnostics)}`,
+    );
+    assert.deepEqual(
+      [...new Set(evidenceMarkers(source, diagnostics))].sort(),
+      FORBIDDEN_PROBES.map(({ name }) => `_reject_${name}`).sort(),
+      `not every prohibited shape tripped its own guard: ${messages(diagnostics)}`,
+    );
   });
 
   it("still accepts the field kinds the schema is built from", () => {
     // The guard has to admit what diagnostics legitimately carry, or producers
     // would route around it. A closed union, a number, a boolean and the
     // neutral shared Digest type must all survive.
-    assert.deepEqual(
-      compile(withField(
-        'phase: "startup" | "quit"; count: number; retried: boolean; '
+    const allowed: readonly Probe[] = [{
+      name: "allowed",
+      field: 'phase: "startup" | "quit"; count: number; retried: boolean; '
         + 'digest: import("../../shared/digest.js").Digest',
-      )),
-      [],
-    );
+      guard: "free-text",
+    }, {
+      name: "allowed_scalar",
+      field: 'phase: "startup" | "quit"; count: number; retried: boolean; '
+        + 'digest: import("../../shared/digest.js").Digest',
+      guard: "scalar",
+    }];
+    assert.deepEqual(compile(withProbes(allowed)), []);
   });
 });

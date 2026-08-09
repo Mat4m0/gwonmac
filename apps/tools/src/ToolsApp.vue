@@ -265,8 +265,6 @@ const onKeydown = (event: KeyboardEvent) => {
     event.preventDefault();
     search.value?.focus();
   }
-  if (event.key === "Escape" && event.defaultPrevented) return;
-  if (event.key === "Escape" && props.mode === "embedded") requestClose();
 };
 
 let disposeResize: (() => void) | null = null;

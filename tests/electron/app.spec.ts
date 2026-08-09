@@ -480,12 +480,21 @@ test.describe("Electron application", () => {
     }
   });
 
-  test("unofficial builds keep saved login only for the current process", async () => {
+  test("unofficial builds keep login volatile without deleting retired secrets", async () => {
     const env = launchEnv({
       GW_OFFLINE_SHELL: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-e2e-"));
+    const settings = JSON.stringify({ autoCheckUpdates: false });
+    await writeFile(path.join(userData, "settings.json"), settings);
+    const windowState = JSON.stringify({
+      bounds: { x: 120, y: 64, width: 1024, height: 768 },
+      mode: "normal",
+    });
+    await writeFile(path.join(userData, "window-state.json"), windowState);
+    await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");
+    await writeFile(path.join(userData, "steam-session.bin"), "retired-steam");
 
     let app = await launch(userData, env);
     try {
@@ -501,33 +510,6 @@ test.describe("Electron application", () => {
         username: "relaunch@example.invalid",
         password: "relaunch-password",
       });
-      await app.close();
-
-      app = await launch(userData, env);
-      const relaunchedPage = await app.firstWindow({ timeout: 30_000 });
-      await relaunchedPage.waitForLoadState("domcontentloaded");
-      expect(await relaunchedPage.evaluate(() =>
-        window.gwNative.credentials.load())).toBeNull();
-    } finally {
-      await app.close().catch(() => {});
-      await rm(userData, { recursive: true, force: true });
-    }
-  });
-
-  test("unofficial startup preserves retired secret files", async () => {
-    const userData = await mkdtemp(path.join(tmpdir(), "gw-secret-cleanup-e2e-"));
-    const settings = JSON.stringify({ autoCheckUpdates: false });
-    await writeFile(path.join(userData, "settings.json"), settings);
-    const windowState = JSON.stringify({
-      bounds: { x: 120, y: 64, width: 1024, height: 768 },
-      mode: "normal",
-    });
-    await writeFile(path.join(userData, "window-state.json"), windowState);
-    await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");
-    await writeFile(path.join(userData, "steam-session.bin"), "retired-steam");
-    const app = await launch(userData, launchEnv({ GW_OFFLINE_SHELL: "1" }));
-    try {
-      await app.firstWindow({ timeout: 30_000 });
       expect(await readFile(path.join(userData, "credentials.bin"), "utf8"))
         .toBe("retired-credentials");
       expect(await readFile(path.join(userData, "steam-session.bin"), "utf8"))
@@ -535,6 +517,18 @@ test.describe("Electron application", () => {
       expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
       expect(await readFile(path.join(userData, "window-state.json"), "utf8"))
         .toBe(windowState);
+      await app.close();
+
+      app = await launch(userData, env);
+      const relaunchedPage = await app.firstWindow({ timeout: 30_000 });
+      await relaunchedPage.waitForLoadState("domcontentloaded");
+      expect(await relaunchedPage.evaluate(() =>
+        window.gwNative.credentials.load())).toBeNull();
+      expect(await readFile(path.join(userData, "credentials.bin"), "utf8"))
+        .toBe("retired-credentials");
+      expect(await readFile(path.join(userData, "steam-session.bin"), "utf8"))
+        .toBe("retired-steam");
+      expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
     } finally {
       await app.close().catch(() => {});
       await rm(userData, { recursive: true, force: true });

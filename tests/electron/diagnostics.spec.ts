@@ -498,7 +498,7 @@ test.describe("diagnostics", () => {
     }
   });
 
-  test("a crashed client offers reporting from the launcher", async () => {
+  test("a crashed client offers reporting and recovers a sandboxed renderer", async () => {
     const fixture = await launchOffline("gw-crash-panel-e2e-");
     const saveRoot = await mkdtemp(path.join(tmpdir(), "gw-crash-export-"));
     const target = path.join(saveRoot, "crash-report.zip");
@@ -539,6 +539,28 @@ test.describe("diagnostics", () => {
         window.gwLoading.set("Checking the game client", null);
       });
       await expect(page.locator("#loading-report")).toBeHidden();
+
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+      });
+      await expect
+        .poll(
+          async () => {
+            const [firstWindow] = app.windows();
+            if (!firstWindow) return false;
+            try {
+              return await firstWindow.evaluate(
+                () =>
+                  globalThis.location.protocol === "gw:" &&
+                  typeof window.gwNative === "object",
+              );
+            } catch {
+              return false;
+            }
+          },
+          { timeout: 15_000 },
+        )
+        .toBe(true);
     } finally {
       await closeOffline(fixture);
       await rm(saveRoot, { recursive: true, force: true });
@@ -751,32 +773,4 @@ test.describe("diagnostics", () => {
     }
   });
 
-  test("recovers the sandbox after a renderer crash", async () => {
-    const fixture = await launchOffline("gw-renderer-recovery-e2e-");
-    try {
-      await fixture.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
-      });
-      await expect
-        .poll(
-          async () => {
-            const [firstWindow] = fixture.app.windows();
-            if (!firstWindow) return false;
-            try {
-              return await firstWindow.evaluate(
-                () =>
-                  globalThis.location.protocol === "gw:" &&
-                  typeof window.gwNative === "object",
-              );
-            } catch {
-              return false;
-            }
-          },
-          { timeout: 15_000 },
-        )
-        .toBe(true);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
 });

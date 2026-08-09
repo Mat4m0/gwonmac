@@ -118,7 +118,7 @@ describe("the companion kernel ABI is structurally verified", () => {
 
 describe("the canonical gate verifies the built companion kernel", () => {
   it("runs the verifier directly after the existing build", () => {
-    const commands = packageScript("verify").split(" && ");
+    const commands = packageScript("verify:runtime").split(" && ");
     const build = commands.indexOf("pnpm build");
     assert.notEqual(build, -1);
     assert.equal(

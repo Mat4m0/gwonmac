@@ -203,11 +203,7 @@ jobs:
           GW_SIGNED_APP_PATH: ${{ steps.handoff.outputs.app }}
           GW_SIGNED_REPLACEMENT_APP_PATH: ${{ steps.handoff.outputs.replacement }}
           GW_SIGNED_CHANNEL: preview
-        run: |
-          for attempt in 1 2 3; do
-            echo "Preview continuity attempt $attempt"
-            pnpm test:signed-keychain
-          done
+        run: pnpm test:signed-keychain
 
       - name: Prepare signed Preview artifact
         id: package

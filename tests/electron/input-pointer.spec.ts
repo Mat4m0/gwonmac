@@ -54,16 +54,14 @@ test.describe("renderer pointer input", () => {
     }
   });
 
-  test("never dispatches a touch event, whatever the click run", async () => {
-    // The host used to reach the client's double-click by synthesising a pair
-    // of touch taps. That path is gone — the client's own flag carries it now
-    // — and it must not come back as a fallback: a tap warps the cursor,
-    // force-releases captured buttons, enters the drag machinery, and delivers
-    // an extra click of its own. See internal/upstream/mouse-double-click.md.
-    const fixture = await launchOffline("gw-no-touch-e2e-");
+  test("passes every click run and primary drag through without touch input", async () => {
+    const fixture = await launchOffline("gw-macos-pointer-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
+      // Double-click used to be synthesized through touch. Exercise every
+      // click-run shape before the real click/drag and prove that fallback
+      // remains absent.
       const touches = await page.evaluate(async () => {
         const canvas = globalThis.document.getElementById("canvas");
         if (!canvas) throw new Error("#canvas is missing");
@@ -79,27 +77,15 @@ test.describe("renderer pointer input", () => {
               bubbles: true, button: 0, clientX: 120, clientY: 140, detail,
             }),
           );
-        // A double-click, then a longer run, then a drag — every shape that
-        // used to arm, fire, or refuse a tap pair.
         for (const detail of [1, 2, 3, 4, 5, 6]) {
           mouse("mousedown", detail);
           mouse("mouseup", detail);
         }
-        // Well past the old 250 ms holdback plus its gap.
         await new Promise((resolve) => setTimeout(resolve, 600));
         return seen;
       });
       expect(touches).toEqual([]);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
 
-  test("passes primary clicks and drags through without touch input", async () => {
-    const fixture = await launchOffline("gw-macos-pointer-e2e-");
-    try {
-      const { page } = fixture;
-      await startGameInput(page);
       await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const loading = globalThis.document.getElementById("loading");

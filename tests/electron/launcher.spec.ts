@@ -25,7 +25,7 @@ declare global {
 }
 
 test.describe("launcher recovery", () => {
-  test("keeps verified data and offers one retry after an interrupted download", async () => {
+  test("keeps verified data, retries interruption, and verifies before startup", async () => {
     const fixture = await launchOffline("gw-launcher-e2e-", {
       GW_OFFLINE_SNAPSHOT_SIZE: String(8 * 1024 ** 3),
     });
@@ -102,26 +102,7 @@ test.describe("launcher recovery", () => {
           (await window.gwNative.settings.get()).dataStrategy,
         ),
       ).toBe("full");
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
-  test("verifies apparently complete Full Game data before startup", async () => {
-    const size = 8 * 1024 ** 3;
-    const fixture = await launchOffline("gw-launcher-verify-e2e-", {
-      GW_OFFLINE_SNAPSHOT_SIZE: String(size),
-    });
-    try {
-      const { app, page } = fixture;
-      // The first boot parks on the strategy choice, because it resolves with
-      // the default settings and therefore never runs a Full Game
-      // verification. Waiting for it leaves the reload as the only boot that
-      // can call downloadAll, which is what the count below asserts.
-      await expect(page.locator("#data-choice")).toBeVisible();
-      await page.evaluate(() =>
-        window.gwNative.settings.set({ dataStrategy: "full" }),
-      );
+      const size = 8 * 1024 ** 3;
       await app.evaluate(({ ipcMain }, totalBytes) => {
         ipcMain.removeHandler("gw:cache:info");
         ipcMain.handle("gw:cache:info", () => ({
