@@ -36,6 +36,11 @@ import {
   ENHANCEMENT_MANIFEST_SECTION,
   transformEnhancementWasm,
 } from "../../src/main/certification/enhancement-transform.js";
+import {
+  parseCode,
+  sectionById,
+  splitSections,
+} from "../../src/main/core/wasm-binary.js";
 
 const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -113,18 +118,20 @@ function officialFixture(): Uint8Array {
     0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [6, 0, 0, 2, 3, 4, 5]);
+  const functions = section(3, [8, 0, 0, 2, 3, 4, 5, 5, 4]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
+  const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
   const callerName = [...new TextEncoder().encode("caller")];
   const loopName = [
     ...new TextEncoder().encode("EmscriptenExeThreadMainLoop"),
   ];
   const exports = section(7, [
-    3,
+    4,
     ...uleb(callerName.length), ...callerName, 0, 2,
     ...uleb(loopName.length), ...loopName, 0, 3,
     3, 116, 98, 108, 1, 0,
+    6, 109, 101, 109, 111, 114, 121, 2, 0,
   ]);
   const elements = section(9, [
     2,
@@ -140,9 +147,11 @@ function officialFixture(): Uint8Array {
   ];
   const loop = [0, 0x0b];
   const code = section(10, [
-    6,
+    8,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
+    ...uleb(loop.length), ...loop,
+    ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
@@ -154,6 +163,7 @@ function officialFixture(): Uint8Array {
     ...imports,
     ...functions,
     ...table,
+    ...memory,
     ...globals,
     ...exports,
     ...elements,
@@ -204,6 +214,15 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     tableSlot: 5,
     commands: {
       thunkExport: "enhancement_command",
+      professionTrace: {
+        readerExport: "enhancement_profession_trace",
+        sender: {
+          functionIndex: 8,
+          params: ["i32", "i32", "i32"],
+          results: [],
+          bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[7]!),
+        },
+      },
       drain: {
         functionIndex: 6,
         params: ["i32", "i32"],
@@ -212,7 +231,14 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
         bodySha256:
           "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
       },
-      entries: [],
+      entries: [{
+        opcode: 65,
+        functionIndex: 7,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[6]!),
+        label: "fixture profession command",
+      }],
     },
     cursorEvent: {
       functionIndex: 4,

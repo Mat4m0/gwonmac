@@ -24,6 +24,7 @@ import {
   parseCode,
   parseExports,
   sectionById,
+  sleb,
   splitSections,
 } from "../../src/main/core/wasm-binary.js";
 const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
@@ -141,23 +142,28 @@ function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Six defined functions: three hooks, two commands, and the distinct
-  // recurring game-thread callback at which queued commands may run.
-  const functions = section(3, [6, 0, 1, 2, 0, 3, 3]);
+  // Eight defined functions: three hooks, three commands, the distinct
+  // recurring game-thread callback, and the shared packet sender.
+  const functions = section(3, [8, 0, 1, 2, 0, 3, 3, 3, 2]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
+  const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
   const loopName = [...new TextEncoder().encode("EmscriptenExeThreadMainLoop")];
   const cursorName = [...new TextEncoder().encode("cursor")];
   const uiName = [...new TextEncoder().encode("ui")];
   const frameName = [...new TextEncoder().encode("frame")];
+  const professionName = [...new TextEncoder().encode("profession")];
+  const memoryName = [...new TextEncoder().encode("memory")];
   const exports = section(7, [
-    5,
+    7,
     ...tableName, 1, 0,
+    ...uleb(memoryName.length), ...memoryName, 2, 0,
     ...uleb(loopName.length), ...loopName, 0, 3,
     ...uleb(cursorName.length), ...cursorName, 0, 4,
     ...uleb(uiName.length), ...uiName, 0, 5,
     ...uleb(frameName.length), ...frameName, 0, 8,
+    ...uleb(professionName.length), ...professionName, 0, 9,
   ]);
   const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
   const frameSegment = [0, 0x41, 4, 0x0b, 1, 8];
@@ -172,18 +178,31 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   // the real skillbar and attribute commands take three and four.
   const pair = [0, 0x20, 0, 0x10, 0, 0x20, 1, 0x10, 0, 0x0b];
   const frame = [0, 0x20, 0, 0x10, 0, 0x0b];
+  const profession = [
+    0,
+    0x41, 0, 0x41, ...sleb(65), 0x36, 2, 0,
+    0x41, 0, 0x20, 0, 0x36, 2, 4,
+    0x41, 0, 0x20, 1, 0x36, 2, 8,
+    0x41, 0xe7, 0x07, 0x41, 12, 0x41, 0, 0x10, 10,
+    0x0b,
+  ];
+  const sender = [
+    0, 0x20, 0, 0x20, 1, 0x20, 2, 0x10, 2, 0x0b,
+  ];
   const code = section(10, [
-    6,
+    8,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
     ...uleb(command.length), ...command,
     ...uleb(pair.length), ...pair,
     ...uleb(frame.length), ...frame,
+    ...uleb(profession.length), ...profession,
+    ...uleb(sender.length), ...sender,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
-    ...type, ...imports, ...functions, ...table, ...globals, ...exports,
+    ...type, ...imports, ...functions, ...table, ...memory, ...globals, ...exports,
     ...elements, ...code,
   ]);
 }
@@ -205,6 +224,17 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     tableSlot: 5,
     commands: {
       thunkExport: "enhancement_command",
+      professionTrace: {
+        readerExport: "enhancement_profession_trace",
+        sender: {
+          functionIndex: 10,
+          params: ["i32", "i32", "i32"],
+          results: [],
+          bodySha256: createHash("sha256")
+            .update(commandBody(bytes, 7))
+            .digest("hex"),
+        },
+      },
       drain: {
         functionIndex: 8,
         params: ["i32", "i32"],
@@ -232,6 +262,15 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
           .update(commandBody(bytes, 4))
           .digest("hex"),
         label: "fixture pair command",
+      }, {
+        opcode: 65,
+        functionIndex: 9,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes, 6))
+          .digest("hex"),
+        label: "fixture profession command",
       }],
     },
     cursorEvent: {
@@ -924,6 +963,51 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.deepEqual(sent, [], "and nothing was sent");
   });
 
+  it("distinguishes native and GWonMac profession packets without changing them", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
+    const packets: number[][] = [];
+    const instance = new WebAssembly.Instance(
+      new WebAssembly.Module(new Uint8Array(output)),
+      {
+        env: {
+          t: () => {},
+          c: () => {},
+          u: (connection: number, size: number, pointer: number) => {
+            packets.push([connection, size, pointer]);
+          },
+        },
+      },
+    );
+    const wasmMemory = instance.exports.memory as WebAssembly.Memory;
+    const nativeProfession = instance.exports.profession as
+      (target: number, profession: number) => void;
+    const enqueue = instance.exports[build.commands.thunkExport] as
+      (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    const readTrace = instance.exports[build.commands.professionTrace.readerExport] as
+      (pointer: number) => number;
+    const trace = () => {
+      assert.equal(readTrace(64), 11);
+      return [...new Uint32Array(wasmMemory.buffer, 64, 11)];
+    };
+
+    nativeProfession(77, 2);
+    assert.deepEqual(packets, [[999, 12, 0]]);
+    assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 77, 2]);
+    assert.deepEqual(trace(), [1, 1, 0, 77, 2, 1, 0, 12, 65, 77, 2]);
+
+    assert.equal(enqueue(65, 88, 3, 0, 0), 1);
+    frame(1, 2);
+    assert.deepEqual(packets, [
+      [999, 12, 0],
+      [999, 12, 0],
+    ]);
+    assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 88, 3]);
+    assert.deepEqual(trace(), [1, 2, 1, 88, 3, 2, 1, 12, 65, 88, 3]);
+  });
+
   it("refuses a command whose function is not the one certified", () => {
     const input = fixture();
     const build = manifest(input);
@@ -1009,7 +1093,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
         },
         CURSOR_TOOLBOX_COMMANDS,
       ),
-      /must be distinct from hooks and commands/,
+      /must be distinct from hooks, commands, and sender/,
     );
     assert.throws(
       () => transformEnhancementWasm(
@@ -1024,6 +1108,54 @@ describe("targeted Enhancement WebAssembly transform", () => {
         CURSOR_TOOLBOX_COMMANDS,
       ),
       /command drain table slot 0 does not map/,
+    );
+  });
+
+  it("refuses an uncertified or shared profession packet sender", () => {
+    const input = fixture();
+    const build = manifest(input);
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            professionTrace: {
+              ...build.commands.professionTrace,
+              sender: {
+                ...build.commands.professionTrace.sender,
+                bodySha256: "0".repeat(64),
+              },
+            },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /profession packet sender resolves .* not the certified/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            professionTrace: {
+              ...build.commands.professionTrace,
+              sender: {
+                ...build.commands.professionTrace.sender,
+                functionIndex: 5,
+                bodySha256: createHash("sha256")
+                  .update(commandBody(input, 2))
+                  .digest("hex"),
+              },
+            },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /profession packet sender must be distinct from hooks and commands/,
     );
   });
 

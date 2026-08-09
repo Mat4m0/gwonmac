@@ -361,11 +361,42 @@ function commands(
   value: unknown,
   where: string,
 ): KnownEnhancementBuild["commands"] {
-  const record = object(value, where, ["thunkExport", "drain", "entries"]);
+  const record = object(value, where, [
+    "thunkExport", "professionTrace", "drain", "entries",
+  ]);
   const thunkExport = record["thunkExport"];
   if (typeof thunkExport !== "string" || !/^[a-z_][a-z0-9_]{0,63}$/.test(thunkExport)) {
     refuse(`${where}.thunkExport must be a plain export name`);
   }
+  const traceAt = `${where}.professionTrace`;
+  const traceRecord = object(record["professionTrace"], traceAt, [
+    "readerExport", "sender",
+  ]);
+  const readerExport = traceRecord["readerExport"];
+  if (
+    typeof readerExport !== "string"
+    || !/^[a-z_][a-z0-9_]{0,63}$/.test(readerExport)
+  ) {
+    refuse(`${traceAt}.readerExport must be a plain export name`);
+  }
+  const senderAt = `${traceAt}.sender`;
+  const senderRecord = object(traceRecord["sender"], senderAt, [
+    "functionIndex", "params", "results", "bodySha256",
+  ]);
+  valueTypes(senderRecord, "params", senderAt, 3);
+  valueTypes(senderRecord, "results", senderAt, 0);
+  const professionTrace = Object.freeze({
+    readerExport,
+    sender: Object.freeze({
+      functionIndex: unsignedWord(
+        senderRecord["functionIndex"],
+        `${senderAt}.functionIndex`,
+      ),
+      params: ["i32", "i32", "i32"] as const,
+      results: [] as const,
+      bodySha256: digest(senderRecord, "bodySha256", senderAt),
+    }),
+  });
   const known = new Set(
     ENHANCEMENT_BUILDS.flatMap((build) =>
       build.commands.entries.map((entry) => entry.opcode)),
@@ -416,6 +447,7 @@ function commands(
   }
   return Object.freeze({
     thunkExport,
+    professionTrace,
     drain,
     entries: Object.freeze(entries),
   });
@@ -586,6 +618,15 @@ function writeEnhancement(build: KnownEnhancementBuild): unknown {
     tableSlot: build.tableSlot,
     commands: {
       thunkExport: build.commands.thunkExport,
+      professionTrace: {
+        readerExport: build.commands.professionTrace.readerExport,
+        sender: {
+          functionIndex: build.commands.professionTrace.sender.functionIndex,
+          params: [...build.commands.professionTrace.sender.params],
+          results: [...build.commands.professionTrace.sender.results],
+          bodySha256: build.commands.professionTrace.sender.bodySha256,
+        },
+      },
       drain: {
         functionIndex: build.commands.drain.functionIndex,
         params: [...build.commands.drain.params],

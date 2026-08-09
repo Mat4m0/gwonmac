@@ -45,6 +45,11 @@ import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import { COMPANION_ABI as COMPANION_DESCRIPTOR } from "../shared/companion-abi.js";
 import { enhancementRuntimePolicy } from "./enhancement-runtime-policy.js";
+import {
+  createProfessionCommandTrace,
+  PROFESSION_COMMAND_TRACE_BYTES,
+  type ProfessionCommandTraceReader,
+} from "./profession-command-trace.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
@@ -216,8 +221,16 @@ export async function installCertifiedCompanion(
         ? exports.enhancement_command as EnhancementCommandEnqueue
         : null)
     : null;
+  const professionTraceReader = capabilities.commands
+    ? (typeof exports?.enhancement_profession_trace === "function"
+        ? exports.enhancement_profession_trace as ProfessionCommandTraceReader
+        : null)
+    : null;
   if (capabilities.commands && commandEnqueue === null) {
     throw new Error("the commands profile derived a module with no command queue");
+  }
+  if (capabilities.commands && professionTraceReader === null) {
+    throw new Error("the commands profile derived a module with no profession trace");
   }
   // Keep the command implementation out of Core-only sessions altogether.
   // The derived module and its JavaScript boundary arrive as one capability.
@@ -250,6 +263,7 @@ export async function installCertifiedCompanion(
   let toolboxPointer = 0;
   let partyPointer = 0;
   let payloadPointer = 0;
+  let professionTracePointer = 0;
   // What malloc returned, which is what free must be given. The aligned base
   // used by the module lives inside it and is not a valid argument to free.
   let runtimeAllocation = 0;
@@ -259,6 +273,7 @@ export async function installCertifiedCompanion(
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
   let disposeCursorRefresh = () => {};
+  let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
   let installedRuntime: object | null = null;
   let cleaned = false;
@@ -274,6 +289,7 @@ export async function installCertifiedCompanion(
     disposeReadout();
     disposeToolbox();
     disposeToolSettings();
+    professionTrace?.dispose();
     if (
       installedCallback !== null
       && table.get(manifest.tableSlot) === installedCallback
@@ -283,6 +299,7 @@ export async function installCertifiedCompanion(
     if (toolboxPointer) free(toolboxPointer);
     if (partyPointer) free(partyPointer);
     if (payloadPointer) free(payloadPointer);
+    if (professionTracePointer) free(professionTracePointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
@@ -325,6 +342,11 @@ export async function installCertifiedCompanion(
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
       );
+      if (window.gwNative.init.development) {
+        professionTracePointer = Number(
+          exports.malloc(PROFESSION_COMMAND_TRACE_BYTES),
+        );
+      }
     }
     if (
       !runtimeAllocation
@@ -334,6 +356,11 @@ export async function installCertifiedCompanion(
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
       || (capabilities.commands && !payloadPointer)
+      || (
+        capabilities.commands
+        && window.gwNative.init.development
+        && !professionTracePointer
+      )
     ) {
       throw new Error("Companion allocation failed");
     }
@@ -358,12 +385,22 @@ export async function installCertifiedCompanion(
           ]
         : []),
       ...(capabilities.commands
-        ? [{
-            name: "command payload",
-            pointer: payloadPointer,
-            size: teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES,
-            align: 4,
-          }]
+        ? [
+            {
+              name: "command payload",
+              pointer: payloadPointer,
+              size: teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES,
+              align: 4,
+            },
+            ...(professionTracePointer
+              ? [{
+                  name: "profession trace",
+                  pointer: professionTracePointer,
+                  size: PROFESSION_COMMAND_TRACE_BYTES,
+                  align: 4,
+                }]
+              : []),
+          ]
         : []),
     ];
     for (const region of ownedRegions) {
@@ -642,6 +679,13 @@ export async function installCertifiedCompanion(
         return observed;
       },
     });
+    if (professionTracePointer !== 0 && professionTraceReader !== null) {
+      professionTrace = createProfessionCommandTrace(
+        memory,
+        professionTracePointer,
+        professionTraceReader,
+      );
+    }
     const setTeamEnabled = () => {
       if (!foundation) return;
       if (teamEnabled()) {
@@ -788,7 +832,8 @@ export async function installCertifiedCompanion(
         : null,
       foundation
         ? { update: (state) => {
-          toolboxObservation = state;
+            toolboxObservation = state;
+            professionTrace?.poll(state);
             const party = state.party;
             const next: typeof playRegion = state.status === "ready"
               && party?.status === "ready"

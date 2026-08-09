@@ -138,6 +138,15 @@ export interface KnownEnhancementBuild {
    */
   commands: Readonly<{
     thunkExport: string;
+    professionTrace: Readonly<{
+      readerExport: string;
+      sender: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+    }>;
     drain: Readonly<{
       functionIndex: number;
       params: readonly ["i32", "i32"];
@@ -197,14 +206,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "bb50ce7df9631c5d25331dd7918225eafa58d9fc44aa5c08d9116b64842ee521",
-      target: "86180e847def2e3db2046e3d832bbabdec13d12add0084b1ca8d93325a210526",
-      cursorTarget: "a00ecb36cef05648aa65354c248106e2ccb4ff281486f8f18264328973097048",
-      cursorToolbox: "703df374f95289519cdf34711efa2e61fffbad8777afb14a24dc9bcd762f78ce",
+      cursor: "477ee7f671a25676f662aa7a93c41ee98ab183bf2cb51b3117262d9fec33ab79",
+      target: "784930666338b9faa17938ee2da29968e44e17cb6734fcb4ae296f0c1e5d30db",
+      cursorTarget: "43dad19c503bf3c23a6102ade812d34eb2c5ffce006f4b78a1e134b34b9587a0",
+      cursorToolbox: "91620f9501745a00b4e0617a4d967aa7480def8a85d9113754ca5ad7ff87707b",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "9ff6cfd2b8de4f7ce4bb8ec395d66052b05acf26cf7df8e46af96d301069d43c",
-      cursorTargetToolboxCommands: "8767b14684a49cd4c2103f11fec898df6b5a9ac2545610eed392d82f73dd9843",
+      cursorToolboxCommands: "810fbc734d7e30fb4ca75d6f34ba33405fa17cfc12f67dd933ad0a3e6bac6a9b",
+      cursorTargetToolboxCommands: "ae6429418d3dc449502f3dcd7a50b9ca230ec4ce426b40ec52853986e22c6eca",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -237,6 +246,19 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     //
     commands: Object.freeze({
       thunkExport: "enhancement_command",
+      professionTrace: Object.freeze({
+        readerExport: "enhancement_profession_trace",
+        // The unique sender shared by all 147 packet builders. The trace
+        // wrapper records only the fixed 12-byte opcode-65 payload and then
+        // calls this exact body unchanged.
+        sender: Object.freeze({
+          functionIndex: 5951,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "d7f7c74b9cb14ba957ed8de7e74cc18167a3b688301d5f3d765ba04770a8b361",
+        }),
+      }),
       // GWCA's `GameThread::Enqueue` hooks this recurring frame callback. Its
       // source anchor is FrApi.cpp's unique `renderElapsed >= 0` assertion;
       // the active table relation below proves this is the registered callback,
