@@ -20,6 +20,7 @@ async function pointerDrag(
   target: ReturnType<Page["locator"]>,
   targetX = 0.5,
   during?: () => Promise<void>,
+  over?: () => Promise<void>,
 ) {
   await source.scrollIntoViewIfNeeded();
   const from = await source.boundingBox();
@@ -34,6 +35,7 @@ async function pointerDrag(
   await during?.();
   await page.mouse.move(to.x + to.width * targetX, to.y + to.height / 2, { steps: 12 });
   await page.waitForTimeout(40);
+  await over?.();
   await page.mouse.up();
 }
 
@@ -110,9 +112,35 @@ test("places catalogue skills and reorders slots by pointer and keyboard", async
       );
       await expect(page.locator(".authoring-bar")).toHaveClass(/skill-bar--receiving/);
     },
+    async () => {
+      await expect(slots.nth(7).locator(".skill-drop-label")).toHaveText("Place in 8");
+      await expect(page.locator(".catalogue-pointer-copy small")).toHaveText("Place in 8");
+    },
   );
   await expect(slots.nth(7)).toHaveAttribute("title", "Infuse Health");
   await expect(page.getByText("Infuse Health placed in slot 8.")).toBeAttached();
+
+  await expect(result).toHaveAttribute("aria-disabled", "true");
+  await result.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Infuse Health is already used in slot 8.")).toBeVisible();
+
+  await page.getByRole("searchbox", { name: "Search skills" }).fill("Cry of Frustration");
+  const elite = page.locator(".skill-result").filter({ hasText: "Cry of Frustration" }).first();
+  await pointerDrag(
+    page,
+    elite.locator(".catalogue-drag-handle"),
+    slots.nth(6),
+    0.5,
+    undefined,
+    async () => {
+      await expect(slots.nth(6).locator(".skill-drop-label")).toHaveText("Replace elite in 7");
+      await expect(slots.nth(0)).toHaveAttribute("data-drop-affected", "");
+    },
+  );
+  await expect(slots.nth(6)).toHaveAttribute("title", "Cry of Frustration");
+  await expect(slots.nth(0)).toHaveAttribute("title", "Empty skill slot");
+  await expect(page.getByText(/replacing Word of Healing in slot 1/)).toBeVisible();
 });
 
 test("exports build and team codes without hiding the manual fallback", async ({ page }) => {
@@ -243,6 +271,86 @@ test("keeps bar and commit actions reachable at short height", async ({ page }) 
   await expect(page.getByRole("button", { name: "Export build" })).toBeVisible();
 });
 
+test("Escape cancels a drag before it closes the catalogue", async ({ page }) => {
+  await openBuild(page);
+  const origin = page.locator(".authoring-bar .skill").nth(7);
+  await origin.click();
+  await page.getByRole("searchbox", { name: "Search skills" }).fill("Infuse Health");
+  const handle = page.locator(".skill-result .catalogue-drag-handle").first();
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  if (!from) throw new Error("Drag handle must be visible");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2, { steps: 3 });
+  await expect(page.locator(".catalogue-pointer-preview")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".catalogue-pointer-preview")).not.toBeAttached();
+  await expect(page.getByRole("heading", { name: "Choose skill 8" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".catalogue-workspace")).not.toBeAttached();
+  await expect(origin).toBeFocused();
+  await page.mouse.up();
+});
+
+for (const [width, height, minimumResultsHeight] of [
+  [320, 800, 70],
+  [360, 800, 75],
+  [640, 900, 250],
+  [1024, 420, 100],
+  [1280, 720, 100],
+] as const) {
+  test(`gives the catalogue one unobscured scroll surface at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await openBuild(page);
+    await page.locator(".authoring-bar .skill").first().click();
+    await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
+    await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+
+    const geometry = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        const bounds = element.getBoundingClientRect();
+        return {
+          top: bounds.top,
+          bottom: bounds.bottom,
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+        };
+      };
+      return {
+        outer: rect(".authoring-scroll"),
+        rail: rect(".authoring-bar-section"),
+        bar: rect(".authoring-bar"),
+        catalogue: rect(".catalogue-workspace"),
+        tools: rect(".catalogue-tools"),
+        results: rect(".skill-results"),
+      };
+    });
+    expect(geometry.outer.scrollHeight).toBeLessThanOrEqual(geometry.outer.clientHeight);
+    expect(geometry.bar.scrollWidth).toBeLessThanOrEqual(geometry.bar.clientWidth);
+    expect(geometry.rail.bottom).toBeLessThanOrEqual(geometry.catalogue.top + 1);
+    expect(geometry.tools.bottom).toBeLessThanOrEqual(geometry.results.top + 1);
+    expect(geometry.results.clientHeight).toBeGreaterThanOrEqual(minimumResultsHeight);
+    expect(await page.locator("body").evaluate((body) => body.scrollWidth)).toBe(width);
+
+    if (height <= 520) {
+      await expect(page.locator(".authoring-header")).toBeHidden();
+      await expect(page.locator(".authoring-actions")).toBeHidden();
+      await page.getByRole("searchbox", { name: "Search skills" }).fill("Infuse Health");
+      await page.locator(".skill-result").first().click();
+      await page.getByRole("button", { name: /Use in slot 1/ }).click();
+      await page.getByRole("button", { name: "Done" }).click();
+      await expect(page.locator(".authoring-header")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+      await expect(page.getByText("Unsaved draft")).toBeVisible();
+    }
+  });
+}
+
 for (const [width, height] of [
   [320, 800], [360, 800], [640, 900], [1024, 420], [1180, 760],
 ] as const) {
@@ -268,7 +376,7 @@ for (const [width, height] of [
   });
 }
 
-test("keeps critical team text and focus treatment legible", async ({ page }) => {
+test("keeps critical team and skill feedback legible", async ({ page }) => {
   const contrast = async (selector: string) => page.locator(selector).first().evaluate((element) => {
     type Colour = [number, number, number, number];
     const parse = (value: string): Colour => {
@@ -346,6 +454,15 @@ test("keeps critical team text and focus treatment legible", async ({ page }) =>
   const apply = page.getByRole("button", { name: "Apply team" });
   await apply.focus();
   expect(await apply.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
+
+  await openBuild(page);
+  expect(await contrast(".authoring-bar .skill-fallback")).toBeGreaterThanOrEqual(4.5);
+  await page.locator(".authoring-bar .skill").first().click();
+  await page.getByRole("searchbox", { name: "Search skills" }).fill("Aegis");
+  const unavailable = page.locator(".skill-result").first();
+  await unavailable.focus();
+  await page.keyboard.press("Enter");
+  expect(await contrast(".bar-drag-status")).toBeGreaterThanOrEqual(4.5);
 });
 
 test("preserves native text undo and protects dirty navigation", async ({ page }) => {

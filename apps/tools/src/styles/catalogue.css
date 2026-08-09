@@ -6,6 +6,13 @@
   background: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
 }
 
+.authoring-scroll--catalogue .catalogue-workspace {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  flex-direction: column;
+}
+
 .profession-editor {
   display: grid;
   margin-top: var(--ui-space-4);
@@ -141,9 +148,15 @@
   outline-offset: -2px;
 }
 
-.skill-result:disabled { opacity: 0.5; }
+.skill-result[data-unavailable] { opacity: 0.66; }
+.skill-result[data-unavailable]:hover,
+.skill-result[data-unavailable][aria-selected="true"] {
+  background: color-mix(in srgb, var(--ui-danger) 9%, transparent);
+}
 
 .catalogue-drag-handle {
+  min-width: 44px;
+  min-height: 44px;
   cursor: grab;
   touch-action: none;
 }
@@ -178,6 +191,18 @@
 
 .catalogue-pointer-preview strong {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalogue-pointer-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.catalogue-pointer-copy small {
+  overflow: hidden;
+  color: var(--ui-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -270,3 +295,64 @@
 .skill-inspector .ui-link { align-self: flex-start; }
 
 .catalogue-prompt { min-height: 260px; }
+
+.authoring-scroll--catalogue .catalogue-layout {
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.authoring-scroll--catalogue .skill-results { max-height: none; }
+.authoring-scroll--catalogue .skill-inspector { overflow: auto; }
+
+@container detail-pane (max-width: 860px) {
+  .catalogue-layout {
+    grid-template-columns: minmax(280px, 1fr) minmax(200px, 0.5fr);
+  }
+}
+
+@container detail-pane (max-width: 479px) {
+  .catalogue-layout {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .skill-results { flex: 1 1 120px; }
+  .skill-inspector {
+    min-height: 0;
+    max-height: 180px;
+    flex: 0 1 180px;
+  }
+  .catalogue-workspace > .workspace-heading {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+}
+
+@container detail-pane (max-width: 390px) {
+  .catalogue-tools { grid-template-columns: 1fr; }
+  .catalogue-count { display: none; }
+  .catalogue-workspace > .workspace-heading p,
+  .skill-inspector .mechanic-list,
+  .skill-inspector .skill-description,
+  .skill-inspector .description-unavailable { display: none; }
+  .skill-inspector {
+    max-height: 64px;
+    flex-basis: 64px;
+    padding: var(--ui-space-2);
+    gap: var(--ui-space-2);
+  }
+  .inspector-identity { display: none; }
+  .skill-inspector .ui-link { display: none; }
+}
+
+@media (max-height: 520px) {
+  .detail-view--catalogue-open .catalogue-tools,
+  .detail-view--catalogue-open .catalogue-layout { margin-top: var(--ui-space-2); }
+  .detail-view--catalogue-open .skill-inspector { max-height: 132px; }
+  .detail-view--catalogue-open .catalogue-count { display: none; }
+  .detail-view--catalogue-open .authoring-bar {
+    max-width: 366px;
+    grid-template-columns: repeat(8, minmax(0, 44px));
+  }
+}

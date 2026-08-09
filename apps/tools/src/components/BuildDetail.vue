@@ -147,7 +147,7 @@ function closeCatalogue(): void {
   workspace.value = "attributes";
   requestAnimationFrame(() => {
     document.querySelector<HTMLButtonElement>(
-      `.authoring-bar .skill:nth-child(${(slot ?? 0) + 1})`,
+      `.authoring-bar .skill[data-skill-slot="${slot ?? 0}"]`,
     )?.focus();
   });
 }

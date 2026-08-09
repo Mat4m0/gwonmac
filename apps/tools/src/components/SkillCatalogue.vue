@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUpdate, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import type { SkillId } from "../model";
 import type { SkillCatalogue, SkillPresentation } from "../skill-catalog";
 import type { BuildDraftController } from "../use-build-draft";
@@ -212,6 +220,13 @@ function closeOrCancel(event: KeyboardEvent): void {
   event.stopPropagation();
   if (!cancelPointerDrag()) emit("close");
 }
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") closeOrCancel(event);
+}
+
+onMounted(() => window.addEventListener("keydown", onWindowKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", onWindowKeydown));
 
 function focusResult(index: number): void {
   const buttons = resultButtons.value;

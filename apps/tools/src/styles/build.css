@@ -30,14 +30,25 @@
 .skill--draggable { cursor: grab; touch-action: none; }
 .skill--chosen { cursor: grabbing; }
 
+.skill-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
+  color: var(--ui-text-bright);
+  font: 700 10px var(--ui-font-mono);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px var(--ui-panel-fill);
+}
+
 .skill-bar--receiving .skill {
   box-shadow:
     inset 0 0 0 1px var(--ui-accent),
     var(--ui-shadow-inset);
 }
 
-.skill-bar--receiving .skill[data-drop-target]::after {
-  content: "Drop";
+.skill-drop-label {
   position: absolute;
   z-index: var(--ui-z-status);
   inset: auto 3px 3px;
@@ -47,12 +58,34 @@
   color: var(--ui-text-bright);
   font: 9px var(--ui-font);
   text-align: center;
+  white-space: nowrap;
 }
 
 .skill-bar--receiving .skill[data-drop-target] {
   box-shadow:
     0 0 0 2px var(--ui-focus),
     inset 0 0 0 2px var(--ui-accent),
+    var(--ui-shadow-inset);
+}
+
+.skill-bar--receiving .skill[data-drop-outcome="replace-elite"] {
+  box-shadow:
+    0 0 0 2px var(--ui-warning),
+    inset 0 0 0 2px var(--ui-warning),
+    var(--ui-shadow-inset);
+}
+
+.skill-bar--receiving .skill[data-drop-outcome="already-used"],
+.skill-bar--receiving .skill[data-drop-outcome="unavailable"] {
+  box-shadow:
+    0 0 0 2px var(--ui-danger),
+    inset 0 0 0 2px var(--ui-danger),
+    var(--ui-shadow-inset);
+}
+
+.skill-bar--receiving .skill[data-drop-affected] {
+  box-shadow:
+    0 0 0 2px var(--ui-warning),
     var(--ui-shadow-inset);
 }
 
@@ -256,6 +289,23 @@
   background: color-mix(in srgb, var(--ui-panel-fill) 94%, var(--ui-outline));
 }
 
+.authoring-scroll--catalogue {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.authoring-scroll--catalogue .authoring-bar-section {
+  position: relative;
+  top: auto;
+  flex: 0 0 auto;
+}
+
+.authoring-scroll--catalogue .build-validation { flex: 0 0 auto; }
+.authoring-scroll--catalogue .workspace-switcher,
+.authoring-scroll--catalogue .authoring-bar-section .workspace-heading,
+.authoring-scroll--catalogue .bar-keyboard-hint { display: none; }
+
 .authoring-bar-section {
   position: sticky;
   z-index: var(--ui-z-status);
@@ -349,6 +399,7 @@
 
 .bar-drag-status[data-tone="success"] { color: var(--ui-success); }
 .bar-drag-status[data-tone="warning"] { color: var(--ui-warning); }
+.bar-drag-status[data-tone="error"] { color: var(--ui-danger); }
 
 .build-validation {
   margin: var(--ui-space-3) 0;
@@ -580,3 +631,76 @@
 .apply-details { margin-top: var(--ui-space-1); color: var(--ui-text); }
 .apply-details summary { cursor: pointer; font-weight: 600; }
 .apply-details ul { margin: var(--ui-space-1) 0 0; padding-left: var(--ui-space-4); }
+
+@container detail-pane (max-width: 860px) {
+  .catalogue-tools { grid-template-columns: minmax(180px, 1fr) auto; }
+  .catalogue-count { grid-column: 1 / -1; justify-self: end; }
+}
+
+@container detail-pane (max-width: 640px) {
+  .authoring-bar {
+    width: 100%;
+    max-width: 430px;
+    grid-template-columns: repeat(8, minmax(0, 52px));
+    gap: 2px;
+  }
+  .comparison-bars,
+  .profession-editor,
+  .attribute-groups { grid-template-columns: 1fr; }
+  .workspace-heading { align-items: stretch; flex-direction: column; }
+  .attribute-budget { justify-items: start; }
+  .authoring-scroll { padding: var(--ui-space-3); }
+  .authoring-bar-section {
+    top: calc(var(--ui-space-3) * -1);
+    margin: calc(var(--ui-space-3) * -1) calc(var(--ui-space-3) * -1) 0;
+    padding: var(--ui-space-3);
+  }
+  .attribute-workspace,
+  .catalogue-workspace { padding: var(--ui-space-3); }
+  .authoring-actions { flex-wrap: wrap; }
+  .save-state { width: 100%; margin-right: 0; }
+  .build-export > label { flex-basis: 100%; }
+}
+
+@container detail-pane (max-width: 390px) {
+  .authoring-tabs .ui-chip { display: none; }
+  .authoring-bar {
+    width: auto;
+    grid-template-columns: repeat(4, minmax(44px, 56px));
+    gap: var(--ui-space-1);
+  }
+  .attribute-line { grid-template-columns: minmax(0, 1fr) auto; }
+  .rank-cost { grid-column: 1 / -1; text-align: right; }
+  .skill-filters { flex-wrap: wrap; }
+  .authoring-actions .ui-button { flex: 1; }
+}
+
+@media (max-height: 520px) {
+  .detail-view--catalogue-open { height: 100% !important; }
+  .detail-view--catalogue-open > .authoring-header,
+  .detail-view--catalogue-open > .authoring-actions,
+  .detail-view--catalogue-open > .shared-commit-sheet,
+  .detail-view--catalogue-open > .publication-result,
+  .detail-view--catalogue-open .build-validation,
+  .detail-view--catalogue-open .workspace-switcher,
+  .detail-view--catalogue-open .authoring-bar-section .workspace-heading,
+  .detail-view--catalogue-open .bar-keyboard-hint { display: none; }
+  .detail-view--catalogue-open .authoring-scroll { padding: var(--ui-space-2); }
+  .detail-view--catalogue-open .authoring-bar-section {
+    margin: calc(var(--ui-space-2) * -1) calc(var(--ui-space-2) * -1) 0;
+    padding: var(--ui-space-2);
+  }
+  .detail-view--catalogue-open .catalogue-workspace {
+    padding: var(--ui-space-2);
+    border-width: 0;
+  }
+  .detail-view--catalogue-open .catalogue-workspace .workspace-heading p { display: none; }
+}
+
+@media (pointer: coarse) {
+  .catalogue-drag-handle,
+  .authoring-bar .skill {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

@@ -404,10 +404,6 @@
 @container (max-width: 860px) {
   .workspace { grid-template-columns: 270px minmax(0, 1fr); }
   .library-pane { width: 270px; }
-  .catalogue-layout { grid-template-columns: minmax(280px, 1fr) minmax(200px, 0.5fr); }
-  .catalogue-tools { grid-template-columns: 1fr; }
-  .catalogue-tools .ui-segment { width: 100%; }
-  .catalogue-count { justify-self: end; }
 }
 
 /* Below this, list and detail become separate views rather than two columns
@@ -454,38 +450,12 @@
   .apply-issue-list li { grid-template-columns: 22px minmax(0, 1fr); }
   .apply-issue-list .ui-link { grid-column: 2; justify-self: start; }
 
-  .authoring-bar { grid-template-columns: repeat(4, minmax(36px, 1fr)); }
-  .comparison-bars { grid-template-columns: 1fr; }
-  .profession-editor,
-  .attribute-groups,
-  .catalogue-layout { grid-template-columns: 1fr; }
-  .skill-inspector { min-height: 220px; }
-  .workspace-heading { align-items: stretch; flex-direction: column; }
-  .attribute-budget { justify-items: start; }
-  .authoring-scroll { padding: var(--ui-space-3); }
-  .authoring-bar-section {
-    top: calc(var(--ui-space-3) * -1);
-    margin: calc(var(--ui-space-3) * -1) calc(var(--ui-space-3) * -1) 0;
-    padding: var(--ui-space-3);
-  }
-  .attribute-workspace,
-  .catalogue-workspace { padding: var(--ui-space-3); }
-  .authoring-actions { flex-wrap: wrap; }
-  .save-state { width: 100%; margin-right: 0; }
-  .build-export > label,
   .share-team > label { flex-basis: 100%; }
 }
 
 @container (max-width: 390px) {
   .detail-title-line { gap: var(--ui-space-2); }
   .profession-mark { width: 34px; height: 34px; }
-  .authoring-tabs .ui-chip { display: none; }
-  .attribute-line {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .rank-cost { grid-column: 1 / -1; text-align: right; }
-  .skill-filters { flex-wrap: wrap; }
-  .authoring-actions .ui-button { flex: 1; }
 }
 
 @media (max-height: 520px) {
