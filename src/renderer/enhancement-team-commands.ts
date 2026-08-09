@@ -17,7 +17,7 @@ const ATTRIBUTE_WORDS = 16;
 export const TEAM_COMMAND_PAYLOAD_BYTES =
   (SKILL_WORDS + ATTRIBUTE_WORDS * 2) * Uint32Array.BYTES_PER_ELEMENT;
 
-export type EnhancementCommandThunk = (
+export type EnhancementCommandEnqueue = (
   opcode: number,
   a0: number,
   a1: number,
@@ -28,7 +28,7 @@ export type EnhancementCommandThunk = (
 type TeamCommandOptions = Readonly<{
   memory: WebAssembly.Memory;
   payloadPointer: number;
-  send: EnhancementCommandThunk;
+  send: EnhancementCommandEnqueue;
   /** Bounded semantic command evidence for unpackaged development launches. */
   development?: boolean;
   /** Refuses unless commands are currently safe and returns the fresh party. */
@@ -94,11 +94,11 @@ export function createTeamApplyCommands({
       console.info(`[tools:dev] command ${JSON.stringify({
         operation,
         opcode,
-        accepted: result === 1,
+        queued: result === 1,
         ...fields,
       })}`);
     }
-    if (result !== 1) throw new Error("Guild Wars refused the command packet");
+    if (result !== 1) throw new Error("Guild Wars command queue is busy");
   };
   const skills = (agentId: number, skillIds: readonly number[]) => {
     if (skillIds.length > SKILL_WORDS) {
@@ -138,6 +138,9 @@ export function createTeamApplyCommands({
   };
 
   return Object.freeze({
+    cancelPending() {
+      sent("cancel", 0, send(0, 0, 0, 0, 0));
+    },
     setHardMode(enabled: boolean) {
       ready();
       if (typeof enabled !== "boolean") {

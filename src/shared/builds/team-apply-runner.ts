@@ -47,6 +47,8 @@ import type { LiveParty, SkillUnlockObservation } from "./live-party.js";
 
 /** The commands the enhancement exposes, as this module needs them. */
 export interface TeamApplyCommands {
+  /** Clears a command that has not yet reached the next game tick. */
+  cancelPending(): void;
   setHardMode(enabled: boolean): void;
   setPlayerSecondary(profession: number): void;
   setPlayerSkills(skillIds: readonly number[]): void;

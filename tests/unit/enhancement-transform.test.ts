@@ -141,26 +141,27 @@ function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Four defined functions: the three hooks plus one for a command to resolve
-  // to. Its body deliberately differs from the tick hook's -- an identical body
-  // would hash the same, and the whole point of `bodySha256` is that two
-  // different functions cannot pass for each other.
-  const functions = section(3, [5, 0, 1, 2, 0, 3]);
-  const table = section(4, [1, 0x70, 1, 4, 4]);
+  // Six defined functions: three hooks, two commands, and the distinct
+  // recurring game-thread callback at which queued commands may run.
+  const functions = section(3, [6, 0, 1, 2, 0, 3, 3]);
+  const table = section(4, [1, 0x70, 1, 5, 5]);
   const globals = section(6, [0]);
   const tableName = [...uleb(3), 116, 98, 108];
   const loopName = [...new TextEncoder().encode("EmscriptenExeThreadMainLoop")];
   const cursorName = [...new TextEncoder().encode("cursor")];
   const uiName = [...new TextEncoder().encode("ui")];
+  const frameName = [...new TextEncoder().encode("frame")];
   const exports = section(7, [
-    4,
+    5,
     ...tableName, 1, 0,
     ...uleb(loopName.length), ...loopName, 0, 3,
     ...uleb(cursorName.length), ...cursorName, 0, 4,
     ...uleb(uiName.length), ...uiName, 0, 5,
+    ...uleb(frameName.length), ...frameName, 0, 8,
   ]);
   const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
-  const elements = section(9, [1, ...mappedSegment]);
+  const frameSegment = [0, 0x41, 4, 0x0b, 1, 8];
+  const elements = section(9, [2, ...mappedSegment, ...frameSegment]);
   const tick = [0, 0x20, 0, 0x10, 0, 0x0b];
   const cursor = [
     0, 0x20, 0, 0x20, 1, 0x20, 2, 0x20, 3, 0x20, 4, 0x10, 1, 0x0b,
@@ -170,13 +171,15 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   // Two arguments, so a command that takes more than one is exercised too --
   // the real skillbar and attribute commands take three and four.
   const pair = [0, 0x20, 0, 0x10, 0, 0x20, 1, 0x10, 0, 0x0b];
+  const frame = [0, 0x20, 0, 0x10, 0, 0x0b];
   const code = section(10, [
-    5,
+    6,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
     ...uleb(command.length), ...command,
     ...uleb(pair.length), ...pair,
+    ...uleb(frame.length), ...frame,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -199,9 +202,18 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
-    tableSlot: 4,
+    tableSlot: 5,
     commands: {
       thunkExport: "enhancement_command",
+      drain: {
+        functionIndex: 8,
+        params: ["i32", "i32"],
+        results: [],
+        tableSlot: 4,
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes, 5))
+          .digest("hex"),
+      },
       entries: [{
         opcode: 31,
         functionIndex: 6,
@@ -381,8 +393,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
       results: [],
     });
     assert.deepEqual(report.table, {
-      min: 4,
-      max: 4,
+      min: 5,
+      max: 5,
       firstEmptySlots: [0],
     });
   });
@@ -453,7 +465,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.deepEqual(dispatches, []);
     assert.deepEqual(order, ["original:0", "original:1", "original:2"]);
 
-    assert.equal(table.length, 5);
+    assert.equal(table.length, 6);
     const slotZeroSentinel = tick as CallableFunction;
     table.set(0, slotZeroSentinel);
     table.set(
@@ -814,10 +826,10 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.equal(decodeEnhancementManifest(moduleWithManifest(evidence)), null);
   });
 
-  // The command thunk is the entire write surface. These are the tests that
+  // The command queue is the entire write surface. These are the tests that
   // decide whether this app can send a packet, so they instantiate the
   // transformed module and drive the function rather than inspecting bytes.
-  it("emits the command thunk for exactly the two certified command profiles", () => {
+  it("emits the command queue for exactly the two certified command profiles", () => {
     const input = fixture();
     const build = manifest(input);
     for (const capabilities of [CURSOR_ONLY, TARGET_ONLY, CURSOR_TARGET, CURSOR_TOOLBOX]) {
@@ -849,7 +861,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     }
   });
 
-  it("dispatches the certified opcode and refuses every other", () => {
+  it("dispatches queued commands only from the certified game-thread callback", () => {
     const input = fixture();
     const build = manifest(input);
     const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
@@ -862,26 +874,51 @@ describe("targeted Enhancement WebAssembly transform", () => {
         t: (value: number) => { sent.push(value); },
         c: () => {},
         u: () => {},
-        tbl: new WebAssembly.Table({ initial: 5, maximum: 5, element: "anyfunc" }),
+        tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
       },
     });
     const command = instance.exports[build.commands.thunkExport] as
       (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
+    const tick = instance.exports.EmscriptenExeThreadMainLoop as (value: number) => void;
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    const cursor = instance.exports.cursor as
+      (a: number, b: number, c: number, d: number, e: number) => void;
     assert.equal(typeof command, "function");
 
-    assert.equal(command(31, 4242, 0, 0, 0), 1, "certified opcode is sent");
-    assert.deepEqual(sent, [4242], "the argument reaches the builder unchanged");
+    assert.equal(command(31, 4242, 0, 0, 0), 1, "certified opcode is queued");
+    assert.deepEqual(sent, [], "enqueue never calls client code re-entrantly");
+    assert.equal(command(93, 11, 22, 33, 44), 0, "a pending command owns the mailbox");
+    cursor(1, 2, 3, 4, 5);
+    assert.deepEqual(sent, [], "an observer hook cannot dispatch commands");
+    tick(7);
+    assert.deepEqual(sent, [7], "the observer tick cannot dispatch commands");
+    frame(70, 700);
+    assert.deepEqual(
+      sent,
+      [7, 4242, 70],
+      "the command runs before the original frame boundary",
+    );
 
     // A command taking more than one argument gets all of them, in order, and
     // the arguments past its arity are ignored rather than passed on.
     assert.equal(command(93, 11, 22, 33, 44), 1);
-    assert.deepEqual(sent, [4242, 11, 22]);
+    assert.deepEqual(sent, [7, 4242, 70], "the second command also waits");
+    tick(8);
+    assert.deepEqual(sent, [7, 4242, 70, 8]);
+    frame(80, 800);
+    assert.deepEqual(sent, [7, 4242, 70, 8, 11, 22, 80]);
+
+    assert.equal(command(31, 99, 0, 0, 0), 1);
+    assert.equal(command(0, 0, 0, 0, 0), 1, "opcode zero cancels the pending command");
+    frame(90, 900);
+    assert.deepEqual(sent, [7, 4242, 70, 8, 11, 22, 80, 90]);
 
     // Everything else, including the neighbours of the ones we certified: the
     // opcodes are a dense range on the real client, so an off-by-one would
     // otherwise land on a real message.
     sent.length = 0;
-    for (const opcode of [0, 1, 16, 21, 30, 32, 92, 94, -1, 0x7fff_ffff]) {
+    assert.equal(command(0, 4242, 0, 0, 0), 1, "opcode zero also cancels an empty mailbox");
+    for (const opcode of [1, 16, 21, 30, 32, 92, 94, -1, 0x7fff_ffff]) {
       assert.equal(command(opcode, 4242, 0, 0, 0), 0, `opcode ${opcode}`);
     }
     assert.deepEqual(sent, [], "and nothing was sent");
@@ -934,6 +971,59 @@ describe("targeted Enhancement WebAssembly transform", () => {
         CURSOR_TOOLBOX_COMMANDS,
       ),
       /out of range/,
+    );
+  });
+
+  it("refuses an uncertified or shared command drain boundary", () => {
+    const input = fixture();
+    const build = manifest(input);
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            drain: { ...build.commands.drain, bodySha256: "0".repeat(64) },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /command drain boundary resolves .* not the certified/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            // The pair command has the same signature. Identity must still be
+            // distinct so command execution and scheduling cannot merge.
+            drain: {
+              ...build.commands.drain,
+              functionIndex: 7,
+              bodySha256: build.commands.entries[1]!.bodySha256,
+            },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /must be distinct from hooks and commands/,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          commands: {
+            ...build.commands,
+            drain: { ...build.commands.drain, tableSlot: 0 },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /command drain table slot 0 does not map/,
     );
   });
 

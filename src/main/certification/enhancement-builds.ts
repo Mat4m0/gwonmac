@@ -138,6 +138,13 @@ export interface KnownEnhancementBuild {
    */
   commands: Readonly<{
     thunkExport: string;
+    drain: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      tableSlot: number;
+      bodySha256: string;
+    }>;
     entries: readonly Readonly<{
       opcode: number;
       functionIndex: number;
@@ -190,14 +197,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "6efffb6cf4d9b2b8e32b0b88db5a04d43074b853dec796d233ec8e3d8ad00d3a",
-      target: "47e450e0149239fdd1c815313b9fbbc242d4f766384b3daf2feb8af2aba6ea27",
-      cursorTarget: "8a1a5d317cbf44b5396b79bce5dbdc39064e93e0fae4f8f9e7245406fd7a8f1b",
-      cursorToolbox: "ea9bb0d29237e6ef61b3bf966037a989e72a1181da5af4fd5e56959b4bc48b26",
+      cursor: "bb50ce7df9631c5d25331dd7918225eafa58d9fc44aa5c08d9116b64842ee521",
+      target: "86180e847def2e3db2046e3d832bbabdec13d12add0084b1ca8d93325a210526",
+      cursorTarget: "a00ecb36cef05648aa65354c248106e2ccb4ff281486f8f18264328973097048",
+      cursorToolbox: "703df374f95289519cdf34711efa2e61fffbad8777afb14a24dc9bcd762f78ce",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "cca986fc5818bbf291a0fca9e92f5abfbf6a937eaf9b6cd71a50aecfa4529fb6",
-      cursorTargetToolboxCommands: "f8588e079ac2d9895c806a71f72d06d79d0215086cc4ca23b0acfe9a2ad76f4f",
+      cursorToolboxCommands: "9ff6cfd2b8de4f7ce4bb8ec395d66052b05acf26cf7df8e46af96d301069d43c",
+      cursorTargetToolboxCommands: "8767b14684a49cd4c2103f11fec898df6b5a9ac2545610eed392d82f73dd9843",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -230,6 +237,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     //
     commands: Object.freeze({
       thunkExport: "enhancement_command",
+      // GWCA's `GameThread::Enqueue` hooks this recurring frame callback. Its
+      // source anchor is FrApi.cpp's unique `renderElapsed >= 0` assertion;
+      // the active table relation below proves this is the registered callback,
+      // not the nearby one-time frame/message initializer (#6659).
+      drain: Object.freeze({
+        functionIndex: 6661,
+        params: Object.freeze(["i32", "i32"] as const),
+        results: Object.freeze([] as const),
+        tableSlot: 1721,
+        bodySha256:
+          "9fb1ca0dee40f5ceef3d0174846ef38af47a8366bfe76cb8da12e86419b40c41",
+      }),
       entries: Object.freeze([
         Object.freeze({
           opcode: 31,

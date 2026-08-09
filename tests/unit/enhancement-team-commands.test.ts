@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   createTeamApplyCommands,
   TEAM_COMMAND_PAYLOAD_BYTES,
-  type EnhancementCommandThunk,
+  type EnhancementCommandEnqueue,
 } from "../../src/renderer/enhancement-team-commands.ts";
 import type { ToolboxObservation } from "../../src/shared/builds/live-party.ts";
 import { heroId } from "../../src/shared/builds/library.ts";
@@ -37,7 +37,7 @@ const observation: ToolboxObservation = {
 test("the closed team surface selects only its reviewed opcodes and payloads", () => {
   const memory = new WebAssembly.Memory({ initial: 1 });
   const sent: unknown[][] = [];
-  const send: EnhancementCommandThunk = (opcode, a0, a1, a2, a3) => {
+  const send: EnhancementCommandEnqueue = (opcode, a0, a1, a2, a3) => {
     const call: unknown[] = [opcode, a0, a1, a2, a3];
     if (opcode === 93) {
       call.push([...new Uint32Array(memory.buffer, a2, a1)]);
@@ -57,6 +57,7 @@ test("the closed team surface selects only its reviewed opcodes and payloads", (
     ready: () => observation,
   });
 
+  commands.cancelPending();
   commands.setHardMode(true);
   commands.setPlayerSecondary(2);
   commands.setPlayerSkills([1, 2, 3]);
@@ -69,6 +70,7 @@ test("the closed team surface selects only its reviewed opcodes and payloads", (
   commands.setHeroAttributes(heroId(6), [[1, 10]]);
 
   assert.deepEqual(sent, [
+    [0, 0, 0, 0, 0],
     [155, 1, 0, 0, 0],
     [65, PLAYER_AGENT, 2, 0, 0],
     [93, PLAYER_AGENT, 3, PAYLOAD, 0, [1, 2, 3]],
@@ -83,7 +85,7 @@ test("the closed team surface selects only its reviewed opcodes and payloads", (
   assert.equal(TEAM_COMMAND_PAYLOAD_BYTES, 160);
 });
 
-test("invalid values are refused before the command thunk", () => {
+test("invalid values are refused before the command queue", () => {
   const memory = new WebAssembly.Memory({ initial: 1 });
   let sends = 0;
   const commands = createTeamApplyCommands({
@@ -129,7 +131,7 @@ test("hero identity is resolved again for every packet and rejected packets thro
   agentId = 22;
   assert.throws(
     () => commands.setHeroSkills(heroId(6), [1]),
-    /refused the command packet/,
+    /command queue is busy/,
   );
   assert.deepEqual(sent.map((call) => call.slice(0, 2)), [[21, 11], [93, 22]]);
 });

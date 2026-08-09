@@ -42,7 +42,7 @@ import type {
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import type { EnhancementCommandThunk } from "./enhancement-team-commands.js";
+import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import { COMPANION_ABI as COMPANION_DESCRIPTOR } from "../shared/companion-abi.js";
 import { enhancementRuntimePolicy } from "./enhancement-runtime-policy.js";
 
@@ -211,13 +211,13 @@ export async function installCertifiedCompanion(
   // the transform emits it only there. A profile without it has no call to a
   // packet builder anywhere in its bytes, so this is a real absence rather
   // than a disabled feature.
-  const commandThunk = capabilities.commands
+  const commandEnqueue = capabilities.commands
     ? (typeof exports.enhancement_command === "function"
-        ? exports.enhancement_command as EnhancementCommandThunk
+        ? exports.enhancement_command as EnhancementCommandEnqueue
         : null)
     : null;
-  if (capabilities.commands && commandThunk === null) {
-    throw new Error("the commands profile derived a module with no command thunk");
+  if (capabilities.commands && commandEnqueue === null) {
+    throw new Error("the commands profile derived a module with no command queue");
   }
   // Keep the command implementation out of Core-only sessions altogether.
   // The derived module and its JavaScript boundary arrive as one capability.
@@ -617,10 +617,10 @@ export async function installCertifiedCompanion(
         | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
       kernelDispatch(3, active, 0, 0, 0, 0);
     };
-    const commands = commandThunk === null ? null : teamCommands!.createTeamApplyCommands({
+    const commands = commandEnqueue === null ? null : teamCommands!.createTeamApplyCommands({
       memory,
       payloadPointer,
-      send: commandThunk,
+      send: commandEnqueue,
       development: window.gwNative.init.development,
       ready: () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");

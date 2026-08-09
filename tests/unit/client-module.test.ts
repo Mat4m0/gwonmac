@@ -104,16 +104,17 @@ const CALL_OFFSET = 5;
  */
 function officialFixture(): Uint8Array {
   const types = section(1, [
-    5,
+    6,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
     0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
     0x60, 1, 0x7f, 0,
     0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
+    0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [5, 0, 0, 2, 3, 4]);
-  const table = section(4, [1, 0x70, 1, 4, 4]);
+  const functions = section(3, [6, 0, 0, 2, 3, 4, 5]);
+  const table = section(4, [1, 0x70, 1, 5, 5]);
   const globals = section(6, [0]);
   const callerName = [...new TextEncoder().encode("caller")];
   const loopName = [
@@ -125,7 +126,11 @@ function officialFixture(): Uint8Array {
     ...uleb(loopName.length), ...loopName, 0, 3,
     3, 116, 98, 108, 1, 0,
   ]);
-  const elements = section(9, [1, 0, 0x41, 1, 0x0b, 3, 4, 3, 5]);
+  const elements = section(9, [
+    2,
+    0, 0x41, 1, 0x0b, 3, 4, 3, 5,
+    0, 0x41, 4, 0x0b, 1, 6,
+  ]);
   const caller = [
     0,
     0x20, 0,
@@ -135,9 +140,10 @@ function officialFixture(): Uint8Array {
   ];
   const loop = [0, 0x0b];
   const code = section(10, [
-    5,
+    6,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
+    ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
@@ -195,8 +201,19 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
-    tableSlot: 4,
-    commands: { thunkExport: "enhancement_command", entries: [] },
+    tableSlot: 5,
+    commands: {
+      thunkExport: "enhancement_command",
+      drain: {
+        functionIndex: 6,
+        params: ["i32", "i32"],
+        results: [],
+        tableSlot: 4,
+        bodySha256:
+          "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
+      },
+      entries: [],
+    },
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],

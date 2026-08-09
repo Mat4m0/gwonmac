@@ -94,6 +94,7 @@ export function applyHarness(
   };
   const agentFor = (hero: number) => world.find((slot) => slot.hero === hero)?.agentId ?? 0;
   const commands: TeamApplyCommands = {
+    cancelPending: () => {},
     setHardMode: (enabled) => { sent.push(`hard:${enabled}`); },
     setPlayerSecondary: (profession) => {
       sent.push(`player-secondary:${player?.agentId ?? 0}:${profession}`);

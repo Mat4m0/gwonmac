@@ -361,7 +361,7 @@ function commands(
   value: unknown,
   where: string,
 ): KnownEnhancementBuild["commands"] {
-  const record = object(value, where, ["thunkExport", "entries"]);
+  const record = object(value, where, ["thunkExport", "drain", "entries"]);
   const thunkExport = record["thunkExport"];
   if (typeof thunkExport !== "string" || !/^[a-z_][a-z0-9_]{0,63}$/.test(thunkExport)) {
     refuse(`${where}.thunkExport must be a plain export name`);
@@ -370,6 +370,22 @@ function commands(
     ENHANCEMENT_BUILDS.flatMap((build) =>
       build.commands.entries.map((entry) => entry.opcode)),
   );
+  const drainAt = `${where}.drain`;
+  const drainRecord = object(record["drain"], drainAt, [
+    "functionIndex", "params", "results", "tableSlot", "bodySha256",
+  ]);
+  valueTypes(drainRecord, "params", drainAt, 2);
+  valueTypes(drainRecord, "results", drainAt, 0);
+  const drain = Object.freeze({
+    functionIndex: unsignedWord(
+      drainRecord["functionIndex"],
+      `${drainAt}.functionIndex`,
+    ),
+    params: ["i32", "i32"] as const,
+    results: [] as const,
+    tableSlot: unsignedWord(drainRecord["tableSlot"], `${drainAt}.tableSlot`),
+    bodySha256: digest(drainRecord, "bodySha256", drainAt),
+  });
   const entries = list(record, "entries", where, { min: 0, max: 32 })
     .map((item, index) => {
       const at = `${where}.entries[${index}]`;
@@ -398,7 +414,11 @@ function commands(
   if (new Set(entries.map((entry) => entry.opcode)).size !== entries.length) {
     refuse(`${where}.entries repeats an opcode`);
   }
-  return Object.freeze({ thunkExport, entries: Object.freeze(entries) });
+  return Object.freeze({
+    thunkExport,
+    drain,
+    entries: Object.freeze(entries),
+  });
 }
 
 /** How many arguments a proposed command declares, bounded before it is read. */
@@ -566,6 +586,13 @@ function writeEnhancement(build: KnownEnhancementBuild): unknown {
     tableSlot: build.tableSlot,
     commands: {
       thunkExport: build.commands.thunkExport,
+      drain: {
+        functionIndex: build.commands.drain.functionIndex,
+        params: [...build.commands.drain.params],
+        results: [...build.commands.drain.results],
+        tableSlot: build.commands.drain.tableSlot,
+        bodySha256: build.commands.drain.bodySha256,
+      },
       entries: build.commands.entries.map((entry) => ({
         opcode: entry.opcode,
         functionIndex: entry.functionIndex,

@@ -438,11 +438,19 @@ export function createNativeHost(
         });
         throw cause;
       } finally {
+        // A refused confirmation must not leave a packet armed to fire after
+        // the UI has already reported failure. Clearing an empty mailbox is a
+        // no-op; clearing a stuck one makes the failure final and the next
+        // Apply independent.
+        if (!operation.signal.aborted) commands.cancelPending();
         if (activeApply === operation) activeApply = null;
       }
     },
     cancelApply() {
-      activeApply?.abort();
+      if (activeApply !== null) {
+        commands?.cancelPending();
+        activeApply.abort();
+      }
     },
   };
 }

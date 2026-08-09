@@ -15,6 +15,7 @@ describe("native Tools host diagnostics", () => {
   it("publishes bounded evidence when Team Apply refuses", async () => {
     const command = vi.fn();
     const commands: TeamApplyCommands = {
+      cancelPending: command,
       setHardMode: command,
       setPlayerSecondary: command,
       setPlayerSkills: command,
@@ -62,6 +63,7 @@ describe("native Tools host diagnostics", () => {
     const debug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
     const command = vi.fn();
     const commands: TeamApplyCommands = {
+      cancelPending: command,
       setHardMode: command,
       setPlayerSecondary: command,
       setPlayerSkills: command,
@@ -112,7 +114,9 @@ describe("native Tools host diagnostics", () => {
 
   it("owns one Apply at a time and cancellation stops the active operation", async () => {
     const command = vi.fn();
+    const cancelPending = vi.fn();
     const commands: TeamApplyCommands = {
+      cancelPending,
       setHardMode: command,
       setPlayerSecondary: command,
       setPlayerSkills: command,
@@ -170,6 +174,7 @@ describe("native Tools host diagnostics", () => {
     host.cancelApply();
     await expect(active).rejects.toMatchObject({ name: "AbortError" });
     expect(command).toHaveBeenCalledOnce();
+    expect(cancelPending).toHaveBeenCalledOnce();
     expect(window.gwTeamApplyProbe).toMatchObject({
       timeline: expect.arrayContaining([
         expect.objectContaining({ state: "sending" }),
