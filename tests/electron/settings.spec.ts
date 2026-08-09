@@ -207,6 +207,16 @@ test.describe("settings experience", () => {
       await expect(page.locator('output[name="uiPanelOpacityValue"]'))
         .toHaveText("65%");
       await expectToken("--ui-panel-opacity", "0.65");
+      await expect(page.locator("#settings-feedback")).toHaveText("Saved.");
+      await expect(page.locator("#settings-feedback")).toHaveAttribute(
+        "data-tone",
+        "success",
+      );
+      expect(
+        await page.locator("#settings-dialog").evaluate((element) =>
+          globalThis.getComputedStyle(element)
+            .getPropertyValue("--ui-panel-opacity").trim()),
+      ).toBe("0.97");
 
       // Nothing here may reach the game. The canvas is the game's surface, and
       // a presentation setting that resized or restyled it would be exactly the
@@ -276,7 +286,7 @@ test.describe("settings experience", () => {
         `≈ ${dimensions.width * 2} × ${dimensions.height * 2}`,
       );
       await expect(page.locator("#settings-pane-display")).toContainText(
-        "2× renders four times the pixels",
+        "Choose Balanced or Performance",
       );
 
       await page.locator('input[name="renderScale"][value="1.5"]').check();
@@ -296,7 +306,7 @@ test.describe("settings experience", () => {
         .toBe(true);
       await page.locator("#settings-tab-controls").click();
       await expect(page.locator("#settings-pane-controls")).toContainText(
-        "GWonMac Core is always active",
+        "Core is on for supported Guild Wars builds",
       );
       await expect
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))
@@ -339,9 +349,10 @@ test.describe("settings experience", () => {
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
 
       const controls = page.locator("#settings-pane-controls");
-      await expect(controls).toContainText("GWonMac Core is always active");
-      await expect(controls).toContainText("native Guild Wars cursor");
-      await expect(controls).toContainText("has no opt-out");
+      await expect(controls).toContainText("Core is on for supported Guild Wars builds");
+      await expect(controls).toContainText("native cursor");
+      await expect(controls).toContainText("required and stay on");
+      await expect(controls).toContainText("Optional tools stay off in PvP");
       await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
       await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
       await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();
@@ -401,7 +412,11 @@ test.describe("settings experience", () => {
       });
       await page.locator('input[name="gwonmacTools"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
-        "GWonMac Tools Beta was not changed.",
+        "Optional Tools were not changed. Your current setup is still active.",
+      );
+      await expect(page.locator("#settings-feedback")).toHaveAttribute(
+        "data-tone",
+        "warning",
       );
       await expect(page.locator('input[name="gwonmacTools"]')).not.toBeChecked();
       expect(await page.evaluate(() => window.gwNative.settings.get()))
@@ -504,7 +519,7 @@ test.describe("settings experience", () => {
       ).toEqual({
         quit: false,
         relaunch: false,
-        buttons: ["Reset Launcher Settings", "Cancel"],
+        buttons: ["Reset GWonMac Settings", "Cancel"],
       });
       expect(await page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ renderScale: 2 });
@@ -562,8 +577,8 @@ test.describe("settings experience", () => {
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
 
-      // Whichever tab follows the first one: the claim is that ArrowRight moves
-      // focus and selection together, not that any two panes are neighbours.
+      // The desktop rail is vertical: ArrowDown moves exactly one section.
+      // The previous duplicate handlers moved twice and skipped a destination.
       const panes = await page
         .locator(".settings-rail .settings-rtab")
         .evaluateAll((tabs) => tabs.map((tab) => (tab as HTMLElement).dataset.pane));
@@ -573,17 +588,79 @@ test.describe("settings experience", () => {
       const dataTab = page.locator(`#settings-tab-${first}`);
       const nextTab = page.locator(`#settings-tab-${second}`);
       await dataTab.focus();
-      await dataTab.press("ArrowRight");
+      await dataTab.press("ArrowDown");
       await expect(nextTab).toBeFocused();
       await expect(nextTab).toHaveAttribute("aria-selected", "true");
       await expect(page.locator(`#settings-pane-${second}`)).toBeVisible();
       await expect(page.locator(`#settings-pane-${first}`)).toBeHidden();
 
-      expect(
-        await page.locator("#settings-saved").evaluate(
-          (element) => globalThis.getComputedStyle(element).transitionDuration,
-        ),
-      ).toBe("0s");
+      await expect(page.locator(".settings-rail")).toHaveAttribute(
+        "aria-orientation",
+        "vertical",
+      );
+      await nextTab.press("ArrowRight");
+      await expect(nextTab).toBeFocused();
+
+      const containment = await page.evaluate(() => {
+        const dialog = document.querySelector("#settings-dialog")
+          ?.getBoundingClientRect();
+        const form = document.querySelector("#settings-form")
+          ?.getBoundingClientRect();
+        const footer = document.querySelector(".settings-footerbar")
+          ?.getBoundingClientRect();
+        if (!dialog || !form || !footer) throw new Error("settings geometry missing");
+        return {
+          dialog: { right: dialog.right, bottom: dialog.bottom },
+          form: { right: form.right, bottom: form.bottom },
+          footer: { right: footer.right, bottom: footer.bottom },
+        };
+      });
+      expect(containment.form.right).toBeLessThanOrEqual(containment.dialog.right);
+      expect(containment.form.bottom).toBeLessThanOrEqual(containment.dialog.bottom);
+      expect(containment.footer.right).toBeLessThanOrEqual(containment.dialog.right);
+      expect(containment.footer.bottom).toBeLessThanOrEqual(containment.dialog.bottom);
+
+      await page.setViewportSize({ width: 320, height: 480 });
+      await expect(page.locator(".settings-rail")).toHaveAttribute(
+        "aria-orientation",
+        "horizontal",
+      );
+      const compactGeometry = await page.evaluate(() => {
+        const dialog = document.querySelector("#settings-dialog")
+          ?.getBoundingClientRect();
+        const panes = document.querySelector(".settings-panes");
+        const rail = document.querySelector(".settings-rail");
+        const footer = document.querySelector(".settings-footerbar")
+          ?.getBoundingClientRect();
+        if (!dialog || !panes || !rail || !footer) {
+          throw new Error("compact settings geometry missing");
+        }
+        return {
+          dialog: {
+            left: dialog.left,
+            top: dialog.top,
+            right: dialog.right,
+            bottom: dialog.bottom,
+          },
+          footerBottom: footer.bottom,
+          paneWidth: [panes.clientWidth, panes.scrollWidth],
+          railWidth: [rail.clientWidth, rail.scrollWidth],
+        };
+      });
+      expect(compactGeometry.dialog.left).toBeGreaterThanOrEqual(0);
+      expect(compactGeometry.dialog.top).toBeGreaterThanOrEqual(0);
+      expect(compactGeometry.dialog.right).toBeLessThanOrEqual(320);
+      expect(compactGeometry.dialog.bottom).toBeLessThanOrEqual(480);
+      expect(compactGeometry.footerBottom).toBeLessThanOrEqual(
+        compactGeometry.dialog.bottom,
+      );
+      expect(compactGeometry.paneWidth[1]).toBe(compactGeometry.paneWidth[0]);
+      expect(compactGeometry.railWidth[1]).toBe(compactGeometry.railWidth[0]);
+
+      const firstCompactTab = page.locator(`#settings-tab-${first}`);
+      await firstCompactTab.focus();
+      await firstCompactTab.press("ArrowRight");
+      await expect(nextTab).toBeFocused();
       await page.locator("#settings-done").click();
       await expect(page.locator("#settings-dialog")).not.toHaveAttribute(
         "open",
@@ -611,7 +688,11 @@ test.describe("settings experience", () => {
 
       await page.locator('input[name="showDiagnostics"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
-        "Settings could not be saved.",
+        "Settings could not be saved. Your previous setting is still active; try again.",
+      );
+      await expect(page.locator("#settings-feedback")).toHaveAttribute(
+        "data-tone",
+        "error",
       );
       await expect(page.locator('input[name="showDiagnostics"]')).not.toBeChecked();
       expect(

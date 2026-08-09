@@ -28,7 +28,6 @@
   const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
   const settingsCache = byId('settings-cache');
   const settingsDataNote = byId('settings-data-note');
-  const settingsSaved = byId('settings-saved');
   const settingsProgress = byId('settings-progress');
   const settingsProgressFill = byId('settings-progress-fill');
   const settingsPanes = form.querySelector('.settings-panes') as HTMLElement;
@@ -96,7 +95,9 @@
   let downloadError = '';
   let launcherResolve: (() => void) | null = null;
   let launcherTotalBytes = 0;
-  let savedTimer: number | null = null;
+  type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
+  const idleFeedback = 'Changes save automatically.';
+  let feedbackTimer: number | null = null;
   let activeSettingsPane = 'data';
   const downloadActive = () =>
     downloadPhase === 'running' || downloadPhase === 'stopping';
@@ -109,7 +110,7 @@
       },
       limits: () => ({
         minWidth: Math.min(480, window.innerWidth - 32),
-        minHeight: Math.min(380, window.innerHeight - 32),
+        minHeight: Math.min(360, window.innerHeight - 32),
         maxWidth: Math.max(280, window.innerWidth - 32),
         maxHeight: Math.max(280, window.innerHeight - 32),
       }),
@@ -124,21 +125,51 @@
     });
   });
 
-  // Auto-save proof: a brief "Saved" note in the header when a change lands.
-  function flashSaved() {
-    if (!settingsSaved) return;
-    settingsSaved.classList.add('show');
-    if (savedTimer !== null) clearTimeout(savedTimer);
-    savedTimer = setTimeout(() => settingsSaved.classList.remove('show'), 1400);
+  // The footer is the only save/action status owner. Success yields back to
+  // the quiet autosave explanation; warnings and failures remain until the
+  // next deliberate action so important feedback cannot vanish unread.
+  function setFeedback(
+    message = idleFeedback,
+    tone: FeedbackTone = 'neutral',
+    resetAfter = 0,
+  ) {
+    if (feedbackTimer !== null) clearTimeout(feedbackTimer);
+    feedbackTimer = null;
+    feedback.textContent = message;
+    feedback.dataset.tone = tone;
+    if (resetAfter > 0) {
+      feedbackTimer = setTimeout(() => {
+        feedbackTimer = null;
+        feedback.textContent = idleFeedback;
+        feedback.dataset.tone = 'neutral';
+      }, resetAfter);
+    }
   }
+
+  const settingsRail = form.querySelector<HTMLElement>('.settings-rail');
+  if (!settingsRail) throw new Error('missing settings rail');
+  const compactSettings = window.matchMedia('(max-width: 560px)');
+  const syncRailOrientation = () => {
+    settingsRail.setAttribute(
+      'aria-orientation',
+      compactSettings.matches ? 'horizontal' : 'vertical',
+    );
+  };
+  syncRailOrientation();
+  compactSettings.addEventListener('change', syncRailOrientation);
 
   function selectPane(name: string) {
     activeSettingsPane = name;
     settingsPanes.dataset.active = name;
+    let selectedTab: HTMLElement | null = null;
     for (const tab of form.querySelectorAll<HTMLElement>('.settings-rtab')) {
       const selected = tab.dataset.pane === name;
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
+      if (selected) selectedTab = tab;
+    }
+    if (dialog.open) {
+      selectedTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
   }
 
@@ -147,36 +178,20 @@
     tab.addEventListener('click', () => {
       if (tab.dataset.pane) selectPane(tab.dataset.pane);
     });
-    tab.addEventListener('keydown', (event) => {
-      const vertical = window.innerWidth > 560;
-      const previous = vertical ? 'ArrowUp' : 'ArrowLeft';
-      const next = vertical ? 'ArrowDown' : 'ArrowRight';
-      if (![previous, next, 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const current = railTabs.indexOf(tab);
-      const target = event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? railTabs.length - 1
-          : (current + (event.key === previous ? -1 : 1) + railTabs.length) % railTabs.length;
-      const destination = railTabs[target];
-      if (destination?.dataset.pane) selectPane(destination.dataset.pane);
-      destination?.focus();
-    });
   }
 
   // Roving tabindex: arrows move between sections, Home/End jump.
-  form
-    .querySelector<HTMLElement>('.settings-rail')
-    ?.addEventListener('keydown', (event) => {
+  settingsRail.addEventListener('keydown', (event) => {
       const active = document.activeElement;
       const index =
         active instanceof globalThis.HTMLElement ? railTabs.indexOf(active) : -1;
       if (index < 0) return;
       let target: HTMLElement | undefined;
-      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      const previous = compactSettings.matches ? 'ArrowLeft' : 'ArrowUp';
+      const next = compactSettings.matches ? 'ArrowRight' : 'ArrowDown';
+      if (event.key === next) {
         target = railTabs[(index + 1) % railTabs.length];
-      } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      } else if (event.key === previous) {
         target = railTabs[(index - 1 + railTabs.length) % railTabs.length];
       } else if (event.key === 'Home') {
         target = railTabs[0];
@@ -187,7 +202,7 @@
       event.preventDefault();
       target.focus();
       if (target.dataset.pane) selectPane(target.dataset.pane);
-    });
+  });
 
   const size = (bytes: number) => bytes >= 1_073_741_824
     ? `${(bytes / 1_073_741_824).toFixed(2)} GB`
@@ -600,7 +615,7 @@
         renderSettingsData(cache);
         if (!dataDownload.hidden) renderLauncherDownload(cache);
         if (downloadError) {
-          if (dialog.open) feedback.textContent = downloadError;
+          if (dialog.open) setFeedback(downloadError, 'error');
           return false;
         }
         if (outcome.status === 'stopped' && dialog.open) {
@@ -612,7 +627,7 @@
         // Only a broken bridge reaches here: the outcome above covers every
         // way the download itself can end.
         downloadError = 'The full game download could not continue.';
-        if (dialog.open) feedback.textContent = downloadError;
+        if (dialog.open) setFeedback(downloadError, 'error');
         if (!dataDownload.hidden) {
           renderLauncherDownload(currentCache, downloadError);
         }
@@ -641,7 +656,7 @@
       await window.gwNative.cache.stopDownload();
     } catch {
       downloadPhase = 'running';
-      feedback.textContent = 'The download could not be paused.';
+      setFeedback('The download could not be paused. Check your connection and try again.', 'error');
       renderSettingsData();
       if (!dataDownload.hidden) {
         renderLauncherDownload(currentCache, 'The download could not be paused.');
@@ -827,7 +842,7 @@
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
     }
-    feedback.textContent = '';
+    setFeedback();
     selectPane(activeSettingsPane);
     settingsCache.textContent = 'Checking downloaded game data…';
     templatePane?.refresh();
@@ -841,7 +856,7 @@
       await readSession().catch(() => undefined);
       await refreshCache();
     } catch {
-      feedback.textContent = 'Settings could not be loaded. Try reopening this window.';
+      setFeedback('Settings could not be loaded. Close Settings and try again.', 'error');
     }
   }
 
@@ -878,7 +893,7 @@
     ) return;
     const patch = patchForControl(control);
     if (!patch) return;
-    feedback.textContent = '';
+    setFeedback('Saving…', 'progress');
     const strategyChanged = control.name === 'dataStrategy';
     const nextStrategy = selectedStrategy();
     void persistSettings(patch)
@@ -887,33 +902,36 @@
           patch.gwonmacTools !== undefined
           && saved.gwonmacTools !== patch.gwonmacTools
         ) {
-          feedback.textContent = 'GWonMac Tools Beta was not changed.';
+          setFeedback('Optional Tools were not changed. Your current setup is still active.', 'warning');
           return;
         }
-        flashSaved();
         if (!strategyChanged) {
-          feedback.textContent = 'Settings saved.';
+          setFeedback('Saved.', 'success', 2200);
           return;
         }
         if (nextStrategy === 'quick' && downloadActive()) {
           await stopFullDownload();
         }
         renderSettingsData();
-        feedback.textContent = nextStrategy === 'full'
-          ? 'Full Game will download before Guild Wars starts next time.'
-          : 'Quick Start will be used next time. Downloaded data is kept.';
+        setFeedback(
+          nextStrategy === 'full'
+            ? 'Saved. Full Game will download before Guild Wars starts next time.'
+            : 'Saved. Quick Start will be used next time; downloaded data is kept.',
+          'success',
+          4500,
+        );
       })
       .catch(() => {
         if (currentSettings) {
           fillForm(currentSettings);
           window.gwApplySettings?.(currentSettings);
         }
-        feedback.textContent = 'Settings could not be saved.';
+        setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
       });
   });
 
   settingsDownload.addEventListener('click', () => {
-    feedback.textContent = '';
+    setFeedback();
     if (downloadActive()) void stopFullDownload();
     else void startFullDownload();
   });
@@ -923,16 +941,16 @@
   });
 
   byId('settings-clear-cache')?.addEventListener('click', async () => {
-    feedback.textContent = '';
+    setFeedback();
     try {
       await window.gwNative.cache.clearAndRestart();
     } catch {
-      feedback.textContent = 'Game data could not be cleared.';
+      setFeedback('Game data could not be cleared. Nothing was removed; try again.', 'error');
     }
   });
 
   settingsReset.addEventListener('click', async () => {
-    feedback.textContent = '';
+    setFeedback();
     try {
       const reset = await window.gwNative.settings.reset();
       if (!reset) return;
@@ -940,10 +958,13 @@
       fillForm(reset);
       renderSettingsData();
       window.gwApplySettings?.(reset);
-      feedback.textContent =
-        'Launcher settings reset. The download choice will appear next launch.';
+      setFeedback(
+        'GWonMac settings were reset. Choose a download mode next launch.',
+        'success',
+        4500,
+      );
     } catch {
-      feedback.textContent = 'Launcher settings could not be reset.';
+      setFeedback('GWonMac settings could not be reset. Nothing changed; try again.', 'error');
     }
   });
 

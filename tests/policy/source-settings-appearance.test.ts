@@ -9,12 +9,11 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("Settings exposes one interface rather than theme or geometry variants", async () => {
+test("Settings does not expose retired theme or geometry variants", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
   for (const retired of ["uiTheme", "uiDensity", "uiBorderWidth", "uiRadius"]) {
     assert.doesNotMatch(html, new RegExp(`name=["']${retired}["']`, "u"));
   }
-  assert.match(html, /one interface inspired by the original Guild Wars client/u);
 });
 
 test("panel opacity is bounded exactly as main requires", async () => {

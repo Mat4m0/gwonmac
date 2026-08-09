@@ -342,7 +342,9 @@ export function bindTemplatePane(
       // leave the source buttons hidden with nothing to bring them back.
       closePreview();
       refresh();
-      status.textContent = 'Those files could not be read.';
+      status.textContent =
+        'Those templates could not be read. Choose Guild Wars .txt files '
+        + 'or copy a valid template code and try again.';
     } finally {
       busy = false;
     }
@@ -412,7 +414,9 @@ export function bindTemplatePane(
       .catch(() => {
         closePreview();
         refresh();
-        status.textContent = 'Those templates could not be saved.';
+        status.textContent =
+          'Those templates could not be saved. Nothing changed; make sure '
+          + 'Guild Wars is still running and try again.';
       })
       .finally(() => {
         busy = false;

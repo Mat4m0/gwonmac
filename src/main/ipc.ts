@@ -707,11 +707,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
       try {
         const { response } = await dialog.showMessageBox(win, {
           type: "warning",
-          buttons: ["Reset Launcher Settings", "Cancel"],
+          buttons: ["Reset GWonMac Settings", "Cancel"],
           defaultId: 1,
           cancelId: 1,
-          message: "Reset launcher settings?",
-          detail: "Display, controls, window size and position, and advanced settings return to their defaults. The download choice will appear next launch. Downloaded game data and your saved login stay untouched.",
+          message: "Reset GWonMac settings?",
+          detail: "Display, tools, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
         });
         if (response !== 0) return null;
         const settings = await ctx.resetSettings();

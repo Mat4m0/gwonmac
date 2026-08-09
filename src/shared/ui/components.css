@@ -153,11 +153,12 @@
  * corners the frame just rounded. */
 .ui-panel {
   display: flex;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   padding: 9px 10px 11px;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .ui-panel-head {
@@ -493,7 +494,7 @@
   align-items: center;
   gap: var(--ui-space-2);
   color: var(--ui-text);
-  cursor: default;
+  cursor: pointer;
 }
 
 .ui-check input {
@@ -505,6 +506,7 @@
 }
 
 .ui-check:has(input:disabled) {
+  cursor: default;
   opacity: 0.45;
 }
 
@@ -655,12 +657,30 @@
   background: transparent;
   color: var(--ui-text-muted);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
-  cursor: default;
+  cursor: pointer;
   text-align: left;
   transition:
     background var(--ui-duration) var(--ui-ease-out),
     color var(--ui-duration) var(--ui-ease-out);
 }
+
+/* One semantic status line for autosave, progress, and failure feedback.
+ * Consumers own the words and lifetime; the design system owns what each
+ * outcome looks like so success can never silently inherit an error colour. */
+.ui-status-line {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  text-wrap: pretty;
+}
+
+.ui-status-line[data-tone="progress"] { color: var(--ui-accent); }
+.ui-status-line[data-tone="success"] {
+  color: color-mix(in srgb, var(--ui-success) 74%, var(--ui-text-bright));
+}
+.ui-status-line[data-tone="warning"] { color: var(--ui-warning); }
+.ui-status-line[data-tone="error"] { color: var(--ui-danger); }
 
 .ui-rail button:hover {
   background: var(--ui-hover);
