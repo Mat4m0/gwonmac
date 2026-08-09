@@ -379,10 +379,17 @@ describe("ToolsApp team management", () => {
       finish = resolve;
     });
     const plans: unknown[] = [];
-    const wrapper = await workbench(applicableHost(async (plan) => {
+    const host = applicableHost(async (plan, onEvent) => {
       plans.push(plan);
+      onEvent?.({
+        state: "waiting",
+        message: "Waiting for Devona's secondary profession…",
+        elapsedMs: 50,
+      });
       return pending;
-    }));
+    });
+    const cancel = vi.spyOn(host, "cancelApply");
+    const wrapper = await workbench(host);
     const apply = wrapper
       .findAll(".detail-actions .ui-button")
       .find((button) => button.text().includes("Apply team"))!;
@@ -390,11 +397,13 @@ describe("ToolsApp team management", () => {
     await apply.trigger("click");
     await flushPromises();
     expect(plans).toHaveLength(1);
-    expect(apply.text()).toBe("Applying…");
-    expect(apply.attributes("disabled")).toBeDefined();
+    expect(apply.text()).toBe("Cancel Apply");
+    expect(apply.attributes("disabled")).toBeUndefined();
     expect(wrapper.get(".team-editor").attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Waiting for Devona's secondary profession…");
     await apply.trigger("click");
     expect(plans).toHaveLength(1);
+    expect(cancel).toHaveBeenCalledOnce();
 
     finish({ commandId: 7, completedChanges: 3, skippedSkills: [] });
     await flushPromises();
@@ -723,4 +732,3 @@ describe("ToolsApp team management", () => {
     wrapper.unmount();
   });
 });
-

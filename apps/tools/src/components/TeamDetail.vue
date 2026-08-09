@@ -567,6 +567,10 @@ const dismissTransientPanel = (event: KeyboardEvent) => {
 };
 
 const apply = () => {
+  if (props.controller.applying.value) {
+    props.controller.cancelTeamApply();
+    return;
+  }
   if (noApplyChanges.value) return;
   props.controller.applyTeam(props.team);
 };
@@ -851,6 +855,8 @@ defineExpose({
 
     </div>
 
+    </fieldset>
+
     <footer v-if="deleting" class="detail-actions detail-actions--explain delete-confirmation">
       <span>
         Delete “{{ team.name }}”? Shared builds are always kept.
@@ -918,19 +924,27 @@ defineExpose({
         {{ applyAssessment.message }}
       </div>
       <div class="team-action-buttons">
-        <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
-        <button class="ui-button" @click="startSharing">Export team</button>
+        <button
+          class="ui-link"
+          data-variant="danger"
+          :disabled="controller.saving.value"
+          @click="deleting = true"
+        >Delete</button>
         <button
           class="ui-button"
-          data-variant="primary"
-          :disabled="applyAssessment.blocked || noApplyChanges || controller.saving.value"
+          :disabled="controller.saving.value"
+          @click="startSharing"
+        >Export team</button>
+        <button
+          class="ui-button"
+          :data-variant="controller.applying.value ? 'danger' : 'primary'"
+          :disabled="!controller.applying.value && (applyAssessment.blocked || noApplyChanges || controller.saving.value)"
           :aria-describedby="applyAssessment.blocked ? 'apply-feedback apply-readiness' : 'apply-feedback'"
           @click="apply"
         >
-          {{ controller.saving.value ? "Applying…" : noApplyChanges ? "Already applied" : "Apply team" }}
+          {{ controller.applying.value ? "Cancel Apply" : noApplyChanges ? "Already applied" : "Apply team" }}
         </button>
       </div>
     </footer>
-    </fieldset>
   </article>
 </template>

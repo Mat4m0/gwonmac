@@ -27,6 +27,7 @@ import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
   runTeamApply,
   type TeamApplyCommands,
+  type TeamApplyEvent,
 } from "../../../src/shared/builds/team-apply-runner";
 import { demoLibrary, demoParty, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
@@ -71,7 +72,11 @@ export interface ToolsHost {
   writeClipboard(text: string): Promise<void>;
   reloadSkills(): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
-  applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
+  applyTeam(
+    plan: TeamApplyPlan,
+    onEvent?: (event: TeamApplyEvent) => void,
+  ): Promise<TeamApplyResult>;
+  cancelApply(): void;
   /**
    * Why `applyTeam` cannot reach the running game, or `null` when it can.
    *
@@ -91,6 +96,7 @@ function teamApplyProbe(
   party: LiveParty,
   commandId: number,
   cause: unknown,
+  timeline: readonly TeamApplyEvent[],
 ) {
   const availability = (
     skill: number | null,
@@ -105,6 +111,7 @@ function teamApplyProbe(
     schema: 1,
     commandId,
     error: cause instanceof Error ? cause.message : String(cause),
+    timeline: Object.freeze(timeline.slice(-64)),
     party: Object.freeze({
       status: party.status,
       playRegion: party.playRegion,
@@ -207,6 +214,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { commandId: 1, completedChanges: 0, skippedSkills: [] };
     },
+    cancelApply() {},
     async reset() {
       storage?.removeItem(STORAGE_KEY);
       memory = cloneLibrary(demoLibrary);
@@ -239,6 +247,7 @@ export function createNativeHost(
   // One counter per session, so a result can be tied to the request that asked
   // for it in a log where several ran.
   let commandId = 0;
+  let activeApply: AbortController | null = null;
   const skills = createSkillCatalogue([]);
   const profession = new Set<Profession>(
     Object.keys(PROFESSIONS) as Profession[],
@@ -366,10 +375,16 @@ export function createNativeHost(
       });
       return published;
     },
-    async applyTeam(plan) {
+    async applyTeam(plan, onEvent) {
       if (commands === null) {
         throw new Error(applyUnavailable ?? "Applying a team is unavailable.");
       }
+      if (activeApply !== null) {
+        throw new Error("A team is already being applied.");
+      }
+      const operation = new AbortController();
+      activeApply = operation;
+      const timeline: TeamApplyEvent[] = [];
       Reflect.deleteProperty(window, "gwTeamApplyProbe");
       const currentCommandId = ++commandId;
       devTrace(development, "apply.start", {
@@ -384,9 +399,14 @@ export function createNativeHost(
           // every published change, and a captured value would let the sequence
           // confirm each step against the party as it was before it started.
           party: () => party.value,
-          settle: () => new Promise<void>((resolve) => {
-            requestAnimationFrame(() => resolve());
-          }),
+          signal: operation.signal,
+          onEvent: (event) => {
+            if (development) {
+              if (timeline.length === 64) timeline.shift();
+              timeline.push(event);
+            }
+            onEvent?.(event);
+          },
         }, currentCommandId);
         devTrace(development, "apply.complete", {
           commandId: currentCommandId,
@@ -395,7 +415,13 @@ export function createNativeHost(
         });
         return result;
       } catch (cause) {
-        const probe = teamApplyProbe(plan, party.value, currentCommandId, cause);
+        const probe = teamApplyProbe(
+          plan,
+          party.value,
+          currentCommandId,
+          cause,
+          timeline,
+        );
         if (development) {
           Reflect.set(window, "gwTeamApplyProbe", probe);
           console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
@@ -410,7 +436,12 @@ export function createNativeHost(
           reason: cause instanceof Error ? cause.message : String(cause),
         });
         throw cause;
+      } finally {
+        if (activeApply === operation) activeApply = null;
       }
+    },
+    cancelApply() {
+      activeApply?.abort();
     },
   };
 }

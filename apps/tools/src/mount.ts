@@ -39,6 +39,7 @@ export function mountToolsApp(
   const visible = ref(options.initiallyVisible ?? options.mode === "standalone");
   const setVisible = (next: boolean) => {
     if (visible.value === next) return;
+    if (!next) options.host.cancelApply();
     visible.value = next;
     devTrace(development, "visibility", { visible: next });
     options.onVisibilityChange?.(next);
@@ -115,6 +116,7 @@ export function mountToolsApp(
     },
     dispose: () => {
       devTrace(development, "dispose");
+      options.host.cancelApply();
       Reflect.deleteProperty(window, "gwPlayerProfessionProbe");
       app.unmount();
     },

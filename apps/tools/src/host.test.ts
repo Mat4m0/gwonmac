@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 import type { TeamApplyPlan } from "../../../src/shared/builds/team-apply";
+import { liveParty } from "../../../src/shared/builds/live-party";
 import type { TeamApplyCommands } from "../../../src/shared/builds/team-apply-runner";
 import { demoParty } from "./fixtures";
 import { createNativeHost } from "./host";
@@ -107,5 +108,74 @@ describe("native Tools host diagnostics", () => {
     production.party.value = demoParty;
     await expect(production.applyTeam(plan)).rejects.toThrow();
     expect(debug).not.toHaveBeenCalled();
+  });
+
+  it("owns one Apply at a time and cancellation stops the active operation", async () => {
+    const command = vi.fn();
+    const commands: TeamApplyCommands = {
+      setHardMode: command,
+      setPlayerSecondary: command,
+      setPlayerSkills: command,
+      setPlayerAttributes: command,
+      addHero: command,
+      kickHero: command,
+      setHeroBehaviour: command,
+      setHeroSecondary: command,
+      setHeroSkills: command,
+      setHeroAttributes: command,
+    };
+    const host = createNativeHost(
+      {} as GwNativeApi,
+      vi.fn(),
+      commands,
+      null,
+      true,
+    );
+    host.party.value = liveParty({
+      status: "ready",
+      partyObserved: true,
+      heroCount: 0,
+      party: {
+        status: "ready",
+        rosterObserved: true,
+        playRegion: "pve",
+        inOutpost: true,
+        hardMode: false,
+        slotCount: 0,
+        slots: [{
+          index: 0,
+          occupied: true,
+          hero: null,
+          agentId: 10,
+          level: 20,
+          professions: [1, 2],
+          behaviour: null,
+          skills: [0, 0, 0, 0, 0, 0, 0, 0],
+          disabled: 0,
+          attributes: [],
+        }],
+      },
+    });
+    const plan: TeamApplyPlan = {
+      mode: "hard",
+      members: Array.from({ length: 8 }, () => ({
+        hero: null,
+        build: null,
+        behaviour: null,
+      })),
+    };
+
+    const active = host.applyTeam(plan);
+    await expect(host.applyTeam(plan)).rejects.toThrow("already being applied");
+    host.cancelApply();
+    await expect(active).rejects.toMatchObject({ name: "AbortError" });
+    expect(command).toHaveBeenCalledOnce();
+    expect(window.gwTeamApplyProbe).toMatchObject({
+      timeline: expect.arrayContaining([
+        expect.objectContaining({ state: "sending" }),
+        expect.objectContaining({ state: "waiting" }),
+        expect.objectContaining({ state: "cancelled" }),
+      ]),
+    });
   });
 });

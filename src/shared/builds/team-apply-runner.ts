@@ -32,6 +32,7 @@ import {
   type AttributeRanks,
   type HeroId,
   type ProfessionPair,
+  type SkillId,
 } from "./library.js";
 import type {
   TeamApplyMember,
@@ -42,7 +43,7 @@ import {
   preflightTeamApply,
   teamApplyProblemMessage,
 } from "./team-apply.js";
-import type { LiveParty } from "./live-party.js";
+import type { LiveParty, SkillUnlockObservation } from "./live-party.js";
 
 /** The commands the enhancement exposes, as this module needs them. */
 export interface TeamApplyCommands {
@@ -67,8 +68,10 @@ export interface TeamApplyEnvironment {
   readonly commands: TeamApplyCommands;
   /** The party as last published. Read fresh at every confirmation. */
   party(): LiveParty;
-  /** Resolves after roughly one published update, or a little longer. */
-  settle(): Promise<void>;
+  /** Stops the sequence before it can send another packet. */
+  readonly signal?: AbortSignal;
+  /** One bounded semantic stream for UI progress and development evidence. */
+  readonly onEvent?: (event: TeamApplyEvent) => void;
   /**
    * Confirmation time. Production uses the real clock when this is absent;
    * deterministic runners can advance it without waiting one wall-clock second.
@@ -79,24 +82,77 @@ export interface TeamApplyEnvironment {
   };
 }
 
+export type TeamApplyEvent = Readonly<{
+  state: "sending" | "waiting" | "retrying" | "stable" | "confirmed"
+    | "cancelled" | "failed";
+  message: string;
+  elapsedMs: number;
+}>;
+
 /** Matches GWToolbox++'s per-hero budget; a roster change is a server round trip. */
 const CONFIRM_MS = 1_000;
-/** Live hero profession changes have crossed the ordinary one-second budget. */
-const PROFESSION_CONFIRM_MS = 3_000;
+/** Live profession changes can arrive well after the command was accepted. */
+const PROFESSION_CONFIRM_MS = 15_000;
+/** A published profession leads the client state rebuilt from that profession. */
+const PROFESSION_STABLE_MS = 1_000;
+/** One idempotent resend covers a packet dropped during the client transition. */
+const PROFESSION_RETRY_MS = 3_000;
+const SKILL_CONFIRM_MS = 3_000;
+const SKILL_STABLE_MS = 1_000;
 const POLL_MS = 50;
 /**
  * When a step is re-sent once, if it is allowed to be.
  *
- * Only the skill bar uses it, and only because it follows a profession change:
- * the client rebuilds the bar when the secondary moves, and a set that arrives
- * during that rebuild can be dropped. Re-sending is safe because writing the
- * same bar twice is the same bar.
+ * Skill bars and profession changes each use one bounded retry. Both writes are
+ * idempotent: sending the same requested value twice has the same final state.
  */
-const RETRY_MS = 300;
+const SKILL_RETRY_MS = 750;
 
 const BEHAVIOUR_IDS = Object.freeze({ fight: 0, guard: 1, avoid: 2 });
 
-class ApplyRefused extends Error {}
+class ApplyRefused extends Error {
+  readonly elapsedMs: number;
+
+  constructor(message: string, elapsedMs = 0) {
+    super(message);
+    this.elapsedMs = elapsedMs;
+  }
+}
+class ApplyCancelled extends Error {}
+
+type ConfirmationObservation<T> =
+  | Readonly<{ state: "waiting" }>
+  | Readonly<{ state: "confirmed"; value: T }>
+  | Readonly<{ state: "candidate"; key: string; value: T }>;
+
+type ConfirmationPolicy = Readonly<{
+  timeoutMs?: number;
+  stableMs?: number;
+  retryAfterMs?: number;
+}>;
+
+function emit(
+  environment: TeamApplyEnvironment,
+  state: TeamApplyEvent["state"],
+  message: string,
+  elapsedMs = 0,
+): void {
+  environment.onEvent?.(Object.freeze({ state, message, elapsedMs }));
+}
+
+function cancelled(environment: TeamApplyEnvironment): void {
+  if (environment.signal?.aborted) throw new ApplyCancelled("Apply was cancelled");
+}
+
+function send(
+  environment: TeamApplyEnvironment,
+  what: string,
+  command: () => void,
+): void {
+  cancelled(environment);
+  emit(environment, "sending", `Sending ${what}…`);
+  command();
+}
 
 function writableParty(environment: TeamApplyEnvironment): LiveParty {
   const party = environment.party();
@@ -123,51 +179,61 @@ function writableParty(environment: TeamApplyEnvironment): LiveParty {
  * the projection is republished only when it changes, so a subscription would
  * wait forever for a change that had already happened before we asked.
  */
-async function confirm(
+async function confirmObserved<T>(
   environment: TeamApplyEnvironment,
   what: string,
-  check: (party: LiveParty) => boolean,
+  observe: (party: LiveParty) => ConfirmationObservation<T>,
   retry?: () => void,
-  timeoutMs = CONFIRM_MS,
-): Promise<void> {
+  policy: ConfirmationPolicy = {},
+): Promise<T> {
   const now = environment.confirmationTime?.now ?? Date.now;
   const sleep = environment.confirmationTime?.sleep
     ?? ((milliseconds: number) => new Promise<void>((resolve) => {
       setTimeout(resolve, milliseconds);
     }));
   const started = now();
-  const deadline = started + timeoutMs;
+  const deadline = started + (policy.timeoutMs ?? CONFIRM_MS);
+  let candidateKey: string | null = null;
+  let candidateSince = 0;
   let resent = false;
+  emit(environment, "waiting", `Waiting for ${what}…`);
   for (;;) {
+    cancelled(environment);
     const party = writableParty(environment);
-    if (check(party)) return;
-    if (now() >= deadline) {
-      throw new ApplyRefused(`${what} did not take effect`);
+    const observation = observe(party);
+    if (observation.state === "confirmed") {
+      emit(environment, "confirmed", `${what} confirmed.`, now() - started);
+      return observation.value;
     }
-    if (retry && !resent && now() - started >= RETRY_MS) {
+    if (now() >= deadline) {
+      throw new ApplyRefused(`${what} did not take effect`, now() - started);
+    }
+    if (observation.state === "candidate") {
+      if (candidateKey !== observation.key) {
+        candidateKey = observation.key;
+        candidateSince = now();
+      }
+      if (now() - candidateSince >= (policy.stableMs ?? 0)) {
+        emit(environment, "stable", `${what} settled.`, now() - started);
+        return observation.value;
+      }
+    } else {
+      candidateKey = null;
+      candidateSince = 0;
+    }
+    if (
+      retry
+      && !resent
+      && policy.retryAfterMs !== undefined
+      && now() - started >= policy.retryAfterMs
+    ) {
       resent = true;
+      cancelled(environment);
+      emit(environment, "retrying", `Retrying ${what}…`, now() - started);
       retry();
     }
-    await environment.settle();
     await sleep(POLL_MS);
   }
-}
-
-/**
- * A published profession value leads the client's rebuilt skill-selection
- * state. Give that rebuild one bounded interval before writing the new bar;
- * otherwise a newly valid secondary-profession skill can be silently dropped.
- */
-async function settleProfessionChange(
-  environment: TeamApplyEnvironment,
-): Promise<void> {
-  const sleep = environment.confirmationTime?.sleep
-    ?? ((milliseconds: number) => new Promise<void>((resolve) => {
-      setTimeout(resolve, milliseconds);
-    }));
-  await environment.settle();
-  await sleep(RETRY_MS);
-  writableParty(environment);
 }
 
 /** The bar the game currently shows for `hero`, or `null` if it was not read. */
@@ -220,31 +286,42 @@ async function applySkillBar(
   wanted: readonly number[],
   before: readonly number[] | null,
   read: (party: LiveParty) => readonly number[] | null,
-  send: () => void,
+  command: () => void,
   skipped: Set<number>,
+  unlocks: SkillUnlockObservation | null,
 ): Promise<boolean> {
   if (before !== null && sameBar(before, wanted)) return false;
-  send();
-  let steady: readonly number[] | null = null;
-  await confirm(
+  send(environment, what, command);
+  const result = await confirmObserved(
     environment,
     what,
     (party) => {
       const bar = read(party);
-      if (bar === null) return false;
-      if (sameBar(bar, wanted)) return true;
-      if (before !== null && sameBar(bar, before)) return false;
-      if (steady === null || !sameBar(steady, bar)) {
-        steady = bar;
-        return false;
-      }
-      wanted.forEach((skill, slot) => {
-        if (skill !== 0 && bar[slot] !== skill) skipped.add(skill);
-      });
-      return true;
+      if (bar === null) return { state: "waiting" };
+      if (sameBar(bar, wanted)) return { state: "confirmed", value: bar };
+      if (before !== null && sameBar(bar, before)) return { state: "waiting" };
+      return { state: "candidate", key: bar.join(","), value: bar };
     },
-    send,
+    () => send(environment, what, command),
+    {
+      timeoutMs: SKILL_CONFIRM_MS,
+      stableMs: SKILL_STABLE_MS,
+      retryAfterMs: SKILL_RETRY_MS,
+    },
   );
+  wanted.forEach((skill, slot) => {
+    if (skill === 0 || result[slot] === skill) return;
+    if (
+      unlocks !== null
+      && skill < unlocks.knownThrough
+      && unlocks.unlocked.has(skill as SkillId)
+    ) {
+      throw new ApplyRefused(
+        `${what} omitted reportedly unlocked skill ${skill} from slot ${slot + 1}`,
+      );
+    }
+    skipped.add(skill);
+  });
   return true;
 }
 
@@ -292,7 +369,10 @@ export async function runTeamApply(
   const opening = environment.party();
   const preflight = preflightTeamApply(plan, opening);
   if (!preflight.ready) {
-    throw new Error(`${teamApplyProblemMessage(preflight.blockers[0])} 0 changes were made.`);
+    const message = `${teamApplyProblemMessage(preflight.blockers[0])} `
+      + "0 changes were confirmed.";
+    emit(environment, "failed", message);
+    throw new Error(message);
   }
 
   const wanted = plan.members
@@ -311,12 +391,16 @@ export async function runTeamApply(
       }
       const wantedHard = plan.mode === "hard";
       if (opening.hardMode !== wantedHard) {
-        writableParty(environment);
-        environment.commands.setHardMode(wantedHard);
-        await confirm(
+        send(environment, wantedHard ? "enabling Hard Mode" : "enabling Normal Mode", () => {
+          writableParty(environment);
+          environment.commands.setHardMode(wantedHard);
+        });
+        await confirmObserved(
           environment,
           wantedHard ? "enabling Hard Mode" : "enabling Normal Mode",
-          (party) => party.playRegion === "pve" && party.hardMode === wantedHard,
+          (party) => party.playRegion === "pve" && party.hardMode === wantedHard
+            ? { state: "confirmed", value: undefined }
+            : { state: "waiting" },
         );
         completedChanges += 1;
       }
@@ -329,22 +413,27 @@ export async function runTeamApply(
       }
       const [, secondary] = playerMember.build.professions;
       const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
-      let secondaryChanged = false;
       if ((current.professions?.[1] ?? null) !== secondary) {
-        writableParty(environment);
-        environment.commands.setPlayerSecondary(wantedSecondary);
-        await confirm(
+        const setSecondary = () => send(environment, "the player's secondary profession", () => {
+          writableParty(environment);
+          environment.commands.setPlayerSecondary(wantedSecondary);
+        });
+        setSecondary();
+        await confirmObserved(
           environment,
           "the player's secondary profession",
-          (party) => (party.player?.professions?.[1] ?? null) === secondary,
-          undefined,
-          PROFESSION_CONFIRM_MS,
+          (party) => (party.player?.professions?.[1] ?? null) === secondary
+            ? { state: "candidate", key: String(secondary), value: undefined }
+            : { state: "waiting" },
+          setSecondary,
+          {
+            timeoutMs: PROFESSION_CONFIRM_MS,
+            stableMs: PROFESSION_STABLE_MS,
+            retryAfterMs: PROFESSION_RETRY_MS,
+          },
         );
         completedChanges += 1;
-        secondaryChanged = true;
       }
-
-      if (secondaryChanged) await settleProfessionChange(environment);
 
       const skills = skillIds(playerMember);
       const before = livePlayerBar(environment.party());
@@ -361,6 +450,7 @@ export async function runTeamApply(
           environment.commands.setPlayerSkills(skills);
         },
         skipped,
+        opening.characterSkills,
       )) {
         completedChanges += 1;
       }
@@ -373,8 +463,16 @@ export async function runTeamApply(
         if (writableParty(environment).player === null) {
           throw new ApplyRefused("the player was no longer observed");
         }
-        environment.commands.setPlayerAttributes(ranks);
-        await confirm(environment, "the player's attributes", settled);
+        send(environment, "the player's attributes", () => {
+          environment.commands.setPlayerAttributes(ranks);
+        });
+        await confirmObserved(
+          environment,
+          "the player's attributes",
+          (party) => settled(party)
+            ? { state: "confirmed", value: undefined }
+            : { state: "waiting" },
+        );
         completedChanges += 1;
       }
     }
@@ -388,11 +486,15 @@ export async function runTeamApply(
           throw new ApplyRefused("Devona cannot be removed safely; remove her manually");
         }
         if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
-        environment.commands.kickHero(unwanted.hero);
-        await confirm(
+        send(environment, `removing ${heroLabel(unwanted.hero)}`, () => {
+          environment.commands.kickHero(unwanted.hero);
+        });
+        await confirmObserved(
           environment,
           `removing ${heroLabel(unwanted.hero)}`,
-          (party) => !party.heroes.some((hero) => hero.hero === unwanted.hero),
+          (party) => !party.heroes.some((hero) => hero.hero === unwanted.hero)
+            ? { state: "confirmed", value: undefined }
+            : { state: "waiting" },
         );
         completedChanges += 1;
         continue;
@@ -402,12 +504,16 @@ export async function runTeamApply(
       );
       if (!missing) break;
       if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
-      environment.commands.addHero(missing.hero);
-      await confirm(
+      send(environment, `adding ${heroLabel(missing.hero)}`, () => {
+        environment.commands.addHero(missing.hero);
+      });
+      await confirmObserved(
         environment,
         `adding ${heroLabel(missing.hero)}`,
         (party) => party.heroes.some(
-          (hero) => hero.hero === missing.hero && hero.agentId > 0),
+          (hero) => hero.hero === missing.hero && hero.agentId > 0)
+          ? { state: "confirmed", value: undefined }
+          : { state: "waiting" },
       );
       completedChanges += 1;
     }
@@ -447,24 +553,30 @@ export async function runTeamApply(
         const live = environment.party().heroes
           .find((hero) => hero.hero === member.hero);
         const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
-        let secondaryChanged = false;
         if ((live?.professions?.[1] ?? null) !== secondary) {
-          writableParty(environment);
-          environment.commands.setHeroSecondary(member.hero, wantedSecondary);
-          await confirm(
+          const subject = `${heroLabel(member.hero)}'s secondary profession`;
+          const setSecondary = () => send(environment, subject, () => {
+            writableParty(environment);
+            environment.commands.setHeroSecondary(member.hero, wantedSecondary);
+          });
+          setSecondary();
+          await confirmObserved(
             environment,
-            `${heroLabel(member.hero)}'s secondary profession`,
+            subject,
             (party) => (party.heroes.find(
               (hero) => hero.hero === member.hero)?.professions?.[1] ?? null)
-              === secondary,
-            undefined,
-            PROFESSION_CONFIRM_MS,
+              === secondary
+              ? { state: "candidate", key: String(secondary), value: undefined }
+              : { state: "waiting" },
+            setSecondary,
+            {
+              timeoutMs: PROFESSION_CONFIRM_MS,
+              stableMs: PROFESSION_STABLE_MS,
+              retryAfterMs: PROFESSION_RETRY_MS,
+            },
           );
           completedChanges += 1;
-          secondaryChanged = true;
         }
-
-        if (secondaryChanged) await settleProfessionChange(environment);
 
         const skills = skillIds(member);
         const before = liveBar(environment.party(), member.hero);
@@ -479,6 +591,7 @@ export async function runTeamApply(
             environment.commands.setHeroSkills(member.hero, skills);
           },
           skipped,
+          opening.accountSkills,
         )) {
           completedChanges += 1;
         }
@@ -491,11 +604,16 @@ export async function runTeamApply(
         );
         if (!settled(environment.party())) {
           writableParty(environment);
-          environment.commands.setHeroAttributes(member.hero, ranks);
-          await confirm(
+          const subject = `${heroLabel(member.hero)}'s attributes`;
+          send(environment, subject, () => {
+            environment.commands.setHeroAttributes(member.hero, ranks);
+          });
+          await confirmObserved(
             environment,
-            `${heroLabel(member.hero)}'s attributes`,
-            settled,
+            subject,
+            (party) => settled(party)
+              ? { state: "confirmed", value: undefined }
+              : { state: "waiting" },
           );
           completedChanges += 1;
         }
@@ -507,12 +625,17 @@ export async function runTeamApply(
           .find((hero) => hero.hero === member.hero);
         if (live?.behaviour !== member.behaviour) {
           writableParty(environment);
-          environment.commands.setHeroBehaviour(member.hero, behaviour);
-          await confirm(
+          const subject = `${heroLabel(member.hero)}'s behaviour`;
+          send(environment, subject, () => {
+            environment.commands.setHeroBehaviour(member.hero, behaviour);
+          });
+          await confirmObserved(
             environment,
-            `${heroLabel(member.hero)}'s behaviour`,
+            subject,
             (party) => party.heroes.find(
-              (hero) => hero.hero === member.hero)?.behaviour === member.behaviour,
+              (hero) => hero.hero === member.hero)?.behaviour === member.behaviour
+              ? { state: "confirmed", value: undefined }
+              : { state: "waiting" },
           );
           completedChanges += 1;
         }
@@ -524,14 +647,30 @@ export async function runTeamApply(
       throw new ApplyRefused("the final party roster did not match the team");
     }
   } catch (cause) {
-    if (cause instanceof ApplyRefused) {
-      throw new Error(
-        `${cause.message}. ${completedChanges} `
-        + `${completedChanges === 1 ? "change" : "changes"} were made before it `
-        + "stopped; the party window shows where it got to.",
+    if (cause instanceof ApplyRefused || cause instanceof ApplyCancelled) {
+      const confirmed = completedChanges === 1
+        ? "1 change was confirmed"
+        : `${completedChanges} changes were confirmed`;
+      const wasCancelled = cause instanceof ApplyCancelled;
+      emit(
+        environment,
+        wasCancelled ? "cancelled" : "failed",
+        cause.message,
+        cause instanceof ApplyRefused ? cause.elapsedMs : 0,
+      );
+      const error = new Error(
+        `${cause.message}. ${confirmed} before Apply stopped; the party window `
+        + "shows where it got to.",
         { cause },
       );
+      if (wasCancelled) error.name = "AbortError";
+      throw error;
     }
+    emit(
+      environment,
+      "failed",
+      cause instanceof Error ? cause.message : "Team Apply failed",
+    );
     throw cause;
   }
 
