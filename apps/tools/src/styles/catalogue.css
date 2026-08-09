@@ -120,7 +120,9 @@
 .catalogue-heading-actions {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--ui-space-2);
 }
 
@@ -359,10 +361,16 @@
   .catalogue-workspace > .workspace-heading {
     align-items: flex-start;
     flex-direction: row;
+    flex-wrap: wrap;
   }
+  .catalogue-heading-actions { width: 100%; justify-content: flex-start; }
 }
 
 @container detail-pane (max-width: 390px) {
+  .catalogue-workspace { padding: var(--ui-space-3); }
+  .catalogue-workspace > .workspace-heading { gap: var(--ui-space-2); }
+  .catalogue-heading-actions { gap: var(--ui-space-1); }
+  .catalogue-heading-actions .ui-button { padding-inline: var(--ui-space-2); }
   .catalogue-tools { grid-template-columns: 1fr; }
   .catalogue-count { display: none; }
   .catalogue-workspace > .workspace-heading p,
@@ -370,8 +378,8 @@
   .skill-inspector .skill-description,
   .skill-inspector .description-unavailable { display: none; }
   .skill-inspector {
-    max-height: 64px;
-    flex-basis: 64px;
+    max-height: 48px;
+    flex-basis: 48px;
     padding: var(--ui-space-2);
     gap: var(--ui-space-2);
   }

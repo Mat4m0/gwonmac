@@ -8,6 +8,7 @@ import {
 } from "vue";
 import type { SkillCatalogue, SkillPresentation } from "../skill-catalog";
 import type { BuildDraftController } from "../use-build-draft";
+import type { SkillUnlockObservation } from "../../../../src/shared/builds/live-party";
 import { presentSkillPlacement, type SkillPlacementPresentation } from "../skill-drop";
 import type { SkillDragSession } from "../use-skill-drag-session";
 
@@ -15,6 +16,8 @@ const props = defineProps<{
   editor: BuildDraftController;
   catalogue: SkillCatalogue;
   allowPlayerOnly: boolean;
+  unlocks: SkillUnlockObservation | null;
+  unlockScope: "account" | "character";
   dragSession: SkillDragSession;
 }>();
 const emit = defineEmits<{
@@ -24,7 +27,8 @@ const emit = defineEmits<{
 
 const search = ref("");
 const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
-const availableOnly = ref(false);
+const placeableOnly = ref(false);
+const unlockedOnly = ref(false);
 const inspected = ref<SkillPresentation | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
@@ -65,7 +69,11 @@ const results = computed(() => {
       if (filter.value === "primary" && skill.profession !== primary) return false;
       if (filter.value === "secondary" && skill.profession !== secondary) return false;
       if (filter.value === "elite" && !skill.elite) return false;
-      if (availableOnly.value && placement(skill)?.blocked) return false;
+      if (placeableOnly.value && placement(skill)?.blocked) return false;
+      if (
+        unlockedOnly.value
+        && (!props.unlocks || !props.unlocks.unlocked.has(skill.id))
+      ) return false;
       return needle.length === 0
         || skill.name.toLocaleLowerCase().includes(needle)
         || skill.attribute?.toLocaleLowerCase().includes(needle);
@@ -104,6 +112,12 @@ watch(results, (values) => {
     focusedResult.value = Math.min(focusedResult.value, values.length - 1);
   }
 });
+watch(
+  () => props.unlocks,
+  (value) => {
+    if (!value || value.knownThrough === 0) unlockedOnly.value = false;
+  },
+);
 function placement(skill: SkillPresentation): SkillPlacementPresentation | null {
   const active = props.editor.activeSlot.value;
   return active === null ? null : presentSkillPlacement(
@@ -177,12 +191,23 @@ function clear(): void {
 }
 
 function recoverEmptyResults(): void {
-  if (availableOnly.value) availableOnly.value = false;
+  if (unlockedOnly.value) unlockedOnly.value = false;
+  else if (placeableOnly.value) placeableOnly.value = false;
   else {
     search.value = "";
     filter.value = "all";
   }
 }
+
+const unlocksAvailable = computed(() =>
+  props.unlocks !== null && props.unlocks.knownThrough > 0
+);
+const unlockFilterHelp = computed(() => unlocksAvailable.value
+  ? props.unlockScope === "account"
+    ? "Show skills unlocked for this account and usable by heroes."
+    : "Show skills learned by the current Guild Wars character."
+  : "Skill unlocks are unavailable until Guild Wars is in a supported PvE area."
+);
 
 function hideBrokenIcon(event: Event): void {
   const image = event.currentTarget;
@@ -213,11 +238,23 @@ function hideBrokenIcon(event: Event): void {
       </div>
       <div class="catalogue-heading-actions">
         <button
-          class="ui-chip catalogue-availability"
-          :aria-pressed="availableOnly"
-          @click="availableOnly = !availableOnly"
+          class="ui-chip catalogue-placeable"
+          :aria-pressed="placeableOnly"
+          aria-label="Show placeable skills only"
+          title="Hide skills that cannot be placed in this slot."
+          @click="placeableOnly = !placeableOnly"
         >
-          Available only
+          Placeable
+        </button>
+        <button
+          class="ui-chip catalogue-unlocked"
+          :aria-pressed="unlockedOnly"
+          aria-label="Show unlocked skills only"
+          :disabled="!unlocksAvailable"
+          :title="unlockFilterHelp"
+          @click="unlockedOnly = !unlockedOnly"
+        >
+          Unlocked
         </button>
         <button class="ui-button" @click="emit('close')">Done</button>
       </div>
@@ -325,13 +362,21 @@ function hideBrokenIcon(event: Event): void {
           </span>
         </button>
         <div v-if="!results.length" class="ui-empty">
-          <strong>{{ availableOnly ? "No available skills" : "No eligible skills" }}</strong>
-          <p v-if="availableOnly">
+          <strong>
+            {{ unlockedOnly
+              ? "No unlocked skills"
+              : placeableOnly ? "No placeable skills" : "No eligible skills" }}
+          </strong>
+          <p v-if="unlockedOnly">
+            No matching skill is unlocked for this
+            {{ unlockScope === "account" ? "account" : "character" }}.
+          </p>
+          <p v-else-if="placeableOnly">
             No matching skill can be placed in this slot. Show all skills to inspect why.
           </p>
           <p v-else>Clear the search or choose another profession filter.</p>
           <button class="ui-button" @click="recoverEmptyResults">
-            {{ availableOnly ? "Show all skills" : "Clear filters" }}
+            {{ unlockedOnly || placeableOnly ? "Show all skills" : "Clear filters" }}
           </button>
         </div>
       </div>

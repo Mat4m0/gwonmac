@@ -136,6 +136,12 @@ remains selectable when clipboard access is unavailable. In the build editor,
 drag a filled skill to any occupied or empty slot to reorder the bar. Touch and
 pointer dragging use the same interaction; keyboard users can move the focused
 skill with Command/Control + Left/Right Arrow.
+The skill catalogue's **Placeable** filter hides skills that cannot go into the
+active slot. **Unlocked** is a separate, optional filter: for a hero build it
+uses account-wide unlocks, while for a player build it uses skills learned by
+the current Guild Wars character. Unlock facts are read only in a supported
+PvE area, stay on this Mac for the current session, and are never written into
+the build library or diagnostics.
 If skill names or icons are temporarily unavailable, the saved library remains
 usable. Choose **Retry skill data** in Tools after the game data becomes
 available; restarting the app is not required.

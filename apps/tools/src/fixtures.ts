@@ -136,6 +136,17 @@ export const demoParty = liveParty({
   heroCount: 3,
   firstHeroId: 6,
   firstHeroAgentId: 142,
+  party: {
+    status: "ready",
+    accountSkills: {
+      knownThrough: 2_240,
+      unlocked: presentations.filter((_, index) => index % 2 === 0).map((skill) => skill.id),
+    },
+    characterSkills: {
+      knownThrough: 2_240,
+      unlocked: presentations.filter((_, index) => index % 2 === 0).map((skill) => skill.id),
+    },
+  },
 });
 
 export const demoLibrary: BuildLibrary = {

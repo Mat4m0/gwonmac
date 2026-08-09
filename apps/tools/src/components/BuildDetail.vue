@@ -9,6 +9,7 @@ import {
 import { PROFESSIONS } from "../../../../src/shared/builds/heroes";
 import { encodeSkillTemplate } from "../../../../src/shared/builds/skill-template";
 import type { Profession, SkillId } from "../../../../src/shared/builds/library";
+import type { SkillUnlockObservation } from "../../../../src/shared/builds/live-party";
 import type { BuildProblem } from "../../../../src/shared/builds/validate";
 import type { LibraryController } from "../use-library";
 import {
@@ -68,6 +69,14 @@ const catalogueOpen = computed(() =>
   view.value === "build"
   && workspace.value === "skills"
   && editor.activeSlot.value !== null
+);
+const unlockScope = computed<"account" | "character">(() =>
+  context.value === "hero" ? "account" : "character"
+);
+const skillUnlocks = computed<SkillUnlockObservation | null>(() =>
+  unlockScope.value === "account"
+    ? props.controller.party.value.accountSkills
+    : props.controller.party.value.characterSkills
 );
 
 watch(editor.dirty, (dirty) => emit("dirtyChange", dirty), { immediate: true });
@@ -411,6 +420,8 @@ defineExpose({
           :editor="editor"
           :catalogue="controller.skills"
           :allow-player-only="allowPlayerOnly"
+          :unlocks="skillUnlocks"
+          :unlock-scope="unlockScope"
           :drag-session="dragSession"
           @close="closeCatalogue"
           @place="placeSkill"

@@ -1,5 +1,7 @@
 import { flushPromises } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import { unavailableParty } from "../../../src/shared/builds/live-party";
+import { createDemoHost } from "./host";
 import { workbench } from "./ToolsApp.test-fixture";
 
 describe("ToolsApp build authoring", () => {
@@ -88,15 +90,41 @@ describe("ToolsApp build authoring", () => {
     await flushPromises();
     expect(wrapper.find(".skill-result").exists()).toBe(true);
 
-    await wrapper.get(".catalogue-availability").trigger("click");
+    await wrapper.get(".catalogue-placeable").trigger("click");
     await flushPromises();
     expect(wrapper.find(".skill-result").exists()).toBe(false);
-    expect(wrapper.get(".ui-empty").text()).toContain("No available skills");
+    expect(wrapper.get(".ui-empty").text()).toContain("No placeable skills");
 
     await wrapper.get(".ui-empty .ui-button").trigger("click");
     await flushPromises();
     expect(wrapper.find(".skill-result").exists()).toBe(true);
     wrapper.unmount();
+  });
+
+  it("filters by observed character unlocks and admits when they are unavailable", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Heal Party");
+    await flushPromises();
+    expect(wrapper.find(".skill-result").exists()).toBe(true);
+
+    await wrapper.get(".catalogue-unlocked").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".skill-result").exists()).toBe(false);
+    expect(wrapper.get(".ui-empty").text()).toContain("No unlocked skills");
+
+    wrapper.unmount();
+
+    const host = createDemoHost();
+    host.party.value = unavailableParty();
+    const unavailable = await workbench(host);
+    await unavailable.get('[role="tab"]:nth-child(2)').trigger("click");
+    await unavailable.findAll(".library-row")[0]!.trigger("click");
+    await unavailable.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    expect(unavailable.get(".catalogue-unlocked").attributes("disabled")).toBe("");
+    unavailable.unmount();
   });
 
   it("asks before changing a shared bar and keeps an edited fork related", async () => {
