@@ -1,3 +1,7 @@
+/**
+ * Extended-memory setting presentation.
+ * Derives and binds its copy from saved intent and effective runtime status.
+ */
 import type { ExtendedMemoryRuntimeStatus } from "../shared/contracts.js";
 
 export type ExtendedMemoryView = Readonly<{

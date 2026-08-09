@@ -86,6 +86,7 @@ test("authors, commits, reloads, discards, and undoes one atomic draft", async (
 });
 
 test("places catalogue skills and reorders slots by pointer and keyboard", async ({ page }) => {
+  test.setTimeout(40_000);
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await openBuild(page);

@@ -1,3 +1,7 @@
+/**
+ * Extended-memory runtime truth.
+ * Projects certified module selection into the one status published to the renderer.
+ */
 import {
   WASM_HEAP_CAP_BYTES,
   type ExtendedMemoryRuntimeStatus,

@@ -1,3 +1,7 @@
+/**
+ * Settings data-strategy controller.
+ * Owns source selection, cache/download progress, and launcher presentation.
+ */
 import type {
   AppSettings,
   AppSettingsPatch,
