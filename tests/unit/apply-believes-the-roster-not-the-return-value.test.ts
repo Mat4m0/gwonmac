@@ -505,6 +505,81 @@ test("a new secondary profession is set, and set before the bar", async () => {
   assert.equal(result.completedChanges, 3);
 });
 
+test("a bar waits for the client's profession rebuild after confirmation", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  game.react("secondary:11:2", [changed]);
+  const setSkills = game.environment.commands.setHeroSkills;
+  game.environment.commands.setHeroSkills = (hero, skills) => {
+    assert.ok(
+      game.environment.confirmationTime!.now() >= 300,
+      "the profession projection was published before its skill state was ready",
+    );
+    setSkills(hero, skills);
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+});
+
+test("a live secondary transition may exceed the ordinary command deadline", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const observedParty = game.environment.party;
+  let professionRequested = false;
+  let professionPublished = false;
+  const setSecondary = game.environment.commands.setHeroSecondary;
+  game.environment.commands.setHeroSecondary = (hero, profession) => {
+    setSecondary(hero, profession);
+    professionRequested = true;
+  };
+  game.environment.party = () => {
+    if (
+      professionRequested
+      && !professionPublished
+      && game.environment.confirmationTime!.now() >= 1_500
+    ) {
+      professionPublished = true;
+      game.set([changed]);
+    }
+    return observedParty();
+  };
+  game.environment.commands.setHeroSkills = (_hero, skills) => {
+    assert.ok(game.environment.confirmationTime!.now() >= 1_800);
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+});
+
 test("a monoclass build clears the secondary rather than leaving it", async () => {
   const game = harness([{
     hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],

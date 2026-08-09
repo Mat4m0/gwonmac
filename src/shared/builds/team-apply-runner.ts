@@ -81,6 +81,8 @@ export interface TeamApplyEnvironment {
 
 /** Matches GWToolbox++'s per-hero budget; a roster change is a server round trip. */
 const CONFIRM_MS = 1_000;
+/** Live hero profession changes have crossed the ordinary one-second budget. */
+const PROFESSION_CONFIRM_MS = 3_000;
 const POLL_MS = 50;
 /**
  * When a step is re-sent once, if it is allowed to be.
@@ -126,6 +128,7 @@ async function confirm(
   what: string,
   check: (party: LiveParty) => boolean,
   retry?: () => void,
+  timeoutMs = CONFIRM_MS,
 ): Promise<void> {
   const now = environment.confirmationTime?.now ?? Date.now;
   const sleep = environment.confirmationTime?.sleep
@@ -133,7 +136,7 @@ async function confirm(
       setTimeout(resolve, milliseconds);
     }));
   const started = now();
-  const deadline = started + CONFIRM_MS;
+  const deadline = started + timeoutMs;
   let resent = false;
   for (;;) {
     const party = writableParty(environment);
@@ -148,6 +151,23 @@ async function confirm(
     await environment.settle();
     await sleep(POLL_MS);
   }
+}
+
+/**
+ * A published profession value leads the client's rebuilt skill-selection
+ * state. Give that rebuild one bounded interval before writing the new bar;
+ * otherwise a newly valid secondary-profession skill can be silently dropped.
+ */
+async function settleProfessionChange(
+  environment: TeamApplyEnvironment,
+): Promise<void> {
+  const sleep = environment.confirmationTime?.sleep
+    ?? ((milliseconds: number) => new Promise<void>((resolve) => {
+      setTimeout(resolve, milliseconds);
+    }));
+  await environment.settle();
+  await sleep(RETRY_MS);
+  writableParty(environment);
 }
 
 /** The bar the game currently shows for `hero`, or `null` if it was not read. */
@@ -309,6 +329,7 @@ export async function runTeamApply(
       }
       const [, secondary] = playerMember.build.professions;
       const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
+      let secondaryChanged = false;
       if ((current.professions?.[1] ?? null) !== secondary) {
         writableParty(environment);
         environment.commands.setPlayerSecondary(wantedSecondary);
@@ -316,9 +337,14 @@ export async function runTeamApply(
           environment,
           "the player's secondary profession",
           (party) => (party.player?.professions?.[1] ?? null) === secondary,
+          undefined,
+          PROFESSION_CONFIRM_MS,
         );
         completedChanges += 1;
+        secondaryChanged = true;
       }
+
+      if (secondaryChanged) await settleProfessionChange(environment);
 
       const skills = skillIds(playerMember);
       const before = livePlayerBar(environment.party());
@@ -421,6 +447,7 @@ export async function runTeamApply(
         const live = environment.party().heroes
           .find((hero) => hero.hero === member.hero);
         const wantedSecondary = secondary === null ? 0 : PROFESSIONS[secondary].id;
+        let secondaryChanged = false;
         if ((live?.professions?.[1] ?? null) !== secondary) {
           writableParty(environment);
           environment.commands.setHeroSecondary(member.hero, wantedSecondary);
@@ -430,9 +457,14 @@ export async function runTeamApply(
             (party) => (party.heroes.find(
               (hero) => hero.hero === member.hero)?.professions?.[1] ?? null)
               === secondary,
+            undefined,
+            PROFESSION_CONFIRM_MS,
           );
           completedChanges += 1;
+          secondaryChanged = true;
         }
+
+        if (secondaryChanged) await settleProfessionChange(environment);
 
         const skills = skillIds(member);
         const before = liveBar(environment.party(), member.hero);
