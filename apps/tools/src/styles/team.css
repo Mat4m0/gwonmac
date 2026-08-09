@@ -15,7 +15,7 @@
   min-height: 54px;
   padding: var(--ui-space-2);
   grid-template-columns: 18px 160px minmax(190px, 1fr) minmax(150px, 1fr) 96px;
-  align-items: center;
+  align-items: start;
   gap: var(--ui-space-2);
   border: 1px solid transparent;
   border-radius: var(--ui-radius-sm);
@@ -50,6 +50,7 @@
 .team-slot--compact:focus-within .available-slot { display: none; }
 
 .slot-number {
+  margin-top: calc((var(--ui-control-height) - 1em) / 2);
   color: var(--ui-text-faint);
   font: var(--ui-font-size-sm) var(--ui-font-mono);
 }
@@ -57,16 +58,23 @@
 .hero-cell {
   display: flex;
   min-width: 0;
-  align-items: center;
+  align-items: start;
   gap: var(--ui-space-2);
 }
 
 .hero-avatar {
   width: 28px;
   height: 28px;
+  margin-top: calc((var(--ui-control-height) - 28px) / 2);
 }
 
 .hero-cell > span:last-child { min-width: 0; }
+
+.player-identity {
+  display: grid;
+  min-height: var(--ui-control-height);
+  align-content: center;
+}
 
 .hero-picker {
   display: grid;
@@ -113,6 +121,23 @@
 }
 .behavior-picker,
 .behavior-picker select { min-width: 0; width: 100%; }
+
+.team-title-line {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.team-title-line .profession-mark {
+  margin-top: calc((var(--ui-control-height) - 36px) / 2);
+}
+
+.team-title-line .title-input,
+.team-title-line .detail-header-actions > .ui-button {
+  min-height: var(--ui-control-height);
+}
+
+.team-title-line .detail-header-actions { align-self: start; }
 
 .team-mode {
   min-width: 0;

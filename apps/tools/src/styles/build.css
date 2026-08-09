@@ -216,8 +216,13 @@
 .team-controls {
   display: flex;
   margin-top: var(--ui-space-2);
-  align-items: center;
+  align-items: flex-end;
   gap: var(--ui-space-3);
+}
+
+.team-controls .tag-entry input {
+  width: 112px;
+  min-height: var(--ui-control-height);
 }
 
 .detail-scroll {

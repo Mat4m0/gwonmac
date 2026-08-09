@@ -1182,10 +1182,15 @@ describe("ToolsApp", () => {
     const wrapper = await workbench();
     const section = wrapper.get(".live-party");
 
+    expect(section.element.tagName).toBe("DETAILS");
+    expect(section.attributes("open")).toBeDefined();
     expect(section.text()).toContain("3 heroes");
     expect(section.findAll(".live-party-row")).toHaveLength(1);
     expect(section.text()).toContain("Koss");
     expect(section.text()).toContain("2 more heroes are in your party");
+
+    await section.get("summary").trigger("click");
+    expect(section.attributes("open")).toBeUndefined();
     wrapper.unmount();
   });
 

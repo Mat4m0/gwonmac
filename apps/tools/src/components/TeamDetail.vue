@@ -576,8 +576,8 @@ defineExpose({
     @keydown.esc="dismissTransientPanel"
   >
     <fieldset class="team-editor" :disabled="controller.saving.value">
-    <header class="detail-header">
-      <div class="detail-title-line">
+    <header class="detail-header team-detail-header">
+      <div class="detail-title-line team-title-line">
         <div class="ui-mark profession-mark">8</div>
         <div class="title-editor">
           <label class="ui-sr-only" for="team-name">Team name</label>
@@ -668,7 +668,7 @@ defineExpose({
             >
               {{ teamMemberLabel(slot.hero, index)[0] }}
             </span>
-            <span v-if="index === 0">
+            <span v-if="index === 0" class="player-identity">
               <strong>You</strong>
               <small>
                 {{ slot.build && controller.library.value
