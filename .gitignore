@@ -32,6 +32,7 @@ venv/
 # Dependencies and local tooling.
 node_modules/
 package-lock.json
+.impeccable/
 
 # Release packaging, assembled by .github/workflows/release.yml.
 dist-release/
@@ -70,3 +71,4 @@ plans/*
 !plans/research-tool-architecture.md
 !plans/build-team-plan.md
 !plans/memory-bug.md
+!plans/full-refactor-optimization.md
