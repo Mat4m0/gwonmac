@@ -507,6 +507,7 @@ export async function assertPackagedOffSession() {
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init),
       {
+        development: false,
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,

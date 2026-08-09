@@ -29,6 +29,8 @@ type TeamCommandOptions = Readonly<{
   memory: WebAssembly.Memory;
   payloadPointer: number;
   send: EnhancementCommandThunk;
+  /** Bounded semantic command evidence for unpackaged development launches. */
+  development?: boolean;
   /** Refuses unless commands are currently safe and returns the fresh party. */
   ready(): ToolboxObservation;
 }>;
@@ -38,6 +40,7 @@ export function createTeamApplyCommands({
   payloadPointer,
   send,
   ready,
+  development = false,
 }: TeamCommandOptions): TeamApplyCommands {
   const hero = (heroId: number) => {
     if (!Number.isInteger(heroId) || heroId < 1 || heroId > 39) {
@@ -81,7 +84,20 @@ export function createTeamApplyCommands({
     agent(member.agentId);
     return member.agentId;
   };
-  const sent = (result: number) => {
+  const sent = (
+    operation: string,
+    opcode: number,
+    result: number,
+    fields: Readonly<Record<string, number | boolean>> = {},
+  ) => {
+    if (development) {
+      console.debug(`[tools:dev] command ${JSON.stringify({
+        operation,
+        opcode,
+        accepted: result === 1,
+        ...fields,
+      })}`);
+    }
     if (result !== 1) throw new Error("Guild Wars refused the command packet");
   };
   const skills = (agentId: number, skillIds: readonly number[]) => {
@@ -92,7 +108,10 @@ export function createTeamApplyCommands({
       throw new Error("every skill must be a non-negative id");
     }
     const at = payload(0, skillIds);
-    sent(send(93, agentId, skillIds.length, at, 0));
+    sent("skills", 93, send(93, agentId, skillIds.length, at, 0), {
+      agentId,
+      count: skillIds.length,
+    });
   };
   const attributes = (
     agentId: number,
@@ -112,7 +131,10 @@ export function createTeamApplyCommands({
       SKILL_WORDS + ATTRIBUTE_WORDS,
       ranks.map(([, rank]) => rank),
     );
-    sent(send(16, agentId, ranks.length, ids, levels));
+    sent("attributes", 16, send(16, agentId, ranks.length, ids, levels), {
+      agentId,
+      count: ranks.length,
+    });
   };
 
   return Object.freeze({
@@ -121,13 +143,16 @@ export function createTeamApplyCommands({
       if (typeof enabled !== "boolean") {
         throw new Error("Hard Mode must be enabled or disabled");
       }
-      sent(send(155, enabled ? 1 : 0, 0, 0, 0));
+      sent("hard-mode", 155, send(155, enabled ? 1 : 0, 0, 0, 0), { enabled });
     },
     setPlayerSecondary(profession: number) {
       const observed = ready();
       const agentId = playerAgent(observed);
       validProfession(profession);
-      sent(send(65, agentId, profession, 0, 0));
+      sent("secondary", 65, send(65, agentId, profession, 0, 0), {
+        agentId,
+        profession,
+      });
     },
     setPlayerSkills(skillIds: readonly number[]) {
       skills(playerAgent(ready()), skillIds);
@@ -140,24 +165,32 @@ export function createTeamApplyCommands({
     addHero(heroId: number) {
       ready();
       hero(heroId);
-      sent(send(30, heroId, 0, 0, 0));
+      sent("add-hero", 30, send(30, heroId, 0, 0, 0), { heroId });
     },
     kickHero(heroId: number) {
       ready();
       hero(heroId);
-      sent(send(31, heroId, 0, 0, 0));
+      sent("kick-hero", 31, send(31, heroId, 0, 0, 0), { heroId });
     },
     setHeroBehaviour(heroId: number, behaviour: number) {
       const agentId = heroAgent(heroId, ready());
       if (!Number.isInteger(behaviour) || behaviour < 0 || behaviour > 2) {
         throw new Error(`behaviour ${behaviour} is not one the client defines`);
       }
-      sent(send(21, agentId, behaviour, 0, 0));
+      sent("hero-behaviour", 21, send(21, agentId, behaviour, 0, 0), {
+        heroId,
+        agentId,
+        behaviour,
+      });
     },
     setHeroSecondary(heroId: number, profession: number) {
       const agentId = heroAgent(heroId, ready());
       validProfession(profession);
-      sent(send(65, agentId, profession, 0, 0));
+      sent("secondary", 65, send(65, agentId, profession, 0, 0), {
+        heroId,
+        agentId,
+        profession,
+      });
     },
     setHeroSkills(heroId: number, skillIds: readonly number[]) {
       skills(heroAgent(heroId, ready()), skillIds);

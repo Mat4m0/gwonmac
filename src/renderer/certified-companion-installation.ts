@@ -570,6 +570,23 @@ export async function installCertifiedCompanion(
       : "pve";
     let readout: ReturnType<typeof createTargetReadout> | null = null;
     const policy = () => enhancementRuntimePolicy(program, optionalSettings, playRegion);
+    let lastPolicyTrace = "";
+    const tracePolicy = (reason: "launch" | "region" | "settings") => {
+      if (!window.gwNative.init.development) return;
+      const active = policy();
+      const summary = {
+        program,
+        playRegion,
+        nativeCursor: capabilities.nativeCursor,
+        teamManagement: active.teamManagement,
+        targetReadout: active.targetReadout,
+        commands: commands !== null,
+      };
+      const signature = JSON.stringify(summary);
+      if (signature === lastPolicyTrace) return;
+      lastPolicyTrace = signature;
+      console.debug(`[tools:dev] policy ${JSON.stringify({ reason, ...summary })}`);
+    };
     const targetEnabled = () => policy().targetReadout;
     const setTargetEnabled = () => {
       if (!observeState) return;
@@ -604,6 +621,7 @@ export async function installCertifiedCompanion(
       memory,
       payloadPointer,
       send: commandThunk,
+      development: window.gwNative.init.development,
       ready: () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
         if (!teamEnabled()) throw new Error("Team management is disabled");
@@ -640,10 +658,12 @@ export async function installCertifiedCompanion(
         toolbox = null;
       }
     };
+    tracePolicy("launch");
     setTeamEnabled();
     const onToolSettings = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
       optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
+      tracePolicy("settings");
       setTeamEnabled();
       setTargetEnabled();
       syncActiveObservers();
@@ -758,6 +778,7 @@ export async function installCertifiedCompanion(
               : "unknown";
             if (foundation && next !== playRegion) {
               playRegion = next;
+              tracePolicy("region");
               setTeamEnabled();
               setTargetEnabled();
               syncActiveObservers();
@@ -776,6 +797,7 @@ export async function installCertifiedCompanion(
               : "unknown";
             if (next !== playRegion) {
               playRegion = next;
+              tracePolicy("region");
               setTeamEnabled();
               setTargetEnabled();
               syncActiveObservers();

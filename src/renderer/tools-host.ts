@@ -50,6 +50,7 @@ type ToolsBundle = Readonly<{
       publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
       commands: TeamApplyCommands | null;
       applyUnavailable: string | null;
+      development: boolean;
     },
   ): ToolsAppHandle;
 }>;
@@ -144,6 +145,7 @@ export function mountToolsInto(
         publishTemplate,
         commands,
         applyUnavailable: commands === null ? APPLY_UNAVAILABLE : null,
+        development: window.gwNative.init.development,
       });
       return {
         setVisible: (visible: boolean) => {

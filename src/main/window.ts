@@ -240,6 +240,7 @@ export function rendererInitArgument(options: {
   enhancementProgram: EnhancementProgram;
 }): string {
   const init: RendererInit = {
+    development: !app.isPackaged,
     enhancementProgram: options.enhancementProgram,
     enhancementSelection: options.enhancementSelection,
     templateFsTrace:

@@ -550,6 +550,8 @@ export interface ClientSession {
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {
+  /** Enables bounded console evidence. Always false in packaged builds. */
+  development: boolean;
   /** Fixed developer program for this launch. Always `none` when packaged. */
   enhancementProgram: EnhancementProgram;
   /** The independently selected Enhancement tools for this launch. */

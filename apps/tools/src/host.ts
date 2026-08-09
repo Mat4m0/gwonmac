@@ -30,6 +30,7 @@ import {
 } from "../../../src/shared/builds/team-apply-runner";
 import { demoLibrary, demoParty, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
+import { devTrace } from "./dev-trace";
 import {
   createSkillCatalogue,
   type SkillCatalogue,
@@ -232,6 +233,7 @@ export function createNativeHost(
    */
   commands: TeamApplyCommands | null,
   applyUnavailable: string | null,
+  development = false,
 ): ToolsHost {
   const party = ref(unavailableParty());
   // One counter per session, so a result can be tied to the request that asked
@@ -302,6 +304,7 @@ export function createNativeHost(
       throw new Error("The skill catalogue arrived empty.");
     }
     skills.replace(parsed);
+    devTrace(development, "skills.loaded", { count: parsed.length });
   };
   return {
     label: "Saved on this Mac",
@@ -321,9 +324,33 @@ export function createNativeHost(
           },
         ),
       ]);
+      devTrace(development, "library.loaded", {
+        builds: library.library.builds.length,
+        teams: library.library.teams.length,
+        recovered: library.recovered,
+        skillsAvailable: skills === null,
+      });
       return skills === null ? library : { ...library, skillProblem: skills };
     },
-    saveLibrary: (library) => api.buildLibrary.set(library),
+    async saveLibrary(library) {
+      devTrace(development, "library.save.start", {
+        builds: library.builds.length,
+        teams: library.teams.length,
+      });
+      try {
+        const saved = await api.buildLibrary.set(library);
+        devTrace(development, "library.save.complete", {
+          builds: saved.builds.length,
+          teams: saved.teams.length,
+        });
+        return saved;
+      } catch (cause) {
+        devTrace(development, "library.save.failed", {
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+        throw cause;
+      }
+    },
     readClipboard: () => api.clipboard.readText(),
     writeClipboard: (text) => api.clipboard.writeText(text),
     reloadSkills: loadSkills,
@@ -332,7 +359,12 @@ export function createNativeHost(
       if (code === null) {
         throw new Error("This build cannot be written as a template.");
       }
-      return publishTemplate({ name: build.name, code });
+      devTrace(development, "template.publish.start");
+      const published = await publishTemplate({ name: build.name, code });
+      devTrace(development, "template.publish.complete", {
+        location: published.location,
+      });
+      return published;
     },
     async applyTeam(plan) {
       if (commands === null) {
@@ -340,8 +372,13 @@ export function createNativeHost(
       }
       Reflect.deleteProperty(window, "gwTeamApplyProbe");
       const currentCommandId = ++commandId;
+      devTrace(development, "apply.start", {
+        commandId: currentCommandId,
+        mode: plan.mode,
+        configuredMembers: plan.members.filter((member) => member.build !== null).length,
+      });
       try {
-        return await runTeamApply(plan, {
+        const result = await runTeamApply(plan, {
           commands,
           // Read through the ref rather than captured: the overlay rewrites it on
           // every published change, and a captured value would let the sequence
@@ -351,10 +388,27 @@ export function createNativeHost(
             requestAnimationFrame(() => resolve());
           }),
         }, currentCommandId);
+        devTrace(development, "apply.complete", {
+          commandId: currentCommandId,
+          completedChanges: result.completedChanges,
+          skippedSkills: result.skippedSkills.length,
+        });
+        return result;
       } catch (cause) {
         const probe = teamApplyProbe(plan, party.value, currentCommandId, cause);
-        Reflect.set(window, "gwTeamApplyProbe", probe);
-        console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
+        if (development) {
+          Reflect.set(window, "gwTeamApplyProbe", probe);
+          console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
+        } else {
+          console.warn(
+            "[tools] Team Apply failed",
+            cause instanceof Error ? cause.message : String(cause),
+          );
+        }
+        devTrace(development, "apply.failed", {
+          commandId: currentCommandId,
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
         throw cause;
       }
     },

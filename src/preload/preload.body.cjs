@@ -75,6 +75,7 @@ function rendererInit() {
       )
     : "none";
   return {
+    development: parsed.development === true,
     enhancementProgram,
     enhancementSelection,
     templateFsTrace: parsed.templateFsTrace === true,

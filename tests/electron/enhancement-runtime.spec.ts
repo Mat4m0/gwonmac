@@ -15,6 +15,7 @@ test.describe("Enhancement runtime selection", () => {
     try {
       const init = await fixture.page.evaluate(() => window.gwNative.init);
       expect(init).toEqual({
+        development: true,
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,
