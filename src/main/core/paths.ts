@@ -30,6 +30,7 @@ export interface GamePaths {
   compatibility: string;
   enhancements: string;
   nativeDoubleClick: string;
+  extendedMemory: string;
   chunks: string;
   bootChunks: string;
   skillAssets: string;
@@ -58,6 +59,7 @@ export function gamePaths(userData: string): GamePaths {
     compatibility: path.join(game, "compatibility"),
     enhancements: path.join(game, "enhancements"),
     nativeDoubleClick: path.join(game, "double-click"),
+    extendedMemory: path.join(game, "extended-memory"),
     chunks: path.join(game, "chunks"),
     bootChunks: path.join(game, "boot-chunks.json"),
     // Icons and text decoded out of the player's own archive, under a

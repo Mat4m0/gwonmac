@@ -205,17 +205,70 @@ export interface MemoryPressurePresentation {
   detail: string;
   reloadButton: string;
   dismissButton: string;
+  whyLink: string;
+}
+
+export interface MemoryPressureChip {
+  text: string;
+  /** The whole sentence, for the button's accessible name. */
+  label: string;
+}
+
+export interface MemoryExplanationBlock {
+  title: string;
+  body: string;
+}
+
+export interface MemoryExplanation {
+  title: string;
+  blocks: readonly MemoryExplanationBlock[];
+  closeButton: string;
 }
 
 /**
  * The game client's WASM heap is approaching its hard 2 GiB cap; once it gets
  * there the next big allocation kills the client wherever the player happens
  * to be standing. These sentences exist so the player spends that death at a
- * moment of their choosing: reloading from a town or outpost is a quick relog
- * that loses nothing, while an uncontrolled crash mid-mission loses the run.
+ * moment of their choosing.
+ *
+ * They state a condition and not a deadline, which is where they ended up
+ * rather than where they started. "Running low" meant half an hour in the open
+ * world and about two minutes in a mission, and a player could not tell which —
+ * so the *thresholds* count in time now, and that is the fix. It is only the
+ * printed figure that is gone, and a real crash bundle is why.
+ *
+ * Replayed against the Eye of the North session of 2026-08-04 — the player's
+ * own `wasm.heapGrew` staircase, ending at exactly 2 GiB — the levels arrived
+ * where they should: `low` with 31 minutes of real play left against the
+ * shipped rule's 11, `critical` with 7. The figure did not. It read
+ * 10 → 15 → 20 → 75 → 40 → 20 → 15 → 10 → 3, and at one point offered "about
+ * 75 minutes" to a player with 18 left, because a quiet stretch sat in the
+ * measurement window just before they went back into heavy loading.
+ *
+ * No rate can see a player about to zone into a dungeon. The estimate still
+ * exists — the thresholds are computed from it and the log records it — but
+ * it is a diagnostic, and a diagnostic printed on a
+ * banner is a promise. The level is the part that survived contact with a
+ * real session, so the level is the part the player is told.
+ *
+ * They state the reconnect rather than hedging it, which they did not always.
+ * The uncertainty was never whether Guild Wars gives a player their instance
+ * back after a dropped connection — it does — but whether *our* reload looks
+ * like a dropped connection to its server. Tested 2026-08-05 across all five
+ * reload paths this app can take, from inside an instance: every one came back
+ * with progress intact, in under thirty seconds. That is the specific question
+ * the hedge existed for, so the hedge is gone.
+ *
+ * The outpost is no longer in the notice. It is still true that an outpost
+ * risks nothing at all, and the explanation says so — but leading with it is
+ * what made the shipped sentence easy to ignore from inside a dungeon, and now
+ * that the reconnect is measured, repeating the caveat argues against a fact.
  */
 const MEMORY_RELOAD = 'Reload Now';
 const MEMORY_DISMISS = 'Later';
+const MEMORY_WHY = 'Why is this happening?';
+const MEMORY_REJOIN =
+  'Guild Wars puts you back where you were, in under a minute.';
 
 export function memoryPressurePresentation(
   level: 'low' | 'critical',
@@ -226,15 +279,78 @@ export function memoryPressurePresentation(
       ? 'Guild Wars is almost out of memory.'
       : 'Guild Wars is running low on memory.',
     detail: critical
-      ? 'A crash is likely soon. Head to a town or outpost at the next '
-        + 'safe moment and choose Reload Now — that is a quick relog, and '
-        + 'from an outpost you lose nothing.'
-      : 'After long sessions the game can crash when memory runs out. To '
-        + 'pick the moment yourself, finish what you are doing, return to a '
-        + 'town or outpost, and choose Reload Now — it works like a quick '
-        + 'relog.',
+      ? `Reload soon — ${MEMORY_REJOIN}`
+      : `Reload when it suits you — ${MEMORY_REJOIN}`,
     reloadButton: MEMORY_RELOAD,
     dismissButton: MEMORY_DISMISS,
+    whyLink: MEMORY_WHY,
+  };
+}
+
+/**
+ * What `Later` leaves behind: the thing that stops a dismissal meaning silence
+ * until the crash, which is what the shipped build did. It carried a live
+ * countdown until the Eye of the North bundle showed that countdown reading
+ * "75 min" to a player with eighteen minutes left — a figure that moves is
+ * only worth more than a word if it moves the right way.
+ */
+export function memoryPressureChip(
+  level: 'low' | 'critical',
+): MemoryPressureChip {
+  return level === 'critical'
+    ? {
+        text: 'Memory almost full',
+        label:
+          'Guild Wars is almost out of memory. Open the memory warning again.',
+      }
+    : {
+        text: 'Low memory',
+        label: 'Guild Wars is low on memory. Open the memory warning again.',
+      };
+}
+
+/**
+ * The four things a player asks once they have read the warning twice. The
+ * third block says what is true today — measured, documented, published. It
+ * must not claim we are in contact with ArenaNet until someone has actually
+ * written to them.
+ */
+export function memoryExplanation(): MemoryExplanation {
+  return {
+    title: 'Why this memory warning appears',
+    closeButton: 'Close',
+    blocks: [
+      {
+        title: 'What this is',
+        body:
+          "ArenaNet's current game client is capped at 2 GB of WebAssembly "
+          + 'memory. During long sessions that visit new content, its memory '
+          + 'can keep growing instead of settling. At the cap, the next large '
+          + 'allocation stops the game.',
+      },
+      {
+        title: 'Why the app cannot clear it',
+        body:
+          "The memory and its objects belong to ArenaNet's game client. This "
+          + 'app cannot safely discard objects it does not own. It can measure '
+          + 'the heap and warn before the client reaches its cap.',
+      },
+      {
+        title: 'Where it stands',
+        body:
+          'We have measured it, documented it in detail, and published the '
+          + 'findings for ArenaNet.',
+      },
+      {
+        title: 'What to do',
+        body:
+          'Reloading gives the game a fresh 2 GB. It takes under a minute, '
+          + 'and Guild Wars puts you back where you were — the same way it '
+          + 'handles a dropped connection. We tested that from inside an '
+          + 'instance, on every way this app can reload the game. A town or '
+          + 'outpost is still the one place with nothing at all to lose.',
+      },
+    ],
   };
 }
 

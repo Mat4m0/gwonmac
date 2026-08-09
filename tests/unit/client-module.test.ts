@@ -325,7 +325,9 @@ async function fixture() {
   scratchDirs.push(root);
   const official = officialFixture();
   const officialWasmPath = join(root, "official.wasm");
+  const officialJsPath = join(root, "official.js");
   await writeFile(officialWasmPath, official);
+  await writeFile(officialJsPath, "official glue");
   const templateSaveBuild = certifyTemplate(official);
   const templateOutput = rewriteTemplateSaveWasm(official, templateSaveBuild);
   const enhancement = enhancementBuild(templateOutput);
@@ -333,12 +335,14 @@ async function fixture() {
     root,
     official,
     officialWasmPath,
+    officialJsPath,
     officialSha256: sha256(official),
     templateSaveBuild,
     enhancementBuild: enhancement,
     compatibilityCacheRoot: join(root, "compatibility"),
     enhancementCacheRoot: join(root, "enhancement"),
     nativeDoubleClickCacheRoot: join(root, "double-click"),
+    extendedMemoryCacheRoot: join(root, "extended-memory"),
   };
 }
 
@@ -351,12 +355,14 @@ function options(
 ) {
   return {
     officialWasmPath: value.officialWasmPath,
+    officialJsPath: value.officialJsPath,
     officialSha256: value.officialSha256,
     certification,
     enhancementCapabilities,
     compatibilityCacheRoot: value.compatibilityCacheRoot,
     enhancementCacheRoot: value.enhancementCacheRoot,
     nativeDoubleClickCacheRoot: value.nativeDoubleClickCacheRoot,
+    extendedMemoryCacheRoot: value.extendedMemoryCacheRoot,
   };
 }
 
@@ -463,6 +469,8 @@ describe("client module preparation", () => {
 
     assert.deepEqual(prepared, {
       wasmPath: value.officialWasmPath,
+      jsPath: value.officialJsPath,
+      extendedMemory: { status: "disabled" },
       state: "uncertified",
       enhancementBuild: null,
       // An unrecognised client is served exactly as downloaded, so it also

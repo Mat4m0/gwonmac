@@ -3,6 +3,7 @@
  * It keeps that half of the closed schema reviewable as one bounded table.
  */
 import type { EventSpec } from "./schema-fields.js";
+import { EXTENDED_MEMORY_PROFILES } from "../certification/extended-memory.js";
 import {
   appPhase,
   appUpdateErrorCode,
@@ -19,6 +20,7 @@ import {
   finiteNumber,
   incompleteCommandOutcome,
   launcherStrategy,
+  literal,
   localVerificationReason,
   localVerificationSource,
   none,
@@ -612,6 +614,20 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "info",
     fields: none,
+  },
+  "wasm.extendedMemory": {
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      mode: literal(["disabled", "unsupported", "active"] as const),
+      profile: literal(["none", ...EXTENDED_MEMORY_PROFILES] as const),
+      capBytes: finiteNumber,
+    },
+  },
+  "wasm.extendedMemoryPrepareFailed": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { code },
   },
   "enhancement.prepareFailed": {
     subsystem: "wasm",

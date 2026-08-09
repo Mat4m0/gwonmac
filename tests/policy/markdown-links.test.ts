@@ -222,6 +222,7 @@ test("code blocks, code spans, URLs and bare anchors are not treated as links", 
 const PROMOTED_PLANS = [
   "plans/research-tool-architecture.md",
   "plans/build-team-plan.md",
+  "plans/memory-bug.md",
 ];
 
 test("the file list covers tracked docs and excludes gitignored scratch", () => {
@@ -232,6 +233,7 @@ test("the file list covers tracked docs and excludes gitignored scratch", () => 
   assert.ok(files.includes("docs/process-model.md"));
   assert.ok(files.includes("plans/research-tool-architecture.md"));
   assert.ok(files.includes("plans/build-team-plan.md"));
+  assert.ok(files.includes("plans/memory-bug.md"));
   assert.ok(
     files.every((file) =>
       (!file.startsWith("plans/") || PROMOTED_PLANS.includes(file))

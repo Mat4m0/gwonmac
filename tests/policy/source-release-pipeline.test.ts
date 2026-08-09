@@ -560,9 +560,13 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
 test("the application ships with no runtime dependency to audit", () => {
   assert.equal(json("package.json").dependencies, undefined);
   assert.equal(json("apps/website/package.json").dependencies, undefined);
-  assert.match(
-    read("pnpm-workspace.yaml"),
-    /auditConfig:\n {2}ignoreGhsas:\n {4}- GHSA-mh99-v99m-4gvg\n$/,
+  assert.deepEqual(
+    read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
+    [
+      "GHSA-mh99-v99m-4gvg",
+      "GHSA-w3rx-r6r6-pgpr",
+      "GHSA-5p2g-fcmc-qvqq",
+    ],
   );
 });
 

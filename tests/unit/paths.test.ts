@@ -38,6 +38,7 @@ describe("resolved profile paths", () => {
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
       nativeDoubleClick: `${root}/game/double-click`,
+      extendedMemory: `${root}/game/extended-memory`,
       chunks: `${root}/game/chunks`,
       bootChunks: `${root}/game/boot-chunks.json`,
       skillAssets: `${root}/game/skill-assets`,

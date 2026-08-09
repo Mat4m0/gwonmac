@@ -104,6 +104,22 @@ describe("the recorded abort event", () => {
 });
 
 describe("the recorded heap staircase", () => {
+  it("records whether heap-growth observation is active", () => {
+    assert.deepEqual(
+      diagnosticEventRecord({
+        k: "wasm.memoryProbe",
+        clockSynchronized: true,
+        status: "installed",
+      }),
+      {
+        subsystem: "wasm",
+        level: "info",
+        name: "wasm.memoryProbe",
+        fields: { clockSynchronized: true, status: "installed" },
+      },
+    );
+  });
+
   it("is an info-level renderer event carrying both sides of a growth step", () => {
     assert.deepEqual(
       diagnosticEventRecord({
@@ -116,6 +132,43 @@ describe("the recorded heap staircase", () => {
         level: "info",
         name: "wasm.heapGrew",
         fields: { fromBytes: 1_879_048_192, toBytes: 1_979_711_488 },
+      },
+    );
+  });
+
+  it("records the growth trigger as a separate closed event", () => {
+    const fields = {
+      clockSynchronized: true,
+      requestedBytes: 2_147_483_648,
+      beforeBytes: 2_013_265_920,
+      afterBytes: 2_013_265_920,
+      outcome: "refused" as const,
+      stackFingerprint: asRendererFingerprint("211ffc96"),
+      stackDepth: 2,
+      frame0Function: 17_792,
+      frame0Offset: 0x643e6f,
+      frame1Function: 17_784,
+      frame1Offset: 0x641dc5,
+      frame2Function: 0,
+      frame2Offset: 0,
+      frame3Function: 0,
+      frame3Offset: 0,
+      generatedTextures: 9_000,
+      deletedTextures: 8_750,
+      liveTextures: 250,
+      trackedTextures: 250,
+      knownTextureBytes: 268_435_456,
+      textureUploadBytes: 4_294_967_296,
+      unknownTextureAllocations: 0,
+      textureTrackingSaturated: false,
+    };
+    assert.deepEqual(
+      diagnosticEventRecord({ k: "wasm.growthRequested", ...fields }),
+      {
+        subsystem: "wasm",
+        level: "info",
+        name: "wasm.growthRequested",
+        fields,
       },
     );
   });

@@ -41,6 +41,11 @@ import {
   NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
   rewriteNativeDoubleClickWasm,
 } from "./native-double-click.js";
+import {
+  EXTENDED_MEMORY_RESEARCH_ENABLED,
+  prepareExtendedMemoryArtifacts,
+  type ExtendedMemoryProfile,
+} from "./extended-memory.js";
 
 /**
  * The exact records matched while certifying the official client hash. The
@@ -60,11 +65,15 @@ export type ClientCertification =
     };
 
 export interface ClientModulePreparationFailure {
-  readonly stage: "template-save" | "enhancement" | "native-double-click";
+  readonly stage:
+    | "template-save"
+    | "enhancement"
+    | "native-double-click"
+    | "extended-memory";
   readonly error: unknown;
 }
 
-export interface PreparedClientModule {
+interface PreparedWasmClientModule {
   readonly wasmPath: string;
   readonly state: ClientCompatibilityState;
   readonly enhancementBuild: KnownEnhancementBuild | null;
@@ -77,14 +86,28 @@ export interface PreparedClientModule {
   readonly nativeDoubleClick: boolean;
 }
 
+export type ExtendedMemoryMode =
+  | { readonly status: "disabled" | "unsupported" }
+  | {
+      readonly status: "active";
+      readonly profile: ExtendedMemoryProfile;
+    };
+
+export interface PreparedClientModule extends PreparedWasmClientModule {
+  readonly jsPath: string;
+  readonly extendedMemory: ExtendedMemoryMode;
+}
+
 export interface PrepareClientModuleOptions {
   readonly officialWasmPath: string;
+  readonly officialJsPath: string;
   readonly officialSha256: string;
   readonly certification: ClientCertification;
   readonly enhancementCapabilities: EnhancementCapabilities;
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
   readonly nativeDoubleClickCacheRoot: string;
+  readonly extendedMemoryCacheRoot: string;
 }
 
 function templateSaveCache(
@@ -180,9 +203,9 @@ async function discardEnhancementCache(
  * player the double-click repair's latency, never the client.
  */
 async function withNativeDoubleClick(
-  prepared: PreparedClientModule,
+  prepared: PreparedWasmClientModule,
   cacheRoot: string,
-): Promise<PreparedClientModule> {
+): Promise<PreparedWasmClientModule> {
   const inputSha256 = await sha256File(prepared.wasmPath);
   const build = findNativeDoubleClickBuild(inputSha256);
   const expectedOutputSha256 = build
@@ -219,15 +242,48 @@ async function withNativeDoubleClick(
 export async function prepareClientModule(
   options: PrepareClientModuleOptions,
 ): Promise<PreparedClientModule> {
-  return withNativeDoubleClick(
+  const prepared = await withNativeDoubleClick(
     await prepareCertifiedChain(options),
     options.nativeDoubleClickCacheRoot,
   );
+  if (!EXTENDED_MEMORY_RESEARCH_ENABLED) {
+    return {
+      ...prepared,
+      jsPath: options.officialJsPath,
+      extendedMemory: { status: "disabled" },
+    };
+  }
+  try {
+    const extended = await prepareExtendedMemoryArtifacts(
+      options.officialJsPath,
+      prepared.wasmPath,
+      options.extendedMemoryCacheRoot,
+    );
+    return extended
+      ? {
+          ...prepared,
+          jsPath: extended.jsPath,
+          wasmPath: extended.wasmPath,
+          extendedMemory: { status: "active", profile: extended.profile },
+        }
+      : {
+          ...prepared,
+          jsPath: options.officialJsPath,
+          extendedMemory: { status: "unsupported" },
+        };
+  } catch (error) {
+    return {
+      ...prepared,
+      jsPath: options.officialJsPath,
+      extendedMemory: { status: "unsupported" },
+      failure: prepared.failure ?? { stage: "extended-memory", error },
+    };
+  }
 }
 
 async function prepareCertifiedChain(
   options: PrepareClientModuleOptions,
-): Promise<PreparedClientModule> {
+): Promise<PreparedWasmClientModule> {
   const {
     officialWasmPath,
     officialSha256,

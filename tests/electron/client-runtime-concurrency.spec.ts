@@ -328,6 +328,7 @@ test.describe("client generation coordination", () => {
             store,
             snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
+            jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             enhancementBuild: null,
           });
           const token = Object.freeze({
@@ -356,6 +357,7 @@ test.describe("client generation coordination", () => {
             store,
             snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
+            jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             enhancementBuild: null,
           });
           await fs.writeFile(
@@ -465,6 +467,7 @@ test.describe("client generation coordination", () => {
             store,
             snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
+            jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             enhancementBuild: null,
           });
           const token = Object.freeze({

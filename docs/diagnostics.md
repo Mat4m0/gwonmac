@@ -222,6 +222,57 @@ process when its event loop actually blocked, and otherwise to the renderer.
 Captures recorded before window-state tracking say so rather than claiming the
 window was steady.
 
+### Attributing WASM memory exhaustion
+
+The renderer wraps the official client's imported `emscripten_resize_heap`
+function before instantiation. It does not change the requested size or the
+result. A `wasm.memoryProbe` event first records whether that import was
+available, so silence cannot be mistaken for an active probe. Every call then
+records `wasm.growthRequested` with the requested, before, and after heap
+sizes; whether the request grew, stayed unchanged, was refused, or threw; and
+the first four numeric WASM function indices and code offsets. The event
+therefore includes failed growth attempts that the two-second `wasm.heapGrew`
+capacity staircase cannot see. Stack prose never crosses IPC. An eight-hex
+fingerprint groups identical numeric call chains.
+
+At the same boundary the recorder snapshots bounded WebGL texture aggregates:
+generated, deleted, live, and tracked texture counts; estimated bytes for
+known sized formats; estimated cumulative upload bytes; unknown allocations;
+and whether the 4,096-texture tracking bound was reached. No texture contents,
+WebGL object, pointer, or per-texture history is retained. When
+`unknownTextureAllocations` is non-zero or `textureTrackingSaturated` is true,
+the known byte figure is a lower bound, not total GPU memory.
+
+Run `pnpm diagnostics:summarize <capture.gwdiag>` first. Its **WASM memory
+attribution** section reports the outcome counts, last request, growth trigger,
+and texture state at that request. The growth trigger is the allocation path
+that crossed the current heap capacity; it is not presented as the owner of
+the whole growth step.
+
+| Evidence | What it establishes | What it does not establish |
+| --- | --- | --- |
+| `refused`, unchanged heap, request at or above the compiled cap | The official WASM asked its Emscripten host to exceed the memory available to this build | Which client subsystem retained the earlier allocations |
+| One repeated stack fingerprint while texture counts and estimated bytes stay flat | One stable WASM allocation path is triggering growth, with no measured texture-lifetime correlation | The source symbol without exact-build symbolication |
+| Texture live/known bytes rise with successive requests | Texture allocation or staging is correlated with heap pressure | That GPU storage itself occupies WASM linear memory, or that the host leaked it |
+| Many upload bytes but stable live/known bytes | Texture data is being streamed, while measured retained texture storage is stable | Whether temporary client-side upload buffers are retained elsewhere |
+| Probe `installed`, but no `wasm.growthRequested` before an abort | No call crossed the imported resize boundary before the abort | That the failure was not memory-related; check the abort kind |
+| Probe `resizeImportMissing` | The client build no longer exposes this observation boundary | Anything about growth ownership |
+
+Function indices and offsets are meaningful only for the exact official client
+build recorded in the capture. Run
+`python3 tools/gensyms.py "<path>/Gw.jspi.wasm" build/` against that exact
+artifact before assigning a source symbol. A capture can conclusively show a
+client request being refused at its compiled limit; assigning ownership still
+requires controlled runs of the same client build.
+
+The opt-in 4 GiB research profile records `wasm.extendedMemory` with its
+closed mode, exact post-double-click profile, and effective cap. The summary's
+heap denominator comes from the same runtime cap gauge. `unsupported` means an
+explicit research request did not match the pinned JS/WASM pair and the
+ordinary 2 GiB artifacts were served; `disabled` means the research profile
+was not requested. A preparation fault is additionally recorded as
+`wasm.extendedMemoryPrepareFailed` without exposing its free-text exception.
+
 ## Verification boundaries
 
 ### Claims and the tests that prove them
@@ -295,13 +346,18 @@ Enhancement development uses the layered, cached-safe workflow in
 WASM unchanged, and a live Enhancement run cannot update the client unless update
 permission is explicit.
 
-The dependency audit has one explicit exception for
-`GHSA-mh99-v99m-4gvg`: the latest Electron Forge and Nuxt toolchains still
-reach `brace-expansion` 1.x and 2.x through packaging-only glob libraries, and
+The dependency audit has three explicit packaging-only exceptions. For
+`GHSA-mh99-v99m-4gvg`, the latest Electron Forge and Nuxt toolchains still
+reach `brace-expansion` 1.x and 2.x through development glob libraries, while
 upstream published the memory-bound fix only for the API-incompatible 5.x
-line. The compatible 5.x edge is pinned to 5.0.8. No game, renderer, preload,
-main-process runtime, or packaged dependency accepts these development glob
-patterns. A release invariant forbids production dependencies in either
-workspace package while the exception exists, preventing it from masking a
-shipped vulnerable edge. Remove the exception as soon as the upstream parents
-adopt patched compatible dependencies.
+line. For `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq`, Electron Forge's
+latest DMG maker reaches `image-size` 0.7 through `appdmg`, whose callback API
+is incompatible with the patched 2.x line. That code measures only the
+repository-owned PNG DMG background; it never parses the affected ICNS, JXL,
+or HEIF formats, and copies the repository-owned ICNS icon without passing it
+to `image-size`. No game, renderer, preload, main-process runtime, or packaged
+dependency contains these development-only parsers. A release invariant
+forbids production dependencies in either workspace package and pins the exact
+exception set, preventing an exception from silently widening or masking a
+shipped vulnerable edge. Remove each exception as soon as its upstream parent
+adopts a compatible patched dependency.

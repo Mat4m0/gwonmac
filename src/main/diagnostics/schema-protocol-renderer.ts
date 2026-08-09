@@ -4,7 +4,11 @@
  */
 import type { EventSpec } from "./schema-fields.js";
 import { ALLOWED_PORTS } from "../core/allowlists.js";
-import { WASM_ABORT_REASON_KINDS } from "../../shared/diagnostics.js";
+import {
+  WASM_ABORT_REASON_KINDS,
+  WASM_GROWTH_OUTCOMES,
+  WASM_MEMORY_PROBE_STATUSES,
+} from "../../shared/diagnostics.js";
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   type EnhancementCapabilityProfile,
@@ -410,6 +414,47 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     subsystem: "renderer",
     level: "info",
     fields: { fromBytes: finiteNumber, toBytes: finiteNumber },
+  },
+  "wasm.memoryProbe": {
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      clockSynchronized: boolean,
+      status: literal(WASM_MEMORY_PROBE_STATUSES),
+    },
+  },
+  // Exact heap-growth-boundary observation. Unlike `heapGrew`, this records
+  // refused requests and preserves the numeric WASM call chain which caused
+  // the request. Texture figures are bounded aggregates, never object names
+  // or pixel data.
+  "wasm.growthRequested": {
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      clockSynchronized: boolean,
+      requestedBytes: finiteNumber,
+      beforeBytes: finiteNumber,
+      afterBytes: finiteNumber,
+      outcome: literal(WASM_GROWTH_OUTCOMES),
+      stackFingerprint: isRendererFingerprint,
+      stackDepth: finiteNumber,
+      frame0Function: finiteNumber,
+      frame0Offset: finiteNumber,
+      frame1Function: finiteNumber,
+      frame1Offset: finiteNumber,
+      frame2Function: finiteNumber,
+      frame2Offset: finiteNumber,
+      frame3Function: finiteNumber,
+      frame3Offset: finiteNumber,
+      generatedTextures: finiteNumber,
+      deletedTextures: finiteNumber,
+      liveTextures: finiteNumber,
+      trackedTextures: finiteNumber,
+      knownTextureBytes: finiteNumber,
+      textureUploadBytes: finiteNumber,
+      unknownTextureAllocations: finiteNumber,
+      textureTrackingSaturated: boolean,
+    },
   },
   // The renderer's Enhancement installation lifecycle. `clientPrepared` above
   // says a transformed module was served; only these say whether the hook was

@@ -80,6 +80,7 @@ export interface ProtocolDeps {
     store: ChunkStore;
     snapshotMeta: SnapshotMetadata;
     wasmPath: string;
+    jsPath: string;
   } | null;
 }
 
@@ -524,6 +525,9 @@ export async function handleGwRequest(request: Request): Promise<Response> {
       artifactName === "Gw.jspi.wasm"
         ? active?.wasmPath ??
           clientArtifactPath(gamePaths().artifacts, "Gw.jspi.wasm")
+        : artifactName === "Gw.jspi.js"
+          ? active?.jsPath ??
+            clientArtifactPath(gamePaths().artifacts, "Gw.jspi.js")
         : clientArtifactPath(
             active?.artifactsDir ?? gamePaths().artifacts,
             artifactName,

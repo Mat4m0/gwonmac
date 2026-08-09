@@ -205,6 +205,8 @@ export const RENDERER_MILESTONES = [
   "snapshot.fatalRead",
   "wasm.abort",
   "wasm.exit",
+  "wasm.memoryProbe",
+  "wasm.growthRequested",
   // The renderer half of the Enhancement story: whether our code was actually
   // live in the game's call path. Main records that a transformed module was
   // *prepared*; only these say the hook was installed, refused, or withdrawn —
@@ -235,6 +237,21 @@ export const WASM_ABORT_REASON_KINDS = [
 ] as const;
 export type WasmAbortReasonKind = (typeof WASM_ABORT_REASON_KINDS)[number];
 
+export const WASM_GROWTH_OUTCOMES = [
+  "grown",
+  "unchanged",
+  "refused",
+  "threw",
+] as const;
+export type WasmGrowthOutcome = (typeof WASM_GROWTH_OUTCOMES)[number];
+
+export const WASM_MEMORY_PROBE_STATUSES = [
+  "installed",
+  "resizeImportMissing",
+] as const;
+export type WasmMemoryProbeStatus =
+  (typeof WASM_MEMORY_PROBE_STATUSES)[number];
+
 export interface RendererMilestoneFieldsByName {
   "build.info": { programId: string | number; buildId: string | number };
   /**
@@ -249,6 +266,37 @@ export interface RendererMilestoneFieldsByName {
   };
   /** A non-zero client exit: the other way the running game dies. */
   "wasm.exit": { code: number; heapBytes: number };
+  /** Whether this build can observe the official client's resize boundary. */
+  "wasm.memoryProbe": { status: WasmMemoryProbeStatus };
+  /**
+   * One call through the client's imported heap-growth boundary. Four bounded
+   * numeric WASM frames preserve attribution without exporting stack prose;
+   * texture fields are aggregate lifetime evidence at the same instant.
+   */
+  "wasm.growthRequested": {
+    requestedBytes: number;
+    beforeBytes: number;
+    afterBytes: number;
+    outcome: WasmGrowthOutcome;
+    stackFingerprint: string;
+    stackDepth: number;
+    frame0Function: number;
+    frame0Offset: number;
+    frame1Function: number;
+    frame1Offset: number;
+    frame2Function: number;
+    frame2Offset: number;
+    frame3Function: number;
+    frame3Offset: number;
+    generatedTextures: number;
+    deletedTextures: number;
+    liveTextures: number;
+    trackedTextures: number;
+    knownTextureBytes: number;
+    textureUploadBytes: number;
+    unknownTextureAllocations: number;
+    textureTrackingSaturated: boolean;
+  };
   /**
    * The hook went live. `capabilityProfile` is the closed profile vocabulary
    * from contracts — typed as string here because contracts imports this file;
