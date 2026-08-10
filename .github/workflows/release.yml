@@ -140,12 +140,15 @@ jobs:
           test -n "$TEAM_ID"
           test "$TEAM_ID" = "9NN976MFZ4"
           keychain="$RUNNER_TEMP/gwonmac-release-$(openssl rand -hex 16).keychain-db"
+          original_keychain="$(security default-keychain -d user | tr -d '\" ')"
+          test -n "$original_keychain"
           certificate="$RUNNER_TEMP/developer-id.p12"
           profile="$RUNNER_TEMP/gwonmac.provisionprofile"
           profile_plist="$RUNNER_TEMP/gwonmac-profile.plist"
           api_key="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
           {
             echo "APPLE_KEYCHAIN=$keychain"
+            echo "APPLE_ORIGINAL_KEYCHAIN=$original_keychain"
             echo "APPLE_CERTIFICATE_PATH=$certificate"
             echo "APPLE_PROVISIONING_PROFILE=$profile"
             echo "APPLE_PROFILE_PLIST=$profile_plist"
@@ -212,67 +215,6 @@ jobs:
           GW_PACKAGE_INTENT: release
         run: pnpm make
 
-      - name: Smoke-test signed release candidate
-        env:
-          GW_PACKAGE_INTENT: release
-        run: pnpm test:packaged
-
-      - name: Prove signed Data Protection Keychain continuity
-        run: |
-          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
-          test -n "$app"
-          GW_SIGNED_APP_PATH="$app" GW_SIGNED_CHANNEL=release \
-            pnpm test:signed-keychain
-
-      # Every public beta/RC must be a reversible data experiment even though
-      # replacing the binary with an older Stable remains a manual action.
-      # The latest published Stable creates the data, this exact signed
-      # candidate changes it, then the same Stable must read and write it again.
-      - name: Prove beta data returns to latest Stable
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          GW_SIGNED_CHANNEL: release
-        run: |
-          case "$VERSION" in
-            *-beta.*|*-rc.*) ;;
-            *) echo "Stable release: recurring Stable/Beta round-trip not required."; exit 0 ;;
-          esac
-          stable_dir="$RUNNER_TEMP/latest-stable"
-          mkdir -p "$stable_dir"
-          stable_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
-          case "$stable_tag" in
-            v*) stable_version="${stable_tag#v}" ;;
-            *) echo "Latest Stable tag is not canonical: $stable_tag" >&2; exit 1 ;;
-          esac
-          stable_zip_name="Guild-Wars-Reforged-${stable_version}-macOS-arm64.zip"
-          gh release download "$stable_tag" --repo "$GITHUB_REPOSITORY" \
-            --pattern "$stable_zip_name" \
-            --dir "$stable_dir"
-          stable_zip_count="$(find "$stable_dir" -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')"
-          test "$stable_zip_count" = "1"
-          stable_zip="$(find "$stable_dir" -maxdepth 1 -name '*.zip' -print -quit)"
-          gh attestation verify "$stable_zip" --repo "$GITHUB_REPOSITORY"
-          stable_sha="$(shasum -a 256 "$stable_zip" | awk '{print $1}')"
-          {
-            echo "### Stable/Beta compatibility baseline"
-            echo
-            echo "Latest Stable: \`$stable_tag\` (ZIP SHA-256 \`$stable_sha\`)"
-          } >> "$GITHUB_STEP_SUMMARY"
-          ditto -x -k "$stable_zip" "$stable_dir/unpacked"
-          stable_app="$stable_dir/unpacked/Guild Wars Reforged.app"
-          candidate_count="$(find out -name 'Guild Wars Reforged.app' -type d | wc -l | tr -d ' ')"
-          test "$candidate_count" = "1"
-          candidate_app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
-          test -d "$stable_app"
-          test -d "$candidate_app"
-          pnpm verify:signed-app "$stable_app"
-          GW_STABLE_APP_PATH="$stable_app" \
-          GW_STABLE_VERSION="$stable_version" \
-          GW_CANDIDATE_APP_PATH="$candidate_app" \
-          GW_CANDIDATE_VERSION="$VERSION" \
-            pnpm test:stable-beta-roundtrip
-
       - name: Notarize and staple DMG
         run: |
           dmg_count="$(find out/make -type f -name '*.dmg' | wc -l | tr -d ' ')"
@@ -291,14 +233,57 @@ jobs:
         env:
           GW_SIGNED_CHANNEL: release
         run: |
+          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          zip="$(find out/make -type f -name '*.zip' -print -quit)"
+          dmg="$(find out/make -type f -name '*.dmg' -print -quit)"
+          unzip_dir="$RUNNER_TEMP/verified-release-zip"
+          test -n "$app"
+          test -n "$zip"
+          test -n "$dmg"
+          ditto -x -k "$zip" "$unzip_dir"
           pnpm verify:signed-app \
-            "$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)" \
-            "$(find out/make -type f -name '*.dmg' -print -quit)"
+            "$app" "$dmg"
+          pnpm verify:signed-app \
+            "$unzip_dir/Guild Wars Reforged.app"
 
-      - name: Prepare immutable release assets
+      - name: Prepare signed Keychain replacement fixture
+        id: runtime-fixture
+        env:
+          GW_SIGN_CHANNEL: release
+        run: |
+          app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          replacement="$RUNNER_TEMP/release-replacement/Guild Wars Reforged.app"
+          test -d "$app"
+          mkdir -p "$(dirname "$replacement")"
+          ditto "$app" "$replacement"
+          printf 'newly signed replacement\n' > \
+            "$replacement/Contents/Resources/upgrade-proof"
+          GW_SIGN_APP_PATH="$replacement" \
+            node --import ./scripts/ts-hook.mjs --experimental-strip-types \
+            scripts/sign-distribution-app.ts
+          codesign --verify --deep --strict --verbose=2 "$replacement"
+          cmp "$APPLE_PROVISIONING_PROFILE" \
+            "$replacement/Contents/embedded.provisionprofile"
+          echo "replacement=$replacement" >> "$GITHUB_OUTPUT"
+
+      - name: Remove signing material before non-signing work
+        run: |
+          security default-keychain -d user -s "$APPLE_ORIGINAL_KEYCHAIN"
+          security list-keychains -d user -s "$APPLE_ORIGINAL_KEYCHAIN"
+          security delete-keychain "$APPLE_KEYCHAIN"
+          rm -f "$APPLE_CERTIFICATE_PATH" "$APPLE_API_KEY_PATH" \
+            "$APPLE_PROVISIONING_PROFILE" "$APPLE_PROFILE_PLIST"
+          {
+            echo "APPLE_KEYCHAIN="
+            echo "APPLE_CERTIFICATE_PATH="
+            echo "APPLE_API_KEY_PATH="
+            echo "APPLE_PROVISIONING_PROFILE="
+            echo "APPLE_PROFILE_PLIST="
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare checksum-pinned release assets
         id: assets
         env:
-          GW_SIGNED_CHANNEL: release
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -319,9 +304,6 @@ jobs:
           node --import ./scripts/ts-hook.mjs --experimental-strip-types \
             scripts/release-manifest.ts \
             "$VERSION" "$TAG" "$(basename "$zip")" "$published_at" "$manifest"
-          unzip_dir="$RUNNER_TEMP/unzipped-release"
-          ditto -x -k "$zip" "$unzip_dir"
-          pnpm verify:signed-app "$unzip_dir/Guild Wars Reforged.app"
           sbom="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.spdx.json"
           checksum="$asset_dir/SHA256SUMS.txt"
           {
@@ -394,28 +376,86 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+      - name: Smoke-test signed release candidate without signing secrets
+        env:
+          GW_PACKAGE_INTENT: release
+        run: pnpm test:packaged
+
+      - name: Prove signed Data Protection Keychain continuity without signing secrets
+        env:
+          GW_SIGNED_APP_PATH: ${{ steps.assets.outputs.app }}
+          GW_SIGNED_REPLACEMENT_APP_PATH: ${{ steps.runtime-fixture.outputs.replacement }}
+          GW_SIGNED_CHANNEL: release
+        run: pnpm test:signed-keychain
+
+      # Every public beta/RC must be a reversible data experiment even though
+      # replacing the binary with an older Stable remains a manual action.
+      # The latest published Stable creates the data, this exact signed
+      # candidate changes it, then the same Stable must read and write it again.
+      - name: Prove beta data returns to latest Stable without signing secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          GW_SIGNED_CHANNEL: release
+        run: |
+          case "$VERSION" in
+            *-beta.*|*-rc.*) ;;
+            *) echo "Stable release: recurring Stable/Beta round-trip not required."; exit 0 ;;
+          esac
+          stable_dir="$RUNNER_TEMP/latest-stable"
+          mkdir -p "$stable_dir"
+          stable_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          case "$stable_tag" in
+            v*) stable_version="${stable_tag#v}" ;;
+            *) echo "Latest Stable tag is not canonical: $stable_tag" >&2; exit 1 ;;
+          esac
+          stable_zip_name="Guild-Wars-Reforged-${stable_version}-macOS-arm64.zip"
+          gh release download "$stable_tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$stable_zip_name" \
+            --dir "$stable_dir"
+          stable_zip_count="$(find "$stable_dir" -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')"
+          test "$stable_zip_count" = "1"
+          stable_zip="$(find "$stable_dir" -maxdepth 1 -name '*.zip' -print -quit)"
+          gh attestation verify "$stable_zip" --repo "$GITHUB_REPOSITORY"
+          stable_sha="$(shasum -a 256 "$stable_zip" | awk '{print $1}')"
+          {
+            echo "### Stable/Beta compatibility baseline"
+            echo
+            echo "Latest Stable: \`$stable_tag\` (ZIP SHA-256 \`$stable_sha\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          ditto -x -k "$stable_zip" "$stable_dir/unpacked"
+          stable_app="$stable_dir/unpacked/Guild Wars Reforged.app"
+          candidate_count="$(find out -name 'Guild Wars Reforged.app' -type d | wc -l | tr -d ' ')"
+          test "$candidate_count" = "1"
+          candidate_app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          test -d "$stable_app"
+          test -d "$candidate_app"
+          pnpm verify:signed-app "$stable_app"
+          # Neither tested app needs GitHub authority. The launcher inherits
+          # this shell's environment, so remove the step token first.
+          unset GH_TOKEN
+          GW_STABLE_APP_PATH="$stable_app" \
+          GW_STABLE_VERSION="$stable_version" \
+          GW_CANDIDATE_APP_PATH="$candidate_app" \
+          GW_CANDIDATE_VERSION="$VERSION" \
+            pnpm test:stable-beta-roundtrip
+
       - name: Delete temporary signing material
         if: always()
         run: |
+          if [ -n "${APPLE_ORIGINAL_KEYCHAIN:-}" ]; then
+            security default-keychain -d user -s "$APPLE_ORIGINAL_KEYCHAIN" || true
+            security list-keychains -d user -s "$APPLE_ORIGINAL_KEYCHAIN" || true
+          fi
           if [ -n "${APPLE_KEYCHAIN:-}" ]; then
             security delete-keychain "$APPLE_KEYCHAIN" || true
           fi
-          if [ -n "${APPLE_CERTIFICATE_PATH:-}" ]; then
-            rm -f "$APPLE_CERTIFICATE_PATH"
-          fi
-          if [ -n "${APPLE_API_KEY_PATH:-}" ]; then
-            rm -f "$APPLE_API_KEY_PATH"
-          fi
-          if [ -n "${APPLE_PROVISIONING_PROFILE:-}" ]; then
-            rm -f "$APPLE_PROVISIONING_PROFILE"
-          fi
-          if [ -n "${APPLE_PROFILE_PLIST:-}" ]; then
-            rm -f "$APPLE_PROFILE_PLIST"
-          fi
+          rm -f "${APPLE_CERTIFICATE_PATH:-}" "${APPLE_API_KEY_PATH:-}" \
+            "${APPLE_PROVISIONING_PROFILE:-}" "${APPLE_PROFILE_PLIST:-}"
 
   # Stage the exact signed output as a complete GitHub draft. The draft is not
   # eligible for the website or AppUpdater and gives the release approver one
-  # immutable candidate to test before the separate publish decision.
+  # checksum-pinned candidate to test before the separate publish decision.
   stage-release:
     if: github.ref == 'refs/heads/main' && !inputs.dry_run
     needs: release-build
@@ -479,14 +519,12 @@ jobs:
           fi
 
       - name: Attest ZIP provenance and SBOM
-        if: steps.release-state.outputs.create == 'true'
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-path: release-assets/*.zip
           sbom-path: ${{ steps.release-state.outputs.sbom }}
 
       - name: Attest DMG provenance
-        if: steps.release-state.outputs.create == 'true'
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-path: release-assets/*.dmg
@@ -566,13 +604,22 @@ jobs:
             cd "$remote"
             shasum -a 256 -c SHA256SUMS.txt
           )
+          expected_assets="$RUNNER_TEMP/expected-release-assets.txt"
+          actual_assets="$RUNNER_TEMP/actual-release-assets.txt"
+          {
+            awk '{$1=""; sub(/^[[:space:]]+/, ""); print}' \
+              "$remote/SHA256SUMS.txt"
+            echo SHA256SUMS.txt
+          } | sort > "$expected_assets"
+          find "$remote" -maxdepth 1 -type f -exec basename {} \; \
+            | sort > "$actual_assets"
+          cmp "$expected_assets" "$actual_assets"
           actual_checksums_sha256="$(shasum -a 256 "$remote/SHA256SUMS.txt" | awk '{print $1}')"
           test "$actual_checksums_sha256" = "$EXPECTED_CHECKSUMS_SHA256"
           body="$(node -p 'JSON.parse(process.argv[1]).body' "$release_json")"
           printf '%s\n' "$body" | grep -Eq '^## Verification[[:space:]]*$'
-          while read -r asset_sha asset_name; do
-            test -n "$asset_sha"
-            test -n "$asset_name"
-            printf '%s\n' "$body" | grep -Fq "$asset_sha"
+          while IFS= read -r checksum_row; do
+            test -n "$checksum_row"
+            printf '%s\n' "$body" | grep -Fq "$checksum_row"
           done < "$remote/SHA256SUMS.txt"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

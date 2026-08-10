@@ -209,6 +209,25 @@ describe("application updater", () => {
     }
   });
 
+  it("does not start a download after a synchronous feed event closed it", async () => {
+    for (const event of ["failed", "ready"] as const) {
+      let f!: ReturnType<typeof fixture>;
+      f = fixture({
+        native: {
+          setFeedURL: () => {
+            if (event === "failed") f.updater.updateFailed();
+            else f.updater.updateDownloaded();
+          },
+        },
+      });
+
+      await f.updater.check("beta");
+
+      assert.equal(f.updater.getState().phase, event);
+      assert.equal(f.nativeChecks(), 0);
+    }
+  });
+
   it("reports a refused terminal install once to the cleaned-up caller", async () => {
     const f = fixture({
       native: {

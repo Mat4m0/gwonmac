@@ -309,6 +309,7 @@ export class AppUpdater {
         this.updateFailed();
         return;
       }
+      if (!this.expectedDownload || this.state.phase !== "downloading") return;
       try {
         this.options.nativeUpdater.checkForUpdates();
       } catch {

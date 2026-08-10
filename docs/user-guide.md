@@ -446,9 +446,11 @@ loading screen, in the application menu, on a client-compatibility notice, or
 under **Settings → Updates**. Turning it back on changes the next launch or due
 background check; choose **Check for Updates** when you want an immediate check.
 
-A check asks GitHub whether a newer version of the app exists. It sends nothing
-about you or your installation. ArenaNet client updates are fetched separately
-from ArenaNet and cannot change which Gwonmac application release is installed.
+A check asks GitHub whether a newer version of the app exists. The app sends no
+diagnostics, account/game data, or installation identifier; GitHub still
+receives ordinary HTTPS request metadata. ArenaNet client updates are fetched
+separately from ArenaNet and cannot change which Gwonmac application release is
+installed.
 
 **At launch, an update lands before the game starts.** While the launch check
 or its download is running, the loading screen holds at that step instead of

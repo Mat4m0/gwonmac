@@ -179,7 +179,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   );
   assert.match(
     workflow,
-    /rm -f "\$APPLE_CERTIFICATE_PATH"[\s\S]*rm -f "\$APPLE_API_KEY_PATH"/,
+    /rm -f "\$APPLE_CERTIFICATE_PATH" "\$APPLE_API_KEY_PATH"[\s\S]*"\$APPLE_PROVISIONING_PROFILE" "\$APPLE_PROFILE_PLIST"/,
   );
   assert.match(workflow, /xcrun notarytool submit/);
   assert.match(workflow, /xcrun stapler staple/);
@@ -187,20 +187,26 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(workflow, /7F9A56793C16683742AA7818FE65221A884FA108/);
   assert.match(workflow, /remaining <= 2 \* 365 \* 86400000/);
   assert.match(workflow, /remaining <= 5 \* 365 \* 86400000/);
-  assert.match(
-    workflow,
-    /rm -f "\$APPLE_PROVISIONING_PROFILE"[\s\S]*rm -f "\$APPLE_PROFILE_PLIST"/,
-  );
-
   // The signed-package assertions are the script's, and the workflow's only
   // job is to run it. A release path that can only be exercised by cutting a
   // release is one nobody can reproduce when it breaks, so an assertion that
   // creeps back inline fails here.
   assert.match(script("verify:signed-app"), /scripts\/verify-signed-app\.ts/);
-  assert.match(workflow, /GW_SIGNED_CHANNEL: release\n {8}run: \|\n {10}pnpm verify:signed-app/);
-  assert.match(workflow, /pnpm verify:signed-app "\$unzip_dir\//);
-  assert.doesNotMatch(
+  assert.match(
     workflow,
+    /GW_SIGNED_CHANNEL: release[\s\S]{0,700}pnpm verify:signed-app/,
+  );
+  assert.match(workflow, /pnpm verify:signed-app[\\\s]+"\$unzip_dir\//);
+  assert.match(
+    workflow,
+    /codesign --verify --deep --strict --verbose=2 "\$replacement"/,
+  );
+  const workflowWithoutFixtureVerification = workflow.replace(
+    / {10}codesign --verify --deep --strict --verbose=2 "\$replacement"\n/,
+    "",
+  );
+  assert.doesNotMatch(
+    workflowWithoutFixtureVerification,
     /codesign -dv|codesign --verify|codesign -d --entitlements|spctl|stapler validate/,
   );
   assert.match(verifier, /TeamIdentifier=\$\{APPLE_TEAM_ID\}/);
@@ -264,7 +270,7 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     workflow,
-    /name: Prove signed Data Protection Keychain continuity[\s\S]*?GW_SIGNED_APP_PATH="\$app" GW_SIGNED_CHANNEL=release[\s\S]*?pnpm test:signed-keychain/,
+    /name: Prove signed Data Protection Keychain continuity without signing secrets[\s\S]*?GW_SIGNED_APP_PATH: \$\{\{ steps\.assets\.outputs\.app \}\}[\s\S]*?GW_SIGNED_REPLACEMENT_APP_PATH: \$\{\{ steps\.runtime-fixture\.outputs\.replacement \}\}[\s\S]*?run: pnpm test:signed-keychain/,
   );
   assert.match(
     json("package.json").scripts?.["test:signed-keychain"] ?? "",
@@ -310,16 +316,45 @@ test("release workflow stages and publishes one tested, attested package version
     releasePublish,
     /actions\/checkout|actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
   );
+  const signingMaterialRemovedAt = releaseBuild.indexOf(
+    "security delete-keychain \"$APPLE_KEYCHAIN\"\n          rm -f",
+  );
+  assert.ok(signingMaterialRemovedAt > 0);
+  assert.ok(
+    releaseBuild.indexOf("name: Prepare signed Keychain replacement fixture")
+      < signingMaterialRemovedAt,
+  );
+  assert.ok(
+    signingMaterialRemovedAt
+      < releaseBuild.indexOf("name: Prepare checksum-pinned release assets"),
+  );
+  assert.ok(
+    signingMaterialRemovedAt < releaseBuild.indexOf("uses: anchore/sbom-action@"),
+  );
+  assert.ok(
+    signingMaterialRemovedAt
+      < releaseBuild.indexOf("name: Handoff verified release assets"),
+  );
+  assert.doesNotMatch(
+    releaseBuild.slice(0, signingMaterialRemovedAt),
+    /pnpm test:packaged|pnpm test:signed-keychain|pnpm test:stable-beta-roundtrip/,
+  );
+  const runtimeWithoutSigningSecrets = releaseBuild.slice(signingMaterialRemovedAt);
+  assert.match(runtimeWithoutSigningSecrets, /run: pnpm test:packaged/);
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /GW_SIGNED_REPLACEMENT_APP_PATH:[^\n]+runtime-fixture\.outputs\.replacement/,
+  );
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /unset GH_TOKEN[\s\S]*pnpm test:stable-beta-roundtrip/,
+  );
 
   // A dry run is only evidence about the real build if it is the real build
   // minus every GitHub mutation. Both mutation jobs are skipped whole; no
   // build or package-verification step may branch around work for a dry run.
   // The build records what it produced where skipped jobs cannot hide it.
   assert.match(workflow, /workflow_dispatch:\n {4}inputs:\n {6}dry_run:/);
-  assert.match(
-    workflow,
-    /description: Build and verify the release, then publish nothing\.\n {8}default: false\n {8}type: boolean/,
-  );
   assert.match(
     releaseStage,
     /stage-release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
@@ -360,7 +395,7 @@ test("release workflow stages and publishes one tested, attested package version
   assert.equal(
     workflow.match(/if: steps\.release-state\.outputs\.create == 'true'/gu)
       ?.length,
-    3,
+    1,
   );
   assert.match(
     releaseStage,
@@ -384,7 +419,11 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     releasePublish,
-    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*\^## Verification[\s\S]*while read -r asset_sha asset_name/,
+    /awk '\{\$1=""; sub\(\/\^\[\[:space:\]\]\+\/, ""\); print\}'[\s\S]*echo SHA256SUMS\.txt[\s\S]*find "\$remote" -maxdepth 1 -type f -exec basename \{\} \\;[\s\S]*cmp "\$expected_assets" "\$actual_assets"/,
+  );
+  assert.match(
+    releasePublish,
+    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*\^## Verification[\s\S]*while IFS= read -r checksum_row[\s\S]*grep -Fq "\$checksum_row"/,
   );
   assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);

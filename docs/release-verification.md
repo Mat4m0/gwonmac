@@ -130,6 +130,15 @@ returning Stable reads every candidate value and preserves every untouched
 value while saving its own patch. A mismatch refuses the candidate; it does not
 add an unknown-field bag or migration framework.
 
+The first protected approval exposes the Developer ID and notarization
+credentials only long enough to build, notarize, verify the application, ZIP,
+and DMG, and sign the replacement fixture used by the Keychain proof. The job
+then restores the runner's original Keychain and deletes the temporary
+Keychain, certificate, notarization key, and provisioning-profile files before
+running the SBOM action, uploading artifacts, or launching this candidate or a
+downloaded Stable. Those later processes inherit neither signing authority nor
+the GitHub token used to fetch the Stable package.
+
 ## Release-only canary record
 
 The person granting the **second**, post-staging GitHub `release` environment
@@ -145,8 +154,9 @@ evidence. At minimum record:
 - the ArenaNet module SHA-256 whenever a live client is involved.
 
 The final job mechanically refuses a non-draft, the wrong prerelease class or
-commit, a checksum-file digest different from staging, a missing
-`## Verification` heading, or release notes that omit any staged asset hash.
+commit, any asset name outside the checksum inventory, a checksum-file digest
+different from staging, a missing `## Verification` heading, or release notes
+that omit any complete staged checksum row.
 It deliberately does not try to interpret free-form hardware observations: the
 protected reviewer must refuse approval when a required result is failed,
 missing, or belongs to different assets. Post-publication updater checks are
