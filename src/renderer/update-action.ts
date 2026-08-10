@@ -125,7 +125,7 @@ function messageFor(state: AppUpdateState): string {
     case 'ready':
       return `Version ${state.latestVersion} is ready to install.`;
     case 'manual-stable-return':
-      return `Stable version ${state.decision.version} is available. Returning to Stable requires a manual install.`;
+      return `Stable version ${state.stableVersion} is available. Returning to Stable requires a manual install.`;
     case 'failed':
       return FAILURE_MESSAGE[state.reason];
   }

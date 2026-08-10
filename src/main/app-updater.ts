@@ -254,10 +254,7 @@ export class AppUpdater {
           phase: "manual-stable-return",
           currentVersion: this.options.currentVersion,
           checkedAt,
-          decision: {
-            kind: "manual-stable-return",
-            version: formatReleaseVersion(latest.version),
-          },
+          stableVersion: formatReleaseVersion(latest.version),
         });
         return;
       }

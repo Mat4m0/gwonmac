@@ -306,10 +306,7 @@ describe("application updater", () => {
       phase: "manual-stable-return",
       currentVersion: "2026.8.0-beta.1",
       checkedAt: "1970-01-01T00:00:01.234Z",
-      decision: {
-        kind: "manual-stable-return",
-        version: "2026.7.0",
-      },
+      stableVersion: "2026.7.0",
     });
     assert.equal(f.nativeChecks(), 0);
     assert.deepEqual(f.feeds, []);

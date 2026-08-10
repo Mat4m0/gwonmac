@@ -472,10 +472,7 @@ export type AppUpdateState =
       phase: "manual-stable-return";
       currentVersion: string;
       checkedAt: string;
-      decision: {
-        kind: "manual-stable-return";
-        version: string;
-      };
+      stableVersion: string;
     }
   | {
       phase: "failed";

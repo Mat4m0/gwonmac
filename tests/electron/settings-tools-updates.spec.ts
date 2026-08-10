@@ -98,10 +98,7 @@ test.describe("tools and update settings", () => {
             phase: "manual-stable-return" as const,
             currentVersion: "2026.8.0-beta.1",
             checkedAt: "2026-08-10T00:00:00.000Z",
-            decision: {
-              kind: "manual-stable-return" as const,
-              version: "2026.7.0",
-            },
+            stableVersion: "2026.7.0",
           }),
           check: async () => undefined,
           restartAndInstall: async () => undefined,

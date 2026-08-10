@@ -75,7 +75,7 @@ describe("update action", () => {
       launchGateDecision({
         phase: "manual-stable-return",
         checkedAt: "2026-08-03T10:00:00.000Z",
-        decision: { kind: "manual-stable-return", version: "2026.7.0" },
+        stableVersion: "2026.7.0",
         ...current,
       }),
       "proceed",
@@ -128,7 +128,7 @@ describe("update action", () => {
         phase: "manual-stable-return",
         currentVersion: "2026.8.0-beta.1",
         checkedAt: "2026-08-03T10:00:00.000Z",
-        decision: { kind: "manual-stable-return", version: "2026.7.0" },
+        stableVersion: "2026.7.0",
       }),
       check: async () => undefined,
       restartAndInstall: async () => undefined,
