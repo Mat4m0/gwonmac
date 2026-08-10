@@ -70,6 +70,8 @@ let restoredWindowState: WindowState | null = null;
 let lastNormalBounds: WindowBounds | null = null;
 let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
 let windowStateWrite: Promise<void> = Promise.resolve();
+let windowStateReset: Promise<void> = Promise.resolve();
+let windowStateResetDepth = 0;
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -152,6 +154,10 @@ async function persistWindowState(win: BrowserWindow): Promise<void> {
 }
 
 function scheduleWindowStateSave(win: BrowserWindow): void {
+  // Leaving fullscreen/maximized and applying the default bounds emits several
+  // intermediate events. Persisting one of those after the explicit reset
+  // write can resurrect the old placement.
+  if (windowStateResetDepth > 0) return;
   if (windowStateTimer) clearTimeout(windowStateTimer);
   windowStateTimer = setTimeout(() => {
     windowStateTimer = null;
@@ -162,6 +168,7 @@ function scheduleWindowStateSave(win: BrowserWindow): void {
 }
 
 export async function flushWindowState(): Promise<void> {
+  await windowStateReset;
   if (windowStateTimer) {
     clearTimeout(windowStateTimer);
     windowStateTimer = null;
@@ -172,54 +179,65 @@ export async function flushWindowState(): Promise<void> {
   await windowStateWrite;
 }
 
-export async function resetWindowState(win = mainWindow): Promise<void> {
-  if (windowStateTimer) {
-    clearTimeout(windowStateTimer);
-    windowStateTimer = null;
-  }
-  const reset = defaultWindowState(primaryWorkArea());
-  restoredWindowState = reset;
-  lastNormalBounds = reset.bounds;
-  if (win && !win.isDestroyed()) {
-    if (win.isFullScreen()) {
-      await new Promise<void>((resolve, reject) => {
-        const completed = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        const timeout = setTimeout(() => {
-          win.removeListener("leave-full-screen", completed);
-          reject(new Error("window did not leave full screen"));
-        }, 5_000);
-        win.once("leave-full-screen", completed);
-        win.setFullScreen(false);
+export function resetWindowState(win = mainWindow): Promise<void> {
+  const reset = windowStateReset.then(async () => {
+    windowStateResetDepth += 1;
+    try {
+      if (windowStateTimer) {
+        clearTimeout(windowStateTimer);
+        windowStateTimer = null;
+      }
+      const requested = defaultWindowState(primaryWorkArea());
+      let settled = requested;
+      if (win && !win.isDestroyed()) {
+        if (win.isFullScreen()) {
+          await new Promise<void>((resolve, reject) => {
+            const completed = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            const timeout = setTimeout(() => {
+              win.removeListener("leave-full-screen", completed);
+              reject(new Error("window did not leave full screen"));
+            }, 5_000);
+            win.once("leave-full-screen", completed);
+            win.setFullScreen(false);
+          });
+        }
+        if (win.isMaximized()) {
+          await new Promise<void>((resolve, reject) => {
+            const completed = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            const timeout = setTimeout(() => {
+              win.removeListener("unmaximize", completed);
+              reject(new Error("window did not leave maximized mode"));
+            }, 5_000);
+            win.once("unmaximize", completed);
+            win.unmaximize();
+          });
+        }
+        win.setBounds(requested.bounds);
+        settled = { bounds: { ...win.getBounds() }, mode: "normal" };
+      }
+      restoredWindowState = settled;
+      lastNormalBounds = settled.bounds;
+      const write = windowStateWrite.then(() =>
+        saveWindowState(gamePaths().windowState, settled),
+      );
+      windowStateWrite = write.catch(() => undefined);
+      await write;
+      logEvent({ k: "window.stateReset",
+        width: settled.bounds.width,
+        height: settled.bounds.height,
       });
+    } finally {
+      windowStateResetDepth -= 1;
     }
-    if (win.isMaximized()) {
-      await new Promise<void>((resolve, reject) => {
-        const completed = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        const timeout = setTimeout(() => {
-          win.removeListener("unmaximize", completed);
-          reject(new Error("window did not leave maximized mode"));
-        }, 5_000);
-        win.once("unmaximize", completed);
-        win.unmaximize();
-      });
-    }
-    win.setBounds(reset.bounds);
-  }
-  const write = windowStateWrite.then(() =>
-    saveWindowState(gamePaths().windowState, reset),
-  );
-  windowStateWrite = write.catch(() => undefined);
-  await write;
-  logEvent({ k: "window.stateReset",
-    width: reset.bounds.width,
-    height: reset.bounds.height,
   });
+  windowStateReset = reset.catch(() => undefined);
+  return reset;
 }
 
 export function getMainWindow(): BrowserWindow | null {
@@ -290,13 +308,18 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
   });
 
   const rememberNormalBounds = (): void => {
-    if (win.isFullScreen() || win.isMaximized()) return;
+    if (
+      windowStateResetDepth > 0 ||
+      win.isFullScreen() ||
+      win.isMaximized()
+    ) return;
     lastNormalBounds = { ...win.getBounds() };
     scheduleWindowStateSave(win);
   };
   win.on("move", rememberNormalBounds);
   win.on("resize", rememberNormalBounds);
   const persistMode = (): void => {
+    if (windowStateResetDepth > 0) return;
     void persistWindowState(win).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });

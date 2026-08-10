@@ -17,7 +17,12 @@ import { register } from "node:module";
 import test, { mock } from "node:test";
 
 const recorded: string[] = [];
-(globalThis as { __quitEvents?: string[] }).__quitEvents = recorded;
+const flushes: string[] = [];
+(globalThis as {
+  __quitEvents?: string[];
+  __quitFlushes?: string[];
+}).__quitEvents = recorded;
+(globalThis as { __quitFlushes?: string[] }).__quitFlushes = flushes;
 
 register(
   `data:text/javascript,${encodeURIComponent(
@@ -33,7 +38,7 @@ register(
          return {
            url: "data:text/javascript," + encodeURIComponent(
              "export const logEvent = (e) => { globalThis.__quitEvents.push(e.k); };" +
-             "export const flushDiagnostics = async () => {};",
+             "export const flushDiagnostics = () => new Promise(() => { globalThis.__quitFlushes.push('started'); });",
            ),
            format: "module",
            shortCircuit: true,
@@ -47,7 +52,7 @@ register(
 const { onAppQuit, runQuitCleanup, QUIT_CLEANUP_DEADLINE_MS, isQuitting } =
   await import("../../src/main/lifecycle.ts");
 
-test("a cleanup task that never settles cannot hold the quit", async () => {
+test("neither a stuck cleanup task nor a stuck final flush can hold the quit", async () => {
   const ran: string[] = [];
   // Registration order is reversed at run time, so this one runs last —
   // the position the renderer filesystem sync actually occupies.
@@ -77,5 +82,10 @@ test("a cleanup task that never settles cannot hold the quit", async () => {
   );
   assert.ok(!recorded.includes("quit.cleanupCompleted"),
     "the crash heuristic reads the completion, so a timeout must not claim one");
+  assert.deepEqual(
+    flushes,
+    ["started"],
+    "the final diagnostic write is attempted without escaping the deadline",
+  );
   assert.equal(isQuitting(), true);
 });

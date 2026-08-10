@@ -187,12 +187,18 @@ export async function requestGameStorageReset(
   return true;
 }
 
-export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
+async function pendingMarkerExists(markerPath: string): Promise<boolean> {
   try {
-    await stat(paths.cacheClearRequest);
-  } catch {
-    return;
+    await stat(markerPath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
+}
+
+export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
+  if (!(await pendingMarkerExists(paths.cacheClearRequest))) return;
   await rm(paths.chunks, { recursive: true, force: true });
   await rm(paths.bootChunks, { force: true });
   await rm(paths.cacheClearRequest, { force: true });
@@ -202,11 +208,7 @@ export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
 export async function applyPendingGameStorageReset(
   paths: GamePaths,
 ): Promise<void> {
-  try {
-    await stat(paths.gameStorageClearRequest);
-  } catch {
-    return;
-  }
+  if (!(await pendingMarkerExists(paths.gameStorageClearRequest))) return;
   // This runs before a renderer can mount IDBFS. Clearing it later would race
   // the game's auto-persist and could recreate files before quit.
   await session.defaultSession.clearStorageData({

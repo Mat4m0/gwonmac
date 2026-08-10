@@ -50,7 +50,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/main/core/wasm-binary.ts` | WASM section codec shared by both transforms and the re-certifier |
 | `src/main/certification/` | certified build tables, both transforms, the isolated local proof |
 | `src/main/protocol.ts`    | `gw://app` routing and range responses                            |
-| `src/main/ipc.ts`         | sender/value validation and direct capability forwarding          |
+| `src/main/ipc.ts`         | sender/value validation, channel registration, and direct owner-local operations |
 | `src/main/settings-actions.ts` | settings confirmation, durable reset, relaunch, and recovery |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                       |
 | `src/main/diagnostics/`   | flight recorder, capture, samplers, schema, detector, export      |
