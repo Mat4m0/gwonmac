@@ -16,10 +16,9 @@
  *
  * ## What it will not do
  *
- * Reordering uses the client's dedicated `KickAllHeroes` intent, then waits
- * until the published roster is empty before adding anyone back. That keeps
- * the historical `0x26` sentinel out of the per-hero API, where it would be
- * indistinguishable from the observed Devona id.
+ * Reordering removes every observed hero one at a time, confirms the empty
+ * roster, then adds the saved order. Build 38,797 proved that opcode 31 with
+ * hero id 38 removes Devona; it is not a clear-roster sentinel in this client.
  *
  * It also stops at the first step that does not land. A team applied halfway is
  * worse than one that refused: the player can see a refusal, and cannot see
@@ -57,7 +56,6 @@ export interface TeamApplyCommands {
     ranks: readonly (readonly [attribute: number, rank: number])[],
   ): void;
   addHero(heroId: HeroId): void;
-  kickAllHeroes(): void;
   kickHero(heroId: HeroId): void;
   setHeroBehaviour(heroId: HeroId, behaviour: number): void;
   setHeroSecondary(heroId: HeroId, profession: number): void;
@@ -491,48 +489,36 @@ export async function runTeamApply(
     let rosterActions = 0;
     const beforeRoster = writableParty(environment).heroes.map(({ hero }) => hero);
     const wantedOrder = wanted.map(({ hero }) => hero);
-    const removingDevona = beforeRoster.some((hero) => hero === 38)
-      && !wantedOrder.some((hero) => hero === 38);
-    if (!canReconcileTeamRoster(beforeRoster, wantedOrder) || removingDevona) {
-      if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
-      send(environment, "clearing the hero roster", () => {
-        environment.commands.kickAllHeroes();
-      });
-      await confirmObserved(
-        environment,
-        "clearing the hero roster",
-        (party) => party.heroes.length === 0
-          ? { state: "confirmed", value: undefined }
-          : { state: "waiting" },
-      );
-      completedChanges += 1;
+    if (!canReconcileTeamRoster(beforeRoster, wantedOrder)) {
+      while (writableParty(environment).heroes.length > 0) {
+        const next = writableParty(environment).heroes[0]!;
+        const removal = `${heroLabel(next.hero)}'s removal`;
+        if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
+        send(environment, removal, () => {
+          environment.commands.kickHero(next.hero);
+        });
+        await confirmObserved(
+          environment,
+          removal,
+          (party) => party.heroes.some(({ hero }) => hero === next.hero)
+            ? { state: "waiting" }
+            : { state: "confirmed", value: undefined },
+        );
+        completedChanges += 1;
+      }
     }
     for (;;) {
       const current = writableParty(environment);
       const unwanted = current.heroes.find(({ hero }) => !wantedHeroes.has(hero));
       if (unwanted) {
-        if (unwanted.hero === 38) {
-          if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
-          send(environment, "clearing the hero roster", () => {
-            environment.commands.kickAllHeroes();
-          });
-          await confirmObserved(
-            environment,
-            "clearing the hero roster",
-            (party) => party.heroes.length === 0
-              ? { state: "confirmed", value: undefined }
-              : { state: "waiting" },
-          );
-          completedChanges += 1;
-          continue;
-        }
+        const removal = `${heroLabel(unwanted.hero)}'s removal`;
         if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
-        send(environment, `removing ${heroLabel(unwanted.hero)}`, () => {
+        send(environment, removal, () => {
           environment.commands.kickHero(unwanted.hero);
         });
         await confirmObserved(
           environment,
-          `removing ${heroLabel(unwanted.hero)}`,
+          removal,
           (party) => !party.heroes.some((hero) => hero.hero === unwanted.hero)
             ? { state: "confirmed", value: undefined }
             : { state: "waiting" },
@@ -544,13 +530,14 @@ export async function runTeamApply(
         (member) => !current.heroes.some(({ hero }) => hero === member.hero),
       );
       if (!missing) break;
+      const addition = `${heroLabel(missing.hero)}'s addition`;
       if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
-      send(environment, `adding ${heroLabel(missing.hero)}`, () => {
+      send(environment, addition, () => {
         environment.commands.addHero(missing.hero);
       });
       await confirmObserved(
         environment,
-        `adding ${heroLabel(missing.hero)}`,
+        addition,
         (party) => party.heroes.some(
           (hero) => hero.hero === missing.hero && hero.agentId > 0)
           ? { state: "confirmed", value: undefined }

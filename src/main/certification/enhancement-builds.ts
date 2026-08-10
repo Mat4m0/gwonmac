@@ -239,10 +239,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // Everything a team apply needs, and nothing else. Kick was sent first,
     // alone, against a live game; the rest joined it once that had worked.
     //
-    // `KickAllHeroes` is `kick` with hero id 0x26 and is deliberately *not*
-    // here: 0x26 is 38, and Devona is hero 38. GWCAjs verified the sentinel
-    // live on build 38,615, which predates her. Kicking heroes one at a time
-    // covers every case and never touches the ambiguous value.
+    // Build 38,797 live evidence established that opcode 31 with hero id 38
+    // removes Devona; the historical pre-Devona `0x26` clear-roster sentinel
+    // does not apply to this client. Rebuilds therefore remove observed heroes
+    // individually and confirm each publication before adding the saved order.
     //
     commands: Object.freeze({
       thunkExport: "enhancement_command",

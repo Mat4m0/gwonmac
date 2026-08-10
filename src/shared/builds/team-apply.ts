@@ -318,10 +318,7 @@ export function preflightTeamApply(
   const wantedIds = new Set(wanted.map(({ hero }) => hero));
   const currentOrder = party.heroes.map(({ hero }) => hero);
   const wantedOrder = wanted.map(({ hero }) => hero);
-  const removingDevona = currentOrder.some((hero) => hero === 38)
-    && !wantedOrder.some((hero) => hero === 38);
-  const rebuildRoster = !canReconcileTeamRoster(currentOrder, wantedOrder)
-    || removingDevona;
+  const rebuildRoster = !canReconcileTeamRoster(currentOrder, wantedOrder);
   if (rebuildRoster) {
     changes.push({ kind: "rebuild-roster" });
   } else {

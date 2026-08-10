@@ -63,7 +63,6 @@ test("the closed team surface selects only its reviewed opcodes and payloads", (
   commands.setPlayerSkills([1, 2, 3]);
   commands.setPlayerAttributes([[17, 7], [19, 12]]);
   commands.addHero(heroId(6));
-  commands.kickAllHeroes();
   commands.kickHero(heroId(7));
   commands.setHeroBehaviour(heroId(6), 1);
   commands.setHeroSecondary(heroId(6), 3);
@@ -77,7 +76,6 @@ test("the closed team surface selects only its reviewed opcodes and payloads", (
     [93, PLAYER_AGENT, 3, PAYLOAD, 0, [1, 2, 3]],
     [16, PLAYER_AGENT, 2, PAYLOAD + 8 * 4, PAYLOAD + 24 * 4, [17, 19], [7, 12]],
     [30, 6, 0, 0, 0],
-    [31, 0x26, 0, 0, 0],
     [31, 7, 0, 0, 0],
     [21, 11, 1, 0, 0],
     [65, 11, 3, 0, 0],

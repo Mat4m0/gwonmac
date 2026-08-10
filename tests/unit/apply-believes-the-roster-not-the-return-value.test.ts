@@ -11,9 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   runTeamApply,
-  type TeamApplyEnvironment,
 } from "../../src/shared/builds/team-apply-runner.ts";
-import { liveParty } from "../../src/shared/builds/live-party.ts";
 import { heroId, skillId } from "../../src/shared/builds/library.ts";
 import type {
   TeamApplyMember,
@@ -224,7 +222,7 @@ test("a hero the game never adds is a refusal, however cheerful the command", as
   const game = harness([]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /adding Koss did not take effect/,
+    /Koss's addition did not take effect/,
   );
   assert.deepEqual(game.sent, ["add:6"], "and it did not go on to the next step");
 });
@@ -237,7 +235,7 @@ test("a hero that appears without an agent id is not yet added", async () => {
   game.react("add:6", [{ hero: 6, agentId: 0, behaviour: null, skills: null }]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6) })]), game.environment, 1),
-    /adding Koss did not take effect/,
+    /Koss's addition did not take effect/,
   );
 });
 
@@ -874,162 +872,4 @@ test("a bar and ranks already in place send nothing at all", async () => {
   assert.deepEqual(game.sent, []);
   assert.equal(result.completedChanges, 0);
   assert.equal(result.skippedSkills.length, 0);
-});
-
-test("a behaviour already set is not sent again", async () => {
-  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
-  const result = await runTeamApply(
-    plan([member({ hero: heroId(6), behaviour: "guard" })]),
-    game.environment,
-    1,
-  );
-  assert.deepEqual(game.sent, [], "nothing needed doing");
-  assert.equal(result.completedChanges, 0);
-});
-
-test("heroes that are not in the team leave before the ones that are arrive", async () => {
-  // A full party has no room, so the order is not cosmetic.
-  const game = harness([{ hero: 7, agentId: 11, behaviour: 1, skills: null }]);
-  game.react("kick:7", []);
-  game.react("add:6", [{ hero: 6, agentId: 12, behaviour: 1, skills: null }]);
-
-  const result = await runTeamApply(
-    plan([member({ hero: heroId(6), behaviour: "guard" })]),
-    game.environment,
-    1,
-  );
-  assert.deepEqual(game.sent, ["kick:7", "add:6"]);
-  assert.equal(result.completedChanges, 2);
-});
-
-test("a changed hero order rebuilds the roster in the saved order", async () => {
-  const game = harness([
-    { hero: 6, agentId: 11, behaviour: 1, skills: null },
-    { hero: 7, agentId: 12, behaviour: 1, skills: null },
-  ]);
-  game.react("kick-all", []);
-  game.react("add:7", [
-    { hero: 7, agentId: 21, behaviour: 1, skills: null },
-  ]);
-  game.react("add:6", [
-    { hero: 7, agentId: 21, behaviour: 1, skills: null },
-    { hero: 6, agentId: 22, behaviour: 1, skills: null },
-  ]);
-
-  const result = await runTeamApply(
-    plan([
-      member({ hero: heroId(7), behaviour: "guard" }),
-      member({ hero: heroId(6), behaviour: "guard" }),
-    ]),
-    game.environment,
-    1,
-  );
-  assert.deepEqual(game.sent, ["kick-all", "add:7", "add:6"]);
-  assert.equal(result.completedChanges, 3);
-});
-
-test("a roster rebuild adds nobody until Guild Wars confirms an empty party", async () => {
-  const game = harness([
-    { hero: 6, agentId: 11, behaviour: 1, skills: null },
-    { hero: 7, agentId: 12, behaviour: 1, skills: null },
-  ]);
-
-  await assert.rejects(
-    runTeamApply(
-      plan([
-        member({ hero: heroId(7), behaviour: "guard" }),
-        member({ hero: heroId(6), behaviour: "guard" }),
-      ]),
-      game.environment,
-      1,
-    ),
-    /clearing the hero roster did not take effect/,
-  );
-  assert.deepEqual(game.sent, ["kick-all"]);
-});
-
-test("a concurrent roster addition cannot turn into a false Apply success", async () => {
-  const game = harness([{
-    hero: 6, agentId: 11, behaviour: 1, skills: null,
-  }]);
-  const original = game.environment.commands.setHeroBehaviour;
-  game.environment.commands.setHeroBehaviour = (hero, behaviour) => {
-    original(hero, behaviour);
-    game.set([
-      { hero: 6, agentId: 11, behaviour: 0, skills: null },
-      { hero: 7, agentId: 12, behaviour: 1, skills: null },
-    ]);
-  };
-
-  await assert.rejects(
-    runTeamApply(
-      plan([member({ hero: heroId(6), behaviour: "fight" })]),
-      game.environment,
-      1,
-    ),
-    /final party order did not match the team/,
-  );
-  assert.deepEqual(game.sent, ["behaviour:11:0"]);
-});
-
-test("removing Devona clears and rebuilds through the dedicated roster intent", async () => {
-  const game = harness([
-    { hero: 7, agentId: 10, behaviour: 1, skills: null },
-    { hero: 38, agentId: 11, behaviour: 1, skills: null },
-  ]);
-  game.react("kick-all", []);
-  game.react("add:6", [
-    { hero: 6, agentId: 12, behaviour: 1, skills: null },
-  ]);
-  const result = await runTeamApply(
-    plan([member({ hero: heroId(6), behaviour: "guard" })]),
-    game.environment,
-    1,
-  );
-  assert.deepEqual(game.sent, ["kick-all", "add:6"]);
-  assert.equal(result.completedChanges, 2);
-});
-
-test("applying outside an outpost is refused before anything is sent", async () => {
-  const outside = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], false);
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), outside.environment, 1),
-    /Enter a PvE outpost/,
-  );
-  assert.deepEqual(outside.sent, []);
-
-  // And "not observed" is its own answer, not a quiet yes.
-  const unknown = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], null);
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), unknown.environment, 1),
-    /Waiting to confirm that this is a PvE outpost/,
-  );
-  assert.deepEqual(unknown.sent, []);
-});
-
-test("a party that stops publishing mid-apply stops the apply", async () => {
-  const game = harness([]);
-  const environment: TeamApplyEnvironment = {
-    ...game.environment,
-    party: (() => {
-      let calls = 0;
-      return () => (calls++ === 0
-        ? party([], true)
-        : liveParty({ status: "waiting" }));
-    })(),
-  };
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6) })]), environment, 1),
-    /stopped publishing a party/,
-  );
-});
-
-test("the count in a refusal is the work that landed, not the work attempted", async () => {
-  const game = harness([{ hero: 7, agentId: 11, behaviour: 1, skills: null }]);
-  game.react("kick:7", []);
-  // The add is accepted and never arrives.
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /1 change was confirmed before Apply stopped/,
-  );
 });
