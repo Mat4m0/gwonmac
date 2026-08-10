@@ -1005,8 +1005,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const readTrace = instance.exports[build.commands.professionTrace.readerExport] as
       (pointer: number) => number;
     const trace = () => {
-      assert.equal(readTrace(64), 24);
-      return [...new Uint32Array(wasmMemory.buffer, 64, 24)];
+      assert.equal(readTrace(64), 26);
+      return [...new Uint32Array(wasmMemory.buffer, 64, 26)];
     };
 
     nativeProfession(77, 2);
@@ -1016,7 +1016,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       1, 0, 77, 2,
       0, 0, 0, 0,
-      1, 0, 999, 12,
+      1, 0, 999, 0, 0, 12,
       65, 77, 2, 0, 0, 0, 0, 0, 0, 0, 0,
     ]);
 
@@ -1031,7 +1031,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       2, 1, 88, 3,
       0, 0, 0, 0,
-      2, 1, 999, 12,
+      2, 1, 999, 0, 0, 12,
       65, 88, 3, 0, 0, 0, 0, 0, 0, 0, 0,
     ]);
 
@@ -1042,7 +1042,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       2, 1, 88, 3,
       1, 0, 77, 8,
-      3, 0, 999, 44,
+      3, 0, 999, 0, 0, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
     ]);
     assert.equal(enqueue(93, 77, 8, 256, 0), 1);
@@ -1054,7 +1054,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       2, 1, 88, 3,
       2, 1, 77, 8,
-      4, 1, 999, 44,
+      4, 1, 999, 0, 0, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
     ]);
   });
