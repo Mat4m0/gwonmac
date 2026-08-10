@@ -131,7 +131,9 @@ is meant to inherit the dead ends rather than walk back into them.
 - `geodc.arenanetworks.com` can return the datacenter sentinel `0.0.1.2`; raw
   DNS fallback is intentional.
 - Game infrastructure and web services use different allowlisted domains.
-  Unknown proxy routes fail closed.
+  Unknown proxy routes fail closed. The web-service proxy uses an
+  uncredentialed Chromium fetch and drops Cookie and Set-Cookie headers; it
+  must not acquire browser login state.
 - WASM packet views must be compacted before crossing `contextBridge`.
 - The main process owns TCP handles, backpressure, destination/port checks,
   owner cleanup, and final close semantics.

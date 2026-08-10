@@ -248,8 +248,11 @@ origin are outside that operation. The cleanup is one-way because the retired
 ciphertexts cannot be safely migrated without recreating the prompt it removes.
 
 The cookie-encryption fuse is disabled so Chromium never initializes a separate
-Safe Storage Keychain item. The game proxy drops `Cookie` and `Set-Cookie` in
-both directions, and browser cookies are also cleared at startup and quit.
+Safe Storage Keychain item. The game proxy asks Chromium for an uncredentialed
+fetch and also drops `Cookie` and `Set-Cookie` in both directions, so neither
+pre-existing browser state nor a WebGate response can become login authority.
+Browser cookies are still cleared at startup and quit as cleanup rather than as
+the proxy's security boundary.
 
 ## Distribution identities and signing
 

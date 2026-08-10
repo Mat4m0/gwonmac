@@ -368,6 +368,11 @@ async function handleProxy(
       method,
       headers: fwd,
       redirect: "manual",
+      // Header filtering protects this individual request. `omit` also tells
+      // Chromium not to attach HTTP auth/session credentials of its own and
+      // not to accept an upstream Set-Cookie into the default session. The
+      // proxy is stateless by construction rather than by startup cleanup.
+      credentials: "omit",
     };
     if (method !== "GET") {
       const declared = Number(request.headers.get("content-length") ?? 0);
