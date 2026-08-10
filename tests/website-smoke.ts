@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { EXTERNAL_URLS } from "../src/shared/contracts.ts";
 import {
   RELEASES_FALLBACK_URL,
-  SITE_RELEASE_CHANNEL,
   selectLatestRelease,
 } from "../apps/website/server/utils/release-select.ts";
 import { stopChildProcess } from "./helpers/child-process.ts";
@@ -83,19 +82,14 @@ const SNAPSHOTS = Array.from({ length: 25 }, (_, index) => ({
 
 // Nothing eligible never becomes a broken button: the answer falls back to the
 // releases page with no version claim attached.
-const FALLBACK = (channel: "stable" | "beta") => ({
-  channel,
+const FALLBACK = {
   version: null,
-  prerelease: null,
   url: RELEASES_FALLBACK_URL,
-});
+};
 
 // The resolved download is the notarized arm64 DMG, not its updater ZIP.
-assert.equal(SITE_RELEASE_CHANNEL, "stable");
-assert.deepEqual(selectLatestRelease([STABLE], SITE_RELEASE_CHANNEL), {
-  channel: "stable",
+assert.deepEqual(selectLatestRelease([STABLE], "stable"), {
   version: "0.0.3",
-  prerelease: false,
   url: ARM64_DMG.browser_download_url,
 });
 assert.deepEqual(
@@ -108,7 +102,7 @@ assert.deepEqual(
         "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/unrelated-arm64.dmg",
     }],
   }], "stable"),
-  FALLBACK("stable"),
+  FALLBACK,
 );
 assert.deepEqual(
   selectLatestRelease([{
@@ -118,14 +112,12 @@ assert.deepEqual(
       browser_download_url: "https://attacker.invalid/release.dmg",
     }],
   }], "stable"),
-  FALLBACK("stable"),
+  FALLBACK,
 );
 
 // Beta is explicit, includes release candidates, and never admits alpha.
 const BETA_ANSWER = {
-  channel: "beta",
   version: "0.0.4-rc.1",
-  prerelease: true,
   url: RC_ARM64_DMG.browser_download_url,
 };
 assert.deepEqual(
@@ -134,11 +126,11 @@ assert.deepEqual(
 );
 assert.deepEqual(
   selectLatestRelease([ALPHA], "beta"),
-  FALLBACK("beta"),
+  FALLBACK,
 );
 assert.deepEqual(
   selectLatestRelease([{ ...BETA, prerelease: false }], "beta"),
-  FALLBACK("beta"),
+  FALLBACK,
 );
 
 // Snapshots are public GitHub prereleases but never application versions. A
@@ -172,12 +164,10 @@ assert.deepEqual(
 
 // Stable remains the primary public download even when newer candidates exist.
 assert.deepEqual(selectLatestRelease([ALPHA, BETA, RC, STABLE], "stable"), {
-  channel: "stable",
   version: "0.0.3",
-  prerelease: false,
   url: ARM64_DMG.browser_download_url,
 });
-assert.deepEqual(selectLatestRelease([BETA, RC], "stable"), FALLBACK("stable"));
+assert.deepEqual(selectLatestRelease([BETA, RC], "stable"), FALLBACK);
 
 // Network ordering and network text are not version policy. A malformed stable
 // tag is ignored, and the greatest canonical stable version wins even when
@@ -194,30 +184,28 @@ const NEWER_STABLE = {
   assets: [NEWER_ARM64_DMG],
 };
 assert.deepEqual(
-  selectLatestRelease([{ ...STABLE, tag_name: "banana" }], SITE_RELEASE_CHANNEL),
-  FALLBACK("stable"),
+  selectLatestRelease([{ ...STABLE, tag_name: "banana" }], "stable"),
+  FALLBACK,
 );
-assert.deepEqual(selectLatestRelease([STABLE, NEWER_STABLE], SITE_RELEASE_CHANNEL), {
-  channel: "stable",
+assert.deepEqual(selectLatestRelease([STABLE, NEWER_STABLE], "stable"), {
   version: "2026.8.0",
-  prerelease: false,
   url: NEWER_ARM64_DMG.browser_download_url,
 });
 
 // A stable release whose macOS build has not finished uploading is skipped
 // rather than announced with a releases-page link under its version number.
 assert.deepEqual(
-  selectLatestRelease([{ ...STABLE, assets: [CHECKSUMS, SBOM] }], SITE_RELEASE_CHANNEL),
-  FALLBACK("stable"),
+  selectLatestRelease([{ ...STABLE, assets: [CHECKSUMS, SBOM] }], "stable"),
+  FALLBACK,
 );
 
 // Offline, rate-limited, or unreadable: `fetch` rejecting (`null`) and
 // GitHub's error object both reach the selector as something that is not an
 // array of releases.
-assert.deepEqual(selectLatestRelease(null, SITE_RELEASE_CHANNEL), FALLBACK("stable"));
+assert.deepEqual(selectLatestRelease(null, "stable"), FALLBACK);
 assert.deepEqual(
-  selectLatestRelease({ message: "API rate limit exceeded" }, SITE_RELEASE_CHANNEL),
-  FALLBACK("stable"),
+  selectLatestRelease({ message: "API rate limit exceeded" }, "stable"),
+  FALLBACK,
 );
 
 const host = "127.0.0.1";
@@ -397,13 +385,11 @@ try {
   // DMG when one is eligible, the releases page otherwise — always this repo.
   const latest = await load("/api/latest");
   assert.equal(latest.status, 200);
-  const answer = (await latest.json()) as { channel: string; url: string };
-  assert.equal(answer.channel, SITE_RELEASE_CHANNEL);
+  const answer = (await latest.json()) as { url: string };
   assert.match(answer.url, new RegExp(`^${EXTERNAL_URLS.releases}/`));
   const betaLatest = await load("/api/latest?channel=beta");
   assert.equal(betaLatest.status, 200);
-  const betaAnswer = (await betaLatest.json()) as { channel: string; url: string };
-  assert.equal(betaAnswer.channel, "beta");
+  const betaAnswer = (await betaLatest.json()) as { url: string };
   assert.match(betaAnswer.url, new RegExp(`^${EXTERNAL_URLS.releases}/`));
 } finally {
   await stopChildProcess(server);

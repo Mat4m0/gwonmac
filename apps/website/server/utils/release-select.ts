@@ -9,10 +9,8 @@
 // builds. Alpha and snapshot builds are never public acquisition candidates.
 
 import {
-  DEFAULT_UPDATE_TRACK,
   compareReleaseVersions,
   formatReleaseVersion,
-  isPrerelease,
   isReleaseEligibleForTrack,
   parseReleaseVersion,
   releaseMetadataMatchesStage,
@@ -29,10 +27,6 @@ export const RELEASES_FALLBACK_URL = `https://github.com/${RELEASE_REPO}/release
 // Snapshot tags are not release versions and fail the pattern below. Fetch the
 // API maximum so a page of snapshots cannot hide the latest valid release.
 export const GITHUB_API_URL = `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=100`;
-
-export type SiteReleaseChannel = UpdateTrack;
-
-export const SITE_RELEASE_CHANNEL: SiteReleaseChannel = DEFAULT_UPDATE_TRACK;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -55,17 +49,15 @@ function appleSiliconDmg(
 }
 
 export interface LatestRelease {
-  channel: SiteReleaseChannel;
   /** Canonical version text, or null when nothing eligible was found. */
   version: string | null;
-  prerelease: boolean | null;
   /** Direct DMG download when found, the releases page otherwise. */
   url: string;
 }
 
 export function selectLatestRelease(
   payload: unknown,
-  channel: SiteReleaseChannel,
+  track: UpdateTrack,
 ): LatestRelease {
   let selected: { version: ReleaseVersion; url: string } | null = null;
   if (Array.isArray(payload)) {
@@ -76,7 +68,7 @@ export function selectLatestRelease(
       if (!version || typeof tag !== "string") continue;
       if (typeof release.prerelease !== "boolean") continue;
       if (!releaseMetadataMatchesStage(version, release.prerelease)) continue;
-      if (!isReleaseEligibleForTrack(version, channel)) continue;
+      if (!isReleaseEligibleForTrack(version, track)) continue;
       const url = appleSiliconDmg(release, tag, version);
       if (!url) continue;
       if (!selected || compareReleaseVersions(version, selected.version) > 0) {
@@ -86,10 +78,8 @@ export function selectLatestRelease(
   }
   return selected
     ? {
-        channel,
         version: formatReleaseVersion(selected.version),
-        prerelease: isPrerelease(selected.version),
         url: selected.url,
       }
-    : { channel, version: null, prerelease: null, url: RELEASES_FALLBACK_URL };
+    : { version: null, url: RELEASES_FALLBACK_URL };
 }
