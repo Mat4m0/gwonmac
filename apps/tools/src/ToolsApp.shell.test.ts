@@ -267,6 +267,4 @@ describe("ToolsApp shell and library", () => {
     ).toBe("true");
     wrapper.unmount();
   });
-
 });
-
