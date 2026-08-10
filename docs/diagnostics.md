@@ -340,7 +340,9 @@ change for investigation. The canary does not prove:
   one — a non-default path since the setting started defaulting to `true`;
 
 Those are explicit live release gates, not assumptions hidden behind unit
-tests.
+tests. The release approver executes them and records exact build, hardware,
+client hash, and evidence using the
+[release-only canary record](release-verification.md#release-only-canary-record).
 
 Enhancement development uses the layered, cached-safe workflow in
 `docs/enhancement-development.md`. Unknown client hashes always use the official

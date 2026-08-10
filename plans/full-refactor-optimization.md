@@ -168,7 +168,7 @@ boundary.
 | Settings decision ownership | unit plus focused Electron story | Electron suite |
 | Source/import/bridge boundaries | policy/type tests | ordinary check |
 | Signed identity/Keychain/notarization | signed package workflow | release only |
-| Live account/client/update behavior | owned canary checklist | release/patch day only |
+| Live account/client/update behavior | [owned release-only canary record](../docs/release-verification.md#release-only-canary-record) | release/patch day only |
 
 Ordinary local targets remain:
 
@@ -216,7 +216,11 @@ Deferred means absent from the program, not partially scaffolded.
 ## External release operations
 
 Code can be complete before these operations are possible, but Beta must not be
-advertised as safely returnable until all applicable gates pass:
+advertised as safely returnable until the pre-publication gates and bounded
+post-publication certification checks pass:
+
+The release approver executes and records these operations using the
+[release-only canary record](../docs/release-verification.md#release-only-canary-record).
 
 1. publish Stable enabler `S0` with the selector and stable-readable contract;
 2. build a newer `B1` under the same release identity;

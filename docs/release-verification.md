@@ -109,6 +109,66 @@ continuity only. When Electron, Chromium, or the filesystem/persistence
 contract changes, the release also round-trips a real template through the
 production Emscripten IDBFS boundary.
 
+## Release-only canary record
+
+The person approving the GitHub `release` environment owns these checks. They
+must record the evidence in a `Verification` section of the matching GitHub
+release notes; a private note or an unlinked local run is not release evidence.
+Record the release-workflow URL, exact application versions and
+`CFBundleVersion` values, DMG and ZIP SHA-256 values, tested macOS/hardware, and
+the ArenaNet module SHA-256 when a live client is involved. A failed or missing
+pre-publication item blocks that release. Post-publication updater checks are
+certification, not gates that pretend the build is still private; their bounded
+response is defined below. Neither case creates a fallback updater or weakens
+the check.
+
+For the first public Beta sequence, name the exact Stable enabler `S0`, newer
+Beta candidate `B1`, and matching final Stable `S1`. Later beta/RC candidates
+use the same candidate checklist with the latest published Stable as both the
+starting and returning version.
+
+- **Before every public beta/RC:** the approval-gated signed package job must pass
+  `S0 → candidate → the same S0`. The candidate version must be newer,
+  each launched app must report the expected version, and settings,
+  Builds/Teams with tags/order/references, window state, and profile-origin
+  browser storage must survive a read-modify-write in all three launches with
+  no quarantine, reset, or game-data redownload. When
+  Electron, Chromium, or persistence changes, also save and reload a real
+  template through production IDBFS and exercise the real Keychain boundary.
+- **Within 30 minutes after publishing a beta/RC:** on one release-identity Stable install with
+  Beta enabled, the production updater must select and install that exact
+  candidate. The app must reopen under the same bundle ID, profile, and
+  Keychain identity. With saved login enabled for the canary account, the
+  account must remain available and complete login without credential re-entry.
+  Record the installed version and workflow/release URL.
+- **Within 30 minutes after publishing the matching Stable:** one installed beta/RC must receive
+  and install exact `S1` through the production updater, preserving the same
+  identity and player data; the same saved-login observation must pass. No
+  automatic older-Stable downgrade is tested or supported.
+- **Before every release:** use the finite release hardware matrix: a MacBook Air
+  (M1, 8 GB) on the oldest supported macOS and a Mac mini (M4, 16 GB) on the
+  newest supported macOS. On each, the canary account must reach a playable
+  character and enter a zone without an authentication loop or crash; the
+  launcher and game must render continuously for ten minutes without a black
+  surface, GPU-process crash, context loss, or persistent corruption. When the
+  release claims Enhancement for ArenaNet's current module, Tools must report
+  the matching client fingerprint, show the observed player/party rather than
+  `unavailable`, and capture a team successfully; any refused or partial
+  capability fails this observation. Record pass/fail, macOS and hardware,
+  client hash, and any diagnostic report fingerprint; never record credentials
+  or game traffic.
+
+The release may publish only when every applicable pre-publication item is
+present and passing. It is certified for announcement/promotion only after its
+post-publication updater check is also recorded as passing. If that check fails,
+the approver stops announcement and promotion immediately. A failed beta/RC is
+returned to draft so the single release selector no longer discovers it. If any
+failed build may already have installed—or if a final Stable fails—the recovery
+is a higher corrective release; assets are never replaced in place and players
+are never automatically downgraded. `Not applicable` must name the unchanged
+boundary (for example, no Electron/persistence change); it is not a substitute
+for the recurring Stable/candidate round-trip or updater checks.
+
 ## Verify the downloaded files
 
 Download the DMG, ZIP, `RELEASES.json`, `SHA256SUMS.txt`, and `.spdx.json` from the same
