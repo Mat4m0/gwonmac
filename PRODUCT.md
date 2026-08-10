@@ -88,9 +88,9 @@ public claim to something that executes, and its rule is the product rule: **a
 public claim with no row does not ship, and a row whose proof reads _none_ is a
 claim to narrow or delete, not a claim to explain.**
 
-Two website capability claims — "up to 60 FPS, tuned for Apple Silicon" and
-"up to 4K" — have no proof today. They get narrowed to what the render-scale
-and packaging tests establish, or dropped. Measured frame rates live in
+The former website FPS and fixed-resolution promises had no proof and have
+been removed. Public copy now says only what the render-scale and arm64
+packaging tests establish. Measured frame rates live in
 [`docs/performance-electron.md`](docs/performance-electron.md) as evidence from
 specific machines, never as a promise.
 

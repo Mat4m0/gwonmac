@@ -233,6 +233,10 @@ try {
     /https:\/\/plausible\.io\/js\/pa--X4qMlLVyMnUW4L8emwE_\.js/,
   );
   assert.match(html, /window\.plausible\.init\(\)/);
+  assert.match(html, /selectable render scale/i);
+  assert.match(html, /built for Apple Silicon/i);
+  assert.doesNotMatch(html, /(?:60|120)\s*(?:–|-|to)?\s*(?:120\s*)?FPS/i);
+  assert.doesNotMatch(html, /(?:4K|5K)/i);
 
   // Hero and final CTA.
   assert.equal(downloadLinks(html).length, 2);
