@@ -546,8 +546,12 @@ unsafe fn collect(
                 unlock[word] |= bit;
                 unlock[2 + word] |= bit;
             }
-            // Professions reach the roster by hero id: the party member does
-            // not carry them, and this record does.
+            // HeroInfo is account metadata. It supplies professions for the
+            // account-wide hero facts and is a safe roster fallback only when
+            // the canonical live profession-state table had no row for this
+            // agent. Overwriting a live row here serves the hero's previous
+            // secondary after an in-game change and makes Apply skip the very
+            // profession command it needs to send.
             if layout.info_primary != 0 {
                 let packed =
                     pack_professions(unsafe { field(entry, layout.info_primary) }?, unsafe {
@@ -558,7 +562,10 @@ unsafe fn collect(
                         account_professions[hero_id as usize] = packed;
                     }
                     for hero in heroes.iter_mut() {
-                        if hero.flags & SLOT_OCCUPIED != 0 && hero.hero_id == hero_id {
+                        if hero.flags & SLOT_OCCUPIED != 0
+                            && hero.flags & SLOT_PROFESSIONS == 0
+                            && hero.hero_id == hero_id
+                        {
                             hero.professions = packed;
                             hero.flags |= SLOT_PROFESSIONS;
                         }

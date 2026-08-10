@@ -391,6 +391,47 @@ describe("Companion kernel", () => {
     });
   });
 
+  it("keeps live hero professions ahead of stale account metadata", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+
+    // HeroInfo still says W/R, while the live agent-keyed profession table has
+    // moved Devona to W/N. This is the exact shape observed in the client after
+    // changing a hero's secondary profession in the party window.
+    kernel.view.setUint32(
+      ADDRESSES.professionStateBuffer + 8,
+      4,
+      true,
+    );
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const party = readyParty(kernel.party());
+    assert.deepEqual(party.slots[1]?.professions, [1, 4]);
+    assert.deepEqual(
+      party.accountProfessions?.find((entry) => entry.hero === 1)?.professions,
+      [1, 2],
+      "HeroInfo remains the account-wide fallback",
+    );
+
+    // Profession changes have no certified party-dirty message. The bounded
+    // reconciliation must still replace the live value within two seconds,
+    // and the unchanged HeroInfo row must not overwrite it again.
+    const sequence = party.sequence;
+    kernel.view.setUint32(
+      ADDRESSES.professionStateBuffer + 8,
+      5,
+      true,
+    );
+    for (let tick = 0; tick < 119; tick += 1) kernel.tick();
+    assert.equal(readyParty(kernel.party()).sequence, sequence);
+    kernel.tick();
+    const changed = readyParty(kernel.party());
+    assert.ok(changed.sequence > sequence);
+    assert.deepEqual(changed.slots[1]?.professions, [1, 5]);
+  });
+
   it("keeps character unlocks when the account table fails closed", async () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
