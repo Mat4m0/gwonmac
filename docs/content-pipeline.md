@@ -149,8 +149,11 @@ beta and RC release downloads the latest published signed Stable, launches it
 against a disposable profile, launches the exact signed candidate, then
 launches the same Stable again. Settings, Builds, Teams, tags/references,
 window state, and origin-owned profile storage must remain semantically
-readable and writable with no quarantine or reset. This is a release-only gate,
-not part of `pnpm check`. A first beta therefore cannot ship until a Stable
-containing the selector and this data contract has already shipped. Native
-update-path/Keychain continuity is re-run when those dependencies or identities
-change; it is not duplicated on every beta.
+readable and writable with no quarantine or reset. That browser-store probe
+proves origin continuity; it does not claim to exercise Emscripten IDBFS. A
+real game-IDBFS/template round-trip is added when Electron, Chromium, or the
+filesystem/persistence contract changes. This is a release-only gate, not part
+of `pnpm check`. A first beta therefore cannot ship until a Stable containing
+the selector and this data contract has already shipped. Native update-path and
+Keychain continuity are likewise re-run when those dependencies or identities
+change; they are not duplicated on every beta.

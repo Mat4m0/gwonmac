@@ -104,7 +104,10 @@ candidate → the same Stable semantic round-trip. Both binaries must read,
 modify, and rewrite settings, Builds/Teams with tags and references, window
 state, and profile-origin browser storage without quarantine or reset. A beta
 therefore cannot be the first build carrying its own selector: a Stable
-enabler must already be published.
+enabler must already be published. The browser-store probe establishes origin
+continuity only. When Electron, Chromium, or the filesystem/persistence
+contract changes, the release also round-trips a real template through the
+production Emscripten IDBFS boundary.
 
 ## Verify the downloaded files
 

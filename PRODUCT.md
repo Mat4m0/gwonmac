@@ -53,8 +53,10 @@ Returning to Stable is truthful rather than magical. A matching final Stable
 is a normal forward update; when the latest Stable is older than the installed
 Beta, the app opens the fixed Releases page for a manual signed/notarized DMG
 install. It never asks the native updater to downgrade. Every public beta and
-RC is release-gated on the latest Stable reading and rewriting its canonical
-player data after the candidate has changed it.
+RC is release-gated on the latest Stable reading and rewriting the durable
+state covered by the recurring proof: settings, Builds and Teams, window state,
+and origin-owned browser storage. A real game-IDBFS/template round-trip is also
+required whenever Electron, Chromium, or the filesystem contract changes.
 
 The required product boundary is that Build and Team authoring is host-owned
 while observations and Apply are exact-client capabilities. Host authoring

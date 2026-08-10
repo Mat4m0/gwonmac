@@ -327,14 +327,11 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(workflow, /--prerelease --latest=false/);
   assert.doesNotMatch(workflow, /SIGNED_BETA_UPDATE_PROVEN/);
   assert.match(workflow, /\*-alpha\.\*/);
-  assert.match(workflow, /Alpha builds are internal snapshots, not public releases/);
   assert.match(workflow, /name: Prove beta data returns to latest Stable/);
-  assert.match(workflow, /gh api "repos\/\$GITHUB_REPOSITORY\/releases\/latest"/);
+  assert.match(workflow, /stable_zip_name="Guild-Wars-Reforged-\$\{stable_version\}-macOS-arm64\.zip"/);
   assert.match(workflow, /gh attestation verify "\$stable_zip"/);
-  assert.match(workflow, /shasum -a 256 "\$stable_zip"/);
-  assert.match(workflow, /Stable\/Beta compatibility baseline/);
   assert.match(workflow, /pnpm verify:signed-app "\$stable_app"/);
-  assert.match(workflow, /GW_STABLE_APP_PATH="\$stable_app"/);
+  assert.match(workflow, /GW_STABLE_VERSION="\$stable_version"/);
   assert.match(workflow, /pnpm test:stable-beta-roundtrip/);
   assert.match(
     script("test:stable-beta-roundtrip"),

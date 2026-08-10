@@ -26,7 +26,10 @@ import {
 } from "../src/shared/builds/library.ts";
 import type { AppSettings } from "../src/shared/contracts.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
-import { parseReleaseVersion } from "../src/shared/release.ts";
+import {
+  compareReleaseVersions,
+  parseReleaseVersion,
+} from "../src/shared/release.ts";
 import {
   closePackagedApp,
   launchPackagedApp,
@@ -34,6 +37,7 @@ import {
 } from "../tests/helpers/packaged-app.ts";
 
 const stableApp = process.env.GW_STABLE_APP_PATH;
+const stableVersion = process.env.GW_STABLE_VERSION;
 const candidateApp = process.env.GW_CANDIDATE_APP_PATH;
 const candidateVersion = process.env.GW_CANDIDATE_VERSION;
 if (
@@ -44,10 +48,14 @@ if (
     "the Stable/Beta round-trip requires an ephemeral release runner or GW_ALLOW_LOCAL_STABLE_BETA_TEST=1",
   );
 }
-if (!stableApp || !candidateApp || !candidateVersion) {
+if (!stableApp || !stableVersion || !candidateApp || !candidateVersion) {
   throw new Error(
-    "GW_STABLE_APP_PATH, GW_CANDIDATE_APP_PATH, and GW_CANDIDATE_VERSION are required",
+    "GW_STABLE_APP_PATH, GW_STABLE_VERSION, GW_CANDIDATE_APP_PATH, and GW_CANDIDATE_VERSION are required",
   );
+}
+const parsedStable = parseReleaseVersion(stableVersion);
+if (!parsedStable || parsedStable.channel !== "stable") {
+  throw new Error("GW_STABLE_VERSION must name an exact Stable release");
 }
 const parsedCandidate = parseReleaseVersion(candidateVersion);
 if (
@@ -55,6 +63,11 @@ if (
   || (parsedCandidate.channel !== "beta" && parsedCandidate.channel !== "rc")
 ) {
   throw new Error("the Stable/Beta round-trip runs only for a beta or RC candidate");
+}
+if (compareReleaseVersions(parsedCandidate, parsedStable) <= 0) {
+  throw new Error(
+    `candidate ${candidateVersion} must be newer than Stable ${stableVersion}`,
+  );
 }
 
 const productName = DISTRIBUTION_CHANNEL_CONFIG.release.productName;
@@ -116,9 +129,9 @@ async function windowSize(page: Page): Promise<{ width: number; height: number }
 
 /**
  * Exercise origin-owned browser storage with both embedded Chromium versions.
- * The game uses IndexedDB through Emscripten IDBFS at this same `gw://app`
- * origin; a full live-client IDBFS run is added only when Electron or the
- * filesystem contract changes.
+ * This proves origin continuity, not Emscripten's IDBFS schema or filesystem
+ * calls. A real IDBFS/template round-trip is a separate release gate whenever
+ * Electron, Chromium, or the filesystem/persistence contract changes.
  */
 async function roundTripProfileStore(
   page: Page,
@@ -214,10 +227,14 @@ let running: RunningPackagedApp | null = null;
 try {
   console.log("stable/beta compatibility: latest Stable creates canonical state");
   running = await launch(stableApp);
-  const stableVersion = (await running.page.evaluate(
+  const launchedStableVersion = (await running.page.evaluate(
     () => window.gwNative.appUpdates.getState(),
   )).currentVersion;
-  assert.equal(parseReleaseVersion(stableVersion)?.channel, "stable");
+  assert.equal(
+    launchedStableVersion,
+    stableVersion,
+    "the downloaded latest-Stable ZIP launched a different version",
+  );
   const stableSettings = await running.page.evaluate(() =>
     window.gwNative.settings.set({
       autoCheckUpdates: false,
@@ -239,6 +256,13 @@ try {
 
   console.log("stable/beta compatibility: candidate reads, modifies, and writes");
   running = await launch(candidateApp);
+  assert.equal(
+    (await running.page.evaluate(
+      () => window.gwNative.appUpdates.getState(),
+    )).currentVersion,
+    candidateVersion,
+    "the signed candidate app launched a different version",
+  );
   const candidateInitial = await readCanonical(running.page);
   assert.equal(candidateInitial.recovered, false);
   assert.equal(candidateInitial.settings.updateTrack, "beta");
@@ -265,6 +289,13 @@ try {
 
   console.log("stable/beta compatibility: the same Stable reads and writes again");
   running = await launch(stableApp);
+  assert.equal(
+    (await running.page.evaluate(
+      () => window.gwNative.appUpdates.getState(),
+    )).currentVersion,
+    stableVersion,
+    "the return launch did not use the exact Stable baseline",
+  );
   const returned = await readCanonical(running.page);
   assert.equal(returned.recovered, false);
   assert.equal(returned.settings.showDiagnostics, true);

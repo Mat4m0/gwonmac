@@ -241,9 +241,13 @@ jobs:
           stable_dir="$RUNNER_TEMP/latest-stable"
           mkdir -p "$stable_dir"
           stable_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
-          test -n "$stable_tag"
+          case "$stable_tag" in
+            v*) stable_version="${stable_tag#v}" ;;
+            *) echo "Latest Stable tag is not canonical: $stable_tag" >&2; exit 1 ;;
+          esac
+          stable_zip_name="Guild-Wars-Reforged-${stable_version}-macOS-arm64.zip"
           gh release download "$stable_tag" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'Guild-Wars-Reforged-*-macOS-arm64.zip' \
+            --pattern "$stable_zip_name" \
             --dir "$stable_dir"
           stable_zip_count="$(find "$stable_dir" -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')"
           test "$stable_zip_count" = "1"
@@ -257,11 +261,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           ditto -x -k "$stable_zip" "$stable_dir/unpacked"
           stable_app="$stable_dir/unpacked/Guild Wars Reforged.app"
+          candidate_count="$(find out -name 'Guild Wars Reforged.app' -type d | wc -l | tr -d ' ')"
+          test "$candidate_count" = "1"
           candidate_app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
           test -d "$stable_app"
           test -d "$candidate_app"
           pnpm verify:signed-app "$stable_app"
           GW_STABLE_APP_PATH="$stable_app" \
+          GW_STABLE_VERSION="$stable_version" \
           GW_CANDIDATE_APP_PATH="$candidate_app" \
           GW_CANDIDATE_VERSION="$VERSION" \
             pnpm test:stable-beta-roundtrip
