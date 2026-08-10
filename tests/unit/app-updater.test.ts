@@ -382,6 +382,32 @@ describe("application updater", () => {
     }
   });
 
+  it("refuses a release whose only ZIP is not the exact arm64 package", async () => {
+    const version = "2026.7.0-beta.2";
+    const tag = `v${version}`;
+    const f = fixture({
+      fetch: async () => response([release(version, {
+        assets: [
+          {
+            name: "RELEASES.json",
+            browser_download_url: `${repo}/releases/download/${tag}/RELEASES.json`,
+          },
+          {
+            name: `Guild-Wars-Reforged-${version}-macOS-x64.zip`,
+            browser_download_url:
+              `${repo}/releases/download/${tag}/Guild-Wars-Reforged-${version}-macOS-x64.zip`,
+          },
+        ],
+      })]),
+    });
+
+    await f.updater.check("beta");
+
+    const state = f.updater.getState();
+    assert.equal(state.phase === "failed" && state.reason, "feed-invalid");
+    assert.equal(f.nativeChecks(), 0);
+  });
+
   it("never presents transport failure as up to date", async () => {
     const f = fixture({
       fetch: async () => {

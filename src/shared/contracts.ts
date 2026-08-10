@@ -29,8 +29,15 @@ import type {
   EnhancementSelection,
 } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
+import {
+  DEFAULT_UPDATE_TRACK,
+  UPDATE_TRACKS,
+  type UpdateTrack,
+} from "./release.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
+export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
+export type { UpdateTrack };
 
 export type BuildKind = "jspi";
 
@@ -279,9 +286,6 @@ export interface ClockSyncResponse {
 export const UI_STYLES = ["guild-wars", "obsidian"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
 
-export const UPDATE_TRACKS = ["stable", "beta"] as const;
-export type UpdateTrack = (typeof UPDATE_TRACKS)[number];
-
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
   /** The visual treatment applied to every GWonMac panel. */
@@ -348,7 +352,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
-  updateTrack: "stable",
+  updateTrack: DEFAULT_UPDATE_TRACK,
   lastUpdateCheckAt: null,
   compatibilityNoticeSeenFor: null,
 };

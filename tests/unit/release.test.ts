@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  DEFAULT_UPDATE_TRACK,
+  UPDATE_TRACKS,
   compareReleaseVersions,
   formatReleaseVersion,
   isPrerelease,
+  isReleaseEligibleForTrack,
   parseReleaseVersion,
+  releaseMetadataMatchesStage,
   type ReleaseVersion,
 } from "../../src/shared/release.ts";
 
@@ -132,5 +136,28 @@ describe("release version ordering", () => {
     assert.equal(isPrerelease(parsed("2026.7.0-alpha.1")), true);
     assert.equal(isPrerelease(parsed("2026.7.0-beta.1")), true);
     assert.equal(isPrerelease(parsed("2026.7.0-rc.1")), true);
+  });
+});
+
+describe("public release tracks", () => {
+  it("keeps Stable as the default and never makes alpha public", () => {
+    assert.deepEqual(UPDATE_TRACKS, ["stable", "beta"]);
+    assert.equal(DEFAULT_UPDATE_TRACK, "stable");
+    const eligibility = (version: string, track: "stable" | "beta") =>
+      isReleaseEligibleForTrack(parsed(version), track);
+    assert.equal(eligibility("1.0.0-alpha.1", "beta"), false);
+    assert.equal(eligibility("1.0.0-beta.1", "stable"), false);
+    assert.equal(eligibility("1.0.0-rc.1", "stable"), false);
+    assert.equal(eligibility("1.0.0", "stable"), true);
+    assert.equal(eligibility("1.0.0-beta.1", "beta"), true);
+    assert.equal(eligibility("1.0.0-rc.1", "beta"), true);
+    assert.equal(eligibility("1.0.0", "beta"), true);
+  });
+
+  it("requires GitHub prerelease metadata to match the tag", () => {
+    assert.equal(releaseMetadataMatchesStage(parsed("1.0.0"), false), true);
+    assert.equal(releaseMetadataMatchesStage(parsed("1.0.0"), true), false);
+    assert.equal(releaseMetadataMatchesStage(parsed("1.0.0-beta.1"), true), true);
+    assert.equal(releaseMetadataMatchesStage(parsed("1.0.0-beta.1"), false), false);
   });
 });

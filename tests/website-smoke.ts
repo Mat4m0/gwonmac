@@ -98,6 +98,28 @@ assert.deepEqual(selectLatestRelease([STABLE], SITE_RELEASE_CHANNEL), {
   prerelease: false,
   url: ARM64_DMG.browser_download_url,
 });
+assert.deepEqual(
+  selectLatestRelease([{
+    ...STABLE,
+    assets: [{
+      ...ARM64_DMG,
+      name: "unrelated-arm64.dmg",
+      browser_download_url:
+        "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/unrelated-arm64.dmg",
+    }],
+  }], "stable"),
+  FALLBACK("stable"),
+);
+assert.deepEqual(
+  selectLatestRelease([{
+    ...STABLE,
+    assets: [{
+      ...ARM64_DMG,
+      browser_download_url: "https://attacker.invalid/release.dmg",
+    }],
+  }], "stable"),
+  FALLBACK("stable"),
+);
 
 // Beta is explicit, includes release candidates, and never admits alpha.
 const BETA_ANSWER = {

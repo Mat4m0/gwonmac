@@ -7,8 +7,8 @@
  * gates are provable without running a timer; an open game socket defers a
  * check because a Squirrel download must not compete with live game traffic.
  *
- * Only a package carrying the release marker may reach Squirrel.Mac. A
- * The selected Stable/Beta track is read once per check. Stable admits only
+ * Only a package carrying the release marker may reach Squirrel.Mac. The
+ * selected Stable/Beta track is read once per check. Stable admits only
  * stable releases; Beta additionally admits beta and RC releases. Alpha is
  * never eligible. The separately signed Preview tester app cannot reach this
  * owner. A ready update waits for a restart rather than taking one.
@@ -16,15 +16,17 @@
 import type {
   AppUpdateErrorCode,
   AppUpdateState,
-  UpdateTrack,
 } from "../shared/contracts.js";
 import { RELEASE_REPO } from "../shared/contracts.js";
 import { releaseAssetUrl } from "../shared/project-identity.js";
 import {
   compareReleaseVersions,
   formatReleaseVersion,
+  isReleaseEligibleForTrack,
   parseReleaseVersion,
+  releaseMetadataMatchesStage,
   type ReleaseVersion,
+  type UpdateTrack,
 } from "../shared/release.js";
 import { redactDiagnosticText } from "./diagnostics/text-scan.js";
 
@@ -443,13 +445,11 @@ function parseCandidates(
     const version = parseReleaseVersion(tag);
     if (!version) continue;
     if (typeof value.prerelease !== "boolean") continue;
-    const prerelease = version.channel !== "stable";
     // GitHub metadata and the canonical tag must describe the same release.
     // Refusing disagreement prevents an incorrectly flagged alpha or stable
     // build from crossing the selected-track boundary.
-    if (value.prerelease !== prerelease) continue;
-    if (version.channel === "alpha") continue;
-    if (track === "stable" && version.channel !== "stable") continue;
+    if (!releaseMetadataMatchesStage(version, value.prerelease)) continue;
+    if (!isReleaseEligibleForTrack(version, track)) continue;
     const canonical = formatReleaseVersion(version);
     if (versions.has(canonical)) return null;
     versions.add(canonical);

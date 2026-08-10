@@ -1,11 +1,11 @@
 /**
  * One parse, one comparison, one channel policy for this project's releases.
  *
- * Three places currently answer "is that version newer than this one, and may
- * it be offered?" and they disagree: the update/mismatch check in main, the
- * website's download resolver, and the release workflow's own tag validation.
- * A disagreement here is user-visible — an install told it is up to date when
- * it is not, or a download button pointing at a prerelease.
+ * The application updater and website download resolver both consume these
+ * rules. They keep their own transport and asset validation, but neither gets
+ * to redefine what a release version means or which stages a track admits.
+ * A disagreement there would be user-visible: an install told it is current
+ * while the website offers something else.
  *
  * SemVer only. The versioning *scheme* (CalVer semantics in SemVer syntax) is a
  * product decision owned by scripts/macos-version.ts and the release workflow;
@@ -15,6 +15,10 @@
  */
 
 export type ReleaseChannel = "alpha" | "beta" | "rc" | "stable";
+
+export const UPDATE_TRACKS = ["stable", "beta"] as const;
+export type UpdateTrack = (typeof UPDATE_TRACKS)[number];
+export const DEFAULT_UPDATE_TRACK: UpdateTrack = "stable";
 
 export interface ReleaseVersion {
   readonly major: number;
@@ -82,6 +86,23 @@ export function compareReleaseVersions(
 
 export function isPrerelease(version: ReleaseVersion): boolean {
   return version.channel !== "stable";
+}
+
+/** GitHub's release flag must describe the same stage as the canonical tag. */
+export function releaseMetadataMatchesStage(
+  version: ReleaseVersion,
+  prerelease: boolean,
+): boolean {
+  return prerelease === isPrerelease(version);
+}
+
+/** Alpha remains private; Beta adds beta/RC while always admitting Stable. */
+export function isReleaseEligibleForTrack(
+  version: ReleaseVersion,
+  track: UpdateTrack,
+): boolean {
+  return version.channel !== "alpha"
+    && (track === "beta" || version.channel === "stable");
 }
 
 /** Canonical text: no `v`, and the prerelease only when there is one. */
