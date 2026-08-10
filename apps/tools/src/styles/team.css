@@ -14,7 +14,7 @@
   display: grid;
   min-height: 54px;
   padding: var(--ui-space-2);
-  grid-template-columns: 18px 160px minmax(190px, 1fr) minmax(150px, 1fr) 96px;
+  grid-template-columns: 18px 160px minmax(190px, 1fr) minmax(150px, 1fr) 96px auto;
   align-items: start;
   gap: var(--ui-space-2);
   border: 1px solid transparent;
@@ -32,7 +32,14 @@
 
 .team-slots > li.team-slot--compact:not(:focus-within) {
   min-height: 46px;
-  grid-template-columns: 18px minmax(180px, 1fr) auto;
+  grid-template-columns: 18px minmax(180px, 1fr) auto auto;
+}
+
+.team-slots > li.team-slot--dragging { opacity: 0.42; }
+.team-slots > li.team-slot--drop-target {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--ui-accent) 12%, transparent);
 }
 
 .team-slot--compact:not(:focus-within) .build-picker,
@@ -121,6 +128,24 @@
 }
 .behavior-picker,
 .behavior-picker select { min-width: 0; width: 100%; }
+
+.team-member-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+
+.team-member-actions .ui-button[data-icon] {
+  width: 28px;
+  min-width: 28px;
+  min-height: var(--ui-control-height);
+  padding: 0;
+}
+
+.team-move-handle { cursor: grab; touch-action: none; }
+.team-move-handle:active { cursor: grabbing; }
+.team-remove-member:hover,
+.team-remove-member:focus-visible { color: var(--ui-danger); }
 
 .team-title-line {
   display: grid;
@@ -382,14 +407,14 @@
 
 @container detail-pane (max-width: 720px) {
   .team-slots > li {
-    grid-template-columns: 18px minmax(130px, 0.8fr) minmax(180px, 1.2fr) 96px;
+    grid-template-columns: 18px minmax(130px, 0.8fr) minmax(180px, 1.2fr) 96px auto;
   }
 
   .team-slots .skill-bar,
   .team-slots .empty-bar { display: none; }
 
   .team-slots > li.team-slot--compact:not(:focus-within) {
-    grid-template-columns: 18px minmax(130px, 1fr) auto;
+    grid-template-columns: 18px minmax(130px, 1fr) auto auto;
   }
 }
 
@@ -402,7 +427,7 @@
     justify-content: flex-end;
   }
   .team-slots > li {
-    grid-template-columns: 18px minmax(0, 1fr) 96px;
+    grid-template-columns: 18px minmax(0, 1fr) 96px auto;
     align-items: start;
   }
 
@@ -412,12 +437,13 @@
   .hero-cell { grid-column: 2; }
   .behavior-picker { grid-column: 3; }
   .build-picker {
-    grid-column: 2 / -1;
+    grid-column: 2 / 4;
     grid-row: 2;
   }
+  .team-member-actions { grid-column: 4; grid-row: 1; }
 
   .team-slots > li.team-slot--compact:not(:focus-within) {
-    grid-template-columns: 18px minmax(0, 1fr) auto;
+    grid-template-columns: 18px minmax(0, 1fr) auto auto;
   }
 
   .team-controls { align-items: stretch; flex-direction: column; }

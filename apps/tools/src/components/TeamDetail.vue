@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import {
-  HEROES_IN_PANEL_ORDER,
-  PROFESSIONS,
-  heroLabel,
-} from "../../../../src/shared/builds/heroes";
+import { HEROES_IN_PANEL_ORDER, PROFESSIONS, heroLabel } from "../../../../src/shared/builds/heroes";
 import {
   buildById,
   buildId,
@@ -21,12 +17,10 @@ import {
   type TeamApplyProblem,
   type TeamApplyRuntimeProblem,
 } from "../../../../src/shared/builds/team-apply";
-import {
-  teamMemberLabel,
-  type Team,
-} from "../model";
+import { teamMemberLabel, type Team } from "../model";
 import SkillBar from "./SkillBar.vue";
 import TagEditor from "./TagEditor.vue";
+import { useTeamRoster } from "../use-team-roster";
 
 const props = defineProps<{
   team: Team;
@@ -45,6 +39,23 @@ const shareCode = ref("");
 const shareProblem = ref("");
 const shareStatus = ref("");
 const shareCodeInput = ref<HTMLTextAreaElement | null>(null);
+const roster = useTeamRoster(() => props.team, props.controller.updateTeam);
+const {
+  announcement: rosterAnnouncement,
+  asPosition: asTeamPosition,
+  chooseHero,
+  draggedMember,
+  drop: dropMember,
+  dropTarget,
+  endDrag: endMemberDrag,
+  enterDropTarget: enterMemberDropTarget,
+  fixOrder: fixTeamOrder,
+  isConfigured: configuredHeroSlot,
+  isCompactEmpty: compactEmptySlot,
+  moveByKeyboard: moveMemberByKeyboard,
+  remove: removeMember,
+  startDrag: startMemberDrag,
+} = roster;
 watch(
   () => props.team.id,
   () => {
@@ -476,11 +487,9 @@ const buildOptionGroups = (index: number): BuildOptionGroup[] => {
   });
 };
 
-const compactEmptySlot = (slot: TeamSlot, index: number): boolean =>
-  index > 0
-  && slot.hero === null
-  && slot.build === null
-  && issuesForSlot(index).length === 0;
+const hasPartyGap = computed(() =>
+  applyAssessment.value.issues.some((issue) => issue.id.startsWith("stored-party-gap-")),
+);
 
 const sharedBuildCount = computed(() => {
   const ids = new Set(props.team.slots.flatMap((slot) => slot.build === null ? [] : [slot.build]));
@@ -519,15 +528,6 @@ const updateSlot = (
   }),
   label,
 );
-
-const chooseHero = async (index: number, event: Event) => {
-  const select = event.target as HTMLSelectElement;
-  const value = select.value;
-  const hero = value ? heroId(Number(value)) : null;
-  if (!await updateSlot(index, { hero }, "Hero assignment updated")) {
-    select.value = String(props.team.slots[index]?.hero ?? "");
-  }
-};
 
 const chooseBuild = async (index: number, event: Event) => {
   const select = event.target as HTMLSelectElement;
@@ -669,9 +669,13 @@ defineExpose({
           :key="`${slot.hero}-${index}`"
           :class="{
             'team-slot--empty': !slot.build,
-            'team-slot--compact': compactEmptySlot(slot, index),
+            'team-slot--compact': compactEmptySlot(slot, index, issuesForSlot(index).length > 0),
+            'team-slot--dragging': draggedMember === index,
+            'team-slot--drop-target': dropTarget === index && draggedMember !== index,
           }"
           :data-invalid="!assignmentValid(slot, index) || issuesForSlot(index).length > 0 ? '' : undefined"
+          @dragover="enterMemberDropTarget(asTeamPosition(index), $event)"
+          @drop="dropMember(asTeamPosition(index), $event)"
         >
           <span class="slot-number">{{ index + 1 }}</span>
           <div class="hero-cell">
@@ -779,7 +783,12 @@ defineExpose({
           />
           <span v-else class="empty-bar">Empty slot</span>
 
-          <span v-if="compactEmptySlot(slot, index)" class="available-slot">Available slot</span>
+          <span
+            v-if="compactEmptySlot(slot, index, issuesForSlot(index).length > 0)"
+            class="available-slot"
+          >
+            {{ draggedMember === null ? "Available slot" : "Move here" }}
+          </span>
 
           <label class="behavior-picker">
             <span class="ui-sr-only">Behavior for {{ teamMemberLabel(slot.hero, index) }}</span>
@@ -797,8 +806,37 @@ defineExpose({
             </select>
           </label>
 
+          <div v-if="configuredHeroSlot(slot, index)" class="team-member-actions">
+            <button
+              :id="`team-move-${index}`"
+              class="ui-button team-move-handle"
+              data-icon
+              type="button"
+              draggable="true"
+              :aria-label="`Move ${teamMemberLabel(slot.hero, index)}`"
+              :title="`Drag to move ${teamMemberLabel(slot.hero, index)}; use arrow keys to reorder`"
+              @click.prevent
+              @keydown="moveMemberByKeyboard(asTeamPosition(index), $event)"
+              @dragstart="startMemberDrag(asTeamPosition(index), $event)"
+              @dragend="endMemberDrag"
+            >
+              <span aria-hidden="true">⠿</span>
+            </button>
+            <button
+              class="ui-button team-remove-member"
+              data-icon
+              type="button"
+              :aria-label="`Remove ${teamMemberLabel(slot.hero, index)} from team`"
+              :title="`Remove ${teamMemberLabel(slot.hero, index)} from team`"
+              @click="removeMember(asTeamPosition(index))"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+
         </li>
       </ol>
+      <span class="ui-sr-only" aria-live="polite">{{ rosterAnnouncement }}</span>
 
       <section
         v-if="applyAssessment.blocked"
@@ -821,6 +859,14 @@ defineExpose({
             @click="swapReciprocalBuilds"
           >
             Swap the mismatched builds
+          </button>
+          <button
+            v-else-if="hasPartyGap"
+            class="ui-button"
+            data-variant="primary"
+            @click="fixTeamOrder"
+          >
+            Fix team order
           </button>
         </div>
         <ul class="apply-issue-list">

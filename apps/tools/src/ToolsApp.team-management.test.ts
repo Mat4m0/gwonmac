@@ -321,6 +321,117 @@ describe("ToolsApp team management", () => {
     wrapper.unmount();
   });
 
+  it("removes a hero as one record, compacts the roster, and can undo", async () => {
+    const wrapper = await workbench();
+    const originalHero = wrapper.get<HTMLSelectElement>("#team-hero-1").element.value;
+    await wrapper.get<HTMLSelectElement>("#team-hero-2").setValue("6");
+    await wrapper.get<HTMLSelectElement>("#team-behaviour-2").setValue("guard");
+    await flushPromises();
+    const followingHero = wrapper.get<HTMLSelectElement>("#team-hero-3").element.value;
+
+    await wrapper.findAll(".team-remove-member")[0]!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get<HTMLSelectElement>("#team-hero-1").element.value).toBe("6");
+    expect(wrapper.get<HTMLSelectElement>("#team-behaviour-1").element.value).toBe("guard");
+    expect(wrapper.get<HTMLSelectElement>("#team-hero-2").element.value).toBe(followingHero);
+
+    await wrapper.get(".library-summary .ui-link").trigger("click");
+    await flushPromises();
+    expect(wrapper.get<HTMLSelectElement>("#team-hero-1").element.value).toBe(originalHero);
+    expect(wrapper.get<HTMLSelectElement>("#team-hero-2").element.value).toBe("6");
+    wrapper.unmount();
+  });
+
+  it("moves whole hero records with the keyboard and restores focus", async () => {
+    const wrapper = await workbench();
+    await wrapper.get<HTMLSelectElement>("#team-hero-2").setValue("6");
+    await wrapper.get<HTMLSelectElement>("#team-behaviour-2").setValue("avoid");
+    await flushPromises();
+
+    await wrapper.get("#team-move-2").trigger("keydown", { key: "ArrowUp" });
+    await flushPromises();
+
+    expect(wrapper.get<HTMLSelectElement>("#team-hero-1").element.value).toBe("6");
+    expect(wrapper.get<HTMLSelectElement>("#team-behaviour-1").element.value).toBe("avoid");
+    expect(document.activeElement?.id).toBe("team-move-1");
+    expect(wrapper.text()).toContain("Koss moved to slot 2.");
+    wrapper.unmount();
+  });
+
+  it("moves a hero onto an empty destination by dragging its handle", async () => {
+    const wrapper = await workbench(applicableHost(
+      async () => ({ commandId: 1, completedChanges: 0, skippedSkills: [] }),
+    ));
+    await wrapper.get<HTMLSelectElement>("#team-hero-2").setValue("6");
+    await flushPromises();
+    const before = wrapper.findAll<HTMLSelectElement>(".hero-picker select")
+      .map((select) => select.element.value)
+      .filter(Boolean);
+    const transfer = {
+      dropEffect: "none",
+      effectAllowed: "none",
+      setData: vi.fn(),
+    };
+
+    await wrapper.get("#team-move-1").trigger("dragstart", { dataTransfer: transfer });
+    const emptyRows = wrapper.findAll(".team-slot--compact");
+    const destination = emptyRows[emptyRows.length - 1]!;
+    expect(destination.text()).toContain("Move here");
+    await destination.trigger("dragover", {
+      dataTransfer: transfer,
+    });
+    await destination.trigger("drop", {
+      dataTransfer: transfer,
+    });
+    await flushPromises();
+
+    const after = wrapper.findAll<HTMLSelectElement>(".hero-picker select")
+      .map((select) => select.element.value)
+      .filter(Boolean);
+    expect(after).toEqual([...before.slice(1), before[0]]);
+    wrapper.unmount();
+  });
+
+  it("repairs an imported roster gap in one action", async () => {
+    const host = applicableHost(
+      async () => ({ commandId: 1, completedChanges: 0, skippedSkills: [] }),
+    );
+    const load = host.loadLibrary;
+    host.loadLibrary = async () => {
+      const loaded = await load();
+      return {
+        ...loaded,
+        library: {
+          ...loaded.library,
+          teams: loaded.library.teams.map((team, teamIndex) => {
+            if (teamIndex !== 0) return team;
+            const member = team.slots[1]!;
+            return {
+              ...team,
+              slots: mapTeamSlots(team.slots, (slot, slotIndex) => slotIndex === 1
+                ? { hero: null, build: null, behaviour: null }
+                : slotIndex === 2 ? member : slot),
+            };
+          }),
+        },
+      };
+    };
+    const wrapper = await workbench(host);
+    const hero = wrapper.get<HTMLSelectElement>("#team-hero-2").element.value;
+
+    expect(wrapper.get(".apply-readiness").text()).toContain("Move configured heroes");
+    await wrapper
+      .findAll(".apply-readiness .ui-button")
+      .find((button) => button.text() === "Fix team order")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get<HTMLSelectElement>("#team-hero-1").element.value).toBe(hero);
+    expect(wrapper.find(".apply-readiness").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("shows shared-build guidance only when another team uses an assignment", async () => {
     const shared = await workbench();
     expect(shared.get(".detail-view .ui-banner").text()).toContain(

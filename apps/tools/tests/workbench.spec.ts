@@ -446,6 +446,26 @@ test("aligns team header controls and configured row controls", async ({ page })
   expect(Math.max(...controlTops) - Math.min(...controlTops)).toBeLessThanOrEqual(1);
 });
 
+test("reorders and removes whole team members with keyboard and undo", async ({ page }) => {
+  const selectedHeroes = () => page.locator(".hero-picker select").evaluateAll(
+    (selects) => selects.map((select) => (select as HTMLSelectElement).value).filter(Boolean),
+  );
+  const before = await selectedHeroes();
+  expect(before.length).toBeGreaterThanOrEqual(3);
+
+  await page.locator("#team-move-2").focus();
+  await page.keyboard.press("Home");
+  const reordered = [before[1], before[0], ...before.slice(2)];
+  await expect.poll(selectedHeroes).toEqual(reordered);
+  await expect(page.locator("#team-move-1")).toBeFocused();
+
+  await page.locator(".team-remove-member").first().click();
+  await expect.poll(selectedHeroes).toEqual(reordered.slice(1));
+
+  await page.locator(".library-summary .ui-link").click();
+  await expect.poll(selectedHeroes).toEqual(reordered);
+});
+
 test("projects Obsidian through the shared system without layout drift", async ({ page }) => {
   await page.evaluate(() => {
     document.documentElement.dataset.uiStyle = "obsidian";
