@@ -443,7 +443,8 @@ six hours while the app stays open, never while a game connection is open, and
 the first-run screen says so before the first check happens. Turn it off and
 the app contacts GitHub only when you choose **Check for Updates** — on the
 loading screen, in the application menu, on a client-compatibility notice, or
-under **Settings → Updates**. Turning it back on immediately checks once.
+under **Settings → Updates**. Turning it back on changes the next launch or due
+background check; choose **Check for Updates** when you want an immediate check.
 
 A check asks GitHub whether a newer version of the app exists. It sends nothing
 about you or your installation. ArenaNet client updates are fetched separately
@@ -468,10 +469,9 @@ filesystem before either kind of restart.
 Updates** to also receive beta and release-candidate application builds. Alpha
 builds are never offered. Stable and Beta use the same application identity,
 profile, saved login, and updater; this setting changes only which releases the
-next check may select. With automatic checks on, changing it starts a check. If
-a check or download is already active, that work finishes under the selection
-it started with and the new choice applies to the next check. With automatic
-checks off, changing tracks makes no request until you check manually.
+next check may select. Changing tracks makes no request by itself: the new
+choice applies at the next launch, due background check, or manual check. A
+check or download already active finishes under the selection it started with.
 
 A beta or RC normally advances to its final Stable release as an ordinary
 forward update. If you select Stable while the latest Stable is older than the
@@ -481,6 +481,8 @@ release's signed and notarized DMG and install it manually; macOS Gatekeeper
 checks it when opened. GWonMac neither downloads nor independently verifies
 that manual DMG. Public beta and RC releases are tested so the latest Stable
 can read, modify, and rewrite their canonical player data before publication.
+They cannot add a durable settings key until a published Stable already owns
+that key; this avoids a hidden compatibility store when returning to Stable.
 
 The separately signed Preview tester app is a different installation identity,
 not the Beta track, and cannot use AppUpdater. A failed check is never reported

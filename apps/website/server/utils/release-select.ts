@@ -62,7 +62,9 @@ export function selectLatestRelease(
   let selected: { version: ReleaseVersion; url: string } | null = null;
   if (Array.isArray(payload)) {
     for (const release of payload) {
-      if (!isRecord(release) || release.draft === true) continue;
+      // Only an explicit public answer is eligible. Missing or malformed
+      // metadata must not turn a staged approval draft into a download.
+      if (!isRecord(release) || release.draft !== false) continue;
       const tag = release.tag_name;
       const version = typeof tag === "string" ? parseReleaseVersion(tag) : null;
       if (!version || typeof tag !== "string") continue;

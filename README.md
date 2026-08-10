@@ -170,7 +170,9 @@ settings, and every project link — the launcher and website both import it.
 Releases are cut from `main` by manual dispatch of the macOS workflow. The
 approval-gated workflow signs with Developer ID, notarizes and staples the app
 and DMG, generates the updater feed, checksums and SPDX SBOM, attests the exact
-DMG and ZIP, and publishes only after re-verifying the complete draft.
+DMG and ZIP, and stages a complete draft. A maintainer tests those exact
+checksum-pinned assets; a second protected approval re-downloads the draft and
+publishes it without rebuilding or replacing anything.
 
 The GitHub `release` environment must require a maintainer approval and contain
 these secrets:

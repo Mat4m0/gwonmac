@@ -103,6 +103,11 @@ also record `lastUpdateCheckAt`, so a failing environment retries at the same
 six-hour spacing. `autoCheckUpdates` defaults on and is declared plainly at
 first run and in Settings; switched off, a launch reaches github.com zero
 times.
+Saving `autoCheckUpdates` or `updateTrack` changes the next launch or due
+background check; a settings write is not itself a network command. **Check for
+Updates** remains the explicit immediate action. This keeps every automatic
+start behind the launch/periodic rule above without storing a second “pending
+check” flag.
 
 `AppUpdater` is the only runtime reader of this project's releases. Application
 updates are separate from ArenaNet client and game-content updates; neither can
@@ -157,3 +162,11 @@ of `pnpm check`. A first beta therefore cannot ship until a Stable containing
 the selector and this data contract has already shipped. Native update-path and
 Keychain continuity are likewise re-run when those dependencies or identities
 change; they are not duplicated on every beta.
+
+Settings use an explicit expand/contract release rule, not an unknown-field
+bag. The latest Stable must already own every durable key a public beta/RC can
+write. A Stable release may introduce an inert/defaulted key; a later candidate
+may use it. Removal waits until the supported Stable baseline no longer needs
+the key. The signed round-trip compares the candidate file's exact key set with
+Stable's, then proves Stable reads every candidate value and preserves every
+untouched value while writing its own changes.

@@ -5,8 +5,11 @@
  * This intentionally launches the two signed app bundles, not two source
  * checkouts. It is the stable-enabler gate for the first Beta and the recurring
  * compatibility gate after that. There is no migration framework: if a
- * candidate changes a durable shape in a way Stable cannot round-trip, the
- * release is refused.
+ * candidate adds a durable settings key that Stable does not already own, or
+ * changes any durable shape in a way Stable cannot round-trip, the release is
+ * refused. New settings therefore expand in Stable first and may be used by a
+ * later candidate; old fields contract only after the supported Stable
+ * baseline no longer needs them.
  */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -107,6 +110,28 @@ async function readCanonical(page: Page): Promise<{
     const library = await window.gwNative.buildLibrary.get();
     return { settings, ...library };
   });
+}
+
+async function readSettingsDocument(): Promise<Record<string, unknown>> {
+  const value = JSON.parse(
+    await readFile(path.join(userData, "settings.json"), "utf8"),
+  ) as unknown;
+  assert.ok(
+    typeof value === "object" && value !== null && !Array.isArray(value),
+    "settings.json is not an object",
+  );
+  return value as Record<string, unknown>;
+}
+
+const sortedKeys = (value: Record<string, unknown>): string[] =>
+  Object.keys(value).sort();
+
+function semanticSettings(
+  document: Record<string, unknown>,
+): Record<string, unknown> {
+  const { formatVersion, ...settings } = document;
+  assert.equal(formatVersion, 1, "settings.json formatVersion changed");
+  return settings;
 }
 
 async function setWindowSize(page: Page, width: number, height: number): Promise<void> {
@@ -253,6 +278,7 @@ try {
   await setWindowSize(running.page, 1_000, 700);
   await closePackagedApp(running);
   running = null;
+  const stableSettingsDocument = await readSettingsDocument();
 
   console.log("stable/beta compatibility: candidate reads, modifies, and writes");
   running = await launch(candidateApp);
@@ -286,6 +312,12 @@ try {
   await setWindowSize(running.page, 960, 680);
   await closePackagedApp(running);
   running = null;
+  const candidateSettingsDocument = await readSettingsDocument();
+  assert.deepEqual(
+    sortedKeys(candidateSettingsDocument),
+    sortedKeys(stableSettingsDocument),
+    "candidate introduced or removed a durable settings key; ship the schema expansion in Stable before the beta/RC uses it",
+  );
 
   console.log("stable/beta compatibility: the same Stable reads and writes again");
   running = await launch(stableApp);
@@ -298,9 +330,11 @@ try {
   );
   const returned = await readCanonical(running.page);
   assert.equal(returned.recovered, false);
-  assert.equal(returned.settings.showDiagnostics, true);
-  assert.equal(returned.settings.uiPanelOpacity, 87);
-  assert.equal(returned.settings.updateTrack, "beta");
+  assert.deepEqual(
+    returned.settings,
+    semanticSettings(candidateSettingsDocument),
+    "Stable did not read every candidate-written settings value",
+  );
   assert.deepEqual(returned.library, candidateLibrary);
   assert.deepEqual(await windowSize(running.page), { width: 960, height: 680 });
   await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
@@ -318,8 +352,16 @@ try {
     },
   );
   const final = await readCanonical(running.page);
-  assert.equal(final.settings.showDiagnostics, false);
-  assert.equal(final.settings.updateTrack, "stable");
+  const expectedFinalSettings = {
+    ...semanticSettings(candidateSettingsDocument),
+    showDiagnostics: false,
+    updateTrack: "stable",
+  };
+  assert.deepEqual(
+    final.settings,
+    expectedFinalSettings,
+    "Stable lost candidate-written settings while saving its own patch",
+  );
   assert.deepEqual(final.library, finalLibrary);
   await closePackagedApp(running);
   running = null;
@@ -335,8 +377,11 @@ try {
     false,
     "Stable quarantined the candidate-written Build library",
   );
-  const diskSettings = JSON.parse(await readFile(path.join(userData, "settings.json"), "utf8"));
-  assert.equal(diskSettings.updateTrack, "stable");
+  const diskSettings = await readSettingsDocument();
+  assert.deepEqual(diskSettings, {
+    formatVersion: 1,
+    ...expectedFinalSettings,
+  });
   const diskLibrary = JSON.parse(await readFile(path.join(userData, "build-library.json"), "utf8"));
   assert.deepEqual(diskLibrary, finalLibrary);
   assert.ok(await readFile(path.join(userData, "window-state.json"), "utf8"));

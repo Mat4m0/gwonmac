@@ -4,8 +4,9 @@
  *
  * It is also the only caller of the releases API in this project.
  * `periodicCheckDue` holds every gate on an automatic check and is pure, so the
- * gates are provable without running a timer; an open game socket defers a
- * check because a Squirrel download must not compete with live game traffic.
+ * gates are provable without running a timer; an open game socket defers an
+ * automatic check because a Squirrel download must not compete with live game
+ * traffic.
  *
  * Only a package carrying the release marker may reach Squirrel.Mac. The
  * selected Stable/Beta track is read once per check. Stable admits only
@@ -144,6 +145,10 @@ export class AppUpdater {
   updateDownloaded(): void {
     const expected = this.expectedDownload;
     if (!expected || this.state.phase !== "downloading") return;
+    // The native transition is complete. A late `error` or
+    // `update-not-available` event belongs to no active download and must not
+    // turn a ready update into a failure.
+    this.expectedDownload = null;
     this.setState({
       phase: "ready",
       currentVersion: this.options.currentVersion,
@@ -166,10 +171,24 @@ export class AppUpdater {
     this.fail("feed-invalid", lastCheckedAt);
   }
 
-  quitAndInstall(): void {
-    if (this.state.phase !== "ready" || this.installStarted) return;
+  /**
+   * Hands the already-ready update to Squirrel exactly once. `false` is a
+   * terminal refusal for the caller that has already completed quit cleanup;
+   * retrying inside that dismantled process would be unsafe.
+   */
+  quitAndInstall(): boolean {
+    if (this.state.phase !== "ready" || this.installStarted) return false;
     this.installStarted = true;
-    this.options.nativeUpdater.quitAndInstall();
+    try {
+      this.options.nativeUpdater.quitAndInstall();
+      return true;
+    } catch (error) {
+      // Cleanup has already completed, so diagnostics are closed. Preserve the
+      // native cause in the local developer console without reviving updater
+      // state or exporting native prose.
+      console.error("native update installation refused", error);
+      return false;
+    }
   }
 
   private async runCheck(track: UpdateTrack): Promise<void> {
@@ -275,13 +294,21 @@ export class AppUpdater {
       }
       const latestVersion = formatReleaseVersion(latest.version);
       this.expectedDownload = { latestVersion, checkedAt };
-      this.options.nativeUpdater.setFeedURL({ url: feed.url });
+      // Publish the owned transition before calling native code. A synchronous
+      // native event or refusal can then close this exact download instead of
+      // racing a later transition back to `downloading`.
       this.setState({
         phase: "downloading",
         currentVersion: this.options.currentVersion,
         latestVersion,
         checkedAt,
       });
+      try {
+        this.options.nativeUpdater.setFeedURL({ url: feed.url });
+      } catch {
+        this.updateFailed();
+        return;
+      }
       try {
         this.options.nativeUpdater.checkForUpdates();
       } catch {
@@ -436,7 +463,9 @@ function parseCandidates(
   const candidates: ReleaseCandidate[] = [];
   const versions = new Set<string>();
   for (const value of body) {
-    if (!isRecord(value) || value.draft === true) continue;
+    // A missing or malformed publication flag is not evidence that a release
+    // is public. This also keeps a staged approval draft out of both tracks.
+    if (!isRecord(value) || value.draft !== false) continue;
     const tag = value.tag_name;
     if (typeof tag !== "string") continue;
     const version = parseReleaseVersion(tag);

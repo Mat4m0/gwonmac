@@ -243,7 +243,7 @@ test("release entitlements are an exact three-key allowlist", () => {
   );
 });
 
-test("release workflow publishes one tested, attested package version", () => {
+test("release workflow stages and publishes one tested, attested package version", () => {
   const workflow = read(".github/workflows/release.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
@@ -292,33 +292,43 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(verification, /run: pnpm audit --audit-level=high/);
   const releaseBuild = workflow.slice(
     workflow.indexOf("  release-build:"),
+    workflow.indexOf("\n  stage-release:"),
+  );
+  const releaseStage = workflow.slice(
+    workflow.indexOf("\n  stage-release:"),
     workflow.indexOf("\n  release:"),
   );
   const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
   assert.match(releaseBuild, /permissions:[\s\S]{0,80}contents: read/);
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
   assert.match(releaseBuild, /actions\/upload-artifact@/);
-  assert.match(releasePublish, /actions\/download-artifact@/);
+  assert.match(releaseStage, /actions\/download-artifact@/);
+  assert.match(releaseStage, /actions\/attest@/);
+  assert.doesNotMatch(releaseStage, /--draft=false/);
+  assert.match(releasePublish, /gh release download/);
   assert.doesNotMatch(
     releasePublish,
-    /actions\/checkout|pnpm install|pnpm make|pnpm test/,
+    /actions\/checkout|actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
   );
 
-  // A dry run is only evidence about the real release if it is the real
-  // release minus its publishing: the flag is read once, by the job that tags,
-  // attests, and uploads, and no step that builds or verifies may consult it.
-  // What the run produced is recorded where a skipped release cannot record
-  // it.
+  // A dry run is only evidence about the real build if it is the real build
+  // minus every GitHub mutation. Both mutation jobs are skipped whole; no
+  // build or package-verification step may branch around work for a dry run.
+  // The build records what it produced where skipped jobs cannot hide it.
   assert.match(workflow, /workflow_dispatch:\n {4}inputs:\n {6}dry_run:/);
   assert.match(
     workflow,
     /description: Build and verify the release, then publish nothing\.\n {8}default: false\n {8}type: boolean/,
   );
   assert.match(
+    releaseStage,
+    /stage-release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
+  );
+  assert.match(
     releasePublish,
     /release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
   );
-  assert.equal(workflow.match(/if: [^\n]*dry_run/gu)?.length, 1);
+  assert.equal(workflow.match(/if: [^\n]*dry_run/gu)?.length, 2);
   assert.match(
     releaseBuild,
     /name: Summarize built and verified assets[\s\S]*?cat "\$ASSET_DIR\/SHA256SUMS\.txt"[\s\S]*?>> "\$GITHUB_STEP_SUMMARY"/,
@@ -352,7 +362,31 @@ test("release workflow publishes one tested, attested package version", () => {
       ?.length,
     3,
   );
-  assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--draft=false/);
+  assert.match(
+    releaseStage,
+    /outputs:\n {6}checksums-sha256: \$\{\{ steps\.draft\.outputs\.checksums-sha256 \}\}/,
+  );
+  assert.match(
+    releaseStage,
+    /name: Verify exact remote draft[\s\S]*cmp release-assets\/SHA256SUMS\.txt "\$remote\/SHA256SUMS\.txt"[\s\S]*echo "checksums-sha256=\$checksums_sha256" >> "\$GITHUB_OUTPUT"/,
+  );
+  assert.match(
+    releasePublish,
+    /needs: \[release-build, stage-release\][\s\S]{0,100}environment: release/,
+  );
+  assert.match(
+    releasePublish,
+    /EXPECTED_CHECKSUMS_SHA256: \$\{\{ needs\.stage-release\.outputs\.checksums-sha256 \}\}/,
+  );
+  assert.match(
+    releasePublish,
+    /--json body,isDraft,isPrerelease,targetCommitish[\s\S]*isDraft'[\s\S]*isPrerelease'[\s\S]*targetCommitish'/,
+  );
+  assert.match(
+    releasePublish,
+    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*\^## Verification[\s\S]*while read -r asset_sha asset_name/,
+  );
+  assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
   assert.match(workflow, /\*\.zip \*\.dmg RELEASES\.json \*\.spdx\.json/);
   assert.match(

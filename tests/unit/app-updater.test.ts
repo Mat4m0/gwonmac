@@ -71,6 +71,11 @@ function fixture(options: {
   currentVersion?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  native?: {
+    setFeedURL?: (url: string) => void;
+    checkForUpdates?: () => void;
+    quitAndInstall?: () => void;
+  };
 } = {}) {
   const states: AppUpdateState[] = [];
   const remembered: number[] = [];
@@ -91,12 +96,17 @@ function fixture(options: {
       ? {}
       : { timeoutMs: options.timeoutMs }),
     nativeUpdater: {
-      setFeedURL: ({ url }) => feeds.push(url),
+      setFeedURL: ({ url }) => {
+        options.native?.setFeedURL?.(url);
+        feeds.push(url);
+      },
       checkForUpdates: () => {
+        options.native?.checkForUpdates?.();
         nativeChecks += 1;
       },
       quitAndInstall: () => {
         installs += 1;
+        options.native?.quitAndInstall?.();
       },
     },
     rememberCheckedAt: async (value) => {
@@ -170,9 +180,48 @@ describe("application updater", () => {
     assert.equal(f.updater.getState().phase, "downloading");
     f.updater.updateDownloaded();
     assert.equal(f.updater.getState().phase, "ready");
-    f.updater.quitAndInstall();
-    f.updater.quitAndInstall();
+    // Native events arriving after readiness belong to no active download.
+    f.updater.updateFailed();
+    f.updater.updateNotAvailable();
+    assert.equal(f.updater.getState().phase, "ready");
+    assert.equal(f.updater.quitAndInstall(), true);
+    assert.equal(f.updater.quitAndInstall(), false);
     assert.equal(f.installs(), 1);
+  });
+
+  it("closes synchronous native feed and download refusals", async () => {
+    for (const native of [
+      { setFeedURL: () => { throw new Error("feed refused"); } },
+      { checkForUpdates: () => { throw new Error("download refused"); } },
+    ]) {
+      const f = fixture({ native });
+
+      await f.updater.check("beta");
+
+      assert.deepEqual(f.updater.getState(), {
+        phase: "failed",
+        currentVersion: "2026.7.0-beta.1",
+        lastCheckedAt: "1970-01-01T00:00:01.234Z",
+        reason: "download-failed",
+      });
+      f.updater.updateDownloaded();
+      assert.equal(f.updater.getState().phase, "failed");
+    }
+  });
+
+  it("reports a refused terminal install once to the cleaned-up caller", async () => {
+    const f = fixture({
+      native: {
+        quitAndInstall: () => { throw new Error("install refused"); },
+      },
+    });
+    await f.updater.check("beta");
+    f.updater.updateDownloaded();
+
+    assert.equal(f.updater.quitAndInstall(), false);
+    assert.equal(f.updater.quitAndInstall(), false);
+    assert.equal(f.installs(), 1);
+    assert.equal(f.updater.getState().phase, "ready");
   });
 
   it("coalesces concurrent checks", async () => {
@@ -345,6 +394,24 @@ describe("application updater", () => {
       } else {
         assert.equal(state.phase === "failed" && state.reason, "unreadable");
       }
+      assert.equal(f.nativeChecks(), 0);
+    }
+  });
+
+  it("requires an explicit false draft flag before selecting a release", async () => {
+    for (const candidate of [
+      { ...release("2026.8.0-beta.1"), draft: undefined },
+      { ...release("2026.8.0-beta.1"), draft: "false" },
+      release("2026.8.0-beta.1", { draft: true }),
+    ]) {
+      const f = fixture({
+        currentVersion: "2026.7.0",
+        fetch: async () => response([candidate]),
+      });
+
+      await f.updater.check("beta");
+
+      assert.equal(f.updater.getState().phase, "up-to-date");
       assert.equal(f.nativeChecks(), 0);
     }
   });

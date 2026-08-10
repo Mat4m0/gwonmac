@@ -2,12 +2,13 @@
  * The settings file: its shape rule, its recovery behaviour, and nothing about
  * what any individual setting means.
  *
- * Unknown fields are ignored and unknown types refused, so an older profile
- * keeps every value it had while a malformed one cannot slip past the type. A
- * format version this build does not recognise is refused rather than
- * reinterpreted; the file is then moved aside intact and defaults are used, so
- * an unreadable profile costs a player their preferences and never their
- * downloaded game data.
+ * Unknown fields are ignored on read and are not preserved on the next write;
+ * this is deliberate, not a compatibility bag. Public prereleases therefore
+ * follow expand/contract release ordering: the latest Stable must already own
+ * every durable key a beta or RC can write. A malformed known value is refused.
+ * A format version this build does not recognise is moved aside intact and
+ * defaults are used, so an unreadable profile costs a player their preferences
+ * and never their downloaded game data.
  *
  * `parseSettingsPatch` rejects an unknown key outright instead of dropping it,
  * because a silently ignored key is indistinguishable to the renderer from a

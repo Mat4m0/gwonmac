@@ -161,6 +161,12 @@ assert.deepEqual(
   selectLatestRelease([DRAFT, RC], "beta"),
   BETA_ANSWER,
 );
+for (const draft of [undefined, "false", true]) {
+  assert.deepEqual(
+    selectLatestRelease([{ ...STABLE, draft }], "stable"),
+    FALLBACK,
+  );
+}
 
 // Stable remains the primary public download even when newer candidates exist.
 assert.deepEqual(selectLatestRelease([ALPHA, BETA, RC, STABLE], "stable"), {

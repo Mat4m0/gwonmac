@@ -175,17 +175,7 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   return settingsLock.run(async () => {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
-    const saved = await saveSettings(settingsPath, { ...current, ...patch });
-    if (
-      saved.autoCheckUpdates
-      && (
-        !current.autoCheckUpdates
-        || current.updateTrack !== saved.updateTrack
-      )
-    ) {
-      void checkForAppUpdates(saved.updateTrack);
-    }
-    return saved;
+    return saveSettings(settingsPath, { ...current, ...patch });
   });
 }
 
@@ -537,8 +527,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     checkAppUpdates: () => checkForAppUpdates(),
     restartAndInstallUpdate: (win) => {
       if (updateRestartInFlight) return updateRestartInFlight;
+      const updater = appUpdaterController;
       const operation = (async () => {
-        if (appUpdaterController?.getState().phase !== "ready") return;
+        if (updater?.getState().phase !== "ready") return;
         await resetGameInput(win);
         if (sockets.size() > 0) {
           const { response } = await dialog.showMessageBox(win, {
@@ -553,7 +544,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
           if (response !== 0) return;
         }
         await runQuitCleanup();
-        appUpdaterController.quitAndInstall();
+        // Cleanup is deliberately irreversible. If Squirrel refuses the
+        // terminal handoff, leave instead of resuming a process whose sockets,
+        // client runtime, diagnostics, and persistence owners are gone.
+        if (!updater.quitAndInstall()) app.exit(1);
       })().finally(() => {
         if (updateRestartInFlight === operation) updateRestartInFlight = null;
       });

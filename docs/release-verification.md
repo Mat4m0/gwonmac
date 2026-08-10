@@ -70,16 +70,28 @@ These establish that the file was produced from this repository by the
 published release workflow. They do not replace macOS Gatekeeper or make an
 untrusted repository safe.
 
-The approval-gated `release` environment must contain the G2 Developer ID
-certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export password as
-`APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution profile for
-`io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The P12 and profile
-are base64-encoded secret values, not repository files. Before it builds, the
-workflow rejects a profile with the wrong team, application identifier,
-distribution type, certificate fingerprint, certificate count, or remaining
-lifetime. It blocks below two years and warns below five. After signing, it
-compares the embedded profile byte-for-byte and checks the top-level app's
-exact three entitlements.
+The protected `release` environment must require a maintainer and contain the
+G2 Developer ID certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export
+password as `APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution
+profile for `io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The P12
+and profile are base64-encoded secret values, not repository files. The first
+environment approval admits `release-build`: before it builds, the workflow
+rejects a profile with the wrong team, application identifier, distribution
+type, certificate fingerprint, certificate count, or remaining lifetime. It
+blocks below two years and warns below five. After signing, it compares the
+embedded profile byte-for-byte and checks the top-level app's exact three
+entitlements.
+
+Publication is a separate decision after the build. `stage-release` attests
+the verified DMG and ZIP, creates or resumes a complete GitHub draft, downloads
+that draft again, and pins the SHA-256 of its `SHA256SUMS.txt` as a job output.
+The draft is ineligible for both release selectors. Test those exact draft
+assets and complete the record below. Only then approve the final `release` job
+through the protected environment. That job rebuilds and uploads nothing: it
+re-downloads the draft, requires the same tag target and Stable/prerelease
+classification, verifies every asset against the staged checksum digest, and
+then removes the draft flag. A changed asset therefore requires a new staging
+run and a new final approval; it is never replaced during publication.
 
 Those post-signing checks are `scripts/verify-signed-app.ts` rather than
 workflow text, so the release path is reproducible off CI:
@@ -109,15 +121,35 @@ continuity only. When Electron, Chromium, or the filesystem/persistence
 contract changes, the release also round-trips a real template through the
 production Emscripten IDBFS boundary.
 
+Settings follow expand/contract release ordering without preserving unknown
+fields. The latest Stable must already own every durable key a candidate can
+write: introduce an inert/defaulted key in Stable, use it in a later beta/RC,
+and remove it only after the supported Stable baseline no longer needs it. The
+release proof compares the exact candidate and Stable key sets, then proves the
+returning Stable reads every candidate value and preserves every untouched
+value while saving its own patch. A mismatch refuses the candidate; it does not
+add an unknown-field bag or migration framework.
+
 ## Release-only canary record
 
-The person approving the GitHub `release` environment owns these checks. They
-must record the evidence in a `Verification` section of the matching GitHub
-release notes; a private note or an unlinked local run is not release evidence.
-Record the release-workflow URL, exact application versions and
-`CFBundleVersion` values, DMG and ZIP SHA-256 values, tested macOS/hardware, and
-the ArenaNet module SHA-256 when a live client is involved. A failed or missing
-pre-publication item blocks that release. Post-publication updater checks are
+The person granting the **second**, post-staging GitHub `release` environment
+approval owns these checks. Test the draft's exact DMG/ZIP, then record the
+evidence under a line containing exactly `## Verification` in that draft's
+GitHub release notes. A private note or an unlinked local run is not release
+evidence. At minimum record:
+
+- the release-workflow URL;
+- exact application version and `CFBundleVersion`;
+- every asset name and SHA-256 row from the staged `SHA256SUMS.txt`;
+- pass/fail, macOS version, and hardware for each required machine; and
+- the ArenaNet module SHA-256 whenever a live client is involved.
+
+The final job mechanically refuses a non-draft, the wrong prerelease class or
+commit, a checksum-file digest different from staging, a missing
+`## Verification` heading, or release notes that omit any staged asset hash.
+It deliberately does not try to interpret free-form hardware observations: the
+protected reviewer must refuse approval when a required result is failed,
+missing, or belongs to different assets. Post-publication updater checks are
 certification, not gates that pretend the build is still private; their bounded
 response is defined below. Neither case creates a fallback updater or weakens
 the check.
@@ -132,7 +164,9 @@ starting and returning version.
   each launched app must report the expected version, and settings,
   Builds/Teams with tags/order/references, window state, and profile-origin
   browser storage must survive a read-modify-write in all three launches with
-  no quarantine, reset, or game-data redownload. When
+  no quarantine, reset, or game-data redownload. Candidate settings must have
+  exactly the latest Stable key set and every untouched candidate value must
+  survive Stable's final write. When
   Electron, Chromium, or persistence changes, also save and reload a real
   template through production IDBFS and exercise the real Keychain boundary.
 - **Within 30 minutes after publishing a beta/RC:** on one release-identity Stable install with
@@ -145,7 +179,8 @@ starting and returning version.
   and install exact `S1` through the production updater, preserving the same
   identity and player data; the same saved-login observation must pass. No
   automatic older-Stable downgrade is tested or supported.
-- **Before every release:** use the finite release hardware matrix: a MacBook Air
+- **Before every release:** install the exact staged draft assets and use the
+  finite release hardware matrix: a MacBook Air
   (M1, 8 GB) on the oldest supported macOS and a Mac mini (M4, 16 GB) on the
   newest supported macOS. On each, the canary account must reach a playable
   character and enter a zone without an authentication loop or crash; the

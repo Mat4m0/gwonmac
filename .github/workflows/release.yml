@@ -8,9 +8,9 @@ on:
       dry_run:
         # Proves the whole release path — the same build, signing,
         # notarization, stapling, and verification a release runs — without
-        # creating a tag, a release, or an attestation. It gates the publish
-        # job alone, so a passing dry run is evidence about the real path
-        # rather than about a second one.
+        # creating a tag, a release, or an attestation. It skips only the two
+        # GitHub-mutation jobs, so a passing dry run exercises the real build
+        # and package checks rather than a second path.
         description: Build and verify the release, then publish nothing.
         default: false
         type: boolean
@@ -413,14 +413,16 @@ jobs:
             rm -f "$APPLE_PROFILE_PLIST"
           fi
 
-  # Every step below tags, attests, uploads, or publishes, and this is the only
-  # job holding the write permissions to do it. A dry run skips the job whole;
-  # nothing above it is conditional.
-  release:
+  # Stage the exact signed output as a complete GitHub draft. The draft is not
+  # eligible for the website or AppUpdater and gives the release approver one
+  # immutable candidate to test before the separate publish decision.
+  stage-release:
     if: github.ref == 'refs/heads/main' && !inputs.dry_run
     needs: release-build
     runs-on: macos-15
     timeout-minutes: 15
+    outputs:
+      checksums-sha256: ${{ steps.draft.outputs.checksums-sha256 }}
     permissions:
       attestations: write
       artifact-metadata: write
@@ -503,7 +505,8 @@ jobs:
           fi
           gh release create "$TAG" "${args[@]}" release-assets/*
 
-      - name: Verify remote release and publish atomically
+      - name: Verify exact remote draft
+        id: draft
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-build.outputs.tag }}
@@ -519,5 +522,57 @@ jobs:
             cd "$remote"
             shasum -a 256 -c SHA256SUMS.txt
           )
+          cmp release-assets/SHA256SUMS.txt "$remote/SHA256SUMS.txt"
           cmp release-assets/RELEASES.json "$remote/RELEASES.json"
+          checksums_sha256="$(shasum -a 256 "$remote/SHA256SUMS.txt" | awk '{print $1}')"
+          echo "checksums-sha256=$checksums_sha256" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Staged release candidate"
+            echo
+            echo "Draft: \`$TAG\`"
+            echo "SHA256SUMS.txt SHA-256: \`$checksums_sha256\`"
+            echo
+            echo "Test these exact draft assets and add the owned Verification record to the draft release notes before approving publication."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Publication is deliberately a second protected decision. It downloads the
+  # staged draft again and refuses if any asset or the human-owned Verification
+  # record changed or is missing. It never rebuilds or re-uploads an asset.
+  release:
+    if: github.ref == 'refs/heads/main' && !inputs.dry_run
+    needs: [release-build, stage-release]
+    runs-on: macos-15
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Verify staged candidate and publish
+        env:
+          EXPECTED_CHECKSUMS_SHA256: ${{ needs.stage-release.outputs.checksums-sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
+          TAG: ${{ needs.release-build.outputs.tag }}
+        run: |
+          release_json="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json body,isDraft,isPrerelease,targetCommitish)"
+          test "$(node -p 'JSON.parse(process.argv[1]).isDraft' "$release_json")" = "true"
+          test "$(node -p 'JSON.parse(process.argv[1]).isPrerelease' "$release_json")" = "$PRERELEASE"
+          test "$(node -p 'JSON.parse(process.argv[1]).targetCommitish' "$release_json")" = "$GITHUB_SHA"
+          remote="$RUNNER_TEMP/staged-release"
+          mkdir -p "$remote"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$remote"
+          (
+            cd "$remote"
+            shasum -a 256 -c SHA256SUMS.txt
+          )
+          actual_checksums_sha256="$(shasum -a 256 "$remote/SHA256SUMS.txt" | awk '{print $1}')"
+          test "$actual_checksums_sha256" = "$EXPECTED_CHECKSUMS_SHA256"
+          body="$(node -p 'JSON.parse(process.argv[1]).body' "$release_json")"
+          printf '%s\n' "$body" | grep -Eq '^## Verification[[:space:]]*$'
+          while read -r asset_sha asset_name; do
+            test -n "$asset_sha"
+            test -n "$asset_name"
+            printf '%s\n' "$body" | grep -Fq "$asset_sha"
+          done < "$remote/SHA256SUMS.txt"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
