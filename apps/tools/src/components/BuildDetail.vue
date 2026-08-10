@@ -233,7 +233,11 @@ function importDraft(): void {
 }
 
 async function writeTemplate(): Promise<void> {
-  if (editor.dirty.value || !props.controller.validate(props.build, props.context).valid) return;
+  if (
+    props.controller.publishUnavailable
+    || editor.dirty.value
+    || !props.controller.validate(props.build, props.context).valid
+  ) return;
   publication.value = await props.controller.publish(props.build);
 }
 
@@ -607,9 +611,14 @@ defineExpose({
       <button
         class="ui-button"
         :title="editor.dirty.value ? 'Save changes before writing this template into Guild Wars' : undefined"
-        :disabled="editor.dirty.value || controller.saving.value"
+        :disabled="controller.publishUnavailable !== null || editor.dirty.value || controller.saving.value"
         @click="writeTemplate"
       >Save to Guild Wars</button>
+      <small
+        v-if="controller.publishUnavailable"
+        class="ui-field-hint"
+        role="status"
+      >{{ controller.publishUnavailable }}</small>
       <button class="ui-button" data-variant="primary" @click="copyBuildCode">Copy code</button>
     </footer>
     <footer v-else class="detail-actions authoring-actions">

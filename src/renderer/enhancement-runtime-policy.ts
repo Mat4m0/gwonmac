@@ -12,6 +12,19 @@ export type OptionalToolSettings = Readonly<{
 
 export type RuntimePlayRegion = "pve" | "pvp" | "unknown";
 
+/**
+ * The game snapshot is the canonical region observation when that capability
+ * exists. Party state is still required by commands, but it cannot re-enable
+ * optional surfaces after a newer snapshot says PvP or unknown. Developer
+ * Toolbox profiles have no snapshot observer, so their party is the fallback.
+ */
+export function runtimePlayRegion(
+  snapshot: RuntimePlayRegion | null,
+  party: RuntimePlayRegion,
+): RuntimePlayRegion {
+  return snapshot ?? party;
+}
+
 /** One fail-closed answer for optional observers, UI, and commands. */
 export function enhancementRuntimePolicy(
   program: EnhancementProgram,

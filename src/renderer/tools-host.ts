@@ -20,7 +20,10 @@
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TeamApplyCommands } from "../shared/builds/team-apply-runner.js";
-import type { MountedTool } from "./toolbox-foundation.js";
+import {
+  createToolboxLifecycle,
+  type MountedTool,
+} from "./toolbox-foundation.js";
 import {
   applyImport,
   planImport,
@@ -47,7 +50,9 @@ type ToolsBundle = Readonly<{
     options: {
       initiallyVisible?: boolean;
       onVisibilityChange?(visible: boolean): void;
-      publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
+      publishTemplate:
+        | ((template: PublishableTemplate) => Promise<PublishedTemplate>)
+        | null;
       commands: TeamApplyCommands | null;
       applyUnavailable: string | null;
       development: boolean;
@@ -105,7 +110,7 @@ async function publishTemplate(
  */
 const APPLY_UNAVAILABLE =
   "Team Apply is unavailable in this session. Your saved teams are safe; "
-  + "you can keep playing and publish individual builds as templates.";
+  + "you can keep playing and edit, import, or export builds and teams.";
 
 /**
  * Loads the Tools bundle and hands the overlay a handle to it.
@@ -132,6 +137,8 @@ export function mountToolsInto(
    * import at run time and the Tools bundle compiles in.
    */
   commands: TeamApplyCommands | null,
+  /** Whether this session's client can discover templates written to IDBFS. */
+  templatePublishingAvailable: boolean,
 ): Promise<MountedTool | null> {
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
@@ -142,7 +149,7 @@ export function mountToolsInto(
       const app = bundle.mountToolsApp(host, {
         initiallyVisible: false,
         onVisibilityChange,
-        publishTemplate,
+        publishTemplate: templatePublishingAvailable ? publishTemplate : null,
         commands,
         applyUnavailable: commands === null ? APPLY_UNAVAILABLE : null,
         development: window.gwNative.init.development,
@@ -161,4 +168,35 @@ export function mountToolsInto(
       host.textContent = "Tools could not be loaded — see the console.";
       return null;
     });
+}
+
+/**
+ * Mounts the saved-library-only Tools experience for an official client that
+ * has no usable companion. This module already owns the Tools bundle boundary,
+ * so it also owns the matching settings listener and teardown; the Emscripten
+ * bootstrap only decides when this fallback is needed.
+ */
+export function mountHostOnlyTools(
+  parent: HTMLElement,
+  templatePublishingAvailable: boolean,
+): () => void {
+  const lifecycle = createToolboxLifecycle(parent, {
+    mountTool: (host, onVisibilityChange) =>
+      mountToolsInto(
+        host,
+        onVisibilityChange,
+        null,
+        templatePublishingAvailable,
+      ),
+  });
+  const syncEnabled = () => {
+    const settings = window.gwToolsSettings();
+    lifecycle.setEnabled(settings.enabled && settings.teamManagement);
+  };
+  window.addEventListener("gw:tools-settings", syncEnabled);
+  syncEnabled();
+  return () => {
+    window.removeEventListener("gw:tools-settings", syncEnabled);
+    lifecycle.dispose();
+  };
 }

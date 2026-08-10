@@ -186,6 +186,7 @@ let gameWasmModule: WebAssembly.Module | null = null;
 let runtimeInitialized = false;
 let enhancementInstallationStarted = false;
 let hostOnlyToolsInstallationStarted = false;
+let templatePublishingAvailable = false;
 let rendererUnloading = false;
 let crashRecorded = false;
 
@@ -241,37 +242,25 @@ const log = (...a: unknown[]) => {
 function installHostOnlyTools(): void {
   if (hostOnlyToolsInstallationStarted || rendererUnloading) return;
   hostOnlyToolsInstallationStarted = true;
-  void Promise.all([
-    import('./toolbox-foundation.js'),
-    import('./tools-host.js'),
-  ])
-    .then(([{ createToolboxLifecycle }, { mountToolsInto }]) => {
+  void import('./tools-host.js')
+    .then(({ mountHostOnlyTools }) => {
       if (rendererUnloading) return;
-      const lifecycle = createToolboxLifecycle(document.body, {
-        mountTool: (host, onVisibilityChange) =>
-          mountToolsInto(host, onVisibilityChange, null),
-      });
-      const syncEnabled = () => {
-        const settings = window.gwToolsSettings();
-        lifecycle.setEnabled(settings.enabled && settings.teamManagement);
-      };
-      const onToolSettings = () => syncEnabled();
-      window.addEventListener('gw:tools-settings', onToolSettings);
-      syncEnabled();
+      const dispose = mountHostOnlyTools(
+        document.body,
+        templatePublishingAvailable,
+      );
       if (rendererUnloading) {
-        window.removeEventListener('gw:tools-settings', onToolSettings);
-        lifecycle.dispose();
+        dispose();
         return;
       }
-      disposeHostOnlyTools = () => {
-        window.removeEventListener('gw:tools-settings', onToolSettings);
-        lifecycle.dispose();
-      };
+      disposeHostOnlyTools = dispose;
     })
-    .catch((error) => log(
-      '[tools]',
-      error instanceof Error ? error.message : String(error),
-    ));
+    .catch((error) => {
+      log(
+        '[tools]',
+        error instanceof Error ? error.message : String(error),
+      );
+    });
 }
 
 function maybeInstallEnhancements(): void {
@@ -1215,6 +1204,9 @@ function loadGlue() {
       native().client.session(),
     ]);
     appSettings = settings;
+    templatePublishingAvailable =
+      session.compatibility?.state === 'template-only'
+      || session.compatibility?.state === 'certified';
     applyAppearance(settings);
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,

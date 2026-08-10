@@ -68,6 +68,7 @@ const CSP =
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 const RENDERER_SHARED_MODULES = new Set([
   "companion-abi.js",
+  "companion-kernel-contract.js",
   "contracts.js",
   "enhancement-config.js",
   "enhancement-contracts.js",

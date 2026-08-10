@@ -1,28 +1,18 @@
 import assert from "node:assert/strict";
 import { COMPANION_ABI } from "../src/shared/companion-abi.ts";
+import {
+  COMPANION_KERNEL_EXPORTS,
+  COMPANION_KERNEL_IMPORTS,
+  companionKernelSignatureBytes,
+} from "../src/shared/companion-kernel-contract.ts";
+export {
+  COMPANION_KERNEL_IMPORTS,
+  COMPANION_KERNEL_SIGNATURES,
+} from "../src/shared/companion-kernel-contract.ts";
 
-export const COMPANION_KERNEL_IMPORTS = Object.freeze([
-  "env.__indirect_function_table:table",
-  "env.__memory_base:global",
-  "env.__stack_pointer:global",
-  "env.__table_base:global",
-  "env.memory:memory",
-]);
-
-// One ABI list for both the build sealer and the deeper reproducibility gate.
-// The renderer carries the same list because it independently type-checks the
-// instantiated module at the browser boundary; a source invariant compares it.
-export const COMPANION_KERNEL_SIGNATURES = Object.freeze([
-  { name: "companion_init", typeIndex: 0 },
-  { name: "companion_dispatch", typeIndex: 1 },
-  { name: "companion_cursor_event_count", typeIndex: 2 },
-  { name: "companion_abi", typeIndex: 2 },
-  { name: "companion_config_bytes", typeIndex: 2 },
-  { name: "companion_snapshot_bytes", typeIndex: 2 },
-  { name: "companion_cursor_bytes", typeIndex: 2 },
-  { name: "companion_toolbox_bytes", typeIndex: 2 },
-  { name: "companion_party_bytes", typeIndex: 2 },
-]);
+const companionKernelSignatureModule = new WebAssembly.Module(
+  companionKernelSignatureBytes(),
+);
 
 /**
  * What each nullary export must answer, restated where a human changes it.
@@ -79,74 +69,10 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   0x01, 0x05, 0xe1, 0x0f, 0x02, 0x00, 0x00,
 ]);
 
-const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES
-  .map(({ name }) => `${name}:function`)
-  .sort();
 const WASM_PAGE_BYTES = 65_536;
 const TEST_MEMORY_PAGES = 4;
 const TEST_MEMORY_BASE = WASM_PAGE_BYTES;
 const TEST_SENTINELS = Object.freeze([0xa5, 0x5a]);
-
-/** @param {number} value */
-function encodeUleb(value) {
-  const bytes = [];
-  do {
-    let byte = value & 0x7f;
-    value = Math.floor(value / 0x80);
-    if (value !== 0) byte |= 0x80;
-    bytes.push(byte);
-  } while (value !== 0);
-  return bytes;
-}
-
-/** @param {string} value */
-function encodeName(value) {
-  const bytes = new TextEncoder().encode(value);
-  return [...encodeUleb(bytes.byteLength), ...bytes];
-}
-
-/** @param {number} parameterCount @param {boolean} returnsI32 */
-function i32FunctionType(parameterCount, returnsI32) {
-  return [
-    0x60,
-    ...encodeUleb(parameterCount),
-    ...Array.from({ length: parameterCount }, () => 0x7f),
-    ...(returnsI32 ? [0x01, 0x7f] : [0x00]),
-  ];
-}
-
-/** @param {number} id @param {number[]} payload */
-function encodeSection(id, payload) {
-  return [id, ...encodeUleb(payload.length), ...payload];
-}
-
-function makeCompanionSignatureModule() {
-  const types = [
-    // companion_init: snapshot, config, cursor, toolbox and party regions as
-    // pointer/size pairs, plus the feature word. Eleven, not nine, since the
-    // party region joined.
-    i32FunctionType(11, true),
-    i32FunctionType(6, false),
-    i32FunctionType(0, true),
-  ];
-  const typeSection = [...encodeUleb(types.length), ...types.flat()];
-  const importSection = [
-    ...encodeUleb(COMPANION_KERNEL_SIGNATURES.length),
-    ...COMPANION_KERNEL_SIGNATURES.flatMap(({ name, typeIndex }) => [
-      ...encodeName("kernel"),
-      ...encodeName(name),
-      0,
-      ...encodeUleb(typeIndex),
-    ]),
-  ];
-  return new WebAssembly.Module(Uint8Array.of(
-    0, 97, 115, 109, 1, 0, 0, 0,
-    ...encodeSection(1, typeSection),
-    ...encodeSection(2, importSection),
-  ));
-}
-
-const COMPANION_SIGNATURE_MODULE = makeCompanionSignatureModule();
 
 /** @param {Uint8Array} binary */
 function sectionIds(binary) {
@@ -237,7 +163,7 @@ function validateInstantiationWrites(module, memorySize) {
       },
     });
     assert.doesNotThrow(
-      () => new WebAssembly.Instance(COMPANION_SIGNATURE_MODULE, {
+      () => new WebAssembly.Instance(companionKernelSignatureModule, {
         kernel: instance.exports,
       }),
       "companion kernel exports have invalid function types",
@@ -293,7 +219,7 @@ export function validateCompanionKernelContract(binary) {
     WebAssembly.Module.exports(module)
       .map((entry) => `${entry.name}:${entry.kind}`)
       .sort(),
-    EXPECTED_EXPORTS,
+    COMPANION_KERNEL_EXPORTS,
     "companion kernel export surface is invalid",
   );
   const dylink = dylinkSections[0];

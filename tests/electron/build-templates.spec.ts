@@ -1,6 +1,6 @@
 // The Build Templates pane, driven end to end against a real main process.
 //
-// GW_OFFLINE_SHELL=1 means no ArenaNet client boots, so there is no real mount:
+// The default cached-only fixture has no client, so there is no real mount:
 // the pane's own "the game has to be running" state is therefore free to test,
 // and everything else installs a fake FS on the page the way the update spec
 // fakes Module.FS. The export half is real all the way to disk — that is the
@@ -10,7 +10,11 @@ import { expect, test } from "@playwright/test";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  isDomActiveElement,
+  launchOffline,
+} from "./fixtures.mjs";
 
 const SKILLS = "OQCiUyo8AkVwR4KMMGAAAEAA";
 const PASTED = "OACjIyhM5MXzyJlzbyMlmTuhJ";
@@ -233,7 +237,9 @@ test.describe("build templates", () => {
       await page.locator("#templates-import-clipboard").click();
 
       // The caret lands where the next act is, rather than making it be found.
-      await expect(page.locator("#templates-name")).toBeFocused();
+      await expect.poll(
+        () => isDomActiveElement(page.locator("#templates-name")),
+      ).toBe(true);
       await page.locator("#templates-name").fill("Paragon Imbagon");
 
       // A different source has nothing to do with that name.

@@ -50,8 +50,10 @@ and is not shipped behavior yet.
 
 The required product boundary is that Build and Team authoring is host-owned
 while observations and Apply are exact-client capabilities. Host authoring
-remains usable when those capabilities refuse; the packaged unknown-build story
-proves the official module stays active and no companion command surface appears.
+remains usable when those capabilities refuse; publishing into the game's
+template list additionally requires certified template support. The packaged
+unknown-build story proves the official module stays active and no companion
+command surface appears.
 
 ## Non-goals
 

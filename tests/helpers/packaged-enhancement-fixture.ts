@@ -27,6 +27,13 @@ import {
   type EnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.ts";
 import { stopChildProcess } from "./child-process.ts";
+import { saveBuildLibrary } from "../../src/main/core/build-library.ts";
+import {
+  LIBRARY_VERSION,
+  buildId,
+  skillBarOf,
+  type BuildLibrary,
+} from "../../src/shared/builds/library.ts";
 // The canonical tables, not their emitted copies. `pnpm typecheck` runs before
 // `pnpm build` in `pnpm verify`, so a static import of `build/` here would make
 // checking depend on output that may not exist yet. The packaged app under
@@ -45,6 +52,14 @@ import {
   DISTRIBUTION_CHANNEL_CONFIG,
 } from "../../src/shared/distribution-channel.ts";
 import { resolvePackageMode } from "../../scripts/package-mode.ts";
+import {
+  seedCachedClient,
+  TEST_CLIENT_GLUE,
+  TEST_CLIENT_SHA256,
+  TEST_CLIENT_WASM,
+} from "./cached-client.ts";
+
+export { seedCachedClient } from "./cached-client.ts";
 
 /**
  * The host `Module` the renderer publishes for ArenaNet's generated glue. Only
@@ -104,15 +119,8 @@ export const packagedExecutable = path.join(
   `out/${productName}-darwin-${process.arch}/${productName}.app/Contents/MacOS/${productName}`,
 );
 
-export const OFFICIAL_WASM = Uint8Array.from([
-  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-  0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
-  0x03, 0x02, 0x01, 0x00,
-  0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
-]);
-export const OFFICIAL_SHA256 = createHash("sha256")
-  .update(OFFICIAL_WASM)
-  .digest("hex");
+export const OFFICIAL_WASM = TEST_CLIENT_WASM;
+export const OFFICIAL_SHA256 = TEST_CLIENT_SHA256;
 // `assert.fail` returns `never`, so this is the build itself rather than an
 // optional every function below would have to re-narrow.
 export const ENHANCEMENT_BUILD =
@@ -185,15 +193,7 @@ export const PRODUCT_RUNTIME_KEYS = Object.freeze([
 export const OBSERVER_RUNTIME_KEYS = Object.freeze(
   [...DEVELOPER_RUNTIME_KEYS, "setHookEnabledForBenchmark"].sort(),
 );
-export const SNAPSHOT_BYTES = Uint8Array.of(0);
-export const SNAPSHOT_HASH = createHash("md5")
-  .update(SNAPSHOT_BYTES)
-  .digest("hex");
-export const SYNTHETIC_GLUE = [
-  "Module.instantiateWasm({ env: {} }, function () {",
-  "  Module.onRuntimeInitialized();",
-  "});",
-].join("\n");
+export const SYNTHETIC_GLUE = TEST_CLIENT_GLUE;
 
 export function uleb(value: number) {
   const bytes: number[] = [];
@@ -331,7 +331,7 @@ export interface LaunchPaths {
 }
 
 export interface LaunchOptions {
-  cachedOnly?: boolean;
+  cachedClient?: boolean;
   prepare?: (paths: LaunchPaths) => Promise<void>;
 }
 
@@ -339,7 +339,7 @@ export async function launchPackaged(
   prefix: string,
   settings: AppSettingsPatch,
   {
-    cachedOnly = false,
+    cachedClient = false,
     prepare = async () => undefined,
   }: LaunchOptions = {},
 ) {
@@ -350,19 +350,22 @@ export async function launchPackaged(
   const userData = await mkdtemp(path.join(tmpdir(), prefix));
   const artifacts = path.join(userData, "game", "artifacts");
   try {
-    await mkdir(artifacts, { recursive: true });
-    await Promise.all([
-      writeFile(
-        path.join(userData, "settings.json"),
-        // Packaged builds are update-capable and the check defaults on; a test
-        // launch must never reach GitHub, so every profile opts out unless the
-        // test says otherwise.
-        JSON.stringify({ autoCheckUpdates: false, ...settings }),
-        { mode: 0o600 },
-      ),
-      writeFile(path.join(artifacts, "Gw.jspi.wasm"), OFFICIAL_WASM),
-    ]);
-    await prepare({ artifacts, userData });
+    await writeFile(
+      path.join(userData, "settings.json"),
+      // Packaged builds are update-capable and the check defaults on; a test
+      // launch must never reach GitHub, so every profile opts out unless the
+      // test says otherwise.
+      JSON.stringify({ autoCheckUpdates: false, ...settings }),
+      { mode: 0o600 },
+    );
+    const paths = { artifacts, userData };
+    if (cachedClient) {
+      await seedCachedClient(paths, {
+        beforeSeal: () => prepare(paths),
+      });
+    } else {
+      await prepare(paths);
+    }
   } catch (error) {
     await rm(userData, { recursive: true, force: true });
     throw error;
@@ -375,10 +378,8 @@ export async function launchPackaged(
     ELECTRON_ENABLE_LOGGING: "1",
   };
   delete env.ELECTRON_RUN_AS_NODE;
-  delete env.GW_OFFLINE_SHELL;
   delete env.GW_REQUIRE_CACHED_CLIENT;
-  if (cachedOnly) env.GW_REQUIRE_CACHED_CLIENT = "1";
-  else env.GW_OFFLINE_SHELL = "1";
+  env.GW_REQUIRE_CACHED_CLIENT = "1";
   const child = spawn(
     packagedExecutable,
     [
@@ -463,36 +464,39 @@ export async function driveHarnessRuntime(page: Page) {
   );
 }
 
-export async function seedCachedClient({ artifacts, userData }: LaunchPaths) {
-  const game = path.join(userData, "game");
-  const chunks = path.join(game, "chunks");
-  const compatibility = path.join(game, "compatibility", "stale", "0");
-  const enhancement = path.join(game, "enhancements", "stale", "0");
+async function seedHostOnlyToolsClient(paths: LaunchPaths) {
+  const compatibility = path.join(paths.userData, "game", "compatibility", "stale", "0");
+  const enhancement = path.join(paths.userData, "game", "enhancements", "stale", "0");
   await Promise.all([
-    mkdir(chunks, { recursive: true }),
     mkdir(compatibility, { recursive: true }),
     mkdir(enhancement, { recursive: true }),
   ]);
   await Promise.all([
-    writeFile(path.join(artifacts, "Gw.jspi.js"), SYNTHETIC_GLUE),
-    writeFile(path.join(artifacts, "version.json"), "{}"),
-    writeFile(
-      path.join(artifacts, "manifest.json"),
-      JSON.stringify({
-        compressionMode: "none",
-        chunkSize: SNAPSHOT_BYTES.byteLength,
-        snapshot: "Gw.snapshot",
-        size: SNAPSHOT_BYTES.byteLength,
-        chunkHashes: [SNAPSHOT_HASH],
-      }),
-    ),
-    writeFile(path.join(chunks, SNAPSHOT_HASH), SNAPSHOT_BYTES),
     writeFile(
       path.join(compatibility, "Gw.jspi.wasm"),
       "stale compatibility output",
     ),
     writeFile(path.join(enhancement, "Gw.jspi.wasm"), "stale Enhancement output"),
   ]);
+  const library: BuildLibrary = {
+    version: LIBRARY_VERSION,
+    builds: [{
+      id: buildId("packaged-host-only"),
+      name: "Patch-day build",
+      professions: ["Mo", null],
+      skills: skillBarOf(() => null),
+      attributes: {},
+      tags: ["patch-day"],
+      notes: "",
+      favourite: false,
+      lastUsed: null,
+      parent: null,
+      origin: null,
+    }],
+    teams: [],
+    tags: ["patch-day"],
+  };
+  await saveBuildLibrary(path.join(paths.userData, "build-library.json"), library);
 }
 
 export async function assertPackagedOffSession() {
@@ -503,8 +507,7 @@ export async function assertPackagedOffSession() {
       dataStrategy: "quick",
     },
     {
-      cachedOnly: true,
-      prepare: seedCachedClient,
+      cachedClient: true,
     },
   );
   try {
@@ -658,8 +661,8 @@ export async function assertPackagedHostOnlyToolsSession() {
       gwonmacTools: true,
     },
     {
-      cachedOnly: true,
-      prepare: seedCachedClient,
+      cachedClient: true,
+      prepare: seedHostOnlyToolsClient,
     },
   );
   try {
@@ -705,12 +708,31 @@ export async function assertPackagedHostOnlyToolsSession() {
       { nativeCursor: true, tools: true },
     );
     await openTools();
+    await fixture.page.getByRole("tab", { name: "Builds" }).click();
+    await fixture.page.locator(".library-row").first().click();
+    await fixture.page.getByRole("button", { name: "Export build" }).click();
+    await fixture.page.getByText(
+      "Saving into Guild Wars is unavailable for this client build. "
+      + "Your build remains safe in the local library.",
+      { exact: true },
+    ).waitFor();
+    assert.equal(
+      await fixture.page.getByRole("button", { name: "Save to Guild Wars" }).isDisabled(),
+      true,
+      "an uncertified official module offered in-game template publication",
+    );
+    const dismissNotice = fixture.page.getByRole("button", {
+      name: "Dismiss message",
+    });
+    if (await dismissNotice.isVisible()) await dismissNotice.click();
+    await fixture.page.getByRole("button", { name: "Done" }).click();
+    await fixture.page.getByRole("tab", { name: "Teams" }).click();
     await fixture.page.getByRole("button", { name: "New team", exact: true }).click();
     await fixture.page.getByLabel("Name optional").fill("Patch-day team");
     await fixture.page.getByRole("button", { name: "Create team" }).click();
     await fixture.page.getByText(
       "Team Apply is unavailable in this session. Your saved teams are safe; "
-      + "you can keep playing and publish individual builds as templates.",
+      + "you can keep playing and edit, import, or export builds and teams.",
       { exact: true },
     ).first().waitFor();
     assert.ok(
@@ -777,9 +799,8 @@ export async function assertPackagedHostOnlyToolsAfterSoftRefusal() {
       gwonmacTools: true,
     },
     {
-      cachedOnly: true,
+      cachedClient: true,
       prepare: async (paths) => {
-        await seedCachedClient(paths);
         await writeFile(path.join(paths.artifacts, "Gw.jspi.wasm"), module);
       },
     },

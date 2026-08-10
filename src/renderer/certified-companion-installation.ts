@@ -43,8 +43,19 @@ import type {
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
-import { COMPANION_ABI as COMPANION_DESCRIPTOR } from "../shared/companion-abi.js";
-import { enhancementRuntimePolicy } from "./enhancement-runtime-policy.js";
+import {
+  COMPANION_ABI as COMPANION_DESCRIPTOR,
+} from "../shared/companion-abi.js";
+import {
+  COMPANION_KERNEL_EXPORTS,
+  COMPANION_KERNEL_IMPORTS,
+  companionKernelSignatureBytes,
+} from "../shared/companion-kernel-contract.js";
+import {
+  enhancementRuntimePolicy,
+  runtimePlayRegion,
+  type RuntimePlayRegion,
+} from "./enhancement-runtime-policy.js";
 import {
   createProfessionCommandTrace,
   PROFESSION_COMMAND_TRACE_BYTES,
@@ -68,6 +79,22 @@ const COMPANION_RUNTIME_BYTES = 65_536;
  * rounded up inside it; the raw pointer is what has to be freed.
  */
 const COMPANION_RUNTIME_ALIGN = 16;
+const companionKernelSignatureModule = new WebAssembly.Module(
+  companionKernelSignatureBytes(),
+);
+
+// A Wasm import is the platform's exact function-type check. JavaScript
+// reflection cannot distinguish i32 from f32/f64 or void from i32.
+function hasExactCompanionSignatures(exports: WebAssembly.Exports): boolean {
+  try {
+    new WebAssembly.Instance(companionKernelSignatureModule, {
+      kernel: exports,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 let companionInstallations = 0;
 
@@ -90,89 +117,6 @@ function percentile95(samples: readonly number[]): number {
   const ordered = [...samples].sort((left, right) => left - right);
   return ordered[Math.max(0, Math.ceil(ordered.length * 0.95) - 1)] ?? 0;
 }
-const COMPANION_SIGNATURES = [
-  { name: "companion_init", typeIndex: 0 },
-  { name: "companion_dispatch", typeIndex: 1 },
-  { name: "companion_cursor_event_count", typeIndex: 2 },
-  { name: "companion_abi", typeIndex: 2 },
-  { name: "companion_config_bytes", typeIndex: 2 },
-  { name: "companion_snapshot_bytes", typeIndex: 2 },
-  { name: "companion_cursor_bytes", typeIndex: 2 },
-  { name: "companion_toolbox_bytes", typeIndex: 2 },
-  { name: "companion_party_bytes", typeIndex: 2 },
-] as const;
-
-function encodeUleb(value: number): number[] {
-  const bytes: number[] = [];
-  do {
-    let byte = value & 0x7f;
-    value = Math.floor(value / 0x80);
-    if (value !== 0) byte |= 0x80;
-    bytes.push(byte);
-  } while (value !== 0);
-  return bytes;
-}
-
-function encodeName(value: string): number[] {
-  const bytes = new TextEncoder().encode(value);
-  return [...encodeUleb(bytes.byteLength), ...bytes];
-}
-
-function i32FunctionType(parameterCount: number, returnsI32: boolean): number[] {
-  return [
-    0x60,
-    ...encodeUleb(parameterCount),
-    ...Array.from({ length: parameterCount }, () => 0x7f),
-    ...(returnsI32 ? [0x01, 0x7f] : [0x00]),
-  ];
-}
-
-function encodeSection(id: number, payload: number[]): number[] {
-  return [id, ...encodeUleb(payload.length), ...payload];
-}
-
-function companionSignatureModule(): WebAssembly.Module {
-  const types = [
-    // init takes five region pointer/size pairs and the feature word.
-    i32FunctionType(11, true),
-    i32FunctionType(6, false),
-    i32FunctionType(0, true),
-  ];
-  const typeSection = [
-    ...encodeUleb(types.length),
-    ...types.flat(),
-  ];
-  const importSection = [
-    ...encodeUleb(COMPANION_SIGNATURES.length),
-    ...COMPANION_SIGNATURES.flatMap(({ name, typeIndex }) => [
-      ...encodeName("kernel"),
-      ...encodeName(name),
-      0x00,
-      ...encodeUleb(typeIndex),
-    ]),
-  ];
-  return new WebAssembly.Module(Uint8Array.of(
-    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-    ...encodeSection(1, typeSection),
-    ...encodeSection(2, importSection),
-  ));
-}
-
-// A Wasm import is the platform's exact function-type check. JavaScript
-// reflection cannot distinguish i32 from f32/f64 or void from i32.
-const COMPANION_SIGNATURE_MODULE = companionSignatureModule();
-
-function hasExactCompanionSignatures(exports: WebAssembly.Exports): boolean {
-  try {
-    new WebAssembly.Instance(COMPANION_SIGNATURE_MODULE, {
-      kernel: exports,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function installCertifiedCompanion(
   instance: WebAssembly.Instance,
   module: WebAssembly.Module,
@@ -461,26 +405,16 @@ export async function installCertifiedCompanion(
       await crypto.subtle.digest("SHA-256", kernelBytes),
     )].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     const kernelModule = await WebAssembly.compile(kernelBytes);
-    const expectedImports = [
-      "env.__indirect_function_table:table",
-      "env.__memory_base:global",
-      "env.__stack_pointer:global",
-      "env.__table_base:global",
-      "env.memory:memory",
-    ];
     const imports = WebAssembly.Module.imports(kernelModule)
       .map((entry) => `${entry.module}.${entry.name}:${entry.kind}`)
       .sort();
-    if (JSON.stringify(imports) !== JSON.stringify(expectedImports)) {
+    if (JSON.stringify(imports) !== JSON.stringify(COMPANION_KERNEL_IMPORTS)) {
       throw new Error("Companion kernel import surface is invalid");
     }
-    const expectedExports = COMPANION_SIGNATURES
-      .map(({ name }) => `${name}:function`)
-      .sort();
     const kernelExports = WebAssembly.Module.exports(kernelModule)
       .map((entry) => `${entry.name}:${entry.kind}`)
       .sort();
-    if (JSON.stringify(kernelExports) !== JSON.stringify(expectedExports)) {
+    if (JSON.stringify(kernelExports) !== JSON.stringify(COMPANION_KERNEL_EXPORTS)) {
       throw new Error("Companion kernel export surface is invalid");
     }
     const immutableI32 = (value: number) => new WebAssembly.Global(
@@ -602,18 +536,29 @@ export async function installCertifiedCompanion(
       window.gwCursorState = () => cursor?.state ?? null;
     }
     let optionalSettings = window.gwToolsSettings();
-    let playRegion: "pve" | "pvp" | "unknown" = foundation
+    let snapshotPlayRegion: RuntimePlayRegion | null = observeState
+      ? "unknown"
+      : null;
+    let partyPlayRegion: RuntimePlayRegion = foundation
       ? "unknown"
       : "pve";
     let readout: ReturnType<typeof createTargetReadout> | null = null;
-    const policy = () => enhancementRuntimePolicy(program, optionalSettings, playRegion);
+    const playRegion = () => runtimePlayRegion(
+      snapshotPlayRegion,
+      partyPlayRegion,
+    );
+    const policy = () => enhancementRuntimePolicy(
+      program,
+      optionalSettings,
+      playRegion(),
+    );
     let lastPolicyTrace = "";
     const tracePolicy = (reason: "launch" | "region" | "settings") => {
       if (!window.gwNative.init.development) return;
       const active = policy();
       const summary = {
         program,
-        playRegion,
+        playRegion: playRegion(),
         nativeCursor: capabilities.nativeCursor,
         teamManagement: active.teamManagement,
         targetReadout: active.targetReadout,
@@ -661,9 +606,10 @@ export async function installCertifiedCompanion(
       ready: () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
         if (!teamEnabled()) throw new Error("Team management is disabled");
-        if (playRegion !== "pve") {
+        const currentRegion = playRegion();
+        if (currentRegion !== "pve") {
           throw new Error(
-            playRegion === "pvp"
+            currentRegion === "pvp"
               ? "GWonMac Tools are unavailable in PvP"
               : "GWonMac Tools are unavailable while the region is unknown",
           );
@@ -671,6 +617,9 @@ export async function installCertifiedCompanion(
         const observed = toolboxObservation;
         if (observed === null || observed.status !== "ready") {
           throw new Error("no party has been observed yet");
+        }
+        if (observed.party?.playRegion !== "pve") {
+          throw new Error("team commands require a confirmed PvE party");
         }
         if (observed.party?.inOutpost !== true) {
           throw new Error("team commands require a confirmed PvE outpost");
@@ -682,7 +631,7 @@ export async function installCertifiedCompanion(
       ? createToolboxLifecycle(document.body, {
           mountTool: (host, onVisibilityChange) =>
             import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host, onVisibilityChange, commands),
+              mountToolsInto(host, onVisibilityChange, commands, true),
             ),
         })
       : null;
@@ -809,12 +758,12 @@ export async function installCertifiedCompanion(
       polledCursor,
       observeState
         ? { update: (state) => {
-            const next: typeof playRegion = state.status === "ready"
+            const next: RuntimePlayRegion = state.status === "ready"
               && (state.playRegion === "pve" || state.playRegion === "pvp")
               ? state.playRegion
               : "unknown";
-            if (foundation && next !== playRegion) {
-              playRegion = next;
+            if (next !== snapshotPlayRegion) {
+              snapshotPlayRegion = next;
               tracePolicy("region");
               setTeamEnabled();
               setTargetEnabled();
@@ -828,13 +777,16 @@ export async function installCertifiedCompanion(
             toolboxObservation = state;
             professionTrace?.poll(state);
             const party = state.party;
-            const next: typeof playRegion = state.status === "ready"
+            const next: RuntimePlayRegion = state.status === "ready"
               && party?.status === "ready"
               && (party.playRegion === "pve" || party.playRegion === "pvp")
               ? party.playRegion
               : "unknown";
-            if (next !== playRegion) {
-              playRegion = next;
+            const previousRegion = playRegion();
+            if (next !== partyPlayRegion) {
+              partyPlayRegion = next;
+            }
+            if (playRegion() !== previousRegion) {
               tracePolicy("region");
               setTeamEnabled();
               setTargetEnabled();
