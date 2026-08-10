@@ -537,6 +537,7 @@ export async function assertToolboxFoundationLifecycle() {
             free,
             enhancement_hook_slot: hookSlot,
             enhancement_command: () => 1,
+            enhancement_profession_trace: () => 30,
           },
         },
         module,

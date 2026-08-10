@@ -166,6 +166,7 @@ export const DEVELOPER_RUNTIME_KEYS = Object.freeze([
 export const PRODUCT_RUNTIME_KEYS = Object.freeze([
   ...DEVELOPER_RUNTIME_KEYS,
   "addHero",
+  "cancelPending",
   "kickHero",
   "setHardMode",
   "setHeroAttributes",
