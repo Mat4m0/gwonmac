@@ -7,9 +7,9 @@
 // offered; a release only counts if it ships a notarized Apple Silicon DMG
 // (an asset ending in `arm64.dmg`) — one carrying only checksums is skipped.
 //
-// Channels: `stable` offers stable releases only; `beta` (the launch-phase
-// default) also offers prereleases. Flip SITE_RELEASE_CHANNEL to "stable"
-// after the first stable release ships.
+// Channels: `stable` is the public default and offers stable releases only;
+// the explicit `beta` path additionally offers beta and release-candidate
+// builds. Alpha and snapshot builds are never public acquisition candidates.
 
 export const RELEASE_REPO = "Mat4m0/gwonmac";
 export const RELEASES_FALLBACK_URL = `https://github.com/${RELEASE_REPO}/releases/latest`;
@@ -19,7 +19,7 @@ export const GITHUB_API_URL = `https://api.github.com/repos/${RELEASE_REPO}/rele
 
 export type SiteReleaseChannel = "stable" | "beta";
 
-export const SITE_RELEASE_CHANNEL: SiteReleaseChannel = "beta";
+export const SITE_RELEASE_CHANNEL: SiteReleaseChannel = "stable";
 
 // Same grammar and precedence as the app's src/shared/release.ts: leading
 // zeroes are rejected, prereleases order alpha < beta < rc < stable.
@@ -29,6 +29,7 @@ const CHANNEL_ORDER = { alpha: 0, beta: 1, rc: 2, stable: 3 } as const;
 
 interface ParsedVersion {
   numbers: [number, number, number, number, number];
+  channel: keyof typeof CHANNEL_ORDER;
   prerelease: boolean;
   text: string;
 }
@@ -41,6 +42,7 @@ function parseReleaseTag(tag: string): ParsedVersion | null {
   const channel = (match[4] ?? "stable") as keyof typeof CHANNEL_ORDER;
   return {
     numbers: [major!, minor!, patch!, CHANNEL_ORDER[channel], sequence!],
+    channel,
     prerelease: channel !== "stable",
     text: `${major}.${minor}.${patch}${channel === "stable" ? "" : `-${channel}.${sequence}`}`,
   };
@@ -88,7 +90,10 @@ export function selectLatestRelease(
       if (!isRecord(release) || release.draft === true) continue;
       const parsed = typeof release.tag_name === "string" ? parseReleaseTag(release.tag_name) : null;
       if (!parsed) continue;
-      if (channel === "stable" && (release.prerelease === true || parsed.prerelease)) continue;
+      if (typeof release.prerelease !== "boolean") continue;
+      if (release.prerelease !== parsed.prerelease) continue;
+      if (parsed.channel === "alpha") continue;
+      if (channel === "stable" && parsed.channel !== "stable") continue;
       const url = appleSiliconDmg(release);
       if (!url) continue;
       if (!selected || isNewer(parsed, selected.parsed)) selected = { parsed, url };

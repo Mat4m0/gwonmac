@@ -19,7 +19,7 @@ import {
 // conflict under `getQuery` — read the channel from the event path instead.
 function requestedChannel(event: { path: string }): SiteReleaseChannel {
   const channel = new URL(event.path, "http://localhost").searchParams.get("channel");
-  return channel === "stable" ? "stable" : SITE_RELEASE_CHANNEL;
+  return channel === "beta" ? "beta" : SITE_RELEASE_CHANNEL;
 }
 
 export default defineCachedEventHandler(

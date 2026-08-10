@@ -36,16 +36,38 @@ const STABLE = {
   prerelease: false,
   assets: [CHECKSUMS, SBOM, ARM64_DMG],
 };
-const PRERELEASE_ARM64_DMG = {
+const ALPHA_ARM64_DMG = {
   name: "Guild-Wars-Reforged-0.0.4-alpha.1-macOS-arm64.dmg",
   browser_download_url:
     "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-alpha.1/Guild-Wars-Reforged-0.0.4-alpha.1-macOS-arm64.dmg",
 };
-const PRERELEASE = {
+const ALPHA = {
   tag_name: "v0.0.4-alpha.1",
   draft: false,
   prerelease: true,
-  assets: [PRERELEASE_ARM64_DMG],
+  assets: [ALPHA_ARM64_DMG],
+};
+const BETA_ARM64_DMG = {
+  name: "Guild-Wars-Reforged-0.0.4-beta.1-macOS-arm64.dmg",
+  browser_download_url:
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-beta.1/Guild-Wars-Reforged-0.0.4-beta.1-macOS-arm64.dmg",
+};
+const BETA = {
+  tag_name: "v0.0.4-beta.1",
+  draft: false,
+  prerelease: true,
+  assets: [BETA_ARM64_DMG],
+};
+const RC_ARM64_DMG = {
+  name: "Guild-Wars-Reforged-0.0.4-rc.1-macOS-arm64.dmg",
+  browser_download_url:
+    "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.4-rc.1/Guild-Wars-Reforged-0.0.4-rc.1-macOS-arm64.dmg",
+};
+const RC = {
+  tag_name: "v0.0.4-rc.1",
+  draft: false,
+  prerelease: true,
+  assets: [RC_ARM64_DMG],
 };
 const DRAFT = { ...STABLE, tag_name: "v0.0.5", draft: true };
 const SNAPSHOTS = Array.from({ length: 25 }, (_, index) => ({
@@ -69,67 +91,71 @@ const FALLBACK = (channel: "stable" | "beta") => ({
 });
 
 // The resolved download is the notarized arm64 DMG, not its updater ZIP.
-assert.equal(SITE_RELEASE_CHANNEL, "beta");
+assert.equal(SITE_RELEASE_CHANNEL, "stable");
 assert.deepEqual(selectLatestRelease([STABLE], SITE_RELEASE_CHANNEL), {
-  channel: "beta",
+  channel: "stable",
   version: "0.0.3",
   prerelease: false,
   url: ARM64_DMG.browser_download_url,
 });
 
-// During the launch phase, a newer prerelease becomes the direct download.
-const PRERELEASE_ANSWER = {
+// Beta is explicit, includes release candidates, and never admits alpha.
+const BETA_ANSWER = {
   channel: "beta",
-  version: "0.0.4-alpha.1",
+  version: "0.0.4-rc.1",
   prerelease: true,
-  url: PRERELEASE_ARM64_DMG.browser_download_url,
+  url: RC_ARM64_DMG.browser_download_url,
 };
 assert.deepEqual(
-  selectLatestRelease([PRERELEASE, STABLE], SITE_RELEASE_CHANNEL),
-  PRERELEASE_ANSWER,
+  selectLatestRelease([ALPHA, BETA, RC, STABLE], "beta"),
+  BETA_ANSWER,
 );
 assert.deepEqual(
-  selectLatestRelease([PRERELEASE], SITE_RELEASE_CHANNEL),
-  PRERELEASE_ANSWER,
+  selectLatestRelease([ALPHA], "beta"),
+  FALLBACK("beta"),
+);
+assert.deepEqual(
+  selectLatestRelease([{ ...BETA, prerelease: false }], "beta"),
+  FALLBACK("beta"),
 );
 
 // Snapshots are public GitHub prereleases but never application versions. A
 // failed cleanup can put more than one old API page ahead of the beta without
 // changing the website's answer, whichever side of it GitHub returns them on.
 assert.deepEqual(
-  selectLatestRelease([...SNAPSHOTS, PRERELEASE, STABLE], SITE_RELEASE_CHANNEL),
-  PRERELEASE_ANSWER,
+  selectLatestRelease([...SNAPSHOTS, RC, STABLE], "beta"),
+  BETA_ANSWER,
 );
 assert.deepEqual(
-  selectLatestRelease([PRERELEASE, STABLE, ...SNAPSHOTS], SITE_RELEASE_CHANNEL),
-  PRERELEASE_ANSWER,
+  selectLatestRelease([RC, STABLE, ...SNAPSHOTS], "beta"),
+  BETA_ANSWER,
 );
 assert.deepEqual(
   selectLatestRelease(
     [
       { ...SNAPSHOTS[0], tag_name: "snapshot-latest" },
       { ...SNAPSHOTS[1], assets: [CHECKSUMS, SBOM] },
-      PRERELEASE,
+      RC,
     ],
-    SITE_RELEASE_CHANNEL,
+    "beta",
   ),
-  PRERELEASE_ANSWER,
+  BETA_ANSWER,
 );
 
 // Drafts are invisible to a logged-out visitor and are not offered either.
 assert.deepEqual(
-  selectLatestRelease([DRAFT, PRERELEASE], SITE_RELEASE_CHANNEL),
-  PRERELEASE_ANSWER,
+  selectLatestRelease([DRAFT, RC], "beta"),
+  BETA_ANSWER,
 );
 
-// Reverting the one channel constant to stable restores the long-term policy.
-assert.deepEqual(selectLatestRelease([PRERELEASE, STABLE], "stable"), {
+// Stable remains the primary public download even when newer candidates exist.
+assert.deepEqual(selectLatestRelease([ALPHA, BETA, RC, STABLE], "stable"), {
   channel: "stable",
   version: "0.0.3",
   prerelease: false,
   url: ARM64_DMG.browser_download_url,
 });
-assert.deepEqual(selectLatestRelease([PRERELEASE], "stable"), FALLBACK("stable"));
+assert.deepEqual(selectLatestRelease([BETA, RC], "stable"), FALLBACK("stable"));
 
 // Network ordering and network text are not version policy. A malformed stable
 // tag is ignored, and the greatest canonical stable version wins even when
@@ -147,10 +173,10 @@ const NEWER_STABLE = {
 };
 assert.deepEqual(
   selectLatestRelease([{ ...STABLE, tag_name: "banana" }], SITE_RELEASE_CHANNEL),
-  FALLBACK("beta"),
+  FALLBACK("stable"),
 );
 assert.deepEqual(selectLatestRelease([STABLE, NEWER_STABLE], SITE_RELEASE_CHANNEL), {
-  channel: "beta",
+  channel: "stable",
   version: "2026.8.0",
   prerelease: false,
   url: NEWER_ARM64_DMG.browser_download_url,
@@ -160,16 +186,16 @@ assert.deepEqual(selectLatestRelease([STABLE, NEWER_STABLE], SITE_RELEASE_CHANNE
 // rather than announced with a releases-page link under its version number.
 assert.deepEqual(
   selectLatestRelease([{ ...STABLE, assets: [CHECKSUMS, SBOM] }], SITE_RELEASE_CHANNEL),
-  FALLBACK("beta"),
+  FALLBACK("stable"),
 );
 
 // Offline, rate-limited, or unreadable: `fetch` rejecting (`null`) and
 // GitHub's error object both reach the selector as something that is not an
 // array of releases.
-assert.deepEqual(selectLatestRelease(null, SITE_RELEASE_CHANNEL), FALLBACK("beta"));
+assert.deepEqual(selectLatestRelease(null, SITE_RELEASE_CHANNEL), FALLBACK("stable"));
 assert.deepEqual(
   selectLatestRelease({ message: "API rate limit exceeded" }, SITE_RELEASE_CHANNEL),
-  FALLBACK("beta"),
+  FALLBACK("stable"),
 );
 
 const host = "127.0.0.1";
@@ -271,6 +297,8 @@ try {
   for (const href of downloadLinks(html)) {
     assert.equal(href, "/download");
   }
+  assert.match(html, /href="\/download\?channel=beta"/);
+  assert.match(html, />Download Beta</);
 
   // The German landing page carries the same analytics and buttons; a
   // locale-prefixed link would be answered by the /de/download alias below.
@@ -286,6 +314,8 @@ try {
   for (const href of downloadLinks(germanHtml)) {
     assert.match(href, /^\/(de\/)?download$/);
   }
+  assert.match(germanHtml, /href="\/download\?channel=beta"/);
+  assert.match(germanHtml, />Beta herunterladen</);
 
   // Public performance-sensitive prose stays qualitative. Controlled, dated
   // measurements belong in docs/performance-electron.md, not in marketing
@@ -325,6 +355,15 @@ try {
     download.headers.get("location") ?? "",
     new RegExp(`^${EXTERNAL_URLS.releases}/`),
   );
+  const betaDownload = await globalThis.fetch(
+    `http://${host}:${port}/download?channel=beta`,
+    { redirect: "manual" },
+  );
+  assert.equal(betaDownload.status, 302);
+  assert.match(
+    betaDownload.headers.get("location") ?? "",
+    new RegExp(`^${EXTERNAL_URLS.releases}/`),
+  );
   // The alias the layer's locale-prefixed links land on.
   const germanDownload = await globalThis.fetch(`http://${host}:${port}/de/download`, {
     redirect: "manual",
@@ -339,6 +378,11 @@ try {
   const answer = (await latest.json()) as { channel: string; url: string };
   assert.equal(answer.channel, SITE_RELEASE_CHANNEL);
   assert.match(answer.url, new RegExp(`^${EXTERNAL_URLS.releases}/`));
+  const betaLatest = await load("/api/latest?channel=beta");
+  assert.equal(betaLatest.status, 200);
+  const betaAnswer = (await betaLatest.json()) as { channel: string; url: string };
+  assert.equal(betaAnswer.channel, "beta");
+  assert.match(betaAnswer.url, new RegExp(`^${EXTERNAL_URLS.releases}/`));
 } finally {
   await stopChildProcess(server);
 }
