@@ -19,17 +19,17 @@ declare global {
   // in the renderer. They exist only while it runs.
   var __failLauncherDownloadTest: ((result: DownloadOutcome) => void) | undefined;
   var __fullGameVerificationCalls: number | undefined;
-  var __clientRetryRestart: {
-    quit: number;
-    relaunch: number;
-    originalQuit: Electron.App["quit"];
-    originalRelaunch: Electron.App["relaunch"];
-  };
   var __gameStorageReset: {
     accept: boolean;
     quit: number;
     relaunch: number;
     originalDialog: Electron.Dialog["showMessageBox"];
+    originalQuit: Electron.App["quit"];
+    originalRelaunch: Electron.App["relaunch"];
+  };
+  var __clientRetryRestart: {
+    quit: number;
+    relaunch: number;
     originalQuit: Electron.App["quit"];
     originalRelaunch: Electron.App["relaunch"];
   };
