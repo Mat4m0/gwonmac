@@ -200,11 +200,16 @@ is meant to inherit the dead ends rather than walk back into them.
   a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of application discovery,
   release validation, download, ready, and install state. Only an official
-  package carrying the release marker may reach Squirrel.Mac. A release-identity stable
-  version receives stable releases only; a release-identity prerelease may
-  advance to a later eligible prerelease or stable. The separately signed
-  Preview tester app cannot use AppUpdater. A ready update waits for an explicit
-  or ordinary restart. ArenaNet client updates remain separate and automatic.
+  package carrying the release marker may reach Squirrel.Mac. `updateTrack`
+  is the sole Stable/Beta preference inside that release identity: Stable is
+  the default; Beta additionally admits beta and RC releases; alpha is never
+  eligible. Selecting Stable never authorizes a native downgrade. An older
+  Stable is named as a manual return through the fixed Releases page, while a
+  matching final Stable remains a normal forward update. The separately signed
+  Preview tester app cannot use AppUpdater. Every public beta/RC must pass the
+  release-only latest-Stable → candidate → same-Stable semantic data
+  round-trip. A ready forward update waits for an explicit or ordinary restart.
+  ArenaNet client updates remain separate and automatic.
   `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md` owns
   what the player is told.
 

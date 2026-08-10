@@ -13,15 +13,12 @@ in a number. July is `7`, never `07`: `2026.07.01` is not a valid version, and
 `src/shared/release.ts` — the one parser this app compares versions with —
 refuses to read it rather than guessing what was meant.
 
-Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
-`-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
-An install running a stable release is never offered a prerelease. The current
-website selector is `SITE_RELEASE_CHANNEL` in
-`apps/website/server/utils/release-select.ts`. Its launch-phase `beta` value
-currently accepts every parsed prerelease stage, including any alpha candidate.
-That is current behavior, not the desired public-Beta contract: the accepted
-refactor plan requires the website and application selectors to exclude alpha
-before public Stable/Beta updates are advertised.
+The parser recognizes the historical prerelease shapes `-alpha.N`, `-beta.N`,
+and `-rc.N`, ordered alpha < beta < RC < the release itself. Public versioned
+releases refuse alpha. Stable is the website and application default; the
+explicit Beta path additionally admits beta and RC builds. Tag syntax and
+GitHub's prerelease flag must agree, and snapshots never parse as application
+versions.
 
 **What the number does not mean.** It is not a compatibility promise, and in
 particular it says nothing about which Guild Wars client build the release
@@ -34,10 +31,12 @@ A newer app version fixes an uncertified client build only if it contains a
 baseline for the changed structure, so a higher number on its own is not the
 answer.
 
-Automatic checks remain user-controlled and on by default. A release-identity
-stable version receives stable releases only; a release-identity prerelease may
-advance to a later eligible prerelease or stable. The separately signed Preview
-tester app cannot use AppUpdater. See [Updates](user-guide.md#updates).
+Automatic checks remain user-controlled and on by default. Stable/Beta is one
+preference inside the release identity; Beta keeps the same profile, Keychain,
+and updater. A matching final Stable is a forward update. An older Stable is a
+manual DMG return through the fixed Releases page, never a native downgrade.
+The separately signed Preview tester app cannot use AppUpdater. See
+[Updates](user-guide.md#updates).
 
 Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
 application versions. Their tags deliberately do not parse as one of the
@@ -98,13 +97,14 @@ identity boundary required a manual DMG replacement; the explicit
 `~/Library/Application Support/Guild Wars` path preserved ordinary profile
 data while both login routes required one new sign-in.
 
-`SIGNED_BETA_UPDATE_PROVEN` belongs only to that historical bundle-identity
-and Keychain cutover. It records that a corrected-identity beta installed over
-another corrected-identity build and retained the profile and secrets. Do not
-reuse it for the planned recurring Stable/Beta data-compatibility gate. Every
-future public beta/RC instead proves an actual latest-stable → candidate →
-latest-stable semantic round-trip as specified by
-`plans/full-refactor-optimization.md`.
+`SIGNED_BETA_UPDATE_PROVEN` belonged only to that historical bundle-identity
+and Keychain cutover and has been removed from the active release workflow.
+Every public beta/RC now proves an actual latest signed Stable → exact signed
+candidate → the same Stable semantic round-trip. Both binaries must read,
+modify, and rewrite settings, Builds/Teams with tags and references, window
+state, and profile-origin browser storage without quarantine or reset. A beta
+therefore cannot be the first build carrying its own selector: a Stable
+enabler must already be published.
 
 ## Verify the downloaded files
 

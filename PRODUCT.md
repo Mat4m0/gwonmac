@@ -43,10 +43,18 @@ available when client integration is unavailable. Optional observers and
 commands are disabled in PvP, guild halls, and unknown regions.
 
 “Tools Beta” is a feature-maturity label, not an application update channel.
-Preview remains the separately signed tester application; the planned public
-Stable/Beta application track is defined in
-[the accepted refactor plan](plans/full-refactor-optimization.md)
-and is not shipped behavior yet.
+The release application has a separate Stable/Beta update preference: Stable
+is the default, while Beta opts into beta and release-candidate application
+builds under the same bundle, profile, Keychain, and updater identity. Alpha is
+never public. Preview remains the separately signed tester application and has
+no automatic updater.
+
+Returning to Stable is truthful rather than magical. A matching final Stable
+is a normal forward update; when the latest Stable is older than the installed
+Beta, the app opens the fixed Releases page for a manual signed/notarized DMG
+install. It never asks the native updater to downgrade. Every public beta and
+RC is release-gated on the latest Stable reading and rewriting its canonical
+player data after the candidate has changed it.
 
 The required product boundary is that Build and Team authoring is host-owned
 while observations and Apply are exact-client capabilities. Host authoring

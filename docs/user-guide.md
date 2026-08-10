@@ -464,12 +464,28 @@ install on the next ordinary restart. Restarting while Guild Wars is
 connected asks before disconnecting. The app saves its persistent game
 filesystem before either kind of restart.
 
-A release-identity stable version receives stable releases only. A
-release-identity prerelease may advance to a later eligible prerelease or
-stable. The separately signed Preview tester app cannot use AppUpdater. A
-failed check is never reported as “up to date,” and **Last checked** records the
-last completed catalog check. ArenaNet client updates remain separate and
-automatic.
+**Stable** is the default update track. Choose **Beta** under **Settings →
+Updates** to also receive beta and release-candidate application builds. Alpha
+builds are never offered. Stable and Beta use the same application identity,
+profile, saved login, and updater; this setting changes only which releases the
+next check may select. With automatic checks on, changing it starts a check. If
+a check or download is already active, that work finishes under the selection
+it started with and the new choice applies to the next check. With automatic
+checks off, changing tracks makes no request until you check manually.
+
+A beta or RC normally advances to its final Stable release as an ordinary
+forward update. If you select Stable while the latest Stable is older than the
+installed Beta, GWonMac does **not** ask macOS to downgrade it. It names the
+available Stable and opens the fixed GitHub Releases page. Download that
+release's signed and notarized DMG and install it manually; macOS Gatekeeper
+checks it when opened. GWonMac neither downloads nor independently verifies
+that manual DMG. Public beta and RC releases are tested so the latest Stable
+can read, modify, and rewrite their canonical player data before publication.
+
+The separately signed Preview tester app is a different installation identity,
+not the Beta track, and cannot use AppUpdater. A failed check is never reported
+as “up to date,” and **Last checked** records the last completed catalog check.
+ArenaNet client updates remain separate and automatic.
 
 ## When the client build is not certified
 

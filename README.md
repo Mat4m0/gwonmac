@@ -33,6 +33,11 @@ Releases are numbered by date — `2026.7.1` is a July 2026 build — which says
 how recent a release is and nothing about which game client build it certifies:
 [Release numbering](docs/release-verification.md#release-numbering).
 
+The website and app use Stable by default. Players who deliberately choose
+Beta receive beta and release-candidate app builds under the same release
+identity; alpha builds are never offered. The separately signed Preview tester
+snapshots are not the Beta track and cannot update themselves.
+
 ## How it works
 
 On first launch the app asks how you want game data downloaded, and waits for your choice.
@@ -63,6 +68,10 @@ mid-download with _Play Now Instead_.
   GitHub only when you press **Check for Updates**. A downloaded update is
   offered as a restart and otherwise installs on the next restart. See
   [Updates](docs/user-guide.md#updates).
+- **Stable/Beta is one release preference, not another installation identity.**
+  Beta keeps the same profile and saved login. A final Stable updates forward
+  normally; returning to an older Stable opens the Releases page for a manual
+  DMG install because the app never performs an automatic downgrade.
 
 Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 

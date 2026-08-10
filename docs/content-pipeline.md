@@ -112,20 +112,24 @@ Only a packaged macOS build whose generated `distribution-channel.json` names
 `release` may update. The marker has the exact shape
 `{ schema: 1, repository, channel }`; capabilities are derived from that closed
 channel rather than stored as booleans. Preview, Development, malformed, and
-unmarked packages fail as `updater-unavailable` before making a request. A
-release-identity stable version receives stable releases only; a
-release-identity prerelease may advance to a later eligible prerelease or
-stable. The separately signed Preview tester app cannot use AppUpdater. Drafts,
-malformed tags, duplicate assets, unexpected download URLs, and a
-`RELEASES.json` that does not name the exact release ZIP fail closed.
+unmarked packages fail as `updater-unavailable` before making a request. The
+one release identity reads one persisted `updateTrack` when a check starts.
+Stable admits only stable releases; Beta additionally admits beta and RC;
+alpha is always refused. Drafts, tag/prerelease disagreement, duplicate
+versions, malformed tags or assets, unexpected download URLs, and a
+`RELEASES.json` that does not name the exact versioned arm64 ZIP fail closed.
+The separately signed Preview tester app cannot use AppUpdater.
 
 The main process gives the validated single-release server response to
 Electron's Squirrel.Mac `autoUpdater`, which downloads the ZIP. Main has already
 made the version decision; the feed is deliberately not Squirrel's static
 multi-release format because its native numeric comparison cannot represent
 this project's SemVer prerelease suffixes. It publishes one discriminated
-`AppUpdateState`: `idle`, `checking`, `up-to-date`, `downloading`, `ready`, or
-`failed` with a closed reason. The renderer receives no network text or URL.
+`AppUpdateState`: `idle`, `checking`, `up-to-date`, `downloading`, `ready`,
+`manual-stable-return`, or `failed` with a closed reason. A manual return names
+only the exact Stable version and opens the fixed Releases page; it never puts
+an older build into Squirrel or passes an asset URL across IPC. The renderer
+receives no network text or URL.
 A check left without a readable answer — `offline`, `timeout`, or `unreadable`,
 whether the body never parsed or parsed into something that is not a releases
 list — also records `appUpdate.requestFailed` naming which request lost it, the
@@ -139,3 +143,14 @@ same quit path as a normal quit, including a bounded renderer `FS.syncfs(false)`
 before native cleanup. An active game socket requires confirmation. The first
 Developer ID release is a manual DMG bootstrap because an older ad-hoc
 signature cannot update into the new signing identity.
+
+Stable and Beta do not create a fourth distribution identity. Every public
+beta and RC release downloads the latest published signed Stable, launches it
+against a disposable profile, launches the exact signed candidate, then
+launches the same Stable again. Settings, Builds, Teams, tags/references,
+window state, and origin-owned profile storage must remain semantically
+readable and writable with no quarantine or reset. This is a release-only gate,
+not part of `pnpm check`. A first beta therefore cannot ship until a Stable
+containing the selector and this data contract has already shipped. Native
+update-path/Keychain continuity is re-run when those dependencies or identities
+change; it is not duplicated on every beta.
