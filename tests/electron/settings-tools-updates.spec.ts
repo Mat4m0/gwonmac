@@ -223,7 +223,7 @@ test.describe("tools and update settings", () => {
     }
   });
 
-  test("the first Tools enable can be declined, then saves and restarts atomically", async () => {
+  test("the first Tools enable can be declined and a saved enable survives relaunch refusal", async () => {
     const fixture = await launchOffline("gw-tools-enable-restart-e2e-");
     try {
       const { app, page } = fixture;
@@ -281,6 +281,7 @@ test.describe("tools and update settings", () => {
         dialog.showMessageBox = record as typeof dialog.showMessageBox;
         electronApp.relaunch = () => {
           globalThis.__resetRestart.relaunch = true;
+          throw new Error("injected relaunch refusal");
         };
         electronApp.quit = () => {
           globalThis.__resetRestart.quit = true;
@@ -295,7 +296,7 @@ test.describe("tools and update settings", () => {
         if (!options) throw new Error("no message box was shown");
         return { quit, relaunch, buttons: options.buttons };
       })).toEqual({
-        quit: true,
+        quit: false,
         relaunch: true,
         buttons: ["Enable and Restart", "Cancel"],
       });

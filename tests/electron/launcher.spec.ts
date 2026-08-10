@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeOffline,
@@ -23,6 +22,14 @@ declare global {
   var __clientRetryRestart: {
     quit: number;
     relaunch: number;
+    originalQuit: Electron.App["quit"];
+    originalRelaunch: Electron.App["relaunch"];
+  };
+  var __gameStorageReset: {
+    accept: boolean;
+    quit: number;
+    relaunch: number;
+    originalDialog: Electron.Dialog["showMessageBox"];
     originalQuit: Electron.App["quit"];
     originalRelaunch: Electron.App["relaunch"];
   };
@@ -319,9 +326,10 @@ test.describe("launcher recovery", () => {
     }
   });
 
-  test("clears saved files before the replacement renderer can mount IDBFS", async () => {
+  test("confirms, persists, and applies a saved-files reset before replacement startup", async () => {
     let fixture = await launchOffline("gw-filesystem-reset-e2e-");
     const { userData } = fixture;
+    const marker = path.join(userData, "clear-game-storage-on-start");
     try {
       await fixture.page.evaluate(
         () =>
@@ -340,11 +348,63 @@ test.describe("launcher recovery", () => {
             };
           }),
       );
+
+      await fixture.app.evaluate(({ app: electronApp, dialog }) => {
+        globalThis.__gameStorageReset = {
+          accept: false,
+          quit: 0,
+          relaunch: 0,
+          originalDialog: dialog.showMessageBox,
+          originalQuit: electronApp.quit,
+          originalRelaunch: electronApp.relaunch,
+        };
+        dialog.showMessageBox = async () => ({
+          response: globalThis.__gameStorageReset.accept ? 0 : 1,
+          checkboxChecked: false,
+        });
+        electronApp.relaunch = () => {
+          globalThis.__gameStorageReset.relaunch += 1;
+        };
+        electronApp.quit = () => {
+          globalThis.__gameStorageReset.quit += 1;
+        };
+      });
+
+      expect(
+        await fixture.page.evaluate(() =>
+          window.gwNative.gameStorage.resetAndRestart(),
+        ),
+      ).toBe(false);
+      expect(existsSync(marker)).toBe(false);
+      expect(
+        await fixture.app.evaluate(() => ({
+          quit: globalThis.__gameStorageReset.quit,
+          relaunch: globalThis.__gameStorageReset.relaunch,
+        })),
+      ).toEqual({ quit: 0, relaunch: 0 });
+
+      await fixture.app.evaluate(() => {
+        globalThis.__gameStorageReset.accept = true;
+      });
+      expect(
+        await fixture.page.evaluate(() =>
+          window.gwNative.gameStorage.resetAndRestart(),
+        ),
+      ).toBe(true);
+      expect(existsSync(marker)).toBe(true);
+      expect(
+        await fixture.app.evaluate(() => ({
+          quit: globalThis.__gameStorageReset.quit,
+          relaunch: globalThis.__gameStorageReset.relaunch,
+        })),
+      ).toEqual({ quit: 1, relaunch: 1 });
+
+      await fixture.app.evaluate(({ app: electronApp, dialog }) => {
+        dialog.showMessageBox = globalThis.__gameStorageReset.originalDialog;
+        electronApp.quit = globalThis.__gameStorageReset.originalQuit;
+        electronApp.relaunch = globalThis.__gameStorageReset.originalRelaunch;
+      });
       await fixture.app.close();
-      await writeFile(
-        path.join(userData, "clear-game-storage-on-start"),
-        "",
-      );
 
       fixture = await launchOfflineAt(userData);
       expect(
@@ -355,7 +415,7 @@ test.describe("launcher recovery", () => {
         ),
       ).toBe(false);
       expect(
-        existsSync(path.join(userData, "clear-game-storage-on-start")),
+        existsSync(marker),
       ).toBe(false);
     } finally {
       await closeOffline(fixture);

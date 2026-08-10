@@ -70,7 +70,8 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, and the Enhancement switches |
 | `certificates/`           | the reviewed ArenaNet client-generation heartbeat used by scheduled recertification |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
-| `src/main/ipc.ts`         | validated native capability handlers                          |
+| `src/main/ipc.ts`         | validated capability transport and direct forwarding          |
+| `src/main/settings-actions.ts` | settings confirmations, durable reset markers, relaunch, and startup recovery |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
 | `src/main/diagnostics/`   | flight recorder, capture, samplers, schema, detector, export  |
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
