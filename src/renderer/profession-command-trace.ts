@@ -9,7 +9,7 @@
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
-const TRACE_WORDS = 26;
+const TRACE_WORDS = 30;
 export const PROFESSION_COMMAND_TRACE_BYTES =
   TRACE_WORDS * Uint32Array.BYTES_PER_ELEMENT;
 
@@ -54,8 +54,12 @@ export function createProfessionCommandTrace(
       const senderConnection = words[11]!;
       const senderState = words[12]!;
       const senderTransport = words[13]!;
-      const senderSize = words[14]!;
-      const senderPayload = [...words.slice(15, 26)].slice(
+      const senderCursorBefore = words[14]!;
+      const senderCursorAfter = words[15]!;
+      const senderFlagBefore = words[16]!;
+      const senderFlagAfter = words[17]!;
+      const senderSize = words[18]!;
+      const senderPayload = [...words.slice(19, 30)].slice(
         0,
         Math.min(11, Math.floor(senderSize / 4)),
       );
@@ -102,6 +106,10 @@ export function createProfessionCommandTrace(
           connection: senderConnection,
           state: senderState,
           transport: senderTransport,
+          cursorBefore: senderCursorBefore,
+          cursorAfter: senderCursorAfter,
+          flagBefore: senderFlagBefore,
+          flagAfter: senderFlagAfter,
           size: senderSize,
           payload: Object.freeze(senderPayload),
         }),

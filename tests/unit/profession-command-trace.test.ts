@@ -15,7 +15,7 @@ const professionSnapshot = (
   1,
   count, origin, target, profession,
   0, 0, 0, 0,
-  count, origin, 999, 2, 555, 12,
+  count, origin, 999, 2, 555, 10, 22, 0, 1, 12,
   65, target, profession, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
@@ -56,7 +56,7 @@ test("the command trace publishes exact profession and skill payloads", () => {
       },
     };
 
-    assert.equal(PROFESSION_COMMAND_TRACE_BYTES, 104);
+    assert.equal(PROFESSION_COMMAND_TRACE_BYTES, 120);
     trace.poll(state);
     trace.poll(state);
     snapshot = professionSnapshot(2, 1, 77, 4);
@@ -65,7 +65,7 @@ test("the command trace publishes exact profession and skill payloads", () => {
       1,
       2, 1, 77, 4,
       1, 0, 77, 8,
-      3, 0, 999, 2, 555, 44,
+      3, 0, 999, 2, 555, 10, 22, 0, 1, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 7, 8,
     ];
     trace.poll(state);
@@ -85,6 +85,10 @@ test("the command trace publishes exact profession and skill payloads", () => {
         connection: 999,
         state: 2,
         transport: 555,
+        cursorBefore: 10,
+        cursorAfter: 22,
+        flagBefore: 0,
+        flagAfter: 1,
         size: 12,
         payload: [65, 77, 2],
       },
@@ -101,6 +105,10 @@ test("the command trace publishes exact profession and skill payloads", () => {
         connection: 999,
         state: 2,
         transport: 555,
+        cursorBefore: 10,
+        cursorAfter: 22,
+        flagBefore: 0,
+        flagAfter: 1,
         size: 44,
         payload: [93, 77, 8, 1, 2, 3, 4, 5, 6, 7, 8],
       },

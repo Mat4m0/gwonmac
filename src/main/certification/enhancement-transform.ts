@@ -64,7 +64,7 @@ const DISPATCH_PARAMS = 6;
  *  command; the widest builder we have takes four scalars. */
 const COMMAND_PARAMS = 5;
 const COMMAND_ARGS = COMMAND_PARAMS - 1;
-const PROFESSION_TRACE_WORDS = 26;
+const PROFESSION_TRACE_WORDS = 30;
 const DISPATCH_TICK = 0;
 const DISPATCH_CURSOR = 1;
 const DISPATCH_UI = 2;
@@ -331,6 +331,10 @@ type ProfessionTraceGlobals = Readonly<{
   senderConnection: number;
   senderState: number;
   senderTransport: number;
+  senderCursorBefore: number;
+  senderCursorAfter: number;
+  senderFlagBefore: number;
+  senderFlagAfter: number;
   senderSize: number;
   senderPayload: number;
 }>;
@@ -405,15 +409,23 @@ function tracedPacketSender(
     Uint8Array.of(0x20), uleb(0),
     Uint8Array.of(0x28), uleb(2), uleb(56),
     Uint8Array.of(0x24), uleb(globals.senderTransport),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x28), uleb(2), uleb(64),
+    Uint8Array.of(0x24), uleb(globals.senderCursorBefore),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x28), uleb(2), uleb(84),
+    Uint8Array.of(0x24), uleb(globals.senderFlagBefore),
     Uint8Array.of(0x20), uleb(1),
     Uint8Array.of(0x24), uleb(globals.senderSize),
     ...Array.from({ length: 11 }, (_, index) => concat(
       index < words ? load(index * 4) : concat(Uint8Array.of(0x41), sleb(0)),
       Uint8Array.of(0x24), uleb(globals.senderPayload + index),
     )),
+    Uint8Array.of(0x41), sleb(1),
+    Uint8Array.of(0x21), uleb(3),
   );
   return concat(
-    uleb(0),
+    uleb(1), uleb(1), Uint8Array.of(0x7f),
     Uint8Array.of(0x20), uleb(1),
     Uint8Array.of(0x41), sleb(12),
     Uint8Array.of(0x4f, 0x04, 0x40),
@@ -434,6 +446,15 @@ function tracedPacketSender(
     Uint8Array.of(0x20), uleb(1),
     Uint8Array.of(0x20), uleb(2),
     Uint8Array.of(0x10), uleb(originalIndex),
+    Uint8Array.of(0x20), uleb(3),
+    Uint8Array.of(0x04, 0x40),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x28), uleb(2), uleb(64),
+    Uint8Array.of(0x24), uleb(globals.senderCursorAfter),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x28), uleb(2), uleb(84),
+    Uint8Array.of(0x24), uleb(globals.senderFlagAfter),
+    Uint8Array.of(0x0b),
     Uint8Array.of(0x0b),
   );
 }
@@ -455,6 +476,10 @@ function professionTraceReader(globals: ProfessionTraceGlobals): Uint8Array {
     globals.senderConnection,
     globals.senderState,
     globals.senderTransport,
+    globals.senderCursorBefore,
+    globals.senderCursorAfter,
+    globals.senderFlagBefore,
+    globals.senderFlagAfter,
     globals.senderSize,
     ...Array.from({ length: 11 }, (_, index) => globals.senderPayload + index),
   ] as const;
@@ -907,8 +932,12 @@ export function transformEnhancementWasm(
     senderConnection: traceGlobalBase + 11,
     senderState: traceGlobalBase + 12,
     senderTransport: traceGlobalBase + 13,
-    senderSize: traceGlobalBase + 14,
-    senderPayload: traceGlobalBase + 15,
+    senderCursorBefore: traceGlobalBase + 14,
+    senderCursorAfter: traceGlobalBase + 15,
+    senderFlagBefore: traceGlobalBase + 16,
+    senderFlagAfter: traceGlobalBase + 17,
+    senderSize: traceGlobalBase + 18,
+    senderPayload: traceGlobalBase + 19,
   };
   const dispatchTypeIndex = types.length;
 
