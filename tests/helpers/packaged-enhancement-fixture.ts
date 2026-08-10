@@ -60,6 +60,13 @@ export interface HostModule {
     ) => void,
   ): unknown;
   onRuntimeInitialized(): void;
+  setStartupProgress(
+    stage: unknown,
+    a: unknown,
+    b: unknown,
+    c: unknown,
+    d: unknown,
+  ): void;
   socket?: { connect?: unknown };
 }
 
@@ -409,6 +416,16 @@ export async function closePackaged(fixture: PackagedFixture) {
   await rm(fixture.userData, { recursive: true, force: true });
 }
 
+/** Completes the one upstream startup signal the synthetic WASM cannot emit. */
+async function completeSyntheticClientStartup(page: Page) {
+  await page.evaluate(() => {
+    const { Module } = globalThis as PageGlobals;
+    if (!Module) throw new Error("the renderer published no Module");
+    Module.setStartupProgress("complete", undefined, undefined, undefined, undefined);
+  });
+  await page.waitForSelector("#loading.gone");
+}
+
 export async function driveHarnessRuntime(page: Page) {
   await page.waitForFunction(() => {
     const { Module } = globalThis as PageGlobals;
@@ -661,6 +678,7 @@ export async function assertPackagedHostOnlyToolsSession() {
       await fixture.page.waitForFunction(
         () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
       );
+      await completeSyntheticClientStartup(fixture.page);
       await fixture.page.waitForSelector("#toolbox-foundation");
     };
     const openTools = async () => {
@@ -669,7 +687,13 @@ export async function assertPackagedHostOnlyToolsSession() {
           cancelable: true,
         })));
       assert.equal(claimed, true, "the production Tools command was not claimed");
-      await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]');
+      await fixture.page.waitForSelector('#toolbox-foundation[data-open="true"]');
+      await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]', {
+        state: "attached",
+      });
+      await fixture.page.waitForSelector('.tools-stage[data-mode="embedded"]', {
+        state: "visible",
+      });
     };
 
     await waitForRuntime();
@@ -771,13 +795,20 @@ export async function assertPackagedHostOnlyToolsAfterSoftRefusal() {
     await fixture.page.waitForFunction(
       () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
     );
+    await completeSyntheticClientStartup(fixture.page);
     await fixture.page.waitForSelector("#toolbox-foundation");
     const claimed = await fixture.page.evaluate(() =>
       !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
         cancelable: true,
       })));
     assert.equal(claimed, true, "soft refusal did not install host-only Tools");
-    await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]');
+    await fixture.page.waitForSelector('#toolbox-foundation[data-open="true"]');
+    await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]', {
+      state: "attached",
+    });
+    await fixture.page.waitForSelector('.tools-stage[data-mode="embedded"]', {
+      state: "visible",
+    });
     assert.equal(await fixture.page.evaluate(() => window.gwCompanionRuntime), undefined);
   } finally {
     await closePackaged(fixture);
