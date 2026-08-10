@@ -625,3 +625,95 @@ export async function assertPackagedOffSession() {
     await closePackaged(fixture);
   }
 }
+
+/**
+ * Proves the shipped unknown-build route, not a manually mounted Tools host.
+ * The same cached official-only fixture used above starts with Tools selected;
+ * the renderer must mount host authoring while exposing neither observation nor
+ * command integration.
+ */
+export async function assertPackagedHostOnlyToolsSession() {
+  const fixture = await launchPackaged(
+    "gw-packaged-host-only-tools-",
+    {
+      compatibilityNoticeSeenFor: OFFICIAL_SHA256,
+      dataStrategy: "quick",
+      gwonmacTools: true,
+    },
+    {
+      cachedOnly: true,
+      prepare: seedCachedClient,
+    },
+  );
+  try {
+    const enhancementRequests: string[] = [];
+    fixture.page.on("request", (request) => {
+      if (enhancementResource(request.url())) enhancementRequests.push(request.url());
+    });
+    const waitForRuntime = async () => {
+      await fixture.page.waitForFunction(async () => {
+        const progress = await window.gwNative.progress.current();
+        if (progress.phase === "error") {
+          throw new Error(`cached client failed: ${progress.errorCode}`);
+        }
+        return progress.phase === "ready";
+      });
+      await fixture.page.waitForFunction(
+        () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
+      );
+      await fixture.page.waitForSelector("#toolbox-foundation");
+    };
+    const openTools = async () => {
+      const claimed = await fixture.page.evaluate(() =>
+        !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
+          cancelable: true,
+        })));
+      assert.equal(claimed, true, "the production Tools command was not claimed");
+      await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]');
+    };
+
+    await waitForRuntime();
+    const session = await fixture.page.evaluate(() => window.gwNative.client.session());
+    assert.equal(session.compatibility?.state, "uncertified");
+    assert.equal(session.compatibility?.enhancementActive, false);
+    assert.deepEqual(
+      await fixture.page.evaluate(() => window.gwNative.init.enhancementSelection),
+      { nativeCursor: true, tools: true },
+    );
+    await openTools();
+    await fixture.page.getByRole("button", { name: "New team", exact: true }).click();
+    await fixture.page.getByLabel("Name optional").fill("Patch-day team");
+    await fixture.page.getByRole("button", { name: "Create team" }).click();
+    await fixture.page.getByText(
+      "Team Apply is unavailable in this session. Your saved teams are safe; "
+      + "you can keep playing and publish individual builds as templates.",
+      { exact: true },
+    ).first().waitFor();
+    assert.ok(
+      (await fixture.page.evaluate(async () =>
+        (await window.gwNative.buildLibrary.get()).library.teams
+          .some((team) => team.name === "Patch-day team"))),
+      "the host-only Tools route did not persist its library change",
+    );
+    assert.equal(
+      await fixture.page.evaluate(() => window.gwCompanionRuntime),
+      undefined,
+      "an official-only session exposed a companion command surface",
+    );
+    assert.deepEqual(enhancementRequests, []);
+
+    await fixture.page.reload({ waitUntil: "domcontentloaded" });
+    await waitForRuntime();
+    await openTools();
+    await fixture.page.getByText("Patch-day team", { exact: true }).waitFor();
+    assert.deepEqual(
+      await fixture.page.evaluate(async () => [
+        ...new Uint8Array(await (await fetch("Gw.jspi.wasm")).arrayBuffer()),
+      ]),
+      [...OFFICIAL_WASM],
+    );
+    assert.deepEqual(enhancementRequests, []);
+  } finally {
+    await closePackaged(fixture);
+  }
+}

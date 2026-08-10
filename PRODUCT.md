@@ -37,9 +37,10 @@ fresh observations. Target distance remains a clearly labelled Test tool.
 
 Core cursor and template support are always on for a certified client. Optional
 Tools are a Beta opt-in. Their first enable requires one restart to select the
-certified client module; after that, individual tool toggles are live. Optional
-observers, UI, and command access are disabled in PvP, guild halls, and unknown
-regions.
+best client module available for that exact ArenaNet build; after that,
+individual tool toggles are live. Host-owned Build and Team authoring remains
+available when client integration is unavailable. Optional observers and
+commands are disabled in PvP, guild halls, and unknown regions.
 
 “Tools Beta” is a feature-maturity label, not an application update channel.
 Preview remains the separately signed tester application; the planned public
@@ -48,11 +49,9 @@ Stable/Beta application track is defined in
 and is not shipped behavior yet.
 
 The required product boundary is that Build and Team authoring is host-owned
-while observations and Apply are exact-client capabilities. Host authoring must
-remain usable when those capabilities refuse. The current production mount does
-not yet prove that unknown-build path, so the focused continuity PR in the
-accepted plan owns it; public documentation must not claim it before that story
-passes.
+while observations and Apply are exact-client capabilities. Host authoring
+remains usable when those capabilities refuse; the packaged unknown-build story
+proves the official module stays active and no companion command surface appears.
 
 ## Non-goals
 

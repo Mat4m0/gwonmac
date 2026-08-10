@@ -428,7 +428,11 @@ test("the served module decides whether Enhancement imports", async () => {
   assert.doesNotMatch(gate, /Object\.values\(init\.enhancementSelection\)/u);
   assert.match(
     gate,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length !== 1/u,
+    /const manifestCount = WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length;/u,
+  );
+  assert.match(
+    gate,
+    /if \(manifestCount !== 1\) \{\s*if \(init\.enhancementSelection\.tools\) installHostOnlyTools\(\);\s*return;\s*\}/u,
   );
   assert.match(
     gate,
@@ -437,6 +441,10 @@ test("the served module decides whether Enhancement imports", async () => {
   assert.ok(
     gate.indexOf("customSections") < gate.indexOf("import('./enhancements.js')"),
     "Enhancement was imported before the served module proved its manifest",
+  );
+  assert.ok(
+    gate.indexOf("installHostOnlyTools()") < gate.indexOf("import('./enhancements.js')"),
+    "host-owned Tools still waits for the optional Enhancement installer",
   );
   assert.doesNotMatch(gate, /init\.nativeCursor/u);
   // Emscripten may report runtime initialization before or after the

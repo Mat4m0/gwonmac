@@ -1,4 +1,7 @@
-import { assertPackagedOffSession } from "./helpers/packaged-enhancement-fixture.ts";
+import {
+  assertPackagedHostOnlyToolsSession,
+  assertPackagedOffSession,
+} from "./helpers/packaged-enhancement-fixture.ts";
 import {
   assertRollbackAfterTablePublication,
   assertTargetReadoutLifecycle,
@@ -6,9 +9,10 @@ import {
 } from "./helpers/packaged-enhancement-scenarios.ts";
 
 await assertPackagedOffSession();
+await assertPackagedHostOnlyToolsSession();
 await assertTargetReadoutLifecycle();
 await assertToolboxFoundationLifecycle();
 await assertRollbackAfterTablePublication();
 console.log(
-  "packaged Enhancement runtime proved isolation, target and Toolbox lifecycles, and post-table rollback",
+  "packaged Enhancement runtime proved isolation, host-only continuity, target and Toolbox lifecycles, and post-table rollback",
 );

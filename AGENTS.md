@@ -352,15 +352,16 @@ explicit; do not bypass that guard or use a temporary Electron profile.
 Certified Core (native cursor and template support) remains active whenever its
 exact build proof passes. GWonMac Tools Beta is optional and off by default; its
 first enable may restart to select the commands derivative, but individual tool
-toggles are live afterward. The pure library and existing `ToolsHost` can run
-without commands, but the current production mount is still nested inside
-certified companion installation. Do not claim unknown-build host-only
-  continuity until the focused PR in `plans/full-refactor-optimization.md`
-  proves the normal renderer path. Optional observers and commands must be
-  inactive in PvP, guild halls, and unknown regions. Team Apply is an explicit
-  PvE-outpost configuration action: include the player, confirm every step from
-  observed state, and expose no generic opcode command. Unsupported team fields
-  are deleted from the released model rather than stored and ignored.
+toggles are live afterward. The existing `ToolsHost` mounts with a null command
+port when an unknown official client has no certified companion manifest, so
+Build and Team authoring remains available without importing Enhancement code.
+`tests/packaged-enhancement-runtime.ts` owns that normal packaged route; a
+manually mounted renderer test is not sufficient. Optional observers and
+commands must be inactive in PvP, guild halls, and unknown regions. Team Apply
+is an explicit PvE-outpost configuration action: include the player, confirm
+every step from observed state, and expose no generic opcode command.
+Unsupported team fields are deleted from the released model rather than stored
+and ignored.
 
 Before finishing, check for a second source of truth, retained old paths,
 unnecessary structure, harder debugging, broken architecture decisions, and
