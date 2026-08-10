@@ -144,7 +144,7 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   ]);
   // Eight defined functions: three hooks, three commands, the distinct
   // recurring game-thread callback, and the shared packet sender.
-  const functions = section(3, [8, 0, 1, 2, 0, 3, 3, 3, 2]);
+  const functions = section(3, [8, 0, 1, 2, 0, 2, 3, 3, 2]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -154,9 +154,10 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   const uiName = [...new TextEncoder().encode("ui")];
   const frameName = [...new TextEncoder().encode("frame")];
   const professionName = [...new TextEncoder().encode("profession")];
+  const skillName = [...new TextEncoder().encode("skill")];
   const memoryName = [...new TextEncoder().encode("memory")];
   const exports = section(7, [
-    7,
+    8,
     ...tableName, 1, 0,
     ...uleb(memoryName.length), ...memoryName, 2, 0,
     ...uleb(loopName.length), ...loopName, 0, 3,
@@ -164,6 +165,7 @@ function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(uiName.length), ...uiName, 0, 5,
     ...uleb(frameName.length), ...frameName, 0, 8,
     ...uleb(professionName.length), ...professionName, 0, 9,
+    ...uleb(skillName.length), ...skillName, 0, 7,
   ]);
   const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
   const frameSegment = [0, 0x41, 4, 0x0b, 1, 8];
@@ -174,9 +176,21 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   ];
   const ui = [0, 0x20, 0, 0x20, 1, 0x20, 2, 0x10, 2, 0x0b];
   const command = [0, 0x41, 0, 0x1a, 0x20, 0, 0x10, 0, 0x0b];
-  // Two arguments, so a command that takes more than one is exercised too --
-  // the real skillbar and attribute commands take three and four.
-  const pair = [0, 0x20, 0, 0x10, 0, 0x20, 1, 0x10, 0, 0x0b];
+  // A compact real-shape skill-bar builder: packet words are written at 128,
+  // then handed to the shared sender unchanged.
+  const pair = [
+    0,
+    0x41, ...sleb(128), 0x41, ...sleb(93), 0x36, 2, 0,
+    0x41, ...sleb(128), 0x20, 0, 0x36, 2, 4,
+    0x41, ...sleb(128), 0x20, 1, 0x36, 2, 8,
+    ...Array.from({ length: 8 }, (_, index) => [
+      0x41, ...sleb(128),
+      0x20, 2, 0x28, 2, ...uleb(index * 4),
+      0x36, 2, ...uleb(12 + index * 4),
+    ]).flat(),
+    0x41, ...sleb(999), 0x41, ...sleb(44), 0x41, ...sleb(128), 0x10, 10,
+    0x0b,
+  ];
   const frame = [0, 0x20, 0, 0x10, 0, 0x0b];
   const profession = [
     0,
@@ -256,7 +270,7 @@ function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       }, {
         opcode: 93,
         functionIndex: 7,
-        params: ["i32", "i32"],
+        params: ["i32", "i32", "i32"],
         results: [],
         bodySha256: createHash("sha256")
           .update(commandBody(bytes, 4))
@@ -945,12 +959,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
     tick(8);
     assert.deepEqual(sent, [7, 4242, 70, 8]);
     frame(80, 800);
-    assert.deepEqual(sent, [7, 4242, 70, 8, 11, 22, 80]);
+    assert.deepEqual(sent, [7, 4242, 70, 8, 80]);
 
     assert.equal(command(31, 99, 0, 0, 0), 1);
     assert.equal(command(0, 0, 0, 0, 0), 1, "opcode zero cancels the pending command");
     frame(90, 900);
-    assert.deepEqual(sent, [7, 4242, 70, 8, 11, 22, 80, 90]);
+    assert.deepEqual(sent, [7, 4242, 70, 8, 80, 90]);
 
     // Everything else, including the neighbours of the ones we certified: the
     // opcodes are a dense range on the real client, so an off-by-one would
@@ -963,7 +977,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.deepEqual(sent, [], "and nothing was sent");
   });
 
-  it("distinguishes native and GWonMac profession packets without changing them", () => {
+  it("distinguishes native and GWonMac command packets without changing them", () => {
     const input = fixture();
     const build = manifest(input);
     const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
@@ -983,20 +997,28 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const wasmMemory = instance.exports.memory as WebAssembly.Memory;
     const nativeProfession = instance.exports.profession as
       (target: number, profession: number) => void;
+    const nativeSkill = instance.exports.skill as
+      (target: number, count: number, skills: number) => void;
     const enqueue = instance.exports[build.commands.thunkExport] as
       (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
     const frame = instance.exports.frame as (value: number, context: number) => void;
     const readTrace = instance.exports[build.commands.professionTrace.readerExport] as
       (pointer: number) => number;
     const trace = () => {
-      assert.equal(readTrace(64), 11);
-      return [...new Uint32Array(wasmMemory.buffer, 64, 11)];
+      assert.equal(readTrace(64), 23);
+      return [...new Uint32Array(wasmMemory.buffer, 64, 23)];
     };
 
     nativeProfession(77, 2);
     assert.deepEqual(packets, [[999, 12, 0]]);
     assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 77, 2]);
-    assert.deepEqual(trace(), [1, 1, 0, 77, 2, 1, 0, 12, 65, 77, 2]);
+    assert.deepEqual(trace(), [
+      1,
+      1, 0, 77, 2,
+      0, 0, 0, 0,
+      1, 0, 12,
+      65, 77, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
 
     assert.equal(enqueue(65, 88, 3, 0, 0), 1);
     frame(1, 2);
@@ -1005,7 +1027,36 @@ describe("targeted Enhancement WebAssembly transform", () => {
       [999, 12, 0],
     ]);
     assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 88, 3]);
-    assert.deepEqual(trace(), [1, 2, 1, 88, 3, 2, 1, 12, 65, 88, 3]);
+    assert.deepEqual(trace(), [
+      1,
+      2, 1, 88, 3,
+      0, 0, 0, 0,
+      2, 1, 12,
+      65, 88, 3, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+
+    const skillWords = new Uint32Array(wasmMemory.buffer, 256, 8);
+    skillWords.set([1, 2, 3, 4, 5, 6, 446, 8]);
+    nativeSkill(77, 8, 256);
+    assert.deepEqual(trace(), [
+      1,
+      2, 1, 88, 3,
+      1, 0, 77, 8,
+      3, 0, 44,
+      93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
+    ]);
+    assert.equal(enqueue(93, 77, 8, 256, 0), 1);
+    frame(3, 4);
+    assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 128, 11)], [
+      93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
+    ]);
+    assert.deepEqual(trace(), [
+      1,
+      2, 1, 88, 3,
+      2, 1, 77, 8,
+      4, 1, 44,
+      93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
+    ]);
   });
 
   it("refuses a command whose function is not the one certified", () => {
@@ -1082,12 +1133,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
           ...build,
           commands: {
             ...build.commands,
-            // The pair command has the same signature. Identity must still be
+            // The profession command has the same signature. Identity must still be
             // distinct so command execution and scheduling cannot merge.
             drain: {
               ...build.commands.drain,
-              functionIndex: 7,
-              bodySha256: build.commands.entries[1]!.bodySha256,
+              functionIndex: 9,
+              bodySha256: build.commands.entries[2]!.bodySha256,
             },
           },
         },
@@ -1111,7 +1162,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     );
   });
 
-  it("refuses an uncertified or shared profession packet sender", () => {
+  it("refuses an uncertified or shared traced packet sender", () => {
     const input = fixture();
     const build = manifest(input);
     assert.throws(
@@ -1132,7 +1183,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
         },
         CURSOR_TOOLBOX_COMMANDS,
       ),
-      /profession packet sender resolves .* not the certified/,
+      /traced packet sender resolves .* not the certified/,
     );
     assert.throws(
       () => transformEnhancementWasm(
@@ -1155,7 +1206,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
         },
         CURSOR_TOOLBOX_COMMANDS,
       ),
-      /profession packet sender must be distinct from hooks and commands/,
+      /traced packet sender must be distinct from hooks and commands/,
     );
   });
 

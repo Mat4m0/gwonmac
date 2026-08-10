@@ -64,7 +64,7 @@ const DISPATCH_PARAMS = 6;
  *  command; the widest builder we have takes four scalars. */
 const COMMAND_PARAMS = 5;
 const COMMAND_ARGS = COMMAND_PARAMS - 1;
-const PROFESSION_TRACE_WORDS = 11;
+const PROFESSION_TRACE_WORDS = 23;
 const DISPATCH_TICK = 0;
 const DISPATCH_CURSOR = 1;
 const DISPATCH_UI = 2;
@@ -322,12 +322,14 @@ type ProfessionTraceGlobals = Readonly<{
   builderOrigin: number;
   builderTarget: number;
   builderProfession: number;
+  skillBuilderCount: number;
+  skillBuilderOrigin: number;
+  skillBuilderTarget: number;
+  skillBuilderSkillCount: number;
   senderCount: number;
   senderOrigin: number;
   senderSize: number;
-  senderOpcode: number;
-  senderTarget: number;
-  senderProfession: number;
+  senderPayload: number;
 }>;
 
 /** Records both raw arguments before preserving the exact profession builder. */
@@ -353,7 +355,31 @@ function tracedProfessionBuilder(
   );
 }
 
-/** Records only opcode 65's fixed three-word payload, then preserves sender. */
+/** Records the skill builder's scalar inputs, then preserves its exact body. */
+function tracedSkillBuilder(
+  originalIndex: number,
+  globals: ProfessionTraceGlobals,
+): Uint8Array {
+  return concat(
+    uleb(0),
+    Uint8Array.of(0x23), uleb(globals.skillBuilderCount),
+    Uint8Array.of(0x41), sleb(1),
+    Uint8Array.of(0x6a, 0x24), uleb(globals.skillBuilderCount),
+    Uint8Array.of(0x23), uleb(globals.origin),
+    Uint8Array.of(0x24), uleb(globals.skillBuilderOrigin),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x24), uleb(globals.skillBuilderTarget),
+    Uint8Array.of(0x20), uleb(1),
+    Uint8Array.of(0x24), uleb(globals.skillBuilderSkillCount),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x20), uleb(1),
+    Uint8Array.of(0x20), uleb(2),
+    Uint8Array.of(0x10), uleb(originalIndex),
+    Uint8Array.of(0x0b),
+  );
+}
+
+/** Records exact opcode 65 and 93 payloads, then preserves the shared sender. */
 function tracedPacketSender(
   originalIndex: number,
   globals: ProfessionTraceGlobals,
@@ -361,6 +387,19 @@ function tracedPacketSender(
   const load = (offset: number) => concat(
     Uint8Array.of(0x20), uleb(2),
     Uint8Array.of(0x28), uleb(2), uleb(offset),
+  );
+  const record = (words: number) => concat(
+    Uint8Array.of(0x23), uleb(globals.senderCount),
+    Uint8Array.of(0x41), sleb(1),
+    Uint8Array.of(0x6a, 0x24), uleb(globals.senderCount),
+    Uint8Array.of(0x23), uleb(globals.origin),
+    Uint8Array.of(0x24), uleb(globals.senderOrigin),
+    Uint8Array.of(0x20), uleb(1),
+    Uint8Array.of(0x24), uleb(globals.senderSize),
+    ...Array.from({ length: 11 }, (_, index) => concat(
+      index < words ? load(index * 4) : concat(Uint8Array.of(0x41), sleb(0)),
+      Uint8Array.of(0x24), uleb(globals.senderPayload + index),
+    )),
   );
   return concat(
     uleb(0),
@@ -370,16 +409,15 @@ function tracedPacketSender(
     load(0),
     Uint8Array.of(0x41), sleb(65),
     Uint8Array.of(0x46, 0x04, 0x40),
-    Uint8Array.of(0x23), uleb(globals.senderCount),
-    Uint8Array.of(0x41), sleb(1),
-    Uint8Array.of(0x6a, 0x24), uleb(globals.senderCount),
-    Uint8Array.of(0x23), uleb(globals.origin),
-    Uint8Array.of(0x24), uleb(globals.senderOrigin),
+    record(3),
+    Uint8Array.of(0x0b, 0x0b),
     Uint8Array.of(0x20), uleb(1),
-    Uint8Array.of(0x24), uleb(globals.senderSize),
-    load(0), Uint8Array.of(0x24), uleb(globals.senderOpcode),
-    load(4), Uint8Array.of(0x24), uleb(globals.senderTarget),
-    load(8), Uint8Array.of(0x24), uleb(globals.senderProfession),
+    Uint8Array.of(0x41), sleb(44),
+    Uint8Array.of(0x4f, 0x04, 0x40),
+    load(0),
+    Uint8Array.of(0x41), sleb(93),
+    Uint8Array.of(0x46, 0x04, 0x40),
+    record(11),
     Uint8Array.of(0x0b, 0x0b),
     Uint8Array.of(0x20), uleb(0),
     Uint8Array.of(0x20), uleb(1),
@@ -397,12 +435,14 @@ function professionTraceReader(globals: ProfessionTraceGlobals): Uint8Array {
     globals.builderOrigin,
     globals.builderTarget,
     globals.builderProfession,
+    globals.skillBuilderCount,
+    globals.skillBuilderOrigin,
+    globals.skillBuilderTarget,
+    globals.skillBuilderSkillCount,
     globals.senderCount,
     globals.senderOrigin,
     globals.senderSize,
-    globals.senderOpcode,
-    globals.senderTarget,
-    globals.senderProfession,
+    ...Array.from({ length: 11 }, (_, index) => globals.senderPayload + index),
   ] as const;
   return concat(
     uleb(0),
@@ -704,6 +744,10 @@ export function transformEnhancementWasm(
     ? commands.find((entry) => entry.opcode === 65)
       ?? fail("commands capability has no certified profession command")
     : null;
+  const skillCommand = capabilities.commands
+    ? commands.find((entry) => entry.opcode === 93)
+      ?? fail("commands capability has no certified skill-bar command")
+    : null;
   const professionBuilder = professionCommand
     ? resolveHook(
         "profession builder",
@@ -712,32 +756,40 @@ export function transformEnhancementWasm(
         professionCommand.results,
       )
     : null;
-  const professionSender = capabilities.commands
+  const skillBuilder = skillCommand
     ? resolveHook(
-        "profession packet sender",
+        "skill-bar builder",
+        skillCommand.functionIndex,
+        skillCommand.params,
+        skillCommand.results,
+      )
+    : null;
+  const packetSender = capabilities.commands
+    ? resolveHook(
+        "traced packet sender",
         build.commands.professionTrace.sender.functionIndex,
         build.commands.professionTrace.sender.params,
         build.commands.professionTrace.sender.results,
       )
     : null;
-  if (professionSender) {
+  if (packetSender) {
     const body = createHash("sha256")
-      .update(bodies[professionSender.localIndex]!)
+      .update(bodies[packetSender.localIndex]!)
       .digest("hex");
     if (body !== build.commands.professionTrace.sender.bodySha256) {
       fail(
-        `profession packet sender resolves to function `
+        `traced packet sender resolves to function `
         + `${build.commands.professionTrace.sender.functionIndex}, whose body is `
         + `${body} and not the certified `
         + `${build.commands.professionTrace.sender.bodySha256}`,
       );
     }
     if (
-      selected.some((hook) => hook.localIndex === professionSender.localIndex)
+      selected.some((hook) => hook.localIndex === packetSender.localIndex)
       || commands.some((entry) => entry.functionIndex
         === build.commands.professionTrace.sender.functionIndex)
     ) {
-      fail("profession packet sender must be distinct from hooks and commands");
+      fail("traced packet sender must be distinct from hooks and commands");
     }
   }
   const commandDrainBoundary = capabilities.commands
@@ -762,7 +814,7 @@ export function transformEnhancementWasm(
     if (
       selected.some((hook) => hook.localIndex === commandDrainBoundary.localIndex)
       || commands.some((entry) => entry.functionIndex === build.commands.drain.functionIndex)
-      || professionSender?.localIndex === commandDrainBoundary.localIndex
+      || packetSender?.localIndex === commandDrainBoundary.localIndex
     ) {
       fail("command drain boundary must be distinct from hooks, commands, and sender");
     }
@@ -832,12 +884,14 @@ export function transformEnhancementWasm(
     builderOrigin: traceGlobalBase + 2,
     builderTarget: traceGlobalBase + 3,
     builderProfession: traceGlobalBase + 4,
-    senderCount: traceGlobalBase + 5,
-    senderOrigin: traceGlobalBase + 6,
-    senderSize: traceGlobalBase + 7,
-    senderOpcode: traceGlobalBase + 8,
-    senderTarget: traceGlobalBase + 9,
-    senderProfession: traceGlobalBase + 10,
+    skillBuilderCount: traceGlobalBase + 5,
+    skillBuilderOrigin: traceGlobalBase + 6,
+    skillBuilderTarget: traceGlobalBase + 7,
+    skillBuilderSkillCount: traceGlobalBase + 8,
+    senderCount: traceGlobalBase + 9,
+    senderOrigin: traceGlobalBase + 10,
+    senderSize: traceGlobalBase + 11,
+    senderPayload: traceGlobalBase + 12,
   };
   const dispatchTypeIndex = types.length;
 
@@ -866,7 +920,8 @@ export function transformEnhancementWasm(
           commandTypeIndex,
           commandDrainTypeIndex,
           professionBuilder!.typeIndex,
-          professionSender!.typeIndex,
+          skillBuilder!.typeIndex,
+          packetSender!.typeIndex,
           professionTraceReaderTypeIndex,
         ]
       : []),
@@ -889,7 +944,8 @@ export function transformEnhancementWasm(
             traceGlobals.origin,
           ),
           bodies[professionBuilder!.localIndex]!,
-          bodies[professionSender!.localIndex]!,
+          bodies[skillBuilder!.localIndex]!,
+          bodies[packetSender!.localIndex]!,
           professionTraceReader(traceGlobals),
         ]
       : []),
@@ -900,7 +956,8 @@ export function transformEnhancementWasm(
   const commandFunctionIndex = commandBoundaryOriginalIndex + 1;
   const commandDrainFunctionIndex = commandFunctionIndex + 1;
   const professionOriginalIndex = commandDrainFunctionIndex + 1;
-  const senderOriginalIndex = professionOriginalIndex + 1;
+  const skillOriginalIndex = professionOriginalIndex + 1;
+  const senderOriginalIndex = skillOriginalIndex + 1;
   const professionTraceReaderIndex = senderOriginalIndex + 1;
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(
@@ -921,7 +978,11 @@ export function transformEnhancementWasm(
       professionOriginalIndex,
       traceGlobals,
     );
-    nextBodies[professionSender!.localIndex] = tracedPacketSender(
+    nextBodies[skillBuilder!.localIndex] = tracedSkillBuilder(
+      skillOriginalIndex,
+      traceGlobals,
+    );
+    nextBodies[packetSender!.localIndex] = tracedPacketSender(
       senderOriginalIndex,
       traceGlobals,
     );

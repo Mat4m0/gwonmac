@@ -118,7 +118,7 @@ function officialFixture(): Uint8Array {
     0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [8, 0, 0, 2, 3, 4, 5, 5, 4]);
+  const functions = section(3, [9, 0, 0, 2, 3, 4, 5, 5, 4, 4]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -147,9 +147,10 @@ function officialFixture(): Uint8Array {
   ];
   const loop = [0, 0x0b];
   const code = section(10, [
-    8,
+    9,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
+    ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
@@ -238,6 +239,13 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
         results: [],
         bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[6]!),
         label: "fixture profession command",
+      }, {
+        opcode: 93,
+        functionIndex: 9,
+        params: ["i32", "i32", "i32"],
+        results: [],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[8]!),
+        label: "fixture skill-bar command",
       }],
     },
     cursorEvent: {

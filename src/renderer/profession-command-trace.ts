@@ -1,14 +1,15 @@
 /**
- * Development-only differential trace for the hero profession command.
+ * Development-only differential trace for hero profession and skill commands.
  *
- * The transformed client records only the fixed opcode-65 builder arguments
- * and sender payload. This renderer owner adds the party fact visible at the
- * same observer publication, keeps a bounded local history, and makes it easy
- * for a tester to paste one JSON value. Nothing is persisted or diagnosed.
+ * The transformed client records only the scalar builder arguments and exact
+ * opcode-65/opcode-93 sender payloads. This renderer owner adds the party fact
+ * visible at the same observer publication, keeps a bounded local history,
+ * and makes it easy for a tester to paste one JSON value. Nothing is persisted
+ * or diagnosed.
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
-const TRACE_WORDS = 11;
+const TRACE_WORDS = 23;
 export const PROFESSION_COMMAND_TRACE_BYTES =
   TRACE_WORDS * Uint32Array.BYTES_PER_ELEMENT;
 
@@ -21,7 +22,8 @@ export function createProfessionCommandTrace(
 ) {
   const entries: unknown[] = [];
   let sequence = 0;
-  let lastBuilderCount = 0;
+  let lastProfessionBuilderCount = 0;
+  let lastSkillBuilderCount = 0;
   let lastSenderCount = 0;
   let disposed = false;
 
@@ -35,44 +37,67 @@ export function createProfessionCommandTrace(
       if (disposed) return;
       const written = read(pointer);
       if (written !== TRACE_WORDS) {
-        throw new Error(`profession trace wrote ${written} words`);
+        throw new Error(`team command trace wrote ${written} words`);
       }
       const words = new Uint32Array(memory.buffer, pointer, TRACE_WORDS);
       const schema = words[0]!;
-      const builderCount = words[1]!;
-      const builderOrigin = words[2]!;
-      const builderTarget = words[3]!;
+      const professionBuilderCount = words[1]!;
+      const professionBuilderOrigin = words[2]!;
+      const professionBuilderTarget = words[3]!;
       const builderProfession = words[4]!;
-      const senderCount = words[5]!;
-      const senderOrigin = words[6]!;
-      const senderSize = words[7]!;
-      const senderOpcode = words[8]!;
-      const senderTarget = words[9]!;
-      const senderProfession = words[10]!;
+      const skillBuilderCount = words[5]!;
+      const skillBuilderOrigin = words[6]!;
+      const skillBuilderTarget = words[7]!;
+      const skillBuilderSkillCount = words[8]!;
+      const senderCount = words[9]!;
+      const senderOrigin = words[10]!;
+      const senderSize = words[11]!;
+      const senderPayload = [...words.slice(12, 23)].slice(
+        0,
+        Math.min(11, Math.floor(senderSize / 4)),
+      );
+      const professionChanged = professionBuilderCount !== lastProfessionBuilderCount;
+      const skillChanged = skillBuilderCount !== lastSkillBuilderCount;
+      const senderChanged = senderCount !== lastSenderCount;
       if (
         schema !== 1
-        || (builderCount === lastBuilderCount && senderCount === lastSenderCount)
+        || (!professionChanged && !skillChanged && !senderChanged)
       ) return;
-      lastBuilderCount = builderCount;
+      lastProfessionBuilderCount = professionBuilderCount;
+      lastSkillBuilderCount = skillBuilderCount;
       lastSenderCount = senderCount;
+      const observedTarget = skillChanged
+        ? skillBuilderTarget
+        : professionChanged
+          ? professionBuilderTarget
+          : (senderPayload[1] ?? 0);
       const target = state.party?.slots?.find(
-        (slot) => slot.occupied && slot.agentId === builderTarget,
+        (slot) => slot.occupied && slot.agentId === observedTarget,
       );
       const entry = Object.freeze({
         sequence: ++sequence,
-        builder: Object.freeze({
-          count: builderCount,
-          origin: builderOrigin === 1 ? "gwonmac" : "native",
-          target: builderTarget,
+        changed: Object.freeze({
+          professionBuilder: professionChanged,
+          skillBuilder: skillChanged,
+          sender: senderChanged,
+        }),
+        professionBuilder: Object.freeze({
+          count: professionBuilderCount,
+          origin: professionBuilderOrigin === 1 ? "gwonmac" : "native",
+          target: professionBuilderTarget,
           profession: builderProfession,
+        }),
+        skillBuilder: Object.freeze({
+          count: skillBuilderCount,
+          origin: skillBuilderOrigin === 1 ? "gwonmac" : "native",
+          target: skillBuilderTarget,
+          skillCount: skillBuilderSkillCount,
         }),
         sender: Object.freeze({
           count: senderCount,
           origin: senderOrigin === 1 ? "gwonmac" : "native",
           size: senderSize,
-          opcode: senderOpcode,
-          target: senderTarget,
-          profession: senderProfession,
+          payload: Object.freeze(senderPayload),
         }),
         observed: target
           ? Object.freeze({
@@ -88,7 +113,7 @@ export function createProfessionCommandTrace(
         schema: 1,
         entries: Object.freeze([...entries]),
       }));
-      console.info(`[tools:dev] profession trace ${JSON.stringify(entry)}`);
+      console.info(`[tools:dev] team command trace ${JSON.stringify(entry)}`);
     },
     dispose() {
       if (disposed) return;

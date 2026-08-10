@@ -206,14 +206,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "477ee7f671a25676f662aa7a93c41ee98ab183bf2cb51b3117262d9fec33ab79",
-      target: "784930666338b9faa17938ee2da29968e44e17cb6734fcb4ae296f0c1e5d30db",
-      cursorTarget: "43dad19c503bf3c23a6102ade812d34eb2c5ffce006f4b78a1e134b34b9587a0",
-      cursorToolbox: "91620f9501745a00b4e0617a4d967aa7480def8a85d9113754ca5ad7ff87707b",
+      cursor: "df2450273dc27f1efa0bbaa3a729d0da6f3ac590cb17ea101bdd02e3eca36de7",
+      target: "aa25c32ad6a83796e3e8604e16bed0154e7bc80066034bd8ff3ec1d820404fe9",
+      cursorTarget: "235c6c62ac54463ff79c6708440bf5e16a5a09b3f20358e612916a0228a2d634",
+      cursorToolbox: "218ac401661705cb4d73b29c12d078c0e54cf2dd705848f983ceb0706d5c183f",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "810fbc734d7e30fb4ca75d6f34ba33405fa17cfc12f67dd933ad0a3e6bac6a9b",
-      cursorTargetToolboxCommands: "ae6429418d3dc449502f3dcd7a50b9ca230ec4ce426b40ec52853986e22c6eca",
+      cursorToolboxCommands: "8b70610e168cdedfeb4671e29c2539b4f5eb962c1d862f869ab3b6265697b36c",
+      cursorTargetToolboxCommands: "3d922cbd76f26e7427679ba6f9824fe792b9f725986fccf8fbca6561bfd881aa",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -249,7 +249,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       professionTrace: Object.freeze({
         readerExport: "enhancement_profession_trace",
         // The unique sender shared by all 147 packet builders. The trace
-        // wrapper records only the fixed 12-byte opcode-65 payload and then
+        // wrapper records only fixed opcode-65 and opcode-93 payloads and then
         // calls this exact body unchanged.
         sender: Object.freeze({
           functionIndex: 5951,
