@@ -45,16 +45,16 @@ const {
   asPosition: asTeamPosition,
   chooseHero,
   draggedMember,
-  drop: dropMember,
   dropTarget,
-  endDrag: endMemberDrag,
-  enterDropTarget: enterMemberDropTarget,
+  finishPointerDrag: finishMemberPointerDrag,
   fixOrder: fixTeamOrder,
   isConfigured: configuredHeroSlot,
   isCompactEmpty: compactEmptySlot,
+  losePointerDrag: loseMemberPointerDrag,
+  movePointerDrag: moveMemberPointerDrag,
   moveByKeyboard: moveMemberByKeyboard,
   remove: removeMember,
-  startDrag: startMemberDrag,
+  startPointerDrag: startMemberPointerDrag,
 } = roster;
 watch(
   () => props.team.id,
@@ -673,9 +673,8 @@ defineExpose({
             'team-slot--dragging': draggedMember === index,
             'team-slot--drop-target': dropTarget === index && draggedMember !== index,
           }"
+          :data-team-slot="index"
           :data-invalid="!assignmentValid(slot, index) || issuesForSlot(index).length > 0 ? '' : undefined"
-          @dragover="enterMemberDropTarget(asTeamPosition(index), $event)"
-          @drop="dropMember(asTeamPosition(index), $event)"
         >
           <span class="slot-number">{{ index + 1 }}</span>
           <div class="hero-cell">
@@ -812,13 +811,15 @@ defineExpose({
               class="ui-button team-move-handle"
               data-icon
               type="button"
-              draggable="true"
               :aria-label="`Move ${teamMemberLabel(slot.hero, index)}`"
               :title="`Drag to move ${teamMemberLabel(slot.hero, index)}; use arrow keys to reorder`"
               @click.prevent
               @keydown="moveMemberByKeyboard(asTeamPosition(index), $event)"
-              @dragstart="startMemberDrag(asTeamPosition(index), $event)"
-              @dragend="endMemberDrag"
+              @pointerdown="startMemberPointerDrag(asTeamPosition(index), $event)"
+              @pointermove="moveMemberPointerDrag"
+              @pointerup="finishMemberPointerDrag"
+              @pointercancel="loseMemberPointerDrag"
+              @lostpointercapture="loseMemberPointerDrag"
             >
               <span aria-hidden="true">⠿</span>
             </button>

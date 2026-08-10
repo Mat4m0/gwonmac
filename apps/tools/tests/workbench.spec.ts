@@ -446,7 +446,7 @@ test("aligns team header controls and configured row controls", async ({ page })
   expect(Math.max(...controlTops) - Math.min(...controlTops)).toBeLessThanOrEqual(1);
 });
 
-test("reorders and removes whole team members with keyboard and undo", async ({ page }) => {
+test("reorders team members with keyboard and pointer drag, then removes and undoes", async ({ page }) => {
   const selectedHeroes = () => page.locator(".hero-picker select").evaluateAll(
     (selects) => selects.map((select) => (select as HTMLSelectElement).value).filter(Boolean),
   );
@@ -459,11 +459,27 @@ test("reorders and removes whole team members with keyboard and undo", async ({ 
   await expect.poll(selectedHeroes).toEqual(reordered);
   await expect(page.locator("#team-move-1")).toBeFocused();
 
+  const handle = await page.locator("#team-move-1").boundingBox();
+  const destination = await page.locator('[data-team-slot="3"]').boundingBox();
+  expect(handle).not.toBeNull();
+  expect(destination).not.toBeNull();
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle!.x + handle!.width / 2 + 8, handle!.y + handle!.height / 2 + 8);
+  await page.mouse.move(
+    destination!.x + destination!.width / 2,
+    destination!.y + destination!.height / 2,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  const pointerReordered = [reordered[1], reordered[2], reordered[0], ...reordered.slice(3)];
+  await expect.poll(selectedHeroes).toEqual(pointerReordered);
+
   await page.locator(".team-remove-member").first().click();
-  await expect.poll(selectedHeroes).toEqual(reordered.slice(1));
+  await expect.poll(selectedHeroes).toEqual(pointerReordered.slice(1));
 
   await page.locator(".library-summary .ui-link").click();
-  await expect.poll(selectedHeroes).toEqual(reordered);
+  await expect.poll(selectedHeroes).toEqual(pointerReordered);
 });
 
 test("projects Obsidian through the shared system without layout drift", async ({ page }) => {

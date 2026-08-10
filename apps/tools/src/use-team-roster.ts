@@ -1,4 +1,4 @@
-import { nextTick, ref } from "vue";
+import { nextTick, onUnmounted, ref } from "vue";
 import {
   compactTeamMembers,
   heroId,
@@ -19,6 +19,12 @@ export function useTeamRoster(
   const draggedMember = ref<TeamSlotIndex | null>(null);
   const dropTarget = ref<TeamSlotIndex | null>(null);
   const announcement = ref("");
+  let pointerId: number | null = null;
+  let pointerSource: TeamSlotIndex | null = null;
+  let pointerHandle: HTMLElement | null = null;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let touchReadyAt = 0;
   const asPosition = (index: number): TeamSlotIndex => index as TeamSlotIndex;
   const memberName = (index: number): string =>
     teamMemberLabel(team().slots[index]?.hero ?? null, index);
@@ -86,33 +92,83 @@ export function useTeamRoster(
     if (!saved) select.value = String(team().slots[index]?.hero ?? "");
   };
 
-  const startDrag = (position: TeamSlotIndex, event: DragEvent) => {
-    draggedMember.value = position;
-    dropTarget.value = position;
-    event.dataTransfer?.setData("text/plain", String(position));
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-    announcement.value = `Moving ${memberName(position)}. Choose a destination.`;
-  };
-
-  const enterDropTarget = (position: TeamSlotIndex, event: DragEvent) => {
-    if (draggedMember.value === null || position === 0) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    dropTarget.value = position;
-  };
-
-  const drop = async (position: TeamSlotIndex, event: DragEvent) => {
-    if (draggedMember.value === null || position === 0) return;
-    event.preventDefault();
-    const source = draggedMember.value;
-    endDrag();
-    await move(source, position);
-  };
-
-  const endDrag = () => {
+  const endDrag = (releaseCapture = true) => {
+    const handle = pointerHandle;
+    const activePointer = pointerId;
+    pointerId = null;
+    pointerSource = null;
+    pointerHandle = null;
     draggedMember.value = null;
     dropTarget.value = null;
+    if (
+      releaseCapture
+      && handle
+      && activePointer !== null
+      && handle.hasPointerCapture?.(activePointer)
+    ) {
+      handle.releasePointerCapture(activePointer);
+    }
   };
+
+  const targetAt = (x: number, y: number): TeamSlotIndex | null => {
+    const row = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-team-slot]");
+    const position = Number(row?.dataset.teamSlot);
+    return Number.isInteger(position) && position > 0 && position < 8
+      ? asPosition(position)
+      : null;
+  };
+
+  const startPointerDrag = (position: TeamSlotIndex, event: PointerEvent) => {
+    if (position === 0 || pointerId !== null || (event.pointerType === "mouse" && event.button !== 0)) {
+      return;
+    }
+    pointerId = event.pointerId;
+    pointerSource = position;
+    pointerHandle = event.currentTarget as HTMLElement;
+    pointerStartX = event.clientX;
+    pointerStartY = event.clientY;
+    touchReadyAt = event.pointerType === "touch" ? performance.now() + 120 : 0;
+    pointerHandle.setPointerCapture?.(event.pointerId);
+  };
+
+  const movePointerDrag = (event: PointerEvent) => {
+    if (event.pointerId !== pointerId || pointerSource === null) return;
+    if (draggedMember.value === null) {
+      const distance = Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY);
+      if (distance < 5 || performance.now() < touchReadyAt) return;
+      draggedMember.value = pointerSource;
+      dropTarget.value = pointerSource;
+      announcement.value = `Moving ${memberName(pointerSource)}. Choose a destination.`;
+    }
+    event.preventDefault();
+    dropTarget.value = targetAt(event.clientX, event.clientY) ?? dropTarget.value;
+  };
+
+  const finishPointerDrag = async (event: PointerEvent) => {
+    if (event.pointerId !== pointerId) return;
+    const source = draggedMember.value;
+    const destination = targetAt(event.clientX, event.clientY) ?? dropTarget.value;
+    if (source !== null) event.preventDefault();
+    endDrag();
+    if (source !== null && destination !== null) await move(source, destination);
+  };
+
+  const losePointerDrag = (event: PointerEvent) => {
+    if (event.pointerId === pointerId) endDrag(false);
+  };
+
+  const cancelWithEscape = (event: KeyboardEvent) => {
+    if (event.key !== "Escape" || pointerId === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    announcement.value = "Hero move cancelled.";
+    endDrag();
+  };
+  window.addEventListener("keydown", cancelWithEscape, true);
+  onUnmounted(() => {
+    window.removeEventListener("keydown", cancelWithEscape, true);
+    endDrag();
+  });
 
   const moveByKeyboard = (position: TeamSlotIndex, event: KeyboardEvent) => {
     let destination: TeamSlotIndex | null = null;
@@ -130,15 +186,16 @@ export function useTeamRoster(
     asPosition,
     chooseHero,
     draggedMember,
-    drop,
     dropTarget,
     endDrag,
-    enterDropTarget,
+    finishPointerDrag,
     fixOrder,
     isConfigured,
     isCompactEmpty,
+    losePointerDrag,
+    movePointerDrag,
     moveByKeyboard,
     remove,
-    startDrag,
+    startPointerDrag,
   };
 }

@@ -359,7 +359,7 @@ describe("ToolsApp team management", () => {
     wrapper.unmount();
   });
 
-  it("moves a hero onto an empty destination by dragging its handle", async () => {
+  it("moves a hero onto an empty destination with the embedded pointer drag path", async () => {
     const wrapper = await workbench(applicableHost(
       async () => ({ commandId: 1, completedChanges: 0, skippedSkills: [] }),
     ));
@@ -368,23 +368,32 @@ describe("ToolsApp team management", () => {
     const before = wrapper.findAll<HTMLSelectElement>(".hero-picker select")
       .map((select) => select.element.value)
       .filter(Boolean);
-    const transfer = {
-      dropEffect: "none",
-      effectAllowed: "none",
-      setData: vi.fn(),
-    };
-
-    await wrapper.get("#team-move-1").trigger("dragstart", { dataTransfer: transfer });
     const emptyRows = wrapper.findAll(".team-slot--compact");
     const destination = emptyRows[emptyRows.length - 1]!;
-    expect(destination.text()).toContain("Move here");
-    await destination.trigger("dragover", {
-      dataTransfer: transfer,
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint")
+      .mockReturnValue(destination.element);
+    await wrapper.get("#team-move-1").trigger("pointerdown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      pointerId: 7,
+      pointerType: "mouse",
     });
-    await destination.trigger("drop", {
-      dataTransfer: transfer,
+    await wrapper.get("#team-move-1").trigger("pointermove", {
+      clientX: 30,
+      clientY: 30,
+      pointerId: 7,
+      pointerType: "mouse",
+    });
+    expect(destination.text()).toContain("Move here");
+    await wrapper.get("#team-move-1").trigger("pointerup", {
+      clientX: 30,
+      clientY: 30,
+      pointerId: 7,
+      pointerType: "mouse",
     });
     await flushPromises();
+    elementFromPoint.mockRestore();
 
     const after = wrapper.findAll<HTMLSelectElement>(".hero-picker select")
       .map((select) => select.element.value)
