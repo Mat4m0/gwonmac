@@ -29,9 +29,9 @@ import {
   isProxyCookieHeader,
   isProxyFetchDestination,
   isProxyRoute,
+  proxyResponseHeaders,
   type ProxyRoute,
   resolveProxyHost,
-  rewriteProxyRedirect,
 } from "./core/proxy-routes.js";
 import { clientArtifactPath } from "./core/paths.js";
 import { SkillAssets } from "./core/skill-catalogue.js";
@@ -396,36 +396,23 @@ async function handleProxy(
       init.body = Buffer.from(body);
     }
     const res = await net.fetch(upstream, init);
-    let safeLocation = "";
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get("location");
-      if (loc) {
-        try {
-          safeLocation = rewriteProxyRedirect(route, loc, upstream);
-        } catch {
-          logEvent({ k: "proxy.redirectBlocked", route });
-          requestSpan.end({
-            status: 502,
-            reason: "redirectEscape",
-            code: null,
-          });
-          return new Response("redirect blocked", { status: 502, headers: headers() });
-        }
-      }
+    const safeHeaders = proxyResponseHeaders(
+      route,
+      upstream,
+      res.status,
+      res.headers,
+    );
+    if (safeHeaders === null) {
+      logEvent({ k: "proxy.redirectBlocked", route });
+      requestSpan.end({
+        status: 502,
+        reason: "redirectEscape",
+        code: null,
+      });
+      return new Response("redirect blocked", { status: 502, headers: headers() });
     }
     const out = new Headers(headers());
-    for (const [k, v] of res.headers) {
-      const key = k.toLowerCase();
-      if (isProxyCookieHeader(key)) continue;
-      if (
-        key === "content-security-policy"
-        || key === "content-security-policy-report-only"
-        || key === "x-content-type-options"
-      ) {
-        continue;
-      }
-      out.set(k, key === "location" && safeLocation ? safeLocation : v);
-    }
+    for (const [name, value] of safeHeaders) out.set(name, value);
     requestSpan.end({ status: res.status, reason: null, code: null });
     return new Response(res.body, { status: res.status, headers: out });
   } catch (err) {

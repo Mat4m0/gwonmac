@@ -89,6 +89,48 @@ export function rewriteProxyRedirect(
   return `gw://app/${route}${next.pathname}${next.search}`;
 }
 
+/**
+ * Applies the response half of the stateless proxy boundary.
+ *
+ * `null` means a redirect tried to leave its exact allowlisted host. The main
+ * handler owns the resulting diagnostic and 502 response; this function owns
+ * only the deterministic header decision, including stripping every cookie
+ * and upstream policy header before the custom scheme adds its own policy.
+ */
+export function proxyResponseHeaders(
+  route: ProxyRoute,
+  upstream: string,
+  status: number,
+  source: Headers,
+): Headers | null {
+  let safeLocation = "";
+  if (status >= 300 && status < 400) {
+    const location = source.get("location");
+    if (location) {
+      try {
+        safeLocation = rewriteProxyRedirect(route, location, upstream);
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  const output = new Headers();
+  for (const [name, value] of source) {
+    const lower = name.toLowerCase();
+    if (isProxyCookieHeader(lower)) continue;
+    if (
+      lower === "content-security-policy"
+      || lower === "content-security-policy-report-only"
+      || lower === "x-content-type-options"
+    ) {
+      continue;
+    }
+    output.set(name, lower === "location" && safeLocation ? safeLocation : value);
+  }
+  return output;
+}
+
 export function resolveProxyRoute(
   path: string,
   routes: Readonly<Record<string, string>> = PROXY_ROUTES,

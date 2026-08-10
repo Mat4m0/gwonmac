@@ -38,3 +38,14 @@ test("the proxy still answers only fetches", () => {
     /if \(!isProxyFetchDestination\(destination\)\)/u,
   );
 });
+
+test("the proxy response still crosses the canonical header boundary", () => {
+  // The pure boundary is exercised with safe and escaped redirects in
+  // proxy-routes.test.ts. Chromium's custom-protocol fixture cannot expose a
+  // synthetic 302 to net.fetch, so retain only this one production call-site
+  // assertion rather than introducing a second transport implementation.
+  assert.match(
+    read("src/main/protocol.ts"),
+    /proxyResponseHeaders\(\s*route,\s*upstream,\s*res\.status,\s*res\.headers,/u,
+  );
+});

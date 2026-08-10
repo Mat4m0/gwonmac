@@ -4,6 +4,7 @@ import {
   isProxyCookieHeader,
   isProxyFetchDestination,
   PROXY_ROUTES,
+  proxyResponseHeaders,
   resolveProxyRoute,
   rewriteProxyRedirect,
 } from "../../src/main/core/proxy-routes.js";
@@ -57,6 +58,37 @@ describe("proxy-routes", () => {
     ]) {
       assert.throws(() => rewriteProxyRedirect("account", location, upstream));
     }
+  });
+
+  it("applies redirect and stateless-header policy as one response boundary", () => {
+    const source = new Headers({
+      "Content-Security-Policy": "default-src *",
+      "Content-Type": "application/xml",
+      Location: "/next?ticket=1",
+      "Set-Cookie": "session=secret",
+      "X-Content-Type-Options": "unsafe",
+    });
+    const safe = proxyResponseHeaders(
+      "account",
+      "https://account.arena.net/login",
+      302,
+      source,
+    );
+    assert.ok(safe);
+    assert.equal(safe.get("location"), "gw://app/account/next?ticket=1");
+    assert.equal(safe.get("content-type"), "application/xml");
+    assert.equal(safe.get("set-cookie"), null);
+    assert.equal(safe.get("content-security-policy"), null);
+    assert.equal(safe.get("x-content-type-options"), null);
+    assert.equal(
+      proxyResponseHeaders(
+        "account",
+        "https://account.arena.net/login",
+        302,
+        new Headers({ Location: "https://attacker.invalid/steal" }),
+      ),
+      null,
+    );
   });
 
   it("permits proxy routes only for fetch/XHR destinations", () => {
