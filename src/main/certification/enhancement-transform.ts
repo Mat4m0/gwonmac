@@ -386,7 +386,7 @@ function tracedSkillBuilder(
   );
 }
 
-/** Records the sender context and exact opcode 65/93 payloads, then preserves it. */
+/** Records the sender context and exact roster/profession/skill payloads, then preserves it. */
 function tracedPacketSender(
   originalIndex: number,
   globals: ProfessionTraceGlobals,
@@ -426,6 +426,14 @@ function tracedPacketSender(
   );
   return concat(
     uleb(1), uleb(1), Uint8Array.of(0x7f),
+    Uint8Array.of(0x20), uleb(1),
+    Uint8Array.of(0x41), sleb(8),
+    Uint8Array.of(0x4f, 0x04, 0x40),
+    load(0),
+    Uint8Array.of(0x41), sleb(31),
+    Uint8Array.of(0x46, 0x04, 0x40),
+    record(2),
+    Uint8Array.of(0x0b, 0x0b),
     Uint8Array.of(0x20), uleb(1),
     Uint8Array.of(0x41), sleb(12),
     Uint8Array.of(0x4f, 0x04, 0x40),

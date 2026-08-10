@@ -2,7 +2,7 @@
  * Development-only differential trace for hero profession and skill commands.
  *
  * The transformed client records only the scalar builder arguments, sender
- * connection and exact opcode-65/opcode-93 payloads. This renderer owner adds
+ * connection and exact opcode-31/opcode-65/opcode-93 payloads. This renderer owner adds
  * the party fact visible at the same observer publication, keeps a bounded
  * local history, and makes it easy for a tester to paste one JSON value.
  * Nothing is persisted or diagnosed.

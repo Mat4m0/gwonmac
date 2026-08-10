@@ -155,9 +155,10 @@ function fixture(hookParamType = 0x7f): Uint8Array {
   const frameName = [...new TextEncoder().encode("frame")];
   const professionName = [...new TextEncoder().encode("profession")];
   const skillName = [...new TextEncoder().encode("skill")];
+  const senderName = [...new TextEncoder().encode("sender")];
   const memoryName = [...new TextEncoder().encode("memory")];
   const exports = section(7, [
-    8,
+    9,
     ...tableName, 1, 0,
     ...uleb(memoryName.length), ...memoryName, 2, 0,
     ...uleb(loopName.length), ...loopName, 0, 3,
@@ -166,6 +167,7 @@ function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(frameName.length), ...frameName, 0, 8,
     ...uleb(professionName.length), ...professionName, 0, 9,
     ...uleb(skillName.length), ...skillName, 0, 7,
+    ...uleb(senderName.length), ...senderName, 0, 10,
   ]);
   const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
   const frameSegment = [0, 0x41, 4, 0x0b, 1, 8];
@@ -999,6 +1001,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
       (target: number, profession: number) => void;
     const nativeSkill = instance.exports.skill as
       (target: number, count: number, skills: number) => void;
+    const nativeSender = instance.exports.sender as
+      (connection: number, size: number, pointer: number) => void;
     const enqueue = instance.exports[build.commands.thunkExport] as
       (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
     const frame = instance.exports.frame as (value: number, context: number) => void;
@@ -1009,20 +1013,31 @@ describe("targeted Enhancement WebAssembly transform", () => {
       return [...new Uint32Array(wasmMemory.buffer, 64, 30)];
     };
 
+    new Uint32Array(wasmMemory.buffer, 0, 2).set([31, 38]);
+    nativeSender(999, 8, 0);
+    assert.deepEqual(trace(), [
+      1,
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+      1, 0, 999, 0, 0, 0, 0, 0, 0, 8,
+      31, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+
     nativeProfession(77, 2);
-    assert.deepEqual(packets, [[999, 12, 0]]);
+    assert.deepEqual(packets, [[999, 8, 0], [999, 12, 0]]);
     assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 77, 2]);
     assert.deepEqual(trace(), [
       1,
       1, 0, 77, 2,
       0, 0, 0, 0,
-      1, 0, 999, 0, 0, 0, 0, 0, 0, 12,
+      2, 0, 999, 0, 0, 0, 0, 0, 0, 12,
       65, 77, 2, 0, 0, 0, 0, 0, 0, 0, 0,
     ]);
 
     assert.equal(enqueue(65, 88, 3, 0, 0), 1);
     frame(1, 2);
     assert.deepEqual(packets, [
+      [999, 8, 0],
       [999, 12, 0],
       [999, 12, 0],
     ]);
@@ -1031,7 +1046,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       2, 1, 88, 3,
       0, 0, 0, 0,
-      2, 1, 999, 0, 0, 0, 0, 0, 0, 12,
+      3, 1, 999, 0, 0, 0, 0, 0, 0, 12,
       65, 88, 3, 0, 0, 0, 0, 0, 0, 0, 0,
     ]);
 
@@ -1042,7 +1057,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       2, 1, 88, 3,
       1, 0, 77, 8,
-      3, 0, 999, 0, 0, 0, 0, 0, 0, 44,
+      4, 0, 999, 0, 0, 0, 0, 0, 0, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
     ]);
     assert.equal(enqueue(93, 77, 8, 256, 0), 1);
@@ -1054,7 +1069,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
       1,
       2, 1, 88, 3,
       2, 1, 77, 8,
-      4, 1, 999, 0, 0, 0, 0, 0, 0, 44,
+      5, 1, 999, 0, 0, 0, 0, 0, 0, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
     ]);
   });
