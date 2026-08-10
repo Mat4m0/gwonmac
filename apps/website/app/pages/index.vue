@@ -142,8 +142,8 @@ const FEATURES = [
     kicker: { en: "Open", de: "Offen" },
     title: { en: "Free and open source", de: "Kostenlos und Open Source" },
     description: {
-      en: "The source code is available on GitHub under GPL-3.0. Optional quality-of-life features for PvE are already in development.",
-      de: "Der Quellcode ist unter GPL-3.0 auf GitHub verfügbar. Zusätzliche optionale Funktionen für PvE sind bereits in Entwicklung.",
+      en: "The source code is available on GitHub under GPL-3.0. Optional GWonMac Tools for managing PvE builds and teams are available in Beta.",
+      de: "Der Quellcode ist unter GPL-3.0 auf GitHub verfügbar. Die optionalen GWonMac Tools zum Verwalten von PvE-Builds und Teams sind als Beta verfügbar.",
     },
   },
 ];
@@ -323,8 +323,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Can I use GWToolbox++?", de: "Kann ich GWToolbox++ nutzen?" },
     a: {
-      en: "No. It hooks into the Windows client, and GWonMac doesn’t run that client. GWonMac Tools, our own optional set of PvE quality-of-life features, is in development. Soon™.",
-      de: "Nein. Es klinkt sich in den Windows-Client ein, und GWonMac führt diesen Client nicht aus. GWonMac Tools, unser eigenes optionales Set an PvE-Quality-of-Life-Features, ist in Entwicklung. Soon™.",
+      en: "No. It hooks into the Windows client, and GWonMac doesn’t run that client. GWonMac Tools Beta is the native alternative for local build and team management. It is optional, limited to supported PvE outposts, and automatically unavailable in PvP, guild halls, and unknown regions.",
+      de: "Nein. Es klinkt sich in den Windows-Client ein, und GWonMac führt diesen Client nicht aus. GWonMac Tools Beta ist die native Alternative für die lokale Build- und Teamverwaltung. Sie ist optional, auf unterstützte PvE-Außenposten beschränkt und in PvP, Gildenhallen und unbekannten Gebieten automatisch nicht verfügbar.",
     },
   },
   {
