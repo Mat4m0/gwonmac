@@ -184,6 +184,23 @@ test("behavior-only work is part of the canonical preview", () => {
   ]);
 });
 
+test("roster order is a canonical Apply change", () => {
+  const result = preflightTeamApply(
+    plan([
+      member({ hero: heroId(6), behaviour: "guard" }),
+      member({ hero: heroId(7), behaviour: "guard" }),
+    ]),
+    party([
+      { hero: 7, agentId: 11, behaviour: 1, skills: null },
+      { hero: 6, agentId: 12, behaviour: 1, skills: null },
+    ]),
+  );
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.ready ? result.changes : [], [
+    { kind: "rebuild-roster" },
+  ]);
+});
+
 test("canonical preflight reports each logical change once", () => {
   const result = preflightTeamApply(
     plan([member({ hero: heroId(6), build: build(), behaviour: "fight" })]),
@@ -885,6 +902,52 @@ test("heroes that are not in the team leave before the ones that are arrive", as
   assert.equal(result.completedChanges, 2);
 });
 
+test("a changed hero order rebuilds the roster in the saved order", async () => {
+  const game = harness([
+    { hero: 6, agentId: 11, behaviour: 1, skills: null },
+    { hero: 7, agentId: 12, behaviour: 1, skills: null },
+  ]);
+  game.react("kick-all", []);
+  game.react("add:7", [
+    { hero: 7, agentId: 21, behaviour: 1, skills: null },
+  ]);
+  game.react("add:6", [
+    { hero: 7, agentId: 21, behaviour: 1, skills: null },
+    { hero: 6, agentId: 22, behaviour: 1, skills: null },
+  ]);
+
+  const result = await runTeamApply(
+    plan([
+      member({ hero: heroId(7), behaviour: "guard" }),
+      member({ hero: heroId(6), behaviour: "guard" }),
+    ]),
+    game.environment,
+    1,
+  );
+  assert.deepEqual(game.sent, ["kick-all", "add:7", "add:6"]);
+  assert.equal(result.completedChanges, 3);
+});
+
+test("a roster rebuild adds nobody until Guild Wars confirms an empty party", async () => {
+  const game = harness([
+    { hero: 6, agentId: 11, behaviour: 1, skills: null },
+    { hero: 7, agentId: 12, behaviour: 1, skills: null },
+  ]);
+
+  await assert.rejects(
+    runTeamApply(
+      plan([
+        member({ hero: heroId(7), behaviour: "guard" }),
+        member({ hero: heroId(6), behaviour: "guard" }),
+      ]),
+      game.environment,
+      1,
+    ),
+    /clearing the hero roster did not take effect/,
+  );
+  assert.deepEqual(game.sent, ["kick-all"]);
+});
+
 test("a concurrent roster addition cannot turn into a false Apply success", async () => {
   const game = harness([{
     hero: 6, agentId: 11, behaviour: 1, skills: null,
@@ -904,24 +967,27 @@ test("a concurrent roster addition cannot turn into a false Apply success", asyn
       game.environment,
       1,
     ),
-    /final party roster did not match the team/,
+    /final party order did not match the team/,
   );
   assert.deepEqual(game.sent, ["behaviour:11:0"]);
 });
 
-test("Devona refuses the whole Apply before another hero is removed", async () => {
-  // `KickAllHeroes` is `kick(0x26)` and 0x26 is 38. One of those two meanings
-  // is wrong on a build that has her and nobody has established which, so the
-  // runner refuses rather than finding out during someone's apply.
+test("removing Devona clears and rebuilds through the dedicated roster intent", async () => {
   const game = harness([
     { hero: 7, agentId: 10, behaviour: 1, skills: null },
     { hero: 38, agentId: 11, behaviour: 1, skills: null },
   ]);
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /Devona cannot be removed safely/,
+  game.react("kick-all", []);
+  game.react("add:6", [
+    { hero: 6, agentId: 12, behaviour: 1, skills: null },
+  ]);
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), behaviour: "guard" })]),
+    game.environment,
+    1,
   );
-  assert.deepEqual(game.sent, [], "and no packet was sent at all");
+  assert.deepEqual(game.sent, ["kick-all", "add:6"]);
+  assert.equal(result.completedChanges, 2);
 });
 
 test("applying outside an outpost is refused before anything is sent", async () => {

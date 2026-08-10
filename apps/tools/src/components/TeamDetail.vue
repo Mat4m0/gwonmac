@@ -216,7 +216,6 @@ const runtimeProblemGuidance = (problem: TeamApplyRuntimeProblem): string | null
     case "hero-locked": return "Choose an unlocked hero or unlock this hero in Guild Wars.";
     case "hero-availability-unknown": return "Add this hero in the Guild Wars party window first.";
     case "skill-locked": return "Choose an unlocked skill, or unlock it in Guild Wars before applying.";
-    case "devona-removal": return "Remove Devona in the Guild Wars party window, then apply again.";
   }
 };
 
@@ -339,10 +338,12 @@ const applyAssessment = computed(() => {
   if (count("mode")) changes.push(`set ${props.team.mode === "hard" ? "Hard" : "Normal"} Mode`);
   const removing = count("remove-hero");
   const adding = count("add-hero");
+  const rebuilding = count("rebuild-roster");
   const builds = count("player-build") + count("hero-build");
   const behaviours = count("behaviour");
   if (removing) changes.push(`remove ${removing} ${removing === 1 ? "hero" : "heroes"}`);
   if (adding) changes.push(`add ${adding} ${adding === 1 ? "hero" : "heroes"}`);
+  if (rebuilding) changes.push("rebuild heroes in this order");
   if (builds) changes.push(`update ${builds} ${builds === 1 ? "build" : "builds"}`);
   if (behaviours) changes.push(`update ${behaviours} ${behaviours === 1 ? "behavior" : "behaviors"}`);
   return {
@@ -672,6 +673,8 @@ defineExpose({
             'team-slot--compact': compactEmptySlot(slot, index, issuesForSlot(index).length > 0),
             'team-slot--dragging': draggedMember === index,
             'team-slot--drop-target': dropTarget === index && draggedMember !== index,
+            'team-slot--drop-before': dropTarget === index && draggedMember !== null && index < draggedMember,
+            'team-slot--drop-after': dropTarget === index && draggedMember !== null && index > draggedMember,
           }"
           :data-team-slot="index"
           :data-invalid="!assignmentValid(slot, index) || issuesForSlot(index).length > 0 ? '' : undefined"

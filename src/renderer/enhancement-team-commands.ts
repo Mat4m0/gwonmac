@@ -170,6 +170,10 @@ export function createTeamApplyCommands({
       hero(heroId);
       sent("add-hero", 30, send(30, heroId, 0, 0, 0), { heroId });
     },
+    kickAllHeroes() {
+      ready();
+      sent("kick-all-heroes", 31, send(31, 0x26, 0, 0, 0));
+    },
     kickHero(heroId: number) {
       ready();
       hero(heroId);

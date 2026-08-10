@@ -106,6 +106,7 @@ export function applyHarness(
       sent.push(`player-attributes:${player?.agentId ?? 0}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
     },
     addHero: (hero) => { sent.push(`add:${hero}`); },
+    kickAllHeroes: () => { sent.push("kick-all"); },
     kickHero: (hero) => { sent.push(`kick:${hero}`); },
     setHeroBehaviour: (hero, behaviour) => {
       sent.push(`behaviour:${agentFor(hero)}:${behaviour}`);

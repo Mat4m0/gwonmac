@@ -79,11 +79,11 @@ export type TeamApplyRuntimeProblem =
       readonly rule: "skill-locked";
       readonly hero: HeroId | null;
       readonly skills: readonly [SkillId, ...SkillId[]];
-    }
-  | { readonly rule: "devona-removal" };
+    };
 
 export type TeamApplyChange = Readonly<{
-  kind: "mode" | "player-build" | "add-hero" | "remove-hero" | "hero-build" | "behaviour";
+  kind: "mode" | "player-build" | "add-hero" | "remove-hero"
+    | "rebuild-roster" | "hero-build" | "behaviour";
   hero?: HeroId;
 }>;
 
@@ -248,6 +248,27 @@ function lockedSkills(
   );
 }
 
+/**
+ * Whether removals followed by append-only additions can produce `wanted`
+ * without disturbing heroes whose relative order is already correct.
+ */
+export function canReconcileTeamRoster(
+  current: readonly HeroId[],
+  wanted: readonly HeroId[],
+): boolean {
+  const wantedSet = new Set(wanted);
+  const retained = current.filter((hero) => wantedSet.has(hero));
+  return retained.every((hero, index) => hero === wanted[index]);
+}
+
+export function teamRosterOrderMatches(
+  current: readonly HeroId[],
+  wanted: readonly HeroId[],
+): boolean {
+  return current.length === wanted.length
+    && current.every((hero, index) => hero === wanted[index]);
+}
+
 export function preflightTeamApply(
   plan: TeamApplyPlan,
   party: LiveParty,
@@ -295,10 +316,19 @@ export function preflightTeamApply(
     (member): member is TeamApplyMember & { hero: HeroId } => member.hero !== null,
   );
   const wantedIds = new Set(wanted.map(({ hero }) => hero));
-  for (const live of party.heroes) {
-    if (wantedIds.has(live.hero)) continue;
-    if (live.hero === 38) blockers.push({ rule: "devona-removal" });
-    else changes.push({ kind: "remove-hero", hero: live.hero });
+  const currentOrder = party.heroes.map(({ hero }) => hero);
+  const wantedOrder = wanted.map(({ hero }) => hero);
+  const removingDevona = currentOrder.some((hero) => hero === 38)
+    && !wantedOrder.some((hero) => hero === 38);
+  const rebuildRoster = !canReconcileTeamRoster(currentOrder, wantedOrder)
+    || removingDevona;
+  if (rebuildRoster) {
+    changes.push({ kind: "rebuild-roster" });
+  } else {
+    for (const live of party.heroes) {
+      if (wantedIds.has(live.hero)) continue;
+      changes.push({ kind: "remove-hero", hero: live.hero });
+    }
   }
   for (const member of wanted) {
     const live = party.heroes.find(({ hero }) => hero === member.hero);
@@ -308,7 +338,7 @@ export function preflightTeamApply(
         blockers.push({ rule: "hero-availability-unknown", hero: member.hero });
       } else if (facts.availability === "locked") {
         blockers.push({ rule: "hero-locked", hero: member.hero });
-      } else {
+      } else if (!rebuildRoster) {
         changes.push({ kind: "add-hero", hero: member.hero });
       }
     }
@@ -371,6 +401,5 @@ export function teamApplyProblemMessage(problem: TeamApplyRuntimeProblem): strin
         : `skills ${problem.skills.join(", ")}`;
       return `${owner} uses ${skills}, which ${problem.skills.length === 1 ? "is" : "are"} not unlocked.`;
     }
-    case "devona-removal": return "Devona cannot be removed safely. Remove her in the party window first.";
   }
 }

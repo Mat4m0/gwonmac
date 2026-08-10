@@ -471,6 +471,9 @@ test("reorders team members with keyboard and pointer drag, then removes and und
     destination!.y + destination!.height / 2,
     { steps: 4 },
   );
+  await expect(page.locator('[data-team-slot="1"]')).toHaveClass(/team-slot--dragging/);
+  await expect(page.locator('[data-team-slot="3"]')).toHaveClass(/team-slot--drop-target/);
+  await expect(page.locator('[data-team-slot="3"]')).toHaveClass(/team-slot--drop-after/);
   await page.mouse.up();
   const pointerReordered = [reordered[1], reordered[2], reordered[0], ...reordered.slice(3)];
   await expect.poll(selectedHeroes).toEqual(pointerReordered);

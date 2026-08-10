@@ -16,11 +16,10 @@
  *
  * ## What it will not do
  *
- * It never kicks with hero id 38. `KickAllHeroes` is `kick(0x26)` and `0x26` is
- * 38, which is also Devona — so on a build that has her, one of those two
- * meanings is wrong and nobody has yet established which. Removing heroes one
- * at a time is the same outcome and never touches the value in doubt, at the
- * cost of one packet each.
+ * Reordering uses the client's dedicated `KickAllHeroes` intent, then waits
+ * until the published roster is empty before adding anyone back. That keeps
+ * the historical `0x26` sentinel out of the per-hero API, where it would be
+ * indistinguishable from the observed Devona id.
  *
  * It also stops at the first step that does not land. A team applied halfway is
  * worse than one that refused: the player can see a refusal, and cannot see
@@ -40,7 +39,9 @@ import type {
   TeamApplyResult,
 } from "./team-apply.js";
 import {
+  canReconcileTeamRoster,
   preflightTeamApply,
+  teamRosterOrderMatches,
   teamApplyProblemMessage,
 } from "./team-apply.js";
 import type { LiveParty, SkillUnlockObservation } from "./live-party.js";
@@ -56,6 +57,7 @@ export interface TeamApplyCommands {
     ranks: readonly (readonly [attribute: number, rank: number])[],
   ): void;
   addHero(heroId: HeroId): void;
+  kickAllHeroes(): void;
   kickHero(heroId: HeroId): void;
   setHeroBehaviour(heroId: HeroId, behaviour: number): void;
   setHeroSecondary(heroId: HeroId, profession: number): void;
@@ -487,12 +489,42 @@ export async function runTeamApply(
     }
 
     let rosterActions = 0;
+    const beforeRoster = writableParty(environment).heroes.map(({ hero }) => hero);
+    const wantedOrder = wanted.map(({ hero }) => hero);
+    const removingDevona = beforeRoster.some((hero) => hero === 38)
+      && !wantedOrder.some((hero) => hero === 38);
+    if (!canReconcileTeamRoster(beforeRoster, wantedOrder) || removingDevona) {
+      if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
+      send(environment, "clearing the hero roster", () => {
+        environment.commands.kickAllHeroes();
+      });
+      await confirmObserved(
+        environment,
+        "clearing the hero roster",
+        (party) => party.heroes.length === 0
+          ? { state: "confirmed", value: undefined }
+          : { state: "waiting" },
+      );
+      completedChanges += 1;
+    }
     for (;;) {
       const current = writableParty(environment);
       const unwanted = current.heroes.find(({ hero }) => !wantedHeroes.has(hero));
       if (unwanted) {
         if (unwanted.hero === 38) {
-          throw new ApplyRefused("Devona cannot be removed safely; remove her manually");
+          if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
+          send(environment, "clearing the hero roster", () => {
+            environment.commands.kickAllHeroes();
+          });
+          await confirmObserved(
+            environment,
+            "clearing the hero roster",
+            (party) => party.heroes.length === 0
+              ? { state: "confirmed", value: undefined }
+              : { state: "waiting" },
+          );
+          completedChanges += 1;
+          continue;
         }
         if (++rosterActions > 16) throw new ApplyRefused("the party roster kept changing");
         send(environment, `removing ${heroLabel(unwanted.hero)}`, () => {
@@ -651,9 +683,8 @@ export async function runTeamApply(
       }
     }
     const finalHeroes = writableParty(environment).heroes.map(({ hero }) => hero);
-    if (finalHeroes.length !== wantedHeroes.size
-      || finalHeroes.some((hero) => !wantedHeroes.has(hero))) {
-      throw new ApplyRefused("the final party roster did not match the team");
+    if (!teamRosterOrderMatches(finalHeroes, wantedOrder)) {
+      throw new ApplyRefused("the final party order did not match the team");
     }
   } catch (cause) {
     if (cause instanceof ApplyRefused || cause instanceof ApplyCancelled) {
