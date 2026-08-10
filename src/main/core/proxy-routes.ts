@@ -13,7 +13,7 @@
  * These are web services. Game infrastructure is allowlisted separately in
  * `allowlists.ts`, and the two lists do not merge.
  */
-import { AppError, AllowlistError } from "../../shared/errors.js";
+import { AllowlistError } from "../../shared/errors.js";
 
 export const PROXY_ROUTES = {
   webgate: "webgate.ncplatform.net",
@@ -29,14 +29,6 @@ export const PROXY_ROUTES = {
  * an open string.
  */
 export type ProxyRoute = keyof typeof PROXY_ROUTES;
-
-const ROUTE_RE = /^\/([a-z0-9][a-z0-9-]{0,30})(\/.*)$/i;
-
-export interface ProxyTarget {
-  route: string;
-  host: string;
-  path: string;
-}
 
 export function resolveProxyHost(route: string): string {
   const key = route.toLowerCase();
@@ -129,24 +121,4 @@ export function proxyResponseHeaders(
     output.set(name, lower === "location" && safeLocation ? safeLocation : value);
   }
   return output;
-}
-
-export function resolveProxyRoute(
-  path: string,
-  routes: Readonly<Record<string, string>> = PROXY_ROUTES,
-): ProxyTarget {
-  const m = ROUTE_RE.exec(path);
-  if (!m) {
-    throw new AppError("proxy_path", `not a proxy path: ${path}`);
-  }
-  const route = m[1]!;
-  const rest = m[2]!;
-  const host = routes[route.toLowerCase()];
-  if (!host) {
-    throw new AppError(
-      "unknown_proxy_route",
-      `unknown proxy route ${JSON.stringify(route)} — known: ${Object.keys(routes).sort().join(", ")}`,
-    );
-  }
-  return { route: route.toLowerCase(), host, path: rest };
 }
