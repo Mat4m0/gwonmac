@@ -84,7 +84,7 @@ test.describe("tools and update settings", () => {
         globalThis.fetch = async (input) => {
           const url = String(input);
           return new Response(JSON.stringify(
-            url.includes("api.github.com")
+            url === "https://api.github.com/repos/Mat4m0/gwonmac/releases?per_page=100"
               ? [{
                   tag_name: tag,
                   draft: false,
