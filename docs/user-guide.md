@@ -272,8 +272,9 @@ upstream, retype or screenshot what you need.
 Guild Wars saves each build as a short template code. On Windows those are
 `.txt` files under `Documents\Guild Wars\Templates`; here they live inside the
 game's own storage, so **Settings → Templates** is how they get in and
-out. The pane works once the game has started, because that is when the game's
-storage exists.
+out. Wait until Guild Wars has finished starting and you have signed in before
+using the pane. If you opened Settings earlier, close and reopen it after
+signing in so it can reconnect to the game's storage.
 
 **Export…** asks for a folder and writes a `Guild Wars Build
 Templates` folder into it: one `.txt` per build, under `Skills` and

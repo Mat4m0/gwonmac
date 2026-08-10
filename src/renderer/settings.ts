@@ -57,6 +57,7 @@
   const appearanceOutput = (name: string) =>
     form.elements.namedItem(`${name}Value`) as HTMLOutputElement | null;
   let updateAction: UpdateAction | null = null;
+  let templatePane: import('./template-pane.js').TemplatePane | null = null;
 
   let currentSession: ClientSession | null = null;
 
@@ -137,6 +138,7 @@
     if (dialog.open) {
       selectedTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+    if (name === 'templates') templatePane?.refresh();
   }
 
   const railTabs = [...form.querySelectorAll<HTMLElement>('.settings-rtab')];
@@ -251,10 +253,9 @@
   }
 
   // The pane reads the game's mounted template directories, so it is refreshed
-  // every time the sheet opens rather than subscribed: the mount appears when
+  // when it binds and whenever Templates is selected. The mount appears when
   // the client boots and vanishes when it dies, and neither is an event this
   // renderer is told about.
-  let templatePane: import('./template-pane.js').TemplatePane | null = null;
   void import('./template-pane.js')
     .then((module) => {
       templatePane = module.bindTemplatePane(document, {
@@ -450,7 +451,6 @@
     setFeedback();
     selectPane(activeSettingsPane);
     settingsCache.textContent = 'Checking downloaded game data…';
-    templatePane?.refresh();
     try {
       await settingsWrite;
       currentSettings = await window.gwNative.settings.get();
