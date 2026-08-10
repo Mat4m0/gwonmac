@@ -1,7 +1,7 @@
 # Full refactor and optimization plan
 
 Status: proposed implementation plan
-Date: 2026-08-09
+Date: 2026-08-10
 Repository baseline: `cfcdb4c` (`Simplify and strengthen the test architecture (#118)`)
 Scope: evolve the current shipped `gwonmac` in place, one independently useful
 pull request at a time.
@@ -81,8 +81,65 @@ true.
 7. The application quits within its existing deadline even when cleanup work
    fails.
 8. No new account, game-data, or diagnostic content leaves the machine.
+9. Players may opt into public beta application updates without installing a
+   second copy of Gwonmac or changing release identity.
+10. Leaving the beta track stops future beta offers immediately. A final stable
+    release installs through the normal updater; when the latest stable is
+    older, the app offers an explicit verified stable download instead of
+    attempting a hidden self-downgrade.
+11. Public beta releases never make canonical player data unreadable by the
+    latest stable release.
 
-### 2.2 Patch-day experience
+### 2.2 Application release experience
+
+The signed release application has one user preference:
+
+```ts
+type UpdateTrack = "stable" | "beta";
+```
+
+This preference selects eligible application releases. It is not a packaging,
+signing, Keychain or storage identity. The existing `release`, `preview` and
+`development` distribution channels retain those security responsibilities;
+`preview` remains an internal/test package and does not become a second public
+beta product.
+
+The selection policy is deliberately small:
+
+| Installed release | Selected track | Eligible releases |
+| --- | --- | --- |
+| stable | stable | newer stable only |
+| stable | beta | newer beta, release candidate or stable |
+| beta/RC | beta | later beta, release candidate or final stable |
+| beta/RC | stable | stable only; no further prereleases |
+| any | any | never alpha |
+
+Betas are prereleases of their intended final version, for example
+`2026.9.0-beta.1` → `2026.9.0-rc.1` → `2026.9.0`. Reaching that final stable is
+a normal forward update.
+
+macOS automatic update is not treated as a general downgrade mechanism. If a
+player selects Stable while running a beta newer than the latest stable, the
+app identifies the latest signed stable release, explains the situation, and
+offers its verified DMG. It never sends an older version to Squirrel.Mac and
+never silently replaces the running application.
+
+Rollback safety is primarily a data-compatibility rule:
+
+- beta settings changes are additive and unknown fields are tolerated;
+- beta releases do not destructively migrate canonical player data;
+- beta-only caches and indexes are versioned, disposable and rebuildable;
+- renames or semantic changes require a stable expand/contract release first;
+- credentials retain the release Keychain identity; and
+- reinstalling stable never deletes profiles, Builds, Teams, templates,
+  diagnostics or downloaded game data.
+
+This is a real compatibility requirement created by the player-facing rollback
+promise. It does not justify a generic migration framework, application
+snapshots, duplicate update service, background rollback agent or bundled copy
+of the previous application.
+
+### 2.3 Patch-day experience
 
 The ordinary maintainer workflow is one command:
 
@@ -115,7 +172,7 @@ A difficult ArenaNet change may still require investigation. The improvement is
 that the machine identifies which capability and which proof failed instead of
 presenting one undifferentiated broken tool chain.
 
-### 2.3 Runtime architecture
+### 2.4 Runtime architecture
 
 ```mermaid
 flowchart LR
@@ -124,7 +181,7 @@ flowchart LR
         Cert["Capability certification"]
         Network["Validated network and sockets"]
         Secrets["Keychain"]
-        Updates["Application updater"]
+        Updates["Application updater and release track"]
         Diag["Diagnostics"]
         Builds["Build library persistence"]
     end
@@ -151,7 +208,7 @@ The diagram describes ownership, not a mandatory folder template. A feature
 gets a new file only when that file has one real owner and permits deletion or
 simplification elsewhere.
 
-### 2.4 Sources of truth
+### 2.5 Sources of truth
 
 | Concept | Canonical owner | Derived or disposable state |
 | --- | --- | --- |
@@ -165,11 +222,12 @@ simplification elsewhere.
 | Settings | one versioned settings record | form control state |
 | Credentials | macOS Data Protection Keychain | short-lived in-memory values |
 | App update | the existing `AppUpdater` state | buttons and status copy |
+| App update eligibility | one persisted `UpdateTrack` preference plus pure release selection policy | displayed track and rollback guidance |
 | Diagnostics | the canonical recorder | report summaries and comparisons |
 
 No PR may create another authoritative copy of one of these concepts.
 
-### 2.5 Maintainer architecture
+### 2.6 Maintainer architecture
 
 - `main.ts` sequences owners; it does not implement their workflows.
 - `ipc.ts` validates senders and values; it does not decide domain behavior.
@@ -185,7 +243,7 @@ No PR may create another authoritative copy of one of these concepts.
 - `pnpm check` remains the fast contributor loop and `pnpm verify` remains the
   complete local gate.
 
-### 2.6 Quantitative outcomes
+### 2.7 Quantitative outcomes
 
 These are ratchets, not invitations to rewrite correct code solely to hit a
 number.
@@ -203,7 +261,10 @@ number.
 | Fast local gate | no slower than the current approximately 45-second baseline without evidence |
 | Complete local gate | no slower than the current approximately 3m38s baseline without evidence |
 | Production runtime dependencies | no new dependency without a measured requirement |
-| Persisted format changes during the program | zero unless a dedicated PR proves necessity |
+| Persisted format changes during the program | one additive `UpdateTrack` setting; otherwise zero unless a dedicated PR proves necessity |
+| Public application update tracks | stable and beta; alpha never public |
+| Native automatic downgrade paths | zero |
+| Beta rollback data compatibility | latest stable safely opens canonical data produced by public beta |
 
 File size is a diagnostic, not an acceptance criterion. A 500-line parser with
 one coherent grammar may be better than six artificial wrappers. A 150-line
@@ -338,15 +399,17 @@ better. Confidence is stated separately in the ranking table.
 | 4 | PR 4 — separate generation transactions from runtime selection | 4 | 4 | 5 | 5 | 4 | 4 | 2 | 4 |
 | 5 | PR 5 — feature-owned IPC handlers | 2 | 2 | 4 | 5 | 3 | 3 | 2 | 5 |
 | 6 | PR 6 — small main composition root and explicit cancellation | 3 | 3 | 4 | 5 | 3 | 3 | 2 | 5 |
-| 7 | PR 7 — explicit renderer GameHost boundary | 3 | 3 | 4 | 5 | 4 | 4 | 2 | 4 |
-| 8 | PR 8 — simplify launcher/settings presentation | 3 | 1 | 3 | 5 | 4 | 4 | 3 | 3 |
-| 9 | PR 9 — simplify the Tools host and delivery boundary | 4 | 3 | 4 | 5 | 4 | 4 | 2 | 4 |
-| 10 | PR 10 — remove obsolete architecture and plan residue | 1 | 2 | 2 | 4 | 2 | 1 | 1 | 5 |
+| 7 | PR 7 — public beta track and safe return to stable | 4 | 1 | 4 | 4 | 3 | 3 | 2 | 4 |
+| 8 | PR 8 — explicit renderer GameHost boundary | 3 | 3 | 4 | 5 | 4 | 4 | 2 | 4 |
+| 9 | PR 9 — simplify launcher/settings presentation | 3 | 1 | 3 | 5 | 4 | 4 | 3 | 3 |
+| 10 | PR 10 — simplify the Tools host and delivery boundary | 4 | 3 | 4 | 5 | 4 | 4 | 2 | 4 |
+| 11 | PR 11 — remove obsolete architecture and plan residue | 1 | 2 | 2 | 4 | 2 | 1 | 1 | 5 |
 
-PRs 1–4 are the patch-survival foundation. PRs 5–7 simplify runtime ownership.
-PRs 8–9 simplify product delivery after the runtime seams are stable. PR 10
-removes transition residue only after the code makes the old descriptions
-false.
+PRs 1–4 are the patch-survival foundation. PRs 5–6 simplify main-process
+ownership. PR 7 adds the player-facing release policy after the updater has one
+clear owner. PRs 8–10 simplify runtime and product delivery after those seams
+are stable. PR 11 removes transition residue only after the code makes the old
+descriptions false.
 
 ### 4.3 Dependency order
 
@@ -358,11 +421,13 @@ flowchart TD
     P4 --> P5["PR 5 · IPC ownership"]
     P4 --> P6["PR 6 · main composition"]
     P5 --> P6
-    P6 --> P7["PR 7 · GameHost boundary"]
-    P7 --> P8["PR 8 · shell simplification"]
-    P7 --> P9["PR 9 · Tools boundary"]
-    P8 --> P10["PR 10 · residue deletion"]
-    P9 --> P10
+    P6 --> P7["PR 7 · beta track and stable return"]
+    P6 --> P8["PR 8 · GameHost boundary"]
+    P7 --> P9["PR 9 · shell simplification"]
+    P8 --> P9
+    P8 --> P10["PR 10 · Tools boundary"]
+    P9 --> P11["PR 11 · residue deletion"]
+    P10 --> P11
 ```
 
 PRs may be split into smaller pull requests when a natural hard-cut boundary
@@ -1142,7 +1207,186 @@ Preserve the existing principles:
 
 ---
 
-## 11. PR 7 — Explicit renderer GameHost boundary
+## 11. PR 7 — Public beta track and safe return to stable
+
+### Rank
+
+Priority 7. Direct player value and meaningful recovery benefit, deliberately
+scheduled after `AppUpdater` and application lifetime have one clear owner. It
+does not block the ArenaNet patch-survival work.
+
+### Problem
+
+The release parser already understands prerelease stages, but stable installs
+intentionally do not offer prereleases. The existing distribution-channel
+identity also distinguishes release, preview and development packages. Reusing
+that packaging identity as a user preference would mix signing/Keychain
+authority with release eligibility and create a second public application.
+
+“Enable beta updates” and “rollback” are also different operations. Opting into
+newer prereleases is a normal forward update. Returning from a beta to an older
+stable application is a downgrade, which the macOS updater must not be assumed
+to support. More importantly, replacing the application bundle is safe only if
+the latest stable application can still read the player's canonical data.
+
+### Desired result
+
+The signed release app owns one setting:
+
+```ts
+type UpdateTrack = "stable" | "beta";
+```
+
+`AppUpdater` remains the only owner of discovery, validation, download, ready
+state and installation. A pure release-selection function combines the current
+version, selected track and validated candidates and returns exactly one of:
+
+```ts
+type UpdateDecision =
+  | { kind: "none" }
+  | { kind: "upgrade"; release: Release }
+  | { kind: "manual-stable-return"; release: Release };
+```
+
+Only `upgrade` reaches Electron `autoUpdater`. `manual-stable-return` presents a
+verified stable download and clear replacement instructions; it is never
+reported as an automatic update.
+
+### Cornerstone pieces
+
+#### One eligibility policy
+
+- Stable track accepts stable releases only.
+- Beta track accepts beta, release-candidate and stable releases.
+- Alpha is never a public option.
+- Stable users do not receive prereleases until they explicitly opt in.
+- Selecting Stable immediately suppresses further beta/RC offers.
+- The final stable corresponding to an installed prerelease is a normal forward
+  update.
+- Candidate ordering uses the existing release-version semantics; UI code does
+  not reimplement it.
+
+#### Keep identity separate from preference
+
+`release`, `preview` and `development` continue to govern bundle identity,
+Keychain access and automatic-update authority. `UpdateTrack` only filters
+validated releases inside the signed release app. Preview remains available for
+internal/package verification and is not advertised as the beta track.
+
+#### Stable-return behavior
+
+When the player selects Stable while running a prerelease:
+
+1. if an eligible final stable is newer, use the normal updater;
+2. if the latest stable is older, show its exact version and a
+   `Download latest stable…` action;
+3. resolve the download only from the validated release metadata already owned
+   by `AppUpdater`;
+4. open the signed/notarized stable DMG through the existing external-open
+   authority; and
+5. explain that replacing the application preserves player data.
+
+The app does not silently quit, move application bundles, retain a duplicate
+app bundle, invoke private Squirrel APIs or claim the older stable is an
+automatic update.
+
+#### Public-beta data compatibility
+
+The rollback promise becomes a release invariant:
+
+- canonical settings remain readable by latest stable; beta additions are
+  optional and unknown fields are tolerated;
+- beta does not destructively migrate Builds, Teams, templates, profiles,
+  credentials, client generations or game content;
+- beta-only cache/index state is explicitly versioned and disposable;
+- a field rename, changed meaning or destructive migration requires a stable
+  expand/contract release before any beta writes the new representation; and
+- a public beta release gate exercises stable → beta → stable against a
+  disposable profile whenever persisted behavior changed.
+
+This compatibility check belongs at release certification, not in every fast
+contributor run. A beta that cannot satisfy it must not promise rollback and
+must not be published on the public beta track.
+
+#### Settings presentation contract
+
+The current Settings surface gains only the preference, current version/track,
+one-time opt-in confirmation and stable-return state needed for this PR. PR 9
+later migrates that already-proven state into the single Vue presentation
+without changing its meaning.
+
+### What to delete or simplify
+
+- Replace the hard-coded “stable never sees prerelease” branch with the one
+  track-aware release-selection policy.
+- Delete any duplicated candidate filtering from the UI or feed construction.
+- Do not turn preview distribution metadata into a user setting.
+- Do not add another update feed owner, updater state machine or preference
+  store.
+- Do not retain both old and new release-selection paths after tests pass.
+
+### Corner cases
+
+- Stable install opts into Beta when no beta exists.
+- Stable install sees beta, RC and final candidates for the same release line.
+- Beta install advances to a later beta, then RC, then final stable.
+- Player switches to Stable before a final stable exists.
+- Player switches tracks while a check is running or an update is downloaded.
+- Automatic checks are disabled while Beta is selected.
+- App is offline when the player requests stable return.
+- Release metadata contains alpha, malformed, duplicate, unsigned or wrong-arch
+  candidates.
+- Latest stable asset is missing after metadata discovery.
+- A beta crashes after writing disposable derived state.
+- Stable is reinstalled over beta with existing Keychain and player data.
+
+Track changes affect the next check. They do not cancel or reinterpret an
+already downloaded application update; the UI names that downloaded version
+and lets the player install it or defer it. This avoids racing native updater
+state with preference changes.
+
+### Verification
+
+- Pure table tests cover every installed-stage/track/candidate-stage
+  combination and ordering ties.
+- Alpha and malformed candidates are always refused.
+- An older stable produces `manual-stable-return` and is never passed to
+  Electron `autoUpdater`.
+- Auto-update opt-out, offline behavior and update failure still permit play.
+- Renderer tests cover opt-in confirmation, current track/version, track
+  switching and both stable-return presentations.
+- Packaged signed proof covers stable → beta and beta/RC → corresponding final
+  stable through the normal updater.
+- Release certification covers beta → older stable reinstall with existing
+  canonical player data whenever persisted behavior changed.
+- Asset validation, signing, notarization and existing updater authority remain
+  unchanged.
+- `pnpm verify`.
+
+### Better after merge
+
+- Players can choose early application releases without installing a separate
+  product.
+- Returning to Stable is truthful and predictable on both sides of the version
+  boundary.
+- Release selection has one pure, testable owner.
+- The rollback promise includes the player data that actually matters.
+- Preview/development identities remain narrow security and testing concepts.
+
+### Overengineering rejected
+
+- No automatic macOS downgrade implementation.
+- No custom installer or private Squirrel integration.
+- No side-by-side public Stable and Beta apps.
+- No bundled previous application or application snapshot manager.
+- No rollback daemon, remote command channel or second updater.
+- No alpha/nightly/custom-channel framework.
+- No generic schema migration framework; use an explicit stable expand/contract
+  release only when a real persisted change requires it.
+
+---
+
+## 12. PR 8 — Explicit renderer GameHost boundary
 
 ### Rank
 
@@ -1265,11 +1509,12 @@ move every existing renderer file for visual symmetry.
 
 ---
 
-## 12. PR 8 — Simplify launcher and settings presentation
+## 13. PR 9 — Simplify launcher and settings presentation
 
 ### Rank
 
-Priority 8. Valuable but deliberately behind runtime ownership because UI
+Priority 9. Valuable but deliberately behind runtime ownership and release
+policy because UI
 rewrites should consume stable state rather than define it.
 
 ### Problem
@@ -1362,7 +1607,7 @@ Each surface moves once. There is no runtime switch between old and new UI.
 
 ---
 
-## 13. PR 9 — Simplify the Tools host and delivery boundary
+## 14. PR 10 — Simplify the Tools host and delivery boundary
 
 ### Rank
 
@@ -1472,7 +1717,7 @@ the main renderer removes more build/runtime mismatch than it adds coupling.
 
 ---
 
-## 14. PR 10 — Remove obsolete architecture and plan residue
+## 15. PR 11 — Remove obsolete architecture and plan residue
 
 ### Rank
 
@@ -1554,12 +1799,12 @@ investigations remain valuable when clearly classified.
 
 ---
 
-## 15. Explicitly not planned
+## 16. Explicitly not planned
 
 These ideas are not forbidden forever. They are excluded from the required PR
 sequence because current evidence does not justify their cost.
 
-### 15.1 One bundled renderer artifact
+### 16.1 One bundled renderer artifact
 
 Potential value:
 
@@ -1587,7 +1832,7 @@ Evidence required before promotion:
 
 If it wins, it becomes one hard-cut PR that deletes the old emit/serve path.
 
-### 15.2 One global ArenaNet request arbiter
+### 16.2 One global ArenaNet request arbiter
 
 Potential value:
 
@@ -1609,7 +1854,7 @@ Evidence required:
 
 Until then, preserve the shared ceiling and its policy test.
 
-### 15.3 Generic fact ledger
+### 16.3 Generic fact ledger
 
 Potential value:
 
@@ -1624,7 +1869,7 @@ Why rejected:
 
 Use capability-owned facts and one patch-day report instead.
 
-### 15.4 Generic state-machine framework
+### 16.4 Generic state-machine framework
 
 Potential value:
 
@@ -1639,7 +1884,7 @@ Why rejected:
 
 Use small discriminated unions and direct functions per owner.
 
-### 15.5 Second renderer or worker-hosted client
+### 16.5 Second renderer or worker-hosted client
 
 Potential value:
 
@@ -1654,7 +1899,7 @@ Why rejected:
 
 Prototype only in response to a measured recovery or isolation failure.
 
-### 15.6 Lazy native game filesystem
+### 16.6 Lazy native game filesystem
 
 Potential value:
 
@@ -1669,7 +1914,7 @@ Why rejected now:
 
 Treat it as a separate performance research project with a controlled fixture.
 
-### 15.7 Remote deny or remote fact channel expansion
+### 16.7 Remote deny or remote fact channel expansion
 
 Potential value:
 
@@ -1685,13 +1930,13 @@ The existing feed may continue only within its current proof and exact-
 restatement restrictions. Expansion requires a concrete shipped incident or a
 new structural proof.
 
-### 15.8 New database, cache, profile system or background service
+### 16.8 New database, cache, profile system or background service
 
 No current acceptance criterion requires one. Existing files, atomic writes,
 content-addressed chunks, the current profile, and the existing update schedule
 remain simpler.
 
-### 15.9 New runtime dependency
+### 16.9 New runtime dependency
 
 A dependency must delete more maintenance and audit surface than it adds and
 must solve a measured requirement. Familiarity or convenience alone is not the
@@ -1699,7 +1944,7 @@ criterion.
 
 ---
 
-## 16. Cross-program verification matrix
+## 17. Cross-program verification matrix
 
 The final merged program must prove these end-to-end properties.
 
@@ -1720,6 +1965,10 @@ The final merged program must prove these end-to-end properties.
 | Package contains only reviewed runtime files | actual ASAR inventory | release asset verification |
 | Release assets bind to source | existing release workflow tests | GitHub attestations |
 | Diagnostics contain no protected prose | closed schema and detector | planted canaries |
+| Stable users never receive prereleases implicitly | release-selection truth table | packaged update check |
+| Beta reaches corresponding final stable normally | release-selection and updater integration | signed stable → beta → stable proof |
+| Older stable is never sent to native updater | manual-stable-return test | verified DMG action story |
+| Public beta preserves stable-readable player data | compatibility fixtures | beta → older stable release certification |
 
 ### Required commands by PR class
 
@@ -1731,17 +1980,18 @@ The final merged program must prove these end-to-end properties.
 | renderer GameHost or UI | `pnpm verify`, targeted visual/Electron stories |
 | official client transform | `pnpm verify`, client-artifact lane, scoped live proof |
 | packaging/signing/release | `pnpm verify`, signed dry run where authority is available |
+| application release selection or update track | `pnpm verify`, release-policy truth table, targeted updater stories |
 
 The PR description records exact observed counts and elapsed times. The plan
 does not freeze counts that naturally change as tests are combined or deleted.
 
 ---
 
-## 17. Release and rollout strategy
+## 18. Release and rollout strategy
 
 This is an in-place application evolution.
 
-### 17.1 Release groups
+### 18.1 Release groups
 
 Suggested release points:
 
@@ -1749,16 +1999,18 @@ Suggested release points:
 | --- | --- | --- |
 | Patch-day foundation | PRs 1–3 | faster compatibility response and truthful independent capability state |
 | Runtime ownership | PRs 4–6 | safer candidate recovery and more predictable lifecycle |
-| Renderer simplification | PRs 7–8 | clearer launcher/settings behavior and lower maintenance risk |
-| Tools and cleanup | PRs 9–10 | stronger Tools isolation and simpler contribution surface |
+| Public beta updates | PR 7 | player-controlled early releases and a truthful return-to-stable path |
+| Renderer simplification | PRs 8–9 | clearer launcher/settings behavior and lower maintenance risk |
+| Tools and cleanup | PRs 10–11 | stronger Tools isolation and simpler contribution surface |
 
 A security or player-facing fix ships immediately and does not wait for a
 group boundary.
 
-### 17.2 Data continuity
+### 18.2 Data continuity
 
-The program intentionally avoids persisted-format changes. If implementation
-reveals one is necessary:
+The program adds only the backward-compatible `UpdateTrack` setting. Public
+beta data must remain readable by latest stable as defined in PR 7. If any
+other persisted-format change becomes necessary:
 
 1. stop the affected PR;
 2. write a dedicated migration proposal;
@@ -1769,20 +2021,25 @@ reveals one is necessary:
 7. test real fixture upgrades; and
 8. never maintain dual writers.
 
-### 17.3 Rollback
+### 18.3 Rollback
 
 Every PR must be revertible at the source level without deleting player data.
 If a PR changes a wire or persisted contract, its rollback story belongs in
 that PR and may require forward repair rather than an application downgrade.
+
+Player-facing return from a public beta follows PR 7: corresponding final
+stable is a normal update; an older stable is an explicit verified DMG install.
+This product behavior does not weaken the source-level rollback requirement for
+the refactor PRs.
 
 The release process continues packaging the exact tested build. Do not rebuild
 between verification and signing.
 
 ---
 
-## 18. Program success review
+## 19. Program success review
 
-After PR 10, conduct one review against outcomes rather than file counts.
+After PR 11, conduct one review against outcomes rather than file counts.
 
 ### Patch-day review
 
@@ -1800,6 +2057,9 @@ After PR 10, conduct one review against outcomes rather than file counts.
 - Trace one passive observation.
 - Trace one Apply request from click to observed confirmation.
 - Trace one settings update.
+- Trace Stable → Beta selection, release eligibility and native updater handoff.
+- Trace Beta → Stable for both a newer final stable and an older manual stable
+  return.
 - Trace one diagnostic event to export.
 - Trace quit during an active download.
 
@@ -1818,6 +2078,8 @@ Ask:
 - Can a contributor find the owner of a capability without reading the entire
   application?
 - Can a player update normally without migrating or redownloading game data?
+- Can a player leave Beta without hidden downgrade behavior or risking
+  canonical player data?
 
 Any “yes” answer requires deletion, simplification, or a written reason the
 cost is necessary.
@@ -1839,7 +2101,7 @@ claim. Preserve raw results and package identities.
 
 ---
 
-## 19. Final definition of done
+## 20. Final definition of done
 
 The refactor program is complete only when all of the following are true:
 
@@ -1860,6 +2122,15 @@ The refactor program is complete only when all of the following are true:
 - [ ] No new generic ledger, state-machine framework, plugin system, database,
       service layer, or remote authority was introduced.
 - [ ] Existing player data and updater identity remain compatible.
+- [ ] Signed release builds expose exactly Stable and Beta update tracks;
+      Stable remains the default and Alpha is never offered.
+- [ ] Update-track preference is separate from release/preview/development
+      packaging identity and `AppUpdater` remains the only updater owner.
+- [ ] Beta/RC → corresponding final stable uses the normal signed updater.
+- [ ] Returning to an older stable uses a verified explicit DMG action and no
+      older version reaches Electron `autoUpdater`.
+- [ ] Public beta release proof demonstrates that latest stable can safely open
+      canonical player data produced by beta.
 - [ ] Package inventory, SBOM, signing, notarization, checksums and attestations
       remain intact.
 - [ ] `pnpm check` and `pnpm verify` remain within their current practical
@@ -1867,7 +2138,7 @@ The refactor program is complete only when all of the following are true:
 - [ ] Historical plans are clearly classified and no longer appear to be
       current instructions.
 - [ ] The final architecture review finds one source of truth for every concept
-      listed in section 2.4.
+      listed in section 2.5.
 
 The final measure is not fewer files or newer patterns. It is that an ArenaNet
 update, a player failure, and a contributor change each reach one obvious owner
