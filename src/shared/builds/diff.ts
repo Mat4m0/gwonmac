@@ -6,9 +6,8 @@
  * is a variant of Discord Necro" until something can answer "what is this bar
  * closest to?". Both questions are one comparison, so they live in one file.
  *
- * The comparison is not invented here either: it is the one the UX prototype at
- * `plans/research/toolbox/11-teams-ux-prototype.html` arrived at by being used.
- * Three of its decisions are the reason this is worth having:
+ * Three decisions make the comparison useful to the real variant and capture
+ * flows:
  *
  * 1. A changed slot carries *both* skills, not the slot number. "Slot 3
  * changed" is a diff a machine is satisfied by; "Aegis → Protective Spirit"

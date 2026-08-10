@@ -566,15 +566,15 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(feedback, /id: diagnostics[\s\S]*?required: false/);
 });
 
-test("the application ships with no runtime dependency to audit", () => {
+test("the root app and website add no runtime package entries and audit exceptions stay explicit", () => {
   assert.equal(json("package.json").dependencies, undefined);
   assert.equal(json("apps/website/package.json").dependencies, undefined);
   assert.deepEqual(
     read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
     [
-      "GHSA-mh99-v99m-4gvg",
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
+      "GHSA-g7r4-m6w7-qqqr",
     ],
   );
 });
@@ -787,8 +787,10 @@ test("the feed publication reproduces twice and signs in isolation", () => {
 
   // Transitional publication still runs the application's own trust rule and
   // refuses an explicitly disabled or malformed pin.
-  assert.match(target, /certificateFeedTrust\(pinned\)\.remote/);
-  assert.match(target, /refusing transitional publication/);
+  assert.match(
+    target,
+    /if \(certificateFeedTrust\(pinned\)\.remote\) process\.exit\(0\);[\s\S]*process\.exit\(1\);/,
+  );
 
   // Two runners, and they have to be two different machines for the comparison
   // to be evidence about this repository rather than about one runner.

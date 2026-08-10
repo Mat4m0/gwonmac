@@ -1,4 +1,4 @@
-// P0.4: the Markdown link checker follows repository boundaries and reports
+// The Markdown link checker follows repository boundaries and reports
 // useful failures. `pnpm check:links` owns the one scan of the real tree.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

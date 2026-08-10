@@ -1,4 +1,4 @@
-// P2.3. `SocketManager` used to publish `error.message` and free-text close
+// `SocketManager` used to publish `error.message` and free-text close
 // reasons to both the renderer and the flight recorder — libuv writes the
 // destination address into that message ("connect ECONNREFUSED 1.2.3.4:6112").
 // These tests drive the manager with a fake socket and read what it emitted:

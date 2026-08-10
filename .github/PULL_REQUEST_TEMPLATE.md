@@ -2,6 +2,10 @@
 
 <!-- Describe the user-visible or architectural outcome. -->
 
+## Invariant
+
+<!-- Name the behavior or trust boundary this changes or protects. -->
+
 ## Verification
 
 <!-- List the commands or manual checks you ran. -->

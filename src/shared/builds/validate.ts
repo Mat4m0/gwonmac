@@ -1,8 +1,8 @@
 /**
- * Primitive A6, the build half: the structural rules that decide whether a
- * stored `Build` describes a character the game could actually produce. Team
- * rules (the same hero in two slots, a gap between filled party slots, an
- * unlocked-hero check that needs C4) belong to a team validator and are
+ * Structural rules that decide whether a stored `Build` describes a character
+ * the game could actually produce. Team rules (the same hero in two slots, a
+ * gap between filled party slots, or an unlocked-hero check) belong to a team
+ * validator and are
  * deliberately not here — this file takes one build and answers about that
  * build alone, with no clock, no I/O and no game access.
  *
@@ -18,22 +18,17 @@
  * a non-empty tuple, so "invalid with nothing wrong" and "valid but here
  * are three problems" are both unspellable.
  *
- * 2. **The skill catalogue is injected, because we do not own one.** Which
- * profession a skill belongs to, and whether it is elite, is content —
- * primitive A1 in `plans/tools/hero-builds/primitives.md`, an undecided
- * product question (certified client read, bundled table, or no names at
- * all). Inventing a skill table here would be inventing ArenaNet data, and
- * it would rot the moment A1 is answered. So `validateBuild` takes the
- * lookup as a parameter: a fixture answers it in tests today, and whatever
- * A1 settles on answers it later without this file changing. A skill the
+ * 2. **The skill catalogue is injected, because this pure validator does not
+ * own ArenaNet content.** Inventing a second skill table here would create a
+ * stale authority. So `validateBuild` takes the lookup as a parameter: a
+ * fixture answers it in tests and the host catalogue answers it in production.
+ * A skill the
  * catalogue cannot resolve is reported as `unknown-skill` rather than
  * skipped, because silently skipping turns an incomplete catalogue into a
  * clean bill of health — the one lie this module must not tell.
  *
- * 3. **Provenance is marked, not smoothed over.** The tables below come from
- * `plans/tools/hero-builds/evidence/hero-and-profession-tables.md`, which
- * is explicit about where its own sources stop. Two of the ten primary
- * attributes are asserted by the source tree and eight are not; the
+ * 3. **Provenance is marked, not smoothed over.** Two of the ten primary
+ * attributes are asserted by the reviewed source tree and eight are not; the
  * level-20 budget is not in the source tree at all. Each of those carries a
  * comment saying so where it is declared. Nothing here is presented as
  * read-from-source when it was not.
@@ -59,7 +54,7 @@ import { ATTRIBUTE_POINT_COST, ATTRIBUTES } from "./heroes.js";
  * a common skill — the client's `Any` profession, which is what PvE-only,
  * Sunspear, Kurzick/Luxon and title-line skills carry — and such a skill is
  * legal on every bar. This is deliberately the *minimum*: a name, an icon and
- * an attribute are what the UI wants from A1, but none of them decide whether a
+ * an attribute are what the UI wants from a catalogue, but none decide whether a
  * build can exist, so none of them are required to answer that question.
  */
 export interface CataloguedSkill {
@@ -69,8 +64,8 @@ export interface CataloguedSkill {
 }
 
 /**
- * The injected A1 lookup. `null` means "this catalogue does not know that id",
- * which is a real and expected answer — the no-catalogue degradation in A1 has
+ * The injected catalogue lookup. `null` means "this catalogue does not know
+ * that id", which is a real and expected answer — degraded operation has
  * every id unknown — and not an error.
  */
 export type SkillCatalogue = (skill: SkillId) => CataloguedSkill | null;
@@ -80,8 +75,8 @@ export type SkillCatalogue = (skill: SkillId) => CataloguedSkill | null;
  * order attribute problems are reported in.
  *
  * `heroes.ts` owns the table — which profession each attribute belongs to, from
- * the trailing comments on `GWCA/Constants/Constants.h:64-77` as recorded in
- * the evidence document §3 — and this file reads it. A second transcription of
+ * the trailing comments on `GWCA/Constants/Constants.h:64-77` — and this file
+ * reads it. A second transcription of
  * those 42 rows here would be a second answer to "whose attribute is Divine
  * Favor", and the two would only be found to disagree by a player whose legal
  * build was rejected.
@@ -98,15 +93,15 @@ const ATTRIBUTE_NAMES = Object.keys(ATTRIBUTES) as readonly Attribute[];
  * characters may invest in, which is what makes this a validation rule rather
  * than trivia.
  *
- * **Provenance is uneven and this is the honest state of it.** The evidence
- * document §3.2 is blunt: the source tree asserts only two of these ten. The
+ * **Provenance is uneven and this is the honest state of it.** The reviewed
+ * source tree asserts only two of these ten. The
  * comment on `Constants.h:73` ("sin/rit primary") establishes `CriticalStrikes`
  * for the Assassin and `SpawningPower` for the Ritualist, and those two sit out
  * of enum order precisely because of it. The other eight are **assumed** here
  * from ordinary knowledge of the game; they are not read from either source
- * tree, and §3.2 warns specifically against reading them out of
+ * tree. Do not infer them from
  * `kProfessionAttributes`, which is ordered by frequency of use and would name
- * `DominationMagic` for the Mesmer. §4 names the live read that settles them:
+ * `DominationMagic` for the Mesmer. The live read that can settle them is
  * `GW::SkillbarMgr::GetAttributeConstantData`. When that read happens, this
  * table is the one place to correct — it is the only one. `heroes.ts` used to
  * carry the two source-asserted answers a second time and `null` for the rest,
@@ -133,7 +128,7 @@ export const PRIMARY_ATTRIBUTE = {
 
 /**
  * The highest buyable rank, derived from `heroes.ts`'s `kAttrCost` transcription
- * (`GWTB/Utils/TeamBuildEncoder.h:153`, evidence document §3.4) rather than
+ * (`GWTB/Utils/TeamBuildEncoder.h:153`) rather than
  * restated. That table has thirteen entries, so the ranks a character can buy
  * are 0-12 and its last key *is* the cap — a rank with no entry there is a rank
  * the game cannot sell.
@@ -143,10 +138,8 @@ const MAX_ATTRIBUTE_RANK = Object.keys(ATTRIBUTE_POINT_COST).length - 1;
 /**
  * Attribute points a level-20 character has to spend.
  *
- * **Assumed, not read.** The evidence document §3.4 states plainly that 200 is
- * *NOT IN SOURCE* — neither GWCA nor GWToolbox states it anywhere — and that A6
- * must not take the figure from that document. It is here because a budget rule
- * with no budget is not a rule, it is the number `primitives.md` A6 cites, and
+ * **Assumed, not read.** Neither GWCA nor GWToolbox states 200 anywhere. It is
+ * here because a budget rule with no budget is not a rule, and
  * it matches the cost table's shape (rank 12 costs 97, so two attributes at 12
  * plus change is the familiar level-20 spread). Treat it as the single value to
  * correct if a live read disagrees.
@@ -233,7 +226,7 @@ export type BuildValidation =
  * Every structural reason `build` could not exist in game, or `valid: true`.
  *
  * Pure: same inputs, same answer, no clock and no game access. `catalogue` is
- * the injected A1 lookup — see the file header for why it is a parameter and
+ * the injected catalogue lookup — see the file header for why it is a parameter and
  * not a table in this repository.
  */
 export function validateBuild(
@@ -370,7 +363,7 @@ function checkAttributes(
     if (rank === undefined) continue;
 
     // `AttributeRank` stops at 12, so this branch is unreachable from a `Build`
-    // literal. It is not dead: A2 decodes ranks off the wire and an imported
+    // literal. It is not dead: imported data can carry ranks off the wire and a
     // file is a promise nobody kept, and this validator is where such a record
     // first meets the rules. A rank with no cost entry is one the game cannot
     // sell, so it is rejected rather than clamped and it buys nothing.

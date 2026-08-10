@@ -1,7 +1,9 @@
 /**
- * What every `.gwdiag` reader needs: unpacking one into a temporary directory,
- * parsing its documents, and the validation each command runs before it prints
- * a number.
+ * What every diagnostics ZIP reader needs: unpacking one into a temporary
+ * directory, parsing its documents, and the validation each command runs
+ * before it prints a number. The current UI writes `.zip`; the same readers
+ * retain the legacy `.gwdiag` filename because the archive format did not
+ * change.
  *
  * A capture is opened here and nowhere else, so the tools cannot disagree about
  * what a valid archive is, and the temporary directory is removed even when the
@@ -470,13 +472,4 @@ export function comparisonWarnings(before: Capture, after: Capture): string[] {
     warnings.push("a Chromium trace is profiler-contaminated");
   }
   return warnings;
-}
-
-export function numberAt(object: Record<string, unknown>, pathParts: string[]): number {
-  let value: unknown = object;
-  for (const key of pathParts) {
-    if (!value || typeof value !== "object") return 0;
-    value = (value as Record<string, unknown>)[key];
-  }
-  return typeof value === "number" ? value : 0;
 }

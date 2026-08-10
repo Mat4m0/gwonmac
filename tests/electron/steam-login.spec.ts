@@ -510,7 +510,7 @@ test.describe("the Steam credential seam", () => {
     await getAuthToken(fixture, "Steam", true);
 
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-steam-"));
-    const target = path.join(diagnosticRoot, "capture.gwdiag");
+    const target = path.join(diagnosticRoot, "capture.zip");
     await fixture.app.evaluate(
       async ({ app }, args) => {
         const { createRequire } = process.getBuiltinModule("module");

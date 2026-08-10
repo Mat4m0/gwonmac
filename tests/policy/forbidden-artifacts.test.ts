@@ -24,6 +24,7 @@ test("no downloaded game artifacts or generated output are tracked", () => {
     /(^|\/)Gw\.snapshot$/i,
     /(^|\/)(manifest|version)\.json$/i,
     /\.gwdiag$/i,
+    /(^|\/)guild-wars-diagnostics[^/]*\.zip$/i,
     /\.dmp$/i,
     /(^|\/)credentials\.bin$/i,
     /^(build|out|node_modules|gwpatch-cache)\//i,

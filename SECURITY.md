@@ -16,4 +16,4 @@ the smallest necessary evidence. Do not include real account credentials, game
 packet captures, or unrelated private data.
 
 Ordinary crashes and bugs belong in the public bug form with the app’s redacted
-`.gwdiag` export.
+diagnostics `.zip` export.

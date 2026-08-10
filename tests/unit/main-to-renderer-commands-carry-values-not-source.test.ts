@@ -1,4 +1,4 @@
-// P5.1/P5.2, executed rather than asserted about. The real preload and the real
+// This behavior is executed rather than asserted about. The real preload and
 // renderer command router are loaded and driven: a command crosses as a typed
 // object, a capture level arrives as a number rather than spliced into a string
 // of JavaScript, the acknowledgement main waits on is sent only after the
@@ -30,7 +30,7 @@ const preloadSource: string = generatePreload({
 }, root);
 // The router is a classic script — index.html loads it with a `<script>` tag
 // and it exports nothing — so the only way to drive it is to run its text. It
-// is TypeScript from P3, so the text is transpiled here under the same target
+// is TypeScript, so the text is transpiled here under the same target
 // and module the renderer project emits with. Reading src/ and transpiling is
 // what keeps this test buildless; reading build/renderer would make it depend
 // on a build the unit suite does not run.

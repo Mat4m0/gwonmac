@@ -1,4 +1,4 @@
-// P2.8. Killing the app between `write` and the newline leaves one incomplete
+// Killing the app between `write` and the newline leaves one incomplete
 // final JSONL record. That is normal, and the export must survive it: the
 // export path used to `JSON.parse` every line unguarded and throw, while the
 // previous-session path tolerated it. There is now one reader, and these tests

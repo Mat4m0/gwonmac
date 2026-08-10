@@ -334,7 +334,7 @@ if (
 ) {
   const input = process.argv[2];
   if (!input) {
-    console.error("usage: pnpm diagnostics:attribute-stalls <capture.gwdiag> [threshold-ms]");
+    console.error("usage: pnpm diagnostics:attribute-stalls <capture.zip> [threshold-ms]");
     process.exitCode = 2;
   } else {
     const thresholdMs = process.argv[3] === undefined

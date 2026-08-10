@@ -1,9 +1,9 @@
 # Diagnostics and verification
 
-This document owns the local flight recorder and the `.gwdiag` export — what is
+This document owns the local flight recorder and the diagnostics ZIP export — what is
 recorded, what each protection tier actually guarantees, and how to read a
-capture — together with the map from every public claim to the thing that
-executes to prove it.
+capture — together with the proof map for public claims whose failure could
+harm privacy, data, releases, updates, or performance decisions.
 
 ## The flight recorder
 
@@ -75,7 +75,8 @@ The existing main-to-renderer capture command path also owns a noninteractive
 recording indicator, elapsed timer, and problem-marker acknowledgement; it
 does not add a preload capability.
 
-`.gwdiag` is a ZIP with:
+The current `.zip` export (and the legacy `.gwdiag` name accepted by the
+developer readers) contains:
 
 ```text
 manifest.json
@@ -203,7 +204,7 @@ render scale, canvas size, capture level, visibility, same-session and
 overlapping-window differences. Deep traces are labeled profiler-contaminated
 and should locate a bottleneck, not provide the final before/after number.
 
-`pnpm diagnostics:attribute-stalls <capture.gwdiag> [threshold-ms]` requires a
+`pnpm diagnostics:attribute-stalls <capture.zip> [threshold-ms]` requires a
 Level 2 capture made by a build with the trace markers above. It finds
 consecutive submitted-frame marks beyond the threshold, counts snapshot
 resolutions inside each interval, reconstructs V8 CPU-profiler stacks, and
@@ -212,7 +213,7 @@ overlapping renderer-thread trace events. Captures without the markers fail
 report the incompatibility instead of attempting cross-clock timestamp
 inference.
 
-`pnpm diagnostics:attribute-frames <capture.gwdiag> [threshold-ms]` is its
+`pnpm diagnostics:attribute-frames <capture.zip> [threshold-ms]` is its
 Level 1 counterpart, and Level 1 is the level that can establish gains. It joins
 visible-frame gaps from `frames.bin` to the main-process events within a second
 and a half either side — the main process keeps running while the renderer is
@@ -243,7 +244,7 @@ WebGL object, pointer, or per-texture history is retained. When
 `unknownTextureAllocations` is non-zero or `textureTrackingSaturated` is true,
 the known byte figure is a lower bound, not total GPU memory.
 
-Run `pnpm diagnostics:summarize <capture.gwdiag>` first. Its **WASM memory
+Run `pnpm diagnostics:summarize <capture.zip>` first. Its **WASM memory
 attribution** section reports the outcome counts, last request, growth trigger,
 and texture state at that request. The growth trigger is the allocation path
 that crossed the current heap capacity; it is not presented as the owner of
@@ -277,13 +278,12 @@ was not requested. A preparation fault is additionally recorded as
 
 ### Claims and the tests that prove them
 
-Every statement this project makes in public — the website, `README.md`, the
-in-app copy — is a claim someone can hold us to. Each one gets a row here and
-each row names something that executes.
-
-**The rule: a public claim with no row does not ship, and a row whose proof
-reads _none_ is a claim to narrow or delete, not a claim to explain.** The
-two that read _none_ today are recorded rather than quietly kept.
+The table covers consequential public invariants: security and privacy,
+data-loss and recovery behavior, update and release promises, and measured
+performance decisions. Each row names something that executes. Ordinary
+explanatory copy does not need a duplicate proof row; when a new public claim
+falls into one of these categories, either add executable evidence here or
+narrow the claim before it ships.
 
 | Claim | Where it is made | What executes to prove it |
 | --- | --- | --- |
@@ -291,14 +291,14 @@ two that read _none_ today are recorded rather than quietly kept.
 | The official artifact is preserved; the module the session runs is a derived copy | website FAQ, `docs/user-guide.md` | `tests/unit/template-save-compat.test.ts` — *never writes into the caller's input, Buffer or not*, *leaves unknown future client builds canonical*; `tests/unit/derived-wasm-cache.test.ts` — *publishes nothing when the output misses the pinned hash* |
 | Game files come directly from ArenaNet and are verified before use | website FAQ, `README.md` | `tests/unit/manifest.test.ts`, `tests/unit/chunk-store.test.ts` (verify-on-read, unlink-and-refetch), `tests/unit/published-client.test.ts`; `tests/integration/updater.test.ts` for publication, corruption repair and rollback |
 | The Mac app sends no telemetry, credentials, account identifiers, or game traffic to a GWonMac/project endpoint; required traffic is limited to public ArenaNet-shaped destinations | website safety and account pages | `tests/unit/no-game-traffic-is-uploaded.test.ts` refuses every destination that is not a public ArenaNet-shaped address (loopback, private ranges, this project's own host, every port outside 6112/80/443) and exports a socket's lifetime with no trace of what it carried; `tests/unit/allowlists.test.ts` and `tests/unit/proxy-routes.test.ts` prove the boundaries underneath it |
-| A `.gwdiag` never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
+| A diagnostics export never contains credentials, account identifiers, packet contents, or crash dumps | website FAQ, `docs/user-guide.md` | `tests/unit/diagnostic-schema-rejects-free-text.test.ts`, `tests/unit/export-detector-rejects-undeclared-event-fields.test.ts`, `tests/unit/socket-events-carry-no-error-text.test.ts`, `tests/unit/trace-scanner-catches-the-adversarial-corpus.test.ts`. Read *What the export actually guarantees* above for which tier covers which file |
 | With update checks switched off, the app makes no network request the player did not ask for | settings copy, `docs/user-guide.md` | `tests/electron/a-launch-checks-github-once-unless-opted-out.spec.ts` — the row's proof: it wraps the main process's `fetch` and counts exactly **one** api.github.com request across a launch with the defaults, then **zero** across a launch with the box unticked. `tests/unit/settings.test.ts`, `tests/unit/app-updater.test.ts`, and `tests/unit/update-action.test.ts` prove the constituents, including `periodicCheckDue` — every gate on the background re-check and its cadence constants |
 | Automatic checks happen at launch and then at most every six hours, never while a game connection is open | settings copy, first-run line, `README.md`, `docs/user-guide.md` | `tests/unit/app-updater.test.ts` — the `periodicCheckDue` gates and the `PERIODIC_CHECK_TICK_MS`/`PERIODIC_CHECK_DUE_MS` constants; `tests/policy/source-release-pipeline.test.ts` pins that the tick in `main.ts` is wired through that one predicate |
 | The game's own cursor is on by default, is switchable off, and no artwork ships or is downloaded | settings copy, `docs/user-guide.md` | `tests/release/packaged-enhancement-surface.test.ts` — *the cursor ships on, and a player who switches it off stays off*; `tests/electron/enhancement-cursor.spec.ts` for what Chromium computes from a published cursor region; `tests/policy/forbidden-artifacts.test.ts` for what is tracked |
 | Releases are Developer ID signed, notarized, stapled, and the shipped fuses hold | website FAQ | `.github/workflows/release.yml` verifies the G2 fingerprint, profile identity, Team ID, timestamp, hardened runtime, exact three top-level entitlements, Gatekeeper and stapled tickets; `tests/signed-keychain-runtime.ts` proves the signed product retains a Data Protection Keychain item across relaunch, move, and a newly signed replacement; `tests/policy/source-release-pipeline.test.ts` pins that policy; `tests/packaged-smoke.ts` and `tests/policy/fuses.test.ts` verify package structure and fuses |
-| Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.ts` (opt-in live smoke) — the drawing buffer changes with the setting; `tests/electron/settings.spec.ts` for the resolutions shown beside each scale |
+| Render scale changes the real backing resolution | website, settings copy | `tests/electron/live.spec.ts` (opt-in live smoke) — the drawing buffer changes with the setting; [`tests/electron/settings-data-display.spec.ts`](../tests/electron/settings-data-display.spec.ts) for the resolutions shown beside each scale |
 | "Built for Apple Silicon" | website capability facts | `.github/workflows/macos-verify.yml` and `.github/workflows/release.yml` fail before building unless the package runner reports `arm64`; `tests/policy/source-release-pipeline.test.ts` pins both gates |
-| "The client's available graphics settings, plus selectable render scale" | website capability facts | Narrowed in P3.22 from "every in-game quality option, fully available", which was wrong — the official WebGL client may offer only `None` for antialiasing. `tests/website-smoke.ts` executes the served page and fails if it promises every quality option again; the render-scale half is the row above |
+| "The client's available graphics settings, plus selectable render scale" | website capability facts | Narrowed from "every in-game quality option, fully available", which was wrong — the official WebGL client may offer only `None` for antialiasing. `tests/website-smoke.ts` executes the served page and fails if it promises every quality option again; the render-scale half is the row above |
 
 Unit tests cover manifest/range parsing, allowlists, settings, atomic files,
 cache coalescing, hash validation, insufficient-disk rejection, interrupted
@@ -344,18 +344,18 @@ Enhancement development uses the layered, cached-safe workflow in
 WASM unchanged, and a live Enhancement run cannot update the client unless update
 permission is explicit.
 
-The dependency audit has three explicit packaging-only exceptions. For
-`GHSA-mh99-v99m-4gvg`, the latest Electron Forge and Nuxt toolchains still
-reach `brace-expansion` 1.x and 2.x through development glob libraries, while
-upstream published the memory-bound fix only for the API-incompatible 5.x
-line. For `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq`, Electron Forge's
-latest DMG maker reaches `image-size` 0.7 through `appdmg`, whose callback API
-is incompatible with the patched 2.x line. That code measures only the
-repository-owned PNG DMG background; it never parses the affected ICNS, JXL,
-or HEIF formats, and copies the repository-owned ICNS icon without passing it
-to `image-size`. No game, renderer, preload, main-process runtime, or packaged
-dependency contains these development-only parsers. A release invariant
-forbids production dependencies in either workspace package and pins the exact
-exception set, preventing an exception from silently widening or masking a
-shipped vulnerable edge. Remove each exception as soon as its upstream parent
-adopts a compatible patched dependency.
+The dependency audit has three explicit development-only exceptions. For
+`GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq`, Electron Forge's latest DMG
+maker reaches `image-size` 0.7 through `appdmg`; that dependency line has no
+patched release. The code measures only the repository-owned PNG DMG
+background. It never parses the affected ICNS, JXL, or HEIF formats, and it
+copies the repository-owned ICNS icon without passing it to `image-size`. For
+`GHSA-g7r4-m6w7-qqqr`, `fontless` requires `esbuild` 0.27 and invokes only its
+transform API; the affected serve-directory path exists only on Windows, while
+owned automation runs on macOS or Linux. No game, renderer, preload,
+main-process runtime, or packaged dependency contains these development-only
+paths. A release invariant keeps runtime package entries out of the root
+application and website manifests and pins the exact exception set, preventing
+an exception from silently widening or masking a shipped vulnerable edge.
+Remove each exception as soon as its upstream parent adopts a compatible
+patched dependency.

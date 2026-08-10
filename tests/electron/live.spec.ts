@@ -151,7 +151,7 @@ test.describe("live client", () => {
       });
 
       // The build's identity, read from the one owner of the three
-      // certification states and from the gauges a `.gwdiag` carries.
+      // certification states and from the gauges a diagnostics export carries.
       const identity = await page.evaluate(async () => {
         const session = await window.gwNative.client.session();
         const diagnostics = await window.gwNative.diagnostics.current();
@@ -219,7 +219,7 @@ test.describe("live client", () => {
           `client module ${compatibility.clientSha256} is not a certified build`,
         ).toBe("certified");
         expect(identity.certificationGauge).toBe("certified");
-        // Emitted into every `.gwdiag`; a false here means templates, build
+        // Emitted into every diagnostics export; a false here means templates, build
         // screenshots and chat logs are broken for every player on this build.
         expect(identity.templateSaveGauge).toBe(true);
       });

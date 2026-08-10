@@ -10,7 +10,7 @@ describe("canonical renderer URL", () => {
   });
 
   it("rejects every query string, including the ones it used to carry", () => {
-    // P5.2 moved launch configuration into the preload argument, so the trust
+    // Launch configuration lives in the preload argument, so the trust
     // root no longer allow-lists anything. A parameter it once accepted is now
     // exactly as untrusted as one it never did.
     for (const url of [

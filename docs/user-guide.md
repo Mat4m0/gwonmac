@@ -8,17 +8,10 @@ not bundle game binaries.
 
 Published builds are signed with Developer ID and notarized by Apple.
 
-To build from source:
-
-```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm package
-```
-
-Local source builds remain ad-hoc signed. Published releases use a `.dmg`:
-open it, drag Guild Wars Reforged into Applications, then launch it normally.
-Do not disable Gatekeeper globally.
+The [development instructions](../README.md#development) own source-build
+prerequisites and commands. Local source builds remain ad-hoc signed.
+Published releases use a `.dmg`: open it, drag Guild Wars Reforged into
+Applications, then launch it normally. Do not disable Gatekeeper globally.
 
 Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
 build/SBOM attestations. Follow [Verify a release](release-verification.md)
@@ -395,14 +388,14 @@ against a real crash it was wrong by enough to matter in both directions, and
 a number on a banner is a promise. What is worth acting on is that the warning
 appeared.
 
-**Reload Guild Wars** restarts the client with fresh memory. It takes under a minute,
-and Guild Wars puts you back where you were — the same way it handles a
-dropped connection. That was tested from inside an instance on every way this
-app can reload the game, and progress survived each time; a town or outpost is
-still the one place with nothing at all to lose. **Later** dismisses the current
-level for this session; escalation from Low to Critical shows the same notice
-again. **Details** expands the effective 2 GB or 4 GB limit inline without
-opening a modal over the game.
+**Reload Guild Wars** restarts the client with fresh memory; the time depends
+on your Mac and cached game data. Guild Wars puts you back where you were — the
+same way it handles a dropped connection. That was tested from inside an
+instance on every way this app can reload the game, and progress survived each
+time; a town or outpost is still the one place with nothing at all to lose.
+**Later** dismisses the current level for this session; escalation from Low to
+Critical shows the same notice again. **Details** expands the effective 2 GB
+or 4 GB limit inline without opening a modal over the game.
 
 ## If the game crashes
 

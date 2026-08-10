@@ -187,7 +187,7 @@ test.describe("diagnostics", () => {
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
 
-      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const target = path.join(diagnosticRoot, "capture.zip");
       await app.evaluate(async ({ app: electronApp }, args) => {
         const load = process
           .getBuiltinModule("node:module")
@@ -224,7 +224,7 @@ test.describe("diagnostics", () => {
     const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
     try {
-      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const target = path.join(diagnosticRoot, "capture.zip");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       const contractsPath = path.join(root, "build/shared/contracts.js");
       const stopped = await fixture.app.evaluate(
@@ -298,7 +298,7 @@ test.describe("diagnostics", () => {
     }
   });
 
-  // P5.9 moved every channel's parser into the handler registry, ahead of the
+  // Every channel's parser lives in the handler registry, ahead of the
   // handler's own try/catch. Two channels used to parse inside it and record
   // `credentials.saveFailed` / `settings.saveFailed`, so until the registry
   // recorded the rejection itself, "my saved login stopped working" produced an
@@ -641,7 +641,7 @@ test.describe("diagnostics", () => {
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
 
-      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const target = path.join(diagnosticRoot, "capture.zip");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       await app.evaluate(
         async ({ app: electronApp }, args) => {
@@ -677,7 +677,7 @@ test.describe("diagnostics", () => {
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
-      // P2.5 — `redaction` is the detector's result, not a literal the exporter
+      // `redaction` is the detector's result, not a literal the exporter
       // writes about itself. Every app-authored record is schema-certified,
       // while traceBytesScanned states the separate pattern-scanner coverage.
       expect(manifest.redaction).toMatchObject({

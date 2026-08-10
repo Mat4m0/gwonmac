@@ -299,7 +299,8 @@ async function ensureDirs(): Promise<void> {
   await mkdir(paths.game, { recursive: true });
   await mkdir(paths.chunks, { recursive: true });
   await mkdir(paths.diagnostics, { recursive: true });
-  // P1.2 — first open of the directories we own. A process killed between
+  // On the first open of the directories we own, remove incomplete atomic
+  // writes. A process killed between
   // write and rename leaves `<name>.<pid>.<hex>.tmp` behind, and boot is the
   // only moment at which every one of those directories is known to be idle.
   const removed = await sweepOrphanDirectories(documentDirectories(paths));

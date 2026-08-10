@@ -1,12 +1,12 @@
 # Refactor program: outcome and completion record
 
-Status: implemented as a six-branch stack; final exact-HEAD verification and
-external release operations remain separate gates.
+Status: accepted and in progress as a six-branch stack. Later stacked PRs
+implement the target outcomes below; the final PR records only what the exact
+stack head has actually proved.
 
 Evidence baseline: `main` at `54c6e0806d484fdd6ac4c03b1edf102a16a9bd10`,
-reviewed on 2026-08-10. The former detailed proposal remains available in Git
-history at commit `62a57c8`; it is not duplicated here because workflow steps,
-contracts, and test inventories belong to their executable owners.
+reviewed on 2026-08-10. Workflow steps, contracts, and test inventories belong
+to their executable owners rather than being duplicated here.
 
 ## Purpose
 
@@ -19,8 +19,8 @@ This program is complete when GWonMac is the smallest system that:
 3. has one fast, reviewable ArenaNet certification path;
 4. gives release-app players truthful Stable/Beta selection and a safe manual
    return to Stable;
-5. has one owner for each native invariant and no feature policy in generic
-   IPC; and
+5. has one owner for each native invariant and keeps multi-step feature
+   workflows out of generic IPC; and
 6. can be verified without turning ordinary contribution into release
    certification.
 
@@ -30,7 +30,7 @@ The preference throughout is:
 delete > simplify > replace > add
 ```
 
-This is an outcome record, not a second implementation. Exact schemas live in
+This is a target outcome, not a second implementation. Exact schemas live in
 types, exact release steps live in workflows/scripts, and exact behavior lives
 in tests.
 
@@ -70,7 +70,8 @@ in tests.
 
 - One existing `pnpm certification` command and one scheduled workflow own
   detection and proposal. No report database, registry, or second CLI exists.
-- Unknown official bytes boot without waiting for optional transforms.
+- Unknown official bytes remain bootable. The isolated template proof is
+  bounded to five seconds; refusal serves the preserved official module.
 - Template compatibility may be derived and proved locally.
 - Enhancement memory/layout facts remain exact-build facts shipped in an app
   release; no remote certificate authority can widen them.
@@ -85,6 +86,8 @@ in tests.
   updater, and settings store.
 - A Stable enabler containing the selector ships before the first public Beta.
 - Every public beta/RC is newer than the exact latest Stable baseline.
+- The latest Stable already accepts every durable settings key and value a
+  candidate may write; Beta never invents rollback compatibility state.
 - The release gate launches that exact signed Stable, the exact signed
   candidate, then the same Stable again.
 - Settings, Builds, Teams, tags/references, window state, origin-owned browser
@@ -99,8 +102,11 @@ in tests.
 ### Maintainer outcomes
 
 - Main is an explicit composition/lifetime root, not a service container.
-- Feature modules own dialogs, durable markers, and recovery decisions.
-- IPC owns sender validation, parsing, registration, and transport only.
+- Feature modules own their multi-step dialogs, durable markers, and recovery
+  decisions; main retains app-wide lifecycle and update presentation.
+- IPC validates senders and values, registers channels, and either forwards a
+  direct owner-local capability or calls its workflow owner. It is not a
+  second feature service.
 - The preload remains a frozen, narrow capability bridge.
 - Renderer game integration and host-only Tools share only lifecycle behavior
   that has two real consumers; there is no generic `GameHost`, plugin ABI, or
@@ -109,7 +115,7 @@ in tests.
 - Performance claims name a measurement boundary; unproved public absolutes are
   removed rather than converted into architecture.
 
-## Canonical owners
+## Target owners
 
 | Concern | Owner | Executable proof |
 | --- | --- | --- |
@@ -117,8 +123,9 @@ in tests.
 | Application discovery/download/install | `src/main/app-updater.ts` | `tests/unit/app-updater.test.ts` |
 | Website release acquisition | `apps/website/server/utils/release-select.ts` | `tests/website-smoke.ts` |
 | Stable-readable candidate data | `scripts/verify-stable-beta-roundtrip.ts` | release workflow only |
-| Official client publication/rollback | `PatchClient` + `ClientRuntime` | client integration/package stories |
-| Optional Tools lifetime | `src/renderer/toolbox-foundation.ts` | packaged Enhancement runtime |
+| Official client publication/rollback | `PatchClient` + `ClientRuntime` + `ActiveClientSlot` | active-client unit and client integration/package stories |
+| Shared Tools lifetime | `src/renderer/toolbox-foundation.ts` | packaged Enhancement runtime |
+| Host-only Tools mounting | `src/renderer/tools-host.ts` | packaged unknown/soft-refusal stories |
 | Settings workflows | `src/main/settings-actions.ts` | unit/Electron settings stories |
 | Bridge channels and payloads | `src/shared/contracts.ts` + preload | policy and Electron bridge tests |
 | Diagnostics | per-feature event fragments + recorder | diagnostics unit/export tests |
@@ -130,14 +137,14 @@ No other document may redefine these rules.
 The program uses six cohesive PRs, not eleven enlarged ones. Removed and
 deferred proposals account for the smaller count.
 
-| Order | Branch | Outcome | Value | Risk/cost | State |
-| ---: | --- | --- | --- | --- | --- |
-| 0 | `refactor/docs-foundation` | truthful architecture/update vocabulary and this completion record | high maintainer | low | implemented |
-| 1 | `refactor/remove-certificate-feed` | delete the non-operational remote authority and all residue | high simplification | low-medium | implemented |
-| 2 | `refactor/host-only-tools` | keep host authoring available across unknown/soft-refused clients | high player/patch day | medium | implemented |
-| 3 | `refactor/stable-beta-updates` | one Stable/Beta selector, website policy, manual return, and exact data gate | high player/release | medium-high release cost | implemented |
-| 4 | `refactor/webgate-story` | prove stateless WebGate cookies/auth/redirect refusal end to end | high regression reduction | low-medium | implemented |
-| 5 | `refactor/ipc-workflows` | move settings dialogs, markers, and recovery out of generic IPC | high maintainability | medium | implemented |
+| Order | Branch | Outcome | Value | Risk/cost |
+| ---: | --- | --- | --- | --- |
+| 0 | `refactor/docs-foundation` | delete stale plans and unsupported claims; establish truthful architecture/update vocabulary and this target record | high maintainer | low-medium |
+| 1 | `refactor/remove-certificate-feed` | delete the non-operational remote authority, profile-controlled proof cache, and all residue | high simplification/security | low-medium |
+| 2 | `refactor/host-only-tools` | keep host authoring available across unknown/soft-refused clients | high player/patch day | medium |
+| 3 | `refactor/stable-beta-updates` | one Stable/Beta selector, website policy, manual return, and exact data gate | high player/release | medium-high release cost |
+| 4 | `refactor/webgate-story` | bind every client-backed `gw://` response and ready signal to one active client generation; keep WebGate stateless, cap proxy request bodies, and compact materialized snapshot/icon views | high regression reduction | medium |
+| 5 | `refactor/ipc-workflows` | move settings dialogs, markers, and recovery out of generic IPC; keep quit/marker failures bounded and honest | high maintainability | medium |
 
 Each branch may contain several atomic commits. A PR is split only when each
 part is independently safe to ship; line count alone is not an ownership
@@ -155,6 +162,8 @@ boundary.
 | Host-only Tools on unknown/soft-refused build | packaged production-path story | packaged suite |
 | Host-only live disable/re-enable | same packaged story | packaged suite |
 | Official bytes/no companion command on unknown build | same packaged story | packaged suite |
+| No ready signal or client artifact before activation | active-client unit + client-runtime Electron story | Electron suite |
+| No patch alias replacement while an active generation is serving | client-runtime concurrency + launcher retry stories | Electron suite |
 | Stateless WebGate auth/cookie boundary | unit classifier + one composed Electron story | Electron suite |
 | Settings decision ownership | unit plus focused Electron story | Electron suite |
 | Source/import/bridge boundaries | policy/type tests | ordinary check |
@@ -183,7 +192,7 @@ packaged story.
 - generic `GameHost`, coordinator, cancellation framework, registry, ledger,
   plugin surface, background job, or database;
 - Vue shell rewrite without measured player value;
-- duplicate website release parser/repository/ordering policy;
+- duplicate website release version/track policy;
 - source-regex tests that duplicate packaged behavior; and
 - public performance absolutes without evidence.
 
@@ -225,7 +234,7 @@ The refactor program closes when all applicable boxes are evidenced:
 
 - [ ] full stack is rebased and each PR remains independently reviewable;
 - [ ] user-owned unrelated worktree changes are unchanged;
-- [ ] typecheck, lint, formatting, unit, policy, integration, release, Tools,
+- [ ] typecheck, lint, unit, policy, integration, release, Tools,
       website, Electron, packaged runtime, and packaged smoke gates pass against
       the exact final stack head;
 - [ ] the mandatory thermonuclear review has no unresolved P1/P2 finding;
@@ -234,10 +243,13 @@ The refactor program closes when all applicable boxes are evidenced:
 - [ ] Stable/Beta selection has one release-policy source and every candidate
       is exact, newer than Stable, and Stable-readable;
 - [ ] WebGate remains stateless and no credential or cookie becomes app state;
-- [ ] generic IPC contains transport/validation, not feature decisions;
-- [ ] no remote certificate authority, duplicate updater, duplicate release
-      parser, `GameHost`, `ToolsHost`, coordinator, registry, migration
-      framework, or compatibility path remains;
+- [ ] multi-step settings workflows are outside IPC; direct owner-local IPC
+      operations remain explicit rather than hidden behind another service;
+- [ ] no remote certificate authority, duplicate updater or release
+      version/track policy, generic `GameHost`, second Tools host, coordinator,
+      registry, migration framework, or refactor-only compatibility shim
+      remains. The one existing `ToolsHost` and released-data readers remain
+      intentionally;
 - [ ] active documents describe shipped behavior and distinguish local proof
       from signed/live release operations; and
 - [ ] the program stops. Further architecture work requires a reproduced player

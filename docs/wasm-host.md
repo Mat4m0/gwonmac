@@ -64,7 +64,7 @@ Before instantiation, the renderer then wraps the official module's
 `fd_pwrite`, `fd_seek`, and `fd_close` imports.
 The bounded console trace records only the template kind, flags, descriptor,
 errno, and requested/written byte counts. It never records a filename, path, or
-file content, does not cross IPC, and is not included in `.gwdiag` exports.
+file content, does not cross IPC, and is not included in diagnostics exports.
 Normal launches retain the original imports unchanged.
 
 Resetting the saved Guild Wars files clears exactly this mount. After native
@@ -207,7 +207,7 @@ template-save transform throws is published as `uncertified`, because it is
 degraded exactly that far.
 
 `ClientRuntime` publishes the state once per activated client as
-`client.buildCertification` in a `.gwdiag`, and the older
+`client.buildCertification` in a diagnostics export, and the older
 `wasm.templateSaveCompatible` boolean is derived from the same object rather
 than computed separately, so the two cannot disagree. The renderer reads the
 state over `gw:client:session` together with the client hash and whether this

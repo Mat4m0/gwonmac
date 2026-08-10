@@ -76,20 +76,20 @@ Refusals, not a backlog.
   a diagnostics file to a bug report themselves.
 - **No plugin ABI, and no port of the Windows one.** Native injection, GWCA
   pointers, Direct3D/ImGui rendering, and DLL plugins are replacement work.
-- **No disk-usage promise.** The full download is about 4 GB and stays until
-  the player clears it; the app does not silently evict game data to stay under
-  a cap. Making that promise means building eviction first.
+- **No disk-usage promise.** A full download stays until the player clears it;
+  the app does not silently evict game data to stay under a cap. Making a fixed
+  size promise means building and measuring that policy first.
 - **No forced update.** Automatic checking and downloading is on by default,
   declared plainly at first run, and one checkbox turns it off for good. A
   ready update waits for the player to restart or choose **Restart to Update**.
 
 ## Claims we stand behind
 
-Exactly the ones with a test behind them.
-[`docs/diagnostics.md`](docs/diagnostics.md#verification-boundaries) maps each
-public claim to something that executes, and its rule is the product rule: **a
-public claim with no row does not ship, and a row whose proof reads _none_ is a
-claim to narrow or delete, not a claim to explain.**
+Consequential privacy, data, release, update, and performance promises need
+executable evidence. [`docs/diagnostics.md`](docs/diagnostics.md#verification-boundaries)
+maps those public invariants to their proofs. Ordinary explanatory copy does
+not need a duplicate row; an unsupported consequential promise is narrowed or
+deleted rather than defended with prose.
 
 The former website FPS and fixed-resolution promises had no proof and have
 been removed. Public copy now says only what the render-scale and arm64

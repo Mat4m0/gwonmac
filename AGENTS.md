@@ -74,7 +74,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
 | `src/tools/certification.ts` | the one certification command line: `doctor`, `recertify`, `template`, `transform`, `double-click` |
-| `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
+| `src/tools/diagnostics/`  | diagnostics ZIP validation, summary, comparison               |
 | `tests/`                  | unit, integration, Electron, packaged, and release invariants |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                |
 | `internal/upstream/`      | upstream client defects, workaround, re-certification          |
@@ -223,7 +223,7 @@ is meant to inherit the dead ends rather than walk back into them.
 
 ## Diagnostics and privacy
 
-There is one canonical main-process flight recorder and one `.gwdiag` report.
+There is one canonical main-process flight recorder and one diagnostics ZIP.
 Renderer console text is not exported. Renderer failures cross IPC only as
 allow-listed names plus non-text fingerprints.
 The closed schema owns every dot-separated event name, subsystem, level, field,
@@ -329,7 +329,7 @@ the complete affected caller bodies after normalising only the selected call
 indices; the Enhancement proof requires every certified static address in the same
 complete code-reference contexts. Any other change serves the untouched
 official module. The
-`client.buildCertification` gauge in a `.gwdiag` names it —
+`client.buildCertification` gauge in a diagnostics export names it —
 `certified`, `template-only` (templates save, enhancement tools cannot load), or
 `uncertified` — and `wasm.templateSaveCompatible` is the older boolean
 derived from that same answer. `pnpm certification template` re-derives the

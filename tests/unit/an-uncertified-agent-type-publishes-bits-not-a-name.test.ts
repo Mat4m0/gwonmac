@@ -1,4 +1,4 @@
-// P7.3. The snapshot's target type word used to be turned into `Item`,
+// The snapshot's target type word used to be turned into `Item`,
 // `Gadget` or `Living` by the decoder, while the readiness register in
 // `docs/enhancement-development.md` still lists hostile/item/gadget as the next
 // proof — three names, one of them certified. These tests execute the decoder

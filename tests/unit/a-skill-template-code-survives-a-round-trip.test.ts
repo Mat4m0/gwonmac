@@ -1,64 +1,13 @@
-// `src/shared/builds/skill-template.ts` reads a string a stranger pasted into
-// Discord. That is the whole reason this file is long: the codec has exactly two
-// jobs, and the second one is larger than the first.
-//
-//   1. Every valid code must survive `encode(decode(code))` byte for byte. A
-//      codec that decodes correctly but re-encodes to a different string is not
-//      a codec — the player pastes the build back into the game and gets a
-//      different bar, or the "did this change?" comparison the builds library is
-//      built on answers noise.
-//   2. Every invalid code must produce `null` without throwing. Not an
-//      exception, not a half-filled template, not the prefix that happened to
-//      parse. §7.2 of the evidence document records that GWCA leaves the
-//      caller's struct indeterminate on failure, which is precisely the shape a
-//      caller mistakes for success; the adversarial corpus below is the
-//      standing proof that this implementation does not repeat it.
-//
-//   node --import ./tests/ts-hook.mjs --experimental-strip-types --test \
-//     tests/unit/a-skill-template-code-survives-a-round-trip.test.ts
-//
-// ## What the vectors are worth, stated up front
-//
-// There are two tables here and they are worth different things.
-//
-// `VECTORS` comes from `plans/tools/hero-builds/evidence/skill-template-codec.md`
-// §8, and that document is blunt about their status (§8.6): they were
-// **constructed by hand from the specification** and no Guild Wars client has
-// ever produced one. They are regression vectors — they prove this codec still
-// agrees with the layout it was written against, and on their own they prove
-// nothing about ArenaNet. What makes them worth having is coverage: between them
-// they select every width the format offers and the two shapes a naive
-// implementation gets wrong. §8.3 proves the width codes are written even when
-// the sections they size are empty, and §8.5 proves a hole in the middle of a
-// bar is data rather than the end of the stream.
-//
-// `CONFORMANCE` is the external evidence, and it arrived after this file was
-// first written. Four codes nobody here authored, two of them published with a
-// full decoding, from ArenaNet's own wiki and from an independent encoder
-// library. They are what turns "this codec matches our document" into "our
-// document matches the game" — and the first thing they did was falsify §6's
-// padding rule, which every self-consistent round trip in `VECTORS` had been
-// happily agreeing with.
-//
-// What is still unproven is the write direction against a real client: these
-// four say the game's encoder produces what we read, not that the game's decoder
-// accepts what we write. That needs §10 items 1 and 2 — save a bar in the hosted
-// client, read `app:/Templates/Skills` back, compare.
-//
-// The fifth code, §8.1, is the only string of this kind that exists in either
-// upstream repository — and it is truncated. It is here as a rejection case,
-// because "the one real-looking fragment in the source tree" is exactly the
-// string somebody would eventually paste in as a fixture.
-//
-// ## The rejection cases that are this file's own opinion
-//
-// Four of the corpus entries below fail for reasons §7.1 does not list, and each
-// is paired with a valid twin that differs only in the offending field — a
-// rejection test that cannot tell "the decoder refused this for the stated
-// reason" from "the decoder refuses everything" is not a test. The four are an
-// unnamed profession or attribute id, an attribute rank above 12, the same
-// attribute twice, and trailing bits that are not zero. The reasoning lives in
-// the header of the module under test; the twins live here.
+// The codec has two contracts: every accepted code round-trips byte for byte,
+// and every rejected code returns `null` without throwing or exposing a partial
+// template. `VECTORS` are hand-built regression cases that exercise every width
+// and the empty-section/middle-hole shapes naive decoders miss. `CONFORMANCE`
+// contains externally produced codes from the hosted client, ArenaNet's wiki,
+// and an independent encoder. The external cases prove compatibility; the
+// hand-built cases provide coverage. Rejection cases are paired with a valid
+// twin so they prove the named refusal rather than a decoder that rejects all
+// input. The write direction remains a live-client release check: save in the
+// hosted client, read `app:/Templates/Skills`, and compare.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -74,7 +23,7 @@ interface Vector {
   readonly code: string;
   /**
    * The same payload one `A` shorter, under the six-bit padding rule this
-   * codec used before the real codes in `CONFORMANCE` settled §6 — or `null`
+   * codec used before the real codes in `CONFORMANCE` settled byte padding — or `null`
    * where the two rules agree on the length. The decoder still accepts it,
    * because trailing bits are zero either way; the encoder never writes it.
    */
@@ -87,8 +36,8 @@ interface Vector {
 
 const VECTORS: readonly Vector[] = [
   {
-    // §8.2 — the widest common attribute width and an 11-bit skill width, which
-    // is the case Toolbox's own writer cannot express (§5.3: it never emits a
+    // The widest common attribute width and an 11-bit skill width, which
+    // Toolbox's own writer cannot express (it never emits a
     // `skill_code` above 1, so it cannot spell any skill id past 511).
     what: "an Assassin/Warrior with 6-bit attributes and 11-bit skills",
     code: "OwFj0xja0MlZ/3Brhp/IgdFBAA",
@@ -100,7 +49,7 @@ const VECTORS: readonly Vector[] = [
     skills: [1637, 1022, 775, 781, 1018, 1028, 349, 2],
   },
   {
-    // §8.3 — the degenerate case, and the shortest legal template at 16
+    // The degenerate case, and the shortest legal template at 16
     // characters. Nothing is invested and nothing is slotted, and the code is
     // still 16 characters long, because `attr_code` is written even when the
     // count is 0 and all eight skill fields are written even when every one of
@@ -113,7 +62,7 @@ const VECTORS: readonly Vector[] = [
     skills: [null, null, null, null, null, null, null, null],
   },
   {
-    // §8.4 — `attr_code = 1`, the 5-bit attribute width. §5.3 records that
+    // `attr_code = 1`, the 5-bit attribute width. Toolbox's party writer
     // Toolbox's party-loadout writer emits only 0 or 2, so an encoder ported
     // from that file would write this build with 6-bit ids and produce a
     // decodable code that is not the one the client would have written.
@@ -127,7 +76,7 @@ const VECTORS: readonly Vector[] = [
     skills: [282, 283, 281, 887, 311, 309, 38, 2],
   },
   {
-    // §8.5 — four empty slots in the *middle* of the bar, and a resurrection
+    // Four empty slots in the *middle* of the bar, and a resurrection
     // signet behind them. The long run of `A` characters is real data: a
     // decoder that stops at the first zero skill loses slot 8 and still returns
     // a plausible-looking build. Also the narrowest attribute width, 4 bits,
@@ -156,7 +105,7 @@ const VECTORS: readonly Vector[] = [
  * quoted as real codes without a decoding; they are round-trip only, and what
  * they add is width combinations the first two do not reach.
  *
- * They also settled §6. Under the six-bit padding rule this codec shipped with,
+ * They also settled byte padding. Under the six-bit padding rule this codec shipped with,
  * the first and third came out one `A` short while the second and fourth were
  * byte-identical — which is what a padding rule looks like when you have it
  * wrong, and what no amount of self-consistent derivation could have caught.
@@ -248,9 +197,9 @@ const CORPUS: readonly { what: string; code: string }[] = [
   { what: "a single space", code: " " },
   { what: "a newline", code: "\n" },
   { what: "only whitespace where a code was expected", code: "   \t\n  " },
-  // §8.1, quoted verbatim from `TeamBuildEncoder.h:30` and the only code-shaped
+  // Quoted verbatim from `TeamBuildEncoder.h:30` and the only code-shaped
   // string in either upstream repository. Its header decodes coherently — an
-  // A/W with Dagger Mastery — which is what §1.2 leans on as evidence for the
+  // A/W with Dagger Mastery — evidence for the profession/attribute mapping.
   // layout, and then the stream runs out 28 bits short of a complete template.
   // A decoder that returns what it managed to read would hand back an A/W with
   // an empty bar and no sign anything was wrong.
@@ -259,25 +208,25 @@ const CORPUS: readonly { what: string; code: string }[] = [
   { what: "a valid code cut off inside the skill section", code: "OwFj0xja0MlZ/3Brhp" },
   { what: "four bits of a header and nothing else", code: "O" },
   // One character changed, in the version field: `w` (48) to `x` (49) sets bit
-  // 6, which is version bit 2, so the code claims version 4. §7.1 R4.
+  // 6, which is version bit 2, so the code claims version 4.
   { what: "a valid code with one character changed", code: "OxFj0xja0MlZ/3Brhp/IgdFBA" },
-  // The same surgery at the other end: the last character of §8.5 from `A` to
+  // The same surgery at the other end: the last character of the middle-hole vector from `A` to
   // `g` sets bit 143, which is past the 142-bit payload. Padding is zero bits;
   // this is not.
   { what: "a valid code whose trailing padding is not zero", code: "OgNDoMr9M0txKuAAAAAAAABg" },
   { what: "a valid code with a garbage suffix", code: "OQAAAAAAAAAAAAAAZZZZ" },
   { what: "a character outside the alphabet", code: "OQAAAAAAAAAA_AAA" },
   // Standard base64 pads with `=`; this format ends on a character boundary and
-  // never does (§2). A `=` is therefore a sign the code went through something
+  // never does. A `=` is therefore a sign the code went through something
   // that thought it was ordinary base64.
   { what: "an RFC 4648 pad character", code: "OQAAAAAAAAAAAAA=" },
   { what: "whitespace in the middle of an otherwise valid code", code: "OQAAAAA AAAAAAAA" },
   { what: "a non-ASCII character", code: "OQAAAAAAAAAA\u{1F600}AAA" },
-  // §9: field 0 is 15 for the party-loadout/equipment family, which puts `f` at
+  // Field 0 is 15 for the party-loadout/equipment family, which puts `f` at
   // the front instead of `O`. It must fail on the kind rather than decode into
   // rubbish — the two formats share the alphabet, the bit order and the body.
   { what: "a code of a different template type", code: "fQAAAAAAAAAAAAAA" },
-  // `attr_count` 13. §3.2: `SkillTemplate` holds `attribute_ids[12]`, so this
+  // `attr_count` 13. `SkillTemplate` holds `attribute_ids[12]`, so this
   // is a malformed code and not a large build.
   { what: "an attribute count above the twelve a template holds", code: "OQAt0dAAAAAAAAAAAA" },
   // `attr_count` 12 with a stream that ends after two of them: the count is
@@ -289,18 +238,18 @@ const CORPUS: readonly { what: string; code: string }[] = [
   // format, so "more skills than exist" is spelled as a width the stream cannot
   // fund.
   { what: "a skill width the stream cannot fund", code: "OQAA8BAAABAAwAAAgAAA" },
-  // Attribute id 26, in the unnamed 26-28 gap of the client's own enum (§4.2).
+  // Attribute id 26, in the unnamed 26-28 gap of the client's own enum.
   { what: "an attribute id in the client's unnamed enum gap", code: "OQAhoVAAAAAAAAAAAA" },
   { what: "an attribute id past the end of the table", code: "OQAh0WAAAAAAAAAAAA" },
   // Rank 13. The 4-bit field can spell 15; the game's cumulative cost table has
   // 13 entries, so 12 is the highest rank a character can buy.
   { what: "an attribute rank above the twelve points can buy", code: "OQAh01AAAAAAAAAAAA" },
   { what: "the same attribute twice", code: "OQAiowKDAAAAAAAAAAA" },
-  // §7.2: both professions None is how Toolbox itself detects a failed decode.
+  // Both professions None is how Toolbox itself detects a failed decode.
   { what: "a primary profession of None", code: "OAAAAAAAAAAAAAAA" },
   { what: "a profession id the client has no profession for", code: "OwCAAAAAAAAAAAAA" },
   { what: "a secondary profession id past the ten that exist", code: "OQsAAAAAAAAAAAAA" },
-  // §5.1 bounds the payload at 502 bits, which is 84 characters. Neither of
+  // The payload is bounded at 502 bits, which is 84 characters. Neither of
   // these may be walked bit by bit before being refused, and neither may throw.
   { what: "an absurdly long run of valid characters", code: "O".repeat(500_000) },
   { what: "a valid code with a megabyte of zero bits after it", code: `OQAAAAAAAAAAAAAA${"A".repeat(1_000_000)}` },
@@ -328,7 +277,7 @@ test("every worked example re-encodes to the byte-identical code", () => {
     assert.ok(decoded, vector.what);
     assert.equal(encodeSkillTemplate(decoded), vector.code, vector.what);
 
-    // Attribute order is the code's, not ours. §8.2 stores 29, 35, 17 and §8.4
+    // Attribute order is the code's, not ours. The vectors store 29, 35, 17 and
     // stores 13, 16, 15 — neither is sorted, so the encoder writes the record's
     // key order and the decoder must build the record in stream order. Sorting
     // either side would decode correctly and re-encode to a different string,
@@ -381,7 +330,7 @@ test("a real code decodes to what its publisher says it holds", () => {
 });
 
 test("a real code re-encodes to the byte-identical string the client wrote", () => {
-  // This is the assertion §6 was open on, and the reason the encoder pads to a
+  // This is the padding assertion, and the reason the encoder pads to a
   // byte. Two of the four are unchanged by that rule and two are not, so a
   // regression to six-bit padding fails here and nowhere else in this file.
   for (const { what, code } of CONFORMANCE) {
@@ -392,7 +341,7 @@ test("a real code re-encodes to the byte-identical string the client wrote", () 
 });
 
 test("the short padding a stranger's tool may write still decodes", () => {
-  // §6 is settled — the client pads to a whole byte, and `CONFORMANCE` below is
+  // The client pads to a whole byte, and `CONFORMANCE` below is
   // the evidence. But a code one `A` shorter carries the same payload followed
   // by the same zero bits, and third-party build sites do emit it. Reading it is
   // free; writing it is not, so the decoder accepts both and the encoder
@@ -430,7 +379,7 @@ test("each of this codec's own rejections has a valid twin one field away", () =
     { what: "an attribute rank", rejected: "OQAh01AAAAAAAAAAAA", accepted: "OQAh0xAAAAAAAAAAAA" },
     // Secondary profession 11 against 10, Dervish — the last one that exists.
     { what: "a secondary profession id", rejected: "OQsAAAAAAAAAAAAA", accepted: "OQoAAAAAAAAAAAAA" },
-    // Trailing bits: non-zero against the zero padding of §6's other rule.
+    // Trailing bits: non-zero against the required zero padding.
     { what: "trailing padding", rejected: "OQAAAAAAAAAAAAAAZZZZ", accepted: "OQAAAAAAAAAAAAAAAAAA" },
   ];
   for (const { what, rejected, accepted } of twins) {
@@ -462,7 +411,7 @@ test("an empty slot round-trips as an empty slot and never as skill 0", () => {
     assert.notEqual(slot, skillId(0));
   }
 
-  // §8.5's holes are in the middle, which is the case a decoder that stops at
+  // The holes are in the middle, which is the case a decoder that stops at
   // the first zero gets wrong: it would return three skills and lose the
   // resurrection signet in slot 8.
   const holes = decodeSkillTemplate("OgNDoMr9M0txKuAAAAAAAABA");
@@ -471,7 +420,7 @@ test("an empty slot round-trips as an empty slot and never as skill 0", () => {
   assert.equal(holes.skills[7], 2);
 
   // And back out: an empty slot is written at full width like any other id
-  // (§3.2), so an empty bar is a full-length code and not a short one.
+  // so an empty bar is a full-length code and not a short one.
   assert.equal(encodeSkillTemplate(EMPTY_WARRIOR), "OQAAAAAAAAAAAAAA");
   assert.equal(
     encodeSkillTemplate({
@@ -486,7 +435,7 @@ test("an empty slot round-trips as an empty slot and never as skill 0", () => {
 });
 
 test("a skill id this client build has never heard of decodes rather than fails", () => {
-  // §7.3 draws the line: an unknown *skill* id is a skill from a newer client,
+  // An unknown *skill* id can be a skill from a newer client,
   // so it decodes and carries its number for the UI to render as `#3512`.
   // Unknown profession and attribute ids are the opposite call — the record has
   // closed unions for those and no value to put in them — which is why the
@@ -502,11 +451,11 @@ test("a skill id this client build has never heard of decodes rather than fails"
 test("a code the client would not have written re-encodes to the one it would", () => {
   // Round-tripping is byte-identity for codes in the format's canonical form,
   // and canonicalisation for the rest. Two ways a code can be decodable and
-  // non-canonical, both of them §5.2's rules read backwards:
+  // non-canonical, both of them consequences of the width rules read backwards:
   //
   //   - a field wider than the values in it need. `OQAh0x…` spends 6 bits on
   //     Dagger Mastery, whose id is 29 and fits in 5. It decodes; it is not
-  //     what the client writes, and §5.2 warns that choosing a larger width
+  //     what the client writes; choosing a larger width
   //     still produces a decodable code — which is exactly why the encoder
   //     cannot simply echo the width it was handed.
   //   - a rank-0 attribute, which the format can carry and no observed code

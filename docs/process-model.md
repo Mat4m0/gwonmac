@@ -58,7 +58,7 @@ arbitrary filesystem or URL fetch capability.
 | `src/companion-kernel/`     | freestanding read-only game-state companion WASM                  |
 | `src/shared/`             | contracts, validation types, progress, errors                     |
 | `src/tools/certification.ts` | the one certification command line over that chain              |
-| `src/tools/diagnostics/`  | `.gwdiag` validator, summary, comparison                          |
+| `src/tools/diagnostics/`  | diagnostics ZIP validator, summary, comparison                    |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                    |
 
 The preload is deliberately self-contained CommonJS. Electron’s sandboxed

@@ -1,8 +1,7 @@
-# The only path that turns the certification tables on main into a signed
-# certificate feed installations fetch. It publishes data and nothing else:
-# every field it moves is a hash, an address, an index or a message identifier,
-# and every fact it delivers is re-established locally before it enables
-# anything. The key holder can withhold a certificate and cannot mint one.
+# The transitional path that turns certification tables on main into the two
+# fixed assets installations know how to request. Template facts are locally
+# re-derived. Enhancement entries may only restate exact facts already compiled
+# into the app, so the key holder cannot widen Enhancement support.
 #
 # The shape follows the versioned release: derive, prove, then hand the proven
 # bytes to one isolated job that holds the credential and does nothing else.
@@ -11,9 +10,9 @@
 # a runner — a machine that was tampered with disagrees with the other one and
 # blocks the publication instead of signing its own answer.
 #
-# Nothing here runs until the go-live checklist in certificates/README.md is
-# done: the pinned key is a placeholder in every clone, and this workflow
-# refuses in its first job while it stays one.
+# The committed pin is real. This workflow still applies the application's
+# trust rule and refuses an explicitly disabled or malformed pin. The accepted
+# refactor removes this non-operational remote path rather than expanding it.
 name: Certificate feed publication
 
 on:
@@ -68,10 +67,8 @@ jobs:
           node-version: "24"
 
       # The application's own rule, run against the committed file rather than
-      # restated here. While the placeholder stands, no installation trusts any
-      # feed, so a signature made today would be spent on nobody — and the
-      # approval it would consume is a person's attention.
-      - name: Refuse to publish while no key is pinned
+      # restated here. A disabled or malformed pin cannot authorize a publish.
+      - name: Refuse an invalid or disabled pin
         run: |
           node --import ./scripts/ts-hook.mjs --experimental-strip-types -e '
             const { readFileSync } = await import("node:fs");
@@ -81,9 +78,8 @@ jobs:
             const pinned = readFileSync("certificates/public-key.txt", "utf8");
             if (certificateFeedTrust(pinned).remote) process.exit(0);
             console.error(
-              "certificates/public-key.txt still holds the placeholder, so no"
-                + " installation would trust a feed signed today. Work through"
-                + " the go-live checklist in certificates/README.md first.",
+              "Certificate feed trust is disabled or invalid; refusing"
+                + " transitional publication.",
             );
             process.exit(1);
           '

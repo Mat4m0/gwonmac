@@ -21,7 +21,6 @@ import {
 } from "../../shared/enhancement-contracts.js";
 import {
   ENHANCEMENT_CONFIG_FIELDS,
-  ENHANCEMENT_LAYOUT_FIELDS,
   type EnhancementLayout,
 } from "../../shared/enhancement-config.js";
 export {
@@ -89,10 +88,6 @@ export type EnhancementPartyDirtyMessages = readonly [
  * decode as plausible ranks; a count word would have walked straight into
  * them. See the evidence file, C5.
  */
-export function enhancementLayoutWords(layout: EnhancementLayout): number[] {
-  return ENHANCEMENT_LAYOUT_FIELDS.map((field) => layout[field]);
-}
-
 export function enhancementConfigWords(
   build: KnownEnhancementBuild,
   capabilities: EnhancementCapabilities,
@@ -426,8 +421,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       heroOwnerPlayerId: 0x04,
       heroId: 0x08,
       // Certified live against this build in an outpost, by cross-match
-      // against the eight offsets above rather than by plausibility. See
-      // plans/tools/hero-builds/evidence/party-memory-layout.md.
+      // against the eight offsets above rather than by plausibility.
       heroLevel: 0x14,
       partyPlayers: 0x04,
       partyHenchmen: 0x14,

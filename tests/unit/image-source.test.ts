@@ -1,5 +1,5 @@
 // Behaviour tests for the snapshot image source extracted from harness.ts in
-// P6. Every assertion drives the real module: the scheduler runs, the cache
+// Every assertion drives the real module: the scheduler runs, the cache
 // evicts, and the ranges are assembled from bytes a fake transport returns.
 // Nothing here reads source text.
 import assert from "node:assert/strict";

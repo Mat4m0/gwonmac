@@ -40,16 +40,17 @@ The two modes are:
 
 | Mode                            | What happens                                                                                |
 | ------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Quick Start** _(recommended)_ | Playable in about a minute. Areas download the first time you visit them.                   |
-| **Full Game**                   | Downloads everything first (~4 GB). The game starts only when you choose _Play Guild Wars_. |
+| **Quick Start** _(recommended)_ | Starts after the required files are ready. Areas download the first time you visit them.     |
+| **Full Game**                   | Downloads all game data first. The game starts only when you choose _Play Guild Wars_.       |
 
 You can switch modes later in Settings → Game Data, pause and resume a full download, or start playing
 mid-download with _Play Now Instead_.
 
 ## Privacy and data
 
-- **The Mac app never uploads telemetry.** Diagnostics are written locally and only
-  leave your machine if you attach a `.gwdiag` file to a bug report yourself.
+- **The Mac app never uploads telemetry.** Diagnostics are written locally and
+  only leave your machine if you attach the exported `.zip` file to a bug report
+  yourself.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
 - Guild Wars' own **Remember Password** stores one opaque item in Apple's Data
@@ -67,14 +68,22 @@ Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 
 ## Development
 
-**Requirements:** macOS on Apple Silicon · Node.js 22.19+ · pnpm 11 ·
-[Rust](https://rustup.rs) (via rustup)
+**Requirements:** macOS on Apple Silicon · Xcode Command Line Tools ·
+Node.js 22.19+ · pnpm 11 · [Rust](https://rustup.rs) (via rustup)
 
 ```bash
+xcode-select --install
 corepack enable
 pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 pnpm dev
 ```
+
+The Xcode Command Line Tools and Playwright Chromium install are one-time setup
+steps. `pnpm check` is the fast source/unit/policy loop and does not need
+Chromium. `pnpm verify` includes browser and Electron acceptance tests, so it
+does need Chromium and permission to launch GUI applications; it does not need
+an ArenaNet account or a pre-existing client cache.
 
 Rust is a build prerequisite, not an optional extra: every entry point runs
 `pnpm build`, which compiles `src/companion-kernel/lib.rs` to WebAssembly with
@@ -123,7 +132,8 @@ overwrite an existing Dev login.
 
 `pnpm test:electron` launches a real macOS application process, so it needs
 permission to open GUI applications. Those launches run in the background and
-do not take keyboard focus. The networked smoke test is opt-in:
+do not take keyboard focus. The deterministic local suites do not contact
+ArenaNet. The networked smoke test is opt-in:
 
 ```bash
 pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
@@ -192,7 +202,7 @@ diagnostics remain local unless you explicitly attach the exported file.
 The app keeps a bounded, local-only flight recorder — startup and frame
 timings, cache/network/disk cost, memory, GPU and power state, socket
 lifetimes — and **Help → Report a Problem…** turns it into one redacted
-`.gwdiag` file that only leaves your machine if you attach it yourself.
+diagnostics `.zip` that only leaves your machine if you attach it yourself.
 [Report a problem](docs/user-guide.md#report-a-problem) covers which capture to
 record for which symptom; [Diagnostics](docs/diagnostics.md) covers the
 format and exactly what the redaction does and does not guarantee.
@@ -200,9 +210,9 @@ format and exactly what the redaction does and does not guarantee.
 Inspect captures without launching the app:
 
 ```bash
-pnpm diagnostics:validate capture.gwdiag
-pnpm diagnostics:summarize capture.gwdiag
-pnpm diagnostics:compare before.gwdiag after.gwdiag
+pnpm diagnostics:validate capture.zip
+pnpm diagnostics:summarize capture.zip
+pnpm diagnostics:compare before.zip after.zip
 ```
 
 Performance claims should compare alternating sets of packaged-build runs, not
