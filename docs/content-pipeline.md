@@ -104,14 +104,9 @@ six-hour spacing. `autoCheckUpdates` defaults on and is declared plainly at
 first run and in Settings; switched off, a launch reaches github.com zero
 times.
 
-The reviewed build also calls the transitional certificate-feed delivery path
-from that trigger. Because the committed pin is real, an update-capable release
-may request two fixed `releases/latest/download/` assets behind the same consent
-switch and game-socket deferral. At the 2026-08-10 evidence baseline, recent
-public releases published neither asset, so these requests do not currently
-provide an operational patch-recovery path. The accepted refactor plan removes
-the feed and leaves `AppUpdater` as the only runtime reader of this project's
-release assets. `docs/wasm-host.md` owns the current transition.
+`AppUpdater` is the only runtime reader of this project's releases. Application
+updates are separate from ArenaNet client and game-content updates; neither can
+authorize the other.
 
 Only a packaged macOS build whose generated `distribution-channel.json` names
 `release` may update. The marker has the exact shape

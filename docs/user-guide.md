@@ -445,13 +445,9 @@ the app contacts GitHub only when you choose **Check for Updates** — on the
 loading screen, in the application menu, on a client-compatibility notice, or
 under **Settings → Updates**. Turning it back on immediately checks once.
 
-A check asks GitHub whether a newer version of the app exists. The current build
-also attempts two fixed legacy compatibility-record assets on that same
-consented trigger. At the 2026-08-10 evidence baseline, recent releases
-published neither asset, so this is not a player-facing patch-recovery
-guarantee; the accepted refactor plan removes those requests and keeps
-compatibility changes in signed app releases. Neither current request sends
-anything about you or your installation.
+A check asks GitHub whether a newer version of the app exists. It sends nothing
+about you or your installation. ArenaNet client updates are fetched separately
+from ArenaNet and cannot change which Gwonmac application release is installed.
 
 **At launch, an update lands before the game starts.** While the launch check
 or its download is running, the loading screen holds at that step instead of

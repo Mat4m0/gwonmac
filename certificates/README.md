@@ -1,72 +1,13 @@
-# Client certification records
+# Client certification record
 
-This directory currently contains:
+This directory contains `certified-client.json`, the ArenaNet JSPI code
+generation already reviewed by this repository. It is a detector heartbeat,
+not runtime authority.
 
-- certified-client.json: the ArenaNet JSPI code generation already reviewed by
-  this repository; and
-- public-key.txt: the real Ed25519 pin used by the transitional remote
-  certificate-feed implementation.
-
-The two files have different authority. certified-client.json is a detector
-heartbeat and is not read at runtime. public-key.txt currently enables remote
-signature verification, but the remote-feed path is scheduled for hard-cut
-deletion by plans/full-refactor-optimization.md.
-
-## Current remote-feed status
-
-The committed public-key.txt is a canonical raw Ed25519 public key encoded as
-base64. It is not the historical PLACEHOLDER-NO-REMOTE-FEED-TRUST sentinel.
-Consequently, an update-capable release may request:
-
-~~~text
-certificate-feed.json
-certificate-feed.json.sig
-~~~
-
-from the fixed current-release asset URLs whenever the ordinary
-application-update trigger permits it.
-
-At the 2026-08-10 evidence baseline, recent public Gwonmac releases published
-neither asset. The code and pin therefore exist, but the feed is not an
-operational ArenaNet patch-recovery guarantee.
-
-Even with correctly signed assets, the feed has a deliberately narrow effect:
-
-- template-save facts are proposals and must be re-derived against the exact
-  local official client bytes;
-- Enhancement facts have no independent structural proof and are accepted only
-  when they exactly restate ENHANCEMENT_BUILDS already compiled into that
-  application; and
-- official ArenaNet bytes remain the fallback whenever proof refuses.
-
-An older app therefore cannot gain newly measured Enhancement layouts or
-commands from the feed. Those facts still require a signed application release.
-The only distinct potential benefit is rare template-only recovery when the
-isolated local structural verifier cannot derive the fact itself.
-
-That remaining benefit does not currently justify the signer, publication
-workflow, runtime delivery, persisted derived record, diagnostics vocabulary,
-and test hierarchy. The accepted refactor plan removes the remote feed and
-keeps:
-
-- compiled certification tables;
-- the isolated local verifier;
-- the existing certification CLI;
-- the scheduled recertification workflow; and
-- official-client fallback.
-
-Until that deletion lands:
-
-- do not expand the feed schema;
-- do not add another consumer or scheduler;
-- do not treat feed availability as a release or patch-day promise;
-- do not allow a signature to replace local proof; and
-- do not publish newly measured Enhancement facts as though an old app could
-  establish them.
-
-The existing publication workflow is transitional code, not the supported
-maintainer path. Do not invest in restoring it unless a concrete incident first
-satisfies the evidence trigger in the accepted refactor plan.
+Runtime authorization stays in the compiled certification tables and isolated
+local structural proof. There is no remote certification authority. Newly
+measured Enhancement facts require a signed application release, and verified
+official ArenaNet bytes remain the fallback when optional transforms refuse.
 
 ## The certified client generation
 

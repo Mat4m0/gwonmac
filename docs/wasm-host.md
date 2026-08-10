@@ -271,37 +271,18 @@ own `pnpm verify` gate passes on it, which is the same gate every other change
 faces. The Enhancement table stays untouched by machine because its layout
 words are client-memory addresses no structural anchor re-derives.
 
-## Transitional remote certificate feed
+## Certification authority boundary
 
-Runtime feed code still exists in the reviewed build, but it is not the
-supported ArenaNet patch-recovery path.
+An exact client build is authorized only by compiled certification facts or by
+the isolated local structural verifier. Newly measured Enhancement layouts,
+messages, and commands require a signed application release because an older
+application cannot independently prove them. There is no remote certification
+authority.
 
-The committed pin is a real Ed25519 key, so an update-capable release may ask
-the two fixed current-release asset URLs for `certificate-feed.json` and its
-detached signature on the ordinary application-update trigger. At the
-2026-08-10 evidence baseline, recent public releases carried neither asset.
-The machinery is therefore active but operationally empty, not the historical
-placeholder/no-request state.
-
-Its useful authority is also narrower than the old architecture text implied:
-
-- template-save entries are proposals and must survive the same local
-  structural transform proof against the exact official bytes;
-- Enhancement entries are accepted only when they exactly restate
-  `ENHANCEMENT_BUILDS` already compiled into this application; and
-- official bytes remain the fallback.
-
-An older application cannot gain newly measured Enhancement layouts, messages,
-or commands from this feed. Those facts require a signed application release.
-The only distinct potential value is rare template-only recovery when the local
-structural verifier cannot derive the entry.
-
-[`plans/full-refactor-optimization.md`](../plans/full-refactor-optimization.md)
-therefore schedules a hard cut: remove the remote signer, publication workflow,
-runtime delivery, persisted record, diagnostics vocabulary, and feed-specific
-tests. Keep compiled tables, the local verifier, scheduled recertification, and
-official fallback. Until that PR lands, do not extend or add consumers to the
-feed.
+When either optional transform refuses, the verified official ArenaNet client
+remains playable. Scheduled recertification detects a changed code generation,
+runs the same local proof, and opens a proposal or a named investigation; it
+does not grant runtime authority by itself.
 
 ## Enhancement instrumentation
 

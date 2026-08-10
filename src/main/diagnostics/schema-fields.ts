@@ -32,10 +32,6 @@ import {
   parseReleaseVersion,
 } from "../../shared/release.js";
 import type { AppUpdateStage } from "../app-updater.js";
-import {
-  CERTIFICATE_FEED_OUTCOMES,
-  CERTIFICATE_FEED_SOURCES,
-} from "../certification/certificate-feed-delivery.js";
 import { LOCAL_VERIFICATION_REASONS } from "../certification/local-client-verifier.js";
 import {
   isProxyRoute,
@@ -253,7 +249,4 @@ export const buildCertification = literal([
   "template-only",
   "uncertified",
 ] as const);
-export const certificateFeedOutcome = literal(CERTIFICATE_FEED_OUTCOMES);
-export const certificateFeedSource = literal(CERTIFICATE_FEED_SOURCES);
-
 export const none = {} as const;

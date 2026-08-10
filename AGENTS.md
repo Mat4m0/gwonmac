@@ -64,8 +64,8 @@ is meant to inherit the dead ends rather than walk back into them.
 | ------------------------- | ------------------------------------------------------------- |
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
-| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, and the transitional remote-feed code scheduled for deletion |
-| `certificates/`           | the certified client generation and the transitional remote-feed pin; `plans/full-refactor-optimization.md` owns its retirement |
+| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, and the Enhancement switches |
+| `certificates/`           | the reviewed ArenaNet client-generation heartbeat used by scheduled recertification |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -186,21 +186,11 @@ is meant to inherit the dead ends rather than walk back into them.
 - Forge accepts one `GW_PACKAGE_INTENT`: `local`, `preview-handoff`, `release`,
   or `development`. Do not recreate independent channel/signing flags; the
   closed intent is what makes unsupported package states unrepresentable.
-- The current tree still contains a transitional remote certificate feed.
-  `certificates/public-key.txt` is a real Ed25519 pin, not the old placeholder,
-  so an update-capable release may request the two fixed feed assets on the same
-  trigger as an application-update check. At the 2026-08-10 evidence baseline,
-  recent public releases carried neither asset, so this is not an operational
-  patch-recovery guarantee. The feed cannot deliver newly measured Enhancement
-  facts to an older app: its Enhancement half is accepted only as an exact
-  restatement of that app's compiled `ENHANCEMENT_BUILDS`. Its only distinct
-  possible value is a rare template-only proposal when local structural proof
-  refuses. Do not expand, repair, or add consumers to this authority.
-  `plans/full-refactor-optimization.md` owns the hard-cut deletion. Until that
-  lands, the existing schema must remain data-only: template proposals must be
-  re-derived locally, Enhancement proposals must exactly match compiled facts
-  and reproduce the existing transform outputs, and official bytes remain the
-  fallback.
+- Runtime authorization comes from compiled certification tables or the
+  isolated local structural verifier. There is no remote certification
+  authority. Newly measured Enhancement facts ship in a signed application
+  release; when certification refuses, verified official ArenaNet bytes remain
+  playable and optional Tools degrade independently.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check at launch, then at
@@ -209,11 +199,8 @@ is meant to inherit the dead ends rather than walk back into them.
   exception, including the one on an unrecognised client build; switched off,
   a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of application discovery,
-  release validation, download, ready, and install state. The transitional
-  certificate-feed delivery path may also request its two fixed assets on that
-  same trigger and behind the same switch; it decides nothing about installing
-  an application and is scheduled for deletion. Only an official package
-  carrying the release marker may reach Squirrel.Mac. A release-identity stable
+  release validation, download, ready, and install state. Only an official
+  package carrying the release marker may reach Squirrel.Mac. A release-identity stable
   version receives stable releases only; a release-identity prerelease may
   advance to a later eligible prerelease or stable. The separately signed
   Preview tester app cannot use AppUpdater. A ready update waits for an explicit
@@ -352,15 +339,10 @@ never client bytes, and its branch is worth nothing until the pull request's
 `pnpm verify` gate passes on it. The recorded generation carries no authority;
 it decides only whether that job runs.
 
-`.github/workflows/certificate-feed-publication.yml` and the runtime delivery
-path are transitional, not the supported patch-day path. The repository has a
-real pin, but no recent public release carried the two feed assets at the
-2026-08-10 baseline, and an older app cannot gain new Enhancement facts from
-them. Do not spend work restoring publication or broadening the schema.
-`plans/full-refactor-optimization.md` deletes the feed; compiled fact changes
-ship through the normal signed application release. The scheduled
-`client-recertification.yml` workflow and local verifier remain the patch-day
-owners.
+The scheduled `client-recertification.yml` workflow and the local verifier are
+the patch-day owners. There is no remote certificate publication path. Changes
+to compiled Enhancement facts ship through the normal signed application
+release, while an unknown official client remains the fallback.
 
 For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`

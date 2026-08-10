@@ -15,13 +15,11 @@
  * rename away a tree the other is still reading.
  *
  * Certification is consumed, not re-derived: the runtime asks once which state
- * a build is in and carries that one answer through preparation. A certificate
- * feed can only widen where that answer comes from, never what it is allowed to
- * be — a feed entry has to survive the same transforms before it counts, and a
- * build nothing certifies is served untouched exactly as before.
+ * a build is in and carries that one answer through preparation. Compiled facts
+ * answer known builds; the isolated verifier may derive an exact structural
+ * answer for an unknown one. A build neither path certifies is served untouched.
  */
 import { net } from "electron";
-import { readFile } from "node:fs/promises";
 import {
   type ClientCompatibility,
   type ClientHealthToken,
@@ -44,9 +42,6 @@ import {
   certificationFromLocalVerification,
   certifyClientBuild,
 } from "./certification/client-certification.js";
-import type { CertificateFeed } from "./certification/certificate-feed.js";
-import { proveCertificateFeedEntry } from "./certification/certificate-feed-proof.js";
-import type { ClientCertification } from "./certification/client-module.js";
 import {
   PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
@@ -111,12 +106,6 @@ interface ClientRuntimeOptions {
   offlineShell: boolean;
   enhancementCapabilities: EnhancementCapabilities;
   extendedMemoryEnabled: boolean;
-  /**
-   * The feed governing this session, read per certification pass rather than
-   * captured: a check that lands mid-session must reach the next pass, and the
-   * delivery module is the one thing that knows which feed won.
-   */
-  certificateFeed: () => CertificateFeed;
   onProgress: (progress: DownloadProgress) => void;
   onPrefetch: (progress: PrefetchProgress) => void;
 }
@@ -226,45 +215,6 @@ export class ClientRuntime {
     });
   }
 
-  /**
-   * What the governing feed proposes for this build, once the transforms in
-   * this application have reproduced it — or `null`, which leaves the untouched
-   * official module and the isolated local proof exactly as they were.
-   *
-   * The proof runs here rather than in the isolated verifier because it is the
-   * same work `prepareClientModule` is about to do on the same bytes: the entry
-   * names the transform's inputs outright, so there is no structure to discover
-   * and no attacker-shaped parser to bound. What the isolated process exists
-   * for is the search, and a feed entry is the answer to it.
-   */
-  private async provedFeedCertification(
-    officialWasmPath: string,
-    officialSha256: string,
-  ): Promise<ClientCertification | null> {
-    const feed = this.options.certificateFeed();
-    const entry = feed.entries.get(officialSha256);
-    if (!entry) return null;
-    let official: Uint8Array;
-    try {
-      official = await readFile(officialWasmPath);
-    } catch (error) {
-      logEvent({ k: "certificateFeed.proofUnavailable", code: errorCode(error) });
-      return null;
-    }
-    const proof = proveCertificateFeedEntry(entry, official);
-    logEvent({
-      k: "certificateFeed.proved",
-      sequence: feed.sequence,
-      certification: proof.certification.state,
-    });
-    for (const reason of proof.withheld) {
-      logEvent({ k: "certificateFeed.withheld", reason });
-    }
-    return proof.certification.state === "uncertified"
-      ? null
-      : proof.certification;
-  }
-
   private async selectClientWasm(): Promise<{
     wasmPath: string;
     jsPath: string;
@@ -299,12 +249,6 @@ export class ClientRuntime {
     }
 
     let certification = certifyClientBuild(officialSha256);
-    if (certification.state === "uncertified") {
-      certification = await this.provedFeedCertification(
-        officialWasm,
-        officialSha256,
-      ) ?? certification;
-    }
     if (certification.state === "uncertified") {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
