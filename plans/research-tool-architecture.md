@@ -1,7 +1,10 @@
 # Research ledger: Toolbox architecture for Chromium, Electron, and Wasm
 
-Status: offline research baseline, 2026-08-01. This is an investigation ledger,
-not a client certificate and not a claim of production readiness.
+Status: historical offline research baseline, 2026-08-01. This is an
+investigation ledger, not a client certificate, current implementation plan, or
+claim of production readiness. Its signed remote-certificate recommendation is
+superseded by `full-refactor-optimization.md`, which retains the local verifier
+and scheduled recertification but deletes the non-operational remote feed.
 
 ## Decision
 

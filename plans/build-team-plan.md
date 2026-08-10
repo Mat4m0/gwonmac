@@ -1,8 +1,9 @@
 # Team builds and build authoring on the certified foundation
 
-Status: plan, 2026-08-06. Extends
-[the Toolbox architecture ledger](research-tool-architecture.md); it does not
-supersede or relax anything in it.
+Status: historical implementation plan, delivered principally by PRs 117 and
+120. It records the intended host-only/client-dependent split but is not current
+instruction. The production unknown-build mount still does not fully satisfy
+that split; `full-refactor-optimization.md` owns the focused continuity fix.
 
 ## Decision
 

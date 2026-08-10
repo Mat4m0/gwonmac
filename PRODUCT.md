@@ -41,6 +41,19 @@ certified client module; after that, individual tool toggles are live. Optional
 observers, UI, and command access are disabled in PvP, guild halls, and unknown
 regions.
 
+“Tools Beta” is a feature-maturity label, not an application update channel.
+Preview remains the separately signed tester application; the planned public
+Stable/Beta application track is defined in
+[the accepted refactor plan](plans/full-refactor-optimization.md)
+and is not shipped behavior yet.
+
+The required product boundary is that Build and Team authoring is host-owned
+while observations and Apply are exact-client capabilities. Host authoring must
+remain usable when those capabilities refuse. The current production mount does
+not yet prove that unknown-build path, so the focused continuity PR in the
+accepted plan owns it; public documentation must not claim it before that story
+passes.
+
 ## Non-goals
 
 Refusals, not a backlog.
