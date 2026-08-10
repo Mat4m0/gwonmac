@@ -206,14 +206,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "df2450273dc27f1efa0bbaa3a729d0da6f3ac590cb17ea101bdd02e3eca36de7",
-      target: "aa25c32ad6a83796e3e8604e16bed0154e7bc80066034bd8ff3ec1d820404fe9",
-      cursorTarget: "235c6c62ac54463ff79c6708440bf5e16a5a09b3f20358e612916a0228a2d634",
-      cursorToolbox: "218ac401661705cb4d73b29c12d078c0e54cf2dd705848f983ceb0706d5c183f",
+      cursor: "de721b6a5c0a9b70db592d3b62f216fb41c185b79d5514efcee96fd07766a2e6",
+      target: "caca81db47b4eaf71d1ad7f2d8968b7c1210ac69fe3a47147d73e08eba69997d",
+      cursorTarget: "943d45201a0de4ad8bdb6c4d659426fc260c1a04c1893282bb14f9f350f6ddc1",
+      cursorToolbox: "e48ecf73a4a889c657c93cccb92fe8ca036c6341828832b41d440697e507fe30",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "8b70610e168cdedfeb4671e29c2539b4f5eb962c1d862f869ab3b6265697b36c",
-      cursorTargetToolboxCommands: "3d922cbd76f26e7427679ba6f9824fe792b9f725986fccf8fbca6561bfd881aa",
+      cursorToolboxCommands: "bd2d0405a44e1d1e9c3b8bd291edbbdbd31a8a6180253e9c87817ec0d6320d7e",
+      cursorTargetToolboxCommands: "46dd3188035720f51aad3e73a6ddfe99ede5f79bc49257825ab74646410bdafa",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime

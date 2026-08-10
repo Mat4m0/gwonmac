@@ -99,7 +99,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 21;
+export const ENHANCEMENT_TRANSFORM_ABI = 22;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

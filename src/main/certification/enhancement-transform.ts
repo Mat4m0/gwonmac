@@ -64,7 +64,7 @@ const DISPATCH_PARAMS = 6;
  *  command; the widest builder we have takes four scalars. */
 const COMMAND_PARAMS = 5;
 const COMMAND_ARGS = COMMAND_PARAMS - 1;
-const PROFESSION_TRACE_WORDS = 23;
+const PROFESSION_TRACE_WORDS = 24;
 const DISPATCH_TICK = 0;
 const DISPATCH_CURSOR = 1;
 const DISPATCH_UI = 2;
@@ -328,6 +328,7 @@ type ProfessionTraceGlobals = Readonly<{
   skillBuilderSkillCount: number;
   senderCount: number;
   senderOrigin: number;
+  senderConnection: number;
   senderSize: number;
   senderPayload: number;
 }>;
@@ -379,7 +380,7 @@ function tracedSkillBuilder(
   );
 }
 
-/** Records exact opcode 65 and 93 payloads, then preserves the shared sender. */
+/** Records the sender context and exact opcode 65/93 payloads, then preserves it. */
 function tracedPacketSender(
   originalIndex: number,
   globals: ProfessionTraceGlobals,
@@ -394,6 +395,8 @@ function tracedPacketSender(
     Uint8Array.of(0x6a, 0x24), uleb(globals.senderCount),
     Uint8Array.of(0x23), uleb(globals.origin),
     Uint8Array.of(0x24), uleb(globals.senderOrigin),
+    Uint8Array.of(0x20), uleb(0),
+    Uint8Array.of(0x24), uleb(globals.senderConnection),
     Uint8Array.of(0x20), uleb(1),
     Uint8Array.of(0x24), uleb(globals.senderSize),
     ...Array.from({ length: 11 }, (_, index) => concat(
@@ -441,6 +444,7 @@ function professionTraceReader(globals: ProfessionTraceGlobals): Uint8Array {
     globals.skillBuilderSkillCount,
     globals.senderCount,
     globals.senderOrigin,
+    globals.senderConnection,
     globals.senderSize,
     ...Array.from({ length: 11 }, (_, index) => globals.senderPayload + index),
   ] as const;
@@ -890,8 +894,9 @@ export function transformEnhancementWasm(
     skillBuilderSkillCount: traceGlobalBase + 8,
     senderCount: traceGlobalBase + 9,
     senderOrigin: traceGlobalBase + 10,
-    senderSize: traceGlobalBase + 11,
-    senderPayload: traceGlobalBase + 12,
+    senderConnection: traceGlobalBase + 11,
+    senderSize: traceGlobalBase + 12,
+    senderPayload: traceGlobalBase + 13,
   };
   const dispatchTypeIndex = types.length;
 
