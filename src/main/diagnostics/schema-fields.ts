@@ -32,7 +32,6 @@ import {
   parseReleaseVersion,
 } from "../../shared/release.js";
 import type { AppUpdateStage } from "../app-updater.js";
-import { LOCAL_VERIFICATION_REASONS } from "../certification/local-client-verifier.js";
 import {
   isProxyRoute,
   type ProxyRoute,
@@ -242,8 +241,6 @@ export const thermalState = literal([
   "serious",
   "critical",
 ] as const);
-export const localVerificationSource = literal(["cache", "process"] as const);
-export const localVerificationReason = literal(LOCAL_VERIFICATION_REASONS);
 export const buildCertification = literal([
   "certified",
   "template-only",

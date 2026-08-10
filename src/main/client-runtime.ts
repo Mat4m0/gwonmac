@@ -253,13 +253,11 @@ export class ClientRuntime {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
         officialSha256,
-        cachePath: this.options.paths.localClientVerification,
       });
       if (local) {
-        certification = certificationFromLocalVerification(local.result);
+        certification = certificationFromLocalVerification(local);
         logEvent({
           k: "wasm.localVerificationCompleted",
-          source: local.source,
           certification: certification.state,
         });
       } else {
@@ -301,6 +299,11 @@ export class ClientRuntime {
 
     if (prepared.failure?.stage === "enhancement") {
       logEvent({ k: "enhancement.prepareFailed",
+        code: errorCode(prepared.failure.error),
+      });
+    }
+    if (prepared.failure?.stage === "native-double-click") {
+      logEvent({ k: "wasm.nativeDoubleClickPrepareFailed",
         code: errorCode(prepared.failure.error),
       });
     }

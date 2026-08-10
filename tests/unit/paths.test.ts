@@ -30,7 +30,6 @@ describe("resolved profile paths", () => {
       artifacts: `${root}/game/artifacts`,
       previousArtifacts: `${root}/game/artifacts.previous`,
       rejectedClient: `${root}/game/rejected-client.json`,
-      localClientVerification: `${root}/game/local-client-verification.json`,
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
       nativeDoubleClick: `${root}/game/double-click`,

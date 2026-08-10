@@ -168,14 +168,12 @@ semantic anchors, only an exact shipped Enhancement certificate enables the
 kernel.
 
 The utility process has a five-second deadline and writes no profile state.
-Only main publishes its checksum-protected, owner-only exact-hash answer to
-`game/local-client-verification.json`; its verifier ABI and baseline
-fingerprint make every code or baseline change invalidate the cache. A crash,
-timeout, changed file, malformed answer, ambiguous locator, unexpected data
-layout, or transform failure is no proof. The launcher then serves the
-untouched official module and starts the game normally. The derived caches are
-rebuildable from the official artifact and old compatibility generations are
-deleted when the selected client changes.
+Every unknown exact hash starts that process again; a profile file is never
+certification authority. A crash, timeout, changed file, malformed answer,
+ambiguous locator, unexpected data layout, or transform failure is no proof.
+The launcher then serves the untouched official module and starts the game
+normally. Derived module caches remain rebuildable from the official artifact
+and old compatibility generations are deleted when the selected client changes.
 
 ## Which of three states a client build is in
 

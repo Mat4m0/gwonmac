@@ -11,8 +11,6 @@ import {
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
-  LOCAL_CLIENT_BASELINE_FINGERPRINT,
-  LOCAL_CLIENT_VERIFIER_ABI,
   type LocalClientVerification,
 } from "../../src/main/certification/local-client-verifier.js";
 
@@ -26,8 +24,6 @@ function localVerification(
   enhancement: boolean,
 ): LocalClientVerification {
   return {
-    verifierAbi: LOCAL_CLIENT_VERIFIER_ABI,
-    baselineFingerprint: LOCAL_CLIENT_BASELINE_FINGERPRINT,
     officialSha256: OFFICIAL.sha256,
     templateSaveBuild: template ? OFFICIAL : null,
     enhancementBuild: enhancement ? ENHANCEMENT_BUILDS[0]! : null,

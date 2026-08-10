@@ -19,7 +19,6 @@ import {
   incompleteCommandOutcome,
   launcherStrategy,
   literal,
-  localVerificationSource,
   none,
   nullable,
   steamBlocked,
@@ -554,10 +553,7 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
   "wasm.localVerificationCompleted": {
     subsystem: "wasm",
     level: "info",
-    fields: {
-      source: localVerificationSource,
-      certification: buildCertification,
-    },
+    fields: { certification: buildCertification },
   },
   "wasm.localVerificationUnavailable": {
     subsystem: "wasm",
@@ -578,6 +574,11 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "info",
     fields: none,
+  },
+  "wasm.nativeDoubleClickPrepareFailed": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { code },
   },
   "wasm.extendedMemory": {
     subsystem: "wasm",
