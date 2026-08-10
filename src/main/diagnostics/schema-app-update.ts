@@ -614,11 +614,6 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "info",
     fields: none,
   },
-  "enhancement.obsoleteCacheDiscardFailed": {
-    subsystem: "wasm",
-    level: "warn",
-    fields: { code },
-  },
   "patch.updateFallback": {
     subsystem: "update",
     level: "warn",

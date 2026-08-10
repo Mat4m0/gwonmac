@@ -69,10 +69,7 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
-import {
-  discardObsoleteEnhancementCache,
-  documentDirectories,
-} from "./core/paths.js";
+import { documentDirectories } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
@@ -405,17 +402,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     for (const failure of legacySecretFailures) {
       logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
     }
-  }
-  const obsoleteCacheError = await discardObsoleteEnhancementCache(
-    gamePaths(),
-    rm,
-  );
-  if (obsoleteCacheError !== null) {
-    // This is a derived beta cache. Failure must not block the canonical client.
-    logEvent({
-      k: "enhancement.obsoleteCacheDiscardFailed",
-      code: errorCode(obsoleteCacheError),
-    });
   }
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
