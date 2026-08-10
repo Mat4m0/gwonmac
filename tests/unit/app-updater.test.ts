@@ -218,7 +218,7 @@ describe("application updater", () => {
     assert.equal(f.nativeChecks(), 0);
   });
 
-  it("allows a preview install to advance to stable", async () => {
+  it("allows a release-identity prerelease to advance to stable", async () => {
     const f = fixture({
       fetch: async (input) => isReleaseApiRequest(input)
         ? response([

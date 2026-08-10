@@ -51,7 +51,7 @@ import {
   type CertificateFeedTrust,
 } from "./certificate-feed-trust.js";
 
-/** The two release assets a feed is published as. */
+/** The two fixed asset names this transitional delivery path requests. */
 export const CERTIFICATE_FEED_ASSET = "certificate-feed.json";
 export const CERTIFICATE_FEED_SIGNATURE_ASSET = "certificate-feed.json.sig";
 
@@ -85,7 +85,7 @@ export const CERTIFICATE_FEED_OUTCOMES = [
   "unchanged",
   /** A fetched feed verified but could not be persisted, so it was not adopted. */
   "unstored",
-  /** No key is pinned, so no request was made. The normal state of a clone. */
+  /** No key is pinned, so no request was made. */
   "unpinned",
   /** A key is pinned and these bytes were not signed by it. */
   "untrusted",
@@ -102,8 +102,8 @@ export type CertificateFeedOutcome = (typeof CERTIFICATE_FEED_OUTCOMES)[number];
 
 /**
  * Outcomes that mean a check produced no feed *and* something is wrong — as
- * opposed to the ones that are a configured or ordinary state. Only these are
- * worth a warning; a clone with no pinned key must not log one every launch.
+ * opposed to the ones that are a configured state. Only these are worth a
+ * warning; an explicitly unpinned build must not log one every launch.
  */
 export const CERTIFICATE_FEED_REFUSALS: ReadonlySet<CertificateFeedOutcome> =
   new Set<CertificateFeedOutcome>([
@@ -453,10 +453,9 @@ export class CertificateFeedDelivery {
   }
 
   /**
-   * The pinned key, read once. A file that is neither the placeholder nor a
-   * canonical key line stays distinguishable from the deliberate placeholder:
-   * a mistyped pin reports `untrusted`, not the silent `unpinned` that a clone
-   * is supposed to be in.
+   * The pinned key, read once. A file that is neither the explicit sentinel nor
+   * a canonical key line stays distinguishable from the deliberate disabled
+   * state: a mistyped pin reports `untrusted`, not `unpinned`.
    */
   private async trust(): Promise<CertificateFeedTrust | "unreadable"> {
     if (this.trustValue !== null) return this.trustValue;
@@ -464,7 +463,7 @@ export class CertificateFeedDelivery {
     try {
       pinned = await readFile(this.options.pinnedKeyPath, "utf8");
     } catch {
-      // No key file at all is no pinned key, which is the placeholder's answer.
+      // No key file at all is the same explicit no-remote-trust answer.
       this.trustValue = { remote: false };
       return this.trustValue;
     }

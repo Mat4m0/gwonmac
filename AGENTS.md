@@ -64,8 +64,8 @@ is meant to inherit the dead ends rather than walk back into them.
 | ------------------------- | ------------------------------------------------------------- |
 | `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
-| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, the certificate feed and its delivery |
-| `certificates/`           | the pinned certificate-feed public key, its key ceremony, how a signed feed is published, and the client generation this repository has certified |
+| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, the Enhancement switches, and the transitional remote-feed code scheduled for deletion |
+| `certificates/`           | the certified client generation and the transitional remote-feed pin; `plans/full-refactor-optimization.md` owns its retirement |
 | `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
 | `src/main/ipc.ts`         | validated native capability handlers                          |
 | `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
@@ -73,7 +73,7 @@ is meant to inherit the dead ends rather than walk back into them.
 | `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
 | `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
 | `src/shared/`             | canonical contracts and boundary validators                   |
-| `src/tools/certification.ts` | the one certification command line: `doctor`, `recertify`, `template`, `transform` |
+| `src/tools/certification.ts` | the one certification command line: `doctor`, `recertify`, `template`, `transform`, `double-click` |
 | `src/tools/diagnostics/`  | `.gwdiag` validation, summary, comparison                     |
 | `tests/`                  | unit, integration, Electron, packaged, and release invariants |
 | `tools/`, `gwkey.py`      | developer-only binary analysis                                |
@@ -186,36 +186,21 @@ is meant to inherit the dead ends rather than walk back into them.
 - Forge accepts one `GW_PACKAGE_INTENT`: `local`, `preview-handoff`, `release`,
   or `development`. Do not recreate independent channel/signing flags; the
   closed intent is what makes unsupported package states unrepresentable.
-- The certificate feed is data only — hashes, addresses, indices, message
-  identifiers — and it only ever proposes. No instruction byte, expression or
-  path may be added to its schema, and nothing it delivers enables a feature
-  until it is re-established on the machine. The two halves are not equally
-  re-derivable and must not be trusted as if they were. Template-save facts are
-  proved: the transform re-checks every stub body and call-site signature
-  against the client bytes and must reproduce the claimed output hash, so a feed
-  may certify a build no release has seen. Enhancement facts are not — the
-  layout words are client-memory addresses the companion kernel reads and
-  writes, no structural anchor re-derives them, and an `outputSha256` computed
-  over the signer's own addresses would reproduce and prove nothing. So a feed's
-  enhancement half is accepted only as an exact restatement of the shipped
-  `ENHANCEMENT_BUILDS` table, which is the same exact-build-only rule the
-  isolated local proof already applies. That restriction is what makes the
-  invariant true: a compromised signing key must be able to deny service and
-  nothing else. Do not relax it without giving layout facts their own structural
-  anchor first. Fetched feeds are signed and ordered by a monotonic
-  `sequence`; the bundled snapshot is not, because it is derived from tables
-  compiled into the signed application.
-  `certificates/public-key.txt` holds a placeholder, which means no
-  remote feed is trusted at all — and no request is made either. A feed is
-  fetched as two release assets on the same host the updater already reads,
-  on the update check's own trigger and behind the same consent switch; there
-  is no second scheduler and no second egress destination. A verified feed is
-  stored in the profile as one versioned record carrying the exact bytes and
-  signature, re-verified by the same path at every launch, and deleted rather
-  than partially read when it no longer holds. The governing feed is consulted
-  only where the shipped tables answer `uncertified`, so a feed widens where a
-  certificate may come from and can never withdraw one.
-  `docs/wasm-host.md` owns the mechanism.
+- The current tree still contains a transitional remote certificate feed.
+  `certificates/public-key.txt` is a real Ed25519 pin, not the old placeholder,
+  so an update-capable release may request the two fixed feed assets on the same
+  trigger as an application-update check. At the 2026-08-10 evidence baseline,
+  recent public releases carried neither asset, so this is not an operational
+  patch-recovery guarantee. The feed cannot deliver newly measured Enhancement
+  facts to an older app: its Enhancement half is accepted only as an exact
+  restatement of that app's compiled `ENHANCEMENT_BUILDS`. Its only distinct
+  possible value is a rare template-only proposal when local structural proof
+  refuses. Do not expand, repair, or add consumers to this authority.
+  `plans/full-refactor-optimization.md` owns the hard-cut deletion. Until that
+  lands, the existing schema must remain data-only: template proposals must be
+  re-derived locally, Enhancement proposals must exactly match compiled facts
+  and reproduce the existing transform outputs, and official bytes remain the
+  fallback.
 - The app makes no network request the user was not plainly told about.
   `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
   run and in Settings → Updates) performs one release check at launch, then at
@@ -223,16 +208,18 @@ is meant to inherit the dead ends rather than walk back into them.
   connection is open — and governs **every** automatic check without
   exception, including the one on an unrecognised client build; switched off,
   a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
-  caller of the releases API and the single owner of discovery, feed
-  validation, download, ready, and install state. The certificate feed's two
-  asset requests are the only other reads from this project's releases; they
-  fire on the same trigger, behind the same switch, and decide nothing about
-  installing anything. Only an official package
-  carrying the release marker may reach Squirrel.Mac. Stable installs never
-  receive previews; a preview may advance to stable. A ready update waits for
-  an explicit or ordinary restart. ArenaNet client updates remain separate and
-  automatic. `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md`
-  owns what the player is told.
+  caller of the releases API and the single owner of application discovery,
+  release validation, download, ready, and install state. The transitional
+  certificate-feed delivery path may also request its two fixed assets on that
+  same trigger and behind the same switch; it decides nothing about installing
+  an application and is scheduled for deletion. Only an official package
+  carrying the release marker may reach Squirrel.Mac. A release-identity stable
+  version receives stable releases only; a release-identity prerelease may
+  advance to a later eligible prerelease or stable. The separately signed
+  Preview tester app cannot use AppUpdater. A ready update waits for an explicit
+  or ordinary restart. ArenaNet client updates remain separate and automatic.
+  `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md` owns
+  what the player is told.
 
 ## Diagnostics and privacy
 
@@ -365,17 +352,15 @@ never client bytes, and its branch is worth nothing until the pull request's
 `pnpm verify` gate passes on it. The recorded generation carries no authority;
 it decides only whether that job runs.
 
-`.github/workflows/certificate-feed-publication.yml` is the only path from a
-merged table to a signed feed. Two runners derive the candidate from the tree
-alone and their bytes must be identical; a disagreement publishes nothing and
-files both hashes. The candidate's `sequence` is one past the higher of the feed
-in force and the bundled snapshot, resolved in the one job that sees both. One
-isolated job holds the private key, checks nothing out, refuses a candidate the
-published feed has caught up with while a person was approving it, and uploads
-the two assets. Template-save facts reach the approval gate on the push that
-produced them; Enhancement facts reach it only on a dispatch that says so,
-because nothing on the receiving machine re-derives them. `certificates/README.md` owns
-that mechanism and the go-live checklist the repository owner performs by hand.
+`.github/workflows/certificate-feed-publication.yml` and the runtime delivery
+path are transitional, not the supported patch-day path. The repository has a
+real pin, but no recent public release carried the two feed assets at the
+2026-08-10 baseline, and an older app cannot gain new Enhancement facts from
+them. Do not spend work restoring publication or broadening the schema.
+`plans/full-refactor-optimization.md` deletes the feed; compiled fact changes
+ship through the normal signed application release. The scheduled
+`client-recertification.yml` workflow and local verifier remain the patch-day
+owners.
 
 For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
 `docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
@@ -385,11 +370,15 @@ explicit; do not bypass that guard or use a temporary Electron profile.
 Certified Core (native cursor and template support) remains active whenever its
 exact build proof passes. GWonMac Tools Beta is optional and off by default; its
 first enable may restart to select the commands derivative, but individual tool
-toggles are live afterward. Optional observers and commands must be inactive in
-PvP, guild halls, and unknown regions. Team Apply is an explicit PvE-outpost
-configuration action: include the player, confirm every step from observed
-state, and expose no generic opcode command. Unsupported team fields are
-deleted from the released model rather than stored and ignored.
+toggles are live afterward. The pure library and existing `ToolsHost` can run
+without commands, but the current production mount is still nested inside
+certified companion installation. Do not claim unknown-build host-only
+  continuity until the focused PR in `plans/full-refactor-optimization.md`
+  proves the normal renderer path. Optional observers and commands must be
+  inactive in PvP, guild halls, and unknown regions. Team Apply is an explicit
+  PvE-outpost configuration action: include the player, confirm every step from
+  observed state, and expose no generic opcode command. Unsupported team fields
+  are deleted from the released model rather than stored and ignored.
 
 Before finishing, check for a second source of truth, retained old paths,
 unnecessary structure, harder debugging, broken architecture decisions, and

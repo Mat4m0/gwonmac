@@ -1,8 +1,9 @@
-# The only path that turns the certification tables on main into a signed
-# certificate feed installations fetch. It publishes data and nothing else:
-# every field it moves is a hash, an address, an index or a message identifier,
-# and every fact it delivers is re-established locally before it enables
-# anything. The key holder can withhold a certificate and cannot mint one.
+# The only path that turns the certification tables on main into the two signed
+# feed assets installations know how to request. Template-save proposals are
+# re-derived against the exact local client bytes. Enhancement entries can only
+# restate facts already compiled into that application and reproduce its
+# existing transform outputs; they cannot enable a new layout in an older app.
+# The key holder can withhold a certificate and cannot widen either authority.
 #
 # The shape follows the versioned release: derive, prove, then hand the proven
 # bytes to one isolated job that holds the credential and does nothing else.
@@ -11,16 +12,16 @@
 # a runner — a machine that was tampered with disagrees with the other one and
 # blocks the publication instead of signing its own answer.
 #
-# Nothing here runs until the go-live checklist in certificates/README.md is
-# done: the pinned key is a placeholder in every clone, and this workflow
-# refuses in its first job while it stays one.
+# This is transitional machinery scheduled for deletion by the accepted
+# refactor plan. The committed pin is real, but at the plan's 2026-08-10
+# evidence baseline no recent release published feed assets, and an old app
+# cannot gain newly measured Enhancement facts from them.
 name: Certificate feed publication
 
 on:
-  # The authoring tables a feed is derived from and the pin that decides
-  # whether any feed is believed. A recertification merged to main changes the
-  # first, which is precisely the moment a certificate should reach
-  # installations that will not see an application release for weeks.
+  # The authoring tables the transitional feed is derived from and its pin.
+  # This trigger describes current code only; the accepted refactor plan
+  # removes publication rather than treating it as patch-day delivery.
   push:
     branches: [main]
     paths:
@@ -30,14 +31,10 @@ on:
   workflow_dispatch:
     inputs:
       enhancement_facts:
-        # The tier decision, and the only thing a person adds to a publication.
-        # Template-save facts are re-derived from the client bytes by every
-        # installation that receives them, so reproduction plus the approval
-        # gate is their whole story. Enhancement facts are not re-derivable —
-        # their layout words are client-memory addresses with no structural
-        # anchor — so they are published only when a person dispatched the run
-        # and said that is what they meant.
-        description: Publish a candidate whose entries carry Enhancement facts.
+        # Transitional tier acknowledgment. An older app still accepts
+        # Enhancement only as an exact restatement of facts it already compiled;
+        # this input cannot deliver newly measured layouts to it.
+        description: Acknowledge that the transitional candidate carries Enhancement restatements.
         default: false
         type: boolean
 
@@ -68,10 +65,9 @@ jobs:
           node-version: "24"
 
       # The application's own rule, run against the committed file rather than
-      # restated here. While the placeholder stands, no installation trusts any
-      # feed, so a signature made today would be spent on nobody — and the
-      # approval it would consume is a person's attention.
-      - name: Refuse to publish while no key is pinned
+      # restated here. The transitional workflow still fails closed if a build
+      # deliberately carries the explicit no-remote-trust sentinel.
+      - name: Validate the pinned public key
         run: |
           node --import ./scripts/ts-hook.mjs --experimental-strip-types -e '
             const { readFileSync } = await import("node:fs");
@@ -81,9 +77,8 @@ jobs:
             const pinned = readFileSync("certificates/public-key.txt", "utf8");
             if (certificateFeedTrust(pinned).remote) process.exit(0);
             console.error(
-              "certificates/public-key.txt still holds the placeholder, so no"
-                + " installation would trust a feed signed today. Work through"
-                + " the go-live checklist in certificates/README.md first.",
+              "certificates/public-key.txt does not enable remote feed trust;"
+                + " refusing transitional publication.",
             );
             process.exit(1);
           '

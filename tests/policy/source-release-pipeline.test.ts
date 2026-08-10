@@ -785,10 +785,10 @@ test("the feed publication reproduces twice and signs in isolation", () => {
     /paths:\n {6}- src\/main\/certification\/template-save-compat\.ts\n {6}- src\/main\/certification\/enhancement-builds\.ts\n {6}- certificates\/public-key\.txt\n/,
   );
 
-  // Nothing is published while the pin is the committed placeholder, and the
-  // refusal runs the application's own rule rather than restating the sentinel.
+  // Transitional publication still runs the application's own trust rule and
+  // refuses an explicitly disabled or malformed pin.
   assert.match(target, /certificateFeedTrust\(pinned\)\.remote/);
-  assert.match(target, /go-live checklist in certificates\/README\.md/);
+  assert.match(target, /refusing transitional publication/);
 
   // Two runners, and they have to be two different machines for the comparison
   // to be evidence about this repository rather than about one runner.
@@ -902,18 +902,6 @@ test("the feed publication reproduces twice and signs in isolation", () => {
     assert.ok(sign.includes(`candidate/${asset}`), `${asset} is never published`);
     assert.ok(delivery.includes(`"${asset}"`), `${asset} is not what the app fetches`);
   }
-});
-
-test("the certificate ceremony documents what the owner has to do by hand", () => {
-  const ceremony = read("certificates/README.md");
-  // These four are settings and secrets in accounts this repository cannot
-  // reach. Scripting around them would mean holding the credentials that can
-  // change them, which is a larger blast radius than the thing being automated.
-  assert.match(ceremony, /## The go-live checklist/);
-  assert.match(ceremony, /allow GitHub Actions to create/i);
-  assert.match(ceremony, /certificate-publishing[\s\S]*required reviewers/);
-  assert.match(ceremony, /CERTIFICATE_FEED_SIGNING_KEY/);
-  assert.match(ceremony, /placeholder line in `public-key\.txt`/);
 });
 
 test("the scheduled canary exercises the latest ArenaNet client conservatively", () => {

@@ -104,30 +104,31 @@ six-hour spacing. `autoCheckUpdates` defaults on and is declared plainly at
 first run and in Settings; switched off, a launch reaches github.com zero
 times.
 
-That one trigger asks for two things. `main.ts` calls the updater and
-`src/main/certification/certificate-feed-delivery.ts` from the same place, so
-the certificate feed inherits the schedule, the deferral behind a game socket
-and the consent switch instead of acquiring its own. The feed's request is two
-GETs for release assets published at
-`releases/latest/download/` — the same host and redirect chain the updater's own
-asset requests follow, so there is no second egress destination — and the
-application adds nothing to either: no body, no header, no query, no credential.
-`docs/wasm-host.md` owns what arrives and what it is allowed to do.
+The reviewed build also calls the transitional certificate-feed delivery path
+from that trigger. Because the committed pin is real, an update-capable release
+may request two fixed `releases/latest/download/` assets behind the same consent
+switch and game-socket deferral. At the 2026-08-10 evidence baseline, recent
+public releases published neither asset, so these requests do not currently
+provide an operational patch-recovery path. The accepted refactor plan removes
+the feed and leaves `AppUpdater` as the only runtime reader of this project's
+release assets. `docs/wasm-host.md` owns the current transition.
 
 Only a packaged macOS build whose generated `distribution-channel.json` names
 `release` may update. The marker has the exact shape
 `{ schema: 1, repository, channel }`; capabilities are derived from that closed
 channel rather than stored as booleans. Preview, Development, malformed, and
-unmarked packages fail as `updater-unavailable` before making a request. Stable
-installs ignore previews. Preview installs may advance through previews or to
-stable. Drafts, malformed tags, duplicate assets, unexpected download URLs,
-and a `RELEASES.json` that does not name the exact release ZIP fail closed.
+unmarked packages fail as `updater-unavailable` before making a request. A
+release-identity stable version receives stable releases only; a
+release-identity prerelease may advance to a later eligible prerelease or
+stable. The separately signed Preview tester app cannot use AppUpdater. Drafts,
+malformed tags, duplicate assets, unexpected download URLs, and a
+`RELEASES.json` that does not name the exact release ZIP fail closed.
 
 The main process gives the validated single-release server response to
 Electron's Squirrel.Mac `autoUpdater`, which downloads the ZIP. Main has already
 made the version decision; the feed is deliberately not Squirrel's static
 multi-release format because its native numeric comparison cannot represent
-this project's SemVer preview suffixes. It publishes one discriminated
+this project's SemVer prerelease suffixes. It publishes one discriminated
 `AppUpdateState`: `idle`, `checking`, `up-to-date`, `downloading`, `ready`, or
 `failed` with a closed reason. The renderer receives no network text or URL.
 A check left without a readable answer — `offline`, `timeout`, or `unreadable`,

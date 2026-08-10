@@ -173,11 +173,10 @@ function revealMainWindow(): void {
 }
 
 /**
- * The one "ask this project what is new" action, and the only thing that makes
- * either request. A new application and a newer certificate feed are two
- * answers to that one question — the second is how a recovery arrives as data
- * rather than as an install — so they share a trigger, a schedule and a
- * consent switch instead of acquiring a second of each.
+ * The one "ask this project what is new" action. AppUpdater is the application
+ * update owner. The transitional certificate-feed path shares its trigger and
+ * consent rather than owning another scheduler; the accepted refactor plan
+ * removes that non-operational remote authority.
  */
 async function checkForProjectUpdates(): Promise<void> {
   await Promise.allSettled([
@@ -201,11 +200,11 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
 /**
  * The pinned certificate-feed key. A packaged build reads it from the bundle's
  * Resources, where the code signature seals it; an unpackaged one reads the
- * committed file, which holds the placeholder.
+ * committed real public key.
  *
  * The unpackaged override is how the Electron suite exercises a signed feed
- * with a keypair it generates per run, because the committed placeholder is a
- * value it must not change. It is unreachable from a packaged build.
+ * with a keypair it generates per run without changing repository state. It is
+ * unreachable from a packaged build.
  */
 function pinnedCertificateFeedKeyPath(): string {
   if (app.isPackaged) return path.join(process.resourcesPath, "public-key.txt");
