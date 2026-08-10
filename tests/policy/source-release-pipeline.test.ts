@@ -325,13 +325,20 @@ test("release workflow publishes one tested, attested package version", () => {
   );
 
   assert.match(workflow, /--prerelease --latest=false/);
+  assert.doesNotMatch(workflow, /SIGNED_BETA_UPDATE_PROVEN/);
+  assert.match(workflow, /\*-alpha\.\*/);
+  assert.match(workflow, /Alpha builds are internal snapshots, not public releases/);
+  assert.match(workflow, /name: Prove beta data returns to latest Stable/);
+  assert.match(workflow, /gh api "repos\/\$GITHUB_REPOSITORY\/releases\/latest"/);
+  assert.match(workflow, /gh attestation verify "\$stable_zip"/);
+  assert.match(workflow, /shasum -a 256 "\$stable_zip"/);
+  assert.match(workflow, /Stable\/Beta compatibility baseline/);
+  assert.match(workflow, /pnpm verify:signed-app "\$stable_app"/);
+  assert.match(workflow, /GW_STABLE_APP_PATH="\$stable_app"/);
+  assert.match(workflow, /pnpm test:stable-beta-roundtrip/);
   assert.match(
-    workflow,
-    /SIGNED_BETA_UPDATE_PROVEN: \$\{\{ vars\.SIGNED_BETA_UPDATE_PROVEN \}\}/,
-  );
-  assert.match(
-    workflow,
-    /if \[ "\$prerelease" = "false" \]; then\s+test "\$SIGNED_BETA_UPDATE_PROVEN" = "true"/,
+    script("test:stable-beta-roundtrip"),
+    /verify-stable-beta-roundtrip\.ts/,
   );
   assert.match(workflow, /--draft --generate-notes/);
   assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" != "true"/);

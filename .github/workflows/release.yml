@@ -80,8 +80,6 @@ jobs:
 
       - name: Resolve release version
         id: version
-        env:
-          SIGNED_BETA_UPDATE_PROVEN: ${{ vars.SIGNED_BETA_UPDATE_PROVEN }}
         run: |
           version="$(node -p "require('./package.json').version")"
           node --import ./scripts/ts-hook.mjs --experimental-strip-types -e '
@@ -90,8 +88,9 @@ jobs:
           ' "$version"
           prerelease=false
           if [[ "$version" == *-* ]]; then prerelease=true; fi
-          if [ "$prerelease" = "false" ]; then
-            test "$SIGNED_BETA_UPDATE_PROVEN" = "true"
+          if [[ "$version" == *-alpha.* ]]; then
+            echo "Alpha builds are internal snapshots, not public releases." >&2
+            exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
@@ -224,6 +223,48 @@ jobs:
           test -n "$app"
           GW_SIGNED_APP_PATH="$app" GW_SIGNED_CHANNEL=release \
             pnpm test:signed-keychain
+
+      # Every public beta/RC must be a reversible data experiment even though
+      # replacing the binary with an older Stable remains a manual action.
+      # The latest published Stable creates the data, this exact signed
+      # candidate changes it, then the same Stable must read and write it again.
+      - name: Prove beta data returns to latest Stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          GW_SIGNED_CHANNEL: release
+        run: |
+          case "$VERSION" in
+            *-beta.*|*-rc.*) ;;
+            *) echo "Stable release: recurring Stable/Beta round-trip not required."; exit 0 ;;
+          esac
+          stable_dir="$RUNNER_TEMP/latest-stable"
+          mkdir -p "$stable_dir"
+          stable_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          test -n "$stable_tag"
+          gh release download "$stable_tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'Guild-Wars-Reforged-*-macOS-arm64.zip' \
+            --dir "$stable_dir"
+          stable_zip_count="$(find "$stable_dir" -maxdepth 1 -name '*.zip' | wc -l | tr -d ' ')"
+          test "$stable_zip_count" = "1"
+          stable_zip="$(find "$stable_dir" -maxdepth 1 -name '*.zip' -print -quit)"
+          gh attestation verify "$stable_zip" --repo "$GITHUB_REPOSITORY"
+          stable_sha="$(shasum -a 256 "$stable_zip" | awk '{print $1}')"
+          {
+            echo "### Stable/Beta compatibility baseline"
+            echo
+            echo "Latest Stable: \`$stable_tag\` (ZIP SHA-256 \`$stable_sha\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          ditto -x -k "$stable_zip" "$stable_dir/unpacked"
+          stable_app="$stable_dir/unpacked/Guild Wars Reforged.app"
+          candidate_app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
+          test -d "$stable_app"
+          test -d "$candidate_app"
+          pnpm verify:signed-app "$stable_app"
+          GW_STABLE_APP_PATH="$stable_app" \
+          GW_CANDIDATE_APP_PATH="$candidate_app" \
+          GW_CANDIDATE_VERSION="$VERSION" \
+            pnpm test:stable-beta-roundtrip
 
       - name: Notarize and staple DMG
         run: |

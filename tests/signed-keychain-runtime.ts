@@ -1,6 +1,5 @@
-import { chromium, type Browser, type Page } from "playwright";
 import assert from "node:assert/strict";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +8,10 @@ import {
   DISTRIBUTION_CHANNEL_CONFIG,
   isDistributionChannel,
 } from "../src/shared/distribution-channel.ts";
+import {
+  closePackagedApp,
+  launchPackagedApp,
+} from "./helpers/packaged-app.ts";
 
 const execFileAsync = promisify(execFile);
 const sourceApp = process.env.GW_SIGNED_APP_PATH;
@@ -65,91 +68,6 @@ await writeFile(path.join(profile, "steam-session.bin"), "retired");
 await mkdir(path.join(profile, "game/chunks"), { recursive: true });
 await writeFile(path.join(profile, "game/chunks/preserved"), "chunk-sentinel");
 
-interface RunningApp {
-  browser: Browser;
-  child: ChildProcess;
-  page: Page;
-}
-
-async function delay(milliseconds: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-async function waitUntil<T>(
-  description: string,
-  operation: () => Promise<T | null>,
-): Promise<T> {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    const value = await operation();
-    if (value !== null) return value;
-    await delay(50);
-  }
-  throw new Error(`timed out waiting for ${description}`);
-}
-
-async function launch(appPath: string): Promise<RunningApp> {
-  const executablePath = path.join(
-    appPath,
-    `Contents/MacOS/${channelConfig.productName}`,
-  );
-  const activePort = path.join(profile, "DevToolsActivePort");
-  await rm(activePort, { force: true });
-  const child = spawn(
-    executablePath,
-    [
-      `--user-data-dir=${profile}`,
-      "--remote-debugging-address=127.0.0.1",
-      "--remote-debugging-port=0",
-    ],
-    {
-      env: {
-        ...process.env,
-        GW_OFFLINE_SHELL: "1",
-        GW_BACKGROUND_LAUNCH: "1",
-      },
-      stdio: "ignore",
-    },
-  );
-  try {
-    const port = await waitUntil("the signed app DevTools port", async () => {
-      if (child.exitCode !== null) {
-        throw new Error(`signed app exited with code ${child.exitCode}`);
-      }
-      try {
-        return (await readFile(activePort, "utf8")).split("\n", 1)[0] ?? null;
-      } catch {
-        return null;
-      }
-    });
-    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-    const page = await waitUntil("the signed app window", async () => {
-      for (const context of browser.contexts()) {
-        const [first] = context.pages();
-        if (first) return first;
-      }
-      return null;
-    });
-    await page.waitForLoadState("domcontentloaded");
-    return { browser, child, page };
-  } catch (error) {
-    child.kill("SIGTERM");
-    throw error;
-  }
-}
-
-async function closeApp({ browser, child, page }: RunningApp): Promise<void> {
-  await page.close().catch(() => {});
-  await browser.close().catch(() => {});
-  if (child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([
-    new Promise<void>((resolve) => child.once("exit", () => resolve())),
-    delay(10_000),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
-}
-
 type SecretAction =
   | "save-and-load"
   | "load"
@@ -161,7 +79,11 @@ async function useSecrets(
   action: SecretAction,
 ): Promise<unknown> {
   console.log(`signed keychain: ${action}: launching`);
-  const running = await launch(appPath);
+  const running = await launchPackagedApp({
+    appPath,
+    productName: channelConfig.productName,
+    userData: profile,
+  });
   try {
     console.log(`signed keychain: ${action}: invoking`);
     const result = await running.page.evaluate(
@@ -202,7 +124,7 @@ async function useSecrets(
     return result;
   } finally {
     console.log(`signed keychain: ${action}: closing`);
-    await closeApp(running);
+    await closePackagedApp(running);
     console.log(`signed keychain: ${action}: closed`);
   }
 }
