@@ -619,9 +619,15 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "info",
     fields: {
-      mode: literal(["disabled", "unsupported", "active"] as const),
+      mode: literal(["disabled", "unavailable", "active"] as const),
+      requested: boolean,
       profile: literal(["none", ...EXTENDED_MEMORY_PROFILES] as const),
       capBytes: finiteNumber,
+      fallbackReason: literal([
+        "none",
+        "unsupported-client",
+        "preparation-failed",
+      ] as const),
     },
   },
   "wasm.extendedMemoryPrepareFailed": {

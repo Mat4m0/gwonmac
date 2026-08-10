@@ -97,10 +97,6 @@ export const packagedExecutable = path.join(
   root,
   `out/${productName}-darwin-${process.arch}/${productName}.app/Contents/MacOS/${productName}`,
 );
-assert.ok(
-  existsSync(packagedExecutable),
-  `packaged app is missing at ${packagedExecutable}; run pnpm package first`,
-);
 
 export const OFFICIAL_WASM = Uint8Array.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
@@ -166,6 +162,7 @@ export const DEVELOPER_RUNTIME_KEYS = Object.freeze([
 export const PRODUCT_RUNTIME_KEYS = Object.freeze([
   ...DEVELOPER_RUNTIME_KEYS,
   "addHero",
+  "cancelPending",
   "kickHero",
   "setHardMode",
   "setHeroAttributes",
@@ -340,6 +337,10 @@ export async function launchPackaged(
     prepare = async () => undefined,
   }: LaunchOptions = {},
 ) {
+  assert.ok(
+    existsSync(packagedExecutable),
+    `packaged app is missing at ${packagedExecutable}; run pnpm package first`,
+  );
   const userData = await mkdtemp(path.join(tmpdir(), prefix));
   const artifacts = path.join(userData, "game", "artifacts");
   try {
@@ -507,6 +508,7 @@ export async function assertPackagedOffSession() {
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init),
       {
+        development: false,
         enhancementProgram: "none",
         enhancementSelection: {
           nativeCursor: true,

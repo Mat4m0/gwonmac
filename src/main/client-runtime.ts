@@ -23,9 +23,9 @@
 import { net } from "electron";
 import { readFile } from "node:fs/promises";
 import {
-  WASM_HEAP_CAP_BYTES,
   type ClientCompatibility,
   type ClientHealthToken,
+  type ExtendedMemoryRuntimeStatus,
   type DownloadProgress,
   type FullDownloadOutcome,
   type NoticeCode,
@@ -47,7 +47,6 @@ import {
 import type { CertificateFeed } from "./certification/certificate-feed.js";
 import { proveCertificateFeedEntry } from "./certification/certificate-feed-proof.js";
 import type { ClientCertification } from "./certification/client-module.js";
-import { EXTENDED_MEMORY_MAX_BYTES } from "./certification/extended-memory.js";
 import {
   PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
@@ -92,6 +91,7 @@ import {
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import { verifyClientLocally } from "./certification/local-client-verifier-host.js";
+import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
 
 export type { ActiveClient } from "./active-client.js";
 
@@ -110,6 +110,7 @@ interface ClientRuntimeOptions {
   cachedOnly: boolean;
   offlineShell: boolean;
   enhancementCapabilities: EnhancementCapabilities;
+  extendedMemoryEnabled: boolean;
   /**
    * The feed governing this session, read per certification pass rather than
    * captured: a check that lands mid-session must reach the next pass, and the
@@ -150,6 +151,7 @@ export class ClientRuntime {
    * has been activated.
    */
   private compatibilityValue: ClientCompatibility | null = null;
+  private extendedMemoryValue: ExtendedMemoryRuntimeStatus | null = null;
   /** Exact candidate identity captured by a renderer before it loads glue. */
   private candidateHealthToken: ClientHealthToken | null = null;
   private readonly patchFetch: PatchFetch;
@@ -171,6 +173,10 @@ export class ClientRuntime {
 
   get healthToken(): ClientHealthToken | null {
     return this.candidateHealthToken;
+  }
+
+  get extendedMemory(): ExtendedMemoryRuntimeStatus | null {
+    return this.extendedMemoryValue;
   }
 
   get progress(): DownloadProgress {
@@ -264,6 +270,7 @@ export class ClientRuntime {
     jsPath: string;
     build: ActiveClient["enhancementBuild"];
   }> {
+    this.extendedMemoryValue = null;
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
       "Gw.jspi.wasm",
@@ -279,6 +286,11 @@ export class ClientRuntime {
       logEvent({ k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
+      this.extendedMemoryValue = extendedMemoryRuntimeStatus(
+        this.options.extendedMemoryEnabled
+          ? { status: "unavailable", reason: "unsupported-client" }
+          : { status: "disabled" },
+      );
       return {
         wasmPath: officialWasm,
         jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
@@ -320,6 +332,7 @@ export class ClientRuntime {
       enhancementCacheRoot: this.options.paths.enhancements,
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
+      extendedMemoryEnabled: this.options.extendedMemoryEnabled,
     });
     const state = prepared.state;
     this.compatibilityValue = {
@@ -359,23 +372,28 @@ export class ClientRuntime {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
     gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);
-    const extendedCap = prepared.extendedMemory.status === "active"
-      ? EXTENDED_MEMORY_MAX_BYTES
-      : WASM_HEAP_CAP_BYTES;
+    this.extendedMemoryValue = extendedMemoryRuntimeStatus(prepared.extendedMemory);
+    const extendedCap = this.extendedMemoryValue.effectiveCapBytes;
+    const fallbackReason = this.extendedMemoryValue.fallbackReason;
     gauge("wasm.extendedMemoryMode", prepared.extendedMemory.status);
     gauge("wasm.heapCapBytes", extendedCap);
     logEvent({
       k: "wasm.extendedMemory",
       mode: prepared.extendedMemory.status,
+      requested: this.options.extendedMemoryEnabled,
       profile: prepared.extendedMemory.status === "active"
         ? prepared.extendedMemory.profile
         : "none",
       capBytes: extendedCap,
+      fallbackReason: fallbackReason ?? "none",
     });
-    if (prepared.failure?.stage === "extended-memory") {
+    if (
+      prepared.extendedMemory.status === "unavailable"
+      && prepared.extendedMemory.reason === "preparation-failed"
+    ) {
       logEvent({
         k: "wasm.extendedMemoryPrepareFailed",
-        code: errorCode(prepared.failure.error),
+        code: errorCode(prepared.extendedMemory.error),
       });
     }
     return {

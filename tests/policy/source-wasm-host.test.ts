@@ -517,9 +517,7 @@ test("the memory warning measures time and keeps its one contract import", async
     );
   }
 
-  // The explanation is modal and the notice is not: one dims the game and
-  // takes focus, the other runs beside play.
-  assert.match(html, /id="memory-why"[^>]*role="dialog"[^>]*aria-modal="true"/u);
+  // One non-modal surface owns warning, actions, and progressive disclosure.
   assert.doesNotMatch(
     html,
     /id="memory-notice"[^>]*aria-modal/u,
@@ -535,19 +533,9 @@ test("the memory warning measures time and keeps its one contract import", async
     /id="memory-notice"[^>]*role=/u,
     "interactive warning controls must sit outside the status live region",
   );
-  // `aria-modal` tells a screen reader the game behind it is not there. Half
-  // that contract — the attribute without a keyboard that agrees — describes
-  // an app the player is not using.
-  assert.match(
-    harness,
-    /heapWhyRoot\.hidden\) return;[\s\S]{0,400}'Tab'[\s\S]{0,200}focus\(\)/u,
-    "an aria-modal explanation must trap the keyboard inside itself",
-  );
-  assert.match(
-    harness,
-    /\[heapNoticeRoot, heapChip, heapScrim, heapWhyRoot\]/u,
-    "every warning surface must stop input before it reaches the game",
-  );
+  assert.match(html, /id="memory-notice-details"[\s\S]*<summary>Details<\/summary>/u);
+  assert.doesNotMatch(html, /memory-(?:chip|scrim|why)/u);
+  assert.doesNotMatch(harness, /heap(?:Surface|Chip|Why|LeaveTimer)/u);
 });
 
 test("the memory warning measures a staircase step to step", async () => {

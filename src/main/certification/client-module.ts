@@ -42,7 +42,7 @@ import {
   rewriteNativeDoubleClickWasm,
 } from "./native-double-click.js";
 import {
-  EXTENDED_MEMORY_RESEARCH_ENABLED,
+  EXTENDED_MEMORY_MAX_BYTES,
   prepareExtendedMemoryArtifacts,
   type ExtendedMemoryProfile,
 } from "./extended-memory.js";
@@ -68,8 +68,7 @@ export interface ClientModulePreparationFailure {
   readonly stage:
     | "template-save"
     | "enhancement"
-    | "native-double-click"
-    | "extended-memory";
+    | "native-double-click";
   readonly error: unknown;
 }
 
@@ -87,10 +86,20 @@ interface PreparedWasmClientModule {
 }
 
 export type ExtendedMemoryMode =
-  | { readonly status: "disabled" | "unsupported" }
+  | { readonly status: "disabled" }
   | {
       readonly status: "active";
       readonly profile: ExtendedMemoryProfile;
+      readonly effectiveCapBytes: typeof EXTENDED_MEMORY_MAX_BYTES;
+    }
+  | {
+      readonly status: "unavailable";
+      readonly reason: "unsupported-client";
+    }
+  | {
+      readonly status: "unavailable";
+      readonly reason: "preparation-failed";
+      readonly error: unknown;
     };
 
 export interface PreparedClientModule extends PreparedWasmClientModule {
@@ -108,6 +117,7 @@ export interface PrepareClientModuleOptions {
   readonly enhancementCacheRoot: string;
   readonly nativeDoubleClickCacheRoot: string;
   readonly extendedMemoryCacheRoot: string;
+  readonly extendedMemoryEnabled: boolean;
 }
 
 function templateSaveCache(
@@ -246,7 +256,7 @@ export async function prepareClientModule(
     await prepareCertifiedChain(options),
     options.nativeDoubleClickCacheRoot,
   );
-  if (!EXTENDED_MEMORY_RESEARCH_ENABLED) {
+  if (!options.extendedMemoryEnabled) {
     return {
       ...prepared,
       jsPath: options.officialJsPath,
@@ -264,19 +274,29 @@ export async function prepareClientModule(
           ...prepared,
           jsPath: extended.jsPath,
           wasmPath: extended.wasmPath,
-          extendedMemory: { status: "active", profile: extended.profile },
+          extendedMemory: {
+            status: "active",
+            profile: extended.profile,
+            effectiveCapBytes: EXTENDED_MEMORY_MAX_BYTES,
+          },
         }
       : {
           ...prepared,
           jsPath: options.officialJsPath,
-          extendedMemory: { status: "unsupported" },
+          extendedMemory: {
+            status: "unavailable",
+            reason: "unsupported-client",
+          },
         };
   } catch (error) {
     return {
       ...prepared,
       jsPath: options.officialJsPath,
-      extendedMemory: { status: "unsupported" },
-      failure: prepared.failure ?? { stage: "extended-memory", error },
+      extendedMemory: {
+        status: "unavailable",
+        reason: "preparation-failed",
+        error,
+      },
     };
   }
 }

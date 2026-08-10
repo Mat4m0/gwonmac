@@ -205,31 +205,14 @@ export interface MemoryPressurePresentation {
   detail: string;
   reloadButton: string;
   dismissButton: string;
-  whyLink: string;
-}
-
-export interface MemoryPressureChip {
-  text: string;
-  /** The whole sentence, for the button's accessible name. */
-  label: string;
-}
-
-export interface MemoryExplanationBlock {
-  title: string;
-  body: string;
-}
-
-export interface MemoryExplanation {
-  title: string;
-  blocks: readonly MemoryExplanationBlock[];
-  closeButton: string;
+  explanation: string;
 }
 
 /**
- * The game client's WASM heap is approaching its hard 2 GiB cap; once it gets
- * there the next big allocation kills the client wherever the player happens
- * to be standing. These sentences exist so the player spends that death at a
- * moment of their choosing.
+ * The game client's WASM heap is approaching this session's certified cap;
+ * once it gets there the next big allocation kills the client wherever the
+ * player happens to be standing. These sentences exist so the player spends
+ * that death at a moment of their choosing.
  *
  * They state a condition and not a deadline, which is where they ended up
  * rather than where they started. "Running low" meant half an hour in the open
@@ -259,98 +242,32 @@ export interface MemoryExplanation {
  * with progress intact, in under thirty seconds. That is the specific question
  * the hedge existed for, so the hedge is gone.
  *
- * The outpost is no longer in the notice. It is still true that an outpost
- * risks nothing at all, and the explanation says so — but leading with it is
- * what made the shipped sentence easy to ignore from inside a dungeon, and now
- * that the reconnect is measured, repeating the caveat argues against a fact.
+ * The cap appears only in the inline details, where it is effective runtime
+ * state rather than an inference from the saved opt-in.
  */
-const MEMORY_RELOAD = 'Reload Now';
+const MEMORY_RELOAD = 'Reload Guild Wars';
 const MEMORY_DISMISS = 'Later';
-const MEMORY_WHY = 'Why is this happening?';
-const MEMORY_REJOIN =
-  'Guild Wars puts you back where you were, in under a minute.';
 
-export function memoryPressurePresentation(
+export function memoryWarningCopy(
   level: 'low' | 'critical',
+  capBytes: number,
 ): MemoryPressurePresentation {
   const critical = level === 'critical';
+  const capGb = Math.max(1, Math.round(capBytes / 1_073_741_824));
   return {
     label: critical
       ? 'Guild Wars is almost out of memory.'
       : 'Guild Wars is running low on memory.',
     detail: critical
-      ? `Reload soon — ${MEMORY_REJOIN}`
-      : `Reload when it suits you — ${MEMORY_REJOIN}`,
+      ? 'Reload soon.'
+      : 'Reload when convenient.',
     reloadButton: MEMORY_RELOAD,
     dismissButton: MEMORY_DISMISS,
-    whyLink: MEMORY_WHY,
-  };
-}
-
-/**
- * What `Later` leaves behind: the thing that stops a dismissal meaning silence
- * until the crash, which is what the shipped build did. It carried a live
- * countdown until the Eye of the North bundle showed that countdown reading
- * "75 min" to a player with eighteen minutes left — a figure that moves is
- * only worth more than a word if it moves the right way.
- */
-export function memoryPressureChip(
-  level: 'low' | 'critical',
-): MemoryPressureChip {
-  return level === 'critical'
-    ? {
-        text: 'Memory almost full',
-        label:
-          'Guild Wars is almost out of memory. Open the memory warning again.',
-      }
-    : {
-        text: 'Low memory',
-        label: 'Guild Wars is low on memory. Open the memory warning again.',
-      };
-}
-
-/**
- * The four things a player asks once they have read the warning twice. The
- * third block says what is true today — measured, documented, published. It
- * must not claim we are in contact with ArenaNet until someone has actually
- * written to them.
- */
-export function memoryExplanation(): MemoryExplanation {
-  return {
-    title: 'Why this memory warning appears',
-    closeButton: 'Close',
-    blocks: [
-      {
-        title: 'What this is',
-        body:
-          "ArenaNet's current game client is capped at 2 GB of WebAssembly "
-          + 'memory. During long sessions that visit new content, its memory '
-          + 'can keep growing instead of settling. At the cap, the next large '
-          + 'allocation stops the game.',
-      },
-      {
-        title: 'Why the app cannot clear it',
-        body:
-          "The memory and its objects belong to ArenaNet's game client. This "
-          + 'app cannot safely discard objects it does not own. It can measure '
-          + 'the heap and warn before the client reaches its cap.',
-      },
-      {
-        title: 'Where it stands',
-        body:
-          'We have measured it, documented it in detail, and published the '
-          + 'findings for ArenaNet.',
-      },
-      {
-        title: 'What to do',
-        body:
-          'Reloading gives the game a fresh 2 GB. It takes under a minute, '
-          + 'and Guild Wars puts you back where you were — the same way it '
-          + 'handles a dropped connection. We tested that from inside an '
-          + 'instance, on every way this app can reload the game. A town or '
-          + 'outpost is still the one place with nothing at all to lose.',
-      },
-    ],
+    explanation:
+      `This session can use up to ${capGb} GB. Reloading starts Guild Wars `
+      + 'with fresh memory and puts you back where you were. The experimental '
+      + '4 GB limit provides more headroom, but it cannot stop continued '
+      + 'memory growth.',
   };
 }
 

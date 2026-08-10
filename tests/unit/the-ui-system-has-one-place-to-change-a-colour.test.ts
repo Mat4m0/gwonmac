@@ -1,4 +1,4 @@
-// The OG Guild Wars interface is one system. One hardcoded colour in a
+// Both interface styles are one system. One hardcoded colour in a
 // component is invisible in review and becomes an accidental second style.
 //
 // So the claim is enforced rather than asserted. Neither `ui/components.css`
@@ -137,11 +137,59 @@ test("no consumer invents a stacking order", () => {
   );
 });
 
-test("the shared system has no alternate theme or density selector", () => {
-  assert.doesNotMatch(code(tokens), /\[data-ui-(?:theme|density)=/u);
+test("Obsidian is the only style projection and consumers do not branch", () => {
+  const selectors = [...code(tokens).matchAll(/:root\[data-ui-style="([^"]+)"\]/gu)]
+    .map((match) => match[1]);
+  assert.deepEqual(selectors, ["obsidian"]);
   for (const [, css] of consumers) {
-    assert.doesNotMatch(code(css), /\[data-ui-(?:theme|density)=/u);
+    assert.doesNotMatch(code(css), /\[data-ui-(?:style|theme|density)=/u);
   }
+});
+
+test("persistent interaction states do not leak into neutral controls", () => {
+  const components = readFileSync("src/shared/ui/components.css", "utf8");
+  const toolsShell = readFileSync("apps/tools/src/styles/base-shell.css", "utf8");
+  const rule = (source: string, selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    return source.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, "u"))?.[1] ?? "";
+  };
+
+  assert.match(rule(components, ".ui-button"), /var\(--ui-raised-fill\)/u);
+  assert.match(rule(components, '.ui-button[data-variant="primary"]'), /var\(--ui-primary-fill\)/u);
+  assert.doesNotMatch(rule(components, ".ui-button[data-icon]"), /--ui-shadow-selected/u);
+  assert.doesNotMatch(rule(components, ".ui-slot"), /--ui-shadow-selected/u);
+  assert.doesNotMatch(rule(toolsShell, ".window-brand"), /--ui-shadow-selected/u);
+  assert.match(
+    rule(components, '.ui-tab[aria-selected="true"]'),
+    /inset 0 -2px 0 var\(--ui-accent\)/u,
+  );
+});
+
+test("shared interaction feedback owns disabled, active, and error presentation", () => {
+  const components = code(readFileSync("src/shared/ui/components.css", "utf8"));
+  const catalogue = code(readFileSync("apps/tools/src/styles/catalogue.css", "utf8"));
+  const build = code(readFileSync("apps/tools/src/styles/build.css", "utf8"));
+
+  for (const selector of [
+    '.ui-button[aria-disabled="true"]',
+    ".ui-input:disabled",
+    ".ui-segment button:disabled",
+    ".ui-tab:disabled",
+    '.ui-row[aria-disabled="true"]',
+    'button.ui-chip[aria-disabled="true"]',
+  ]) {
+    assert.ok(components.includes(selector), `${selector} has shared disabled feedback`);
+  }
+  for (const selector of [
+    ".ui-segment button:active:not(:disabled)",
+    ".ui-tab:active:not(:disabled)",
+    '.ui-row:active:not([aria-disabled="true"])',
+  ]) {
+    assert.ok(components.includes(selector), `${selector} has pointer feedback`);
+  }
+  assert.match(components, /\.ui-field-error\s*\{/u);
+  assert.doesNotMatch(catalogue, /\.field-error\s*\{/u);
+  assert.match(build, /\.authoring-tabs > button:focus-visible\s*\{/u);
 });
 
 test("every token a stylesheet uses is actually declared", () => {

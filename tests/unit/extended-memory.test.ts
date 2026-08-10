@@ -5,7 +5,6 @@ import {
   EXTENDED_MEMORY_MAX_BYTES,
   EXTENDED_MEMORY_MAX_PAGES,
   EXTENDED_MEMORY_PROFILES,
-  EXTENDED_MEMORY_RESEARCH_ENABLED,
   EXTENDED_MEMORY_WASM_BUILDS,
   findExtendedMemoryWasmBuild,
   rewriteExtendedMemoryJs,
@@ -15,12 +14,8 @@ import { NATIVE_DOUBLE_CLICK_BUILDS } from "../../src/main/certification/native-
 import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/enhancement-contracts.js";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.js";
 
-describe("research-only extended memory transform", () => {
-  it("requires the explicit research environment and stops one page short of 4 GiB", () => {
-    assert.equal(
-      EXTENDED_MEMORY_RESEARCH_ENABLED,
-      process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1",
-    );
+describe("certified extended memory transform", () => {
+  it("stops one page short of 4 GiB", () => {
     assert.equal(EXTENDED_MEMORY_MAX_PAGES, 65_535);
     assert.equal(EXTENDED_MEMORY_MAX_BYTES, 4_294_901_760);
   });
@@ -74,8 +69,10 @@ describe("research-only extended memory transform", () => {
       diagnosticEventRecord({
         k: "wasm.extendedMemory",
         mode: "active",
+        requested: true,
         profile: "cursorToolbox",
         capBytes: EXTENDED_MEMORY_MAX_BYTES,
+        fallbackReason: "none",
       }),
       {
         subsystem: "wasm",
@@ -83,8 +80,10 @@ describe("research-only extended memory transform", () => {
         name: "wasm.extendedMemory",
         fields: {
           mode: "active",
+          requested: true,
           profile: "cursorToolbox",
           capBytes: EXTENDED_MEMORY_MAX_BYTES,
+          fallbackReason: "none",
         },
       },
     );

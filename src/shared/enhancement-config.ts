@@ -43,6 +43,8 @@ export interface EnhancementLayout {
   partyPlayers: number;
   partyHenchmen: number;
   partyFlag: number;
+  accountContext: number;
+  accountUnlockedSkills: number;
   worldContext: number;
   worldHeroFlags: number;
   heroFlagStride: number;
@@ -77,6 +79,7 @@ export interface EnhancementLayout {
   areaInfoFlags: number;
   worldProfessionStates: number;
   professionStateStride: number;
+  worldCharacterSkills: number;
 }
 
 type Activation = "target" | "target-or-toolbox" | "cursor" | "toolbox";
@@ -96,7 +99,7 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...layout("target-or-toolbox", "gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber"),
   ...layout("target", "agentId", "agentX", "agentY", "agentType", "agentPlayerNumber", "agentModelType"),
   ...layout("cursor", "cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
-  ...layout("toolbox", "partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride"),
+  ...layout("toolbox", "partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
   { source: "dispatcher", key: "playerChatMessage", activation: "toolbox" },
   { source: "dispatcher", key: "hideHeroPanelMessage", activation: "toolbox" },
   { source: "dispatcher", key: "showHeroPanelMessage", activation: "toolbox" },

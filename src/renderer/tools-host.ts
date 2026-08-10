@@ -50,6 +50,7 @@ type ToolsBundle = Readonly<{
       publishTemplate(template: PublishableTemplate): Promise<PublishedTemplate>;
       commands: TeamApplyCommands | null;
       applyUnavailable: string | null;
+      development: boolean;
     },
   ): ToolsAppHandle;
 }>;
@@ -93,7 +94,7 @@ async function publishTemplate(
  * Why applying a team cannot reach the running game, or `null` once it can.
  *
  * Applying means commanding the running game. A Core-only or developer module
- * has no command thunk at all, so the panel must present that absence as a
+ * has no command queue at all, so the panel must present that absence as a
  * refusal rather than as a successful Apply that made zero changes.
  *
  * It is a value rather than only a thrown message because the interface has to
@@ -144,6 +145,7 @@ export function mountToolsInto(
         publishTemplate,
         commands,
         applyUnavailable: commands === null ? APPLY_UNAVAILABLE : null,
+        development: window.gwNative.init.development,
       });
       return {
         setVisible: (visible: boolean) => {

@@ -7,6 +7,7 @@ import {
 import {
   unavailableParty,
   type LiveParty,
+  type SkillUnlockObservation,
 } from "../../../src/shared/builds/live-party";
 import {
   ATTRIBUTES,
@@ -26,9 +27,11 @@ import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
   runTeamApply,
   type TeamApplyCommands,
+  type TeamApplyEvent,
 } from "../../../src/shared/builds/team-apply-runner";
 import { demoLibrary, demoParty, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
+import { devTrace } from "./dev-trace";
 import {
   createSkillCatalogue,
   type SkillCatalogue,
@@ -69,7 +72,11 @@ export interface ToolsHost {
   writeClipboard(text: string): Promise<void>;
   reloadSkills(): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
-  applyTeam(plan: TeamApplyPlan): Promise<TeamApplyResult>;
+  applyTeam(
+    plan: TeamApplyPlan,
+    onEvent?: (event: TeamApplyEvent) => void,
+  ): Promise<TeamApplyResult>;
+  cancelApply(): void;
   /**
    * Why `applyTeam` cannot reach the running game, or `null` when it can.
    *
@@ -83,6 +90,62 @@ export interface ToolsHost {
 }
 
 const STORAGE_KEY = "gwonmac.tools.demo.library.v2";
+
+function teamApplyProbe(
+  plan: TeamApplyPlan,
+  party: LiveParty,
+  commandId: number,
+  cause: unknown,
+  timeline: readonly TeamApplyEvent[],
+) {
+  const availability = (
+    skill: number | null,
+    unlocks: SkillUnlockObservation | null,
+  ) => {
+    if (skill === null) return "empty";
+    if (unlocks === null) return "unobserved";
+    if (skill >= unlocks.knownThrough) return "unknown";
+    return unlocks.unlocked.has(skillId(skill)) ? "unlocked" : "locked";
+  };
+  return Object.freeze({
+    schema: 1,
+    commandId,
+    error: cause instanceof Error ? cause.message : String(cause),
+    timeline: Object.freeze(timeline.slice(-64)),
+    party: Object.freeze({
+      status: party.status,
+      playRegion: party.playRegion,
+      inOutpost: party.inOutpost,
+      partial: party.partial,
+      accountSkillsObserved: party.accountSkills !== null,
+      characterSkillsObserved: party.characterSkills !== null,
+    }),
+    members: Object.freeze(plan.members.map((member, index) => {
+      const live = member.hero === null
+        ? (index === 0 ? party.player : null)
+        : party.heroes.find((candidate) => candidate.hero === member.hero) ?? null;
+      const unlocks = member.hero === null
+        ? (index === 0 ? party.characterSkills : null)
+        : party.accountSkills;
+      const wanted = member.build?.skills.map((skill) => skill === null ? null : Number(skill))
+        ?? null;
+      return Object.freeze({
+        slot: index + 1,
+        heroId: member.hero === null ? null : Number(member.hero),
+        agentId: live?.agentId ?? null,
+        wantedProfessions: member.build?.professions ?? null,
+        observedProfessions: live?.professions ?? null,
+        wantedSkills: wanted,
+        observedSkills: live?.skills?.map((skill) => skill === null ? null : Number(skill))
+          ?? null,
+        availability: wanted?.map((skill) => Object.freeze({
+          skillId: skill,
+          status: availability(skill, unlocks),
+        })) ?? null,
+      });
+    })),
+  });
+}
 
 function safeFileName(value: string): string {
   const cleaned = value
@@ -152,6 +215,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { commandId: 1, completedChanges: 0, skippedSkills: [] };
     },
+    cancelApply() {},
     async reset() {
       storage?.removeItem(STORAGE_KEY);
       memory = cloneLibrary(demoLibrary);
@@ -178,11 +242,13 @@ export function createNativeHost(
    */
   commands: TeamApplyCommands | null,
   applyUnavailable: string | null,
+  development = false,
 ): ToolsHost {
   const party = ref(unavailableParty());
   // One counter per session, so a result can be tied to the request that asked
   // for it in a log where several ran.
   let commandId = 0;
+  let activeApply: AbortController | null = null;
   const skills = createSkillCatalogue([]);
   const profession = new Set<Profession>(
     Object.keys(PROFESSIONS) as Profession[],
@@ -248,6 +314,7 @@ export function createNativeHost(
       throw new Error("The skill catalogue arrived empty.");
     }
     skills.replace(parsed);
+    devTrace(development, "skills.loaded", { count: parsed.length });
   };
   return {
     label: "Saved on this Mac",
@@ -267,9 +334,33 @@ export function createNativeHost(
           },
         ),
       ]);
+      devTrace(development, "library.loaded", {
+        builds: library.library.builds.length,
+        teams: library.library.teams.length,
+        recovered: library.recovered,
+        skillsAvailable: skills === null,
+      });
       return skills === null ? library : { ...library, skillProblem: skills };
     },
-    saveLibrary: (library) => api.buildLibrary.set(library),
+    async saveLibrary(library) {
+      devTrace(development, "library.save.start", {
+        builds: library.builds.length,
+        teams: library.teams.length,
+      });
+      try {
+        const saved = await api.buildLibrary.set(library);
+        devTrace(development, "library.save.complete", {
+          builds: saved.builds.length,
+          teams: saved.teams.length,
+        });
+        return saved;
+      } catch (cause) {
+        devTrace(development, "library.save.failed", {
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+        throw cause;
+      }
+    },
     readClipboard: () => api.clipboard.readText(),
     writeClipboard: (text) => api.clipboard.writeText(text),
     reloadSkills: loadSkills,
@@ -278,22 +369,88 @@ export function createNativeHost(
       if (code === null) {
         throw new Error("This build cannot be written as a template.");
       }
-      return publishTemplate({ name: build.name, code });
+      devTrace(development, "template.publish.start");
+      const published = await publishTemplate({ name: build.name, code });
+      devTrace(development, "template.publish.complete", {
+        location: published.location,
+      });
+      return published;
     },
-    applyTeam(plan) {
+    async applyTeam(plan, onEvent) {
       if (commands === null) {
         throw new Error(applyUnavailable ?? "Applying a team is unavailable.");
       }
-      return runTeamApply(plan, {
-        commands,
-        // Read through the ref rather than captured: the overlay rewrites it on
-        // every published change, and a captured value would let the sequence
-        // confirm each step against the party as it was before it started.
-        party: () => party.value,
-        settle: () => new Promise<void>((resolve) => {
-          requestAnimationFrame(() => resolve());
-        }),
-      }, ++commandId);
+      if (activeApply !== null) {
+        throw new Error("A team is already being applied.");
+      }
+      const operation = new AbortController();
+      activeApply = operation;
+      const timeline: TeamApplyEvent[] = [];
+      Reflect.deleteProperty(window, "gwTeamApplyProbe");
+      const currentCommandId = ++commandId;
+      devTrace(development, "apply.start", {
+        commandId: currentCommandId,
+        mode: plan.mode,
+        configuredMembers: plan.members.filter((member) => member.build !== null).length,
+      });
+      try {
+        const result = await runTeamApply(plan, {
+          commands,
+          // Read through the ref rather than captured: the overlay rewrites it on
+          // every published change, and a captured value would let the sequence
+          // confirm each step against the party as it was before it started.
+          party: () => party.value,
+          signal: operation.signal,
+          onEvent: (event) => {
+            if (development) {
+              if (timeline.length === 64) timeline.shift();
+              timeline.push(event);
+            }
+            onEvent?.(event);
+          },
+        }, currentCommandId);
+        devTrace(development, "apply.complete", {
+          commandId: currentCommandId,
+          completedChanges: result.completedChanges,
+          skippedSkills: result.skippedSkills.length,
+        });
+        return result;
+      } catch (cause) {
+        const probe = teamApplyProbe(
+          plan,
+          party.value,
+          currentCommandId,
+          cause,
+          timeline,
+        );
+        if (development) {
+          Reflect.set(window, "gwTeamApplyProbe", probe);
+          console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
+        } else {
+          console.warn(
+            "[tools] Team Apply failed",
+            cause instanceof Error ? cause.message : String(cause),
+          );
+        }
+        devTrace(development, "apply.failed", {
+          commandId: currentCommandId,
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+        throw cause;
+      } finally {
+        // A refused confirmation must not leave a packet armed to fire after
+        // the UI has already reported failure. Clearing an empty mailbox is a
+        // no-op; clearing a stuck one makes the failure final and the next
+        // Apply independent.
+        if (!operation.signal.aborted) commands.cancelPending();
+        if (activeApply === operation) activeApply = null;
+      }
+    },
+    cancelApply() {
+      if (activeApply !== null) {
+        commands?.cancelPending();
+        activeApply.abort();
+      }
     },
   };
 }

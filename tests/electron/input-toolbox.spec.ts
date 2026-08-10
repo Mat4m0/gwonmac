@@ -186,7 +186,9 @@ test.describe("renderer Tools input", () => {
       // the player can still press more of them.
       await page.keyboard.down("KeyW");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
-      await page.getByRole("button", { name: "Open Tools" }).click();
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:tools-toggle", { cancelable: true }));
+      });
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(tool).toBeVisible();
 
@@ -220,8 +222,8 @@ test.describe("renderer Tools input", () => {
       await page.keyboard.press("x");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
 
-      // The HUD chip gives way to the tool rather than sitting on top of it.
-      await expect(page.getByRole("button", { name: "Open Tools" })).toBeHidden();
+      // The foundation draws no persistent HUD chrome over Guild Wars.
+      await expect(root.locator('[data-role="hud"]')).toHaveCount(0);
 
       // Non-modal: a game click outside the tool lands in the game, and the
       // tool stays open rather than dismissing itself.
@@ -264,19 +266,15 @@ test.describe("renderer Tools input", () => {
       // The chord toggles from anywhere.
       await page.keyboard.press("Control+Shift+Space");
       await expect(tool).toBeHidden();
-      await expect(page.getByRole("button", { name: "Open Tools" })).toBeVisible();
       await page.keyboard.press("Control+Shift+Space");
       await expect(tool).toBeVisible();
 
       // A tool that hides itself has to say so, because the overlay cannot see
-      // it happen. Left unreported, the overlay goes on believing it is open:
-      // the HUD chip stays hidden and the next toggle spends itself restoring
-      // the chip instead of reopening the tool.
+      // it happen. Left unreported, the overlay goes on believing it is open
+      // and the next toggle closes an already-hidden tool.
       await page.getByRole("button", { name: "Close tool" }).click();
       await expect(tool).toBeHidden();
-      await expect(page.getByRole("button", { name: "Open Tools" }))
-        .toBeVisible();
-      await page.getByRole("button", { name: "Open Tools" }).click();
+      await page.keyboard.press("Control+Shift+Space");
       await expect(tool).toBeVisible();
 
       // The menu route: the main process sends `tools.toggle`, and the renderer
@@ -294,14 +292,9 @@ test.describe("renderer Tools input", () => {
       // The palette never reset game input during any of the above.
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
 
-      // The chip says what it controls, and what it names exists. Two spellings
-      // with nothing tying them together is how an aria reference goes dangling
-      // in a rename; the projection it used to point at was `display: none` for
-      // the whole life of every shipped launch.
-      await expect(
-        page.getByRole("button", { name: "Open Tools" }),
-      ).toHaveAttribute("aria-controls", "toolbox-tool");
+      // The stable host remains even though the retired HUD trigger does not.
       await expect(page.locator("#toolbox-tool")).toHaveCount(1);
+      await expect(root.locator('[data-role="hud"]')).toHaveCount(0);
 
       // The native game cursor published on the canvas is mirrored over
       // Tools chrome, and clears back to the system arrow with it.
@@ -353,7 +346,7 @@ test.describe("renderer Tools input", () => {
 
       const root = page.locator("#toolbox-foundation");
       const panel = page.locator(".tools-window");
-      await page.getByRole("button", { name: "Open Tools" }).click();
+      await page.keyboard.press("Control+Shift+Space");
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(page.locator("#toolbox-tool")).toHaveAttribute("data-ready", "true");
       await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
@@ -386,7 +379,7 @@ test.describe("renderer Tools input", () => {
       await page.getByRole("button", { name: "Close GWonMac Tools" }).click();
       await expect(root).toHaveAttribute("data-open", "false");
       await expect(panel).toBeHidden();
-      await page.getByRole("button", { name: "Open Tools" }).click();
+      await page.keyboard.press("Control+Shift+Space");
       await expect(panel).toBeVisible();
       await expect(page.locator(".library-row").filter({ hasText: "Embedded smoke team" }))
         .toHaveCount(1);
@@ -432,7 +425,7 @@ test.describe("renderer Tools input", () => {
         const foundation = module.createToolboxFoundation(document.body, {
           mountTool: () => new Promise((resolve) => { resolveMount = resolve; }),
         });
-        document.querySelector<HTMLButtonElement>("#toolbox-foundation button")!.click();
+        window.dispatchEvent(new CustomEvent("gw:tools-toggle", { cancelable: true }));
         foundation.dispose();
         resolveMount({
           setVisible: () => undefined,

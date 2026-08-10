@@ -22,8 +22,6 @@ import {
 declare const WebAssembly: { validate(bytes: Uint8Array): boolean };
 
 export const EXTENDED_MEMORY_TRANSFORM_ABI = 1;
-export const EXTENDED_MEMORY_RESEARCH_ENABLED =
-  process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1";
 export const EXTENDED_MEMORY_MAX_PAGES = 65_535;
 export const EXTENDED_MEMORY_MAX_BYTES = EXTENDED_MEMORY_MAX_PAGES * 65_536;
 export const EXTENDED_MEMORY_PROFILES = [
@@ -56,38 +54,38 @@ export const EXTENDED_MEMORY_WASM_BUILDS: readonly ExtendedMemoryWasmBuild[] =
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursor" as const,
-      inputSha256: "7b5af185fc2a6cb11ba5833f65b259ddd3069c3cdf14634f9efa14bf4b4bc8ba",
-      outputSha256: "4df4d655f9815c252e4b1b61c69c2fef38eb15df6e9e2e5453104312a3bf6f39",
+      inputSha256: "61dba74fe55c2ba2d8e0d0bb36447fa9112446ea6ea9bae61b944df3b0726d37",
+      outputSha256: "44d19d9db3b8f917415819e724c0a90e04e310eb54b08787e44d916c449a8f61",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "target" as const,
-      inputSha256: "bb185bb54a0959517c69cc303b5a678bdbb59062d76bd4187c49f67d1d82f54d",
-      outputSha256: "6554c91398e7afe914fccddc3b9a66d441008387df258691ba36ff36843a24c4",
+      inputSha256: "e49ab1306b89188125c18963afbcd93913232cee7f61121b68c3797b27c9bcad",
+      outputSha256: "f7576ac19f9709824a9f504dee4fc952c090e570bf6fe7e134967fdf3975ff50",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursorTarget" as const,
-      inputSha256: "f5a72a7d6ddd55d4ff836543ccd89b5a65aacb1c1ee49968bdca8ee56a1e1cfd",
-      outputSha256: "6f0b59e1b8bfc99131ebc78a6f934cd5f45de9cd10e4336c33e81d72504ba7d6",
+      inputSha256: "5bf9250016b46f4a348c94b9e3edf7b180fde7570677ce856c802962435b3023",
+      outputSha256: "b3f6292fc0a0e606b408f5715af02c3c7eeb427e58d9bd01bbba3221cd6f7deb",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursorToolbox" as const,
-      inputSha256: "045b1e3d985552f00d1ab21fe3007552df91ffbc0807d4b5dddcc54ce78dbc2a",
-      outputSha256: "be6cef0eb228023816ca85ea3a6c7ba37d69424b067325f59138548a6ac516be",
+      inputSha256: "e6f1e88d8b4326bd1ea6246bb07443c1661c4d1904d78289be49da00859a6648",
+      outputSha256: "510a369604235779da6d2ea7fa657087544a2d271718f0a048d942abb5a496bd",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursorToolboxCommands" as const,
-      inputSha256: "5656ee7775aa70f30b6d6d2e62cb924a2be088ffb4e359a24832056f8ab71c1c",
-      outputSha256: "72796b63dc20353701f716caca510726728178541410946e4af38567efb693e0",
+      inputSha256: "d95c9ce5ceb7a010261357f4927a434725e33844215d0fda8b7579ae96758a08",
+      outputSha256: "5ba907eb8182638854fa5b11e0951b78877656393ea97f877fde1b382ac7f5cd",
     }),
     Object.freeze({
       buildId: 38_797 as const,
       profile: "cursorTargetToolboxCommands" as const,
-      inputSha256: "f968fe035db695300394fbc3600ac17fc103c94f13dde27f603cd23ecbe22b4b",
-      outputSha256: "633711c7bde61d11190f137a97f889483ca8239ec39a19c4e328cf5ab67d877b",
+      inputSha256: "d2efaa8f460acf0d13cf1c1bfe319bbf94d5fde22d9a96de8a9485630c069c51",
+      outputSha256: "1aac83397e09d3c42a801ba9447da959b62b04d980370c799e8db927cb1cb4cd",
     }),
   ]);
 

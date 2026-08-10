@@ -295,6 +295,9 @@ window.gwLog = (on = true) => {
 const MIB = 1_048_576;
 let heapCapBytes = 0;
 let heapWatch: import('./heap-pressure.js').HeapPressureWatch | null = null;
+let heapWarning:
+  | import('./memory-warning.js').MemoryWarningPresenter
+  | null = null;
 let heapCapRequested = false;
 function requestHeapCap() {
   if (heapCapRequested) return;
@@ -302,38 +305,23 @@ function requestHeapCap() {
   void Promise.all([
     import('../shared/contracts.js'),
     import('./heap-pressure.js'),
+    import('./memory-warning.js'),
   ])
-    .then(([{ WASM_HEAP_CAP_BYTES }, { createHeapPressureWatch }]) => {
+    .then(([
+      { WASM_HEAP_CAP_BYTES },
+      { createHeapPressureWatch },
+      { bindMemoryWarning },
+    ]) => {
       const capBytes = Module.gwonmacHeapCapBytes ?? WASM_HEAP_CAP_BYTES;
       heapCapBytes = capBytes;
       heapWatch = createHeapPressureWatch({ capBytes });
+      heapWarning = bindMemoryWarning(document, reloadClientSafely);
     })
     // A failed load retries on the next tick rather than silencing the
     // warning for the whole session.
     .catch(() => { heapCapRequested = false; });
 }
 let heapNoticeLevel: 'none' | 'low' | 'critical' = 'none';
-/** What is on screen, so a dismissal can be a deferral rather than silence. */
-let heapSurface: 'hidden' | 'notice' | 'chip' = 'hidden';
-let heapLeaveTimer: ReturnType<typeof setTimeout> | null = null;
-let heapWhyLeaveTimer: ReturnType<typeof setTimeout> | null = null;
-const prefersReducedMotion = () =>
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-/**
- * How long to leave an element in the DOM while it animates out, read from the
- * element itself rather than restated here. A number copied out of the
- * stylesheet is a second source of truth that drifts silently — and this one
- * also inherits the shorter durations the reduced-motion block sets, which a
- * constant could not.
- */
-const exitMs = (element: HTMLElement) =>
-  Math.max(
-    0,
-    ...getComputedStyle(element)
-      .transitionDuration.split(',')
-      .map((value) => Number.parseFloat(value) * 1_000)
-      .filter(Number.isFinite),
-  );
 
 const wasmHeapBytes = () => Module.HEAPU8?.buffer.byteLength ?? 0;
 window.gwWasmHeapBytes = wasmHeapBytes;
@@ -355,97 +343,6 @@ const crashTechnicalDetail = (reason: unknown, heapBytes: number): string => {
   ).slice(0, 8192);
 };
 
-// Static markup, and this script loads at the end of <body>, so the elements
-// exist here; a missing id degrades to a watcher that never presents.
-const heapNoticeRoot = document.getElementById('memory-notice');
-const heapNoticeText = document.getElementById('memory-notice-text');
-const heapNoticeLabel = document.getElementById('memory-notice-label');
-const heapNoticeDetail = document.getElementById('memory-notice-detail');
-const heapNoticeReload = document.getElementById('memory-notice-reload');
-const heapNoticeLater = document.getElementById('memory-notice-later');
-const heapNoticeWhy = document.getElementById('memory-notice-why');
-const heapChip = document.getElementById('memory-chip');
-const heapChipText = document.getElementById('memory-chip-text');
-const heapScrim = document.getElementById('memory-scrim');
-const heapWhyRoot = document.getElementById('memory-why');
-const heapWhyTitle = document.getElementById('memory-why-title');
-const heapWhyBlocks = document.getElementById('memory-why-blocks');
-const heapWhyClose = document.getElementById('memory-why-close');
-
-/**
- * The client listens on the window for the events these surfaces generate, so
- * a click on Later used to reach the game as well. Stopping them at the
- * overlay root is the same boundary `toolbox-foundation.ts` draws.
- */
-for (const root of [heapNoticeRoot, heapChip, heapScrim, heapWhyRoot]) {
-  for (const name of [
-    'keydown', 'keyup', 'pointerdown', 'pointerup', 'pointermove',
-    'mousedown', 'mouseup', 'mousemove', 'click', 'wheel', 'contextmenu',
-  ]) {
-    root?.addEventListener(name, (event) => event.stopPropagation());
-  }
-}
-
-heapNoticeReload?.addEventListener('click', () => {
-  hideHeapNotice({ instant: true });
-  reloadClientSafely();
-});
-heapNoticeLater?.addEventListener('click', () => {
-  // Later is a deferral, not a dismissal: the watcher keeps measuring, the
-  // chip remains visible, and a rise to critical raises the banner again.
-  hideHeapNotice({ after: showHeapChip });
-});
-heapNoticeWhy?.addEventListener('click', () => void openHeapWhy());
-heapChip?.addEventListener('click', () => {
-  hideHeapChip();
-  void presentHeapNotice(heapNoticeLevel === 'critical' ? 'critical' : 'low');
-});
-heapWhyClose?.addEventListener('click', () => closeHeapWhy());
-heapScrim?.addEventListener('click', () => closeHeapWhy());
-/**
- * The explanation claims `aria-modal`, which tells a screen reader everything
- * behind it is inert — so the keyboard has to agree. It holds exactly one
- * control, which makes the trap the whole of it: Tab has nowhere else to go.
- * Listening on the document rather than on the panel is what makes Escape
- * work from a click that landed on the panel's own prose.
- */
-document.addEventListener('keydown', (event) => {
-  if (!heapWhyRoot || heapWhyRoot.hidden) return;
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    closeHeapWhy();
-  } else if (event.key === 'Tab') {
-    event.preventDefault();
-    heapWhyClose?.focus();
-  }
-}, true);
-
-function hideHeapNotice(options?: { instant?: boolean; after?: () => void }) {
-  if (!heapNoticeRoot || heapNoticeRoot.hidden) return;
-  if (heapLeaveTimer !== null) clearTimeout(heapLeaveTimer);
-  if (heapSurface === 'notice') heapSurface = 'hidden';
-  if (options?.instant || prefersReducedMotion()) {
-    heapNoticeRoot.hidden = true;
-    heapNoticeRoot.classList.remove('leaving', 'entering');
-    options?.after?.();
-    return;
-  }
-  // It leaves the way it came, back up past the edge it lives on.
-  heapNoticeRoot.classList.add('leaving');
-  heapLeaveTimer = setTimeout(() => {
-    heapLeaveTimer = null;
-    if (!heapNoticeRoot.classList.contains('leaving')) return;
-    heapNoticeRoot.hidden = true;
-    heapNoticeRoot.classList.remove('leaving');
-    options?.after?.();
-  }, exitMs(heapNoticeRoot));
-}
-
-function hideHeapChip() {
-  if (heapChip) heapChip.hidden = true;
-  if (heapSurface === 'chip') heapSurface = 'hidden';
-}
-
 /**
  * Best-effort save sync, then the same page reload the crash overlay's Retry
  * performs; the beforeunload dispose closes this run's game sockets on the
@@ -466,132 +363,6 @@ function reloadClientSafely() {
   else reload();
 }
 
-async function presentHeapNotice(level: 'low' | 'critical') {
-  if (
-    !heapNoticeRoot || !heapNoticeText || !heapNoticeLabel || !heapNoticeDetail
-    || !heapNoticeReload || !heapNoticeLater || !heapNoticeWhy
-  ) return;
-  // The explanation owns the screen until it closes. A level may escalate
-  // while the player is reading it; closeHeapWhy restores the latest level.
-  if (heapWhyRoot && !heapWhyRoot.hidden) return;
-  const { memoryPressurePresentation } = await import('./failure-messages.js');
-  // The import can yield on its first call, so repeat the ownership check to
-  // keep a notice from appearing over a modal opened in the meantime.
-  if (heapWhyRoot && !heapWhyRoot.hidden) return;
-  const copy = memoryPressurePresentation(level);
-  heapNoticeLabel.textContent = copy.label;
-  heapNoticeDetail.textContent = copy.detail;
-  heapNoticeReload.textContent = copy.reloadButton;
-  heapNoticeLater.textContent = copy.dismissButton;
-  heapNoticeWhy.textContent = copy.whyLink;
-  heapNoticeRoot.classList.toggle('critical', level === 'critical');
-  // A surface already on screen changing state does not leave and re-enter;
-  // the colour transition and the re-announcement carry the escalation.
-  const wasShowing = heapSurface === 'notice' && !heapNoticeRoot.hidden;
-  heapNoticeText.setAttribute('role', level === 'critical' ? 'alert' : 'status');
-  heapNoticeText.setAttribute(
-    'aria-live', level === 'critical' ? 'assertive' : 'polite',
-  );
-  heapSurface = 'notice';
-  hideHeapChip();
-  if (heapLeaveTimer !== null) {
-    clearTimeout(heapLeaveTimer);
-    heapLeaveTimer = null;
-  }
-  heapNoticeRoot.classList.remove('leaving');
-  if (wasShowing || prefersReducedMotion()) {
-    heapNoticeRoot.classList.remove('entering');
-    heapNoticeRoot.hidden = false;
-    return;
-  }
-  heapNoticeRoot.classList.add('entering');
-  heapNoticeRoot.hidden = false;
-  void heapNoticeRoot.offsetWidth;
-  requestAnimationFrame(() => heapNoticeRoot.classList.remove('entering'));
-}
-
-function showHeapChip() {
-  if (!heapChip || !heapChipText || heapNoticeLevel === 'none') return;
-  void (async () => {
-    const { memoryPressureChip } = await import('./failure-messages.js');
-    if (heapSurface !== 'hidden') return;
-    const chip = memoryPressureChip(heapNoticeLevel as 'low' | 'critical');
-    // Only touch the DOM when the rendered string actually changes: this runs
-    // on every tick, over a game drawing at sixty frames a second.
-    if (heapChipText.textContent !== chip.text) heapChipText.textContent = chip.text;
-    heapChip.setAttribute('aria-label', chip.label);
-    heapChip.hidden = false;
-    heapSurface = 'chip';
-  })().catch(() => {});
-}
-
-/**
- * The explanation is the one modal task here, so it dims the game and takes
- * focus — and it opens in the notice's place rather than over it, because two
- * translucent surfaces stacked stop being readable.
- */
-async function openHeapWhy() {
-  if (!heapWhyRoot || !heapWhyBlocks || !heapWhyClose || !heapWhyTitle) return;
-  const { memoryExplanation } = await import('./failure-messages.js');
-  const copy = memoryExplanation();
-  heapWhyTitle.textContent = copy.title;
-  heapWhyClose.textContent = copy.closeButton;
-  heapWhyBlocks.replaceChildren(
-    ...copy.blocks.flatMap((block) => {
-      const heading = document.createElement('h3');
-      heading.textContent = block.title;
-      const body = document.createElement('p');
-      body.textContent = block.body;
-      return [heading, body];
-    }),
-  );
-  // The game may hold the pointer; without this the panel cannot be reached.
-  document.exitPointerLock?.();
-  if (heapWhyLeaveTimer !== null) {
-    clearTimeout(heapWhyLeaveTimer);
-    heapWhyLeaveTimer = null;
-  }
-  hideHeapNotice({ instant: true });
-  hideHeapChip();
-  if (heapScrim) heapScrim.hidden = false;
-  heapWhyRoot.classList.remove('leaving');
-  if (!prefersReducedMotion()) {
-    heapWhyRoot.classList.add('entering');
-    heapWhyRoot.hidden = false;
-    void heapWhyRoot.offsetWidth;
-    requestAnimationFrame(() => heapWhyRoot.classList.remove('entering'));
-  } else {
-    heapWhyRoot.hidden = false;
-  }
-  heapWhyClose.focus();
-}
-
-function closeHeapWhy(options?: { instant?: boolean }) {
-  if (!heapWhyRoot || heapWhyRoot.hidden) return;
-  const restoreWarning = () => {
-    if (options?.instant) return;
-    if (heapNoticeLevel !== 'none') {
-      void presentHeapNotice(heapNoticeLevel as 'low' | 'critical').then(() => {
-        heapNoticeWhy?.focus();
-      });
-    } else {
-      document.getElementById('canvas')?.focus();
-    }
-  };
-  const finish = () => {
-    heapWhyLeaveTimer = null;
-    heapWhyRoot.hidden = true;
-    heapWhyRoot.classList.remove('leaving');
-    if (heapScrim) heapScrim.hidden = true;
-    restoreWarning();
-  };
-  if (options?.instant || prefersReducedMotion()) finish();
-  else {
-    heapWhyRoot.classList.add('leaving');
-    heapWhyLeaveTimer = setTimeout(finish, exitMs(heapWhyRoot));
-  }
-}
-
 setInterval(() => {
   if (crashRecorded) return;
   requestHeapCap();
@@ -606,12 +377,8 @@ setInterval(() => {
       + ` at ${Math.round((reading.bytesPerMinute ?? 0) / MIB)} MiB/min`
       + ` — ${reading.level} notice (${reading.raisedBy ?? 'held'})`,
     );
-    // A rise always shows the banner, including out of a dismissal: Later
-    // means later, and the level only ever rises when time is running out.
-    void presentHeapNotice(reading.level);
-    return;
+    heapWarning?.present(reading.level, heapCapBytes);
   }
-  if (heapSurface === 'chip') showHeapChip();
 }, 15_000);
 
 const STARTUP_LABELS = {
@@ -1042,9 +809,7 @@ Module = {
     crashRecorded = true;
     // The crash overlay is taking the screen; nothing animates out from under
     // it.
-    hideHeapNotice({ instant: true });
-    hideHeapChip();
-    closeHeapWhy({ instant: true });
+    heapWarning?.hide();
     const heapBytes = wasmHeapBytes();
     // The overlay first, with the first-crash presentation; the recorded
     // count upgrades it below once main has counted this crash.
@@ -1079,9 +844,7 @@ Module = {
       // first-crash and count the same death twice.
       if (crashRecorded) return;
       crashRecorded = true;
-      hideHeapNotice({ instant: true });
-      hideHeapChip();
-      closeHeapWhy({ instant: true });
+      heapWarning?.hide();
       // `code` is declared unknown at the Module boundary; anything the
       // glue passes that is not a plain integer records as the -1 the
       // schema can still account for.
@@ -1265,7 +1028,7 @@ function loadGlue() {
     if (
       oskInputs.has(target) ||
       (target instanceof Element
-        && target.closest('#toolbox-foundation, #memory-notice, #memory-chip, #memory-why'))
+        && target.closest('#toolbox-foundation, #memory-notice'))
     ) {
       event.stopImmediatePropagation();
     }

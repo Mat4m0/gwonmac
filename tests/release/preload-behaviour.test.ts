@@ -506,6 +506,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     enhancementSelection: { ...value.enhancementSelection },
   });
   assert.deepEqual(plainInit(load().api.init), {
+    development: false,
     enhancementProgram: "none",
     enhancementSelection: { nativeCursor: false, tools: false },
     templateFsTrace: false,
@@ -516,6 +517,7 @@ test("the launch configuration is read from argv, and defaults to production", (
         "--irrelevant",
         RENDERER_INIT_ARGUMENT +
           JSON.stringify({
+            development: true,
             enhancementSelection: {
               nativeCursor: true,
             },
@@ -524,6 +526,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       ]).api.init,
     ),
     {
+      development: true,
       enhancementProgram: "none",
       enhancementSelection: { nativeCursor: true, tools: false },
       templateFsTrace: true,
@@ -541,6 +544,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       }),
     ]).api.init),
     {
+      development: false,
       enhancementProgram: "none",
       enhancementSelection: { nativeCursor: false, tools: false },
       templateFsTrace: false,
@@ -555,6 +559,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     assert.deepEqual(
       plainInit(load([RENDERER_INIT_ARGUMENT + malformed]).api.init),
       {
+        development: false,
         enhancementProgram: "none",
         enhancementSelection: { nativeCursor: false, tools: false },
         templateFsTrace: false,

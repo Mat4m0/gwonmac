@@ -138,6 +138,22 @@ export interface KnownEnhancementBuild {
    */
   commands: Readonly<{
     thunkExport: string;
+    professionTrace: Readonly<{
+      readerExport: string;
+      sender: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+    }>;
+    drain: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      tableSlot: number;
+      bodySha256: string;
+    }>;
     entries: readonly Readonly<{
       opcode: number;
       functionIndex: number;
@@ -190,14 +206,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "b31bb8f673a999ce54195e6473dc05427477dd5d3ddbb6a8e1f0dc7a81e543ae",
-      target: "db44c3985a4083a3ab3fa402b35f4764d23b48e72f724ac906c7891404ad52e9",
-      cursorTarget: "76c17e628f00f5200676727c61e77bd9c5982c72b2a5df9637b8f5a42bb0be52",
-      cursorToolbox: "556b13c558dd0abe239c71b4bcd273a114fe18a6ea5630cc62a57fe256e7f995",
+      cursor: "b0f875b86edb96fbf49d87e6a0063f22737253b7fb1caeb87268bdfa0cd0e6a7",
+      target: "47b39e5a7544a770075c4af7034fe26c375f36233b2c396d38349d3685c7cce9",
+      cursorTarget: "8897cf86bcadd3f03638ddb4f7c937f4e356eee3bc2b08e7d1e325d1262840e3",
+      cursorToolbox: "0cd2a26da5000e9ceff55d2ef5efefbfd3596d82d2797c0f7a6d0c04adf35488",
       // The only derived module that can send anything. Every other profile
       // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "b449db30b989d3625a6622de7e5ac646582230dd1147b16373cb451739223e03",
-      cursorTargetToolboxCommands: "8c746483f39f0fcf41e700ec5a07b0fb098dbe87cdffe7b81d2d28070e6ca363",
+      cursorToolboxCommands: "d5ada77fae0f61a30d2e8a302d30f255513b5034f78201c2fa578db7c898daa5",
+      cursorTargetToolboxCommands: "2bc4bab43a2c5ea5038bc895e04b294bb40a427c9fb9f2dae5c84274facac8a4",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -223,13 +239,38 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // Everything a team apply needs, and nothing else. Kick was sent first,
     // alone, against a live game; the rest joined it once that had worked.
     //
-    // `KickAllHeroes` is `kick` with hero id 0x26 and is deliberately *not*
-    // here: 0x26 is 38, and Devona is hero 38. GWCAjs verified the sentinel
-    // live on build 38,615, which predates her. Kicking heroes one at a time
-    // covers every case and never touches the ambiguous value.
+    // Build 38,797 live evidence established that opcode 31 with hero id 38
+    // removes Devona; the historical pre-Devona `0x26` clear-roster sentinel
+    // does not apply to this client. Rebuilds therefore remove observed heroes
+    // individually and confirm each publication before adding the saved order.
     //
     commands: Object.freeze({
       thunkExport: "enhancement_command",
+      professionTrace: Object.freeze({
+        readerExport: "enhancement_profession_trace",
+        // The unique sender shared by all 147 packet builders. The trace
+        // wrapper records only fixed opcode-65 and opcode-93 payloads and then
+        // calls this exact body unchanged.
+        sender: Object.freeze({
+          functionIndex: 5951,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "d7f7c74b9cb14ba957ed8de7e74cc18167a3b688301d5f3d765ba04770a8b361",
+        }),
+      }),
+      // GWCA's `GameThread::Enqueue` hooks this recurring frame callback. Its
+      // source anchor is FrApi.cpp's unique `renderElapsed >= 0` assertion;
+      // the active table relation below proves this is the registered callback,
+      // not the nearby one-time frame/message initializer (#6659).
+      drain: Object.freeze({
+        functionIndex: 6661,
+        params: Object.freeze(["i32", "i32"] as const),
+        results: Object.freeze([] as const),
+        tableSlot: 1721,
+        bodySha256:
+          "9fb1ca0dee40f5ceef3d0174846ef38af47a8366bfe76cb8da12e86419b40c41",
+      }),
       entries: Object.freeze([
         Object.freeze({
           opcode: 31,
@@ -360,6 +401,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       // client's skill-template loader uses for player and hero professions.
       worldProfessionStates: 0x6bc,
       professionStateStride: 0x14,
+      // WorldContext::unlocked_character_skills, the current character's
+      // learned-skill bitset used by the in-game skill window.
+      worldCharacterSkills: 0x710,
       cursorActiveArt: 0x5a16e0,
       cursorSoftwareModel: 0x5a16e4,
       cursorShowCount: 0x5a16e8,
@@ -388,6 +432,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       partyPlayers: 0x04,
       partyHenchmen: 0x14,
       partyFlag: 0x14,
+      // GameContext::account and AccountContext::unlocked_account_skills.
+      // GWCA exposes this exact array through GetIsSkillUnlocked: one bit per
+      // skill id, account-wide and therefore usable by heroes.
+      accountContext: 0x28,
+      accountUnlockedSkills: 0x124,
       worldContext: 0x2c,
       // Its hero ids *and* agent ids matched the party array exactly.
       worldHeroFlags: 0x584,

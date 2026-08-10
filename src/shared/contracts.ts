@@ -276,8 +276,13 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
+export const UI_STYLES = ["guild-wars", "obsidian"] as const;
+export type UiStyle = (typeof UI_STYLES)[number];
+
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
+  /** The visual treatment applied to every GWonMac panel. */
+  uiStyle: UiStyle;
   /**
    * The application's Guild Wars panels stay translucent enough to see the
    * game behind them. This is presentation only and never reaches the game.
@@ -289,6 +294,8 @@ export interface AppSettings {
   teamManagement: boolean;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
+  /** Request the certified 4 GB client module on the next Guild Wars launch. */
+  extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
   dataStrategy: "quick" | "full" | null;
   /**
@@ -322,10 +329,12 @@ export type AppSettingsPatch = Partial<AppSettings>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
+  uiStyle: "guild-wars",
   uiPanelOpacity: 94,
   gwonmacTools: false,
   teamManagement: true,
   targetReadout: false,
+  extendedMemoryEnabled: false,
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
@@ -485,6 +494,31 @@ export interface ClientCompatibility {
 }
 
 /**
+ * The memory module selected for this running client. Saved intent is kept
+ * separate in AppSettings; this is the launch result and therefore the only
+ * source for claims about what the current session is actually using.
+ */
+export type ExtendedMemoryRuntimeStatus =
+  | Readonly<{
+      requestedAtLaunch: false;
+      status: "standard";
+      effectiveCapBytes: typeof WASM_HEAP_CAP_BYTES;
+      fallbackReason: null;
+    }>
+  | Readonly<{
+      requestedAtLaunch: true;
+      status: "active";
+      effectiveCapBytes: number;
+      fallbackReason: null;
+    }>
+  | Readonly<{
+      requestedAtLaunch: true;
+      status: "unavailable";
+      effectiveCapBytes: typeof WASM_HEAP_CAP_BYTES;
+      fallbackReason: "unsupported-client" | "preparation-failed";
+    }>;
+
+/**
  * The candidate generation this renderer is serving. A renderer captures it
  * before loading the game glue and returns that exact value only after its own
  * first-frame and socket-open evidence. Main refuses a token for any other
@@ -504,6 +538,7 @@ export interface ClientHealthToken {
 export interface ClientSession {
   appVersion: string;
   compatibility: ClientCompatibility | null;
+  extendedMemory: ExtendedMemoryRuntimeStatus | null;
   healthToken: ClientHealthToken | null;
 }
 
@@ -515,6 +550,8 @@ export interface ClientSession {
  * instead, so `isCanonicalRendererUrl` accepts no query string at all.
  */
 export interface RendererInit {
+  /** Enables bounded console evidence. Always false in packaged builds. */
+  development: boolean;
   /** Fixed developer program for this launch. Always `none` when packaged. */
   enhancementProgram: EnhancementProgram;
   /** The independently selected Enhancement tools for this launch. */

@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { appearanceVariables } from "../../src/renderer/appearance.js";
+import {
+  appearanceVariables,
+  applyAppearance,
+} from "../../src/renderer/appearance.js";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
@@ -15,5 +18,24 @@ describe("appearance settings", () => {
     assert.deepEqual(appearanceVariables(appearance), {
       "--ui-panel-opacity": "0.78",
     });
+  });
+
+  it("sets only the optional style marker and removes it for the default", () => {
+    const properties = new Map<string, string>();
+    const root = {
+      dataset: {} as DOMStringMap,
+      style: {
+        setProperty(name: string, value: string) {
+          properties.set(name, value);
+        },
+      },
+    } as HTMLElement;
+
+    applyAppearance({ ...DEFAULT_SETTINGS, uiStyle: "obsidian" }, root);
+    assert.equal(root.dataset.uiStyle, "obsidian");
+    assert.equal(properties.get("--ui-panel-opacity"), "0.94");
+
+    applyAppearance(DEFAULT_SETTINGS, root);
+    assert.equal(root.dataset.uiStyle, undefined);
   });
 });

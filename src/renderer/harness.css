@@ -58,9 +58,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 
 /* The memory warning. Top-centred over the running game, translucent so the
    game reads through it, and never scrimmed — it is a message running beside
-   play, not a dialog that stops it. It enters down from the edge it lives on
-   and leaves the same way, and blur and scale animate together so it arrives
-   as a surface rather than cross-fading as a picture. */
+   play, not a dialog that stops it. */
 #memory-notice {
   position: fixed;
   top: 14px;
@@ -82,18 +80,9 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   box-shadow: inset 0 1px 0 #ffffff1c, 0 2px 8px #000c;
   transform: translateX(-50%) translateY(0) scale(1);
   opacity: 1;
-  transition: transform .4s var(--spring), opacity .28s ease-out,
-              backdrop-filter .4s var(--spring), border-color .3s ease-out,
-              background-color .3s ease-out;
+  transition: border-color .2s ease-out, background-color .2s ease-out;
 }
 #memory-notice[hidden] { display: none; }
-#memory-notice.entering,
-#memory-notice.leaving {
-  transform: translateX(-50%) translateY(-14px) scale(.97);
-  opacity: 0;
-  backdrop-filter: blur(0) saturate(100%);
-  -webkit-backdrop-filter: blur(0) saturate(100%);
-}
 #memory-notice.critical {
   background: #2b0f0ab8;
   border-color: #ff8f6b4d;
@@ -109,20 +98,16 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: #fff6ec;
 }
 #memory-notice.critical #memory-notice-label { color: #ffd9cb; }
+.memory-notice-copy { min-width: 0; }
 #memory-notice-detail {
   font: 13px/1.5 Tahoma, sans-serif;
   letter-spacing: .01em;
   color: #ece0cf;
-  /* The label above is a block; these two run together inline beneath it, so
-     the gap between them belongs here rather than as padding inside a string
-     the copy module owns. */
-  margin-right: .35em;
+  display: block;
 }
-#memory-notice-why {
-  display: inline;
-  padding: 0;
-  border: 0;
-  background: none;
+#memory-notice-details { margin-top: 3px; }
+#memory-notice-details summary {
+  width: fit-content;
   color: #ece0cf;
   opacity: .74;
   font: 13px/1.5 Tahoma, sans-serif;
@@ -131,7 +116,17 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   text-underline-offset: 2px;
   cursor: pointer;
 }
-#memory-notice-why:hover { opacity: 1; }
+#memory-notice-details summary:hover { opacity: 1; }
+#memory-notice-details summary:focus-visible {
+  outline: 2px solid #ff9d66;
+  outline-offset: 2px;
+}
+#memory-notice-details p {
+  max-width: 58ch;
+  margin: 6px 0 0;
+  color: #ece0cf;
+  font: 12.5px/1.5 Tahoma, sans-serif;
+}
 #memory-notice-actions { display: flex; gap: 8px; flex-shrink: 0; }
 #memory-notice-actions button {
   min-height: 36px;
@@ -158,141 +153,34 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 #memory-notice-actions .primary:hover { background: #d15f36; border-color: #ff8a63; }
 
-/* The chip a dismissal leaves. Top right, in the band between the client's own
-   window buttons and the top of its compass — at 118px it sat on the compass
-   itself, over the one piece of UI a player reads constantly. */
-#memory-chip {
-  position: fixed;
-  top: 52px;
-  right: 16px;
-  z-index: 9;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 32px;
-  padding: 6px 11px;
-  border: 1px solid #ffffff26;
-  border-radius: 20px;
-  background: #2b0f0ab3;
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  color: #ffd9cb;
-  font: 600 11.5px/1 Tahoma, sans-serif;
-  letter-spacing: .02em;
-  cursor: pointer;
-  box-shadow: 0 2px 8px #000b;
-  transition: transform .1s ease-out, background-color .12s ease-out;
-}
-#memory-chip[hidden] { display: none; }
-#memory-chip:hover { background: #421b12d9; }
-#memory-chip:active { transform: scale(.96); }
-#memory-chip:focus-visible { outline: 2px solid #ff9d66; outline-offset: 2px; }
-.memory-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff7a55;
-}
-
-/* The explanation is the one modal task here, so it dims what it interrupts.
-   The notice never does — it runs beside play. */
-#memory-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: #000;
-  opacity: .5;
-  transition: opacity .3s ease-out;
-}
-#memory-scrim[hidden] { display: none; }
-#memory-why {
-  position: fixed;
-  top: 14px;
-  left: 50%;
-  z-index: 11;
-  width: min(92vw, 540px);
-  max-height: calc(100vh - 34px);
-  overflow-y: auto;
-  box-sizing: border-box;
-  padding: 20px 22px;
-  border: 1px solid #ffffff21;
-  border-radius: 14px;
-  background: #1a1610f2;
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  color: #f0e6d2;
-  font: 13px/1.6 Tahoma, sans-serif;
-  box-shadow: inset 0 1px 0 #ffffff1a, 0 2px 8px #000d;
-  transform-origin: top center;
-  transform: translateX(-50%) scale(1);
-  opacity: 1;
-  transition: transform .4s var(--spring), opacity .26s ease-out;
-}
-#memory-why[hidden] { display: none; }
-#memory-why.entering, #memory-why.leaving {
-  transform: translateX(-50%) scale(.94);
-  opacity: 0;
-}
-#memory-why h2 {
-  margin: 0 0 14px;
-  color: #fff6ec;
-  font: 600 17px/1.3 Tahoma, sans-serif;
-  text-wrap: balance;
-}
-#memory-why h3 {
-  margin: 16px 0 4px;
-  font: 600 13.5px/1.35 Tahoma, sans-serif;
-  letter-spacing: .005em;
-  color: #efb85b;
-}
-#memory-why h3:first-child { margin-top: 0; }
-#memory-why p { margin: 0; color: #e2d7c2; letter-spacing: .008em; }
-#memory-why-close {
-  margin-top: 18px;
-  min-height: 36px;
-  padding: 8px 16px;
-  border: 1px solid #ffffff26;
-  border-radius: 8px;
-  background: #ffffff14;
-  color: #f0e6d2;
-  font: 500 12.5px/1 Tahoma, sans-serif;
-  cursor: pointer;
-  transition: background-color .12s ease-out, transform .1s ease-out;
-}
-#memory-why-close:hover { background: #ffffff1f; }
-#memory-why-close:active { transform: scale(.97); }
-#memory-why-close:focus-visible { outline: 2px solid #ff9d66; outline-offset: 2px; }
-
 /* Reduced motion keeps the feedback and drops the travel: a cross-fade in
    place, and no scaling under the finger. */
 @media (prefers-reduced-motion: reduce) {
-  #memory-notice, #memory-why, #memory-scrim,
-  #memory-notice button, #memory-chip, #memory-why-close {
-    transition: opacity .2s ease-out;
-  }
-  #memory-notice.entering, #memory-notice.leaving {
-    transform: translateX(-50%);
-    backdrop-filter: blur(20px) saturate(170%);
-    -webkit-backdrop-filter: blur(20px) saturate(170%);
-  }
-  #memory-why.entering, #memory-why.leaving { transform: translateX(-50%); }
-  #memory-notice button:active, #memory-chip:active,
-  #memory-why-close:active { transform: none; }
+  #memory-notice, #memory-notice button { transition: none; }
+  #memory-notice button:active { transform: none; }
 }
 /* Frosted glass is the first thing to go when transparency is refused. */
 @media (prefers-reduced-transparency: reduce) {
   #memory-notice { background: #241d13; backdrop-filter: none;
                    -webkit-backdrop-filter: none; }
   #memory-notice.critical { background: #2b0f0a; }
-  #memory-chip { background: #2b0f0a; backdrop-filter: none;
-                 -webkit-backdrop-filter: none; }
-  #memory-why { background: #1a1610; backdrop-filter: none;
-                -webkit-backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
   #memory-notice { background: #1b150d; border-color: #ffd9a8; }
   #memory-notice.critical { background: #2a0b06; border-color: #ff9f80; }
-  #memory-notice-detail, #memory-notice-why { color: #fff8ee; opacity: 1; }
+  #memory-notice-detail, #memory-notice-details summary,
+  #memory-notice-details p { color: #fff8ee; opacity: 1; }
+}
+
+@media (max-width: 560px) {
+  #memory-notice {
+    width: calc(100vw - 20px);
+    max-width: none;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+  }
+  #memory-notice-actions { justify-content: flex-end; }
 }
 
 /* The Steam sign-in status line: quiet, bottom-centred over the client's own
@@ -344,15 +232,16 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 
 
 /* ------------------------------------------------------------- settings */
-/* One compact panel with a section rail. Rules: a status is never a button,
-   gold is reserved for real actions, danger is quiet and separated, and a
-   dialog that saves automatically has no Done button -- just a Saved note. */
+/* One contained panel with a section rail. The dialog owns three regions:
+   header, one scrolling body, and one persistent status. No pane is allowed
+   to push feedback or the resize affordance outside the metal frame. */
 
 #settings-dialog {
+  --ui-panel-opacity: 0.97;
   width: min(700px, calc(100vw - 32px));
   min-width: min(480px, calc(100vw - 32px));
-  height: min(560px, calc(100vh - 32px));
-  min-height: min(380px, calc(100vh - 32px));
+  height: min(520px, calc(100vh - 32px));
+  min-height: min(360px, calc(100vh - 32px));
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
   padding: 0;
@@ -365,16 +254,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 
 #settings-dialog::backdrop { background: color-mix(in srgb, var(--ui-outline) 82%, transparent); }
 #settings-form { width: 100%; height: 100%; }
+#settings-form,
+#settings-form *,
+#settings-form *::before,
+#settings-form *::after { box-sizing: border-box; }
 .settings-header { flex: 0 0 auto; cursor: default; }
-
-#settings-saved {
-  color: var(--ui-success);
-  font-size: var(--ui-font-size-sm);
-  opacity: 0;
-  transition: opacity var(--ui-duration) var(--ui-ease-out);
-}
-#settings-saved.show { opacity: 1; }
-#settings-form #settings-done { width: var(--ui-control-height); }
+#settings-form #settings-done { width: 36px; min-height: 36px; }
 
 .settings-body {
   display: flex;
@@ -390,7 +275,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   width: 150px;
   overflow-y: auto;
   border-radius: var(--ui-radius-sm);
-  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
+  box-shadow: 0 0 0 1px var(--ui-edge);
 }
 
 .settings-panes {
@@ -401,7 +286,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   overflow: auto;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
-  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
 }
 .settings-pane { display: none; }
 .settings-panes[data-active="data"] #settings-pane-data,
@@ -415,6 +300,54 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
            overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 #settings-dialog [hidden] { display: none !important; }
 
+.settings-pane-title {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font-family: var(--ui-font-display);
+  font-size: var(--ui-font-size-lg);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+.settings-pane-intro {
+  max-width: 58ch;
+  margin: var(--ui-space-1) 0 var(--ui-space-4);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size);
+  text-wrap: pretty;
+}
+.settings-section-title {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size);
+}
+.settings-task + .settings-task {
+  padding-top: var(--ui-space-3);
+  border-top: 1px solid var(--ui-line-soft);
+}
+.settings-setting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+.settings-setting-head .settings-check { min-width: 0; margin: 0; }
+.settings-memory-task {
+  max-width: 62ch;
+  padding: var(--ui-space-3);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+}
+.settings-memory-task .settings-note { margin-top: var(--ui-space-2); }
+.settings-memory-status {
+  margin: var(--ui-space-2) 0 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  text-wrap: pretty;
+}
+.settings-memory-status:empty { display: none; }
+
 #settings-form label.settings-field {
   display: flex;
   flex-direction: column;
@@ -427,29 +360,44 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 #settings-form fieldset legend {
   margin-bottom: var(--ui-space-2);
   color: var(--ui-accent);
-  font-size: var(--ui-font-size-sm);
-  letter-spacing: .05em;
+  font-size: var(--ui-font-size);
+  letter-spacing: .02em;
 }
 
 .settings-seg { max-width: 100%; }
+.settings-quality-seg { width: min(100%, 560px); }
+.settings-style-seg { width: min(100%, 560px); }
+.settings-style-seg label { padding-block: var(--ui-space-2); }
 .render-scale-option {
   display: flex;
-  min-width: 76px;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   gap: 1px;
 }
 .render-scale-option small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); white-space: nowrap; }
 #settings-form label.settings-radio:has(input:checked) .render-scale-option small { color: var(--ui-text-muted); }
+.settings-style-option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+.settings-style-option > span { color: var(--ui-text-bright); font-weight: 600; }
+.settings-style-option small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); white-space: normal; }
+#settings-form label.settings-radio:has(input:checked) .settings-style-option small { color: var(--ui-text-muted); }
 
 .settings-data-actions { margin-top: var(--ui-space-3); }
 .settings-data-actions [data-variant="primary"] { width: 100%; }
-.settings-actions-row { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); margin: var(--ui-space-3) 0; }
+.settings-actions-row { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); margin: var(--ui-space-2) 0 var(--ui-space-3); }
+.settings-template-actions { margin-top: var(--ui-space-4); }
 .settings-divider { height: 1px; margin: var(--ui-space-4) 0 var(--ui-space-3); background: var(--ui-line-soft); }
 #settings-form button.quiet-danger { min-height: 0; }
 .settings-danger-sub { margin: var(--ui-space-1) 0 0; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 
-.settings-status { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size-lg); }
+.settings-status { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size); font-weight: 600; }
 #settings-progress {
   height: var(--ui-space-2);
   margin: var(--ui-space-3) 0 0;
@@ -466,33 +414,75 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 .settings-note {
   margin: var(--ui-space-2) 0 0;
-  max-width: 54ch;
+  max-width: 62ch;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size);
+  text-wrap: pretty;
+}
+.settings-opacity-field {
+  width: min(100%, 32rem);
+  padding: var(--ui-space-3);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-edge);
+}
+.settings-range-ends {
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-sm);
-  text-wrap: pretty;
 }
 
 .settings-footerbar {
   display: flex;
+  min-height: 30px;
+  flex: 0 0 auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-space-3);
-  padding: var(--ui-space-2) var(--ui-space-1) 0;
+  padding: var(--ui-space-2) var(--ui-space-4) 0 var(--ui-space-1);
 }
-.settings-feedback { min-height: 1.3em; margin: 0; color: var(--ui-danger); font-size: var(--ui-font-size-sm); }
-.settings-autosave { flex-shrink: 0; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
+.settings-feedback { min-width: 0; font-size: var(--ui-font-size); }
 
 @media (max-width: 560px) {
-  #settings-dialog { min-width: calc(100vw - 16px); width: calc(100vw - 16px); height: calc(100vh - 16px); }
+  .settings-setting-head { align-items: flex-start; flex-direction: column; }
+  #settings-dialog {
+    width: calc(100vw - 16px);
+    min-width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    min-height: calc(100vh - 16px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
   #settings-resize { display: none; }
   .settings-body { flex-direction: column; }
-  .settings-rail { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; }
-  #settings-form .settings-rtab { border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .settings-rail {
+    display: grid;
+    width: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0;
+    overflow: visible;
+  }
+  #settings-form .settings-rtab {
+    min-width: 0;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    text-align: center;
+    white-space: normal;
+  }
   #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: var(--ui-accent); }
   .settings-panes { padding: var(--ui-space-3); }
 }
 
+@media (max-width: 420px) {
+  .settings-quality-seg,
+  .settings-style-seg { flex-direction: column; }
+  .settings-quality-seg label,
+  .settings-style-seg label { width: 100%; }
+  .settings-footerbar { padding-right: var(--ui-space-5); }
+}
+
+@media (pointer: coarse) {
+  #settings-form #settings-done { width: 44px; min-height: 44px; }
+  #settings-form .settings-rtab { min-height: 44px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  #settings-saved,
   #settings-progress-fill { transition: none; }
 }

@@ -33,39 +33,40 @@ const canCapture = computed(() =>
 </script>
 
 <template>
-  <section class="live-party" aria-label="Party in Guild Wars">
-    <header class="live-party-head">
-      <h2>Party in Guild Wars</h2>
+  <details class="live-party" open>
+    <summary class="live-party-head">
+      <span class="live-party-title">Party in Guild Wars</span>
       <span
         v-if="party.status === 'ready'"
         class="ui-chip"
         :data-level="party.partial ? 'warn' : 'good'"
       >{{ party.heroCount }} {{ party.heroCount === 1 ? "hero" : "heroes" }}</span>
-    </header>
+    </summary>
 
-    <p v-if="party.status === 'unavailable'" class="live-party-note">
-      No party observed. Guild Wars may still be loading.
-    </p>
+    <div class="live-party-body">
+      <p v-if="party.status === 'unavailable'" class="live-party-note">
+        No party observed. Guild Wars may still be loading.
+      </p>
 
-    <template v-else>
-      <ul v-if="party.heroes.length" class="live-party-list">
-        <li v-for="hero in shownHeroes" :key="hero.hero" class="live-party-row">
-          <span class="ui-mark" aria-hidden="true">{{ heroLabel(hero.hero)[0] }}</span>
-          <span class="live-party-name">{{ heroLabel(hero.hero) }}</span>
+      <template v-else>
+        <ul v-if="party.heroes.length" class="live-party-list">
+          <li v-for="hero in shownHeroes" :key="hero.hero" class="live-party-row">
+            <span class="ui-mark" aria-hidden="true">{{ heroLabel(hero.hero)[0] }}</span>
+            <span class="live-party-name">{{ heroLabel(hero.hero) }}</span>
           <!--
             Only what was read. A hero whose professions the kernel could not
             reach shows no professions rather than a dash that reads like a
             monoclass character, and behaviour is absent rather than defaulted
             to Guard, which is a real setting somebody might act on.
           -->
-          <span v-if="hero.professions" class="live-party-meta">
-            {{ hero.professions[1] ? `${hero.professions[0]}/${hero.professions[1]}` : hero.professions[0] }}
-          </span>
-          <span v-if="hero.behaviour" class="ui-chip live-party-behaviour">
-            {{ BEHAVIOUR_LABELS[hero.behaviour] }}
-          </span>
-        </li>
-      </ul>
+            <span v-if="hero.professions" class="live-party-meta">
+              {{ hero.professions[1] ? `${hero.professions[0]}/${hero.professions[1]}` : hero.professions[0] }}
+            </span>
+            <span v-if="hero.behaviour" class="ui-chip live-party-behaviour">
+              {{ BEHAVIOUR_LABELS[hero.behaviour] }}
+            </span>
+          </li>
+        </ul>
 
       <!--
         Said plainly rather than shown as an empty row per missing hero. A
@@ -73,15 +74,15 @@ const canCapture = computed(() =>
         of what the companion currently publishes, and the difference matters to
         anyone deciding whether to trust the list.
       -->
-      <p v-if="remaining" class="live-party-note">
-        {{ remaining }} more {{ remaining === 1 ? "hero is" : "heroes are" }} in your party.
-        <template v-if="unnamed">
-          GWonMac cannot identify {{ unnamed === 1 ? "one" : unnamed }} yet.
-        </template>
-      </p>
-      <p v-else-if="!party.heroes.length" class="live-party-note">
-        No heroes in your party.
-      </p>
+        <p v-if="remaining" class="live-party-note">
+          {{ remaining }} more {{ remaining === 1 ? "hero is" : "heroes are" }} in your party.
+          <template v-if="unnamed">
+            GWonMac cannot identify {{ unnamed === 1 ? "one" : unnamed }} yet.
+          </template>
+        </p>
+        <p v-else-if="!party.heroes.length" class="live-party-note">
+          No heroes in your party.
+        </p>
 
       <!--
         Absent rather than disabled when there is nothing to save. A greyed-out
@@ -89,38 +90,58 @@ const canCapture = computed(() =>
         makes this work is "you have heroes" — which the list above already says
         plainly.
       -->
-      <button
-        v-if="canCapture"
-        class="ui-button"
-        data-variant="primary"
-        :disabled="saving"
-        @click="$emit('capture')"
-      >
-        Save as new team
-      </button>
-    </template>
-  </section>
+        <button
+          v-if="canCapture"
+          class="ui-button"
+          data-variant="primary"
+          :disabled="saving"
+          @click="$emit('capture')"
+        >
+          Save as new team
+        </button>
+      </template>
+    </div>
+  </details>
 </template>
 
 <style scoped>
 .live-party {
-  display: grid;
   padding: var(--ui-space-2) 0;
-  gap: var(--ui-space-2);
 }
 
 .live-party-head {
   display: flex;
+  min-height: var(--ui-control-height);
+  padding: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--ui-space-2);
+  color: var(--ui-text-bright);
+  cursor: pointer;
+  list-style: none;
 }
 
-.live-party-head h2 {
-  margin: 0;
-  color: var(--ui-text-bright);
+.live-party-head::-webkit-details-marker { display: none; }
+.live-party-head::before {
+  content: "▸";
+  flex: 0 0 auto;
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+  transition: transform var(--ui-duration) var(--ui-ease-out);
+}
+.live-party[open] > .live-party-head::before { transform: rotate(90deg); }
+
+.live-party-title {
+  min-width: 0;
+  flex: 1;
   font-size: var(--ui-font-size);
   font-weight: 600;
+}
+
+.live-party-body {
+  display: grid;
+  padding-top: var(--ui-space-2);
+  gap: var(--ui-space-2);
 }
 
 .live-party-list {
@@ -155,7 +176,7 @@ const canCapture = computed(() =>
 
 .live-party-row .ui-chip { padding: 0 var(--ui-space-1); }
 
-.live-party > .ui-button { justify-self: start; }
+.live-party-body > .ui-button { justify-self: start; }
 
 .live-party-note {
   margin: 0;

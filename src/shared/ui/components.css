@@ -108,8 +108,9 @@
   color: var(--ui-text);
 }
 
-/* The accent variant of anything raised: selected tabs, checked boxes, primary
- * buttons. One rule, so "selected" cannot drift from widget to widget. */
+/* A raised toggle keeps its material and changes state through a tonal face.
+ * Tabs, rows and choices own their positional treatment below: persistent
+ * state is a meaning, not a shadow that every component can borrow. */
 .ui-raised[aria-selected="true"],
 .ui-raised[aria-pressed="true"] {
   background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
@@ -153,11 +154,12 @@
  * corners the frame just rounded. */
 .ui-panel {
   display: flex;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   padding: 9px 10px 11px;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .ui-panel-head {
@@ -244,7 +246,7 @@
   padding: 0 var(--ui-space-3);
   border: var(--ui-border-width) solid transparent;
   border-radius: var(--ui-radius);
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gilt) border-box;
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-text);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
@@ -253,28 +255,29 @@
   transition: filter var(--ui-duration) var(--ui-ease-out), transform 60ms linear;
 }
 
-.ui-button:hover:not(:disabled) {
+.ui-button:hover:not(:disabled):not([aria-disabled="true"]) {
   filter: brightness(1.18);
 }
 
-.ui-button:active:not(:disabled) {
+.ui-button:active:not(:disabled):not([aria-disabled="true"]) {
   transform: translateY(1px);
   filter: brightness(0.86);
 }
 
-.ui-button:disabled {
+.ui-button:disabled,
+.ui-button[aria-disabled="true"] {
   cursor: default;
   filter: grayscale(0.45) brightness(0.66);
 }
 
 .ui-button[data-variant="primary"] {
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  background: var(--ui-primary-fill) padding-box, var(--ui-ring-gold) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
-  color: var(--ui-accent-ink);
+  color: var(--ui-primary-ink);
   font-weight: 600;
 }
 
-.ui-button[data-variant="primary"]:hover:not(:disabled) {
+.ui-button[data-variant="primary"]:hover:not(:disabled):not([aria-disabled="true"]) {
   filter: brightness(1.2);
 }
 
@@ -286,7 +289,7 @@
   color: var(--ui-text-muted);
 }
 
-.ui-button[data-variant="quiet"]:hover:not(:disabled) {
+.ui-button[data-variant="quiet"]:hover:not(:disabled):not([aria-disabled="true"]) {
   filter: brightness(1.18);
   color: var(--ui-text-bright);
 }
@@ -299,7 +302,7 @@
   color: var(--ui-danger);
 }
 
-.ui-button[data-variant="danger"]:hover:not(:disabled) {
+.ui-button[data-variant="danger"]:hover:not(:disabled):not([aria-disabled="true"]) {
   background: color-mix(in srgb, var(--ui-danger) 18%, transparent);
 }
 
@@ -309,12 +312,12 @@
   padding: 0;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
-  box-shadow: var(--ui-shadow-selected);
+  box-shadow: var(--ui-shadow-raised-soft);
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-lg);
 }
 
-.ui-button[data-icon]:hover:not(:disabled) {
+.ui-button[data-icon]:hover:not(:disabled):not([aria-disabled="true"]) {
   filter: brightness(1.2);
   color: var(--ui-text-bright);
 }
@@ -335,7 +338,7 @@
 }
 
 .ui-link:hover:not(:disabled) {
-  color: var(--gw-gold-bright);
+  color: var(--ui-accent-hover);
   border-bottom-color: currentColor;
 }
 
@@ -386,8 +389,8 @@
   padding-right: 28px;
   cursor: pointer;
   background:
-    linear-gradient(45deg, transparent 50%, var(--gw-bone) 50%) calc(100% - 15px) 52% / 6px 6px no-repeat,
-    linear-gradient(135deg, var(--gw-bone) 50%, transparent 50%) calc(100% - 9px) 52% / 6px 6px no-repeat,
+    linear-gradient(45deg, transparent 50%, var(--ui-control-mark) 50%) calc(100% - 15px) 52% / 6px 6px no-repeat,
+    linear-gradient(135deg, var(--ui-control-mark) 50%, transparent 50%) calc(100% - 9px) 52% / 6px 6px no-repeat,
     var(--ui-well-fill);
 }
 
@@ -395,6 +398,14 @@
 .ui-textarea::placeholder {
   color: var(--ui-text-faint);
   opacity: 1;
+}
+
+.ui-input:disabled,
+.ui-select:disabled,
+.ui-textarea:disabled,
+.ui-input-group:has(input:disabled) {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* An input that carries an adornment — a search glyph, a shortcut hint — is a
@@ -452,6 +463,11 @@
   text-wrap: pretty;
 }
 
+/* Validation failures use one shared class across Settings and Tools. */
+.ui-field-error {
+  color: var(--ui-danger) !important;
+}
+
 /* A range is the one native control worth keeping native: the platform thumb
  * is already the right size for a pointer and already handles keyboard. */
 .ui-range {
@@ -493,7 +509,7 @@
   align-items: center;
   gap: var(--ui-space-2);
   color: var(--ui-text);
-  cursor: default;
+  cursor: pointer;
 }
 
 .ui-check input {
@@ -505,6 +521,7 @@
 }
 
 .ui-check:has(input:disabled) {
+  cursor: default;
   opacity: 0.45;
 }
 
@@ -565,9 +582,26 @@
 }
 
 .ui-segment label:hover,
-.ui-segment button:hover {
+.ui-segment button:hover:not(:disabled) {
   color: var(--ui-text-bright);
   background: var(--ui-hover);
+}
+
+.ui-segment label:active:not(:has(input:disabled)),
+.ui-segment button:active:not(:disabled) {
+  filter: brightness(0.86);
+}
+
+.ui-segment label:has(input:disabled),
+.ui-segment button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.ui-segment label:has(input:disabled):hover,
+.ui-segment button:disabled:hover {
+  background: transparent;
+  color: var(--ui-text-muted);
 }
 
 /* The real radio stays full size and invisible, covering its label, so a
@@ -625,9 +659,18 @@
   color: var(--ui-text-bright);
 }
 
+.ui-tab:active:not(:disabled) {
+  filter: brightness(0.86);
+}
+
+.ui-tab:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .ui-tab[aria-selected="true"] {
   background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
-  box-shadow: var(--ui-shadow-selected);
+  box-shadow: var(--ui-shadow-selected), inset 0 -2px 0 var(--ui-accent);
   color: var(--ui-accent-ink);
 }
 
@@ -643,28 +686,55 @@
   background: var(--ui-well-fill);
 }
 
-/* A fixed 2px marker, deliberately not `--ui-border-width`: that preference is
+/* A fixed 1px marker, deliberately not `--ui-border-width`: that preference is
  * about the panel's physical edge, and a player who sets it to 0 wants a
  * frameless panel, not a settings rail that stops showing which section they
  * are in. */
 .ui-rail button {
   padding: var(--ui-space-3) var(--ui-space-4);
   border: 0;
-  border-left: 2px solid transparent;
+  border-left: 1px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--ui-text-muted);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
-  cursor: default;
+  cursor: pointer;
   text-align: left;
   transition:
     background var(--ui-duration) var(--ui-ease-out),
     color var(--ui-duration) var(--ui-ease-out);
 }
 
+/* One semantic status line for autosave, progress, and failure feedback.
+ * Consumers own the words and lifetime; the design system owns what each
+ * outcome looks like so success can never silently inherit an error colour. */
+.ui-status-line {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+  text-wrap: pretty;
+}
+
+.ui-status-line[data-tone="progress"] { color: var(--ui-accent); }
+.ui-status-line[data-tone="success"] {
+  color: color-mix(in srgb, var(--ui-success) 74%, var(--ui-text-bright));
+}
+.ui-status-line[data-tone="warning"] { color: var(--ui-warning); }
+.ui-status-line[data-tone="error"] { color: var(--ui-danger); }
+
 .ui-rail button:hover {
   background: var(--ui-hover);
   color: var(--ui-text-bright);
+}
+
+.ui-rail button:active:not(:disabled) {
+  filter: brightness(0.86);
+}
+
+.ui-rail button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .ui-rail button[aria-selected="true"] {
@@ -704,6 +774,15 @@
 
 .ui-row:hover {
   filter: brightness(1.25);
+}
+
+.ui-row:active:not([aria-disabled="true"]) {
+  filter: brightness(0.86);
+}
+
+.ui-row[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .ui-row[aria-selected="true"],
@@ -769,11 +848,21 @@
  * the bare text height lands around 17px. */
 button.ui-chip {
   min-height: calc(var(--ui-control-height) * 0.74);
-  cursor: default;
+  cursor: pointer;
 }
 
-button.ui-chip:hover {
+button.ui-chip:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--ui-text-bright);
+}
+
+button.ui-chip:active:not(:disabled):not([aria-disabled="true"]) {
+  filter: brightness(0.86);
+}
+
+button.ui-chip:disabled,
+button.ui-chip[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .ui-chip[aria-pressed="true"] {
@@ -833,7 +922,7 @@ button.ui-chip:hover {
   border-radius: var(--ui-radius-sm);
   background: linear-gradient(var(--ui-profession, var(--ui-line)), var(--ui-profession, var(--ui-line))) padding-box,
     var(--ui-ring-gilt) border-box;
-  box-shadow: var(--ui-shadow-selected);
+  box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-outline);
   color: var(--ui-profession-ink);
   font-size: var(--ui-font-size-sm);
   font-weight: 700;

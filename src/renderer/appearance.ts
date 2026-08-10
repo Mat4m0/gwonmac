@@ -1,9 +1,9 @@
 /**
  * The one place a settings value becomes a look.
  *
- * The product has one Guild Wars interface. Opacity is the only visual
- * preference because it changes how much of the fight remains visible behind
- * a panel without creating another theme or component geometry.
+ * Both interface styles are projections of the same component system. The
+ * saved value selects a token vocabulary; it never creates parallel markup,
+ * component behaviour, or gameplay state.
  *
  * Presentation only. Nothing here reaches the game: no value changes what the
  * client renders, what it sends, or what it is permitted to do.
@@ -22,5 +22,10 @@ export function applyAppearance(
 ): void {
   for (const [name, value] of Object.entries(appearanceVariables(settings))) {
     root.style.setProperty(name, value);
+  }
+  if (settings.uiStyle === "obsidian") {
+    root.dataset.uiStyle = "obsidian";
+  } else {
+    delete root.dataset.uiStyle;
   }
 }

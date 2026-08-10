@@ -257,6 +257,9 @@ export const ADDRESSES = Object.freeze({
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
+  account: 0xb000,
+  accountSkillBuffer: 0xb400,
+  characterSkillBuffer: 0xb600,
   world: 0x1_0000,
   heroFlagBuffer: 0x1_1000,
   heroInfoBuffer: 0x1_2000,
@@ -278,6 +281,7 @@ export const ADDRESSES = Object.freeze({
 export const DETAIL = Object.freeze({
   heroLevel: 0x14,
   partyPlayers: 0x04, partyHenchmen: 0x14, partyFlag: 0x14,
+  accountContext: 0x28, accountUnlockedSkills: 0x124,
   worldContext: 0x2c,
   heroFlags: 0x584, flagStride: 0x24,
   flagHeroId: 0x00, flagAgentId: 0x04, flagBehavior: 0x0c,
@@ -291,6 +295,7 @@ export const DETAIL = Object.freeze({
   attributeAgentId: 0x00, attributeEntries: 0x04,
   attributeEntryStride: 0x14, attributeEntryId: 0x00, attributeEntryRank: 0x04,
   professionStates: 0x6bc, professionStateStride: 0x14,
+  characterSkills: 0x710,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
@@ -309,7 +314,7 @@ export const PARTY_DIRTY_MESSAGES = Object.freeze([
  *
  * That literal is exactly the shape of the bug `MESSAGE_CONFIG_START` below
  * records: the messages were written as a flat continuation of the address
- * words, the layout grew, and they silently stayed twenty-five words short of
+ * words, the layout grew, and they silently stayed a full detail block short of
  * where the kernel reads them.
  */
 export const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("heroLevel");
@@ -410,7 +415,7 @@ export async function createKernel(
   const exports = kernelExports(instance.exports);
   const config = new Uint32Array(memory.buffer, ADDRESSES.config, CONFIG_WORDS);
   // Address words first: core, cursor, then the first-owned-hero party chain.
-  // The 25 party-detail words after them stay zero — these fixtures exercise
+  // The party-detail words after them stay zero — these fixtures exercise
   // the walk that does not read them, and zero is what the kernel treats as
   // "not certified, do not traverse".
   config.set([
@@ -429,6 +434,7 @@ export async function createKernel(
   if (partyDetail) {
     config.set([
       DETAIL.heroLevel, DETAIL.partyPlayers, DETAIL.partyHenchmen, DETAIL.partyFlag,
+      DETAIL.accountContext, DETAIL.accountUnlockedSkills,
       DETAIL.worldContext,
       DETAIL.heroFlags, DETAIL.flagStride,
       DETAIL.flagHeroId, DETAIL.flagAgentId, DETAIL.flagBehavior,
@@ -446,12 +452,12 @@ export async function createKernel(
   }
   config.set([ADDRESSES.areaInfo, 883, 0x7c, 0x10], POLICY_CONFIG_START);
   config.set(
-    [DETAIL.professionStates, DETAIL.professionStateStride],
+    [DETAIL.professionStates, DETAIL.professionStateStride, DETAIL.characterSkills],
     PLAYER_CONFIG_START,
   );
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
-  // when the layout grew they silently stayed there, twenty-five words short of
+  // when the layout grew they silently stayed there, a full detail block short of
   // where the kernel now reads them, and every init refused.
   config.set(
     [0x1000_0082, 0x1000_01a3, 0x1000_01a4, ...PARTY_DIRTY_MESSAGES],
@@ -557,6 +563,7 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.target + 0x9c, 0xdb, true);
   view.setUint32(ADDRESSES.manualTargetId, 9, true);
   view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
+  view.setUint32(ADDRESSES.game + DETAIL.accountContext, ADDRESSES.account, true);
   view.setUint32(ADDRESSES.partyContext + 0x54, ADDRESSES.partyInfo, true);
   view.setUint32(ADDRESSES.partyInfo + 0x24, ADDRESSES.heroBuffer, true);
   view.setUint32(ADDRESSES.partyInfo + 0x28, 2, true);
@@ -592,6 +599,29 @@ export function installPartyDetailGraph(view: DataView) {
     view.setUint32(at + 8, size, true);
   };
   view.setUint32(ADDRESSES.game + DETAIL.worldContext, ADDRESSES.world, true);
+
+  array(
+    ADDRESSES.account + DETAIL.accountUnlockedSkills,
+    ADDRESSES.accountSkillBuffer,
+    70,
+  );
+  array(
+    ADDRESSES.world + DETAIL.characterSkills,
+    ADDRESSES.characterSkillBuffer,
+    70,
+  );
+  for (const id of [202, 216, 249]) {
+    const word = Math.floor(id / 32);
+    const bit = 1 << (id % 32);
+    const at = ADDRESSES.accountSkillBuffer + word * 4;
+    view.setUint32(at, view.getUint32(at, true) | bit, true);
+  }
+  for (const id of [202, 216]) {
+    const word = Math.floor(id / 32);
+    const bit = 1 << (id % 32);
+    const at = ADDRESSES.characterSkillBuffer + word * 4;
+    view.setUint32(at, view.getUint32(at, true) | bit, true);
+  }
 
   array(ADDRESSES.world + DETAIL.heroFlags, ADDRESSES.heroFlagBuffer, 2);
   for (const [index, [heroId, agentId, behaviour]] of [

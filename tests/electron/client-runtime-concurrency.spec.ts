@@ -36,6 +36,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
+            extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
@@ -132,6 +133,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
+            extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
@@ -223,6 +225,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: false,
+            extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
@@ -311,6 +314,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: true,
+            extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
@@ -450,6 +454,7 @@ test.describe("client generation coordination", () => {
             hostVersion: "test",
             cachedOnly: false,
             offlineShell: true,
+            extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,

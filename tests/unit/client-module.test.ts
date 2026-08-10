@@ -36,6 +36,11 @@ import {
   ENHANCEMENT_MANIFEST_SECTION,
   transformEnhancementWasm,
 } from "../../src/main/certification/enhancement-transform.js";
+import {
+  parseCode,
+  sectionById,
+  splitSections,
+} from "../../src/main/core/wasm-binary.js";
 
 const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -104,28 +109,35 @@ const CALL_OFFSET = 5;
  */
 function officialFixture(): Uint8Array {
   const types = section(1, [
-    5,
+    6,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
     0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
     0x60, 1, 0x7f, 0,
     0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
+    0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [5, 0, 0, 2, 3, 4]);
-  const table = section(4, [1, 0x70, 1, 4, 4]);
+  const functions = section(3, [9, 0, 0, 2, 3, 4, 5, 5, 4, 4]);
+  const table = section(4, [1, 0x70, 1, 5, 5]);
+  const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
   const callerName = [...new TextEncoder().encode("caller")];
   const loopName = [
     ...new TextEncoder().encode("EmscriptenExeThreadMainLoop"),
   ];
   const exports = section(7, [
-    3,
+    4,
     ...uleb(callerName.length), ...callerName, 0, 2,
     ...uleb(loopName.length), ...loopName, 0, 3,
     3, 116, 98, 108, 1, 0,
+    6, 109, 101, 109, 111, 114, 121, 2, 0,
   ]);
-  const elements = section(9, [1, 0, 0x41, 1, 0x0b, 3, 4, 3, 5]);
+  const elements = section(9, [
+    2,
+    0, 0x41, 1, 0x0b, 3, 4, 3, 5,
+    0, 0x41, 4, 0x0b, 1, 6,
+  ]);
   const caller = [
     0,
     0x20, 0,
@@ -135,9 +147,13 @@ function officialFixture(): Uint8Array {
   ];
   const loop = [0, 0x0b];
   const code = section(10, [
-    5,
+    9,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
+    ...uleb(loop.length), ...loop,
+    ...uleb(loop.length), ...loop,
+    ...uleb(loop.length), ...loop,
+    ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
@@ -148,6 +164,7 @@ function officialFixture(): Uint8Array {
     ...imports,
     ...functions,
     ...table,
+    ...memory,
     ...globals,
     ...exports,
     ...elements,
@@ -195,8 +212,42 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
-    tableSlot: 4,
-    commands: { thunkExport: "enhancement_command", entries: [] },
+    tableSlot: 5,
+    commands: {
+      thunkExport: "enhancement_command",
+      professionTrace: {
+        readerExport: "enhancement_profession_trace",
+        sender: {
+          functionIndex: 8,
+          params: ["i32", "i32", "i32"],
+          results: [],
+          bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[7]!),
+        },
+      },
+      drain: {
+        functionIndex: 6,
+        params: ["i32", "i32"],
+        results: [],
+        tableSlot: 4,
+        bodySha256:
+          "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
+      },
+      entries: [{
+        opcode: 65,
+        functionIndex: 7,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[6]!),
+        label: "fixture profession command",
+      }, {
+        opcode: 93,
+        functionIndex: 9,
+        params: ["i32", "i32", "i32"],
+        results: [],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[8]!),
+        label: "fixture skill-bar command",
+      }],
+    },
     cursorEvent: {
       functionIndex: 4,
       params: ["i32", "i32", "i32", "i32", "i32"],
@@ -269,6 +320,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       partyPlayers: 43,
       partyHenchmen: 44,
       partyFlag: 45,
+      accountContext: 78,
+      accountUnlockedSkills: 79,
       worldContext: 46,
       worldHeroFlags: 47,
       heroFlagStride: 48,
@@ -303,6 +356,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       areaInfoFlags: 75,
       worldProfessionStates: 76,
       professionStateStride: 77,
+      worldCharacterSkills: 80,
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;
@@ -363,6 +417,7 @@ function options(
     enhancementCacheRoot: value.enhancementCacheRoot,
     nativeDoubleClickCacheRoot: value.nativeDoubleClickCacheRoot,
     extendedMemoryCacheRoot: value.extendedMemoryCacheRoot,
+    extendedMemoryEnabled: false,
   };
 }
 
@@ -483,6 +538,43 @@ describe("client module preparation", () => {
       assertMissing(value.compatibilityCacheRoot),
       assertMissing(value.enhancementCacheRoot),
     ]);
+  });
+
+  it("falls back to the ordinary module when a requested 4 GB pair is unknown", async () => {
+    const value = await fixture();
+    const request = options(value, { state: "uncertified" }, CURSOR_TOOLBOX);
+    request.extendedMemoryEnabled = true;
+
+    const prepared = await prepareClientModule(request);
+
+    assert.deepEqual(prepared.extendedMemory, {
+      status: "unavailable",
+      reason: "unsupported-client",
+    });
+    assert.equal(prepared.jsPath, value.officialJsPath);
+    assert.equal(prepared.wasmPath, value.officialWasmPath);
+    assert.equal(prepared.failure, null);
+  });
+
+  it("keeps an earlier transform failure separate from 4 GB preparation failure", async () => {
+    const value = await fixture();
+    const request = options(value, {
+      state: "template-only",
+      templateSaveBuild: {
+        ...value.templateSaveBuild,
+        sha256: "0".repeat(64),
+      },
+    }, CURSOR_TOOLBOX);
+    request.extendedMemoryEnabled = true;
+    request.officialJsPath = join(value.root, "missing.js");
+
+    const prepared = await prepareClientModule(request);
+
+    assert.equal(prepared.failure?.stage, "template-save");
+    assert.equal(prepared.extendedMemory.status, "unavailable");
+    if (prepared.extendedMemory.status !== "unavailable") return;
+    assert.equal(prepared.extendedMemory.reason, "preparation-failed");
+    assert.ok("error" in prepared.extendedMemory);
   });
 
   it("drops the Enhancement cache when the certified tool is disabled", async () => {

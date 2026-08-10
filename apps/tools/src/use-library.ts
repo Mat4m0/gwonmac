@@ -104,6 +104,7 @@ export function useLibrary(host: ToolsHost) {
   const notice = ref<Notice>(null);
   const skillProblem = ref<string | null>(null);
   const applyStatus = ref<ApplyStatus>(null);
+  const applying = ref(false);
   const kind = ref<LibraryItem["kind"]>("team");
   const selectedId = ref("");
   const query = ref("");
@@ -622,6 +623,7 @@ export function useLibrary(host: ToolsHost) {
   const applyTeam = async (team: Team) => {
     if (!library.value || saving.value) return null;
     saving.value = true;
+    applying.value = true;
     applyStatus.value = {
       teamId: team.id,
       tone: "progress",
@@ -641,7 +643,13 @@ export function useLibrary(host: ToolsHost) {
         applyStatus.value = { teamId: team.id, tone: "warning", message };
         return null;
       }
-      const result = await host.applyTeam(resolution.plan);
+      const result = await host.applyTeam(resolution.plan, (event) => {
+        applyStatus.value = {
+          teamId: team.id,
+          tone: "progress",
+          message: event.message,
+        };
+      });
       const changes = `${result.completedChanges} confirmed ${
         result.completedChanges === 1 ? "change" : "changes"
       }`;
@@ -697,11 +705,26 @@ export function useLibrary(host: ToolsHost) {
       const message = cause instanceof Error
         ? cause.message
         : "The team could not be applied.";
-      applyStatus.value = { teamId: team.id, tone: "error", message };
+      applyStatus.value = {
+        teamId: team.id,
+        tone: cause instanceof Error && cause.name === "AbortError"
+          ? "warning"
+          : "error",
+        message,
+      };
       return null;
     } finally {
+      applying.value = false;
       saving.value = false;
     }
+  };
+
+  const cancelTeamApply = () => {
+    if (!applying.value) return;
+    applyStatus.value = applyStatus.value
+      ? { ...applyStatus.value, tone: "progress", message: "Cancelling Apply…" }
+      : null;
+    host.cancelApply();
   };
 
   const reset = async () => {
@@ -739,7 +762,7 @@ export function useLibrary(host: ToolsHost) {
     // refused, not the ability to call around the controller for everything
     // else it wraps.
     applyUnavailable: host.applyUnavailable,
-    library, loading, saving, error, notice, skillProblem, applyStatus, kind, selectedId, query, tag,
+    library, loading, saving, applying, error, notice, skillProblem, applyStatus, kind, selectedId, query, tag,
     items, tags, selectedBuild, selectedTeam, canUndo, selectKind,
     select: (next: LibraryItem) => {
       kind.value = next.kind;
@@ -751,7 +774,7 @@ export function useLibrary(host: ToolsHost) {
     saveBuildDraft,
     createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
-    publish, applyTeam, undo, reset,
+    publish, applyTeam, cancelTeamApply, undo, reset,
     importBuild, createBlankBuild, createTeam, importTeamCode, teamCode,
     readClipboard: host.readClipboard, writeClipboard: host.writeClipboard,
     retrySkills, captureCurrentParty, dismissNotice,

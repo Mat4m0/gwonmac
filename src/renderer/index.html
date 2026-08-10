@@ -215,32 +215,21 @@
      crashing at one they did not. harness.ts owns when and how many minutes;
      failure-messages.ts owns every word. -->
 <div id="memory-notice" hidden>
-  <div id="memory-notice-text" role="status" aria-live="polite"
-       aria-atomic="true">
-    <strong id="memory-notice-label"></strong>
-    <span id="memory-notice-detail"></span>
-    <button type="button" id="memory-notice-why"></button>
+  <div class="memory-notice-copy">
+    <div id="memory-notice-text" role="status" aria-live="polite"
+         aria-atomic="true">
+      <strong id="memory-notice-label"></strong>
+      <span id="memory-notice-detail"></span>
+    </div>
+    <details id="memory-notice-details">
+      <summary>Details</summary>
+      <p id="memory-notice-explanation"></p>
+    </details>
   </div>
   <div id="memory-notice-actions">
     <button type="button" id="memory-notice-later"></button>
     <button type="button" id="memory-notice-reload" class="primary"></button>
   </div>
-</div>
-<!-- What Later leaves behind. The banner's figure is frozen when it is shown,
-     so this is the surface that keeps counting — a dismissal is a deferral,
-     not the silence that preceded the crashes this warning exists for. -->
-<button type="button" id="memory-chip" hidden>
-  <span class="memory-chip-dot" aria-hidden="true"></span>
-  <span id="memory-chip-text"></span>
-</button>
-<!-- The explanation is a modal task, so unlike the notice it dims the game.
-     It opens in the notice's place: two translucent surfaces never stack. -->
-<div id="memory-scrim" hidden></div>
-<div id="memory-why" role="dialog" aria-modal="true"
-     aria-labelledby="memory-why-title" hidden>
-  <h2 id="memory-why-title"></h2>
-  <div id="memory-why-blocks"></div>
-  <button type="button" id="memory-why-close"></button>
 </div>
 <output id="capture-status" hidden aria-live="off">
   <span class="capture-dot" aria-hidden="true"></span>
@@ -252,19 +241,19 @@
 <output id="login-status" role="status" aria-live="polite" hidden></output>
 <span id="capture-announcement" class="sr-only" role="status" aria-live="polite"></span>
 
-<!-- Settings: one compact panel with a section rail. Every pane fits without
-     scrolling. A status is never a button; danger actions are quiet and
-     separated; changes save automatically and say so. -->
+<!-- Settings: one contained panel with a section rail. The active pane owns
+     scrolling when it needs it; the header and one canonical save status stay
+     visible. Danger actions are quiet, separated, and confirmed natively. -->
 <dialog id="settings-dialog" class="ui-frame" aria-labelledby="settings-title">
   <form method="dialog" id="settings-form" class="ui-panel">
     <header class="settings-header ui-panel-head">
       <h2 id="settings-title" class="ui-panel-title">Settings</h2>
-      <span id="settings-saved" aria-hidden="true">Saved</span>
       <button value="done" id="settings-done" class="ui-button" data-icon aria-label="Close settings">&#10005;</button>
     </header>
 
     <div class="settings-body">
-      <div class="settings-rail ui-rail" role="tablist" aria-label="Settings sections">
+      <div class="settings-rail ui-rail" role="tablist" aria-label="Settings sections"
+           aria-orientation="vertical">
         <button type="button" class="settings-rtab" id="settings-tab-data"
                 role="tab" aria-selected="true" aria-controls="settings-pane-data"
                 data-pane="data">Game Data</button>
@@ -276,7 +265,7 @@
                 data-pane="display">Display</button>
         <button type="button" class="settings-rtab" id="settings-tab-controls"
                 role="tab" aria-selected="false" aria-controls="settings-pane-controls"
-                data-pane="controls">Controls</button>
+                data-pane="controls">Tools</button>
         <button type="button" class="settings-rtab" id="settings-tab-updates"
                 role="tab" aria-selected="false" aria-controls="settings-pane-updates"
                 data-pane="updates">Updates</button>
@@ -288,7 +277,8 @@
       <div class="settings-panes" data-active="data">
         <section class="settings-pane" id="settings-pane-data" role="tabpanel"
                  aria-labelledby="settings-tab-data">
-          <h3 id="settings-data-title" class="sr-only">Game Data</h3>
+          <h3 id="settings-data-title" class="settings-pane-title">Game data</h3>
+          <p class="settings-pane-intro">Choose how much Guild Wars downloads before you play.</p>
           <p id="settings-cache" class="settings-status" role="status" aria-live="polite">
             Checking downloaded game data…
           </p>
@@ -325,23 +315,33 @@
              has been confirmed. -->
         <section class="settings-pane" id="settings-pane-templates" role="tabpanel"
                  aria-labelledby="settings-tab-templates">
-          <h3 id="settings-templates-title" class="sr-only">Templates</h3>
+          <h3 id="settings-templates-title" class="settings-pane-title">Build templates</h3>
+          <p class="settings-pane-intro">Move Guild Wars skill and equipment templates between this Mac and other installations.</p>
           <p id="templates-status" class="settings-status" role="status" aria-live="polite">
             Checking your saved templates…
           </p>
 
-          <div id="templates-actions" class="settings-actions-row">
-            <button type="button" id="templates-export" class="ui-button" data-variant="primary">Export…</button>
-            <button type="button" id="templates-import-folder" class="ui-button">Import Folder…</button>
-            <button type="button" id="templates-import-files" class="ui-button">Import Files…</button>
-            <button type="button" id="templates-import-clipboard" class="ui-button">Import from Clipboard</button>
+          <div id="templates-actions" class="settings-template-actions">
+            <section class="settings-task" aria-labelledby="templates-export-title">
+              <h4 id="templates-export-title" class="settings-section-title">Export</h4>
+              <p class="settings-note">Save every template as a .txt file that another Guild Wars installation can read.</p>
+              <div class="settings-actions-row">
+                <button type="button" id="templates-export" class="ui-button" data-variant="primary">Export all templates…</button>
+              </div>
+            </section>
+            <section class="settings-task" aria-labelledby="templates-import-title">
+              <h4 id="templates-import-title" class="settings-section-title">Import</h4>
+              <p class="settings-note">Choose a Guild Wars Templates folder, individual .txt files, or codes copied as text.</p>
+              <div class="settings-actions-row">
+                <button type="button" id="templates-import-folder" class="ui-button">Folder…</button>
+                <button type="button" id="templates-import-files" class="ui-button">Files…</button>
+                <button type="button" id="templates-import-clipboard" class="ui-button">Copied text</button>
+              </div>
+            </section>
           </div>
           <p id="templates-help" class="settings-note">
-            Export writes every saved build into a folder of .txt files. Import reads that
-            folder back, or the Templates folder from a Windows Guild Wars install, or a text
-            file holding several codes. Imports arrive in the top level of Skills and
-            Equipment, because Guild Wars does not list templates kept in a subfolder here;
-            a build from a Windows subfolder keeps that folder in its name.
+            Imported templates appear directly in Skills or Equipment. If a Windows template
+            came from a subfolder, that folder stays in its name so it remains recognizable.
           </p>
 
           <!-- Only ever visible when a template is somewhere Guild Wars cannot
@@ -399,56 +399,83 @@
 
         <section class="settings-pane" id="settings-pane-display" role="tabpanel"
                  aria-labelledby="settings-tab-display">
-          <h3 id="settings-display-title" class="sr-only">Display</h3>
+          <h3 id="settings-display-title" class="settings-pane-title">Display</h3>
+          <p class="settings-pane-intro">Balance image quality, interface style, performance, and how much of the game remains visible behind GWonMac.</p>
           <fieldset>
             <legend>Graphics quality</legend>
-            <div class="settings-seg ui-segment" role="presentation">
+            <div class="settings-seg settings-quality-seg ui-segment" data-fill role="presentation">
               <label class="settings-radio">
                 <input type="radio" name="renderScale" value="1">
                 <span class="render-scale-option">
-                  <span>1×</span>
+                  <span>Performance · 1×</span>
                   <small data-render-scale="1">—</small>
                 </span>
               </label>
               <label class="settings-radio">
                 <input type="radio" name="renderScale" value="1.5">
                 <span class="render-scale-option">
-                  <span>1.5×</span>
+                  <span>Balanced · 1.5×</span>
                   <small data-render-scale="1.5">—</small>
                 </span>
               </label>
               <label class="settings-radio">
                 <input type="radio" name="renderScale" value="2">
                 <span class="render-scale-option">
-                  <span>Retina, 2× (Default)</span>
+                  <span>Retina · 2× (Default)</span>
                   <small data-render-scale="2">—</small>
                 </span>
               </label>
             </div>
           </fieldset>
-          <p class="settings-note">Retina is the visual-quality default. 1.5× renders 2.25 times the pixels of 1×; 2× renders four times the pixels. Lower values improve performance and reduce GPU memory use.</p>
+          <p class="settings-note">Retina is the clearest default. Choose Balanced or Performance if Guild Wars feels slow or uses too much GPU memory.</p>
 
           <fieldset>
-            <legend>Interface</legend>
-            <label class="ui-range-field">
+            <legend>Interface style</legend>
+            <div class="settings-seg settings-style-seg ui-segment" data-fill role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="uiStyle" value="guild-wars">
+                <span class="settings-style-option">
+                  <span>Guild Wars <small>Default</small></span>
+                  <small>Ornamental metal and engraved type</small>
+                </span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiStyle" value="obsidian">
+                <span class="settings-style-option">
+                  <span>Obsidian</span>
+                  <small>Borderless charcoal and muted gilt</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Panel visibility</legend>
+            <label class="ui-range-field settings-opacity-field">
               <span>Panel opacity <output name="uiPanelOpacityValue">94%</output></span>
               <input type="range" class="ui-range" name="uiPanelOpacity"
-                     min="65" max="100" step="1">
+                     min="65" max="100" step="1"
+                     aria-describedby="settings-opacity-help">
+              <span class="settings-range-ends" aria-hidden="true">
+                <small>More game visible</small>
+                <small>More solid</small>
+              </span>
             </label>
           </fieldset>
-          <p class="settings-note">GWonMac uses one interface inspired by the original Guild Wars client. Opacity only changes how much of the game remains visible behind GWonMac panels.</p>
+          <p id="settings-opacity-help" class="settings-note">This changes GWonMac panels, not Guild Wars itself. Settings stays readable while you choose.</p>
         </section>
 
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
-          <h3 id="settings-controls-title" class="sr-only">Controls</h3>
-          <p class="settings-status">GWonMac Core is always active when this Guild Wars build is certified.</p>
-          <p class="settings-note">Core provides the native Guild Wars cursor, native double-click, persistent files, and build-template saving. It uses only your installed client and has no opt-out because these are required compatibility features.</p>
+          <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
+          <p class="settings-pane-intro">Core keeps Guild Wars working correctly. Optional tools add conveniences you choose.</p>
+          <p class="settings-status">Core is on for supported Guild Wars builds.</p>
+          <p class="settings-note">Core provides the native cursor, double-click login, persistent files, and build-template saving. These compatibility features are required and stay on.</p>
           <label class="settings-check ui-check">
-            <input type="checkbox" name="gwonmacTools">
-            <span>Enable GWonMac Tools Beta</span>
+            <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
+            <span>Enable optional Tools Beta</span>
           </label>
-          <p class="settings-note">The first enable restarts the app once. Disabling the master switch immediately turns off every optional tool; individual choices below change live after capability is loaded.</p>
+          <p id="settings-tools-help" class="settings-note">The first enable asks to restart once. After that, this switch and the choices below update immediately. Optional tools stay off in PvP and when the game region is unknown.</p>
           <fieldset>
             <legend>Optional tools</legend>
             <label class="settings-check ui-check">
@@ -468,7 +495,8 @@
 
         <section class="settings-pane" id="settings-pane-updates" role="tabpanel"
                  aria-labelledby="settings-tab-updates">
-          <h3 id="settings-updates-title" class="sr-only">Updates</h3>
+          <h3 id="settings-updates-title" class="settings-pane-title">Updates</h3>
+          <p class="settings-pane-intro">Keep GWonMac current without interrupting an active game connection.</p>
           <p class="settings-status">
             Version <span id="settings-update-version">—</span>
             · <span id="settings-update-channel">Preview</span>
@@ -477,7 +505,7 @@
             <input type="checkbox" name="autoCheckUpdates">
             <span>Automatically check for and download app updates</span>
           </label>
-          <p class="settings-note">On by default: one check at launch, then a quiet check about every six hours while the app stays open. It never checks while a game connection is open. Turn this off and the app contacts GitHub only when you ask it to, including when it meets a game client build it does not recognise. Downloaded updates are installed when you restart.</p>
+          <p class="settings-note">Checks run at launch and about every six hours, but never during an active game connection. Downloads install when you restart. Turn this off to check manually.</p>
           <div class="settings-actions-row">
             <button type="button" id="settings-check-updates" class="ui-button">
               Check for Updates
@@ -496,23 +524,45 @@
 
         <section class="settings-pane" id="settings-pane-advanced" role="tabpanel"
                  aria-labelledby="settings-tab-advanced">
-          <h3 id="settings-advanced-title" class="sr-only">Advanced</h3>
+          <h3 id="settings-advanced-title" class="settings-pane-title">Advanced</h3>
+          <p class="settings-pane-intro">Diagnostics and recovery options for troubleshooting GWonMac.</p>
+          <section class="settings-task settings-memory-task"
+                   aria-labelledby="settings-memory-title">
+            <div class="settings-setting-head">
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="extendedMemoryEnabled"
+                       aria-describedby="settings-memory-description settings-memory-status">
+                <span id="settings-memory-title">Experimental 4 GB memory limit</span>
+              </label>
+              <span id="settings-memory-badge" class="ui-chip" data-level="neutral">
+                Using 2 GB
+              </span>
+            </div>
+            <p id="settings-memory-description" class="settings-note">
+              Gives Guild Wars more memory for long sessions and may delay memory-related crashes. It does not stop memory that keeps growing. Restart GWonMac after changing this option.
+            </p>
+            <p id="settings-memory-status" class="settings-memory-status"
+               role="status" aria-live="polite"></p>
+          </section>
+          <div class="settings-divider" aria-hidden="true"></div>
           <label class="settings-check ui-check">
             <input type="checkbox" name="showDiagnostics">
             <span>Show performance overlay</span>
           </label>
+          <p class="settings-note">Shows live rendering and memory measurements over the game. Leave it off unless you are investigating performance.</p>
           <div class="settings-divider" aria-hidden="true"></div>
           <button type="button" id="settings-reset-launcher" class="ui-link quiet-danger" data-variant="danger">
-            Reset Launcher Settings…
+            Reset GWonMac settings…
           </button>
-          <p class="settings-danger-sub">Shows the first-run choice again next launch. Data and login are kept.</p>
+          <p class="settings-danger-sub">Restores display, tools, window position, and launcher choices. Downloaded game data and your login are kept.</p>
         </section>
       </div>
     </div>
 
     <footer class="settings-footerbar">
-      <p id="settings-feedback" class="settings-feedback" role="status" aria-live="polite"></p>
-      <span class="settings-autosave">Changes are saved automatically</span>
+      <p id="settings-feedback" class="ui-status-line settings-feedback"
+         role="status" aria-live="polite" aria-atomic="true"
+         data-tone="neutral">Changes save automatically.</p>
     </footer>
     <button type="button" id="settings-resize" class="ui-resize-grip" aria-label="Resize Settings"></button>
   </form>

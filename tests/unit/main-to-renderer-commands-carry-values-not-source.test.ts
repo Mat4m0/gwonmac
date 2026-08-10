@@ -170,6 +170,7 @@ function harness(argv: string[]) {
 }
 
 const INIT: RendererInit = {
+  development: true,
   enhancementProgram: "toolbox-foundation",
   enhancementSelection: {
     nativeCursor: false,
@@ -189,6 +190,7 @@ test("launch configuration arrives as a preload argument, not as a URL", () => {
 
 test("a renderer with no readable init argument gets the production posture", () => {
   const missing: RendererInit = {
+    development: false,
     enhancementProgram: "none",
     enhancementSelection: {
       nativeCursor: false,

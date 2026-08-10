@@ -7,14 +7,20 @@ import {
 } from "vue";
 import {
   skillBarOf,
+  SKILL_SLOTS,
   type Attribute,
   type AttributeRank,
   type Profession,
   type SkillId,
 } from "../../../src/shared/builds/library";
-import { withAttributeRank } from "../../../src/shared/builds/authoring";
+import {
+  resolveSkillPlacement,
+  withAttributeRank,
+  type SkillPlacementResolution,
+} from "../../../src/shared/builds/authoring";
 import { decodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import type { Build } from "./model";
+import type { SkillCatalogue } from "./skill-catalog";
 import type { LibraryController } from "./use-library";
 
 export type AuthoringContext = "standalone" | "player" | "hero";
@@ -114,6 +120,42 @@ export function useBuildDraft(
     });
   }
 
+  /**
+   * Put one catalogue skill into a specific slot without ever creating the two
+   * invalid bar states the picker can prevent itself: a duplicate skill or a
+   * second elite. Click, double-click, and drag all come through this function
+   * so their behavior cannot drift.
+   */
+  function previewSkillPlacement(
+    slot: number,
+    skill: SkillId,
+    catalogue: SkillCatalogue,
+  ): SkillPlacementResolution {
+    const target = SKILL_SLOTS[slot];
+    if (target === undefined) {
+      throw new RangeError(`Skill slot ${slot} is outside the eight-slot bar.`);
+    }
+    return resolveSkillPlacement(
+      draft.value.skills,
+      target,
+      skill,
+      (id) => catalogue.has(id) ? catalogue.get(id) : null,
+    );
+  }
+
+  function placeSkill(
+    slot: number,
+    skill: SkillId,
+    catalogue: SkillCatalogue,
+  ): SkillPlacementResolution {
+    const resolution = previewSkillPlacement(slot, skill, catalogue);
+    if (resolution.outcome === "place" || resolution.outcome === "replace-elite") {
+      replace({ skills: resolution.skills });
+      activeSlot.value = resolution.target;
+    }
+    return resolution;
+  }
+
   function moveSkill(from: number, to: number): void {
     if (from === to || from < 0 || from >= 8 || to < 0 || to >= 8) return;
     // Reordering changes the length twice, so it happens on a plain array and
@@ -124,19 +166,6 @@ export function useBuildDraft(
     reordered.splice(to, 0, moved ?? null);
     replace({ skills: skillBarOf((position) => reordered[position] ?? null) });
     activeSlot.value = to;
-  }
-
-  function reorderSkills(skills: readonly (SkillId | null)[]): void {
-    if (skills.length !== 8) return;
-    replace({ skills: skillBarOf((position) => skills[position] ?? null) });
-  }
-
-  function finishSkillMove(from: number, to: number): void {
-    const active = activeSlot.value;
-    if (active === null) return;
-    if (active === from) activeSlot.value = to;
-    else if (from < to && active > from && active <= to) activeSlot.value = active - 1;
-    else if (from > to && active >= to && active < from) activeSlot.value = active + 1;
   }
 
   function adaptFromCode(code: string): boolean {
@@ -197,9 +226,9 @@ export function useBuildDraft(
     setSecondary,
     setRank,
     setSkill,
+    previewSkillPlacement,
+    placeSkill,
     moveSkill,
-    reorderSkills,
-    finishSkillMove,
     adaptFromCode,
     requestSave,
     commit,

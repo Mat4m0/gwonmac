@@ -11,186 +11,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   runTeamApply,
-  type TeamApplyCommands,
-  type TeamApplyEnvironment,
 } from "../../src/shared/builds/team-apply-runner.ts";
-import {
-  liveParty,
-  type LiveParty,
-} from "../../src/shared/builds/live-party.ts";
 import { heroId, skillId } from "../../src/shared/builds/library.ts";
 import type {
   TeamApplyMember,
-  TeamApplyPlan,
 } from "../../src/shared/builds/team-apply.ts";
 import { preflightTeamApply } from "../../src/shared/builds/team-apply.ts";
-
-type Slot = {
-  hero: number;
-  agentId: number;
-  professions?: readonly number[] | null;
-  behaviour: number | null;
-  skills: readonly number[] | null;
-  attributes?: readonly (readonly number[])[] | null;
-};
-type Player = Omit<Slot, "hero" | "behaviour">;
-
-/** A published party, built the way the decoder publishes one. */
-function party(
-  slots: readonly Slot[],
-  inOutpost: boolean | null = true,
-  hardMode = false,
-  player: Player | null = {
-    agentId: 1,
-    professions: [1, 2],
-    skills: [0, 0, 0, 0, 0, 0, 0, 0],
-    attributes: [],
-  },
-): LiveParty {
-  return liveParty({
-    status: "ready",
-    partyObserved: true,
-    heroAvailable: slots.length > 0,
-    heroCount: slots.length,
-    firstHeroId: slots[0]?.hero ?? 0,
-    party: {
-      status: "ready",
-      rosterObserved: true,
-      unlockObserved: true,
-      unlocked: Array.from({ length: 39 }, (_, index) => index + 1),
-      playRegion: "pve",
-      hardMode,
-      inOutpost,
-      slotCount: slots.length,
-      slots: [
-        {
-          index: 0, occupied: player !== null, hero: null,
-          agentId: player?.agentId ?? null, level: player === null ? null : 20,
-          professions: player?.professions ?? null, behaviour: null,
-          skills: player?.skills ?? null, disabled: player === null ? null : 0,
-          attributes: player?.attributes ?? null,
-        },
-        ...slots.map((slot, index) => ({
-          index: index + 1,
-          occupied: true,
-          hero: slot.hero,
-          agentId: slot.agentId,
-          level: 20,
-          professions: slot.professions === undefined
-            ? [1, 2] as readonly number[]
-            : slot.professions,
-          behaviour: slot.behaviour,
-          skills: slot.skills,
-          disabled: 0,
-          attributes: slot.attributes ?? [],
-        })),
-      ],
-    },
-  });
-}
-
-/**
- * A game that accepts every packet and changes only when `world` is rewritten.
- *
- * The separation is the point: `sent` records what was asked for, `world`
- * records what is true, and nothing links them unless a test says so.
- */
-function harness(initial: readonly Slot[], inOutpost: boolean | null = true) {
-  const sent: string[] = [];
-  let world = [...initial];
-  let outpost = inOutpost;
-  let hardMode = false;
-  let confirmationNow = 0;
-  let player: Player | null = {
-    agentId: 1,
-    professions: [1, 2],
-    skills: [0, 0, 0, 0, 0, 0, 0, 0],
-    attributes: [],
-  };
-  const agentFor = (hero: number) => world.find((slot) => slot.hero === hero)?.agentId ?? 0;
-  const commands: TeamApplyCommands = {
-    setHardMode: (enabled) => { sent.push(`hard:${enabled}`); },
-    setPlayerSecondary: (profession) => {
-      sent.push(`player-secondary:${player?.agentId ?? 0}:${profession}`);
-    },
-    setPlayerSkills: (skills) => {
-      sent.push(`player-skills:${player?.agentId ?? 0}:${skills.join(",")}`);
-    },
-    setPlayerAttributes: (ranks) => {
-      sent.push(`player-attributes:${player?.agentId ?? 0}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
-    },
-    addHero: (heroId) => { sent.push(`add:${heroId}`); },
-    kickHero: (heroId) => { sent.push(`kick:${heroId}`); },
-    setHeroBehaviour: (heroId, behaviour) => {
-      sent.push(`behaviour:${agentFor(heroId)}:${behaviour}`);
-    },
-    setHeroSecondary: (heroId, profession) => {
-      sent.push(`secondary:${agentFor(heroId)}:${profession}`);
-    },
-    setHeroSkills: (heroId, skills) => {
-      sent.push(`skills:${agentFor(heroId)}:${skills.join(",")}`);
-    },
-    setHeroAttributes: (heroId, ranks) => {
-      sent.push(`attributes:${agentFor(heroId)}:${ranks.map(([a, r]) => `${a}=${r}`).join(",")}`);
-    },
-  };
-  const environment: TeamApplyEnvironment = {
-    commands,
-    party: () => party(world, outpost, hardMode, player),
-    settle: () => Promise.resolve(),
-    confirmationTime: {
-      now: () => confirmationNow,
-      sleep: (milliseconds) => {
-        confirmationNow += milliseconds;
-        return Promise.resolve();
-      },
-    },
-  };
-  return {
-    sent,
-    environment,
-    set(next: readonly Slot[]) { world = [...next]; },
-    setHard(next: boolean) { hardMode = next; },
-    setPlayer(next: Player | null) { player = next; },
-    leave() { outpost = false; },
-    /** Apply the change the next time the runner looks, as the game would. */
-    react(when: string, next: readonly Slot[]) {
-      const original = commands;
-      const react = () => { if (sent.at(-1) === when) world = [...next]; };
-      // Wrapping every command rather than the one named: the runner is free
-      // to reach the reacting state through a different call than the test
-      // expects, and a wrapper on one method would then never fire.
-      const mutable = commands as unknown as Record<string, (...args: never[]) => void>;
-      for (const key of Object.keys(original)) {
-        const inner = mutable[key]!;
-        mutable[key] = (...args: never[]) => {
-          inner(...args);
-          react();
-        };
-      }
-    },
-  };
-}
-
-function member(over: Partial<TeamApplyMember> = {}): TeamApplyMember {
-  return { hero: null, build: null, behaviour: null, ...over };
-}
-
-function plan(members: readonly TeamApplyMember[]): TeamApplyPlan {
-  return { mode: "none", members: [member(), ...members] };
-}
-
-/** A build whose bar and ranks are the ones the assertions below expect. */
-function build() {
-  return {
-    professions: ["W", "R"] as const,
-    attributes: { Strength: 7, HammerMastery: 12 },
-    skills: [
-      skillId(1), skillId(2), skillId(3), skillId(4),
-      skillId(5), skillId(6), skillId(7), skillId(8),
-    ],
-  } as unknown as NonNullable<TeamApplyMember["build"]>;
-}
+import {
+  applyBuild as build,
+  applyHarness as harness,
+  applyMember as member,
+  applyParty as party,
+  applyPlan as plan,
+} from "./team-apply-fixture.ts";
 
 test("Hard Mode is changed and confirmed before any team command", async () => {
   const game = harness([]);
@@ -313,6 +146,31 @@ test("an absent hero's known primary mismatch refuses before roster mutation", a
   assert.deepEqual(game.sent, []);
 });
 
+test("a known-locked assigned skill refuses before the first command", async () => {
+  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
+  const assigned = {
+    ...build(),
+    skills: [skillId(350), skillId(351), null, null, null, null, null, null],
+  } as NonNullable<TeamApplyMember["build"]>;
+  const observed = {
+    ...party([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]),
+    accountSkills: {
+      knownThrough: 500,
+      unlocked: new Set([skillId(349)]),
+    },
+  };
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: assigned, behaviour: "guard" })]),
+      { ...game.environment, party: () => observed },
+      1,
+    ),
+    /Koss's assigned build uses skills 350, 351, which are not unlocked/,
+  );
+  assert.deepEqual(game.sent, []);
+});
+
 test("behavior-only work is part of the canonical preview", () => {
   const result = preflightTeamApply(
     plan([member({ hero: heroId(6), behaviour: "fight" })]),
@@ -324,11 +182,47 @@ test("behavior-only work is part of the canonical preview", () => {
   ]);
 });
 
+test("roster order is a canonical Apply change", () => {
+  const result = preflightTeamApply(
+    plan([
+      member({ hero: heroId(6), behaviour: "guard" }),
+      member({ hero: heroId(7), behaviour: "guard" }),
+    ]),
+    party([
+      { hero: 7, agentId: 11, behaviour: 1, skills: null },
+      { hero: 6, agentId: 12, behaviour: 1, skills: null },
+    ]),
+  );
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.ready ? result.changes : [], [
+    { kind: "rebuild-roster" },
+  ]);
+});
+
+test("canonical preflight reports each logical change once", () => {
+  const result = preflightTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "fight" })]),
+    party([{
+      hero: 6,
+      agentId: 11,
+      behaviour: 1,
+      professions: [1, 2],
+      skills: [90, 91, 92, 93, 94, 95, 96, 97],
+    }]),
+  );
+  assert.equal(result.ready, true);
+  const changes = result.ready ? result.changes : [];
+  assert.equal(
+    new Set(changes.map((change) => JSON.stringify(change))).size,
+    changes.length,
+  );
+});
+
 test("a hero the game never adds is a refusal, however cheerful the command", async () => {
   const game = harness([]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /adding Koss did not take effect/,
+    /Koss's addition did not take effect/,
   );
   assert.deepEqual(game.sent, ["add:6"], "and it did not go on to the next step");
 });
@@ -341,7 +235,7 @@ test("a hero that appears without an agent id is not yet added", async () => {
   game.react("add:6", [{ hero: 6, agentId: 0, behaviour: null, skills: null }]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6) })]), game.environment, 1),
-    /adding Koss did not take effect/,
+    /Koss's addition did not take effect/,
   );
 });
 
@@ -480,6 +374,236 @@ test("a new secondary profession is set, and set before the bar", async () => {
   assert.equal(result.completedChanges, 3);
 });
 
+test("a bar waits for the client's profession rebuild after confirmation", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  game.react("secondary:11:2", [changed]);
+  const setSkills = game.environment.commands.setHeroSkills;
+  game.environment.commands.setHeroSkills = (hero, skills) => {
+    assert.ok(
+      game.environment.confirmationTime!.now() >= 1_000,
+      "the profession projection was published before its skill state was ready",
+    );
+    setSkills(hero, skills);
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+});
+
+test("a live secondary transition may exceed the ordinary command deadline", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const events: { state: string; elapsedMs: number }[] = [];
+  const observedParty = game.environment.party;
+  let professionRequested = false;
+  let professionPublished = false;
+  const setSecondary = game.environment.commands.setHeroSecondary;
+  game.environment.commands.setHeroSecondary = (hero, profession) => {
+    setSecondary(hero, profession);
+    professionRequested = true;
+  };
+  game.environment.party = () => {
+    if (
+      professionRequested
+      && !professionPublished
+      && game.environment.confirmationTime!.now() >= 12_000
+    ) {
+      professionPublished = true;
+      game.set([changed]);
+    }
+    return observedParty();
+  };
+  game.environment.commands.setHeroSkills = (_hero, skills) => {
+    assert.ok(game.environment.confirmationTime!.now() >= 13_000);
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    { ...game.environment, onEvent: (event) => events.push(event) },
+    1,
+  );
+  assert.equal(
+    game.sent.filter((command) => command === "secondary:11:2").length,
+    2,
+    "one retry is sent while the first command is still unobserved",
+  );
+  assert.deepEqual(
+    events
+      .filter((event) => event.state === "retrying")
+      .map(({ state, elapsedMs }) => ({ state, elapsedMs })),
+    [{ state: "retrying", elapsedMs: 3_000 }],
+  );
+});
+
+test("a profession first published on the deadline receives its stability grace", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const observedParty = game.environment.party;
+  let requested = false;
+  let skillsApplied = false;
+  let attributesApplied = false;
+  game.environment.commands.setHeroSecondary = () => { requested = true; };
+  game.environment.party = () => {
+    const now = game.environment.confirmationTime!.now();
+    if (attributesApplied) game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+    else if (skillsApplied) game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+    }]);
+    else if (requested && now >= 15_000) game.set([changed]);
+    return observedParty();
+  };
+  game.environment.commands.setHeroSkills = (_hero, skills) => {
+    assert.ok(game.environment.confirmationTime!.now() >= 16_000);
+    skillsApplied = true;
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    attributesApplied = true;
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+});
+
+test("a deadline candidate that disappears is refused without extending the operation", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const observedParty = game.environment.party;
+  game.environment.commands.setHeroSecondary = () => {};
+  game.environment.party = () => {
+    const now = game.environment.confirmationTime!.now();
+    game.set(now >= 15_000 && now < 15_500 ? [changed] : [initial]);
+    return observedParty();
+  };
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+      game.environment,
+      1,
+    ),
+    /Koss's secondary profession did not take effect/,
+  );
+  assert.equal(
+    game.sent.some((command) => command.startsWith("skills:")),
+    false,
+  );
+});
+
+test("a profession must remain observed for a full stable interval", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  } as const;
+  const changed = { ...initial, professions: [1, 2] as const };
+  const game = harness([initial]);
+  const baseParty = game.environment.party;
+  let requested = false;
+  let skillsApplied = false;
+  let attributesApplied = false;
+  game.environment.commands.setHeroSecondary = () => { requested = true; };
+  game.environment.party = () => {
+    const now = game.environment.confirmationTime!.now();
+    if (attributesApplied) game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+    else if (skillsApplied) game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+    }]);
+    else if (requested && ((now >= 100 && now < 500) || now >= 700)) game.set([changed]);
+    else game.set([initial]);
+    return baseParty();
+  };
+  game.environment.commands.setHeroSkills = (_hero, skills) => {
+    assert.ok(game.environment.confirmationTime!.now() >= 1_700);
+    skillsApplied = true;
+    game.set([{ ...changed, skills }]);
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    attributesApplied = true;
+    game.set([{
+      ...changed,
+      skills: build().skills.map((skill) => skill ?? 0),
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+});
+
+test("cancelling during confirmation sends no dependent command", async () => {
+  const game = harness([{
+    hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
+  }]);
+  const operation = new AbortController();
+  const secondary = game.environment.commands.setHeroSecondary;
+  game.environment.commands.setHeroSecondary = (hero, profession) => {
+    secondary(hero, profession);
+    operation.abort();
+  };
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build() })]),
+      { ...game.environment, signal: operation.signal },
+      1,
+    ),
+    (cause: unknown) => cause instanceof Error && cause.name === "AbortError",
+  );
+  assert.deepEqual(game.sent, ["secondary:11:2"]);
+});
+
 test("a monoclass build clears the secondary rather than leaving it", async () => {
   const game = harness([{
     hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
@@ -505,11 +629,32 @@ test("a secondary the game never changes is a refusal, not a bar written anyway"
   const game = harness([{
     hero: 6, agentId: 11, behaviour: 1, skills: null, professions: [1, 3],
   }]);
+  const events: { state: string; elapsedMs: number }[] = [];
   await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build() })]),
+      { ...game.environment, onEvent: (event) => events.push(event) },
+      1,
+    ),
     /Koss's secondary profession did not take effect/,
   );
-  assert.deepEqual(game.sent, ["secondary:11:2"], "and the bar was never sent");
+  assert.deepEqual(
+    game.sent,
+    ["secondary:11:2", "secondary:11:2"],
+    "one profession retry is sent, and the bar is never sent",
+  );
+  assert.deepEqual(
+    events
+      .filter((event) => event.state === "retrying")
+      .map(({ state, elapsedMs }) => ({ state, elapsedMs })),
+    [{ state: "retrying", elapsedMs: 3_000 }],
+  );
+  assert.deepEqual(
+    events
+      .filter((event) => event.state === "failed")
+      .map(({ state, elapsedMs }) => ({ state, elapsedMs })),
+    [{ state: "failed", elapsedMs: 15_000 }],
+  );
 });
 
 test("unobserved professions refuse before the first command", async () => {
@@ -573,6 +718,77 @@ test("a bar the game only partly equips is applied, and says what it dropped", a
   assert.equal(result.completedChanges, 2, "the bar and the attributes");
 });
 
+test("a progressively published bar is not mistaken for a stable partial bar", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [90, 91, 92, 93, 94, 95, 96, 97],
+  } as const;
+  const game = harness([initial]);
+  const baseParty = game.environment.party;
+  let requested = false;
+  let attributesApplied = false;
+  game.environment.commands.setHeroSkills = () => { requested = true; };
+  game.environment.party = () => {
+    const now = game.environment.confirmationTime!.now();
+    if (attributesApplied) {
+      game.set([{
+        ...initial,
+        skills: [1, 2, 3, 4, 5, 6, 7, 8],
+        attributes: [[17, 7], [19, 12]],
+      }]);
+    } else if (requested && now >= 500) {
+      game.set([{ ...initial, skills: [1, 2, 3, 4, 5, 6, 7, 8] }]);
+    } else if (requested && now >= 250) {
+      game.set([{ ...initial, skills: [1, 2, 3, 4, 94, 95, 96, 97] }]);
+    } else if (requested && now >= 100) {
+      game.set([{ ...initial, skills: [1, 2, 92, 93, 94, 95, 96, 97] }]);
+    }
+    return baseParty();
+  };
+  game.environment.commands.setHeroAttributes = () => {
+    attributesApplied = true;
+    game.set([{
+      ...initial,
+      skills: [1, 2, 3, 4, 5, 6, 7, 8],
+      attributes: [[17, 7], [19, 12]],
+    }]);
+  };
+
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), build: build() })]),
+    game.environment,
+    1,
+  );
+  assert.deepEqual(result.skippedSkills, []);
+});
+
+test("an omitted reportedly unlocked skill is an inconsistency, not a skip", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
+    skills: [90, 91, 92, 93, 94, 95, 96, 97],
+  } as const;
+  const partial = { ...initial, skills: [1, 2, 3, 4, 5, 6, 0, 8] };
+  const game = harness([initial]);
+  game.react("skills:11:1,2,3,4,5,6,7,8", [partial]);
+  const baseParty = game.environment.party;
+  game.environment.party = () => ({
+    ...baseParty(),
+    accountSkills: {
+      knownThrough: 100,
+      unlocked: new Set(Array.from({ length: 8 }, (_, index) => skillId(index + 1))),
+    },
+  });
+
+  await assert.rejects(
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build() })]),
+      game.environment,
+      1,
+    ),
+    /omitted reportedly unlocked skill 7 from slot 7/,
+  );
+});
+
 test("skipped skill names accumulate across the whole team", async () => {
   const first = {
     hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
@@ -619,14 +835,25 @@ test("a bar that never moves is still a refusal", async () => {
     hero: 6, agentId: 11, behaviour: 1, professions: [1, 2],
     skills: [90, 91, 92, 93, 94, 95, 96, 97],
   }]);
+  const events: { state: string; elapsedMs: number }[] = [];
   await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
+    runTeamApply(
+      plan([member({ hero: heroId(6), build: build() })]),
+      { ...game.environment, onEvent: (event) => events.push(event) },
+      1,
+    ),
     /Koss's skill bar did not take effect/,
   );
   assert.deepEqual(game.sent, [
     "skills:11:1,2,3,4,5,6,7,8",
     "skills:11:1,2,3,4,5,6,7,8",
   ], "the safe skill-bar retry is sent exactly once");
+  assert.deepEqual(
+    events
+      .filter((event) => event.state === "retrying")
+      .map(({ state, elapsedMs }) => ({ state, elapsedMs })),
+    [{ state: "retrying", elapsedMs: 750 }],
+  );
 });
 
 test("a bar and ranks already in place send nothing at all", async () => {
@@ -645,113 +872,4 @@ test("a bar and ranks already in place send nothing at all", async () => {
   assert.deepEqual(game.sent, []);
   assert.equal(result.completedChanges, 0);
   assert.equal(result.skippedSkills.length, 0);
-});
-
-test("a behaviour already set is not sent again", async () => {
-  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
-  const result = await runTeamApply(
-    plan([member({ hero: heroId(6), behaviour: "guard" })]),
-    game.environment,
-    1,
-  );
-  assert.deepEqual(game.sent, [], "nothing needed doing");
-  assert.equal(result.completedChanges, 0);
-});
-
-test("heroes that are not in the team leave before the ones that are arrive", async () => {
-  // A full party has no room, so the order is not cosmetic.
-  const game = harness([{ hero: 7, agentId: 11, behaviour: 1, skills: null }]);
-  game.react("kick:7", []);
-  game.react("add:6", [{ hero: 6, agentId: 12, behaviour: 1, skills: null }]);
-
-  const result = await runTeamApply(
-    plan([member({ hero: heroId(6), behaviour: "guard" })]),
-    game.environment,
-    1,
-  );
-  assert.deepEqual(game.sent, ["kick:7", "add:6"]);
-  assert.equal(result.completedChanges, 2);
-});
-
-test("a concurrent roster addition cannot turn into a false Apply success", async () => {
-  const game = harness([{
-    hero: 6, agentId: 11, behaviour: 1, skills: null,
-  }]);
-  const original = game.environment.commands.setHeroBehaviour;
-  game.environment.commands.setHeroBehaviour = (hero, behaviour) => {
-    original(hero, behaviour);
-    game.set([
-      { hero: 6, agentId: 11, behaviour: 0, skills: null },
-      { hero: 7, agentId: 12, behaviour: 1, skills: null },
-    ]);
-  };
-
-  await assert.rejects(
-    runTeamApply(
-      plan([member({ hero: heroId(6), behaviour: "fight" })]),
-      game.environment,
-      1,
-    ),
-    /final party roster did not match the team/,
-  );
-  assert.deepEqual(game.sent, ["behaviour:11:0"]);
-});
-
-test("Devona refuses the whole Apply before another hero is removed", async () => {
-  // `KickAllHeroes` is `kick(0x26)` and 0x26 is 38. One of those two meanings
-  // is wrong on a build that has her and nobody has established which, so the
-  // runner refuses rather than finding out during someone's apply.
-  const game = harness([
-    { hero: 7, agentId: 10, behaviour: 1, skills: null },
-    { hero: 38, agentId: 11, behaviour: 1, skills: null },
-  ]);
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /Devona cannot be removed safely/,
-  );
-  assert.deepEqual(game.sent, [], "and no packet was sent at all");
-});
-
-test("applying outside an outpost is refused before anything is sent", async () => {
-  const outside = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], false);
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), outside.environment, 1),
-    /Enter a PvE outpost/,
-  );
-  assert.deepEqual(outside.sent, []);
-
-  // And "not observed" is its own answer, not a quiet yes.
-  const unknown = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], null);
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), unknown.environment, 1),
-    /Waiting to confirm that this is a PvE outpost/,
-  );
-  assert.deepEqual(unknown.sent, []);
-});
-
-test("a party that stops publishing mid-apply stops the apply", async () => {
-  const game = harness([]);
-  const environment: TeamApplyEnvironment = {
-    ...game.environment,
-    party: (() => {
-      let calls = 0;
-      return () => (calls++ === 0
-        ? party([], true)
-        : liveParty({ status: "waiting" }));
-    })(),
-  };
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6) })]), environment, 1),
-    /stopped publishing a party/,
-  );
-});
-
-test("the count in a refusal is the work that landed, not the work attempted", async () => {
-  const game = harness([{ hero: 7, agentId: 11, behaviour: 1, skills: null }]);
-  game.react("kick:7", []);
-  // The add is accepted and never arrives.
-  await assert.rejects(
-    runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), game.environment, 1),
-    /1 change were made before it stopped/,
-  );
 });

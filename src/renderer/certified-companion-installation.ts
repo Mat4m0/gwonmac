@@ -42,9 +42,14 @@ import type {
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import type { EnhancementCommandThunk } from "./enhancement-team-commands.js";
+import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import { COMPANION_ABI as COMPANION_DESCRIPTOR } from "../shared/companion-abi.js";
 import { enhancementRuntimePolicy } from "./enhancement-runtime-policy.js";
+import {
+  createProfessionCommandTrace,
+  PROFESSION_COMMAND_TRACE_BYTES,
+  type ProfessionCommandTraceReader,
+} from "./profession-command-trace.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
 const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
@@ -211,13 +216,21 @@ export async function installCertifiedCompanion(
   // the transform emits it only there. A profile without it has no call to a
   // packet builder anywhere in its bytes, so this is a real absence rather
   // than a disabled feature.
-  const commandThunk = capabilities.commands
+  const commandEnqueue = capabilities.commands
     ? (typeof exports.enhancement_command === "function"
-        ? exports.enhancement_command as EnhancementCommandThunk
+        ? exports.enhancement_command as EnhancementCommandEnqueue
         : null)
     : null;
-  if (capabilities.commands && commandThunk === null) {
-    throw new Error("the commands profile derived a module with no command thunk");
+  const professionTraceReader = capabilities.commands
+    ? (typeof exports?.enhancement_profession_trace === "function"
+        ? exports.enhancement_profession_trace as ProfessionCommandTraceReader
+        : null)
+    : null;
+  if (capabilities.commands && commandEnqueue === null) {
+    throw new Error("the commands profile derived a module with no command queue");
+  }
+  if (capabilities.commands && professionTraceReader === null) {
+    throw new Error("the commands profile derived a module with no profession trace");
   }
   // Keep the command implementation out of Core-only sessions altogether.
   // The derived module and its JavaScript boundary arrive as one capability.
@@ -250,6 +263,7 @@ export async function installCertifiedCompanion(
   let toolboxPointer = 0;
   let partyPointer = 0;
   let payloadPointer = 0;
+  let professionTracePointer = 0;
   // What malloc returned, which is what free must be given. The aligned base
   // used by the module lives inside it and is not a valid argument to free.
   let runtimeAllocation = 0;
@@ -259,6 +273,7 @@ export async function installCertifiedCompanion(
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
   let disposeCursorRefresh = () => {};
+  let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
   let installedRuntime: object | null = null;
   let cleaned = false;
@@ -274,6 +289,7 @@ export async function installCertifiedCompanion(
     disposeReadout();
     disposeToolbox();
     disposeToolSettings();
+    professionTrace?.dispose();
     if (
       installedCallback !== null
       && table.get(manifest.tableSlot) === installedCallback
@@ -283,6 +299,7 @@ export async function installCertifiedCompanion(
     if (toolboxPointer) free(toolboxPointer);
     if (partyPointer) free(partyPointer);
     if (payloadPointer) free(payloadPointer);
+    if (professionTracePointer) free(professionTracePointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
     if (snapshotPointer) free(snapshotPointer);
@@ -325,6 +342,11 @@ export async function installCertifiedCompanion(
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
       );
+      if (window.gwNative.init.development) {
+        professionTracePointer = Number(
+          exports.malloc(PROFESSION_COMMAND_TRACE_BYTES),
+        );
+      }
     }
     if (
       !runtimeAllocation
@@ -334,6 +356,11 @@ export async function installCertifiedCompanion(
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
       || (capabilities.commands && !payloadPointer)
+      || (
+        capabilities.commands
+        && window.gwNative.init.development
+        && !professionTracePointer
+      )
     ) {
       throw new Error("Companion allocation failed");
     }
@@ -358,12 +385,22 @@ export async function installCertifiedCompanion(
           ]
         : []),
       ...(capabilities.commands
-        ? [{
-            name: "command payload",
-            pointer: payloadPointer,
-            size: teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES,
-            align: 4,
-          }]
+        ? [
+            {
+              name: "command payload",
+              pointer: payloadPointer,
+              size: teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES,
+              align: 4,
+            },
+            ...(professionTracePointer
+              ? [{
+                  name: "profession trace",
+                  pointer: professionTracePointer,
+                  size: PROFESSION_COMMAND_TRACE_BYTES,
+                  align: 4,
+                }]
+              : []),
+          ]
         : []),
     ];
     for (const region of ownedRegions) {
@@ -570,6 +607,23 @@ export async function installCertifiedCompanion(
       : "pve";
     let readout: ReturnType<typeof createTargetReadout> | null = null;
     const policy = () => enhancementRuntimePolicy(program, optionalSettings, playRegion);
+    let lastPolicyTrace = "";
+    const tracePolicy = (reason: "launch" | "region" | "settings") => {
+      if (!window.gwNative.init.development) return;
+      const active = policy();
+      const summary = {
+        program,
+        playRegion,
+        nativeCursor: capabilities.nativeCursor,
+        teamManagement: active.teamManagement,
+        targetReadout: active.targetReadout,
+        commands: commands !== null,
+      };
+      const signature = JSON.stringify(summary);
+      if (signature === lastPolicyTrace) return;
+      lastPolicyTrace = signature;
+      console.debug(`[tools:dev] policy ${JSON.stringify({ reason, ...summary })}`);
+    };
     const targetEnabled = () => policy().targetReadout;
     const setTargetEnabled = () => {
       if (!observeState) return;
@@ -600,10 +654,11 @@ export async function installCertifiedCompanion(
         | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
       kernelDispatch(3, active, 0, 0, 0, 0);
     };
-    const commands = commandThunk === null ? null : teamCommands!.createTeamApplyCommands({
+    const commands = commandEnqueue === null ? null : teamCommands!.createTeamApplyCommands({
       memory,
       payloadPointer,
-      send: commandThunk,
+      send: commandEnqueue,
+      development: window.gwNative.init.development,
       ready: () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
         if (!teamEnabled()) throw new Error("Team management is disabled");
@@ -624,6 +679,13 @@ export async function installCertifiedCompanion(
         return observed;
       },
     });
+    if (professionTracePointer !== 0 && professionTraceReader !== null) {
+      professionTrace = createProfessionCommandTrace(
+        memory,
+        professionTracePointer,
+        professionTraceReader,
+      );
+    }
     const setTeamEnabled = () => {
       if (!foundation) return;
       if (teamEnabled()) {
@@ -640,10 +702,12 @@ export async function installCertifiedCompanion(
         toolbox = null;
       }
     };
+    tracePolicy("launch");
     setTeamEnabled();
     const onToolSettings = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
       optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
+      tracePolicy("settings");
       setTeamEnabled();
       setTargetEnabled();
       syncActiveObservers();
@@ -758,6 +822,7 @@ export async function installCertifiedCompanion(
               : "unknown";
             if (foundation && next !== playRegion) {
               playRegion = next;
+              tracePolicy("region");
               setTeamEnabled();
               setTargetEnabled();
               syncActiveObservers();
@@ -767,7 +832,8 @@ export async function installCertifiedCompanion(
         : null,
       foundation
         ? { update: (state) => {
-          toolboxObservation = state;
+            toolboxObservation = state;
+            professionTrace?.poll(state);
             const party = state.party;
             const next: typeof playRegion = state.status === "ready"
               && party?.status === "ready"
@@ -776,6 +842,7 @@ export async function installCertifiedCompanion(
               : "unknown";
             if (next !== playRegion) {
               playRegion = next;
+              tracePolicy("region");
               setTeamEnabled();
               setTargetEnabled();
               syncActiveObservers();

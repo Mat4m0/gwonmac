@@ -5,8 +5,8 @@
  *
  * Every filesystem path is resolved and then proved to still be under its root,
  * so a traversal, an encoded separator or an embedded NUL cannot reach a file
- * outside it. The snapshot is served from ranges only. Exactly two shared
- * modules are reachable from `src/shared`, named here rather than inferred, and
+ * outside it. The snapshot is served from ranges only. A closed set of shared
+ * modules is reachable from `src/shared`, named here rather than inferred, and
  * a route the proxy does not recognise is refused rather than forwarded.
  *
  * The response headers, including the CSP, are attached here for everything
@@ -72,6 +72,7 @@ const RENDERER_SHARED_MODULES = new Set([
   "enhancement-config.js",
   "enhancement-contracts.js",
   "project-identity.js",
+  "ui/resize.js",
 ]);
 
 export interface ProtocolDeps {

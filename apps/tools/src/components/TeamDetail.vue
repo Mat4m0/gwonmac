@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import {
-  HEROES_IN_PANEL_ORDER,
-  PROFESSIONS,
-} from "../../../../src/shared/builds/heroes";
+import { HEROES_IN_PANEL_ORDER, PROFESSIONS, heroLabel } from "../../../../src/shared/builds/heroes";
 import {
   buildById,
   buildId,
@@ -20,12 +17,10 @@ import {
   type TeamApplyProblem,
   type TeamApplyRuntimeProblem,
 } from "../../../../src/shared/builds/team-apply";
-import {
-  teamMemberLabel,
-  type Team,
-} from "../model";
+import { teamMemberLabel, type Team } from "../model";
 import SkillBar from "./SkillBar.vue";
 import TagEditor from "./TagEditor.vue";
+import { useTeamRoster } from "../use-team-roster";
 
 const props = defineProps<{
   team: Team;
@@ -44,6 +39,23 @@ const shareCode = ref("");
 const shareProblem = ref("");
 const shareStatus = ref("");
 const shareCodeInput = ref<HTMLTextAreaElement | null>(null);
+const roster = useTeamRoster(() => props.team, props.controller.updateTeam);
+const {
+  announcement: rosterAnnouncement,
+  asPosition: asTeamPosition,
+  chooseHero,
+  draggedMember,
+  dropTarget,
+  finishPointerDrag: finishMemberPointerDrag,
+  fixOrder: fixTeamOrder,
+  isConfigured: configuredHeroSlot,
+  isCompactEmpty: compactEmptySlot,
+  losePointerDrag: loseMemberPointerDrag,
+  movePointerDrag: moveMemberPointerDrag,
+  moveByKeyboard: moveMemberByKeyboard,
+  remove: removeMember,
+  startPointerDrag: startMemberPointerDrag,
+} = roster;
 watch(
   () => props.team.id,
   () => {
@@ -203,8 +215,17 @@ const runtimeProblemGuidance = (problem: TeamApplyRuntimeProblem): string | null
     case "primary-mismatch": return "Choose a build with the observed primary profession.";
     case "hero-locked": return "Choose an unlocked hero or unlock this hero in Guild Wars.";
     case "hero-availability-unknown": return "Add this hero in the Guild Wars party window first.";
-    case "devona-removal": return "Remove Devona in the Guild Wars party window, then apply again.";
+    case "skill-locked": return "Choose an unlocked skill, or unlock it in Guild Wars before applying.";
   }
+};
+
+const runtimeProblemMessage = (problem: TeamApplyRuntimeProblem): string => {
+  if (problem.rule !== "skill-locked") return teamApplyProblemMessage(problem);
+  const owner = problem.hero === null
+    ? "Your assigned build"
+    : `${heroLabel(problem.hero)}'s assigned build`;
+  const names = problem.skills.map((skill) => props.controller.skills.get(skill).name);
+  return `${owner} uses ${names.join(", ")}, which ${names.length === 1 ? "is" : "are"} not unlocked.`;
 };
 
 const storedProblemGuidance = (problem: TeamApplyProblem): string | null => {
@@ -287,7 +308,7 @@ const applyAssessment = computed(() => {
   if (!result.ready) {
     result.blockers.forEach((problem, index) => issues.push({
       id: `runtime-${problem.rule}-${"hero" in problem ? problem.hero ?? "player" : index}`,
-      message: teamApplyProblemMessage(problem),
+      message: runtimeProblemMessage(problem),
       guidance: runtimeProblemGuidance(problem),
       slots: runtimeProblemSlots(problem),
       control: runtimeProblemControl(problem),
@@ -317,10 +338,12 @@ const applyAssessment = computed(() => {
   if (count("mode")) changes.push(`set ${props.team.mode === "hard" ? "Hard" : "Normal"} Mode`);
   const removing = count("remove-hero");
   const adding = count("add-hero");
+  const rebuilding = count("rebuild-roster");
   const builds = count("player-build") + count("hero-build");
   const behaviours = count("behaviour");
   if (removing) changes.push(`remove ${removing} ${removing === 1 ? "hero" : "heroes"}`);
   if (adding) changes.push(`add ${adding} ${adding === 1 ? "hero" : "heroes"}`);
+  if (rebuilding) changes.push("rebuild heroes in this order");
   if (builds) changes.push(`update ${builds} ${builds === 1 ? "build" : "builds"}`);
   if (behaviours) changes.push(`update ${behaviours} ${behaviours === 1 ? "behavior" : "behaviors"}`);
   return {
@@ -465,11 +488,9 @@ const buildOptionGroups = (index: number): BuildOptionGroup[] => {
   });
 };
 
-const compactEmptySlot = (slot: TeamSlot, index: number): boolean =>
-  index > 0
-  && slot.hero === null
-  && slot.build === null
-  && issuesForSlot(index).length === 0;
+const hasPartyGap = computed(() =>
+  applyAssessment.value.issues.some((issue) => issue.id.startsWith("stored-party-gap-")),
+);
 
 const sharedBuildCount = computed(() => {
   const ids = new Set(props.team.slots.flatMap((slot) => slot.build === null ? [] : [slot.build]));
@@ -509,15 +530,6 @@ const updateSlot = (
   label,
 );
 
-const chooseHero = async (index: number, event: Event) => {
-  const select = event.target as HTMLSelectElement;
-  const value = select.value;
-  const hero = value ? heroId(Number(value)) : null;
-  if (!await updateSlot(index, { hero }, "Hero assignment updated")) {
-    select.value = String(props.team.slots[index]?.hero ?? "");
-  }
-};
-
 const chooseBuild = async (index: number, event: Event) => {
   const select = event.target as HTMLSelectElement;
   const value = select.value;
@@ -556,6 +568,10 @@ const dismissTransientPanel = (event: KeyboardEvent) => {
 };
 
 const apply = () => {
+  if (props.controller.applying.value) {
+    props.controller.cancelTeamApply();
+    return;
+  }
   if (noApplyChanges.value) return;
   props.controller.applyTeam(props.team);
 };
@@ -576,8 +592,8 @@ defineExpose({
     @keydown.esc="dismissTransientPanel"
   >
     <fieldset class="team-editor" :disabled="controller.saving.value">
-    <header class="detail-header">
-      <div class="detail-title-line">
+    <header class="detail-header team-detail-header">
+      <div class="detail-title-line team-title-line">
         <div class="ui-mark profession-mark">8</div>
         <div class="title-editor">
           <label class="ui-sr-only" for="team-name">Team name</label>
@@ -654,8 +670,13 @@ defineExpose({
           :key="`${slot.hero}-${index}`"
           :class="{
             'team-slot--empty': !slot.build,
-            'team-slot--compact': compactEmptySlot(slot, index),
+            'team-slot--compact': compactEmptySlot(slot, index, issuesForSlot(index).length > 0),
+            'team-slot--dragging': draggedMember === index,
+            'team-slot--drop-target': dropTarget === index && draggedMember !== index,
+            'team-slot--drop-before': dropTarget === index && draggedMember !== null && index < draggedMember,
+            'team-slot--drop-after': dropTarget === index && draggedMember !== null && index > draggedMember,
           }"
+          :data-team-slot="index"
           :data-invalid="!assignmentValid(slot, index) || issuesForSlot(index).length > 0 ? '' : undefined"
         >
           <span class="slot-number">{{ index + 1 }}</span>
@@ -668,7 +689,7 @@ defineExpose({
             >
               {{ teamMemberLabel(slot.hero, index)[0] }}
             </span>
-            <span v-if="index === 0">
+            <span v-if="index === 0" class="player-identity">
               <strong>You</strong>
               <small>
                 {{ slot.build && controller.library.value
@@ -764,7 +785,12 @@ defineExpose({
           />
           <span v-else class="empty-bar">Empty slot</span>
 
-          <span v-if="compactEmptySlot(slot, index)" class="available-slot">Available slot</span>
+          <span
+            v-if="compactEmptySlot(slot, index, issuesForSlot(index).length > 0)"
+            class="available-slot"
+          >
+            {{ draggedMember === null ? "Available slot" : "Move here" }}
+          </span>
 
           <label class="behavior-picker">
             <span class="ui-sr-only">Behavior for {{ teamMemberLabel(slot.hero, index) }}</span>
@@ -782,8 +808,39 @@ defineExpose({
             </select>
           </label>
 
+          <div v-if="configuredHeroSlot(slot, index)" class="team-member-actions">
+            <button
+              :id="`team-move-${index}`"
+              class="ui-button team-move-handle"
+              data-icon
+              type="button"
+              :aria-label="`Move ${teamMemberLabel(slot.hero, index)}`"
+              :title="`Drag to move ${teamMemberLabel(slot.hero, index)}; use arrow keys to reorder`"
+              @click.prevent
+              @keydown="moveMemberByKeyboard(asTeamPosition(index), $event)"
+              @pointerdown="startMemberPointerDrag(asTeamPosition(index), $event)"
+              @pointermove="moveMemberPointerDrag"
+              @pointerup="finishMemberPointerDrag"
+              @pointercancel="loseMemberPointerDrag"
+              @lostpointercapture="loseMemberPointerDrag"
+            >
+              <span aria-hidden="true">⠿</span>
+            </button>
+            <button
+              class="ui-button team-remove-member"
+              data-icon
+              type="button"
+              :aria-label="`Remove ${teamMemberLabel(slot.hero, index)} from team`"
+              :title="`Remove ${teamMemberLabel(slot.hero, index)} from team`"
+              @click="removeMember(asTeamPosition(index))"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+
         </li>
       </ol>
+      <span class="ui-sr-only" aria-live="polite">{{ rosterAnnouncement }}</span>
 
       <section
         v-if="applyAssessment.blocked"
@@ -806,6 +863,14 @@ defineExpose({
             @click="swapReciprocalBuilds"
           >
             Swap the mismatched builds
+          </button>
+          <button
+            v-else-if="hasPartyGap"
+            class="ui-button"
+            data-variant="primary"
+            @click="fixTeamOrder"
+          >
+            Fix team order
           </button>
         </div>
         <ul class="apply-issue-list">
@@ -839,6 +904,8 @@ defineExpose({
       </section>
 
     </div>
+
+    </fieldset>
 
     <footer v-if="deleting" class="detail-actions detail-actions--explain delete-confirmation">
       <span>
@@ -907,19 +974,27 @@ defineExpose({
         {{ applyAssessment.message }}
       </div>
       <div class="team-action-buttons">
-        <button class="ui-link" data-variant="danger" @click="deleting = true">Delete</button>
-        <button class="ui-button" @click="startSharing">Export team</button>
+        <button
+          class="ui-link"
+          data-variant="danger"
+          :disabled="controller.saving.value"
+          @click="deleting = true"
+        >Delete</button>
         <button
           class="ui-button"
-          data-variant="primary"
-          :disabled="applyAssessment.blocked || noApplyChanges || controller.saving.value"
+          :disabled="controller.saving.value"
+          @click="startSharing"
+        >Export team</button>
+        <button
+          class="ui-button"
+          :data-variant="controller.applying.value ? 'danger' : 'primary'"
+          :disabled="!controller.applying.value && (applyAssessment.blocked || noApplyChanges || controller.saving.value)"
           :aria-describedby="applyAssessment.blocked ? 'apply-feedback apply-readiness' : 'apply-feedback'"
           @click="apply"
         >
-          {{ controller.saving.value ? "Applying…" : noApplyChanges ? "Already applied" : "Apply team" }}
+          {{ controller.applying.value ? "Cancel Apply" : noApplyChanges ? "Already applied" : "Apply team" }}
         </button>
       </div>
     </footer>
-    </fieldset>
   </article>
 </template>

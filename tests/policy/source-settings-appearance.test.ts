@@ -1,6 +1,5 @@
-// The product has one OG Guild Wars interface. This source-level policy keeps
-// a retired palette or geometry selector from quietly returning to Settings,
-// while pinning the only remaining appearance control to main's exact bounds.
+// Settings exposes one closed style choice and one bounded visibility control.
+// Retired free-form palette and geometry knobs must not quietly return.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -9,12 +8,14 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("Settings exposes one interface rather than theme or geometry variants", async () => {
+test("Settings exposes the two interface styles and no retired variants", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
   for (const retired of ["uiTheme", "uiDensity", "uiBorderWidth", "uiRadius"]) {
     assert.doesNotMatch(html, new RegExp(`name=["']${retired}["']`, "u"));
   }
-  assert.match(html, /one interface inspired by the original Guild Wars client/u);
+  const values = [...html.matchAll(/<input\b[^>]*\bname=["']uiStyle["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
+    .map((match) => match[1]);
+  assert.deepEqual(values, ["guild-wars", "obsidian"]);
 });
 
 test("panel opacity is bounded exactly as main requires", async () => {

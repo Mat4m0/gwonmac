@@ -8,7 +8,8 @@ import {
 } from "vue";
 import { PROFESSIONS } from "../../../../src/shared/builds/heroes";
 import { encodeSkillTemplate } from "../../../../src/shared/builds/skill-template";
-import type { Profession } from "../../../../src/shared/builds/library";
+import type { Profession, SkillId } from "../../../../src/shared/builds/library";
+import type { SkillUnlockObservation } from "../../../../src/shared/builds/live-party";
 import type { BuildProblem } from "../../../../src/shared/builds/validate";
 import type { LibraryController } from "../use-library";
 import {
@@ -21,6 +22,8 @@ import SkillBar from "./SkillBar.vue";
 import SkillCatalogue from "./SkillCatalogue.vue";
 import TagEditor from "./TagEditor.vue";
 import { navigateTabs } from "../tab-keyboard";
+import { presentSkillPlacement } from "../skill-drop";
+import { useSkillDragSession } from "../use-skill-drag-session";
 
 const props = withDefaults(defineProps<{
   build: Build;
@@ -47,6 +50,34 @@ const exporting = ref(false);
 const exportProblem = ref("");
 const exportStatus = ref("");
 const exportCodeInput = ref<HTMLTextAreaElement | null>(null);
+const placementStatus = ref<{
+  text: string;
+  tone: "success" | "warning" | "error";
+} | null>(null);
+const dragSession = useSkillDragSession({
+  name: (skill) => props.controller.skills.get(skill).name,
+  previewPlacement: (skill, target) => presentSkillPlacement(
+    skill,
+    editor.previewSkillPlacement(target, skill, props.controller.skills),
+    props.controller.skills,
+  ).preview,
+  place: (skill, target) => placeSkill(target, skill),
+  reorder: editor.moveSkill,
+  clearFeedback: () => { placementStatus.value = null; },
+});
+const catalogueOpen = computed(() =>
+  view.value === "build"
+  && workspace.value === "skills"
+  && editor.activeSlot.value !== null
+);
+const unlockScope = computed<"account" | "character">(() =>
+  context.value === "hero" ? "account" : "character"
+);
+const skillUnlocks = computed<SkillUnlockObservation | null>(() =>
+  unlockScope.value === "account"
+    ? props.controller.party.value.accountSkills
+    : props.controller.party.value.characterSkills
+);
 
 watch(editor.dirty, (dirty) => emit("dirtyChange", dirty), { immediate: true });
 watch(
@@ -62,6 +93,8 @@ watch(
     exporting.value = false;
     exportProblem.value = "";
     exportStatus.value = "";
+    dragSession.cancel();
+    placementStatus.value = null;
   },
 );
 
@@ -133,9 +166,18 @@ function closeCatalogue(): void {
   workspace.value = "attributes";
   requestAnimationFrame(() => {
     document.querySelector<HTMLButtonElement>(
-      `.authoring-bar .skill:nth-child(${(slot ?? 0) + 1})`,
+      `.authoring-bar .skill[data-skill-slot="${slot ?? 0}"]`,
     )?.focus();
   });
+}
+
+function placeSkill(slot: number, skill: SkillId): void {
+  const resolution = editor.placeSkill(slot, skill, props.controller.skills);
+  placementStatus.value = presentSkillPlacement(
+    skill,
+    resolution,
+    props.controller.skills,
+  ).completion;
 }
 
 function problemText(problem: BuildProblem): string {
@@ -211,7 +253,11 @@ defineExpose({
 </script>
 
 <template>
-  <article class="detail-view build-authoring" aria-label="Build editor">
+  <article
+    class="detail-view build-authoring"
+    :data-catalogue-open="catalogueOpen ? '' : undefined"
+    aria-label="Build editor"
+  >
     <header class="detail-header authoring-header">
       <div class="detail-title-line">
         <div
@@ -300,15 +346,22 @@ defineExpose({
             :active-slot="editor.activeSlot.value"
             :invalid-slots="invalidSlots"
             :changed-slots="changedSlots"
+            :drag-session="dragSession"
             editable
             @select="selectSlot"
             @clear="editor.setSkill($event, null)"
             @move="editor.moveSkill"
-            @reorder="editor.reorderSkills"
-            @moved="editor.finishSkillMove"
           />
           <p class="bar-keyboard-hint">
-            Drag to reorder · Enter edits · Delete clears · ⌘← / ⌘→ moves
+            Drag skills onto slots; drag slots to reorder · Enter edits · Delete clears · ⌘← / ⌘→ moves
+          </p>
+          <p
+            v-if="placementStatus"
+            class="bar-drag-status"
+            :data-tone="placementStatus.tone"
+            role="status"
+          >
+            {{ placementStatus.text }}
           </p>
         </section>
 
@@ -367,7 +420,11 @@ defineExpose({
           :editor="editor"
           :catalogue="controller.skills"
           :allow-player-only="allowPlayerOnly"
+          :unlocks="skillUnlocks"
+          :unlock-scope="unlockScope"
+          :drag-session="dragSession"
           @close="closeCatalogue"
+          @place="placeSkill"
         />
         <section
           v-else
@@ -438,7 +495,7 @@ defineExpose({
           spellcheck="false"
           placeholder="Paste a revised Guild Wars skill template code"
         />
-        <p v-if="adaptError" class="field-error" role="alert">That is not a valid skill template code.</p>
+        <p v-if="adaptError" class="ui-field-error" role="alert">That is not a valid skill template code.</p>
         <button class="ui-button" :disabled="!adaptCode.trim()" @click="importDraft">
           Load into draft
         </button>

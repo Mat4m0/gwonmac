@@ -17,6 +17,7 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
+  UI_STYLES,
   type AppSettings,
   type AppSettingsPatch,
 } from "../../shared/contracts.js";
@@ -25,6 +26,7 @@ import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
+const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
 
 /**
  * A whole number inside a closed range.
@@ -92,6 +94,12 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
   }
+  if ("uiStyle" in src) {
+    if (!UI_STYLE_VALUES.has(src.uiStyle as AppSettings["uiStyle"])) {
+      throw new AppError("bad_settings", "settings.uiStyle has unknown value");
+    }
+    out.uiStyle = src.uiStyle as AppSettings["uiStyle"];
+  }
   if ("uiPanelOpacity" in src) {
     out.uiPanelOpacity = asBoundedInteger(
       src.uiPanelOpacity,
@@ -100,7 +108,12 @@ export function parseSettings(raw: unknown): AppSettings {
       100,
     );
   }
-  for (const setting of ["gwonmacTools", "teamManagement", "targetReadout"] as const) {
+  for (const setting of [
+    "gwonmacTools",
+    "teamManagement",
+    "targetReadout",
+    "extendedMemoryEnabled",
+  ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
   }
   if ("showDiagnostics" in src) {

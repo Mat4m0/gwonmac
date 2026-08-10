@@ -2,13 +2,12 @@
  *
  * The vocabulary is taken from the original Guild Wars client: an ivory metal
  * ring, engraved parchment text, blue-black selected faces, graphite controls,
- * and recessed black wells. There are deliberately no theme selectors. A
- * component either belongs to this system or it does not.
+ * and recessed black wells. Obsidian is the one optional projection of this
+ * vocabulary: it changes tokens, never markup or component behaviour.
  *
- * `--ui-panel-opacity` is the only player preference. It controls visibility
- * of the game behind a panel without changing the identity or geometry of the
- * interface. The `--ui-*` names remain the public component vocabulary; the
- * measured Guild Wars materials below are their one implementation.
+ * `--ui-panel-opacity` controls visibility of the game behind either style.
+ * The `--ui-*` names remain the public component vocabulary; consumers do not
+ * branch on the selected style.
  */
 
 :root {
@@ -101,8 +100,12 @@
   --ui-text-muted: #b2ac9d;
   --ui-text-faint: #948e7e;
   --ui-accent: #e6c882;
+  --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
   --ui-accent-ink: #f5f0e2;
+  --ui-primary-fill: var(--ui-accent-fill);
+  --ui-primary-ink: var(--ui-accent-ink);
+  --ui-control-mark: var(--gw-bone);
   --ui-focus: #f6e3a8;
   --ui-info: #8cb6df;
   --ui-warning: #e3a94a;
@@ -168,12 +171,79 @@
 
   --ui-duration: 120ms;
   --ui-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ui-z-sticky: 2;
   --ui-z-readout: 3;
   --ui-z-frame: 4;
   --ui-z-title: 5;
   --ui-z-status: 9;
   --ui-z-tools: 30;
   --ui-z-toast: 40;
+}
+
+/* Obsidian keeps the same hierarchy and components, then removes ornamental
+ * chrome in favour of warm-black tonal depth, quiet gilt, and system type.
+ * The selector lives here—and only here—so every surface changes together. */
+:root[data-ui-style="obsidian"] {
+  --ui-border-width: 0px;
+  --ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui-font-display: var(--ui-font);
+
+  --ui-text: oklch(0.93 0.012 84);
+  --ui-text-bright: oklch(0.97 0.01 84);
+  --ui-text-muted: oklch(0.76 0.014 82);
+  --ui-text-faint: oklch(0.64 0.012 82);
+  --ui-accent: oklch(0.79 0.105 83);
+  --ui-accent-hover: oklch(0.88 0.095 86);
+  --ui-accent-strong: oklch(0.7 0.105 82);
+  --ui-accent-ink: oklch(0.94 0.012 84);
+  --ui-primary-fill: linear-gradient(oklch(0.79 0.105 83), oklch(0.79 0.105 83));
+  --ui-primary-ink: oklch(0.2 0.018 78);
+  --ui-control-mark: oklch(0.76 0.014 82);
+  --ui-focus: oklch(0.9 0.105 88);
+  --ui-info: oklch(0.76 0.08 240);
+  --ui-warning: oklch(0.79 0.12 75);
+  --ui-danger: oklch(0.71 0.17 27);
+  --ui-success: oklch(0.74 0.12 145);
+
+  --ui-panel-fill: oklch(0.16 0.006 80 / var(--ui-panel-opacity));
+  --ui-raised-fill: linear-gradient(oklch(0.24 0.009 78), oklch(0.24 0.009 78));
+  --ui-well: oklch(0.105 0.004 80);
+  --ui-well-fill: oklch(0.105 0.004 80 / 0.78);
+  --ui-hover: oklch(0.79 0.105 83 / 0.1);
+  --ui-selected: oklch(0.3 0.035 78);
+  --ui-line: oklch(0.48 0.025 78);
+  --ui-line-soft: oklch(0.78 0.018 82 / 0.13);
+  --ui-outline: transparent;
+  --ui-edge: transparent;
+  --ui-edge-strong: oklch(0.83 0.02 84 / 0.34);
+  --ui-edge-inner: oklch(1 0 0 / 0.035);
+  --ui-shadow: 0 18px 48px oklch(0 0 0 / 0.52);
+  --ui-frame-inset: inset 0 0 0 transparent;
+  --ui-shadow-inset: inset 0 1px 3px oklch(0 0 0 / 0.48);
+  --ui-shadow-inset-deep: inset 0 1px 4px oklch(0 0 0 / 0.58);
+  --ui-shadow-raised: 0 1px 2px oklch(0 0 0 / 0.36);
+  --ui-shadow-raised-soft: 0 0 transparent;
+  --ui-shadow-selected: 0 1px 2px oklch(0 0 0 / 0.36);
+  --ui-shadow-row-selected: 0 1px 2px oklch(0 0 0 / 0.28);
+  --ui-text-shadow: none;
+  --ui-frame: transparent;
+  --ui-frame-top: transparent;
+  --ui-ring-gilt: transparent;
+  --ui-ring-gold: transparent;
+  --ui-ring-quiet: transparent;
+  --ui-ring-empty: transparent;
+  --ui-ring-mark: transparent;
+  --ui-row-fill: linear-gradient(oklch(0.21 0.006 78 / 0.72), oklch(0.21 0.006 78 / 0.72));
+  --ui-title-fill: linear-gradient(oklch(0.2 0.008 78), oklch(0.2 0.008 78));
+  --ui-title-shadow: none;
+  --ui-corner-swell: transparent;
+  --ui-corner-shadow: none;
+  --ui-scroll-track-color: oklch(0.105 0.004 80);
+  --ui-scroll-thumb-color: oklch(0.42 0.018 78);
+  --ui-scroll-track: oklch(0.105 0.004 80);
+  --ui-scroll-track-shadow: none;
+  --ui-scroll-thumb: oklch(0.42 0.018 78);
+  --ui-accent-fill: linear-gradient(oklch(0.27 0.02 78), oklch(0.27 0.02 78));
 }
 
 @media (prefers-reduced-motion: reduce) {

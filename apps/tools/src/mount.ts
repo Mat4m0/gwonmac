@@ -5,6 +5,7 @@ import {
   type ToolboxObservation,
 } from "../../../src/shared/builds/live-party";
 import type { ToolsHost } from "./host";
+import { devTrace } from "./dev-trace";
 import "./styles.css";
 
 export type ToolsAppHandle = Readonly<{
@@ -29,12 +30,18 @@ export function mountToolsApp(
     mode: "standalone" | "embedded";
     initiallyVisible?: boolean;
     onVisibilityChange?: (visible: boolean) => void;
+    development?: boolean;
   },
 ): ToolsAppHandle {
   let lastProfessionProbe = "";
+  let lastPartyTrace = "";
+  const development = options.development === true;
   const visible = ref(options.initiallyVisible ?? options.mode === "standalone");
   const setVisible = (next: boolean) => {
+    if (visible.value === next) return;
+    if (!next) options.host.cancelApply();
     visible.value = next;
+    devTrace(development, "visibility", { visible: next });
     options.onVisibilityChange?.(next);
   };
   const app = createApp({
@@ -47,9 +54,14 @@ export function mountToolsApp(
           onClose: () => setVisible(false),
           onReady: () => {
             target.dataset.ready = "true";
+            devTrace(development, "ready", { mode: options.mode });
           },
         });
     },
+  });
+  devTrace(development, "mount", {
+    mode: options.mode,
+    visible: visible.value,
   });
   app.mount(target);
   return Object.freeze({
@@ -58,6 +70,21 @@ export function mountToolsApp(
     toggle: () => setVisible(!visible.value),
     update: (observation: ToolboxObservation) => {
       options.host.party.value = liveParty(observation);
+      const observed = options.host.party.value;
+      const partySummary = {
+        status: observed.status,
+        playRegion: observed.playRegion,
+        inOutpost: observed.inOutpost,
+        partial: observed.partial,
+        heroes: observed.heroes.length,
+        accountSkillsObserved: observed.accountSkills !== null,
+        characterSkillsObserved: observed.characterSkills !== null,
+      } as const;
+      const partyTrace = JSON.stringify(partySummary);
+      if (partyTrace !== lastPartyTrace) {
+        lastPartyTrace = partyTrace;
+        devTrace(development, "party", partySummary);
+      }
       const party = observation.party;
       const player = party?.slots?.[0];
       if (
@@ -88,6 +115,8 @@ export function mountToolsApp(
       }
     },
     dispose: () => {
+      devTrace(development, "dispose");
+      options.host.cancelApply();
       Reflect.deleteProperty(window, "gwPlayerProfessionProbe");
       app.unmount();
     },

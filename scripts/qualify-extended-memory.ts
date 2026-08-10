@@ -152,6 +152,7 @@ try {
     enhancementCacheRoot: join(selectionScratch, "enhancements"),
     nativeDoubleClickCacheRoot: join(selectionScratch, "double-click"),
     extendedMemoryCacheRoot: join(selectionScratch, "extended-memory"),
+    extendedMemoryEnabled: true,
   });
   if (
     selected.extendedMemory.status !== "active"

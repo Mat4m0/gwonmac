@@ -3,29 +3,20 @@ import { describe, it } from "node:test";
 import {
   ADDRESSES,
   ALL_FEATURES,
-  COMPANION_CURSOR_ABI,
   COMPANION_CURSOR_BYTES,
   COMPANION_PARTY_BYTES,
   COMPANION_TOOLBOX_BYTES,
   CONFIG_BYTES,
   createKernel,
   CURSOR,
-  CURSOR_EDGE,
-  CURSOR_HIDDEN,
-  CURSOR_MAGIC,
-  CURSOR_UNSUPPORTED,
-  CURSOR_VALID,
   decoded,
   DETAIL,
-  expectedRgba,
   FEATURE_NATIVE_CURSOR,
   FEATURE_TARGET_READOUT,
   FEATURE_TOOLBOX_FOUNDATION,
-  fnv1a,
   installCursorGraph,
   installGameGraph,
   installPartyDetailGraph,
-  invalidCursor,
   MESSAGE_CONFIG_START,
   paintCursor,
   PARTY_DIRTY_MESSAGES,
@@ -33,12 +24,10 @@ import {
   readChangedCompanionParty,
   readChangedCompanionToolbox,
   readCompanionSnapshot,
-  readyCursor,
   readyParty,
   readyToolbox,
   rejected,
   sameCompanionToolboxState,
-  TEXTURE_KEY,
 } from "../fixtures/enhancements.ts";
 
 describe("Companion kernel", () => {
@@ -294,6 +283,8 @@ describe("Companion kernel", () => {
     assert.equal(hero?.disabled, null, "disabled mask");
     assert.equal(party.unlockObserved, false);
     assert.equal(party.unlocked, null, "unlock table");
+    assert.equal(party.accountSkills, null, "account skills");
+    assert.equal(party.characterSkills, null, "character skills");
   });
 
   it("retracts the roster when the party cannot be read", async () => {
@@ -353,6 +344,14 @@ describe("Companion kernel", () => {
     assert.deepEqual(hero?.attributes, [[17, 7], [19, 12], [24, 3]]);
     assert.equal(party.unlockObserved, true);
     assert.deepEqual(party.unlocked, [1, 2], "hero_info is account-scoped");
+    assert.deepEqual(party.accountSkills, {
+      knownThrough: 2_240,
+      unlocked: [202, 216, 249],
+    });
+    assert.deepEqual(party.characterSkills, {
+      knownThrough: 2_240,
+      unlocked: [202, 216],
+    });
     // The fixture's character context says outpost, and applying a team is an
     // outpost-only operation — so the flag has to survive the walk rather than
     // being something the interface assumes.
@@ -379,6 +378,68 @@ describe("Companion kernel", () => {
       stateAccepted: true,
       attributeRowObserved: true,
     });
+  });
+
+  it("keeps live hero professions ahead of stale account metadata", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+
+    // HeroInfo still says W/R, while the live agent-keyed profession table has
+    // moved Devona to W/N. This is the exact shape observed in the client after
+    // changing a hero's secondary profession in the party window.
+    kernel.view.setUint32(
+      ADDRESSES.professionStateBuffer + 8,
+      4,
+      true,
+    );
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const party = readyParty(kernel.party());
+    assert.deepEqual(party.slots[1]?.professions, [1, 4]);
+    assert.deepEqual(
+      party.accountProfessions?.find((entry) => entry.hero === 1)?.professions,
+      [1, 2],
+      "HeroInfo remains the account-wide fallback",
+    );
+
+    // Profession changes have no certified party-dirty message. The bounded
+    // reconciliation must still replace the live value within two seconds,
+    // and the unchanged HeroInfo row must not overwrite it again.
+    const sequence = party.sequence;
+    kernel.view.setUint32(
+      ADDRESSES.professionStateBuffer + 8,
+      5,
+      true,
+    );
+    for (let tick = 0; tick < 119; tick += 1) kernel.tick();
+    assert.equal(readyParty(kernel.party()).sequence, sequence);
+    kernel.tick();
+    const changed = readyParty(kernel.party());
+    assert.ok(changed.sequence > sequence);
+    assert.deepEqual(changed.slots[1]?.professions, [1, 5]);
+  });
+
+  it("keeps character unlocks when the account table fails closed", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    installPartyDetailGraph(kernel.view);
+    kernel.view.setUint32(
+      ADDRESSES.account + DETAIL.accountUnlockedSkills + 4,
+      129,
+      true,
+    );
+    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    kernel.tick();
+
+    const party = readyParty(kernel.party());
+    assert.equal(party.accountSkills, null);
+    assert.deepEqual(party.characterSkills, {
+      knownThrough: 2_240,
+      unlocked: [202, 216],
+    });
+    assert.equal(party.rosterObserved, true);
   });
 
   // A party nobody walked cannot say where it is standing, and the difference
@@ -801,194 +862,4 @@ describe("Companion kernel", () => {
     assert.equal(kernel.field(CURSOR.magic), 0);
   });
 
-  it("rejects a cursor region of the wrong size, alignment, or extent", async () => {
-    const kernel = await createKernel();
-    assert.equal(kernel.init({ cursorSize: COMPANION_CURSOR_BYTES - 1 }), 0);
-    assert.equal(kernel.init({ cursorSize: COMPANION_CURSOR_BYTES + 1 }), 0);
-    assert.equal(kernel.init({ cursorSize: 64 }), 0);
-    assert.equal(kernel.init({ cursorPointer: ADDRESSES.cursor + 1 }), 0);
-    assert.equal(kernel.init({ cursorPointer: ADDRESSES.cursor + 2 }), 0);
-    // 16 MiB of memory: this region is aligned but runs past the end.
-    assert.equal(kernel.init({ cursorPointer: 0xff_f000 }), 0);
-    assert.equal(kernel.init({ cursorPointer: 0xffff_f000 }), 0);
-    // A rejected init must leave the kernel dormant.
-    kernel.tick();
-    assert.equal(kernel.field(CURSOR.magic), 0);
-    assert.equal(kernel.init(), 1);
-  });
-
-  it("publishes a validated 32x32 cursor once per distinct cursor", async () => {
-    const kernel = await createKernel();
-    const { view } = kernel;
-    installCursorGraph(view, { hotspotX: 5, hotspotY: 7 });
-    const first = paintCursor(view, 1);
-    assert.equal(kernel.init(), 1);
-
-    // The region comes from the game's allocator, so init clears it.
-    const cleared = invalidCursor(kernel.header());
-    assert.equal(cleared.status, "invalid");
-    assert.equal(cleared.reason, "cursor");
-    assert.equal(kernel.field(CURSOR.generation), 0);
-    assert.deepEqual(
-      [...kernel.payload().slice(0, 8)],
-      [0, 0, 0, 0, 0, 0, 0, 0],
-    );
-
-    kernel.tick();
-    const ready = publishedPixels(kernel.published());
-    assert.equal(ready.status, "ready");
-    assert.equal(ready.generation, 1);
-    assert.equal(ready.flags, CURSOR_VALID);
-    assert.equal(ready.hidden, false);
-    assert.equal(ready.hotspotX, 5);
-    assert.equal(ready.hotspotY, 7);
-    assert.equal(ready.pixelHash, fnv1a(first));
-    assert.equal(kernel.field(CURSOR.magic), CURSOR_MAGIC);
-    assert.equal(
-      view.getUint16(ADDRESSES.cursor + CURSOR.abi, true),
-      COMPANION_CURSOR_ABI,
-    );
-    assert.equal(
-      view.getUint16(ADDRESSES.cursor + CURSOR.byteLength, true),
-      COMPANION_CURSOR_BYTES,
-    );
-    assert.equal(kernel.field(CURSOR.width), CURSOR_EDGE);
-    assert.equal(kernel.field(CURSOR.height), CURSOR_EDGE);
-    // BGRA 0xff112233 -> R 0x11, G 0x22, B 0x33, A 0xff.
-    assert.deepEqual([...ready.pixels.slice(0, 4)], [0x11, 0x22, 0x33, 0xff]);
-    assert.deepEqual(ready.pixels, expectedRgba(first));
-
-    const sequence = kernel.field(CURSOR.sequence);
-    assert.equal(sequence % 2, 0);
-    for (let index = 0; index < 12; index += 1) kernel.tick();
-    assert.equal(kernel.field(CURSOR.generation), 1);
-    assert.equal(kernel.field(CURSOR.sequence), sequence);
-
-    const second = paintCursor(view, 2);
-    kernel.cursorEvent();
-    kernel.tick();
-    assert.equal(kernel.field(CURSOR.generation), 2);
-    assert.equal(kernel.field(CURSOR.pixelHash), fnv1a(second));
-    assert.deepEqual(publishedPixels(kernel.published()).pixels, expectedRgba(second));
-    kernel.tick();
-    kernel.tick();
-    assert.equal(kernel.field(CURSOR.generation), 2);
-
-    // Identical pixels, moved hotspot: the pixel hash cannot see this, so the
-    // published identity must carry the hotspot too.
-    view.setUint32(ADDRESSES.art + 0x04, 9, true);
-    kernel.cursorEvent();
-    kernel.tick();
-    assert.equal(kernel.field(CURSOR.generation), 3);
-    assert.equal(kernel.field(CURSOR.pixelHash), fnv1a(second));
-    assert.equal(readyCursor(kernel.header()).hotspotY, 9);
-
-    // Show/hide moves the flags only: the bitmap is unchanged, so generation
-    // holds and the renderer's CSS cache stays warm.
-    view.setInt32(ADDRESSES.showCount, -1, true);
-    kernel.tick();
-    const gone = readyCursor(kernel.header());
-    assert.equal(gone.status, "ready");
-    assert.equal(gone.flags, CURSOR_VALID | CURSOR_HIDDEN);
-    assert.equal(gone.hidden, true);
-    assert.equal(gone.generation, 3);
-    assert.deepEqual(kernel.payload(), expectedRgba(second));
-    view.setInt32(ADDRESSES.showCount, 0, true);
-    kernel.tick();
-    assert.equal(readyCursor(kernel.header()).flags, CURSOR_VALID);
-    assert.equal(kernel.field(CURSOR.generation), 3);
-    assert.deepEqual(kernel.payload(), expectedRgba(second));
-
-  });
-
-  it("never publishes an uncommitted colour buffer as a cursor", async () => {
-    const kernel = await createKernel();
-    installCursorGraph(kernel.view);
-    assert.equal(kernel.init(), 1);
-    const sequence = kernel.field(CURSOR.sequence);
-    for (let index = 0; index < 5; index += 1) kernel.tick();
-    const header = invalidCursor(kernel.header());
-    assert.equal(header.status, "invalid");
-    assert.equal(header.flags, 0);
-    assert.equal(kernel.field(CURSOR.generation), 0);
-    assert.equal(kernel.field(CURSOR.sequence), sequence);
-    assert.equal(kernel.published(), null);
-
-    paintCursor(kernel.view, 4);
-    kernel.cursorEvent();
-    kernel.tick();
-    assert.equal(kernel.header().status, "ready");
-    assert.equal(kernel.field(CURSOR.generation), 1);
-  });
-
-  it("keeps the last good pixels while the software cursor is live", async () => {
-    const kernel = await createKernel();
-    const { view } = kernel;
-    installCursorGraph(view);
-    const good = paintCursor(view, 5);
-    assert.equal(kernel.init(), 1);
-    kernel.tick();
-    assert.equal(readyCursor(kernel.header()).generation, 1);
-
-    view.setUint32(ADDRESSES.softwareModel, 1, true);
-    const replacement = paintCursor(view, 6);
-    kernel.cursorEvent();
-    for (let index = 0; index < 3; index += 1) kernel.tick();
-    const unsupported = invalidCursor(kernel.header());
-    assert.equal(unsupported.status, "invalid");
-    assert.equal(unsupported.reason, "unsupported");
-    assert.equal(unsupported.flags, CURSOR_UNSUPPORTED);
-    assert.equal(kernel.field(CURSOR.generation), 1);
-    assert.deepEqual(kernel.payload(), expectedRgba(good));
-
-    view.setUint32(ADDRESSES.softwareModel, 0, true);
-    kernel.cursorEvent();
-    kernel.tick();
-    const recovered = publishedPixels(kernel.published());
-    assert.equal(recovered.status, "ready");
-    assert.equal(recovered.generation, 2);
-    assert.deepEqual(recovered.pixels, expectedRgba(replacement));
-  });
-
-  it("clears validity for every rejected art, handle, or texture", async () => {
-    const kernel = await createKernel();
-    const { view } = kernel;
-    installCursorGraph(view);
-    const words = paintCursor(view, 7);
-    assert.equal(kernel.init(), 1);
-    kernel.tick();
-    assert.equal(readyCursor(kernel.header()).generation, 1);
-
-    const rejections: [name: string, breakGraph: () => void][] = [
-      ["texture type", () => view.setUint32(ADDRESSES.texture + 0x0c, 9, true)],
-      ["texture width", () => view.setUint32(ADDRESSES.texture + 0x14, 64, true)],
-      ["texture height", () => view.setUint32(ADDRESSES.texture + 0x18, 16, true)],
-      ["access key", () => view.setUint32(ADDRESSES.handle + 0x08, TEXTURE_KEY + 1, true)],
-      ["null art", () => view.setUint32(ADDRESSES.activeArt, 0, true)],
-      ["misaligned art", () => view.setUint32(ADDRESSES.activeArt, ADDRESSES.art + 1, true)],
-      ["hotspot x", () => view.setUint32(ADDRESSES.art + 0x00, CURSOR_EDGE, true)],
-      ["hotspot y", () => view.setUint32(ADDRESSES.art + 0x04, 0xffff_ffff, true)],
-    ];
-    let generation = 1;
-    for (const [name, breakGraph] of rejections) {
-      breakGraph();
-      kernel.cursorEvent();
-      kernel.tick();
-      const broken = invalidCursor(kernel.header());
-      assert.equal(broken.status, "invalid", name);
-      assert.equal(broken.reason, "cursor", name);
-      assert.equal(broken.flags, 0, name);
-      assert.equal(kernel.published(), null, name);
-      // Header-only: the renderer keeps rendering the last good bitmap.
-      assert.equal(kernel.field(CURSOR.generation), generation, name);
-      assert.deepEqual(kernel.payload(), expectedRgba(words), name);
-
-      installCursorGraph(view);
-      kernel.cursorEvent();
-      kernel.tick();
-      generation += 1;
-      assert.equal(kernel.header().status, "ready", name);
-      assert.equal(kernel.field(CURSOR.generation), generation, name);
-    }
-  });
 });

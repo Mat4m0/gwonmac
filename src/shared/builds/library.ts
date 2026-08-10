@@ -320,6 +320,61 @@ export function mapTeamSlots(
   return teamSlotsOf((position) => map(slots[position], position));
 }
 
+const emptyHeroSlot = (): TeamSlot => ({
+  build: null,
+  hero: null,
+  behaviour: "guard",
+});
+
+/** A hero position is occupied even when an imported build is missing its hero. */
+export const teamSlotHasMember = (slot: TeamSlot): boolean =>
+  slot.hero !== null || slot.build !== null;
+
+/**
+ * Keep the player fixed and pack every hero record toward the front. Hero,
+ * build, and behaviour move as one record so editing order cannot separate
+ * settings that belong together.
+ */
+export function compactTeamMembers(slots: TeamSlots): TeamSlots {
+  const members = slots.slice(1).filter(teamSlotHasMember);
+  return teamSlotsOf((position) => position === 0
+    ? slots[0]
+    : members[position - 1] ?? emptyHeroSlot());
+}
+
+/** Remove one hero record and close the gap it leaves. The player is immutable. */
+export function removeTeamMember(
+  slots: TeamSlots,
+  position: TeamSlotIndex,
+): TeamSlots {
+  if (position === 0 || !teamSlotHasMember(slots[position])) return slots;
+  return compactTeamMembers(mapTeamSlots(slots, (slot, current) =>
+    current === position ? emptyHeroSlot() : slot));
+}
+
+/**
+ * Move one hero record to a visible party position. Empty destinations mean
+ * "move to the end"; no gap is ever stored.
+ */
+export function moveTeamMember(
+  slots: TeamSlots,
+  from: TeamSlotIndex,
+  to: TeamSlotIndex,
+): TeamSlots {
+  if (from === 0 || to === 0 || from === to || !teamSlotHasMember(slots[from])) return slots;
+
+  const members = slots.slice(1).filter(teamSlotHasMember);
+  const source = members.indexOf(slots[from]);
+  if (source < 0) return slots;
+
+  const [member] = members.splice(source, 1);
+  if (!member) return slots;
+  members.splice(Math.min(to - 1, members.length), 0, member);
+  return teamSlotsOf((position) => position === 0
+    ? slots[0]
+    : members[position - 1] ?? emptyHeroSlot());
+}
+
 export interface Team {
   readonly id: TeamId;
   readonly name: string;

@@ -45,7 +45,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 1437 bytes (0x9d 0x0b as LEB128). Eleven documented moves:
+  // Memory footprint 2017 bytes (0xe1 0x0f as LEB128). Documented moves:
   //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //                separates "you have no heroes" from "nobody read the party";
   //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
@@ -70,10 +70,13 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //                populated by the official-client representation.
   //   1513 -> 1437 the client's canonical party profession-state table
   //                replaces both untrustworthy guesses and their lookup data.
+  //   1437 -> 2017 two bounded 70-word skill-unlock bitsets (+560), three
+  //                certified layout words (+12), and their observation state
+  //                (+8) distinguish account unlocks from character learning.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0x9d, 0x0b, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xe1, 0x0f, 0x02, 0x00, 0x00,
 ]);
 
 const EXPECTED_EXPORTS = COMPANION_KERNEL_SIGNATURES
