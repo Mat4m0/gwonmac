@@ -12,7 +12,9 @@
  * selected Stable/Beta track is read once per check. Stable admits only
  * stable releases; Beta additionally admits beta and RC releases. Alpha is
  * never eligible. The separately signed Preview tester app cannot reach this
- * owner. A ready update waits for a restart rather than taking one.
+ * owner. This owner never chooses when to restart: the launch gate may install
+ * a ready update before play, while later readiness waits for user or ordinary
+ * restart orchestration.
  */
 import type {
   AppUpdateErrorCode,
@@ -83,9 +85,6 @@ export class AppUpdater {
   private readonly options: AppUpdaterOptions;
   private state: AppUpdateState;
   private inFlight: Promise<void> | null = null;
-  private expectedDownload:
-    | { latestVersion: string; checkedAt: string }
-    | null = null;
   private installStarted = false;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => number;
@@ -143,32 +142,27 @@ export class AppUpdater {
   }
 
   updateDownloaded(): void {
-    const expected = this.expectedDownload;
-    if (!expected || this.state.phase !== "downloading") return;
+    if (this.state.phase !== "downloading") return;
+    const downloading = this.state;
     // The native transition is complete. A late `error` or
     // `update-not-available` event belongs to no active download and must not
     // turn a ready update into a failure.
-    this.expectedDownload = null;
     this.setState({
       phase: "ready",
       currentVersion: this.options.currentVersion,
-      latestVersion: expected.latestVersion,
-      checkedAt: expected.checkedAt,
+      latestVersion: downloading.latestVersion,
+      checkedAt: downloading.checkedAt,
     });
   }
 
   updateFailed(): void {
-    if (!this.expectedDownload) return;
-    const lastCheckedAt = this.expectedDownload.checkedAt;
-    this.expectedDownload = null;
-    this.fail("download-failed", lastCheckedAt);
+    if (this.state.phase !== "downloading") return;
+    this.fail("download-failed", this.state.checkedAt);
   }
 
   updateNotAvailable(): void {
-    if (!this.expectedDownload) return;
-    const lastCheckedAt = this.expectedDownload.checkedAt;
-    this.expectedDownload = null;
-    this.fail("feed-invalid", lastCheckedAt);
+    if (this.state.phase !== "downloading") return;
+    this.fail("feed-invalid", this.state.checkedAt);
   }
 
   /**
@@ -293,7 +287,6 @@ export class AppUpdater {
         return;
       }
       const latestVersion = formatReleaseVersion(latest.version);
-      this.expectedDownload = { latestVersion, checkedAt };
       // Publish the owned transition before calling native code. A synchronous
       // native event or refusal can then close this exact download instead of
       // racing a later transition back to `downloading`.
@@ -309,7 +302,7 @@ export class AppUpdater {
         this.updateFailed();
         return;
       }
-      if (!this.expectedDownload || this.state.phase !== "downloading") return;
+      if (this.state.phase !== "downloading") return;
       try {
         this.options.nativeUpdater.checkForUpdates();
       } catch {

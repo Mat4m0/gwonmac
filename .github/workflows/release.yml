@@ -430,7 +430,8 @@ jobs:
           candidate_app="$(find out -name 'Guild Wars Reforged.app' -type d -print -quit)"
           test -d "$stable_app"
           test -d "$candidate_app"
-          pnpm verify:signed-app "$stable_app"
+          APPLE_PROVISIONING_PROFILE="$stable_app/Contents/embedded.provisionprofile" \
+            pnpm verify:signed-app "$stable_app"
           # Neither tested app needs GitHub authority. The launcher inherits
           # this shell's environment, so remove the step token first.
           unset GH_TOKEN

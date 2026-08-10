@@ -5,6 +5,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  UI_PANEL_OPACITY_MAX,
+  UI_PANEL_OPACITY_MIN,
+} from "../../src/shared/contracts.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -18,9 +22,8 @@ test("Settings exposes the two interface styles and no retired variants", async 
   assert.deepEqual(values, ["guild-wars", "obsidian"]);
 });
 
-test("panel opacity is bounded exactly as main requires", async () => {
+test("panel opacity uses the canonical bounds", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
-  const settings = await readFile(path.join(root, "src/main/core/settings.ts"), "utf8");
   const input = /<input\b[^>]*\bname\s*=\s*["']uiPanelOpacity["'][^>]*>/iu.exec(html);
   assert.ok(input, "index.html has no panel-opacity range");
   const attribute = (name: string) => {
@@ -28,10 +31,8 @@ test("panel opacity is bounded exactly as main requires", async () => {
     assert.ok(found, `panel opacity has no ${name}`);
     return found[1]!;
   };
-  const bounds = /asBoundedInteger\(\s*src\.uiPanelOpacity,\s*"uiPanelOpacity",\s*(\d+),\s*(\d+),?\s*\)/u.exec(settings);
-  assert.ok(bounds, "main does not bound uiPanelOpacity");
   assert.equal(attribute("type"), "range");
-  assert.equal(attribute("min"), bounds[1]);
-  assert.equal(attribute("max"), bounds[2]);
+  assert.equal(attribute("min"), String(UI_PANEL_OPACITY_MIN));
+  assert.equal(attribute("max"), String(UI_PANEL_OPACITY_MAX));
   assert.equal(attribute("step"), "1");
 });

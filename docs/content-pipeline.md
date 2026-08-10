@@ -142,10 +142,12 @@ releases list or one release's own feed, beside the same closed reason. An
 error behind the fault is redacted and logged, never recorded.
 `lastUpdateCheckAt` is persisted by main after a catalog check completes.
 
-A ready update is offered nonmodally. Restart is explicit; choosing Later lets
-Squirrel apply it on the next ordinary restart. The update restart uses the
-same quit path as a normal quit, including a bounded renderer `FS.syncfs(false)`
-before native cleanup. An active game socket requires confirmation. The first
+A launch-check update installs before play unless the player chooses **Play
+Without Updating**. After that gate, a ready update is offered nonmodally;
+choosing Later lets Squirrel apply it on the next ordinary restart. Either
+update restart uses the same quit path as a normal quit, including a bounded
+renderer `FS.syncfs(false)` before native cleanup. An active game socket
+requires confirmation. The first
 Developer ID release is a manual DMG bootstrap because an older ad-hoc
 signature cannot update into the new signing identity.
 

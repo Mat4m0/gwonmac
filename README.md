@@ -65,9 +65,10 @@ mid-download with _Play Now Instead_.
 - **Updates check on a declared schedule, or not at all.** The app checks
   GitHub at launch and about every six hours while it stays open — a default
   declared at first run that one checkbox turns off. Switched off, it asks
-  GitHub only when you press **Check for Updates**. A downloaded update is
-  offered as a restart and otherwise installs on the next restart. See
-  [Updates](docs/user-guide.md#updates).
+  GitHub only when you press **Check for Updates**. A launch-check update
+  installs before play unless you choose **Play Without Updating**; one
+  downloaded later is offered as a restart and otherwise installs on the next
+  restart. See [Updates](docs/user-guide.md#updates).
 - **Stable/Beta is one release preference, not another installation identity.**
   Beta keeps the same profile and saved login. A final Stable updates forward
   normally; returning to an older Stable opens the Releases page for a manual
@@ -185,6 +186,10 @@ these secrets:
 - `APPLE_API_KEY_P8`: base64 of the App Store Connect API key;
 - `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`, and `APPLE_TEAM_ID`: their Apple
   identifiers.
+
+Stable, Beta, and RC releases reuse this one environment and the exact secret
+names above. They do not need a Beta-specific environment, certificate,
+provisioning profile, notarization key, or signing identity.
 
 On macOS, `base64 -i DeveloperID.p12 | pbcopy`,
 `base64 -i gwonmac.provisionprofile | pbcopy`, and

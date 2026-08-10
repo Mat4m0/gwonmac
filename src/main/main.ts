@@ -477,7 +477,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       ) {
         new Notification({
           title: "Guild Wars Reforged update ready",
-          body: `Version ${state.latestVersion} will install when you restart.`,
+          body: `Version ${state.latestVersion} is ready to install.`,
           silent: true,
         }).show();
       }

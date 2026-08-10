@@ -214,9 +214,10 @@ is meant to inherit the dead ends rather than walk back into them.
   round-trip. Its settings keys and accepted values must already belong to
   latest Stable: expand them in Stable before a candidate uses them, and
   contract them only after the supported Stable baseline no longer needs them.
-  Do not preserve unknown fields in a compatibility bag. An update already
-  ready when the app launches installs before play; an update downloaded later
-  waits for an explicit or ordinary restart.
+  Do not preserve unknown fields in a compatibility bag. An update discovered
+  by the launch check installs before play unless the player chooses **Play
+  Without Updating**; an update downloaded after that gate waits for an
+  explicit or ordinary restart.
   ArenaNet client updates remain separate and automatic.
   `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md` owns
   what the player is told.

@@ -73,8 +73,11 @@ untrusted repository safe.
 The protected `release` environment must require a maintainer and contain the
 G2 Developer ID certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export
 password as `APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution
-profile for `io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The P12
-and profile are base64-encoded secret values, not repository files. The first
+profile for `io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The
+PKCS #12 certificate archive and profile are base64-encoded secret values, not
+repository files. Stable, beta, and RC releases all reuse this exact environment,
+secret set, signing identity, and notarization authority. Do not create a
+track-specific environment or duplicate the Apple credentials. The first
 environment approval admits `release-build`: before it builds, the workflow
 rejects a profile with the wrong team, application identifier, distribution
 type, certificate fingerprint, certificate count, or remaining lifetime. It
@@ -152,7 +155,7 @@ evidence. At minimum record:
 - the release-workflow URL;
 - exact application version and `CFBundleVersion`;
 - every asset name and SHA-256 row from the staged `SHA256SUMS.txt`;
-- pass/fail, macOS version, and hardware for each required machine; and
+- pass/fail, macOS version, model, and memory for the maintainer's test Mac; and
 - the ArenaNet module SHA-256 whenever a live client is involved.
 
 The final job mechanically refuses a non-draft, the wrong prerelease class or
@@ -176,9 +179,9 @@ starting and returning version.
   each launched app must report the expected version, and settings,
   Builds/Teams with tags/order/references, window state, and profile-origin
   browser storage must survive a read-modify-write in all three launches with
-  no quarantine or profile/chunk-store reset; the residency sentinel must
-  remain. This synthetic proof does not claim either app recognizes a resident
-  client generation or avoids content fetches. Candidate settings must have
+  no quarantine or wholesale profile/chunk-directory reset; the directory-reset
+  sentinel must remain. This synthetic proof does not claim either app
+  recognizes a resident client generation or avoids content fetches. Candidate settings must have
   exactly the latest Stable key set and value domains, and every untouched
   candidate value must survive Stable's final write. When
   Electron, Chromium, or persistence changes, also save and reload a real
@@ -193,10 +196,11 @@ starting and returning version.
   and install exact `S1` through the production updater, preserving the same
   identity and player data; the same saved-login observation must pass. No
   automatic older-Stable downgrade is tested or supported.
-- **Before every release:** install the exact staged draft assets and use the
-  finite release hardware matrix: a MacBook Air
-  (M1, 8 GB) on the oldest supported macOS and a Mac mini (M4, 16 GB) on the
-  newest supported macOS. On each, the canary account must reach a playable
+- **Before every release:** install the exact staged draft assets on one
+  maintainer-owned Apple Silicon Mac. A 16 GB MacBook Pro is sufficient; a
+  second Mac and oldest/newest-macOS matrix are not release requirements.
+  Record the actual model, memory, and macOS version so the evidence states the
+  coverage truthfully. On that Mac, the canary account must reach a playable
   character and enter a zone without an authentication loop or crash; the
   launcher and game must render continuously for ten minutes without a black
   surface, GPU-process crash, context loss, or persistent corruption. When the

@@ -92,8 +92,8 @@ await writeFile(
 );
 await mkdir(path.join(userData, "game/chunks"), { recursive: true });
 await writeFile(
-  path.join(userData, "game/chunks/stable-beta-sentinel"),
-  "verified game data stays resident",
+  path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
+  "chunk directory was not wholesale reset",
 );
 
 const cloneLibrary = (library: BuildLibrary): BuildLibrary =>
@@ -482,8 +482,11 @@ try {
   assert.deepEqual(diskLibrary, finalLibrary);
   assert.ok(await readFile(path.join(userData, "window-state.json"), "utf8"));
   assert.equal(
-    await readFile(path.join(userData, "game/chunks/stable-beta-sentinel"), "utf8"),
-    "verified game data stays resident",
+    await readFile(
+      path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
+      "utf8",
+    ),
+    "chunk directory was not wholesale reset",
   );
   console.log(`stable/beta compatibility: ${stableVersion} → ${candidateVersion} → ${stableVersion} passed`);
 } finally {

@@ -347,6 +347,10 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     runtimeWithoutSigningSecrets,
+    /APPLE_PROVISIONING_PROFILE="\$stable_app\/Contents\/embedded\.provisionprofile"[\\\s]+pnpm verify:signed-app "\$stable_app"/,
+  );
+  assert.match(
+    runtimeWithoutSigningSecrets,
     /unset GH_TOKEN[\s\S]*pnpm test:stable-beta-roundtrip/,
   );
 

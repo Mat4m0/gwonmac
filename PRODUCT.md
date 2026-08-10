@@ -90,9 +90,10 @@ Refusals, not a backlog.
 - **No disk-usage promise.** A full download stays until the player clears it;
   the app does not silently evict game data to stay under a cap. Making a fixed
   size promise means building and measuring that policy first.
-- **No forced update.** Automatic checking and downloading is on by default,
-  declared plainly at first run, and one checkbox turns it off for good. A
-  ready update waits for the player to restart or choose **Restart to Update**.
+- **No forced mid-session restart.** Automatic checking and downloading is on
+  by default, declared plainly at first run, and one checkbox turns it off for
+  good. A launch-check update installs before play unless the player chooses
+  **Play Without Updating**; one downloaded later waits for a restart.
 
 ## Claims we stand behind
 

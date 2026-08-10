@@ -90,9 +90,9 @@ in tests.
   candidate may write; Beta never invents rollback compatibility state.
 - The release gate launches that exact signed Stable, the exact signed
   candidate, then the same Stable again.
-- Settings, Builds, Teams, tags/references, window state, origin-owned browser
-  storage, and a game-data residency sentinel survive semantic writes with no
-  quarantine or reset.
+- Settings, Builds, Teams, tags/references, window state, and origin-owned
+  browser storage survive semantic writes with no quarantine or reset; a
+  sentinel proves the chunk directory was not wholesale deleted.
 - The recurring browser-store probe proves origin continuity only. A production
   Emscripten IDBFS/template round-trip is additionally required whenever
   Electron, Chromium, or the filesystem/persistence contract changes.
@@ -221,6 +221,10 @@ post-publication certification checks pass:
 
 The release approver executes and records these operations using the
 [release-only canary record](../docs/release-verification.md#release-only-canary-record).
+Every step reuses the existing protected `release` environment and Apple
+secrets. One maintainer-owned Apple Silicon Mac is sufficient for the live
+check; this program requires neither a Beta-specific signing setup nor a
+second-device hardware matrix.
 
 1. publish Stable enabler `S0` with the selector and stable-readable contract;
 2. build a newer `B1` under the same release identity;
