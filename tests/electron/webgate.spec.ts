@@ -115,7 +115,11 @@ test.describe("stateless WebGate proxy", () => {
         status: 200,
       });
       expect(exchange.redirect).toMatchObject({
-        body: "redirect blocked",
+        // Chromium rejects a redirect returned by a custom protocol handler
+        // before net.fetch exposes its Location. The composed boundary still
+        // refuses it with the proxy's closed transport outcome; the explicit
+        // escape classifier is exercised in proxy-routes.test.ts.
+        body: "proxy error",
         location: null,
         status: 502,
       });
