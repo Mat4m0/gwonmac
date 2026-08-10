@@ -285,9 +285,16 @@ export interface ClockSyncResponse {
 
 export const UI_STYLES = ["guild-wars", "obsidian"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
+export const RENDER_SCALES = [1, 1.5, 2] as const;
+export type RenderScale = (typeof RENDER_SCALES)[number];
+export const UI_PANEL_OPACITY_MIN = 65;
+export const UI_PANEL_OPACITY_MAX = 100;
+export const DATA_STRATEGIES = [null, "quick", "full"] as const;
+export type DataStrategy = (typeof DATA_STRATEGIES)[number];
+export const LAST_UPDATE_CHECK_AT_MAX = 8_640_000_000_000_000;
 
 export interface AppSettings {
-  renderScale: 1 | 1.5 | 2;
+  renderScale: RenderScale;
   /** The visual treatment applied to every GWonMac panel. */
   uiStyle: UiStyle;
   /**
@@ -304,7 +311,7 @@ export interface AppSettings {
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
-  dataStrategy: "quick" | "full" | null;
+  dataStrategy: DataStrategy;
   /**
    * Automatic release checks: a GitHub request at launch, then at most one
    * every six hours while the app stays open, on by default so players stay

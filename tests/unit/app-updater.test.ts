@@ -211,15 +211,12 @@ describe("application updater", () => {
 
   it("does not start a download after a synchronous feed event closed it", async () => {
     for (const event of ["failed", "ready"] as const) {
-      let f!: ReturnType<typeof fixture>;
-      f = fixture({
-        native: {
-          setFeedURL: () => {
-            if (event === "failed") f.updater.updateFailed();
-            else f.updater.updateDownloaded();
-          },
-        },
-      });
+      const native: { setFeedURL?: (url: string) => void } = {};
+      const f = fixture({ native });
+      native.setFeedURL = () => {
+        if (event === "failed") f.updater.updateFailed();
+        else f.updater.updateDownloaded();
+      };
 
       await f.updater.check("beta");
 

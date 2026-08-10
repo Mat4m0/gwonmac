@@ -5,11 +5,11 @@
  * This intentionally launches the two signed app bundles, not two source
  * checkouts. It is the stable-enabler gate for the first Beta and the recurring
  * compatibility gate after that. There is no migration framework: if a
- * candidate adds a durable settings key that Stable does not already own, or
- * changes any durable shape in a way Stable cannot round-trip, the release is
- * refused. New settings therefore expand in Stable first and may be used by a
- * later candidate; old fields contract only after the supported Stable
- * baseline no longer needs them.
+ * candidate adds a durable settings key or accepted value that Stable does not
+ * already own, or changes any durable shape in a way Stable cannot round-trip,
+ * the release is refused. New settings therefore expand in Stable first and
+ * may be used by a later candidate; old fields contract only after the
+ * supported Stable baseline no longer needs them.
  */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -27,7 +27,17 @@ import {
   type Build,
   type BuildLibrary,
 } from "../src/shared/builds/library.ts";
-import type { AppSettings } from "../src/shared/contracts.ts";
+import {
+  DATA_STRATEGIES,
+  LAST_UPDATE_CHECK_AT_MAX,
+  RENDER_SCALES,
+  UI_PANEL_OPACITY_MAX,
+  UI_PANEL_OPACITY_MIN,
+  UI_STYLES,
+  UPDATE_TRACKS,
+  type AppSettings,
+} from "../src/shared/contracts.ts";
+import { parseSettings } from "../src/main/core/settings.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import {
   compareReleaseVersions,
@@ -121,6 +131,84 @@ async function readSettingsDocument(): Promise<Record<string, unknown>> {
     "settings.json is not an object",
   );
   return value as Record<string, unknown>;
+}
+
+const cycle = <T>(values: readonly T[], index: number): T =>
+  values[index % values.length] as T;
+
+const booleanValues = [false, true] as const;
+const opacityValues = [UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX] as const;
+const updateCheckValues = [null, 0, LAST_UPDATE_CHECK_AT_MAX] as const;
+const compatibilityValues = [null, "a".repeat(64)] as const;
+const domainCaseCount = Math.max(
+  RENDER_SCALES.length,
+  UI_STYLES.length,
+  opacityValues.length,
+  booleanValues.length,
+  DATA_STRATEGIES.length,
+  UPDATE_TRACKS.length,
+  updateCheckValues.length,
+  compatibilityValues.length,
+);
+const candidateSettingsDomains = Array.from(
+  { length: domainCaseCount },
+  (_, index): AppSettings => {
+    const settings: AppSettings = {
+      renderScale: cycle(RENDER_SCALES, index),
+      uiStyle: cycle(UI_STYLES, index),
+      uiPanelOpacity: cycle(opacityValues, index),
+      gwonmacTools: cycle(booleanValues, index),
+      teamManagement: cycle(booleanValues, index + 1),
+      targetReadout: cycle(booleanValues, index),
+      extendedMemoryEnabled: cycle(booleanValues, index + 1),
+      showDiagnostics: cycle(booleanValues, index),
+      dataStrategy: cycle(DATA_STRATEGIES, index),
+      autoCheckUpdates: false,
+      updateTrack: cycle(UPDATE_TRACKS, index),
+      lastUpdateCheckAt: cycle(updateCheckValues, index),
+      compatibilityNoticeSeenFor: cycle(compatibilityValues, index),
+    };
+    return parseSettings(settings);
+  },
+);
+
+async function proveStableAcceptsCandidateSettingDomains(
+  stablePath: string,
+): Promise<void> {
+  for (const [index, settings] of candidateSettingsDomains.entries()) {
+    await writeFile(
+      path.join(userData, "settings.json"),
+      JSON.stringify({ formatVersion: 1, ...settings }),
+      { mode: 0o600 },
+    );
+    const stable = await launch(stablePath);
+    try {
+      const read = await stable.page.evaluate(() => window.gwNative.settings.get());
+      assert.deepEqual(
+        read,
+        settings,
+        `latest Stable refused candidate settings-domain case ${index + 1}`,
+      );
+      assert.deepEqual(
+        await stable.page.evaluate(() => window.gwNative.settings.set({})),
+        settings,
+        `latest Stable could not rewrite candidate settings-domain case ${index + 1}`,
+      );
+    } finally {
+      await closePackagedApp(stable);
+    }
+    assert.deepEqual(
+      semanticSettings(await readSettingsDocument()),
+      settings,
+      `latest Stable changed candidate settings-domain case ${index + 1}`,
+    );
+  }
+  const names = await readdir(userData);
+  assert.equal(
+    names.some((name) => name.startsWith("settings.json.corrupt-")),
+    false,
+    "latest Stable quarantined a candidate-owned settings value",
+  );
 }
 
 const sortedKeys = (value: Record<string, unknown>): string[] =>
@@ -250,6 +338,14 @@ const finalLibrary: BuildLibrary = {
 
 let running: RunningPackagedApp | null = null;
 try {
+  console.log("stable/beta compatibility: Stable accepts candidate value domains");
+  await proveStableAcceptsCandidateSettingDomains(stableApp);
+  await writeFile(
+    path.join(userData, "settings.json"),
+    JSON.stringify({ autoCheckUpdates: false }),
+    { mode: 0o600 },
+  );
+
   console.log("stable/beta compatibility: latest Stable creates canonical state");
   running = await launch(stableApp);
   const launchedStableVersion = (await running.page.evaluate(

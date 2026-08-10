@@ -5,10 +5,10 @@
  * Unknown fields are ignored on read and are not preserved on the next write;
  * this is deliberate, not a compatibility bag. Public prereleases therefore
  * follow expand/contract release ordering: the latest Stable must already own
- * every durable key a beta or RC can write. A malformed known value is refused.
- * A format version this build does not recognise is moved aside intact and
- * defaults are used, so an unreadable profile costs a player their preferences
- * and never their downloaded game data.
+ * every durable key and accepted value a beta or RC can write. A malformed
+ * known value is refused. A format version this build does not recognise is
+ * moved aside intact and defaults are used, so an unreadable profile costs a
+ * player their preferences and never their downloaded game data.
  *
  * `parseSettingsPatch` rejects an unknown key outright instead of dropping it,
  * because a silently ignored key is indistinguishable to the renderer from a
@@ -17,8 +17,13 @@
 import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
+  DATA_STRATEGIES,
   DEFAULT_SETTINGS,
+  LAST_UPDATE_CHECK_AT_MAX,
+  RENDER_SCALES,
   UPDATE_TRACKS,
+  UI_PANEL_OPACITY_MAX,
+  UI_PANEL_OPACITY_MIN,
   UI_STYLES,
   type AppSettings,
   type AppSettingsPatch,
@@ -27,7 +32,8 @@ import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
-const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
+const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
+const DATA_STRATEGY_VALUES = new Set<AppSettings["dataStrategy"]>(DATA_STRATEGIES);
 const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
 const UPDATE_TRACK_VALUES = new Set<AppSettings["updateTrack"]>(UPDATE_TRACKS);
 
@@ -92,7 +98,7 @@ export function parseSettings(raw: unknown): AppSettings {
   const out: AppSettings = { ...DEFAULT_SETTINGS };
 
   if ("renderScale" in src) {
-    if (!RENDER_SCALES.has(src.renderScale as AppSettings["renderScale"])) {
+    if (!RENDER_SCALE_VALUES.has(src.renderScale as AppSettings["renderScale"])) {
       throw new AppError("bad_settings", `settings.renderScale has unknown type/value`);
     }
     out.renderScale = src.renderScale as AppSettings["renderScale"];
@@ -107,8 +113,8 @@ export function parseSettings(raw: unknown): AppSettings {
     out.uiPanelOpacity = asBoundedInteger(
       src.uiPanelOpacity,
       "uiPanelOpacity",
-      65,
-      100,
+      UI_PANEL_OPACITY_MIN,
+      UI_PANEL_OPACITY_MAX,
     );
   }
   for (const setting of [
@@ -124,16 +130,14 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   if ("dataStrategy" in src) {
     if (
-      src.dataStrategy !== null &&
-      src.dataStrategy !== "quick" &&
-      src.dataStrategy !== "full"
+      !DATA_STRATEGY_VALUES.has(src.dataStrategy as AppSettings["dataStrategy"])
     ) {
       throw new AppError(
         "bad_settings",
         "settings.dataStrategy must be quick, full, or null",
       );
     }
-    out.dataStrategy = src.dataStrategy;
+    out.dataStrategy = src.dataStrategy as AppSettings["dataStrategy"];
   }
   if ("autoCheckUpdates" in src) {
     out.autoCheckUpdates = asBool(src.autoCheckUpdates, "autoCheckUpdates");
@@ -148,7 +152,12 @@ export function parseSettings(raw: unknown): AppSettings {
     const at = src.lastUpdateCheckAt;
     if (
       at !== null &&
-      !(typeof at === "number" && Number.isSafeInteger(at) && at >= 0)
+      !(
+        typeof at === "number"
+        && Number.isSafeInteger(at)
+        && at >= 0
+        && at <= LAST_UPDATE_CHECK_AT_MAX
+      )
     ) {
       throw new AppError(
         "bad_settings",

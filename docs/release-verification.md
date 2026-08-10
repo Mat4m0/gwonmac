@@ -122,13 +122,15 @@ contract changes, the release also round-trips a real template through the
 production Emscripten IDBFS boundary.
 
 Settings follow expand/contract release ordering without preserving unknown
-fields. The latest Stable must already own every durable key a candidate can
-write: introduce an inert/defaulted key in Stable, use it in a later beta/RC,
-and remove it only after the supported Stable baseline no longer needs it. The
-release proof compares the exact candidate and Stable key sets, then proves the
-returning Stable reads every candidate value and preserves every untouched
-value while saving its own patch. A mismatch refuses the candidate; it does not
-add an unknown-field bag or migration framework.
+fields or values. The latest Stable must already own every durable key and
+accepted value a candidate can write: introduce an inert/defaulted key or wider
+value domain in Stable, use it in a later beta/RC, and remove it only after the
+supported Stable baseline no longer needs it. The release proof compares the
+exact candidate and Stable key sets, exercises every candidate enum plus each
+numeric/null boundary through Stable, then proves the returning Stable reads
+every candidate value and preserves every untouched value while saving its own
+patch. A mismatch refuses the candidate; it does not add an unknown-field bag
+or migration framework.
 
 The first protected approval exposes the Developer ID and notarization
 credentials only long enough to build, notarize, verify the application, ZIP,
@@ -175,8 +177,8 @@ starting and returning version.
   Builds/Teams with tags/order/references, window state, and profile-origin
   browser storage must survive a read-modify-write in all three launches with
   no quarantine, reset, or game-data redownload. Candidate settings must have
-  exactly the latest Stable key set and every untouched candidate value must
-  survive Stable's final write. When
+  exactly the latest Stable key set and value domains, and every untouched
+  candidate value must survive Stable's final write. When
   Electron, Chromium, or persistence changes, also save and reload a real
   template through production IDBFS and exercise the real Keychain boundary.
 - **Within 30 minutes after publishing a beta/RC:** on one release-identity Stable install with
