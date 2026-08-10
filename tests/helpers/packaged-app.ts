@@ -76,7 +76,10 @@ export async function launchPackagedApp(
     {
       env: {
         ...process.env,
-        GW_OFFLINE_SHELL: "1",
+        // Signed-package checks exercise capabilities available before a game
+        // client is active. Refuse network and reach the ordinary cached-client
+        // error state instead of granting a test-only ready lifecycle.
+        GW_REQUIRE_CACHED_CLIENT: "1",
         GW_BACKGROUND_LAUNCH: "1",
         ...options.environment,
       },

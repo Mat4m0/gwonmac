@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
 /**
@@ -43,7 +43,7 @@ const announceLock = (page: import("@playwright/test").Page, locked: boolean) =>
 
 test.describe("input trace", () => {
   test("stays dormant, names double-click decisions, and copies no coordinates", async () => {
-    const fixture = await launchOffline("gw-input-trace-on-");
+    const fixture = await launchCachedClient("gw-input-trace-on-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -115,7 +115,7 @@ test.describe("input trace", () => {
   });
 
   test("reports each pointer lock once, however it was announced", async () => {
-    const fixture = await launchOffline("gw-input-trace-lock-");
+    const fixture = await launchCachedClient("gw-input-trace-lock-");
     try {
       const { page } = fixture;
       await startGameInput(page);

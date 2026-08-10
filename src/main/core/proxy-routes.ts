@@ -14,6 +14,10 @@
  * `allowlists.ts`, and the two lists do not merge.
  */
 import { AllowlistError } from "../../shared/errors.js";
+import {
+  isProxyRouteName,
+  type ProxyRouteName,
+} from "../../shared/proxy-routes.js";
 
 export const PROXY_ROUTES = {
   webgate: "webgate.ncplatform.net",
@@ -21,14 +25,14 @@ export const PROXY_ROUTES = {
   help: "help.guildwars.com",
   store: "store.guildwars.com",
   www: "www.guildwars.com",
-} as const satisfies Readonly<Record<string, string>>;
+} as const satisfies Readonly<Record<ProxyRouteName, string>>;
 
 /**
  * A five-key allowlist, so its keys belong in the type. Diagnostics records
  * which route failed, and `Record<string, string>` would have made that field
  * an open string.
  */
-export type ProxyRoute = keyof typeof PROXY_ROUTES;
+export type ProxyRoute = ProxyRouteName;
 
 export function resolveProxyHost(route: string): string {
   const key = route.toLowerCase();
@@ -43,7 +47,7 @@ export function resolveProxyHost(route: string): string {
  *  caller to have normalised, and it says so in the type rather than folding
  *  case here and claiming a narrowing it has not proved. */
 export function isProxyRoute(route: string): route is ProxyRoute {
-  return Object.hasOwn(PROXY_ROUTES, route);
+  return isProxyRouteName(route);
 }
 
 export function isProxyFetchDestination(destination: string): boolean {

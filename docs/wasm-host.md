@@ -9,8 +9,9 @@ the certification that decides which module a session actually runs.
 `Module` must be declared with `var`; the generated glue redeclares it.
 `Gw.jspi.js` asks for `Gw.wasm`, so `locateFile` explicitly selects
 `Gw.jspi.wasm`. The protocol reads one immutable `ActiveClient` per request;
-its chunk store, snapshot metadata, artifact directory, and selected WASM can
-never come from different client generations. Full-file protocol responses stream from disk, allowing
+its chunk store, artifact directory, selected WASM, and compatibility facts can
+never come from different client generations. Snapshot metadata is derived from
+that store over IPC. Full-file protocol responses stream from disk, allowing
 `WebAssembly.instantiateStreaming` to compile without first retaining the
 whole module in main-process memory. Cached Enhancement validation also streams
 both hashes; the official bytes are loaded only for a cold transform. Asyncify

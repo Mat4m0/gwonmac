@@ -1,21 +1,21 @@
 import { expect, test } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { OFFICIAL_WASM, seedCachedClient } from "../helpers/packaged-enhancement-fixture.js";
-import { closeOffline, launchOffline, launchOfflineAt, type OfflineFixture } from "./fixtures.mjs";
+import {
+  closeOffline,
+  launchCachedClient,
+  launchOfflineAt,
+  type OfflineFixture,
+} from "./fixtures.mjs";
 
 test.describe("extended memory settings", () => {
   test("shows requested and effective memory modes without blocking an unsupported launch", async () => {
     test.setTimeout(60_000);
     let relaunched: OfflineFixture | null = null;
-    const fixture = await launchOffline(
+    const fixture = await launchCachedClient(
       "gw-settings-memory-e2e-",
-      { GW_OFFLINE_SHELL: "0", GW_REQUIRE_CACHED_CLIENT: "1" },
+      {},
       async (userData) => {
-        const artifacts = path.join(userData, "game", "artifacts");
-        await mkdir(artifacts, { recursive: true });
-        await writeFile(path.join(artifacts, "Gw.jspi.wasm"), OFFICIAL_WASM);
-        await seedCachedClient({ artifacts, userData });
         await writeFile(
           path.join(userData, "settings.json"),
           JSON.stringify({
@@ -59,10 +59,7 @@ test.describe("extended memory settings", () => {
         (await window.gwNative.settings.get()).extendedMemoryEnabled,
       )).toBe(false);
       await fixture.app.close();
-      relaunched = await launchOfflineAt(fixture.userData, {
-        GW_OFFLINE_SHELL: "0",
-        GW_REQUIRE_CACHED_CLIENT: "1",
-      });
+      relaunched = await launchOfflineAt(fixture.userData);
       await expect.poll(() => relaunched!.page.evaluate(async () =>
         (await window.gwNative.client.session()).extendedMemory,
       ), { timeout: 30_000 }).toEqual({

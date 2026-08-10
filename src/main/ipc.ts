@@ -50,7 +50,12 @@ import {
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
-import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
+import {
+  AllowlistError,
+  errorCode,
+  NotReadyError,
+  ValidationError,
+} from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import {
   loadBuildLibrary,
@@ -72,7 +77,6 @@ import type {
 } from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
-import { buildSnapshotMetadata } from "./core/snapshot.js";
 import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
   count,
@@ -610,17 +614,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     snapshotMetadata: channel(nothing, async () => {
       const store = ctx.getChunkStore();
       if (!store) {
-        const offlineSize =
-          process.env.GW_OFFLINE_SHELL === "1"
-            ? Number(process.env.GW_OFFLINE_SNAPSHOT_SIZE ?? 0)
-            : 0;
-        return buildSnapshotMetadata({
-          size:
-            Number.isSafeInteger(offlineSize) && offlineSize > 0 ? offlineSize : 0,
-          chunkSize: 262144,
-          chunkHashes: [],
-          residentIndices: [],
-        });
+        throw new NotReadyError("no active client snapshot is available");
       }
       const bits = await store.residentBits();
       return {

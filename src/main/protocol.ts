@@ -21,7 +21,6 @@ import { Readable } from "node:stream";
 import {
   SKILL_CATALOGUE_ROUTE,
   SKILL_ICON_PATTERN,
-  type SnapshotMetadata,
 } from "../shared/contracts.js";
 import { CLIENT_ARTIFACTS } from "./core/access-key.js";
 import type { ChunkStore } from "./core/chunk-store.js";
@@ -36,7 +35,6 @@ import {
 import { clientArtifactPath } from "./core/paths.js";
 import { SkillAssets } from "./core/skill-catalogue.js";
 import { parseRangeHeader } from "./core/ranges.js";
-import { snapshotMetadataWire } from "./core/snapshot.js";
 import { errorCode } from "../shared/errors.js";
 import {
   count,
@@ -73,23 +71,38 @@ const RENDERER_SHARED_MODULES = new Set([
   "enhancement-config.js",
   "enhancement-contracts.js",
   "project-identity.js",
+  "proxy-routes.js",
   "release.js",
   "ui/resize.js",
 ]);
+
+/**
+ * `Response` accepts a plain `ArrayBuffer`, while Node buffers may be views
+ * into a larger pooled backing store. Reuse an already exact buffer; otherwise
+ * copy only the logical bytes so a small protocol response cannot retain or
+ * expose unrelated backing memory.
+ */
+function compactResponseBody(bytes: Uint8Array): ArrayBuffer {
+  if (
+    bytes.buffer instanceof ArrayBuffer
+    && bytes.byteOffset === 0
+    && bytes.byteLength === bytes.buffer.byteLength
+  ) {
+    return bytes.buffer;
+  }
+  const compact = new Uint8Array(bytes.byteLength);
+  compact.set(bytes);
+  return compact.buffer;
+}
 
 export interface ProtocolDeps {
   getActiveClient: () => {
     artifactsDir: string;
     store: ChunkStore;
-    snapshotMeta: SnapshotMetadata;
     wasmPath: string;
     jsPath: string;
   } | null;
 }
-
-let deps: ProtocolDeps = {
-  getActiveClient: () => null,
-};
 
 /**
  * One `SkillAssets` per active client. It owns its own memoisation and its own
@@ -120,10 +133,6 @@ function assetsFor(
   return value;
 }
 
-export function setProtocolDeps(next: ProtocolDeps): void {
-  deps = next;
-}
-
 /** Must run before app ready. */
 export function registerGwScheme(): void {
   protocol.registerSchemesAsPrivileged([
@@ -142,8 +151,8 @@ export function registerGwScheme(): void {
   ]);
 }
 
-export function installGwProtocolHandler(): void {
-  protocol.handle("gw", (request) => handleGwRequest(request));
+export function installGwProtocolHandler(deps: ProtocolDeps): void {
+  protocol.handle("gw", (request) => handleGwRequest(request, deps));
 }
 
 function headers(extra: Record<string, string> = {}): Headers {
@@ -231,9 +240,12 @@ async function fileResponse(
   });
 }
 
-async function handleSnapshot(request: Request): Promise<Response> {
+async function handleSnapshot(
+  request: Request,
+  deps: ProtocolDeps,
+): Promise<Response> {
   const active = deps.getActiveClient();
-  if (!active || active.snapshotMeta.size <= 0) {
+  if (!active || active.store.size <= 0) {
     return new Response("snapshot unavailable", {
       status: 503,
       headers: headers({
@@ -242,14 +254,14 @@ async function handleSnapshot(request: Request): Promise<Response> {
       }),
     });
   }
-  const { store, snapshotMeta: meta } = active;
-  const range = parseRangeHeader(request.headers.get("range"), meta.size);
+  const { store } = active;
+  const range = parseRangeHeader(request.headers.get("range"), store.size);
   if (range === null || range === "unsatisfiable") {
     return new Response(null, {
       status: 416,
       headers: headers({
         "Cache-Control": "no-store",
-        "Content-Range": `bytes */${meta.size}`,
+        "Content-Range": `bytes */${store.size}`,
         "Accept-Ranges": "bytes",
       }),
     });
@@ -281,19 +293,16 @@ async function handleSnapshot(request: Request): Promise<Response> {
       code: null,
     });
     count("protocol.snapshotBytes", data.byteLength);
-    return new Response(
-      Buffer.from(data.buffer, data.byteOffset, data.byteLength),
-      {
+    return new Response(compactResponseBody(data), {
       status: 206,
       headers: headers({
         "Cache-Control": "no-store",
         "Content-Type": "application/octet-stream",
         "Accept-Ranges": "bytes",
-        "Content-Range": `bytes ${range.start}-${range.end}/${meta.size}`,
+        "Content-Range": `bytes ${range.start}-${range.end}/${store.size}`,
         "Content-Length": String(data.byteLength),
       }),
-      },
-    );
+    });
   } catch (err) {
     const code = errorCode(err);
     requestSpan.end({ returnedBytes: 0, code, status: 503 });
@@ -423,7 +432,10 @@ async function handleProxy(
   }
 }
 
-export async function handleGwRequest(request: Request): Promise<Response> {
+async function handleGwRequest(
+  request: Request,
+  deps: ProtocolDeps,
+): Promise<Response> {
   const url = new URL(request.url);
   if (url.hostname !== "app") {
     return new Response("forbidden", { status: 403, headers: headers() });
@@ -437,26 +449,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
   // rewritten redirect now names the route in its canonical spelling.
   const first = (base.split("/")[0] ?? "").toLowerCase();
 
-  if (base === "Gw.snapshot") return handleSnapshot(request);
-
-  if (base === "snapshot-metadata.json") {
-    const active = deps.getActiveClient();
-    if (!active) {
-      return new Response("{}", {
-        status: 503,
-        headers: headers({ "Content-Type": "application/json" }),
-      });
-    }
-    const meta = active.snapshotMeta;
-    const body = JSON.stringify(snapshotMetadataWire(meta));
-    return new Response(body, {
-      status: 200,
-      headers: headers({
-        "Content-Type": "application/json",
-        "Content-Length": String(Buffer.byteLength(body)),
-      }),
-    });
-  }
+  if (base === "Gw.snapshot") return handleSnapshot(request, deps);
 
   if (base === SKILL_CATALOGUE_ROUTE) {
     const empty = () =>
@@ -498,7 +491,7 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     if (!active || request.method !== "GET") return missing();
     const icon = await assetsFor(active).icon(Number(iconMatch[1]));
     return icon
-      ? new Response(icon, {
+      ? new Response(compactResponseBody(icon), {
           status: 200,
           headers: headers({
             "Content-Type": "image/bmp",
@@ -516,15 +509,22 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     : null;
   if (artifactName) {
     const active = deps.getActiveClient();
+    if (!active) {
+      return new Response("client unavailable", {
+        status: 503,
+        headers: headers({
+          "Cache-Control": "no-store",
+          "Content-Type": "text/plain; charset=utf-8",
+        }),
+      });
+    }
     const file =
       artifactName === "Gw.jspi.wasm"
-        ? active?.wasmPath ??
-          clientArtifactPath(gamePaths().artifacts, "Gw.jspi.wasm")
+        ? active.wasmPath
         : artifactName === "Gw.jspi.js"
-          ? active?.jsPath ??
-            clientArtifactPath(gamePaths().artifacts, "Gw.jspi.js")
-        : clientArtifactPath(
-            active?.artifactsDir ?? gamePaths().artifacts,
+          ? active.jsPath
+          : clientArtifactPath(
+            active.artifactsDir,
             artifactName,
           );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
@@ -570,14 +570,12 @@ export async function handleGwRequest(request: Request): Promise<Response> {
     return handleProxy(request, first, rest);
   }
 
-  if (first && !artifactName) {
+  if (first && !base.includes(".")) {
     // Unknown first-label proxy-style path names itself rather than guessing.
-    if (!base.includes(".") || isProxyRoute(first)) {
-      return new Response(`unknown proxy route: ${first}`, {
-        status: 502,
-        headers: headers({ "Content-Type": "text/plain; charset=utf-8" }),
-      });
-    }
+    return new Response(`unknown proxy route: ${first}`, {
+      status: 502,
+      headers: headers({ "Content-Type": "text/plain; charset=utf-8" }),
+    });
   }
 
   return new Response("not found", { status: 404, headers: headers() });

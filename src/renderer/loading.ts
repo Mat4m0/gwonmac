@@ -235,7 +235,11 @@ window.gwLoading = (function (): LoadingController {
         );
         return;
       }
-      window.location.reload();
+      // A no-client retry completes only after publishing a ready generation,
+      // at which point this document can safely load it. An active client
+      // instead asks main to relaunch and reports `starting`; reloading here
+      // would unload the renderer while quit cleanup is still syncing IDBFS.
+      if (progress.phase === 'ready') window.location.reload();
     } catch {
       if (requestedRecovery === 'filesystem') {
         api.failFilesystem();

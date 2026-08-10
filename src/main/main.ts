@@ -2,12 +2,10 @@
  * The composition root: it constructs the subsystems, wires them to one
  * another, and owns the order in which a launch happens.
  *
- * Nothing here implements a behaviour. Every rule this file appears to make —
- * what a setting is, when an update may be checked, which module is served,
- * which secrets are available — belongs to the module it hands the work to, and
- * a decision that starts growing here belongs somewhere else. What main owns is
- * sequence and lifetime: the single-instance lock, the work that must precede
- * `ready`, the profile location, and what is registered to run at quit.
+ * Main owns app-wide sequence, lifetime, and presentation: the single-instance
+ * lock, work that must precede `ready`, the profile location, top-level dialogs,
+ * and quit registration. Feature rules belong to the module it hands work to;
+ * a feature decision that starts growing here should move to that owner.
  */
 import {
   app,
@@ -36,7 +34,7 @@ import {
   type EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
-import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
+import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { Mutex } from "./core/mutex.js";
@@ -77,7 +75,7 @@ import {
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
 } from "./certification/enhancement-policy.js";
-import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
+import { installGwProtocolHandler, registerGwScheme } from "./protocol.js";
 import {
   createMainWindow,
   flushWindowState,
@@ -143,7 +141,6 @@ const HOST_VERSION = (() => {
   return app.getVersion();
 })();
 
-const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
@@ -206,11 +203,14 @@ function buildSocketManager(): SocketManager {
       emitSocketEvent(ownerId, event);
     },
     { count, observe, gauge, peakGauge },
-    !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
+    // An unpackaged Electron test may replace the production destination
+    // validator with one that admits exactly its loopback fixture. Production
+    // still uses the public-ArenaNet allowlist and grants no such exception.
+    !app.isPackaged && process.env.GW_TEST_SOCKET_LOOPBACK === "1"
       ? (destination) => {
           if (destination !== "127.0.0.1:6112") {
             throw new Error(
-              "offline socket fixture permits only 127.0.0.1:6112",
+              "test socket fixture permits only 127.0.0.1:6112",
             );
           }
           return { host: "127.0.0.1", port: 6112, family: 4 };
@@ -225,9 +225,7 @@ function setProgress(next: DownloadProgress): void {
 }
 
 function setPrefetch(next: PrefetchProgress): void {
-  prefetch.completedChunks = next.completedChunks;
-  prefetch.totalChunks = next.totalChunks;
-  sendToRenderer(IPC.prefetchEvent, { ...prefetch });
+  sendToRenderer(IPC.prefetchEvent, { ...next });
 }
 
 function sendToRenderer(channel: string, value: unknown): void {
@@ -439,13 +437,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     paths,
     hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
-    offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementCapabilities,
-    // The environment variable is a developer/qualification shortcut only.
-    // Saved settings remain the sole durable request made by the product UI.
-    extendedMemoryEnabled:
-      settings.extendedMemoryEnabled
-      || process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1",
+    extendedMemoryEnabled: settings.extendedMemoryEnabled,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -499,10 +492,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     logEvent({ k: "fullDownload.stoppedForSleep" });
     clientRuntime.stopDownload();
   });
-  setProtocolDeps({
+  installGwProtocolHandler({
     getActiveClient: () => clientRuntime.active,
   });
-  installGwProtocolHandler();
   logEvent({ k: "protocol.installed" });
 
   const ipcCleanup = registerIpcHandlers({
@@ -519,10 +511,14 @@ if (primaryInstance) void app.whenReady().then(async () => {
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
       clientRuntime.confirmCandidateHealthy(token),
-    // A retry is a request to run the update again, nothing more. Whether it
-    // worked is already on the progress channel, which is where the renderer
-    // reads it — a second, thrown answer would have been a second owner.
-    retryClient: () => clientRuntime.requestUpdate(),
+    retryClient: () =>
+      clientRuntime.retryClient(() => {
+        // An active generation may still have protocol reads in flight. End the
+        // process before startup rollback/update renames its artifact paths; the
+        // replacement process then follows the ordinary no-client boot path.
+        app.relaunch();
+        app.quit();
+      }),
     getAppUpdateState: () => appUpdaterController!.getState(),
     checkAppUpdates: () => checkForAppUpdates(),
     restartAndInstallUpdate: (win) => {
@@ -579,11 +575,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     await ipcCleanup.drainSecrets();
     await flushWindowState();
     sockets.closeAll();
-    updateLongRunningTaskFeedback({
-      ...INITIAL_PROGRESS,
-      phase: "ready",
-      label: "Quitting",
-    });
+    updateLongRunningTaskFeedback(INITIAL_PROGRESS);
     await clientRuntime.shutdown();
     await clearBrowserCookies("quit");
     await stopDiagnostics();

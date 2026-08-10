@@ -29,7 +29,6 @@ import { join } from "node:path";
 import {
   ARENANET_REQUEST_CEILING,
   type DownloadActivity,
-  type DownloadProgress,
 } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import {
@@ -65,22 +64,17 @@ import {
   fetchPatchBytes,
   type PatchFetch,
 } from "./patch-transport.js";
-import {
-  clientArtifactPath,
-  clientManifestPath,
-  snapshotMetadataPath,
-} from "./paths.js";
+import { clientArtifactPath, clientManifestPath } from "./paths.js";
 import {
   parsePublishedClientManifest,
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./published-client.js";
-import {
-  publishSnapshotIndex,
-  snapshotIndexFormatReadable,
-} from "./snapshot.js";
 
 export type FetchLike = PatchFetch;
+type PatchProgress = DownloadActivity & {
+  phase: Exclude<DownloadActivity["phase"], "ready">;
+};
 
 export interface PatchClientOptions {
   artifactsDir: string;
@@ -88,7 +82,7 @@ export interface PatchClientOptions {
   patchRoot?: string;
   fetch: FetchLike;
   jobs?: number;
-  onProgress?: (p: DownloadProgress) => void;
+  onProgress?: (p: PatchProgress) => void;
 }
 
 export interface PatchUpdateResult {
@@ -105,7 +99,7 @@ export class PatchClient {
   private readonly patchRoot: string;
   private readonly fetchFn: FetchLike;
   private readonly jobs: number;
-  private readonly onProgress: ((p: DownloadProgress) => void) | undefined;
+  private readonly onProgress: ((p: PatchProgress) => void) | undefined;
   private readonly headers: Record<string, string>;
 
   constructor(opts: PatchClientOptions) {
@@ -125,11 +119,7 @@ export class PatchClient {
    * renderer read snapshot metadata while there was still no active client,
    * get size 0, and silently stream the whole game over the network instead.
    */
-  private emit(
-    p: DownloadActivity & {
-      phase: Exclude<DownloadActivity["phase"], "ready">;
-    },
-  ): void {
+  private emit(p: PatchProgress): void {
     this.onProgress?.(p);
   }
 
@@ -323,14 +313,11 @@ export class PatchClient {
     }
   }
 
-  private async snapshotIndexesMatch(
+  private async publishedManifestMatches(
     entry: ManifestFileEntry,
     manifest: Manifest,
   ): Promise<boolean> {
     try {
-      const metadata = JSON.parse(
-        await readFile(snapshotMetadataPath(this.artifactsDir), "utf8"),
-      ) as Record<string, unknown>;
       const current = parsePublishedClientManifest(
         JSON.parse(
           await readFile(clientManifestPath(this.artifactsDir), "utf8"),
@@ -347,10 +334,6 @@ export class PatchClient {
         };
       });
       return (
-        snapshotIndexFormatReadable(metadata.formatVersion) &&
-        metadata.size === entry.size &&
-        metadata.chunkSize === manifest.chunkSize &&
-        JSON.stringify(metadata.chunkHashes) === hashes &&
         current.compressionMode === manifest.compression &&
         current.chunkSize === manifest.chunkSize &&
         current.snapshot === SNAPSHOT &&
@@ -435,7 +418,7 @@ export class PatchClient {
     }
   }
 
-  /** Fetch JSPI client artifacts and publish snapshot metadata; never assembles Gw.snapshot. */
+  /** Fetch and publish one verified JSPI client generation; never assembles Gw.snapshot. */
   async update(options?: {
     blockedFingerprint?: string | null;
     signal?: AbortSignal;
@@ -499,7 +482,7 @@ export class PatchClient {
     const wanted = artifacts.filter((artifact) => artifact.needsBuild);
     if (
       wanted.length === 0 &&
-      (await this.snapshotIndexesMatch(snapshotEntry, mf))
+      (await this.publishedManifestMatches(snapshotEntry, mf))
     ) {
       return {
         manifest: mf,
@@ -566,11 +549,6 @@ export class PatchClient {
           await this.stageExisting(artifact.current, artifact.staged);
         }
       }
-      await publishSnapshotIndex(snapshotMetadataPath(stage), {
-        size: snapshotEntry.size,
-        chunkSize: mf.chunkSize,
-        chunkHashes: snapshotEntry.chunkHashes,
-      });
       const stagedManifest = clientManifestPath(stage);
       await writeAtomicJson(
         stagedManifest,

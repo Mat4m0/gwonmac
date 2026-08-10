@@ -13,6 +13,7 @@ import {
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { electronBin, root } from "./fixtures.mjs";
+import { seedCachedClient } from "../helpers/cached-client.js";
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
@@ -71,7 +72,7 @@ const launch = (userData: string, env: Record<string, string>) =>
 test.describe("Electron application", () => {
   test("a second instance exits and reveals the primary window", async () => {
     const env = launchEnv({
-      GW_OFFLINE_SHELL: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-single-instance-e2e-"));
@@ -123,7 +124,7 @@ test.describe("Electron application", () => {
   test("a startup failure exits nonzero and releases the instance lock", async () => {
     const userData = await mkdtemp(path.join(tmpdir(), "gw-startup-failure-e2e-"));
     const baseEnv = launchEnv({
-      GW_OFFLINE_SHELL: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
     const failed = spawn(
@@ -182,7 +183,8 @@ test.describe("Electron application", () => {
       server.listen(6112, "127.0.0.1", () => resolve());
     });
     const env = launchEnv({
-      GW_OFFLINE_SHELL: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
+      GW_TEST_SOCKET_LOOPBACK: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-electron-quit-e2e-"));
@@ -252,7 +254,7 @@ test.describe("Electron application", () => {
 
   test("restores fullscreen and normal bounds, then resets safely", async () => {
     // No GW_BACKGROUND_LAUNCH: setFullScreen is unreliable on a non-key window.
-    const env = launchEnv({ GW_OFFLINE_SHELL: "1" });
+    const env = launchEnv({ GW_REQUIRE_CACHED_CLIENT: "1" });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-window-state-e2e-"));
     const closeCleanly = async (runningApp: ElectronApplication) => {
       const processHandle = runningApp.process();
@@ -394,7 +396,8 @@ test.describe("Electron application", () => {
       server.listen(6112, "127.0.0.1", () => resolve());
     });
     const env = launchEnv({
-      GW_OFFLINE_SHELL: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
+      GW_TEST_SOCKET_LOOPBACK: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-electron-socket-e2e-"));
@@ -482,7 +485,7 @@ test.describe("Electron application", () => {
 
   test("unofficial builds keep login volatile without deleting retired secrets", async () => {
     const env = launchEnv({
-      GW_OFFLINE_SHELL: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
       GW_BACKGROUND_LAUNCH: "1",
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-credentials-e2e-"));
@@ -537,17 +540,25 @@ test.describe("Electron application", () => {
 
   test("in-game Full Game strategy owns the next launch", async () => {
     const env = launchEnv({
-      GW_OFFLINE_SHELL: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
       GW_BACKGROUND_LAUNCH: "1",
-      GW_OFFLINE_SNAPSHOT_SIZE: String(8 * 1024 ** 3),
     });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-strategy-e2e-"));
+    await seedCachedClient(
+      {
+        artifacts: path.join(userData, "game", "artifacts"),
+        userData,
+      },
+      { snapshotSize: 8 * 1024 ** 3 },
+    );
     const app = await launch(userData, env);
     try {
       const page = await app.firstWindow({ timeout: 30_000 });
       await page.waitForLoadState("domcontentloaded");
       await expect(page.locator("#data-choice")).toBeVisible();
       await page.locator("#data-choice-quick").click();
+      await expect(page.locator("#client-compat-play")).toBeVisible();
+      await page.locator("#client-compat-play").click();
       await expect
         .poll(() =>
           page.evaluate(() =>
@@ -568,6 +579,14 @@ test.describe("Electron application", () => {
         "before Guild Wars starts next time",
       );
       await page.locator("#settings-done").click();
+
+      // The next-launch presentation is the subject here. Keep its full-game
+      // operation inert so this network-independent fixture never asks
+      // ArenaNet for the intentionally unresident advertised snapshot.
+      await app.evaluate(({ ipcMain }) => {
+        ipcMain.removeHandler("gw:cache:downloadAll");
+        ipcMain.handle("gw:cache:downloadAll", () => ({ status: "stopped" }));
+      });
 
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.locator("#data-download")).toBeVisible();

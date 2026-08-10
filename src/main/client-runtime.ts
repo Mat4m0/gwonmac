@@ -3,11 +3,11 @@
  * what the resulting build may be transformed into, and publish exactly one
  * active client.
  *
- * `clientReady` is the only thing in the application permitted to publish
- * progress `phase: "ready"`. That phase means the main process has an active
- * client, which nothing outside this runtime can know; published early, the
- * renderer reads snapshot metadata before a client exists, sees size 0, and
- * streams the whole game over the network.
+ * `publishReadyProgress` is the only thing in the application permitted to
+ * publish progress `phase: "ready"`. That phase means the main process has the
+ * exact active client generation, which nothing outside this runtime can know;
+ * published early, the renderer reads snapshot metadata before a client exists,
+ * sees size 0, and streams the whole game over the network.
  *
  * Every operation that moves a generation directory holds one lock for the
  * whole of its work. Update, candidate confirmation and crash rollback all
@@ -23,12 +23,13 @@ import { net } from "electron";
 import {
   type ClientCompatibility,
   type ClientHealthToken,
+  type DownloadActivity,
+  type DownloadFailure,
   type ExtendedMemoryRuntimeStatus,
   type DownloadProgress,
   type FullDownloadOutcome,
   type NoticeCode,
   type PrefetchProgress,
-  type SnapshotMetadata,
 } from "../shared/contracts.js";
 import {
   enhancementCapabilitiesRequested,
@@ -75,7 +76,6 @@ import {
   migrateLegacyPublishedClientManifest,
   verifyPublishedClientArtifacts,
 } from "./core/published-client.js";
-import { buildSnapshotMetadata } from "./core/snapshot.js";
 import {
   count,
   gauge,
@@ -103,7 +103,6 @@ interface ClientRuntimeOptions {
   paths: GamePaths;
   hostVersion: string;
   cachedOnly: boolean;
-  offlineShell: boolean;
   enhancementCapabilities: EnhancementCapabilities;
   extendedMemoryEnabled: boolean;
   onProgress: (progress: DownloadProgress) => void;
@@ -134,13 +133,6 @@ export class ClientRuntime {
   } | null = null;
   private gameUpdate: Promise<void> | null = null;
   private gameUpdateAbort: AbortController | null = null;
-  /**
-   * Which of the three certification states this session is in. Set once per
-   * generation, where the module it describes is chosen; `null` until a client
-   * has been activated.
-   */
-  private compatibilityValue: ClientCompatibility | null = null;
-  private extendedMemoryValue: ExtendedMemoryRuntimeStatus | null = null;
   /** Exact candidate identity captured by a renderer before it loads glue. */
   private candidateHealthToken: ClientHealthToken | null = null;
   private readonly patchFetch: PatchFetch;
@@ -157,7 +149,7 @@ export class ClientRuntime {
   }
 
   get compatibility(): ClientCompatibility | null {
-    return this.compatibilityValue;
+    return this.activeSlot.current?.compatibility ?? null;
   }
 
   get healthToken(): ClientHealthToken | null {
@@ -165,7 +157,7 @@ export class ClientRuntime {
   }
 
   get extendedMemory(): ExtendedMemoryRuntimeStatus | null {
-    return this.extendedMemoryValue;
+    return this.activeSlot.current?.extendedMemory ?? null;
   }
 
   get progress(): DownloadProgress {
@@ -176,9 +168,20 @@ export class ClientRuntime {
     return this.fullDownload !== null;
   }
 
-  private publishProgress(next: DownloadProgress): void {
+  private commitProgress(next: DownloadProgress): void {
+    if (next.phase === "ready" && !this.activeSlot.current) {
+      throw new NotReadyError("ready progress requires an active client");
+    }
     this.progressValue = next;
     this.options.onProgress(next);
+  }
+
+  private publishProgress(
+    next: DownloadFailure | (DownloadActivity & {
+      phase: Exclude<DownloadActivity["phase"], "ready">;
+    }),
+  ): void {
+    this.commitProgress(next);
   }
 
   private cdnChunkFetcher(compression: "none" | "gzip") {
@@ -218,9 +221,9 @@ export class ClientRuntime {
   private async selectClientWasm(): Promise<{
     wasmPath: string;
     jsPath: string;
-    build: ActiveClient["enhancementBuild"];
+    compatibility: ClientCompatibility | null;
+    extendedMemory: ExtendedMemoryRuntimeStatus;
   }> {
-    this.extendedMemoryValue = null;
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
       "Gw.jspi.wasm",
@@ -230,13 +233,12 @@ export class ClientRuntime {
       officialSha256 = await sha256File(officialWasm);
     } catch (error) {
       // Nothing can be certified without the hash, so nothing is transformed.
-      this.compatibilityValue = null;
       gauge("wasm.templateSaveCompatible", false);
       gauge("enhancement.supportedBuild", false);
       logEvent({ k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
-      this.extendedMemoryValue = extendedMemoryRuntimeStatus(
+      const extendedMemory = extendedMemoryRuntimeStatus(
         this.options.extendedMemoryEnabled
           ? { status: "unavailable", reason: "unsupported-client" }
           : { status: "disabled" },
@@ -244,7 +246,8 @@ export class ClientRuntime {
       return {
         wasmPath: officialWasm,
         jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
-        build: null,
+        compatibility: null,
+        extendedMemory,
       };
     }
 
@@ -277,7 +280,7 @@ export class ClientRuntime {
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
     });
     const state = prepared.state;
-    this.compatibilityValue = {
+    const compatibility: ClientCompatibility = {
       state,
       clientSha256: officialSha256,
       enhancementActive: prepared.enhancementBuild !== null,
@@ -319,9 +322,9 @@ export class ClientRuntime {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
     gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);
-    this.extendedMemoryValue = extendedMemoryRuntimeStatus(prepared.extendedMemory);
-    const extendedCap = this.extendedMemoryValue.effectiveCapBytes;
-    const fallbackReason = this.extendedMemoryValue.fallbackReason;
+    const extendedMemory = extendedMemoryRuntimeStatus(prepared.extendedMemory);
+    const extendedCap = extendedMemory.effectiveCapBytes;
+    const fallbackReason = extendedMemory.fallbackReason;
     gauge("wasm.extendedMemoryMode", prepared.extendedMemory.status);
     gauge("wasm.heapCapBytes", extendedCap);
     logEvent({
@@ -346,18 +349,13 @@ export class ClientRuntime {
     return {
       wasmPath: prepared.wasmPath,
       jsPath: prepared.jsPath,
-      build: prepared.enhancementBuild,
+      compatibility,
+      extendedMemory,
     };
   }
 
-  private async snapshotFor(store: ChunkStore): Promise<SnapshotMetadata> {
+  private async recordResidency(store: ChunkStore): Promise<void> {
     const residentIndices = await store.residentIndices();
-    const meta = buildSnapshotMetadata({
-      size: store.size,
-      chunkSize: store.chunkSize,
-      chunkHashes: store.hashes,
-      residentIndices,
-    });
     const residentBytes = residentIndices.reduce(
       (total, index) => total + store.chunkByteLength(index),
       0,
@@ -371,7 +369,6 @@ export class ClientRuntime {
       gauge("cache.initialResidentBytes", residentBytes);
       this.initialResidencyRecorded = true;
     }
-    return meta;
   }
 
   private async activateStore(
@@ -379,18 +376,18 @@ export class ClientRuntime {
     candidateFingerprint: string | null = null,
   ): Promise<ActiveClient> {
     this.initialResidencyRecorded = false;
-    const [snapshotMeta, enhancement] = await Promise.all([
-      this.snapshotFor(store),
+    const [enhancement] = await Promise.all([
       this.selectClientWasm(),
+      this.recordResidency(store),
     ]);
     const previous = this.activeSlot.current;
     const active: ActiveClient = this.activeSlot.publish({
       artifactsDir: this.options.paths.artifacts,
       store,
-      snapshotMeta,
       wasmPath: enhancement.wasmPath,
       jsPath: enhancement.jsPath,
-      enhancementBuild: enhancement.build,
+      compatibility: enhancement.compatibility,
+      extendedMemory: enhancement.extendedMemory,
     });
     this.candidateHealthToken = candidateFingerprint
       ? Object.freeze({
@@ -456,13 +453,6 @@ export class ClientRuntime {
     );
   }
 
-  private async refreshSnapshot(generation: number): Promise<void> {
-    const active = this.activeSlot.current;
-    if (!active || active.generation !== generation) return;
-    const snapshotMeta = await this.snapshotFor(active.store);
-    this.activeSlot.replaceSnapshot(generation, snapshotMeta);
-  }
-
   private async pruneChunkCache(): Promise<void> {
     try {
       const removed = await pruneUnreferencedChunks({
@@ -486,24 +476,34 @@ export class ClientRuntime {
     }
   }
 
-  private publishReadyProgress(noticeCode?: NoticeCode): void {
-    this.publishProgress({
+  private publishReadyProgress(
+    active: ActiveClient,
+    label: string,
+    noticeCode?: NoticeCode,
+  ): void {
+    if (this.activeSlot.current?.generation !== active.generation) {
+      throw new NotReadyError("ready progress requires the active client generation");
+    }
+    this.commitProgress({
       ...INITIAL_PROGRESS,
       phase: "ready",
-      label: "Starting Guild Wars",
+      label,
       ...(noticeCode ? { noticeCode } : {}),
     });
   }
 
   private clientReady(active: ActiveClient, noticeCode?: NoticeCode): void {
-    this.publishReadyProgress(noticeCode);
+    this.publishReadyProgress(active, "Starting Guild Wars", noticeCode);
     void active.store
       .prefetch((progress) => {
         if (this.activeSlot.current?.generation === active.generation) {
           this.options.onPrefetch(progress);
         }
       })
-      .then(() => this.refreshSnapshot(active.generation))
+      .then(() => {
+        if (this.activeSlot.current?.generation !== active.generation) return;
+        return this.recordResidency(active.store);
+      })
       .catch((error) =>
         logEvent({ k: "prefetch.failed", code: errorCode(error) }),
       );
@@ -517,14 +517,10 @@ export class ClientRuntime {
 
   private async runUpdate(signal: AbortSignal): Promise<void> {
     if (signal.aborted) return;
-    if (this.options.offlineShell) {
-      this.publishProgress({
-        ...INITIAL_PROGRESS,
-        phase: "ready",
-        label: "Ready (offline shell)",
-      });
-      return;
-    }
+    // The lock may have queued this operation behind recovery that activated a
+    // client after requestUpdate's first check. Never rename the artifact alias
+    // once any published generation can be serving from it.
+    if (this.activeSlot.current) return;
     if (this.options.cachedOnly) {
       try {
         await this.activatePublishedAndReady("cached-live-probe");
@@ -638,6 +634,10 @@ export class ClientRuntime {
   }
 
   requestUpdate(): Promise<void> {
+    // Once a generation is active its artifact paths may be in use by the
+    // protocol handler. A patch publication renames those paths, so only the
+    // initial no-client boot is allowed to run PatchClient.
+    if (this.activeSlot.current) return Promise.resolve();
     if (this.gameUpdate) return this.gameUpdate;
     this.publishProgress({
       ...INITIAL_PROGRESS,
@@ -656,6 +656,21 @@ export class ClientRuntime {
       });
     this.gameUpdate = operation;
     return operation;
+  }
+
+  retryClient(relaunch: () => void): Promise<void> {
+    if (!this.activeSlot.current) return this.requestUpdate();
+    this.publishProgress({
+      ...INITIAL_PROGRESS,
+      phase: "starting",
+      label: "Restarting the game client",
+    });
+    try {
+      relaunch();
+    } catch (error) {
+      this.publishProgress({ phase: "error", errorCode: errorCode(error) });
+    }
+    return Promise.resolve();
   }
 
   /**
@@ -703,16 +718,17 @@ export class ClientRuntime {
         },
       })
       .then(async (complete): Promise<FullDownloadOutcome> => {
-        await this.refreshSnapshot(active.generation);
+        if (this.activeSlot.current?.generation === active.generation) {
+          await this.recordResidency(active.store);
+        }
         logEvent({
           k: complete ? "fullDownload.completed" : "fullDownload.stopped",
         });
         if (this.activeSlot.current?.generation === active.generation) {
-          this.publishProgress({
-            ...INITIAL_PROGRESS,
-            phase: "ready",
-            label: complete ? "Full game downloaded" : "Download stopped",
-          });
+          this.publishReadyProgress(
+            active,
+            complete ? "Full game downloaded" : "Download stopped",
+          );
         }
         return { status: complete ? "complete" : "stopped" };
       })
@@ -720,11 +736,7 @@ export class ClientRuntime {
         const code = errorCode(error);
         logEvent({ k: "fullDownload.failed", code });
         if (this.activeSlot.current?.generation === active.generation) {
-          this.publishProgress({
-            ...INITIAL_PROGRESS,
-            phase: "ready",
-            label: "Download paused",
-          });
+          this.publishReadyProgress(active, "Download paused");
         }
         return { status: "failed", errorCode: code };
       })
@@ -788,7 +800,11 @@ export class ClientRuntime {
         if (interruptedUpdate) {
           const active = this.activeSlot.current;
           if (active) {
-            this.publishReadyProgress("interrupted-update-retryable");
+            this.publishReadyProgress(
+              active,
+              "Starting Guild Wars",
+              "interrupted-update-retryable",
+            );
             return;
           }
           try {
