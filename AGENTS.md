@@ -197,7 +197,10 @@ is meant to inherit the dead ends rather than walk back into them.
   most one every six hours while the app stays open — never while a game
   connection is open — and governs **every** automatic check without
   exception, including the one on an unrecognised client build; switched off,
-  a launch reaches github.com zero times, forever. `src/main/app-updater.ts` is the only
+  a launch reaches github.com zero times, forever. Saving the checkbox or
+  `updateTrack` changes future automatic checks but starts no request; the
+  explicit Check for Updates action is the immediate path.
+  `src/main/app-updater.ts` is the only
   caller of the releases API and the single owner of application discovery,
   release validation, download, ready, and install state. Only an official
   package carrying the release marker may reach Squirrel.Mac. `updateTrack`
@@ -208,7 +211,12 @@ is meant to inherit the dead ends rather than walk back into them.
   matching final Stable remains a normal forward update. The separately signed
   Preview tester app cannot use AppUpdater. Every public beta/RC must pass the
   release-only latest-Stable → candidate → same-Stable semantic data
-  round-trip. A ready forward update waits for an explicit or ordinary restart.
+  round-trip. Its settings keys and accepted values must already belong to
+  latest Stable: expand them in Stable before a candidate uses them, and
+  contract them only after the supported Stable baseline no longer needs them.
+  Do not preserve unknown fields in a compatibility bag. An update already
+  ready when the app launches installs before play; an update downloaded later
+  waits for an explicit or ordinary restart.
   ArenaNet client updates remain separate and automatic.
   `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md` owns
   what the player is told.

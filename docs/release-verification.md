@@ -176,7 +176,9 @@ starting and returning version.
   each launched app must report the expected version, and settings,
   Builds/Teams with tags/order/references, window state, and profile-origin
   browser storage must survive a read-modify-write in all three launches with
-  no quarantine, reset, or game-data redownload. Candidate settings must have
+  no quarantine or profile/chunk-store reset; the residency sentinel must
+  remain. This synthetic proof does not claim either app recognizes a resident
+  client generation or avoids content fetches. Candidate settings must have
   exactly the latest Stable key set and value domains, and every untouched
   candidate value must survive Stable's final write. When
   Electron, Chromium, or persistence changes, also save and reload a real
