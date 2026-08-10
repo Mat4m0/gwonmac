@@ -702,6 +702,27 @@ export async function assertPackagedHostOnlyToolsSession() {
     );
     assert.deepEqual(enhancementRequests, []);
 
+    const setToolsEnabled = async (enabled: boolean) => {
+      await fixture.page.evaluate(async (next) => {
+        const saved = await window.gwNative.settings.set({ gwonmacTools: next });
+        window.gwApplySettings?.(saved);
+      }, enabled);
+    };
+    await setToolsEnabled(false);
+    await fixture.page.waitForSelector("#toolbox-foundation", { state: "detached" });
+    assert.equal(
+      await fixture.page.evaluate(() =>
+        !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
+          cancelable: true,
+        }))),
+      false,
+      "disabled host-only Tools still claimed its command",
+    );
+    await setToolsEnabled(true);
+    await fixture.page.waitForSelector("#toolbox-foundation");
+    await openTools();
+    await fixture.page.getByText("Patch-day team", { exact: true }).waitFor();
+
     await fixture.page.reload({ waitUntil: "domcontentloaded" });
     await waitForRuntime();
     await openTools();
@@ -713,6 +734,51 @@ export async function assertPackagedHostOnlyToolsSession() {
       [...OFFICIAL_WASM],
     );
     assert.deepEqual(enhancementRequests, []);
+  } finally {
+    await closePackaged(fixture);
+  }
+}
+
+/**
+ * A manifest marker can be present without carrying a supported companion ABI.
+ * That is a soft refusal, not a reason to hide the host-owned library.
+ */
+export async function assertPackagedHostOnlyToolsAfterSoftRefusal() {
+  const module = manifestMarkerModule();
+  const fixture = await launchPackaged(
+    "gw-packaged-host-only-tools-soft-refusal-",
+    {
+      compatibilityNoticeSeenFor: createHash("sha256").update(module).digest("hex"),
+      dataStrategy: "quick",
+      gwonmacTools: true,
+    },
+    {
+      cachedOnly: true,
+      prepare: async (paths) => {
+        await seedCachedClient(paths);
+        await writeFile(path.join(paths.artifacts, "Gw.jspi.wasm"), module);
+      },
+    },
+  );
+  try {
+    await fixture.page.waitForFunction(async () => {
+      const progress = await window.gwNative.progress.current();
+      if (progress.phase === "error") {
+        throw new Error(`cached client failed: ${progress.errorCode}`);
+      }
+      return progress.phase === "ready";
+    });
+    await fixture.page.waitForFunction(
+      () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
+    );
+    await fixture.page.waitForSelector("#toolbox-foundation");
+    const claimed = await fixture.page.evaluate(() =>
+      !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
+        cancelable: true,
+      })));
+    assert.equal(claimed, true, "soft refusal did not install host-only Tools");
+    await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]');
+    assert.equal(await fixture.page.evaluate(() => window.gwCompanionRuntime), undefined);
   } finally {
     await closePackaged(fixture);
   }

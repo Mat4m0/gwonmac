@@ -270,3 +270,48 @@ export function createToolboxFoundation(
     },
   };
 }
+
+/**
+ * Owns the optional lifetime around one toolbox foundation.
+ *
+ * Both certified and host-only sessions can change their Tools setting while
+ * the renderer stays alive. Keeping that transition here makes disabling mean
+ * the same thing in both paths: the DOM, command listener, chord, and mounted
+ * tool all disappear together. The latest observation is retained so a later
+ * re-enable starts current rather than waiting for the next game poll.
+ */
+export function createToolboxLifecycle(
+  parent: HTMLElement,
+  options: Parameters<typeof createToolboxFoundation>[1],
+) {
+  let foundation: ReturnType<typeof createToolboxFoundation> | null = null;
+  let state: ToolboxState = Object.freeze({ status: "waiting" });
+  let disposed = false;
+
+  return {
+    setEnabled(enabled: boolean) {
+      if (disposed) return;
+      if (enabled) {
+        if (foundation !== null) return;
+        foundation = createToolboxFoundation(parent, options);
+        foundation.update(state);
+        return;
+      }
+      foundation?.dispose();
+      foundation = null;
+    },
+    update(next: ToolboxState) {
+      state = next;
+      foundation?.update(next);
+    },
+    get state() {
+      return foundation?.state ?? null;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      foundation?.dispose();
+      foundation = null;
+    },
+  };
+}

@@ -25,7 +25,7 @@ import {
   installCursorRefresh,
   type HiddenCursorRetry,
 } from "./cursor-refresh.js";
-import { createToolboxFoundation } from "./toolbox-foundation.js";
+import { createToolboxLifecycle } from "./toolbox-foundation.js";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_SNAPSHOT_BYTES,
@@ -641,7 +641,6 @@ export async function installCertifiedCompanion(
 
     // The command module owns values and reviewed opcodes; the installer owns
     // the live permission gate and hands it the freshest observed party.
-    let toolbox: ReturnType<typeof createToolboxFoundation> | null = null;
     let toolboxObservation: ToolboxObservation | null = null;
     const teamEnabled = () => policy().teamManagement;
     const syncActiveObservers = () => {
@@ -679,6 +678,14 @@ export async function installCertifiedCompanion(
         return observed;
       },
     });
+    const toolbox = foundation
+      ? createToolboxLifecycle(document.body, {
+          mountTool: (host, onVisibilityChange) =>
+            import("./tools-host.js").then(({ mountToolsInto }) =>
+              mountToolsInto(host, onVisibilityChange, commands),
+            ),
+        })
+      : null;
     if (professionTracePointer !== 0 && professionTraceReader !== null) {
       professionTrace = createProfessionCommandTrace(
         memory,
@@ -687,20 +694,7 @@ export async function installCertifiedCompanion(
       );
     }
     const setTeamEnabled = () => {
-      if (!foundation) return;
-      if (teamEnabled()) {
-        if (toolbox === null) {
-          toolbox = createToolboxFoundation(document.body, {
-            mountTool: (host, onVisibilityChange) =>
-              import("./tools-host.js").then(({ mountToolsInto }) =>
-                mountToolsInto(host, onVisibilityChange, commands),
-              ),
-          });
-        }
-      } else if (toolbox !== null) {
-        toolbox.dispose();
-        toolbox = null;
-      }
+      toolbox?.setEnabled(teamEnabled());
     };
     tracePolicy("launch");
     setTeamEnabled();
@@ -717,7 +711,6 @@ export async function installCertifiedCompanion(
       window.removeEventListener("gw:tools-settings", onToolSettings);
     disposeToolbox = () => {
       toolbox?.dispose();
-      toolbox = null;
     };
 
     // Apply opt-in state before the callback becomes reachable from the game.

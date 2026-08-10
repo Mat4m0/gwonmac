@@ -1,4 +1,5 @@
 import {
+  assertPackagedHostOnlyToolsAfterSoftRefusal,
   assertPackagedHostOnlyToolsSession,
   assertPackagedOffSession,
 } from "./helpers/packaged-enhancement-fixture.ts";
@@ -10,6 +11,7 @@ import {
 
 await assertPackagedOffSession();
 await assertPackagedHostOnlyToolsSession();
+await assertPackagedHostOnlyToolsAfterSoftRefusal();
 await assertTargetReadoutLifecycle();
 await assertToolboxFoundationLifecycle();
 await assertRollbackAfterTablePublication();

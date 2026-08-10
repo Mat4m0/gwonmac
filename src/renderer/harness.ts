@@ -245,17 +245,28 @@ function installHostOnlyTools(): void {
     import('./toolbox-foundation.js'),
     import('./tools-host.js'),
   ])
-    .then(([{ createToolboxFoundation }, { mountToolsInto }]) => {
+    .then(([{ createToolboxLifecycle }, { mountToolsInto }]) => {
       if (rendererUnloading) return;
-      const foundation = createToolboxFoundation(document.body, {
+      const lifecycle = createToolboxLifecycle(document.body, {
         mountTool: (host, onVisibilityChange) =>
           mountToolsInto(host, onVisibilityChange, null),
       });
+      const syncEnabled = () => {
+        const settings = window.gwToolsSettings();
+        lifecycle.setEnabled(settings.enabled && settings.teamManagement);
+      };
+      const onToolSettings = () => syncEnabled();
+      window.addEventListener('gw:tools-settings', onToolSettings);
+      syncEnabled();
       if (rendererUnloading) {
-        foundation.dispose();
+        window.removeEventListener('gw:tools-settings', onToolSettings);
+        lifecycle.dispose();
         return;
       }
-      disposeHostOnlyTools = foundation.dispose;
+      disposeHostOnlyTools = () => {
+        window.removeEventListener('gw:tools-settings', onToolSettings);
+        lifecycle.dispose();
+      };
     })
     .catch((error) => log(
       '[tools]',
@@ -297,6 +308,15 @@ function maybeInstallEnhancements(): void {
         init.enhancementSelection,
         init.enhancementProgram,
       ))
+    .then((installation) => {
+      // Unsupported manifests and exports are a normal soft refusal. The
+      // installer returns null for those cases rather than throwing, but the
+      // host-owned library remains just as usable as it is on a module with no
+      // manifest at all.
+      if (installation === null && init.enhancementSelection.tools) {
+        installHostOnlyTools();
+      }
+    })
     .catch((error) => {
       log(
         '[enhancement]',
