@@ -59,8 +59,9 @@ passes.
 Refusals, not a backlog.
 
 - **No Windows or Linux build.**
-- **No modification of ArenaNet's client.** The downloaded artifact stays
-  canonical and is never redistributed.
+- **No mutation or redistribution of ArenaNet's downloaded artifact.** It stays
+  canonical. Any platform repair or optional Tools transform produces a
+  separate, exact-hash-verified runtime copy and fails back to canonical bytes.
 - **No autonomous gameplay automation.** The app never chooses a target, moves
   a character, uses a skill, sends chat, farms, or acts without an explicit
   player command. Team Apply is a bounded, user-initiated PvE configuration
@@ -69,8 +70,10 @@ Refusals, not a backlog.
   replay one bounded out-and-back pointer hit-test when Guild Wars emitted no
   cursor event; it cannot originate a click or leave the pointer displaced.
 - **No account features.** No bots, macros, multiboxing help, or trading tools.
-- **No telemetry.** Nothing leaves the machine unless the player attaches a
-  diagnostics file to a bug report themselves.
+- **No Mac app telemetry.** Required login and game traffic goes only to the
+  selected provider and ArenaNet services. The app sends no diagnostics,
+  library, account, or gameplay data to a GWonMac service; a player may attach
+  a diagnostics file to a bug report themselves.
 - **No plugin ABI, and no port of the Windows one.** Native injection, GWCA
   pointers, Direct3D/ImGui rendering, and DLL plugins are replacement work.
 - **No disk-usage promise.** The full download is about 4 GB and stays until

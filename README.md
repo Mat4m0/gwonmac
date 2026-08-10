@@ -48,7 +48,7 @@ mid-download with _Play Now Instead_.
 
 ## Privacy and data
 
-- **No telemetry is ever uploaded.** Diagnostics are written locally and only
+- **The Mac app never uploads telemetry.** Diagnostics are written locally and only
   leave your machine if you attach a `.gwdiag` file to a bug report yourself.
 - Passwords, account identifiers, cookies, request bodies, and game packet
   payloads are never recorded.
