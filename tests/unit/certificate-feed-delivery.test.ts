@@ -350,7 +350,7 @@ describe("a stored certificate feed has to earn its way back", () => {
 });
 
 describe("the pin decides whether a request happens at all", () => {
-  it("makes no request when the explicit disabled sentinel is the pin", async () => {
+  it("makes no request while the committed placeholder is the pin", async () => {
     const test = await harness({ pinned: CERTIFICATE_FEED_KEY_SENTINEL });
     const delivery = test.delivery();
 
@@ -366,7 +366,7 @@ describe("the pin decides whether a request happens at all", () => {
     });
   });
 
-  it("deletes a stored feed the disabled sentinel can never believe again", async () => {
+  it("deletes a stored feed the placeholder can never believe again", async () => {
     const { pinned, privateKey } = signer();
     const document = feedBytes(BUNDLED_SEQUENCE + 2);
     const test = await harness({ pinned, serve: signed(privateKey, document) });
@@ -382,7 +382,7 @@ describe("the pin decides whether a request happens at all", () => {
     await assert.rejects(stat(test.storePath));
   });
 
-  it("reports a mistyped pin as untrusted rather than as the disabled sentinel", async () => {
+  it("reports a mistyped pin as untrusted rather than as the deliberate placeholder", async () => {
     const test = await harness({ pinned: "not-a-key" });
     const delivery = test.delivery();
 

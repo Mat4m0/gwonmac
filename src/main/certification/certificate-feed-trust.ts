@@ -3,11 +3,13 @@
  * believed at all: the pinned Ed25519 key, and the detached-signature check
  * over the exact bytes.
  *
- * The key is pinned in `certificates/public-key.txt`. The committed file now
- * contains a real key; the sentinel remains a supported explicit disabled
- * state for tests and packages that deliberately carry no remote trust. It is
- * not a fallback to weaker trust: `certificateFeedTrust` answers
- * `remote: false` and the bundled snapshot governs.
+ * The key is pinned in `certificates/public-key.txt` and the file's committed
+ * content is the sentinel below, so a clone of this repository trusts no remote
+ * feed and no key ceremony has to have happened for the application to work.
+ * The sentinel is not a fallback to weaker trust — it removes remote trust
+ * entirely: `certificateFeedTrust` answers `remote: false`, every fetched feed
+ * is refused with a code, and the bundled snapshot governs. Fail closed, and
+ * loud enough to diagnose.
  *
  * Only fetched feeds are signed. The bundled snapshot is derived from tables
  * compiled into an application that is already signed and notarised, so there
@@ -15,16 +17,16 @@
  * over it would be a second source of the same truth.
  *
  * This module refuses to own what a feed *means*: it verifies bytes and hands
- * them to the parser. It holds no private key material and cannot generate a
- * keypair. The accepted refactor plan removes this remote authority.
+ * them to the parser. It holds no private key material and no key ceremony —
+ * `certificates/README.md` owns that, and nothing here can generate a keypair.
  */
 import { createPublicKey, verify, type KeyObject } from "node:crypto";
 import { AppError } from "../../shared/errors.js";
 import { parseCertificateFeed, type CertificateFeed } from "./certificate-feed.js";
 
 /**
- * The explicit no-remote-trust value. It is a value no base64 key can collide
- * with, so "disabled" is never mistaken for "malformed".
+ * The committed content of `certificates/public-key.txt`. It is a value no
+ * base64 key can collide with, so "unset" is never mistaken for "malformed".
  */
 export const CERTIFICATE_FEED_KEY_SENTINEL = "PLACEHOLDER-NO-REMOTE-FEED-TRUST";
 
@@ -51,7 +53,7 @@ function refuse(what: string): never {
  * Reads the pinned key file's content. Anything that is not the sentinel must
  * be exactly one canonical base64 line holding 32 bytes: a file that is neither
  * is a mistake somebody made, and answering `remote: false` there would hide it
- * behind the same behaviour as the deliberate disabled sentinel.
+ * behind the same behaviour as the deliberate placeholder.
  */
 export function certificateFeedTrust(pinned: string): CertificateFeedTrust {
   const text = pinned.trim();

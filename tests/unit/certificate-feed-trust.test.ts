@@ -5,7 +5,8 @@
 //
 // The committed pinned-key file is read here rather than restated, so the
 // canonical-key rule and the file the application ships cannot drift apart.
-// The explicit disabled state remains covered through the exported sentinel.
+// The placeholder state every fresh clone starts in stays covered through the
+// exported sentinel constant, because the committed file has left that state.
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -69,7 +70,7 @@ describe("the pinned key that ships in this repository", () => {
     );
   });
 
-  it("trusts no remote feed while the disabled sentinel is the pin", () => {
+  it("trusts no remote feed while the placeholder sentinel is the pin", () => {
     assert.deepEqual(certificateFeedTrust(CERTIFICATE_FEED_KEY_SENTINEL), {
       remote: false,
     });

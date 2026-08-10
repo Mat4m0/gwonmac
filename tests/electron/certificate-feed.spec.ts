@@ -3,9 +3,9 @@
 // it actually writes, and the launch that actually reads it back.
 //
 // The key is generated per run and its private half never leaves this process.
-// The app is pointed at this spec's key file through an override that exists
-// only in unpackaged builds, keeping the test isolated from the committed real
-// pin.
+// The committed pin is the placeholder and must stay that way, so the app is
+// pointed at a key file of this spec's own through an override that exists only
+// in unpackaged builds.
 //
 // The feed served here is the application's own bundled snapshot restated at a
 // higher `sequence`. That is deliberate: a fixture written to agree would prove
