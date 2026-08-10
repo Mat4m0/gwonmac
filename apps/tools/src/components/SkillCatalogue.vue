@@ -9,6 +9,7 @@ import {
 import type { SkillCatalogue, SkillPresentation } from "../skill-catalog";
 import type { BuildDraftController } from "../use-build-draft";
 import type { SkillUnlockObservation } from "../../../../src/shared/builds/live-party";
+import { ATTRIBUTES } from "../../../../src/shared/builds/heroes";
 import { presentSkillPlacement, type SkillPlacementPresentation } from "../skill-drop";
 import type { SkillDragSession } from "../use-skill-drag-session";
 
@@ -33,6 +34,7 @@ const inspected = ref<SkillPresentation | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
 const focusedResult = ref<number | null>(null);
+const collapsedGroups = ref(new Set<string>());
 // The `:ref` callback below only ever writes, so narrowing a search left the
 // buttons for every index ever rendered — detached subtrees, each holding a
 // decoded icon — and `focusResult` read a stale length off the end.
@@ -51,7 +53,6 @@ const current = computed(() => {
 const results = computed(() => {
   const [primary, secondary] = props.editor.draft.value.professions;
   const needle = search.value.trim().toLocaleLowerCase();
-  const invested = props.editor.draft.value.attributes;
   return props.catalogue.all()
     .filter((skill) => {
       const normal = skill.availability === "pve";
@@ -79,19 +80,68 @@ const results = computed(() => {
         || skill.attribute?.toLocaleLowerCase().includes(needle);
     })
     .sort((left, right) => {
-      const leftInvested = left.attribute !== null && (invested[left.attribute] ?? 0) > 0;
-      const rightInvested = right.attribute !== null && (invested[right.attribute] ?? 0) > 0;
-      if (leftInvested !== rightInvested) return leftInvested ? -1 : 1;
+      if ((left.attribute === null) !== (right.attribute === null)) {
+        return left.attribute === null ? 1 : -1;
+      }
       if (left.profession !== right.profession) {
         if (left.profession === primary) return -1;
         if (right.profession === primary) return 1;
+        if (left.profession === secondary) return -1;
+        if (right.profession === secondary) return 1;
       }
       if (left.attribute !== right.attribute) {
-        return (left.attribute ?? "zz").localeCompare(right.attribute ?? "zz");
+        return (left.attribute === null ? Number.MAX_SAFE_INTEGER : ATTRIBUTES[left.attribute].id)
+          - (right.attribute === null ? Number.MAX_SAFE_INTEGER : ATTRIBUTES[right.attribute].id);
       }
       return left.name.localeCompare(right.name);
     });
 });
+
+interface SkillGroup {
+  readonly key: string;
+  readonly label: string;
+  readonly skills: readonly SkillPresentation[];
+}
+
+const groups = computed<readonly SkillGroup[]>(() => {
+  const grouped = new Map<string, SkillPresentation[]>();
+  for (const skill of results.value) {
+    const key = skill.attribute ?? "no-attribute";
+    const group = grouped.get(key);
+    if (group) group.push(skill);
+    else grouped.set(key, [skill]);
+  }
+  return [...grouped].map(([key, skills]) => ({
+    key,
+    label: key === "no-attribute" ? "No attribute" : label(key),
+    skills,
+  }));
+});
+const searching = computed(() => search.value.trim().length > 0);
+const groupExpanded = (group: SkillGroup): boolean =>
+  searching.value || !collapsedGroups.value.has(group.key);
+const groupSkills = (group: SkillGroup): readonly SkillPresentation[] => {
+  if (groupExpanded(group)) return group.skills;
+  const selected = group.skills.find((skill) => skill.id === inspected.value?.id);
+  return selected ? [selected] : [];
+};
+const visibleResults = computed(() => groups.value.flatMap(groupSkills));
+const visibleIndex = computed(() => new Map(
+  visibleResults.value.map((skill, index) => [skill.id, index]),
+));
+const groupId = (group: SkillGroup): string => `skill-group-${group.key}`;
+const toggleGroup = (group: SkillGroup): void => {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(group.key)) next.delete(group.key);
+  else next.add(group.key);
+  collapsedGroups.value = next;
+};
+const collapseAll = (): void => {
+  collapsedGroups.value = new Set(groups.value.map((group) => group.key));
+};
+const expandAll = (): void => {
+  collapsedGroups.value = new Set();
+};
 
 watch(
   () => props.editor.activeSlot.value,
@@ -107,6 +157,8 @@ watch(results, (values) => {
     inspected.value = values[0] ?? null;
     if (inspectorHadFocus) void nextTick(() => searchInput.value?.focus());
   }
+});
+watch(visibleResults, (values) => {
   if (!values.length) focusedResult.value = null;
   else if (focusedResult.value !== null) {
     focusedResult.value = Math.min(focusedResult.value, values.length - 1);
@@ -169,7 +221,7 @@ function onResultKeydown(
     ArrowDown: index + 1,
     ArrowUp: index - 1,
     Home: 0,
-    End: results.value.length - 1,
+    End: visibleResults.value.length - 1,
   }[event.key];
   if (movement === undefined) return;
   event.preventDefault();
@@ -177,7 +229,7 @@ function onResultKeydown(
 }
 
 function onSearchKeydown(event: KeyboardEvent): void {
-  if (event.key === "ArrowDown" && results.value.length) {
+  if (event.key === "ArrowDown" && visibleResults.value.length) {
     event.preventDefault();
     focusResult(0);
   } else if (event.key === "Escape") {
@@ -299,68 +351,95 @@ function hideBrokenIcon(event: Event): void {
     </div>
 
     <div class="catalogue-layout">
-      <div class="skill-results" role="listbox" aria-label="Eligible PvE skills">
-        <button
-          v-for="(skill, index) in results"
-          :key="skill.id"
-          :ref="(element) => {
-            if (element) resultButtons[index] = element as HTMLButtonElement;
-          }"
-          class="skill-result"
-          role="option"
-          :aria-selected="inspected?.id === skill.id"
-          :tabindex="focusedResult === index || (focusedResult === null && index === 0) ? 0 : -1"
-          :aria-disabled="placement(skill)?.blocked || undefined"
-          :data-unavailable="placement(skill)?.blocked ? '' : undefined"
-          @focus="focusedResult = index; inspected = skill"
-          @click="inspected = skill"
-          @dblclick="useSkill(skill)"
-          @keydown="onResultKeydown(index, skill, $event)"
+      <div class="skill-results" aria-label="Eligible PvE skills by attribute">
+        <div v-if="groups.length >= 3" class="catalogue-group-actions" aria-label="Attribute sections">
+          <button class="ui-link" type="button" @click="collapseAll">Collapse all</button>
+          <span aria-hidden="true">·</span>
+          <button class="ui-link" type="button" @click="expandAll">Expand all</button>
+        </div>
+        <section
+          v-for="group in groups"
+          :key="group.key"
+          class="skill-group"
+          :aria-labelledby="`${groupId(group)}-heading`"
         >
-          <span
-            class="ui-slot skill catalogue-drag-handle"
-            :data-elite="skill.elite ? '' : undefined"
-            :data-profession="skill.profession"
-            :data-icon-missing="skill.iconUrl ? undefined : ''"
-            :data-pointer-dragging="dragSession.active.value?.source.mode === 'catalogue' && dragSession.active.value.source.skill === skill.id && dragSession.active.value.started ? '' : undefined"
-            :title="`Drag ${skill.name} to a skill slot`"
-            @pointerdown="dragSession.begin($event, { mode: 'catalogue', skill: skill.id })"
-            @pointermove="dragSession.move($event)"
-            @pointerup="dragSession.finish($event, true)"
-            @pointercancel="dragSession.finish($event, false)"
-            @lostpointercapture="dragSession.finish($event, false)"
+          <button
+            :id="`${groupId(group)}-heading`"
+            class="skill-group-heading"
+            type="button"
+            :aria-controls="groupId(group)"
+            :aria-expanded="groupExpanded(group)"
+            @click="toggleGroup(group)"
           >
-            <img
-              v-if="skill.iconUrl"
-              :src="skill.iconUrl"
-              alt=""
-              draggable="false"
-              loading="lazy"
-              @error="hideBrokenIcon"
+            <span class="skill-group-chevron" aria-hidden="true">⌄</span>
+            <span>{{ group.label }}</span>
+            <span class="skill-group-count">{{ group.skills.length }}</span>
+          </button>
+          <div :id="groupId(group)" class="skill-group-results">
+            <button
+              v-for="skill in groupSkills(group)"
+              :key="skill.id"
+              :ref="(element) => {
+                const index = visibleIndex.get(skill.id);
+                if (element && index !== undefined) resultButtons[index] = element as HTMLButtonElement;
+              }"
+              class="skill-result"
+              :aria-pressed="inspected?.id === skill.id"
+              :tabindex="focusedResult === visibleIndex.get(skill.id)
+                || (focusedResult === null && visibleIndex.get(skill.id) === 0) ? 0 : -1"
+              :aria-disabled="placement(skill)?.blocked || undefined"
+              :data-unavailable="placement(skill)?.blocked ? '' : undefined"
+              @focus="focusedResult = visibleIndex.get(skill.id) ?? 0; inspected = skill"
+              @click="inspected = skill"
+              @dblclick="useSkill(skill)"
+              @keydown="onResultKeydown(visibleIndex.get(skill.id) ?? 0, skill, $event)"
             >
-            <span class="skill-fallback" aria-hidden="true">
-              {{ skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
-            </span>
-          </span>
-          <span class="result-copy">
-            <strong>{{ skill.name }}</strong>
-            <small>
-              {{ skill.profession ?? "PvE" }}
-              <template v-if="skill.attribute"> · {{ label(skill.attribute) }}</template>
-            </small>
-          </span>
-          <span class="result-mechanics">
-            <span v-if="skill.elite" class="ui-chip" data-level="warn">Elite</span>
-            <span v-if="skill.availability === 'player-only-pve'" class="ui-chip">Player</span>
-            <small v-if="skill.energyCost">{{ skill.energyCost }}e</small>
-            <small v-else-if="skill.adrenalineCost">{{ skill.adrenalineCost }}a</small>
-            <small v-if="skill.activationSeconds">{{ skill.activationSeconds }}s cast</small>
-            <small v-if="skill.rechargeSeconds">{{ skill.rechargeSeconds }}s recharge</small>
-            <small v-if="placement(skill)?.blocked">
-              {{ placement(skill)?.actionLabel }}
-            </small>
-          </span>
-        </button>
+              <span
+                class="ui-slot skill catalogue-drag-handle"
+                :data-elite="skill.elite ? '' : undefined"
+                :data-profession="skill.profession"
+                :data-icon-missing="skill.iconUrl ? undefined : ''"
+                :data-pointer-dragging="dragSession.active.value?.source.mode === 'catalogue' && dragSession.active.value.source.skill === skill.id && dragSession.active.value.started ? '' : undefined"
+                :title="`Drag ${skill.name} to a skill slot`"
+                @pointerdown="dragSession.begin($event, { mode: 'catalogue', skill: skill.id })"
+                @pointermove="dragSession.move($event)"
+                @pointerup="dragSession.finish($event, true)"
+                @pointercancel="dragSession.finish($event, false)"
+                @lostpointercapture="dragSession.finish($event, false)"
+              >
+                <img
+                  v-if="skill.iconUrl"
+                  :src="skill.iconUrl"
+                  alt=""
+                  draggable="false"
+                  loading="lazy"
+                  @error="hideBrokenIcon"
+                >
+                <span class="skill-fallback" aria-hidden="true">
+                  {{ skill.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
+                </span>
+              </span>
+              <span class="result-copy">
+                <strong>{{ skill.name }}</strong>
+                <small>
+                  {{ skill.profession ?? "PvE" }}
+                  <template v-if="skill.attribute"> · {{ label(skill.attribute) }}</template>
+                </small>
+              </span>
+              <span class="result-mechanics">
+                <span v-if="skill.elite" class="ui-chip" data-level="warn">Elite</span>
+                <span v-if="skill.availability === 'player-only-pve'" class="ui-chip">Player</span>
+                <small v-if="skill.energyCost">{{ skill.energyCost }}e</small>
+                <small v-else-if="skill.adrenalineCost">{{ skill.adrenalineCost }}a</small>
+                <small v-if="skill.activationSeconds">{{ skill.activationSeconds }}s cast</small>
+                <small v-if="skill.rechargeSeconds">{{ skill.rechargeSeconds }}s recharge</small>
+                <small v-if="placement(skill)?.blocked">
+                  {{ placement(skill)?.actionLabel }}
+                </small>
+              </span>
+            </button>
+          </div>
+        </section>
         <div v-if="!results.length" class="ui-empty">
           <strong>
             {{ unlockedOnly

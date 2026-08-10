@@ -5,6 +5,42 @@ import { createDemoHost } from "./host";
 import { workbench } from "./ToolsApp.test-fixture";
 
 describe("ToolsApp build authoring", () => {
+  it("groups filtered skills by attribute with ephemeral accessible disclosures", async () => {
+    const wrapper = await workbench();
+    await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await flushPromises();
+
+    const headings = () => wrapper.findAll(".skill-group-heading");
+    expect(headings().map((heading) => heading.text())).toEqual([
+      "⌄Healing Prayers4",
+      "⌄Smiting Prayers2",
+      "⌄Protection Prayers2",
+      "⌄Divine Favor1",
+      "⌄Fast Casting1",
+      "⌄Illusion Magic3",
+      "⌄Domination Magic4",
+      "⌄Inspiration Magic1",
+      "⌄No attribute2",
+    ]);
+    expect(headings()[0]!.attributes("aria-expanded")).toBe("true");
+    expect(headings()[0]!.attributes("aria-controls")).toBe("skill-group-HealingPrayers");
+
+    await wrapper.get(".catalogue-group-actions .ui-link").trigger("click");
+    await flushPromises();
+    expect(headings().every((heading) => heading.attributes("aria-expanded") === "false")).toBe(true);
+    expect(wrapper.findAll(".skill-result")).toHaveLength(1);
+
+    await wrapper.get('.catalogue-workspace input[type="search"]').setValue("Backfire");
+    await flushPromises();
+    expect(headings()).toHaveLength(1);
+    expect(headings()[0]!.text()).toContain("Illusion Magic");
+    expect(headings()[0]!.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(".skill-result").text()).toContain("Backfire");
+    wrapper.unmount();
+  });
+
   it("authors a blank dual-profession build within the 200-point budget", async () => {
     const wrapper = await workbench();
     await wrapper.get("#builds-library-tab").trigger("click");

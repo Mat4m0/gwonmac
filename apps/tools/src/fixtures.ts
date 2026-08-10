@@ -6,6 +6,7 @@ import {
   skillId,
   teamId,
   teamSlotsOf,
+  type Attribute,
   type Build,
   type BuildLibrary,
   type Profession,
@@ -39,25 +40,38 @@ const eliteSkills = new Set([
   "Invoke Lightning",
 ]);
 const playerOnlySkills = new Set(["Never Rampage Alone", "Elemental Lord"]);
-const presentations: SkillPresentation[] = names.map((name, index) => ({
-  id: skillId(200 + index),
-  name,
-  profession: index < 48
+const catalogueAttributes: Partial<Record<Profession, readonly (Attribute | null)[]>> = {
+  Mo: ["HealingPrayers", "HealingPrayers", "ProtectionPrayers", "ProtectionPrayers", "SmitingPrayers", "SmitingPrayers", "DivineFavor", null],
+  N: ["DeathMagic", "DeathMagic", "DeathMagic", "Curses", "Curses", "BloodMagic", "SoulReaping", null],
+  Me: ["DominationMagic", "DominationMagic", "DominationMagic", "IllusionMagic", "IllusionMagic", "InspirationMagic", "FastCasting", null],
+  R: ["Marksmanship", "Marksmanship", "Marksmanship", "WildernessSurvival", "WildernessSurvival", "BeastMastery", "Expertise", null],
+  Rt: ["RestorationMagic", "RestorationMagic", "RestorationMagic", "ChannelingMagic", "ChannelingMagic", "Communing", "SpawningPower", null],
+  E: ["AirMagic", "AirMagic", "AirMagic", "AirMagic", "EnergyStorage", "EnergyStorage", null, null],
+};
+const presentations: SkillPresentation[] = names.map((name, index) => {
+  const profession = index < 48
     ? professions[Math.floor(index / 8)] ?? null
-    : (["Mo", "Mo", "Me", "Me"] as const)[index - 48] ?? null,
-  attribute: null,
-  elite: eliteSkills.has(name),
-  availability: playerOnlySkills.has(name) ? "player-only-pve" : "pve",
-  energyCost: index % 3 === 0 ? 10 : 5,
-  adrenalineCost: 0,
-  healthCost: 0,
-  overcast: 0,
-  activationSeconds: index % 2 === 0 ? 1 : 0.25,
-  aftercastSeconds: 0.75,
-  rechargeSeconds: 5 + index % 4,
-  description: `${name} demonstrates the client-owned skill description in the standalone workbench.`,
-  iconUrl: null,
-}));
+    : (["Mo", "Mo", "Me", "Me"] as const)[index - 48] ?? null;
+  return {
+    id: skillId(200 + index),
+    name,
+    profession,
+    attribute: profession === null
+      ? null
+      : catalogueAttributes[profession]?.[index % 8] ?? null,
+    elite: eliteSkills.has(name),
+    availability: playerOnlySkills.has(name) ? "player-only-pve" : "pve",
+    energyCost: index % 3 === 0 ? 10 : 5,
+    adrenalineCost: 0,
+    healthCost: 0,
+    overcast: 0,
+    activationSeconds: index % 2 === 0 ? 1 : 0.25,
+    aftercastSeconds: 0.75,
+    rechargeSeconds: 5 + index % 4,
+    description: `${name} demonstrates the client-owned skill description in the standalone workbench.`,
+    iconUrl: null,
+  };
+});
 
 export const demoSkillCatalogue = createSkillCatalogue(presentations);
 

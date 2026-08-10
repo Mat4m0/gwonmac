@@ -171,6 +171,7 @@
 
   --ui-duration: 120ms;
   --ui-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ui-z-sticky: 2;
   --ui-z-readout: 3;
   --ui-z-frame: 4;
   --ui-z-title: 5;
