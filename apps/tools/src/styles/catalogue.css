@@ -16,6 +16,7 @@
   position: relative;
   top: auto;
   flex: 0 0 auto;
+  padding-block: var(--ui-space-2) var(--ui-space-3);
 }
 
 [data-catalogue-open] .build-validation { flex: 0 0 auto; }
@@ -27,7 +28,14 @@
   display: flex;
   overflow: hidden;
   flex: 1;
+  padding: var(--ui-space-3) var(--ui-space-4) var(--ui-space-4);
   flex-direction: column;
+}
+
+.catalogue-workspace > .workspace-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .profession-editor {
@@ -134,6 +142,8 @@
 
 .catalogue-heading-actions {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex: none;
   flex-wrap: wrap;
   align-items: center;
@@ -177,7 +187,8 @@
   gap: var(--ui-space-1);
   border: 0;
   border-bottom: 1px solid var(--ui-line);
-  background: color-mix(in srgb, var(--ui-well-fill) 94%, var(--ui-outline));
+  background: var(--ui-well);
+  box-shadow: 0 1px 0 var(--ui-line);
   color: var(--ui-text-muted);
   font: inherit;
   font-size: var(--ui-font-size-sm);
@@ -185,7 +196,10 @@
   text-align: left;
 }
 
-.skill-group-heading:hover { background: var(--ui-hover); color: var(--ui-text-bright); }
+.skill-group-heading:hover {
+  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-well));
+  color: var(--ui-text-bright);
+}
 .skill-group-heading:active { filter: brightness(0.86); }
 .skill-group-heading:focus-visible {
   outline: 2px solid var(--ui-focus);
@@ -419,6 +433,7 @@
     flex: 0 1 180px;
   }
   .catalogue-workspace > .workspace-heading {
+    display: flex;
     align-items: flex-start;
     flex-direction: row;
     flex-wrap: wrap;

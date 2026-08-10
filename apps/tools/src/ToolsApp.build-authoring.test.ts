@@ -1,10 +1,12 @@
 import { flushPromises } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { unavailableParty } from "../../../src/shared/builds/live-party";
 import { createDemoHost } from "./host";
 import { workbench } from "./ToolsApp.test-fixture";
 
 describe("ToolsApp build authoring", () => {
+  beforeEach(() => window.localStorage.clear());
+
   it("groups filtered skills by attribute with ephemeral accessible disclosures", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
@@ -161,6 +163,31 @@ describe("ToolsApp build authoring", () => {
     await unavailable.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
     expect(unavailable.get(".catalogue-unlocked").attributes("disabled")).toBe("");
     unavailable.unmount();
+  });
+
+  it("keeps catalogue choices across builds and a reopened Tools window", async () => {
+    const first = await workbench();
+    await first.get('[role="tab"]:nth-child(2)').trigger("click");
+    await first.findAll(".library-row")[0]!.trigger("click");
+    await first.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    await first.get(".catalogue-placeable").trigger("click");
+    await first.get(".catalogue-unlocked").trigger("click");
+    expect(first.get(".catalogue-placeable").attributes("aria-pressed")).toBe("true");
+    expect(first.get(".catalogue-unlocked").attributes("aria-pressed")).toBe("true");
+
+    await first.findAll(".library-row")[1]!.trigger("click");
+    await first.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    expect(first.get(".catalogue-placeable").attributes("aria-pressed")).toBe("true");
+    expect(first.get(".catalogue-unlocked").attributes("aria-pressed")).toBe("true");
+    first.unmount();
+
+    const reopened = await workbench();
+    await reopened.get('[role="tab"]:nth-child(2)').trigger("click");
+    await reopened.findAll(".library-row")[0]!.trigger("click");
+    await reopened.findAll(".authoring-bar .skill--editable")[0]!.trigger("click");
+    expect(reopened.get(".catalogue-placeable").attributes("aria-pressed")).toBe("true");
+    expect(reopened.get(".catalogue-unlocked").attributes("aria-pressed")).toBe("true");
+    reopened.unmount();
   });
 
   it("asks before changing a shared bar and keeps an edited fork related", async () => {

@@ -170,6 +170,24 @@ test("places catalogue skills and reorders slots by pointer and keyboard", async
   expect(pageErrors).toEqual([]);
 });
 
+test("keeps catalogue choices across builds and reloads", async ({ page }) => {
+  await openBuild(page);
+  await page.locator(".authoring-bar .skill").first().click();
+  await page.locator(".catalogue-placeable").click();
+  await page.locator(".catalogue-unlocked").click();
+
+  await page.locator(".library-row").nth(1).click();
+  await page.locator(".authoring-bar .skill").first().click();
+  await expect(page.locator(".catalogue-placeable")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".catalogue-unlocked")).toHaveAttribute("aria-pressed", "true");
+
+  await page.reload();
+  await openBuild(page);
+  await page.locator(".authoring-bar .skill").first().click();
+  await expect(page.locator(".catalogue-placeable")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".catalogue-unlocked")).toHaveAttribute("aria-pressed", "true");
+});
+
 test("exports build and team codes without hiding the manual fallback", async ({ page }) => {
   await openBuild(page);
   await page.getByRole("button", { name: "Export build" }).click();
@@ -384,10 +402,14 @@ for (const [width, height, minimumResultsHeight] of [
     });
     expect(geometry.outer.scrollHeight).toBeLessThanOrEqual(geometry.outer.clientHeight);
     expect(geometry.bar.scrollWidth).toBeLessThanOrEqual(geometry.bar.clientWidth);
-    expect(geometry.rail.bottom).toBeLessThanOrEqual(geometry.catalogue.top + 1);
+    expect(Math.abs(geometry.catalogue.top - geometry.rail.bottom)).toBeLessThanOrEqual(1);
     expect(geometry.tools.bottom).toBeLessThanOrEqual(geometry.results.top + 1);
     expect(geometry.results.clientHeight).toBeGreaterThanOrEqual(minimumResultsHeight);
     expect(await page.locator("body").evaluate((body) => body.scrollWidth)).toBe(width);
+    expect(await page.locator(".skill-group-heading").first().evaluate((heading) => {
+      const color = getComputedStyle(heading).backgroundColor;
+      return !color.startsWith("rgba(") && !color.includes(" / ");
+    })).toBe(true);
 
     if (height <= 520) {
       await expect(page.locator(".authoring-header")).toBeHidden();

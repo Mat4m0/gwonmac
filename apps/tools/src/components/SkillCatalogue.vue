@@ -12,6 +12,10 @@ import type { SkillUnlockObservation } from "../../../../src/shared/builds/live-
 import { ATTRIBUTES } from "../../../../src/shared/builds/heroes";
 import { presentSkillPlacement, type SkillPlacementPresentation } from "../skill-drop";
 import type { SkillDragSession } from "../use-skill-drag-session";
+import {
+  loadCataloguePreferences,
+  saveCataloguePreferences,
+} from "../catalogue-preferences";
 
 const props = defineProps<{
   editor: BuildDraftController;
@@ -28,8 +32,9 @@ const emit = defineEmits<{
 
 const search = ref("");
 const filter = ref<"all" | "primary" | "secondary" | "elite" | "player">("all");
-const placeableOnly = ref(false);
-const unlockedOnly = ref(false);
+const savedPreferences = loadCataloguePreferences();
+const placeableOnly = ref(savedPreferences.placeableOnly);
+const unlockedOnly = ref(savedPreferences.unlockedOnly);
 const inspected = ref<SkillPresentation | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 const resultButtons = ref<HTMLButtonElement[]>([]);
@@ -49,6 +54,10 @@ const current = computed(() => {
   const id = props.editor.draft.value.skills[slot];
   return id == null ? null : props.catalogue.get(id);
 });
+const unlocksAvailable = computed(() =>
+  props.unlocks !== null && props.unlocks.knownThrough > 0
+);
+const effectiveUnlockedOnly = computed(() => unlockedOnly.value && unlocksAvailable.value);
 
 const results = computed(() => {
   const [primary, secondary] = props.editor.draft.value.professions;
@@ -72,8 +81,8 @@ const results = computed(() => {
       if (filter.value === "elite" && !skill.elite) return false;
       if (placeableOnly.value && placement(skill)?.blocked) return false;
       if (
-        unlockedOnly.value
-        && (!props.unlocks || !props.unlocks.unlocked.has(skill.id))
+        effectiveUnlockedOnly.value
+        && !props.unlocks?.unlocked.has(skill.id)
       ) return false;
       return needle.length === 0
         || skill.name.toLocaleLowerCase().includes(needle)
@@ -164,12 +173,12 @@ watch(visibleResults, (values) => {
     focusedResult.value = Math.min(focusedResult.value, values.length - 1);
   }
 });
-watch(
-  () => props.unlocks,
-  (value) => {
-    if (!value || value.knownThrough === 0) unlockedOnly.value = false;
-  },
-);
+watch([placeableOnly, unlockedOnly], ([nextPlaceable, nextUnlocked]) => {
+  saveCataloguePreferences({
+    placeableOnly: nextPlaceable,
+    unlockedOnly: nextUnlocked,
+  });
+});
 function placement(skill: SkillPresentation): SkillPlacementPresentation | null {
   const active = props.editor.activeSlot.value;
   return active === null ? null : presentSkillPlacement(
@@ -243,7 +252,7 @@ function clear(): void {
 }
 
 function recoverEmptyResults(): void {
-  if (unlockedOnly.value) unlockedOnly.value = false;
+  if (effectiveUnlockedOnly.value) unlockedOnly.value = false;
   else if (placeableOnly.value) placeableOnly.value = false;
   else {
     search.value = "";
@@ -251,9 +260,6 @@ function recoverEmptyResults(): void {
   }
 }
 
-const unlocksAvailable = computed(() =>
-  props.unlocks !== null && props.unlocks.knownThrough > 0
-);
 const unlockFilterHelp = computed(() => unlocksAvailable.value
   ? props.unlockScope === "account"
     ? "Show skills unlocked for this account and usable by heroes."
@@ -442,11 +448,11 @@ function hideBrokenIcon(event: Event): void {
         </section>
         <div v-if="!results.length" class="ui-empty">
           <strong>
-            {{ unlockedOnly
+            {{ effectiveUnlockedOnly
               ? "No unlocked skills"
               : placeableOnly ? "No placeable skills" : "No eligible skills" }}
           </strong>
-          <p v-if="unlockedOnly">
+          <p v-if="effectiveUnlockedOnly">
             No matching skill is unlocked for this
             {{ unlockScope === "account" ? "account" : "character" }}.
           </p>
@@ -455,7 +461,7 @@ function hideBrokenIcon(event: Event): void {
           </p>
           <p v-else>Clear the search or choose another profession filter.</p>
           <button class="ui-button" @click="recoverEmptyResults">
-            {{ unlockedOnly || placeableOnly ? "Show all skills" : "Clear filters" }}
+            {{ effectiveUnlockedOnly || placeableOnly ? "Show all skills" : "Clear filters" }}
           </button>
         </div>
       </div>
