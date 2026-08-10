@@ -487,9 +487,10 @@ automatic.
 Each ArenaNet client build is checked separately for Core compatibility and the
 exact Tools transform. When ArenaNet
 ships a new build, the launcher checks a local copy in an isolated process.
-When the structures it uses are unchanged or have only moved in the one
-supported way, everything continues normally without an app update or an
-extra choice.
+When the template structures are unchanged or have only moved in the one
+supported way, the isolated check can preserve template/file compatibility
+without an app update. Live Tools observations and Apply still require exact
+Enhancement facts shipped with the app.
 
 If that check cannot prove compatibility — or proves saving files but not the
 GWonMac Tools you selected — the loading screen says so once for that build,
