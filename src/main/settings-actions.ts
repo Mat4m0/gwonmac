@@ -42,13 +42,31 @@ async function confirmAction(
   return response === 0;
 }
 
-/** The durable action already succeeded; relaunch failure is diagnostic only. */
-function requestRelaunch(action: RelaunchAction): void {
+/** The durable action already succeeded; relaunch failure cannot undo it. */
+function requestRelaunch(win: BrowserWindow, action: RelaunchAction): void {
   try {
     app.relaunch();
     app.quit();
   } catch (error) {
     logEvent({ k: "app.relaunchFailed", action, code: errorCode(error) });
+    // Keep the successful durable result, but do not tell the player a restart
+    // happened when Electron refused it. This stays native because the failure
+    // occurs after the IPC result is already determined and applies equally to
+    // settings, cache, and game-storage actions.
+    try {
+      void dialog.showMessageBox(win, {
+        type: "warning",
+        buttons: ["OK"],
+        defaultId: 0,
+        cancelId: 0,
+        message: "Restart did not start",
+        detail:
+          "Your change is saved. Quit and reopen GWonMac to apply it.",
+      }).catch(() => {});
+    } catch {
+      // A warning failure must not turn the already-durable action into a
+      // rejected settings response.
+    }
   }
 }
 
@@ -80,7 +98,7 @@ export async function applySettingsChange(
         strategy: saved.dataStrategy ?? "unselected",
       });
     }
-    if (restartForTools) requestRelaunch("toolsEnable");
+    if (restartForTools) requestRelaunch(win, "toolsEnable");
     return saved;
   } catch (error) {
     logEvent({ k: "settings.saveFailed", code: errorCode(error) });
@@ -140,7 +158,7 @@ export async function requestCacheClear(
     throw error;
   }
   logEvent({ k: "cache.clearRequested" });
-  requestRelaunch("cacheClear");
+  requestRelaunch(win, "cacheClear");
   return true;
 }
 
@@ -165,7 +183,7 @@ export async function requestGameStorageReset(
     throw error;
   }
   logEvent({ k: "filesystem.resetRequested" });
-  requestRelaunch("gameStorageReset");
+  requestRelaunch(win, "gameStorageReset");
   return true;
 }
 

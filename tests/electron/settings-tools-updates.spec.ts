@@ -268,6 +268,7 @@ test.describe("tools and update settings", () => {
           quit: false,
           relaunch: false,
           options: null,
+          messages: [],
           originalQuit: electronApp.quit,
           originalRelaunch: electronApp.relaunch,
         };
@@ -276,6 +277,7 @@ test.describe("tools and update settings", () => {
           options: Electron.MessageBoxOptions,
         ): Promise<Electron.MessageBoxReturnValue> => {
           globalThis.__resetRestart.options = options;
+          globalThis.__resetRestart.messages?.push(options);
           return { response: 0, checkboxChecked: false };
         };
         dialog.showMessageBox = record as typeof dialog.showMessageBox;
@@ -291,14 +293,31 @@ test.describe("tools and update settings", () => {
       await page.locator('input[name="gwonmacTools"]').click();
       await expect.poll(() => page.evaluate(async () =>
         (await window.gwNative.settings.get()).gwonmacTools)).toBe(true);
+      await expect.poll(() => app.evaluate(() =>
+        globalThis.__resetRestart.messages?.length ?? 0)).toBe(2);
       expect(await app.evaluate(() => {
-        const { quit, relaunch, options } = globalThis.__resetRestart;
-        if (!options) throw new Error("no message box was shown");
-        return { quit, relaunch, buttons: options.buttons };
+        const { quit, relaunch, messages } = globalThis.__resetRestart;
+        const [confirmation, warning] = messages ?? [];
+        if (!confirmation || !warning) throw new Error("both restart dialogs were not shown");
+        return {
+          quit,
+          relaunch,
+          confirmation: confirmation.buttons,
+          warning: {
+            buttons: warning.buttons,
+            detail: warning.detail,
+            message: warning.message,
+          },
+        };
       })).toEqual({
         quit: false,
         relaunch: true,
-        buttons: ["Enable and Restart", "Cancel"],
+        confirmation: ["Enable and Restart", "Cancel"],
+        warning: {
+          buttons: ["OK"],
+          detail: "Your change is saved. Quit and reopen GWonMac to apply it.",
+          message: "Restart did not start",
+        },
       });
       await app.evaluate(({ app: electronApp }) => {
         electronApp.quit = globalThis.__resetRestart.originalQuit;
