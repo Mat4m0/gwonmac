@@ -17,6 +17,7 @@ import { readdir, readFile, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
   DEFAULT_SETTINGS,
+  UPDATE_TRACKS,
   UI_STYLES,
   type AppSettings,
   type AppSettingsPatch,
@@ -27,6 +28,7 @@ import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALES = new Set<AppSettings["renderScale"]>([1, 1.5, 2]);
 const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
+const UPDATE_TRACK_VALUES = new Set<AppSettings["updateTrack"]>(UPDATE_TRACKS);
 
 /**
  * A whole number inside a closed range.
@@ -134,6 +136,12 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   if ("autoCheckUpdates" in src) {
     out.autoCheckUpdates = asBool(src.autoCheckUpdates, "autoCheckUpdates");
+  }
+  if ("updateTrack" in src) {
+    if (!UPDATE_TRACK_VALUES.has(src.updateTrack as AppSettings["updateTrack"])) {
+      throw new AppError("bad_settings", "settings.updateTrack has unknown value");
+    }
+    out.updateTrack = src.updateTrack as AppSettings["updateTrack"];
   }
   if ("lastUpdateCheckAt" in src) {
     const at = src.lastUpdateCheckAt;

@@ -84,19 +84,6 @@ export function isPrerelease(version: ReleaseVersion): boolean {
   return version.channel !== "stable";
 }
 
-/**
- * Channel policy: a prerelease is only ever offered to an install already
- * running one. Someone on a stable build asked for stable builds, and an
- * update notice is not the place to decide otherwise for them.
- */
-export function isOfferedUpgrade(
-  current: ReleaseVersion,
-  candidate: ReleaseVersion,
-): boolean {
-  if (isPrerelease(candidate) && !isPrerelease(current)) return false;
-  return compareReleaseVersions(candidate, current) > 0;
-}
-
 /** Canonical text: no `v`, and the prerelease only when there is one. */
 export function formatReleaseVersion(version: ReleaseVersion): string {
   const core = `${version.major}.${version.minor}.${version.patch}`;

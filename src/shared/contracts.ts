@@ -279,6 +279,9 @@ export interface ClockSyncResponse {
 export const UI_STYLES = ["guild-wars", "obsidian"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
 
+export const UPDATE_TRACKS = ["stable", "beta"] as const;
+export type UpdateTrack = (typeof UPDATE_TRACKS)[number];
+
 export interface AppSettings {
   renderScale: 1 | 1.5 | 2;
   /** The visual treatment applied to every GWonMac panel. */
@@ -307,6 +310,13 @@ export interface AppSettings {
    * client build. Opting out is one checkbox, honored forever.
    */
   autoCheckUpdates: boolean;
+  /**
+   * Which release stages the one release updater may discover. This is a
+   * preference inside the `release` distribution identity, not a package or
+   * Keychain identity. Stable is the safe default; Beta additionally admits
+   * beta and release-candidate builds, never alpha builds.
+   */
+  updateTrack: UpdateTrack;
   /**
    * When the last release-check attempt completed, in epoch milliseconds, or
    * `null` if one has never run. An unsupported local build can finish without
@@ -338,6 +348,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
+  updateTrack: "stable",
   lastUpdateCheckAt: null,
   compatibilityNoticeSeenFor: null,
 };
@@ -447,6 +458,20 @@ export type AppUpdateState =
       currentVersion: string;
       latestVersion: string;
       checkedAt: string;
+    }
+  | {
+      /**
+       * Returning to Stable would be a downgrade, which Squirrel must never
+       * perform. The renderer may open only the fixed Releases page and name
+       * this exact stable version; no asset URL crosses the bridge.
+       */
+      phase: "manual-stable-return";
+      currentVersion: string;
+      checkedAt: string;
+      decision: {
+        kind: "manual-stable-return";
+        version: string;
+      };
     }
   | {
       phase: "failed";

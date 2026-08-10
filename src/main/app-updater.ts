@@ -8,22 +8,21 @@
  * check because a Squirrel download must not compete with live game traffic.
  *
  * Only a package carrying the release marker may reach Squirrel.Mac. A
- * release-identity stable version is never offered a prerelease; a
- * release-identity prerelease may advance to a later eligible prerelease or
- * stable. The separately signed Preview tester app cannot reach this owner. A
- * ready update waits for a restart rather than taking one.
+ * The selected Stable/Beta track is read once per check. Stable admits only
+ * stable releases; Beta additionally admits beta and RC releases. Alpha is
+ * never eligible. The separately signed Preview tester app cannot reach this
+ * owner. A ready update waits for a restart rather than taking one.
  */
 import type {
   AppUpdateErrorCode,
   AppUpdateState,
+  UpdateTrack,
 } from "../shared/contracts.js";
 import { RELEASE_REPO } from "../shared/contracts.js";
 import { releaseAssetUrl } from "../shared/project-identity.js";
 import {
   compareReleaseVersions,
   formatReleaseVersion,
-  isOfferedUpgrade,
-  isPrerelease,
   parseReleaseVersion,
   type ReleaseVersion,
 } from "../shared/release.js";
@@ -122,7 +121,7 @@ export class AppUpdater {
     });
   }
 
-  check(): Promise<void> {
+  check(track: UpdateTrack): Promise<void> {
     if (
       this.inFlight
       || this.state.phase === "downloading"
@@ -130,7 +129,10 @@ export class AppUpdater {
     ) {
       return this.inFlight ?? Promise.resolve();
     }
-    const operation = this.runCheck().finally(() => {
+    // Capture the canonical preference once. A settings change while this
+    // request is running applies to the next check instead of changing the
+    // meaning of a response halfway through validation.
+    const operation = this.runCheck(track).finally(() => {
       if (this.inFlight === operation) this.inFlight = null;
     });
     this.inFlight = operation;
@@ -168,7 +170,7 @@ export class AppUpdater {
     this.options.nativeUpdater.quitAndInstall();
   }
 
-  private async runCheck(): Promise<void> {
+  private async runCheck(track: UpdateTrack): Promise<void> {
     const previous = this.lastCheckedAt();
     this.setState({
       phase: "checking",
@@ -221,7 +223,7 @@ export class AppUpdater {
         );
         return;
       }
-      const candidates = parseCandidates(body, current);
+      const candidates = parseCandidates(body, track);
       if (candidates === null) {
         await this.failAndRemember(this.noteFailure("releases", "unreadable"));
         return;
@@ -230,13 +232,38 @@ export class AppUpdater {
       const checkedAtValue = this.now();
       const checkedAt = new Date(checkedAtValue).toISOString();
       await this.remember(checkedAtValue);
-      if (!latest || !isOfferedUpgrade(current, latest.version)) {
+      if (!latest) {
         this.setState({
           phase: "up-to-date",
           currentVersion: this.options.currentVersion,
-          latestVersion: latest
-            ? formatReleaseVersion(latest.version)
-            : this.options.currentVersion,
+          latestVersion: this.options.currentVersion,
+          checkedAt,
+        });
+        return;
+      }
+
+      const comparison = compareReleaseVersions(latest.version, current);
+      if (
+        track === "stable"
+        && current.channel !== "stable"
+        && comparison < 0
+      ) {
+        this.setState({
+          phase: "manual-stable-return",
+          currentVersion: this.options.currentVersion,
+          checkedAt,
+          decision: {
+            kind: "manual-stable-return",
+            version: formatReleaseVersion(latest.version),
+          },
+        });
+        return;
+      }
+      if (comparison <= 0) {
+        this.setState({
+          phase: "up-to-date",
+          currentVersion: this.options.currentVersion,
+          latestVersion: formatReleaseVersion(latest.version),
           checkedAt,
         });
         return;
@@ -271,7 +298,9 @@ export class AppUpdater {
     signal: AbortSignal,
   ): Promise<FeedValidation> {
     const manifests = release.assets.filter((asset) => asset.name === "RELEASES.json");
-    const zips = release.assets.filter((asset) => asset.name.endsWith(".zip"));
+    const expectedZip =
+      `Guild-Wars-Reforged-${formatReleaseVersion(release.version)}-macOS-arm64.zip`;
+    const zips = release.assets.filter((asset) => asset.name === expectedZip);
     if (manifests.length !== 1 || zips.length !== 1) {
       return { reason: "feed-invalid" };
     }
@@ -402,20 +431,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseCandidates(
   body: unknown,
-  current: ReleaseVersion,
+  track: UpdateTrack,
 ): ReleaseCandidate[] | null {
   if (!Array.isArray(body)) return null;
   const candidates: ReleaseCandidate[] = [];
+  const versions = new Set<string>();
   for (const value of body) {
     if (!isRecord(value) || value.draft === true) continue;
     const tag = value.tag_name;
     if (typeof tag !== "string") continue;
     const version = parseReleaseVersion(tag);
     if (!version) continue;
-    if (
-      !isPrerelease(current)
-      && (value.prerelease === true || isPrerelease(version))
-    ) continue;
+    if (typeof value.prerelease !== "boolean") continue;
+    const prerelease = version.channel !== "stable";
+    // GitHub metadata and the canonical tag must describe the same release.
+    // Refusing disagreement prevents an incorrectly flagged alpha or stable
+    // build from crossing the selected-track boundary.
+    if (value.prerelease !== prerelease) continue;
+    if (version.channel === "alpha") continue;
+    if (track === "stable" && version.channel !== "stable") continue;
+    const canonical = formatReleaseVersion(version);
+    if (versions.has(canonical)) return null;
+    versions.add(canonical);
     if (!Array.isArray(value.assets)) return null;
     const assets: ReleaseAsset[] = [];
     for (const asset of value.assets) {

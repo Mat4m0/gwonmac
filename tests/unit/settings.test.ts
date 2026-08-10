@@ -28,6 +28,7 @@ describe("settings", () => {
       // pre-checked line at first run. Unticking it is the one flag that stops
       // every network request nobody asked for, without exception.
       autoCheckUpdates: true,
+      updateTrack: "stable",
       lastUpdateCheckAt: null,
       // No client build has been warned about yet, so every build warns once.
       compatibilityNoticeSeenFor: null,
@@ -63,6 +64,7 @@ describe("settings", () => {
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
+      updateTrack: "stable",
       lastUpdateCheckAt: null,
       compatibilityNoticeSeenFor: null,
     });
@@ -111,6 +113,9 @@ describe("settings", () => {
   it("takes the update fields only in the shapes the renderer can produce", () => {
     assert.equal(parseSettings({ autoCheckUpdates: true }).autoCheckUpdates, true);
     assert.throws(() => parseSettings({ autoCheckUpdates: "yes" }), AppError);
+    assert.equal(parseSettings({ updateTrack: "stable" }).updateTrack, "stable");
+    assert.equal(parseSettings({ updateTrack: "beta" }).updateTrack, "beta");
+    assert.throws(() => parseSettings({ updateTrack: "alpha" }), AppError);
 
     assert.equal(parseSettings({ lastUpdateCheckAt: null }).lastUpdateCheckAt, null);
     assert.equal(parseSettings({ lastUpdateCheckAt: 0 }).lastUpdateCheckAt, 0);
@@ -152,6 +157,9 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ nativeCursor: true }), AppError);
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
       lastUpdateCheckAt: 1_000,
+    });
+    assert.deepEqual(parseSettingsPatch({ updateTrack: "beta" }), {
+      updateTrack: "beta",
     });
     assert.throws(() => parseSettingsPatch({ mystery: true }), AppError);
     assert.throws(() => parseSettingsPatch({ touchMode: "dbltap" }), AppError);
@@ -213,6 +221,7 @@ describe("settings", () => {
       "teamManagement",
       "uiPanelOpacity",
       "uiStyle",
+      "updateTrack",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -256,6 +265,7 @@ describe("settings", () => {
       // profile that completed first run carries its explicit answer and an
       // opt-out is therefore never overridden.
       autoCheckUpdates: true,
+      updateTrack: "stable",
       lastUpdateCheckAt: null,
       compatibilityNoticeSeenFor: null,
     });

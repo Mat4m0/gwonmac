@@ -43,11 +43,21 @@ test.describe("tools and update settings", () => {
       await expect(page.locator("#settings-update-version")).toHaveText(
         packageVersion,
       );
-      // The label follows the running version's shape, so this test holds on
-      // both sides of a stable release.
-      await expect(page.locator("#settings-update-channel")).toHaveText(
-        /^\d+\.\d+\.\d+$/u.test(packageVersion) ? "Stable" : "Preview",
+      // Installed release stage and selected update track are separate facts.
+      await expect(page.locator("#settings-update-stage")).toHaveText(
+        packageVersion.includes("-beta.")
+          ? "Beta"
+          : packageVersion.includes("-rc.")
+            ? "Release Candidate"
+            : packageVersion.includes("-alpha.")
+              ? "Alpha"
+              : "Stable",
       );
+      await expect(page.locator('select[name="updateTrack"]')).toHaveValue("stable");
+      await page.locator('select[name="updateTrack"]').selectOption("beta");
+      await expect
+        .poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ updateTrack: "beta" });
       await expect(page.locator("#settings-update-status")).toContainText(
         "can't update itself",
       );

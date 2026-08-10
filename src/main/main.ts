@@ -28,6 +28,7 @@ import {
   type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
+  type UpdateTrack,
 } from "../shared/contracts.js";
 import {
   enhancementCapabilitiesFor,
@@ -165,8 +166,9 @@ function revealMainWindow(): void {
 }
 
 /** The one application-update action; AppUpdater owns every outcome. */
-async function checkForAppUpdates(): Promise<void> {
-  await appUpdaterController?.check();
+async function checkForAppUpdates(track?: UpdateTrack): Promise<void> {
+  const selected = track ?? (await loadSettings(gamePaths().settings)).updateTrack;
+  await appUpdaterController?.check(selected);
 }
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
@@ -174,8 +176,14 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
     const saved = await saveSettings(settingsPath, { ...current, ...patch });
-    if (!current.autoCheckUpdates && saved.autoCheckUpdates) {
-      void checkForAppUpdates();
+    if (
+      saved.autoCheckUpdates
+      && (
+        !current.autoCheckUpdates
+        || current.updateTrack !== saved.updateTrack
+      )
+    ) {
+      void checkForAppUpdates(saved.updateTrack);
     }
     return saved;
   });
@@ -594,7 +602,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   ));
   if (settings.autoCheckUpdates) {
-    void checkForAppUpdates();
+    void checkForAppUpdates(settings.updateTrack);
   }
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
@@ -610,7 +618,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         lastUpdateCheckAt: current.lastUpdateCheckAt,
         now: Date.now(),
       })) return;
-      void checkForAppUpdates();
+      void checkForAppUpdates(current.updateTrack);
     })().catch(() => {
       // A periodic check is silent by contract; an unreadable settings file
       // already surfaces on the next explicit settings read.

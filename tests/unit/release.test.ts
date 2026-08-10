@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 import {
   compareReleaseVersions,
   formatReleaseVersion,
-  isOfferedUpgrade,
   isPrerelease,
   parseReleaseVersion,
   type ReleaseVersion,
@@ -133,29 +132,5 @@ describe("release version ordering", () => {
     assert.equal(isPrerelease(parsed("2026.7.0-alpha.1")), true);
     assert.equal(isPrerelease(parsed("2026.7.0-beta.1")), true);
     assert.equal(isPrerelease(parsed("2026.7.0-rc.1")), true);
-  });
-});
-
-describe("release channel policy", () => {
-  it("never offers a prerelease to a stable install", () => {
-    const stable = parsed("2026.7.0");
-    assert.equal(isOfferedUpgrade(stable, parsed("2026.8.0-rc.1")), false);
-    assert.equal(isOfferedUpgrade(stable, parsed("2026.8.0")), true);
-  });
-
-  it("offers newer prereleases and stables to a prerelease install", () => {
-    const alpha = parsed("0.0.1-alpha.1");
-    assert.equal(isOfferedUpgrade(alpha, parsed("0.0.1-alpha.2")), true);
-    assert.equal(isOfferedUpgrade(alpha, parsed("0.0.1-beta.1")), true);
-    assert.equal(isOfferedUpgrade(alpha, parsed("0.0.1")), true);
-    assert.equal(isOfferedUpgrade(alpha, parsed("2026.7.0-rc.1")), true);
-  });
-
-  it("offers nothing for the same or an older version", () => {
-    const current = parsed("2026.7.1-beta.2");
-    assert.equal(isOfferedUpgrade(current, parsed("v2026.7.1-beta.2")), false);
-    assert.equal(isOfferedUpgrade(current, parsed("2026.7.1-beta.1")), false);
-    assert.equal(isOfferedUpgrade(current, parsed("2026.7.0")), false);
-    assert.equal(isOfferedUpgrade(current, parsed("2025.12.9")), false);
   });
 });
